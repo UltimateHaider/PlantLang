@@ -1,0 +1,81 @@
+# ═══════════════════════════════════════════════════════════
+# PlantLang — مثال 04: العروق والنبض والتسلسل
+# ═══════════════════════════════════════════════════════════
+
+MISSION: SAFE.
+PLANT strings.
+PLANT lists.
+
+# ── TAP / INFUSE / ABSORB / SEAL ──────────────────────────
+1\ TAP "log.txt" MODE:MARK AS logfile.
+1\ INFUSE logfile WITH "بدأ التشغيل".
+1\ INFUSE logfile WITH "جارٍ المعالجة...".
+1\ INFUSE logfile WITH "اكتمل".
+1\ SEAL logfile.
+
+1\ TAP "log.txt" MODE:SIGHT AS reader.
+1\ ABSORB LINE reader AS line1.
+1\ ABSORB LINE reader AS line2.
+1\ ABSORB LINE reader AS line3.
+1\ SEAL reader.
+
+1\ SHOW line1.
+1\ SHOW line2.
+1\ SHOW line3.
+
+# ── PULSE / WHENEVER ──────────────────────────────────────
+1\ CREATE temperature(NUM) PULSE TO 20.
+1\ CREATE alert_count(NUM) TO 0.
+
+1\ WHENEVER temperature CHANGES,
+2\   MATCH temperature,
+3\     IS BETWEEN 0  20 YIELD SHOW "🌡 بارد: " + temperature.
+3\     IS BETWEEN 21 35 YIELD SHOW "🌡 معتدل: " + temperature.
+3\     IS BETWEEN 36 50 YIELD SHOW "🔥 حار: " + temperature.
+3\     ELSE              YIELD SHOW "⚠ خطير: " + temperature.
+2\   \\.
+1\\.
+
+1\ SET temperature TO 15.
+1\ SET temperature TO 28.
+1\ SET temperature TO 42.
+1\ SET temperature TO 65.
+
+# ── FLOW — التسلسل الذكي ──────────────────────────────────
+1\ ACTION clean(text(TX)),
+2\   REAP t FROM strings:TRIM, text.
+2\   GIVE t.
+1\ /ACTION.
+
+1\ ACTION to_upper(text(TX)),
+2\   REAP u FROM strings:UPPER, text.
+2\   GIVE u.
+1\ /ACTION.
+
+1\ ACTION add_prefix(text(TX)),
+2\   GIVE ">> " + text.
+1\ /ACTION.
+
+1\ REAP result FROM "  مرحباً بالعالم  "
+     FLOW clean
+     FLOW to_upper
+     FLOW add_prefix.
+
+1\ SHOW result.
+
+# ── lists library ─────────────────────────────────────────
+1\ CREATE nums(LIST) TO 5, 3, 8, 1, 9, 2, 7, 4, 6.
+
+1\ REAP sorted  FROM lists:SORT,    nums.
+1\ REAP rev     FROM lists:REVERSE, nums.
+1\ REAP uniq    FROM lists:UNIQUE,  nums.
+1\ REAP avg     FROM lists:AVERAGE, nums.
+1\ REAP median  FROM lists:MEDIAN,  nums.
+1\ REAP chunked FROM lists:CHUNK,   nums, 3.
+
+1\ SHOW sorted.
+1\ SHOW rev.
+1\ SHOW uniq.
+1\ SHOW avg.
+1\ SHOW median.
+1\ SHOW chunked.
