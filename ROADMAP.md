@@ -1,4 +1,4 @@
-# 🗺️ Pantlang Development Roadmap & Status Report (v0.6.0-Core)
+# 🗺️ Pantlang Development Roadmap & Status Report (v0.8.0-Core)
 
 This document outlines the architectural milestones, verified features, technical debt, and future ecosystem roadmap for the Pantlang programming language interpreter (**Chloroplast Core v0.6.0**).
 
