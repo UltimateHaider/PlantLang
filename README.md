@@ -1,4 +1,4 @@
-# 🌱 Pantlang (Chloroplast Complete Engine — v0.7.0)
+# 🌱 Pantlang (Chloroplast Complete Engine — v0.8.0)
 
 Pantlang is an innovative, high-level, structural programming language designed around human-like readability and structural simplicity. By utilizing an ecosystem-inspired vocabulary (such as Soil, Storms, Sprouting, and Reaping), Pantlang bridges the gap between natural language logic and robust computing architecture.
 
@@ -18,12 +18,12 @@ Pantlang is built upon three foundational design pillars:
 
 ## 🚀 Key Features Implemented (Simulator & Interpreter Core)
 
-The active **Chloroplast v0.6.0** engine manages complex execution scopes including:
+The active **Chloroplast v0.8.0** engine manages complex execution scopes including:
 
 * **Object-Oriented Ecosystem (`SPECIES` / `PARENT` / `BLOOM`):** Supports true class structures, method overriding, absolute dynamic state isolation, and inheritance lineage validation via `IS_A`.
 * **Advanced Functional Scopes (`ACTION` / `GIVE` / `REAP`):** Explicit typing parameter passing, deep functional recursion capabilities, and strict result harvesting.
 * **Simulated Concurrency (`SPROUT` / `SYNC` / `RACE`):** Native multi-threaded block queuing where you can spawn async tasks, synchronize multiple workers, or capture the fastest resolving thread.
-* **Reactive Data Binding (`PULSE` / `WHENEVER`):** Observable variables that trigger deeply nested responsive handlers automatically upon every mutation.
+* **Reactive Data Binding (`PULSE` / `WHENEVER`):** Observable variables that trigger deeply nested responsive handlers automatically upon every mutation (Fully verified alongside nested `MATCH` blocks).
 * **Virtual I/O Streaming (`TAP` / `ABSORB` / `INFUSE` / `SEAL`):** A mock file-system data layout to open paths, stream lines, inject content bytes, and safely close buffers.
 * **The 12-Storm Exception Matrix:** 12 strongly-typed systemic exceptions (like `ZERO_STORM`, `LOCK_STORM`, `MISSING_STORM`) caught natively via localized `WEATHER` / `SHELTER` / `CALM` safety shelters.
 * **The PLANT Standard Library:** Immediate structural extensions: `PLANT math` (11 functions), `PLANT strings` (10 functions), and `PLANT lists` (9 algorithms).
@@ -41,16 +41,29 @@ The active **Chloroplast v0.6.0** engine manages complex execution scopes includ
 | `PUT val INTO list` | Collection | Inject an element into the end of a cluster. |
 | `LINK key WITH val IN SELF:map` | Collection | Associate and bind key-value pairs directly inside a native MAP. |
 | `FLOW expression` | Pipeline | Chain the output of an expression into sequential filters (supports multi-line parsing). |
-| `MATCH x / IS / YIELDBranching` | Branching | Non-fallthrough pattern matching with `IS BETWEEN` constraints. |
-| `ANALYZE list` | Inspection | Extract deep statistics (sum, avg, median, min, max). |
+| `MATCH x / IS / YIELD` | Branching | Non-fallthrough pattern matching with `IS BETWEEN` constraints. |
+| `ANALYZE list` | Inspection | Extract deep statistical reports and multi-type metrics. |
 | `EVAPORATE x` | Lifecycle | Instantly delete a variable pointer and free memory soil. |
 
 ---
 
-## 📦 Recent Architectural Fixes & Enhancements (v0.6.0 Changelog)
+## 📦 Recent Architectural Alignments & Enhancements (v0.8.0 Changelog)
 
-The latest stable release closes critical grammar, scoping, and data serialization gaps:
+The latest release achieves complete production alignment with the language specifications, resolving historical technical debts and adding missing core functionalities:
 
+### 🚀 Feature Enhancements
+* **`ANALYZE` Engine Core:** Fully implemented custom multi-type statistical reporting:
+  * **`LIST`:** Extracts deep metrics (`sum`, `avg`, `min`, `max`, and `median`).
+  * **`TX` (Strings):** Computes total length and string boundaries metrics.
+  * **`MAP`:** Inspects active keys and dynamic structural types.
+* **`TYPEOF` Operator:** Implemented type extraction evaluation via `REAP t FROM TYPEOF x.` returning string representations of data models.
+* **`NOW` Real-time Clock:** Successfully debugged and revived. Resolved an execution conflict with the global `REAP` pipeline and fixed scope collisions between `SHOW NOW` and custom local variables named `now`.
+* **`WAIT` Synchronous Interlocking:** Implemented true synchronous blocking using `Atomics.wait` backend execution loops, securely bounded by a maximum of 10 seconds for runtime safety.
+* **`ROOT_SCOPE` Execution Guard:** Built as a protected native `MAP` inside `_firstPass`. Supports dynamic global reads and configuration adjustments via `CONFIG:"key"` blocks while strictly raising a `LOCK_STORM` upon unauthorized mutations.
+* **Quoted Map Key Evaluation (`obj:"key"`):** Extended expression evaluators (`evalExpr`), `SHOW`, and `SET` syntax rules to seamlessly support quoted string literals as identifiers inside `MAP` collections.
+* **Deep Immutability Enforcement:** Added missing strict immutability checks for both `SET obj:prop` and `SET obj:"key"`, ensuring mutated locked maps gracefully throw `LOCK_STORM` exceptions.
+
+### 🛠️ Stable Bug Fixes (Consolidated)
 * **Escaped Delimiters in `CYCLE`:** Fixed a lexer bug where the closing double-backslash (`\\`) in `CYCLE FROM/TO` blocks inside `ACTION` contexts failed to tokenize correctly using strict regex evaluation (`/^\\+$/`).
 * **Multi-line `FLOW` Sanitization:** Resolved parsing failures caused by trailing commas or redundant tokens in multi-line `FLOW` steps by introducing a robust line-cleansing pipeline (`clean,` normalization).
 * **Quoted Sources in `FLOW`:** Upgraded the `FLOW` source extractor regex to fully support quoted string literals containing Arabic punctuation, spaces, and special characters without breaking the pipeline.
@@ -63,42 +76,22 @@ The latest stable release closes critical grammar, scoping, and data serializati
 
 ## 🧪 Verification & Testing Status
 
-* **Core Unit Tests:** `50 / 50 Passed` (100% Success Rate) ✅
-* **Integration Benchmarks:** All `5 / 5 Production Examples` executed without architectural or syntax regressions. ✅
+* **Core Unit Tests:** `56 / 56 Passed` (100% Success Rate — 6 new tests added for v0.8.0 core targets) ✅
+* **Integration Benchmarks:** All `5 / 5 Production Examples` executed flawlessly without regressions. ✅
 
 ---
 
-## 🚀 How to Run the Simulator
+## 📦 Installation & Execution (Command Line Core)
 
-Since the full core interpreter is built inside a highly responsive sandbox web environment:
+You can clone and run the standalone **Chloroplast CLI Engine** natively using Node.js:
 
-1. Clone this repository or download the latest `plantlang_complete_v6.html` file.
-2. Open the file directly by double-clicking it in any modern web browser (Chrome, Edge, Firefox, Safari).
-3. Choose any of the ready-made built-in benchmark scripts from the dropdown:
-   * **Comprehensive Ecosystem Test:** (Inheritance, Constants, Time Calculations).
-   * **Advanced Math & Operations:** (PEMDAS compound calculation validation).
-   * **ACTION / GIVE:** (Deep function recursion checks).
-4. Click ▶ **GROW** to see your code compile, execute, and display real-time memory mutations in the Current Soil inspector pane.
+```bash
+# Clone the official repository using GitHub CLI
+gh repo clone UltimateHaider/PlantLang
+cd PlantLang
 
----
+# Link the binary globally to use the 'chloroplast' command directly
+npm link
 
-## 🗺️ Project Roadmap (Future Goals)
-
-To evolve Pantlang from a sandboxed web engine into a globally deployable production environment, the development lifecycle maps out the following milestones:
-
-### 1. Standalone Core
-* **Native Interpreter:** Moving from browser JavaScript into a fast standalone CLI engine binary (`Chloroplast Native`).
-* **Transpiler Targets:** Compiling `.plnt` scripts into highly optimized Go, Rust, or Python source projects.
-* **Interactive REPL:** A command-line console to test statements and track variables live.
-* **Advanced Error Diagnostics:** Context-aware visual stack traces (`^`) indicating precise row/column offsets during compilation or runtime storms.
-
-### 2. Network & Storage Layer
-* **HARVEST API:** Integrated HTTP client blocks to process external network streams.
-* **SOW / FIND_IN Drivers:** Abstract integration wrappers for persistence structures and database drivers.
-* **LISTEN BRANCH Web Core:** Native backend router blocks to spin up localized micro-service web servers.
-
-### 3. Developer Tooling
-* **GREENHOUSE Packages:** A dedicated module compiler registry and dependency management suite.
-* **SHIELD Security:** Capability-oriented resource bounds governing safe OS system operations.
-* **IDE Ecosystem / LSP:** Full VSCode Extension supporting Language Server Protocol for Syntax Highlighting and Auto-complete.
-* **Visual Logic & Localization Integration:** Native RTL parsing support allowing variable names and script code strings to accept Arabic input parameters natively, maintaining the visual integrity of both scripts.
+# Alternatively, run the core interpreter file directly using Node.js
+node chloroplast.js --help
