@@ -1,90 +1,80 @@
-# 🗺️ Pantlang Development Roadmap & Status Report (v0.9.0-Core)
+# 🗺️ Pantlang Development Roadmap & Status Report (v0.10.0-Ecosystem Phase)
 
-This document outlines the architectural milestones, verified features, technical debt updates, and future ecosystem roadmap for the Pantlang programming language interpreter (**Chloroplast Core v0.8.0**).
+This document outlines the architectural milestones, verified features, active technical updates, and upcoming design targets for the Pantlang programming language interpreter (**Chloroplast Core v0.10.0**).
 
 ---
 
 ## 🟩 1. Features Fully Implemented & Verified (100% Stable)
 
-The following components have been fully integrated into the Node.js runtime environment and validated through rigorous testing:
+The following components have been fully integrated into the Node.js production runtime environment and validated through native automated regressions:
 
-### 🧱 Architecture, Runtime & Data Type Alignments
-* **Advanced Lexer & Parser:** Full support for depth-based multi-line strings (`\n`), statement sealing via periods (`.`), statement continuation via commas (`,`), and multi-line block closures using explicit indentation syntax (`\n.`).
-* **The Soil Engine & Localized Environment:** Strict lexical scoping managing variable chains with dynamic cross-context state evaluation.
-* **The Plant Typing Ecosystem:** Dynamic core runtime type enforcement supporting `NUM`, `SCL`, `TX`, `FACT`, `LIST`, `MAP`, `INSTANCE`, and `VEIN`.
-* **Deep Dynamic Spec Alignment (New in v0.8.0):**
-  * **`ANALYZE` Reducer Engine:** Multi-type statistical compiler processing `LIST` metrics (sum, avg, min, max, median), `TX` string lengths, and `MAP` key footprints.
-  * **`TYPEOF` Operator:** Native type extraction via `REAP t FROM TYPEOF x.` expressions returning standard string identifiers.
-  * **`NOW` Clock & `WAIT` Interlocking:** Fixed timing pipeline overlaps to revive `NOW` timestamps, and added true synchronous blocking loop safety utilizing underlying `Atomics.wait` structures (bounded safely at 10 seconds).
-  * **`ROOT_SCOPE` Global Workspace:** Built as a dedicated, protected global `MAP` initialized at `_firstPass`. Supports dynamic reading and writing through global `CONFIG:"key"` strings, throwing a `LOCK_STORM` on unauthorized mutations.
-  * **Quoted Map Literals & Immutability:** Extended expression evaluation (`evalExpr`), `SHOW`, and `SET` definitions to safely handle string-quoted object properties (`obj:"key"`), ensuring fully locked maps correctly throw structural `LOCK_STORM` exceptions.
+### 🧱 First-Class Native Testing Framework (New in v0.9.0)
+* **`VERIFY` Semantic Engine:** Native test automation grammar executing 5 assertion behaviors directly inside the source engine:
+  1. **Expression Validation (`expr IS expected`):** Evaluates relational operations and boundary loops.
+  2. **Pipeline Harvesting (`FROM action, args GIVES expected`):** Captures functional output transformations.
+  3. **Storm Interception (`STORMS STORM_TYPE FROM expr`):** Confirms absolute crash containment.
+  4. **Dynamic Type Assertion (`TYPE var IS TYPE_NAME`):** Verifies dynamic model instances.
+  5. **Capacity Bounds (`COUNT cluster IS n`):** Tracks allocation sizing for `LIST` and `MAP`.
+* **`SUITE` Layout Isolation:** Contextual grouping structures (`SUITE` / `SUITE/.`) to cleanly wrap, process, and isolate multi-tiered test executions.
+* **100% Native Migration Baseline:** Fully deprecated legacy JS testing setups; all **56 core test specs** are migrated directly into `tests/suite.plnt` using pure Pantlang logic.
 
-### 🧭 Control Flow & Operations
-* **Ecosystem Idioms:** Complete variable lifecycle and immutability checking (`CREATE`, `SET`, `INCREASE`, `DECREASE`, `SHOW`, `LOCK`, `ROOT`, `EVAPORATE`).
-* **Advanced Routing:** Inline/block conditional `IF` processing, short-circuiting `STOP IF` commands, and exhaustive `MATCH/YIELD` branching blocks with boundary testing (`BETWEEN`).
-* **Reactive Core Integration:** Verified standalone `PULSE` and `WHENEVER` property binding layers behaving accurately inside nested `MATCH` constructs.
-* **Looping Mechanisms:** Native `CYCLE` execution engines iterating gracefully over specific collection windows or array intervals, alongside `SEASON` blocks.
+### ⚙️ Core Runtime & Type Alignments
+* **Advanced Lexer & Parser:** Full depth-based block architecture handling multi-line strings (`\n`), statement sealing (`.`), sequence continuation (`,`), and indentation block bounds (`\n.`).
+* **The Soil Engine:** Lexical environment managing cross-context variable resolution chains.
+* **The Plant Typing Lattice:** Strict data enforcement for `NUM`, `SCL`, `TX`, `FACT`, `LIST`, `MAP`, `INSTANCE`, and `VEIN`.
+* **Advanced Reducer & Clock Systems:** Functional `ANALYZE` summaries across compound variables, explicit `TYPEOF` reflection, synchronized clock loops (`NOW`), and safe interlocking delays (`WAIT`) using native `Atomics.wait`.
+* **`ROOT_SCOPE` Global Guard:** Protected configuration matrix accessed via `CONFIG:"key"` strings, raising immediate `LOCK_STORM` anomalies upon unauthorized write attempts.
 
-### 🧬 Objects, Functions & Pipelines
-* **The Species Paradigm (`SPECIES` / `BLOOM` / `PARENT`):** Object-oriented structural inheritance, dynamic method overrides, strict Method Resolution Order (MRO), and self-awareness context mapping using `SELF:prop`.
-* **Functional Ingestion (`ACTION` / `GIVE` / `REAP`):** Explicit function evaluation with recursive parameters passing stacks upward cleanly, even inside multi-level exception safety bounds.
-* **Functional Pipelines (`FLOW`):** Linear evaluation structures piping input expressions into sequential filtering sequences with built-in algorithms (`SORT`, `REVERSE`, `UNIQUE`, `FLATTEN`).
+### 🧬 Objects, Functional Ingestion & Pipelines
+* **The Species Paradigm (`SPECIES` / `BLOOM` / `PARENT`):** Full object-oriented hierarchy, member inheritance, method resolution order (MRO), and dynamic mutation updates using `SELF`.
+* **Recursive Functional Pipelines:** Advanced routing maps handling parameters through `ACTION`/`GIVE`/`REAP` call stacks seamlessly, alongside integrated list operators (`SORT`, `REVERSE`, `UNIQUE`, `FLATTEN`) within **`FLOW`** tracks.
 
-### 🌊 Standard Library & Exception Matrix
-* **12-Storm Exception Matrix:** Strongly-typed architectural anomalies caught via localized `WEATHER` / `SHELTER` / `CALM` safety blocks with stable control bubble processing.
-* **Virtual File System I/O:** Isolated byte pointer operations manipulating files safely via `TAP`, `ABSORB`, `INFUSE`, and `SEAL`.
-* **The PLANT Standard Lib:** High-efficiency mathematical, string manipulation, and list sorting utilities (`PLANT math`, `PLANT strings`, `PLANT lists`, `PLANT io`, `PLANT fs`).
-
-### 🧪 Verification Metrics
-* **Core Unit Tests:** `56 / 56 Passed` (100% Success Rate — Including 6 newly deployed test suites for v0.8.0 keyword confirmation) ✅
-* **Integration Benchmarks:** All `5 / 5 Production Examples` executed natively without regressions or parsing failure. ✅
+### 🧪 Current Verification Metrics
+* **Native Test Automation (`tests/suite.plnt`):** `56 / 56 Passed` (100% Success Rate) ✅
+* **Integration Benchmarks:** All `5 / 5 Production Architecture Examples` executed without regressions. ✅
 
 ---
 
-## 🟨 2. Technical Debt & Known Gaps (Remaining Refining Gaps)
+## 🟨 2. Technical Debt & Known Gaps (Ecosystem Bridge Tasks)
 
-These sections outline edge cases and architectural refactors scheduled to optimize the core engine:
+These remaining gaps focus strictly on finalizing legacy specs and optimizing internal visual tracking logs:
 
-| Category | Component / Feature Gaps | Current Status & Scope |
+| Category | Component / Feature Gaps | Current Status & Target Scope |
 | :--- | :--- | :--- |
-| **Specification Gaps** | `BRAID` Engine Implementation | Documented in user guide specs; needs translation to core parser loops. |
-| **Deep Edge Cases** | Deeply Nested `WEATHER` Scopes | Exception propagation behaves correctly, but multi-nested try/catch structures require automated unit-test expansion. |
-| **Error Handling** | Storm Code Optimization | Refactoring under-utilized storm types (`LOST_STORM`, `BOUND_STORM`, `PERM_STORM`, `STOP_STORM`) to capture subtle core engine faults. |
+| **Specification Gaps** | `BRAID` Concurrency Combinator | Needs parsing engine adjustments to mesh asynchronous execution branches together. |
+| **Error Handling** | Visual Error Pointers (`^`) | Swapping raw stack traces for row/column line offset trace diagnostics. |
+| **Deep Edge Cases** | Multi-nested `WEATHER` Recovery | Needs extensive automated test variations to verify multi-tier catch behaviors. |
 
 ---
 
-## 🟥 3. Complete Future Feature Roadmap (Ecosystem Expansion)
+## 🟥 3. Complete Future Feature Roadmap (The v0.10.0 Horizon)
 
-Future development goals to transition Pantlang into a globally deployable production ecosystem:
+Strategic milestones planned to transition Pantlang from a localized tool into a network-aware, secure runtime environment:
 
-### Phase 1: Native Compilers & Transpilation Blueprints
-* **The Mission Transpiler Engine:** Constructing structural token transpilation configurations translating optimized `.plnt` programs into native high-performance files:
-  * `MISSION:FAST` $\rightarrow$ Go source layouts.
+### Phase 1: Web & Networking Protocol Core (Priority 1)
+* **`HARVEST` Client Architecture:** Integrating native asynchronous HTTP/HTTPS client structures to safely fetch data feeds and interface with web endpoints.
+* **`LISTEN BRANCH` Web Server Engine:** A lightweight, high-performance concurrency block to spawn native HTTP servers directly from within a script file.
+* **`STREAM` Connectivity:** WebSockets architecture layer managing ongoing duplex channels for live systems messaging.
+
+### Phase 2: Native Compilers & Transpilation Layers (Priority 2)
+* **The Mission Transpiler Target Hub:** Building out the compilation blueprint pipelines to generate standalone files from `.plnt` sources:
+  * `MISSION:FAST` $\rightarrow$ Go source modules.
   * `MISSION:SAFE` $\rightarrow$ Rust codebases.
-  * `MISSION:SMART` $\rightarrow$ Scripted Python nodes.
-* **Advanced CLI Dev-Tools:** Upgrading the current REPL with true token colorization, tab auto-completions, and dedicated interactive debugger visual trees.
+  * `MISSION:SMART` $\rightarrow$ Scripted Python structures.
+* **Terminal UI Enhancements:** Upgrading the standard REPL shell loop with interactive syntax highlighting, context autocompletion, and visual trace views.
 
-### Phase 2: Web, Networking & Persistent Storage Layers
-* **`HARVEST` Client API:** Native asynchronous HTTP/HTTPS client structures for network calls and API ingestion.
-* **`SOW` / `FIND_IN` Engine:** Abstract structural mapping layers serving as flexible database query drivers.
-* **`LISTEN BRANCH` & `STREAM` Blocks:** Lightweight, built-in concurrent server configurations spinning up native HTTP routers and high-speed WebSockets directly inside Pantlang.
-
-### Phase 3: Package Management & Deep Localization
-* **`GREENHOUSE` Package Ecosystem:** Registry managers ensuring secure distribution of shared external dependency modules.
-* **`SHIELD` Sandboxing:** Capability-based permission matrices restricting file, network, or OS process allocations at compile-time.
-* **Arabic Native Localization:** Adjusting identifier regex limits within the Lexer to accept full Arabic script inputs for variable structures, methods, and routine signatures natively.
+### Phase 3: Package Distribution & Native Arabic Naming
+* **`SOW` & `FIND_IN` Storage Adapters:** Abstract persistence wrappers serving as generic query interfaces for database infrastructures.
+* **`GREENHOUSE` Dependency Hub:** Centralized system package manager supervising package publishing and semantic imports.
+* **`SHIELD` Capabilities Security:** Secure compile-time resource access matrices regulating filesystem, networking, or host process permissions.
+* **Arabic Native Localization:** Adjusting the internal identifier regular expressions within the Lexer to accept full Arabic alphabet strings for variables, actions, and method naming frames natively.
 
 ---
 
-## 🎯 4. Immediate Strategic Priority Matrix
+## 🎯 4. Immediate Strategic Priority Matrix (Sprints for v0.10.0)
 
-Our upcoming core engineering sprints will target the following milestones:
+Our next upcoming engineering iterations will focus strictly on the following tactical completions:
 
-### 1. Robust Native Assertion Framework (`VERIFY`)
-* Building the **`VERIFY`** command as a first-class language structure. This introduces a native assertion framework directly into the grammar, allowing production projects to run native regression test cases inside Pantlang scripts before building complex network drivers.
-
-### 2. Comprehensive Deep Stack Trace Logging
-* Improving error diagnostics to switch out generic errors for context-aware visual trace pointers (`^`) highlighting exact row/column offsets during lexing or dynamic execution storms.
-
-### 3. Core Engine Benchmarking
-* Validating interpreter performance limits, ensuring memory buffers handle massive script packages (thousands of execution lines) and tracking recursion depth caps inside the AST evaluation loops.
+1. **The `BRAID` Combinator Specification:** Implementing the final missing language manual keyword into `core/interpreter.js` to enable advanced multi-stream code weaving.
+2. **The `HARVEST` Asynchronous Client Engine:** Designing the network fetch mechanics, ensuring response streams map smoothly back into native `MAP` or `TX` elements inside the current Soil.
+3. **Advanced Visual Errors:** Building context-rich, pointer-based terminal logs (`^`) indicating precise row and column positioning whenever a compilation or runtime `Storm` panics.
