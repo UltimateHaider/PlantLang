@@ -1,4 +1,4 @@
-# 🌱 PlantLang (Chloroplast Complete Engine — v1.0.0-Core)
+# 🌱 PlantLang (Chloroplast Complete Engine — v0.10.0-Core)
 
 PlantLang is an innovative, high-level, structural programming language designed around human-like readability and structural simplicity. By utilizing an ecosystem-inspired vocabulary (such as Soil, Storms, Sprouting, and Reaping), PlantLang bridges the gap between natural language logic and robust computing architecture.
 
@@ -18,7 +18,7 @@ PlantLang is built upon three foundational design pillars:
 
 ## 🚀 Key Features Implemented (Simulator & Interpreter Core)
 
-The foundational language core is now officially 100% Complete. The active Chloroplast v1.0.0 engine manages complex execution scopes including:
+The foundational language core is now officially 100% Complete. The active Chloroplast v0.10.0 engine manages complex execution scopes including:
 
 * Native Test Automation (SUITE / VERIFY): Built-in first-class assertion frame supporting isolated expression checks, action harvesting, and native exception tracking written entirely inside PlantLang itself.
 * Data Intertwining (BRAID): Native capability to align multiple parallel collections into paired blocks or zip key/value streams directly into dynamic MAP layouts.
