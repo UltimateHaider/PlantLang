@@ -1,0 +1,372 @@
+MISSION: SAFE.
+PLANT math.
+PLANT strings.
+PLANT lists.
+
+# ═══════════════════════════════════════════════════════════
+#  PlantLang Test Suite — written in PlantLang using VERIFY
+# ═══════════════════════════════════════════════════════════
+
+
+# ── Helpers ─────────────────────────────────────────────────
+1\ ACTION add(a(NUM), b(NUM)),
+2\   GIVE a + b.
+1\ /ACTION.
+
+1\ ACTION multiply(a(NUM), b(NUM)),
+2\   GIVE a * b.
+1\ /ACTION.
+
+1\ ACTION factorial(n(NUM)),
+2\   IF n IS 0, GIVE 1.
+2\   REAP sub FROM factorial, n - 1.
+2\   GIVE n * sub.
+1\ /ACTION.
+
+1\ ACTION greet(name(TX)),
+2\   GIVE "Hello, " + name + "!".
+1\ /ACTION.
+
+1\ ACTION safe_div(a(NUM), b(NUM)),
+2\   WEATHER,
+3\     GIVE a / b.
+2\   SHELTER ZERO_STORM,
+3\     GIVE -1.
+2\   CALM.
+1\ /ACTION.
+
+1\ SPECIES Counter,
+2\   VAR count(NUM) TO 0.
+2\   VAR step(NUM) TO 1.
+2\   ACTION tick(),
+3\     INCREASE SELF:count BY SELF:step.
+3\     GIVE SELF:count.
+2\   /ACTION.
+2\   ACTION reset(),
+3\     SET SELF:count TO 0.
+3\     GIVE 0.
+2\   /ACTION.
+1\ /SPECIES.
+
+1\ SPECIES Animal,
+2\   VAR name(TX) TO "?".
+2\   VAR sound(TX) TO "...".
+2\   ACTION speak(),
+3\     GIVE SELF:name + " says " + SELF:sound.
+2\   /ACTION.
+1\ /SPECIES.
+
+1\ SPECIES Dog PARENT Animal,
+2\   VAR breed(TX) TO "mixed".
+2\   ACTION fetch(),
+3\     GIVE SELF:name + " fetches!".
+2\   /ACTION.
+1\ /SPECIES.
+
+ROOT PASS_MARK TO 50.
+ROOT APP_NAME TO "PlantLang".
+
+ROOT_SCOPE CONFIG,
+  LINK "theme" WITH "dark" IN CONFIG.
+  LINK "lang"  WITH "en"   IN CONFIG.
+  LINK "ver"   WITH "0.6"  IN CONFIG.
+ROOT_SCOPE/.
+
+
+# ═══════════════════════════════════════════════════════════
+SUITE "Variables & Types",
+
+  1\ CREATE n(NUM)   TO 42.
+  1\ CREATE pi(SCL)  TO 3.14.
+  1\ CREATE msg(TX)  TO "hello".
+  1\ CREATE ok(FACT) TO TRUE.
+  1\ CREATE empty_list(LIST) TO.
+  1\ CREATE scores(LIST) TO 85, 92, 78, 96.
+
+  VERIFY "NUM creation",
+    n IS 42.
+
+  VERIFY "SCL creation",
+    pi IS 3.14.
+
+  VERIFY "TX creation",
+    msg IS "hello".
+
+  VERIFY "FACT creation",
+    ok IS TRUE.
+
+  VERIFY "TYPE of NUM",
+    TYPE n IS NUM.
+
+  VERIFY "TYPE of TX",
+    TYPE msg IS TX.
+
+  VERIFY "TYPE of LIST",
+    TYPE scores IS LIST.
+
+  VERIFY "COUNT of scores",
+    COUNT scores IS 4.
+
+  VERIFY "empty LIST has 0 items",
+    COUNT empty_list IS 0.
+
+SUITE/.
+
+
+# ═══════════════════════════════════════════════════════════
+SUITE "Math & Arithmetic",
+
+  1\ CREATE x(NUM) TO 10.
+  1\ CREATE y(NUM) TO 3.
+
+  VERIFY "addition",
+    x + y IS 13.
+
+  VERIFY "subtraction",
+    x - y IS 7.
+
+  VERIFY "multiplication",
+    x * y IS 30.
+
+  VERIFY "integer division",
+    x // y IS 3.
+
+  VERIFY "modulo",
+    x % y IS 1.
+
+  VERIFY "power",
+    2 ** 8 IS 256.
+
+  VERIFY "math:SQRT",
+    FROM math:SQRT, 144 GIVES 12.
+
+  VERIFY "math:ABS negative",
+    FROM math:ABS, -7 GIVES 7.
+
+  VERIFY "math:ROUND",
+    FROM math:ROUND, 3.567, 2 GIVES 3.57.
+
+  VERIFY "math:POW",
+    FROM math:POW, 2, 10 GIVES 1024.
+
+SUITE/.
+
+
+# ═══════════════════════════════════════════════════════════
+SUITE "Actions & Recursion",
+
+  VERIFY "add action",
+    FROM add, 7, 8 GIVES 15.
+
+  VERIFY "multiply action",
+    FROM multiply, 6, 7 GIVES 42.
+
+  VERIFY "greet action",
+    FROM greet, "World" GIVES "Hello, World!".
+
+  VERIFY "factorial 0",
+    FROM factorial, 0 GIVES 1.
+
+  VERIFY "factorial 5",
+    FROM factorial, 5 GIVES 120.
+
+  VERIFY "safe_div normal",
+    FROM safe_div, 10, 2 GIVES 5.
+
+  VERIFY "safe_div by zero returns -1",
+    FROM safe_div, 5, 0 GIVES -1.
+
+SUITE/.
+
+
+# ═══════════════════════════════════════════════════════════
+SUITE "Lists",
+
+  1\ CREATE fruits(LIST) TO apple, banana, mango.
+  1\ PUT kiwi INTO fruits.
+  1\ TAKE apple FROM fruits.
+  1\ SORT fruits.
+
+  VERIFY "PUT adds element",
+    COUNT fruits IS 3.
+
+  VERIFY "TAKE removes element",
+    FIRST fruits IS "banana".
+
+  VERIFY "SORT works",
+    LAST fruits IS "mango".
+
+  1\ CREATE nums(LIST) TO 5, 3, 8, 1, 9, 2.
+
+  VERIFY "SUM list",
+    SUM nums IS 28.
+
+  VERIFY "MAX list",
+    MAX nums IS 9.
+
+  VERIFY "MIN list",
+    MIN nums IS 1.
+
+  VERIFY "strings:SPLIT",
+    FROM strings:SPLIT, "a,b,c", "," GIVES "a,b,c".
+
+SUITE/.
+
+
+# ═══════════════════════════════════════════════════════════
+SUITE "Strings",
+
+  1\ CREATE word(TX) TO "  PlantLang  ".
+
+  VERIFY "strings:TRIM",
+    FROM strings:TRIM, word GIVES "PlantLang".
+
+  VERIFY "strings:UPPER",
+    FROM strings:UPPER, "hello" GIVES "HELLO".
+
+  VERIFY "strings:LOWER",
+    FROM strings:LOWER, "HELLO" GIVES "hello".
+
+  VERIFY "strings:LENGTH",
+    FROM strings:LENGTH, "hello" GIVES 5.
+
+  VERIFY "strings:INCLUDES true",
+    FROM strings:INCLUDES, "hello world", "world" GIVES "true".
+
+  VERIFY "strings:REPLACE",
+    FROM strings:REPLACE, "hello", "ell", "ELL" GIVES "hELLo".
+
+SUITE/.
+
+
+# ═══════════════════════════════════════════════════════════
+SUITE "Storms",
+
+  VERIFY "ZERO_STORM fires on division by zero",
+    STORMS ZERO_STORM FROM 1 / 0.
+
+  VERIFY "MISSING_STORM on undefined var",
+    STORMS MISSING_STORM FROM undefined_variable_xyz.
+
+  VERIFY "LOCK_STORM on ROOT modification",
+    STORMS LOCK_STORM FROM SET PASS_MARK TO 0.
+
+  1\ CREATE caught(TX) TO "no".
+  1\ WEATHER,
+  2\   SHOW 10 / 0.
+  1\ SHELTER ZERO_STORM,
+  2\   SET caught TO "yes".
+  1\ CALM.
+
+  VERIFY "WEATHER catches ZERO_STORM",
+    caught IS "yes".
+
+SUITE/.
+
+
+# ═══════════════════════════════════════════════════════════
+SUITE "Species & Objects",
+
+  1\ BLOOM Counter AS c1.
+  1\ BLOOM Counter AS c2.
+  1\ SET c2:step TO 5.
+
+  1\ REAP v1 FROM c1:tick.
+  1\ REAP v2 FROM c1:tick.
+  1\ REAP v3 FROM c1:tick.
+
+  VERIFY "counter tick increments",
+    c1:count IS 3.
+
+  VERIFY "REAP tick returns count",
+    v3 IS 3.
+
+  1\ REAP _ FROM c1:reset.
+
+  VERIFY "reset clears count",
+    c1:count IS 0.
+
+  1\ REAP s1 FROM c2:tick.
+
+  VERIFY "custom step works",
+    c2:count IS 5.
+
+  1\ BLOOM Dog AS rex.
+  1\ SET rex:name TO "Rex".
+  1\ SET rex:sound TO "Woof!".
+  1\ REAP d1 FROM rex:speak.
+  1\ REAP d2 FROM rex:fetch.
+
+  VERIFY "inherited method speak",
+    d1 IS "Rex says Woof!".
+
+  VERIFY "Dog-specific method fetch",
+    d2 IS "Rex fetches!".
+
+SUITE/.
+
+
+# ═══════════════════════════════════════════════════════════
+SUITE "ROOT & ROOT_SCOPE",
+
+  VERIFY "ROOT constant read",
+    PASS_MARK IS 50.
+
+  VERIFY "ROOT_SCOPE read dark theme",
+    CONFIG:"theme" IS "dark".
+
+  VERIFY "ROOT_SCOPE read version",
+    CONFIG:"ver" IS "0.6".
+
+  VERIFY "ROOT is locked",
+    STORMS LOCK_STORM FROM SET APP_NAME TO "X".
+
+SUITE/.
+
+
+# ═══════════════════════════════════════════════════════════
+SUITE "NOW & TYPEOF",
+
+  1\ REAP ts FROM NOW FORMAT:STAMP.
+
+  VERIFY "NOW STAMP is NUM",
+    TYPE ts IS NUM.
+
+  VERIFY "TYPEOF list",
+    TYPE scores IS LIST.
+
+  VERIFY "NOW STAMP is positive",
+    ts GREATER THAN 0.
+
+SUITE/.
+
+
+# Summary printed by CLI verify command (or manually)
+
+SUITE "BRAID",
+
+  1\ CREATE b_names(LIST) TO Alice, Bob, Charlie.
+  1\ CREATE b_scores(LIST) TO 95, 87, 72.
+
+  1\ BRAID b_names WITH b_scores AS b_pairs.
+
+  VERIFY "BRAID produces LIST",    TYPE b_pairs IS LIST.
+  VERIFY "BRAID length matches",   COUNT b_pairs IS 3.
+
+  VERIFY "BRAID MAP mode",         FROM lists:AVERAGE, b_scores GIVES 84.67.
+
+  1\ CREATE b_keys(LIST) TO host, port.
+  1\ CREATE b_vals(LIST) TO localhost, 8080.
+  1\ BRAID b_keys WITH b_vals AS b_cfg MAP.
+
+  VERIFY "BRAID MAP creates MAP",  TYPE b_cfg IS MAP.
+  VERIFY "BRAID MAP key access",   b_cfg:"host" IS "localhost".
+  VERIFY "BRAID MAP port",         b_cfg:"port" IS 8080.
+
+  1\ CREATE b_short(LIST) TO x, y.
+  1\ CREATE b_long(LIST) TO 1, 2, 3, 4.
+  1\ BRAID b_short WITH b_long AS b_zip.
+  VERIFY "BRAID truncates to shorter list",  COUNT b_zip IS 2.
+
+SUITE/.
+
