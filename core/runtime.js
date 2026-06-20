@@ -1,5 +1,5 @@
 'use strict';
-const STORMS=['ZERO_STORM','TYPE_STORM','MISSING_STORM','SEED_STORM','LOST_STORM','LOCK_STORM','BOUND_STORM','STOP_STORM','PERM_STORM','ANY_STORM'];
+const STORMS=['ZERO_STORM','TYPE_STORM','MISSING_STORM','SEED_STORM','LOST_STORM','LOCK_STORM','BOUND_STORM','STOP_STORM','PERM_STORM','NETWORK_STORM','ANY_STORM'];
 class PlantStorm extends Error {
   constructor(type,message,line){super(message);this.name=type||'ANY_STORM';this.stormType=type||'ANY_STORM';this.line=line;}
 }

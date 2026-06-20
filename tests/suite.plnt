@@ -370,3 +370,38 @@ SUITE "BRAID",
 
 SUITE/.
 
+
+# ═══════════════════════════════════════════════════════════
+SUITE "HTTP / HARVEST",
+
+  1\ HARVEST "https://pypi.org/pypi/requests/json" AS pkg.
+
+  VERIFY "HARVEST GET returns MAP",        TYPE pkg IS MAP.
+  VERIFY "HARVEST result has last_serial", TYPE pkg:"last_serial" IS NUM.
+  VERIFY "last_serial is positive",        pkg:"last_serial" GREATER THAN 0.
+
+  1\ CREATE hdr(MAP).
+  1\ LINK "User-Agent" WITH "PlantLang-Tests (ci@plantlang.dev)" IN hdr.
+  1\ HARVEST "https://crates.io/api/v1/crates/serde" HEADERS:hdr AS crate.
+
+  VERIFY "HARVEST with HEADERS works", TYPE crate IS MAP.
+
+  1\ CREATE payload(MAP).
+  1\ LINK "text" WITH "test" IN payload.
+  1\ HARVEST "https://registry.npmjs.org/-/v1/search" METHOD:POST BODY:payload AS post_resp.
+
+  VERIFY "HARVEST POST completes without throwing", TYPE post_resp IS MAP.
+
+  1\ CREATE caught(TX) TO "no".
+  1\ WEATHER,
+  2\   HARVEST "https://this-domain-does-not-exist-9999.invalid/" AS bad.
+  1\ SHELTER NETWORK_STORM,
+  2\   SET caught TO "yes".
+  1\ CALM.
+
+  VERIFY "NETWORK_STORM caught by WEATHER", caught IS "yes".
+  VERIFY "STORMS assertion catches network failure",
+    STORMS NETWORK_STORM FROM HARVEST "https://nonexistent-xyz-9999.invalid/" AS x.
+
+SUITE/.
+

@@ -1,5 +1,6 @@
 'use strict';
 const {storm,PlantStorm,inferType,coerce,Soil,VeinFS}=require('./runtime');
+const {harvestSync,toPlantValue}=require('./harvest');
 const {evalExpr,evalCond}=require('./evaluator');
 const {INNATE}=require('./innate');
 const {lex}=require('./lexer');
@@ -439,7 +440,7 @@ class Interpreter {
             storm('MISSING_STORM',`"${testExpr}" غير موجود`,line);
           }
           // Try as statement (SET, INCREASE etc)
-          const stmtM=testExpr.match(/^(SET|INCREASE|DECREASE|LOCK|EVAPORATE)\s/i);
+          const stmtM=testExpr.match(/^(SET|INCREASE|DECREASE|LOCK|EVAPORATE|HARVEST|PUT|TAKE|REAP)\s/i);
           if(stmtM){const r=this._exec(testExpr,stmts,i,soil,line);return;}
           // Try as expression
           E(testExpr);
@@ -451,7 +452,14 @@ class Interpreter {
         }
       }
 
-      // TYPE var IS TYPE_NAME
+      // TYPE var IS TYPE_NAME  (also supports TYPE obj:"key" IS ...)
+      else if(am=assertion.match(/^TYPE\s+(\w+):"([^"]*)"\s+IS\s+(\w+)$/i)){
+        const e=soil.get(am[1]);
+        const val=e&&e.value&&typeof e.value==='object'?e.value[am[2]]:undefined;
+        const actualType=val===undefined?'VOID':inferType(val);
+        pass=actualType.toUpperCase()===am[3].toUpperCase();
+        if(!pass)detail=`type is ${actualType}`;
+      }
       else if(am=assertion.match(/^TYPE\s+(\w+)\s+IS\s+(\w+)$/i)){
         const e=soil.get(am[1]);const actualType=e?e.type:'VOID';
         pass=actualType.toUpperCase()===am[2].toUpperCase();
@@ -606,6 +614,61 @@ class Interpreter {
       }else{this.emit(`ANALYZE "${m[1]}" → ${e.type}: ${v}`,'info');}
       return{next:i+1};
     }
+
+    // ── HARVEST: synchronous-style HTTP/HTTPS client ───────────
+    // HARVEST "url" AS result.
+    // HARVEST "url" METHOD:POST BODY:payload AS result.
+    // HARVEST "url" HEADERS:hdrMap AS result.
+    // HARVEST "url" METHOD:POST BODY:payload HEADERS:hdrMap AS result.
+    if(m=stmt.match(/^HARVEST\s+(.+?)\s+AS\s+(\w+)$/i)){
+      const rawHead=m[1],resName=m[2];
+
+      // First token is the URL (string literal or variable)
+      const urlMatch=rawHead.match(/^("(?:[^"]*)"|\S+)/);
+      if(!urlMatch)storm('SEED_STORM','HARVEST requires a URL',line);
+      const urlExpr=urlMatch[1];
+      const url=E(urlExpr);
+      if(typeof url!=='string'||!url)storm('SEED_STORM',`HARVEST: invalid URL "${url}"`,line);
+
+      let rest=rawHead.slice(urlMatch[0].length).trim();
+      let method='GET',bodyVal=null,headersVal=null,timeoutMs=10000;
+
+      // METHOD:WORD
+      let mm=rest.match(/METHOD:(\w+)/i);
+      if(mm)method=mm[1].toUpperCase();
+
+      // TIMEOUT:n  (seconds)
+      let tm=rest.match(/TIMEOUT:([\d.]+)/i);
+      if(tm)timeoutMs=Math.round(parseFloat(tm[1])*1000);
+
+      // BODY:expr  — expr is either a quoted string or a variable name
+      let bm=rest.match(/BODY:("(?:[^"]*)"|\w+)/i);
+      if(bm)bodyVal=E(bm[1]);
+
+      // HEADERS:varname — must reference a MAP variable
+      let hm=rest.match(/HEADERS:(\w+)/i);
+      if(hm){
+        const he=soil.get(hm[1]);
+        if(!he||typeof he.value!=='object'||Array.isArray(he.value))
+          storm('TYPE_STORM',`HARVEST HEADERS: "${hm[1]}" is not a MAP`,line);
+        headersVal=he.value;
+      }
+
+      this.emit(`HARVEST ${method} ${url} …`,'muted');
+      const result=harvestSync(url,{method,headers:headersVal,body:bodyVal,timeoutMs});
+
+      if(!result.success){
+        storm('NETWORK_STORM',`HARVEST failed: ${result.error}`,line);
+      }
+
+      const plantVal=toPlantValue(result.data);
+      const valType=Array.isArray(plantVal)?'LIST':(plantVal&&typeof plantVal==='object')?'MAP':'TX';
+      if(resName!=='_')soil.set(resName,plantVal,valType);
+
+      this.emit(`HARVEST ${method} ${url} → ${result.status} (${valType})`,result.ok?'ok':'warn');
+      return{next:i+1};
+    }
+    // ─────────────────────────────────────────────────────────
 
     // TAP/ABSORB/INFUSE/SEAL
     if(m=stmt.match(/^TAP\s+"([^"]+)"\s+MODE:(\w+)\s+AS\s+(\w+)$/i)){
