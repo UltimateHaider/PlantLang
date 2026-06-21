@@ -1,96 +1,90 @@
-# 🗺️ PlantLang Development Roadmap & Status Report (v0.12.0 Planned Phase)
+# 🗺️ PlantLang Development Roadmap & Status Report (v0.13.0 Planned Phase)
 
-This document outlines the architectural milestones, verified features, active technical updates, and upcoming design targets for the PlantLang programming language interpreter (**Chloroplast Core v0.12.0-Planned**).
+This document outlines the architectural milestones, verified features, active technical updates, and upcoming design targets for the PlantLang programming language interpreter (**Chloroplast Core v0.13.0-Planned**).
 
 ---
 
-## 🟩 1. Features Fully Implemented & Verified (100% Stable v0.11.0 Core)
+## 🟩 1. Features Fully Implemented & Verified (100% Stable v0.12.0 Core)
 
-The following components have been fully integrated into the Node.js production runtime environment and validated through native automated regressions within the Chloroplast v0.11.0 engine baseline:
+The following components have been fully integrated into the Node.js production runtime environment and validated through native automated regressions within the Chloroplast v0.12.0 engine baseline:
+
+### ⛈️ Precision Visual Diagnostics & Caret Locator Engine (`^`)
+* **Coordinate-Aware Lexer:** Upgraded `core/lexer.js` to accurately track `{depth, text, line, column}` parameters for every statement. The column calculation natively handles dynamic whitespace expansions, tab structures, and variable-length depth matrix prefixes (`N\`).
+* **Multiline Anchor Preservation:** Maintained structural location mapping across multi-line sequence continuation scopes linked via commas (`,`).
+* **Deep-Layer Storm Interception:** Refactored over 47 standalone internal `storm()` panic execution nodes. Implemented dual centralized interceptors wrapping the expression evaluator `E()` inside `_exec` and adding an automatic fallback catch matrix inside `_execOne`. Any position-less deep exceptions (like mathematical `ZERO_STORM` or transactional runtime `LOCK_STORM`) are automatically stamped with the current statement's row/column bounds before rendering.
+* **Pure Clean Diagnostics Output:** Suppresses messy, raw engine stack traces, rendering a beautiful, custom terminal error alignment panel instead:
+  ```text
+  ⛈️  Atmospheric Storm Panic: MISSING_STORM  --> examples/06_diagnostics.plnt:21:4
+  21 \ 1\ SHOW subtotl.
+              ^
+  Error: "subtotl" is not defined in the current dynamic Memory Soil.
+  ```
 
 ### 🌾 Synchronous Remote Ingestion (`HARVEST` Engine)
-* **Deadlock-Free Thread Concurrency:** Implemented background Node.js Worker Threads to execute network requests, resolving runtime event-loop locking by blocking the main execution thread using clean, OS-level atomic signals (`SharedArrayBuffer` & `Atomics.wait`).
-* **Deep Format Type Inference:** Built recursive parsing pipelines that automatically unpack incoming JSON payloads into native `MAP` structures, nested `LIST` matrices, and standard `TX` strings without external parsing wrappers.
-* **Atmospheric Network Storm Isolation:** Introduced `NETWORK_STORM` to capture physical connectivity drops or timeout thresholds inside native environmental `WEATHER/SHELTER` blocks. Standard HTTP status failures (like 404 or 500) are handled as data frames inside `result:"status"`.
+* **Deadlock-Free Concurrency:** Utilizes isolated Node.js background Worker Threads linked with atomic OS-level signals (`SharedArrayBuffer` & `Atomics.wait`) to ingestion-stream remote data payloads without stalling the active runtime loop.
+* **Automatic Format Inference:** Unpacks external JSON objects and arrays into strongly-typed native `MAP` structures and sequence `LIST` configurations recursively.
 
-### 🧱 First-Class Native Testing Framework
-* **VERIFY Semantic Engine:** Native test automation grammar executing 5 assertion behaviors directly inside the source engine:
-  * *Expression Verification* (`expr IS expected`): Evaluates relational operations and boundary loops.
-  * *Pipeline Harvesting* (`FROM action, args GIVES expected`): Captures functional output transformations.
-  * *Storm Interception* (`STORMS STORM_TYPE FROM expr`): Confirms absolute crash containment.
-  * *Dynamic Type Assertion* (`TYPE var IS TYPE_NAME`): Verifies dynamic model instances and quoted map fields (`TYPE x:"key" IS TYPE`).
-  * *Capacity Bounds* (`COUNT cluster IS n`): Tracks allocation sizing for `LIST` and `MAP`.
-* **SUITE Layout Isolation:** Contextual grouping structures (`SUITE` / `SUITE/.`) to cleanly wrap, process, and isolate multi-tiered test executions.
-* **100% Native Migration Baseline:** Fully deprecated legacy JS testing setups; all core unit tests are migrated directly into `tests/suite.plnt` using pure PlantLang logic.
+### 🧪 First-Class Native Testing Framework (`SUITE` & `VERIFY`)
+* **VERIFY Operational Core:** Integrated native keywords supporting 5 core assertion profiles (relational matches, reduction transformations, storm containments, dynamic instance types, and structural bound counts).
+* **Fully Native Suite Infrastructure:** 100% native execution mapping. Legacy test frames are completely deprecated; all core assertions run inside the language itself.
 
-### 🔄 Advanced Data Weaving & Mapping (The `BRAID` Engine)
-* **Structural Array Weaving:** Merges separate runtime data clusters into clean positional element pairings natively via the `BRAID` keyword.
-* **Dynamic Mapping Compression:** Zips matching keys and properties into a strongly-typed native `MAP` via `BRAID keys WITH vals AS config MAP.` blocks.
-* **Bounds Safety Trimming:** Short-circuits matching loop sets to gracefully clip allocations tightly down to the shortest target collection size.
+### 🔄 Data Weaving & Object Environments (`BRAID` & `SPECIES`)
+* **The BRAID Matrix Engine:** Merges discrete structural collections into balanced positional key-value layouts, safely short-circuiting arrays down to match the shortest collection boundary size.
+* **The Species Blueprint:** Prototype-free object-oriented hierarchy supporting strict functional parameters, context protection layers via `SELF`, inheritance lines, and instance validation.
 
-### ⚙️ Core Runtime & Type Alignments
-* **Advanced Lexer & Parser:** Full depth-based block architecture handling multi-line strings (`\n`), statement sealing (`.`), sequence continuation (`,`), and indentation block bounds (`\n.`).
-* **The Soil Engine:** Lexical environment managing cross-context variable resolution chains.
-* **The Plant Typing Lattice:** Strict data enforcement for `NUM`, `SCL`, `TX`, `FACT`, `LIST`, `MAP`, `INSTANCE`, and `VEIN`.
-* **ROOT_SCOPE Global Guard:** Protected configuration matrix accessed via `CONFIG:"key"` strings, raising immediate `LOCK_STORM` anomalies upon unauthorized write attempts.
-* **Quoted Key Evaluations (`obj:"key"`):** Extended expression evaluators (`evalExpr`), `SHOW`, and `SET` syntax rules to seamlessly support quoted string literals as identifiers inside `MAP` collections.
-
-### 🧬 Objects, Functional Ingestion & Pipelines
-* **The Species Paradigm (`SPECIES` / `BLOOM` / `PARENT`):** Full object-oriented hierarchy, member inheritance, method resolution order (MRO), and dynamic mutation updates using `SELF`.
-* **Recursive Functional Pipelines:** Advanced routing maps handling parameters through `ACTION`/`GIVE`/`TRACE` call stacks seamlessly, alongside integrated list operators (`SORT`, `REVERSE`, `UNIQUE`, `FLATTEN`) within `FLOW` tracks.
-
-### 🧪 Current Verification Metrics
-* **Native Test Automation (`tests/suite.plnt`):** 70 / 70 Passed (100% Success Rate) ✅ *(Includes 7 newly integrated network validation profiles)*
-* **Legacy Evaluation Base Tests:** 56 / 56 Passed (Arabic Compatibility Baseline) ✅
-* **Integration Benchmarks:** All 5 / 5 Production Architecture Examples executed flawlessly without regressions or execution leaks. ✅
+### 📊 Current Verification Metrics
+* **Total Automated Regressions:** **146 / 146 Assertions Passed (100% Success Rate)** ✅
+  * *Visual Diagnostic Panel & Arrow Alignment Sprints:* 20 / 20 Passed
+  * *Native Core Testing Matrix (`VERIFY`):* 70 / 70 Passed
+  * *Legacy Core Evaluation Tests (Arabic Base Compatibility):* 56 / 56 Passed
+* **Integration Benchmarks:** 6 / 6 Production Architecture Examples executed flawlessly with absolute clean zero-stack leak parameters. ✅
 
 ---
 
-## 🟨 2. Technical Debt & Known Gaps (v0.12.0 Optimization Sprints)
+## 🟨 2. Technical Debt & Known Gaps (v0.13.0 Optimization Sprints)
 
-These remaining items focus strictly on optimizing developer experience and refining deep execution safety for the upcoming milestone release:
+These remaining maintenance items focus strictly on hardening memory isolation parameters and preparing the environment for concurrent server routing frameworks:
 
-* **Category: Error Handling**
-  * *Component / Feature Gaps:* Visual Error Pointers (`^`)
-  * *Current Status & Target Scope:* Swapping raw stack traces for row/column line offset trace diagnostics to pinpoint compile-time and runtime exceptions inside the terminal.
-* **Category: Deep Edge Cases**
-  * *Component / Feature Gaps:* Multi-nested `WEATHER` Recovery
-  * *Current Status & Target Scope:* Expanding automated test variations to verify multi-tier catch behaviors within the 12-Storm Exception Matrix under concurrent constraints.
+* **Category: State Isolation**
+  * *Component / Feature Gaps:* Multi-threaded Dynamic Soil Sandboxing
+  * *Current Status & Target Scope:* Restructuring deep `Soil.clone()` behaviors to ensure incoming web connection requests spawn safely inside non-leaking concurrent thread execution scopes.
+* **Category: Edge Case Verification**
+  * *Component / Feature Gaps:* Multi-nested `WEATHER` Bounds
+  * *Current Status & Target Scope:* Expanding automated suite scenarios to track multiple stacked fallback recoveries inside concurrent processing pipelines.
 
 ---
 
-## 🟦 3. Complete Future Feature Roadmap (The v0.12.0 Horizon)
+## 🟦 3. Complete Future Feature Roadmap (The v0.13.0 Horizon)
 
-Strategic milestones planned to transition PlantLang from a network-capable core into a highly secure, web-server and native deployment ecosystem:
+Strategic milestones planned to transition PlantLang from a standalone desktop interpreter into a highly secure, high-concurrency web-server ecosystem:
 
 ### Phase 1: Web Server Protocol Engine (Priority 1)
-* **`LISTEN BRANCH` Web Server Core:** A lightweight, high-performance concurrency block to spawn native HTTP servers and handle routing layers directly from within a script file.
-* **`STREAM` Connectivity:** Permanent duplex channel web pipelines managing ongoing WebSocket architectures for real-time live systems messaging.
+* **`LISTEN BRANCH` Web Server Core:** Introducing lightweight, high-performance runtime blocks to instantiate concurrent native HTTP servers and map routing branches cleanly directly from inside a script file.
+* **`STREAM` Connectivity:** Permanent full-duplex communication pipeline matrices implementing native WebSocket architectures for live interactive messaging layers.
 
 ### Phase 2: Persistence, Dependency Hub & Security (Priority 2)
-* **`SOW` & `FIND_IN` Storage Adapters:** Abstract data mapper layouts and persistence wrappers serving as generic query interfaces for database infrastructures.
-* **`GREENHOUSE` Dependency Hub:** Centralized system package manager supervising package publishing, semantic versioning, and external file imports.
-* **`SHIELD` Capabilities Security:** Secure compile-time resource access matrices regulating filesystem, networking, or host process permissions.
+* **`SOW` & `FIND_IN` Storage Adapters:** Abstract data mapper contracts and persistence modules serving as query interfaces for major database infrastructures.
+* **`GREENHOUSE` Package Hub:** Unified package management system supervising atomic publishing workflows, semantic version tracking, and explicit structural imports.
+* **`SHIELD` Resource Control:** Access control security vectors enforcing compile-time permission validation for host filesystems, networks, or process actions.
 
-### Phase 3: Native Compilers & Transpilation Target Hub (Priority 3)
-* **The Mission Transpiler:** Building out compilation blueprint pipelines to generate standalone files from `.plnt` sources based on specialized runtime flags:
-  * `MISSION:FAST` → High-performance Go source modules.
-  * `MISSION:SAFE` → Memory-safe Rust codebases.
-  * `MISSION:SMART` → Scripted Python structures.
-* **Terminal UI Enhancements:** Upgrading the standard REPL shell loop with interactive syntax highlighting, context autocompletion, and visual execution trace views.
+### Phase 3: Compilers & Transpilation Target Hub (Priority 3)
+* **The Mission Transpiler:** Blueprint targets optimized to convert `.plnt` files into high-performance source formats matching specialized operational priorities:
+  * `MISSION:FAST` → Compiled Go structures.
+  * `MISSION:SAFE` → Memory-safe Rust applications.
+  * `MISSION:SMART` → Lean Python execution workflows.
 
 ### Phase 4: Native Arabic Naming & Localization (Priority 4)
-* **Arabic Native Localization:** Modifying internal identifier regular expressions within the Lexer token matrices to accept complete Arabic alphabet characters for variables, actions, and method naming frames natively.
+* **Arabic Native Localization:** Modifying identifier regular expressions inside tokenizing matrices to natively parse Arabic alphabet characters for dynamic variable tags, functional behaviors, and structural scopes.
 
 ---
 
-## 🎯 4. Immediate Strategic Priority Matrix (Sprints for v0.12.0)
+## 🎯 4. Immediate Strategic Priority Matrix (Sprints for v0.13.0)
 
-Our next upcoming engineering iterations will focus strictly on the following tactical completions:
+Our next upcoming engineering iterations will focus strictly on the following tactical milestones:
 
-1. **Advanced Visual Errors:** Building context-rich, pointer-based terminal logs (`^`) indicating precise row and column positioning whenever a compilation or runtime Storm panics.
-2. **Multi-tier Exception Regressions:** Expanding the automated suite to thoroughly cover nested exception handling boundaries before moving into web server architectures.
-3. **Pre-Server Sprouting Architecture:** Designing the underlying socket mapping blueprints required to support the `LISTEN BRANCH` infrastructure.
+1. **The Sprouting Server Blueprint (`LISTEN BRANCH`):** Designing syntax rules, core routing maps, and basic request interceptors to spawn a stable local listening port.
+2. **Concurrent Request Lifecycle Tracking:** Ensuring incoming HTTP payloads are automatically ingested as native `MAP` payloads and handled cleanly without memory race conditions.
+3. **Diagnostic Extended Printing:** Integrating the new `core/diagnostics.js` engine into web-layer exceptions to preserve pinpoint error lines during live server crashes.
 
 ---
 *Developed by Haider Mohammed Abd Alwahid — Nasiriyah, Iraq (2026).*

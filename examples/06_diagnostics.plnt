@@ -1,0 +1,21 @@
+# ═══════════════════════════════════════════════════════════
+#  06_diagnostics.plnt
+#  Demonstrates the visual Storm diagnostic panel (line/column
+#  tracking + caret pointer). This file INTENTIONALLY contains
+#  a broken reference on line 9 to trigger MISSING_STORM and
+#  showcase the precision error locator. Run it directly:
+#
+#     node chloroplast.js run examples/06_diagnostics.plnt
+#
+#  Expected: a clean ⛈️  panel pointing at the exact column,
+#  not a raw JS stack trace, and the process exits(1) cleanly
+#  rather than crashing the shell.
+# ═══════════════════════════════════════════════════════════
+MISSION: SAFE.
+
+1\ CREATE subtotal(NUM) TO 200.
+1\ CREATE tax_rate(SCL) TO 0.08.
+1\ SHOW subtotal.
+
+# Typo below: "subtotl" instead of "subtotal" — triggers MISSING_STORM
+1\ SHOW subtotl.

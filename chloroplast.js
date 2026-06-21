@@ -5,6 +5,7 @@ const path=require('path');
 const readline=require('readline');
 const{Interpreter}=require('./core/interpreter');
 const{lex}=require('./core/lexer');
+const{formatStormDiagnostic}=require('./core/diagnostics');
 
 const C={reset:'\x1b[0m',green:'\x1b[32m',red:'\x1b[31m',yellow:'\x1b[33m',cyan:'\x1b[36m',gray:'\x1b[90m',bold:'\x1b[1m'};
 
@@ -34,8 +35,7 @@ function runFile(filePath,opts={}){
     interp.run(source);
     if(opts.verbose)console.log(`\n${C.gray}  اكتمل في ${Date.now()-t0}ms — MISSION: ${mission}${C.reset}`);
   }catch(e){
-    console.error(`\n${C.red}✕ ${e.name||'خطأ'}: ${e.message}${C.reset}`);
-    if(e.line)console.error(`${C.gray}  السطر: ${e.line}${C.reset}`);
+    console.error('\n'+formatStormDiagnostic(e,filePath,source));
     process.exit(1);
   }
 }
@@ -51,8 +51,7 @@ function verifyFile(filePath,opts={}){
     interp.run(source);
     process.exit(interp.verifyStats.failed>0?1:0);
   }catch(e){
-    console.error(`\n${C.red}✕ ${e.name||'Error'}: ${e.message}${C.reset}`);
-    if(e.line)console.error(`${C.gray}  line: ${e.line}${C.reset}`);
+    console.error('\n'+formatStormDiagnostic(e,filePath,source));
     process.exit(1);
   }
 }
@@ -101,7 +100,7 @@ function startREPL(opts={}){
       interp._firstPass(stmts);
       interp._execBlock(stmts,0,stmts.length,interp.soil);
     }catch(e){
-      if(e.stormType)console.error(`${C.red}  ⚡ ${e.stormType}: ${e.message}${C.reset}`);
+      if(e.stormType)console.error('\n'+formatStormDiagnostic(e,null,toRun));
       else console.error(`${C.red}  ✕ ${e.message}${C.reset}`);
     }
     rl.prompt();

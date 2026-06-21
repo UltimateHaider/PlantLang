@@ -1,9 +1,9 @@
 'use strict';
 const STORMS=['ZERO_STORM','TYPE_STORM','MISSING_STORM','SEED_STORM','LOST_STORM','LOCK_STORM','BOUND_STORM','STOP_STORM','PERM_STORM','NETWORK_STORM','ANY_STORM'];
 class PlantStorm extends Error {
-  constructor(type,message,line){super(message);this.name=type||'ANY_STORM';this.stormType=type||'ANY_STORM';this.line=line;}
+  constructor(type,message,line,column){super(message);this.name=type||'ANY_STORM';this.stormType=type||'ANY_STORM';this.line=line;this.column=column;}
 }
-function storm(type,msg,line){if(!STORMS.includes(type))type='ANY_STORM';throw new PlantStorm(type,msg,line);}
+function storm(type,msg,line,column){if(!STORMS.includes(type))type='ANY_STORM';throw new PlantStorm(type,msg,line,column);}
 function inferType(v){
   if(v===null||v===undefined)return'VOID';
   if(typeof v==='boolean')return'FACT';

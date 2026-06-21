@@ -29,11 +29,15 @@ function isBlockOpener(stripped) {
 function lex(source) {
   const rawLines = source.split('\n');
   const statements = [];
-  let buffer = '', bufferLine = 0;
+  let buffer = '', bufferLine = 0, bufferCol = 1;
 
   for (let i = 0; i < rawLines.length; i++) {
-    const raw = rawLines[i].trim();
+    const original = rawLines[i];
+    const raw = original.trim();
     const lineNum = i + 1;
+    // Column where the trimmed content starts (1-indexed)
+    const leadingWs = original.length - original.trimStart().length;
+    const colNum = leadingWs + 1;
     if (!raw || raw.startsWith('#')) continue;
 
     // Determine if this raw line (stripped of trailing comma) is a block opener
@@ -42,28 +46,29 @@ function lex(source) {
     if (!buffer) {
       // Starting fresh
       if (raw.endsWith('.')) {
-        statements.push(parseStatement(strippedRaw, lineNum));
+        statements.push(parseStatement(strippedRaw, lineNum, colNum));
       } else if (raw.endsWith(',') && isBlockOpener(strippedRaw)) {
         // Block opener with trailing comma = emit as statement, comma is syntax not continuation
-        statements.push(parseStatement(strippedRaw, lineNum));
+        statements.push(parseStatement(strippedRaw, lineNum, colNum));
       } else if (raw.endsWith(',')) {
         // True continuation — start buffering
         buffer = raw;
         bufferLine = lineNum;
+        bufferCol = colNum;
       } else {
         // No punctuation — emit as-is
-        statements.push(parseStatement(raw, lineNum));
+        statements.push(parseStatement(raw, lineNum, colNum));
       }
     } else {
       // We're in a continuation buffer
       buffer += ' ' + raw;
       if (raw.endsWith('.')) {
         const text = buffer.slice(0, -1).trim();
-        statements.push(parseStatement(text, bufferLine));
-        buffer = ''; bufferLine = 0;
+        statements.push(parseStatement(text, bufferLine, bufferCol));
+        buffer = ''; bufferLine = 0; bufferCol = 1;
       } else if (!raw.endsWith(',')) {
-        statements.push(parseStatement(buffer.trim(), bufferLine));
-        buffer = ''; bufferLine = 0;
+        statements.push(parseStatement(buffer.trim(), bufferLine, bufferCol));
+        buffer = ''; bufferLine = 0; bufferCol = 1;
       }
       // else keep buffering
     }
@@ -71,16 +76,21 @@ function lex(source) {
 
   if (buffer.trim()) {
     const text = buffer.endsWith(',') ? buffer.slice(0, -1).trim() : buffer.trim();
-    statements.push(parseStatement(text, bufferLine));
+    statements.push(parseStatement(text, bufferLine, bufferCol));
   }
 
   return statements;
 }
 
-function parseStatement(text, line) {
+function parseStatement(text, line, column) {
+  const col = column || 1;
   const m = text.match(/^(\d+)\\\s*/);
-  if (m) return { depth: parseInt(m[1]), text: text.slice(m[0].length).trim(), line };
-  return { depth: 0, text, line };
+  if (m) {
+    // Depth prefix consumed (e.g. "2\ ") — the real statement text starts
+    // after it, so its column shifts right by the prefix length.
+    return { depth: parseInt(m[1]), text: text.slice(m[0].length).trim(), line, column: col + m[0].length };
+  }
+  return { depth: 0, text, line, column: col };
 }
 
 module.exports = { lex };
