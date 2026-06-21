@@ -405,3 +405,33 @@ SUITE "HTTP / HARVEST",
 
 SUITE/.
 
+
+# ═══════════════════════════════════════════════════════════
+SUITE "LISTEN BRANCH grammar",
+
+  1\ CREATE lb_cfg(MAP).
+  1\ LINK "timeout" WITH 30 IN lb_cfg.
+  1\ CREATE lb_result(TX) TO "unset".
+
+  1\ LISTEN BRANCH ON 8080 WITH lb_cfg AS req MAP,
+  2\   CREATE lb_msg(TX) TO "ok".
+  2\   SET lb_result TO lb_msg.
+  2\   GIVE lb_msg AS RESPONSE.
+  1\ LISTEN/.
+
+  VERIFY "well-formed LISTEN BRANCH executes its body", lb_result IS "ok".
+
+  VERIFY "missing ON triggers SYNTAX_STORM",
+    STORMS SYNTAX_STORM FROM LISTEN BRANCH 8080 WITH lb_cfg AS req2 MAP.
+
+  VERIFY "missing WITH triggers SYNTAX_STORM",
+    STORMS SYNTAX_STORM FROM LISTEN BRANCH ON 8080 lb_cfg AS req2 MAP.
+
+  VERIFY "missing AS triggers SYNTAX_STORM",
+    STORMS SYNTAX_STORM FROM LISTEN BRANCH ON 8080 WITH lb_cfg req2 MAP.
+
+  VERIFY "missing MAP triggers SYNTAX_STORM",
+    STORMS SYNTAX_STORM FROM LISTEN BRANCH ON 8080 WITH lb_cfg AS req2.
+
+SUITE/.
+

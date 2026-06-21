@@ -18,7 +18,27 @@ const BLOCK_OPENER_RE = [
   /^ELSE$/i,
   /^SUITE\s+"/i,
   /^SHOW_VERIFY_SUMMARY$/i,
+  /^LISTEN\s+BRANCH\b/i,
 ];
+
+// ── Reserved keyword matrix ─────────────────────────────────────
+// Maps surface keywords to their token kind. Used by the lexer's
+// column-accumulator (KEYWORD_LEN) so that visual caret diagnostics
+// stay aligned even as new multi-word grammars (LISTEN BRANCH, etc.)
+// are added — every keyword's exact string length is registered here
+// once, instead of being hand-counted at each call site.
+const RESERVED_KEYWORDS = {
+  'LISTEN':   'KW_LISTEN',
+  'BRANCH':   'KW_BRANCH',
+  'RESPONSE': 'KW_RESPONSE',
+  'ON':       'KW_ON',
+  'WITH':     'KW_WITH',
+  'AS':       'KW_AS',
+};
+
+function keywordLength(word) {
+  return word.length; // explicit accessor kept for clarity at call sites
+}
 
 function isBlockOpener(stripped) {
   // Remove depth prefix before checking
@@ -93,4 +113,20 @@ function parseStatement(text, line, column) {
   return { depth: 0, text, line, column: col };
 }
 
-module.exports = { lex };
+/**
+ * Resolve the absolute column of a sub-token inside an already-lexed
+ * statement, given the statement's own base column and the character
+ * offset of the token within `stmt.text`. Used by grammar validators
+ * (e.g. parseListenBranch) to point the caret at the exact missing or
+ * misspelled keyword rather than just the start of the statement.
+ *
+ * NOTE: stmt.text has leading/trailing whitespace already trimmed and
+ * any depth prefix already stripped, so stmt.column is exactly where
+ * stmt.text[0] sits in the original source line — offsets within
+ * stmt.text therefore map 1:1 onto source columns.
+ */
+function subTokenColumn(stmt, offsetInText) {
+  return stmt.column + offsetInText;
+}
+
+module.exports = { lex, RESERVED_KEYWORDS, keywordLength, subTokenColumn };

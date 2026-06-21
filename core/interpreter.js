@@ -3,7 +3,8 @@ const {storm,PlantStorm,inferType,coerce,Soil,VeinFS}=require('./runtime');
 const {harvestSync,toPlantValue}=require('./harvest');
 const {evalExpr,evalCond}=require('./evaluator');
 const {INNATE}=require('./innate');
-const {lex}=require('./lexer');
+const {lex,subTokenColumn}=require('./lexer');
+const {ListenBranchStatementNode,ResponseStatementNode}=require('./ast');
 const fs=require('fs');
 const path=require('path');
 
@@ -28,6 +29,108 @@ class Interpreter {
     const stmts=lex(source);
     this._firstPass(stmts);
     this._execBlock(stmts,0,stmts.length,this.soil);
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  AST evaluation bridge (compiler-frontend migration).
+  //
+  //  Additive entry point: accepts a parsed ProgramNode (from
+  //  core/parser.js) instead of raw source text, and routes each
+  //  statement node through a typed evaluator that operates on the
+  //  same Soil scope-chain as the legacy regex pipeline above. This
+  //  exists alongside run()/_execBlock() rather than replacing them
+  //  — the 176-test regression matrix continues to exercise the
+  //  proven regex pipeline, while runProgram()/evaluateNode() let
+  //  AST-migrated statement kinds (SHOW, CREATE so far) be executed
+  //  and verified independently as the migration proceeds.
+  // ═══════════════════════════════════════════════════════════
+
+  /** Run a fully-parsed ProgramNode AST against this interpreter's Soil. */
+  runProgram(programNode){
+    for(const stmtNode of programNode.statements){
+      this.evaluateNode(stmtNode,this.soil);
+    }
+  }
+
+  /** Parse source text via the new tokenizer/parser, then run it as an AST. */
+  runSource(source){
+    const {parse}=require('./parser');
+    const programNode=parse(source);
+    this.runProgram(programNode);
+    return programNode;
+  }
+
+  /** Resolve an AST expression node (Literal/Identifier/RAW_EXPR) to a value. */
+  evaluateExpressionNode(node,soil){
+    if(node===null||node===undefined)return null;
+    if(node.type==='Literal'){
+      if(node.literalType==='RAW_EXPR')return evalExpr(node.value,soil);
+      return node.value;
+    }
+    if(node.type==='Identifier'){
+      const e=soil.get(node.name);
+      if(!e)storm('MISSING_STORM',`"${node.name}" غير موجود`,node.line,node.column);
+      return e.value;
+    }
+    // Fallback: a raw string slipped through (shouldn't normally happen
+    // once parseExpressionSpan always wraps in a Literal/Identifier).
+    if(typeof node==='string')return evalExpr(node,soil);
+    return null;
+  }
+
+  /** Central node router — delegator-executes each AST statement kind. */
+  evaluateNode(node,soil){
+    switch(node.type){
+      case 'CreateStatement': return this.evaluateCreateStatement(node,soil);
+      case 'ShowStatement':   return this.evaluateShowStatement(node,soil);
+      case 'ListenBranchStatement': return this.evaluateListenBranch(node,soil);
+      case 'ResponseStatement': return this.evaluateResponseStatement(node,soil);
+      case 'RawStatement': {
+        // Not yet migrated to a typed node — fall back to the proven
+        // legacy single-statement executor so the AST path can still
+        // run a complete real-world program during the migration.
+        const fakeStmts=[{depth:node.depth,text:node.text,line:node.line,column:node.column}];
+        return this._execOne(fakeStmts,0,1,soil);
+      }
+      default:
+        storm('SYNTAX_STORM',`No evaluator registered for AST node type "${node.type}"`,node.line,node.column);
+    }
+  }
+
+  /** evaluateCreateStatement(node, soil) — CREATE ident(TYPE) TO expr. */
+  evaluateCreateStatement(node,soil){
+    const value=node.valueExpr!==null
+      ? this.evaluateExpressionNode(node.valueExpr,soil)
+      : (node.varType==='LIST'?[]:node.varType==='MAP'?{}:node.varType==='FACT'?false:node.varType==='NUM'?0:'');
+    soil.set(node.identifier,value,node.varType,{pulse:!!node.isPulse});
+    this.emit(`CREATE "${node.identifier}"(${node.varType})${node.isPulse?' PULSE':''} = ${Array.isArray(value)?'['+value.join(', ')+']':value}`,'ok');
+    return{next:1};
+  }
+
+  /** evaluateShowStatement(node, soil) — SHOW expr. */
+  evaluateShowStatement(node,soil){
+    const value=this.evaluateExpressionNode(node.expr,soil);
+    const display=value&&typeof value==='object'?(Array.isArray(value)?'['+value.join(', ')+']':JSON.stringify(value)):String(value);
+    this.emit(display,'inf');
+    return{next:1};
+  }
+
+  /** evaluateListenBranch(node, soil) — bridges the AST node to the existing handler logic. */
+  evaluateListenBranch(node,soil){
+    this.emit(`LISTEN BRANCH ON ${node.portExpr} WITH ${node.configExpr} AS ${node.requestIdent} MAP — registered ✓`,'ok');
+    const reqSoil=soil.child();
+    reqSoil.set(node.requestIdent,{},'MAP');
+    for(const bodyNode of node.bodyStatements){
+      this.evaluateNode(bodyNode,reqSoil);
+    }
+    return{next:1};
+  }
+
+  /** evaluateResponseStatement(node, soil) — GIVE expr AS RESPONSE. */
+  evaluateResponseStatement(node,soil){
+    const value=evalExpr(node.responseExpr,soil);
+    this.emit(`  → RESPONSE: ${value&&typeof value==='object'?JSON.stringify(value):value}`,'muted');
+    return{next:1,returned:true,value};
   }
 
   runFile(filePath){
@@ -116,6 +219,7 @@ class Interpreter {
     if(!text||/^\\+$/.test(text)||text.startsWith('#'))return{next:i+1};
     if(text.match(/^\/ACTION\.?$/i)||text.match(/^\/SPECIES\.?$/i)||
        text.match(/^(\d+)\\\.?$/)||text.match(/^\/\d+\.?$/))return{next:i+1};
+    if(text.match(/^LISTEN\/\.?$/i))return{next:i+1};
     if(text.match(/^ACTION\s+\w+\(/i)){let j=i+1;while(j<stmts.length&&!stmts[j].text.match(/^\/ACTION\.?$/i))j++;return{next:j+1};}
     if(text.match(/^SPECIES\s+/i)){let j=i+1;while(j<stmts.length&&!stmts[j].text.match(/^\/SPECIES\.?$/i))j++;return{next:j+1};}
     if(text.match(/^ROOT\s+\w+\s+TO/i)||text.match(/^PLANT\s+/i)||text.match(/^MISSION\s*:/i))return{next:i+1};
@@ -449,7 +553,7 @@ class Interpreter {
             storm('MISSING_STORM',`"${testExpr}" غير موجود`,line,column);
           }
           // Try as statement (SET, INCREASE etc)
-          const stmtM=testExpr.match(/^(SET|INCREASE|DECREASE|LOCK|EVAPORATE|HARVEST|PUT|TAKE|REAP)\s/i);
+          const stmtM=testExpr.match(/^(SET|INCREASE|DECREASE|LOCK|EVAPORATE|HARVEST|PUT|TAKE|REAP|LISTEN)\s/i);
           if(stmtM){const r=this._exec(testExpr,stmts,i,soil,line,column);return;}
           // Try as expression
           E(testExpr);
@@ -622,6 +726,46 @@ class Interpreter {
         }
       }else{this.emit(`ANALYZE "${m[1]}" → ${e.type}: ${v}`,'info');}
       return{next:i+1};
+    }
+
+    // ── LISTEN BRANCH / RESPONSE: web server grammar (Phase 1) ──
+    // Grammar:
+    //   LISTEN BRANCH ON [portExpr] WITH [configExpr] AS [requestIdent] MAP,
+    //     ...body (may use GIVE [expr] AS RESPONSE)...
+    //   LISTEN/.
+    //
+    // NOTE: this phase implements lexing/grammar/diagnostics only.
+    // Actual socket binding is out of scope here — the body is parsed,
+    // validated, and (for now) executed once synchronously with the
+    // requestIdent bound to an empty request MAP, so handler logic and
+    // RESPONSE extraction can be authored and tested ahead of the real
+    // listener runtime landing in a later phase.
+    if(stmt.match(/^LISTEN\s+BRANCH\b/i)){
+      const node=this.parseListenBranch(stmt,stmts,i);
+      this.emit(`LISTEN BRANCH ON ${node.portExpr} WITH ${node.configExpr} AS ${node.requestIdent} MAP — registered ✓`,'ok');
+
+      const reqSoil=soil.child();
+      reqSoil.set(node.requestIdent,{},'MAP');
+
+      // Execute the handler body in natural order. GIVE [expr] AS RESPONSE
+      // is intercepted statement-by-statement (same depth-aware pattern as
+      // _execBlock/_execOne) so any CREATE/SET earlier in the body has
+      // already run and is visible to the response expression — unlike a
+      // pre-scan, which would evaluate RESPONSE before its dependencies exist.
+      let response=null,j=0;
+      while(j<node.bodyStatements.length){
+        const bs=node.bodyStatements[j];
+        const respNode=this.parseResponseStatement(bs.text,bs);
+        if(respNode){
+          response=evalExpr(respNode.responseExpr,reqSoil);
+          this.emit(`  → RESPONSE: ${response&&typeof response==='object'?JSON.stringify(response):response}`,'muted');
+          j++;continue;
+        }
+        const r=this._execOne(node.bodyStatements,j,node.bodyStatements.length,reqSoil);
+        j=r?r.next:j+1;
+      }
+
+      return{next:node._closerIndex+1};
     }
 
     // ── HARVEST: synchronous-style HTTP/HTTPS client ───────────
@@ -861,6 +1005,109 @@ class Interpreter {
   }
 
   // Collect statements deeper than parentDepth
+  // ═══════════════════════════════════════════════════════════
+  //  parseListenBranch — strict grammar parser for the web server
+  //  signature:
+  //
+  //    LISTEN BRANCH ON [portExpr] WITH [configExpr] AS [requestIdent] MAP,
+  //      ...bodyStatements...
+  //    LISTEN/.
+  //
+  //  Raises SYNTAX_STORM, with a caret pointed at the exact missing
+  //  or misspelled connective keyword, if the pipeline ON/WITH/AS/MAP
+  //  is broken in any way. Returns a ListenBranchStatementNode.
+  // ═══════════════════════════════════════════════════════════
+  parseListenBranch(stmt,stmts,i){
+    const stmtRec=stmts[i];
+    const{line,column}=stmtRec;
+    const text=stmt;
+
+    // Header must start with LISTEN BRANCH — caller already verified this,
+    // but we re-anchor here so offsets below are relative to a known prefix.
+    const headerMatch=text.match(/^LISTEN\s+BRANCH\b/i);
+    if(!headerMatch){
+      storm('SYNTAX_STORM','LISTEN BRANCH: malformed header',line,column);
+    }
+    let cursor=headerMatch[0].length; // offset into `text` just past "LISTEN BRANCH"
+    const rest=text.slice(cursor);
+
+    // Stage 1 — ON [portExpr]
+    let m=rest.match(/^\s+ON\s+/i);
+    if(!m){
+      // Find where ON should be (right after BRANCH) to aim the caret precisely
+      const expectedOffset=cursor+rest.match(/^\s*/)[0].length;
+      storm('SYNTAX_STORM',
+        `LISTEN BRANCH: expected "ON" after BRANCH, found "${rest.trim().split(/\s+/)[0]||'(end of line)'}"`,
+        line, subTokenColumn(stmtRec,expectedOffset));
+    }
+    let afterOn=rest.slice(m[0].length);
+    let onOffsetEnd=cursor+m[0].length;
+
+    // Stage 2 — portExpr WITH [configExpr]
+    m=afterOn.match(/^(.+?)\s+WITH\s+/i);
+    if(!m){
+      // Distinguish: is WITH missing entirely, or did portExpr swallow into EOL?
+      const wOffset=onOffsetEnd+afterOn.length;
+      storm('SYNTAX_STORM',
+        `LISTEN BRANCH: expected "WITH" after the port expression, found "${afterOn.trim().split(/\s+/).pop()||'(end of line)'}"`,
+        line, subTokenColumn(stmtRec,wOffset));
+    }
+    const portExpr=m[1].trim();
+    let afterWith=afterOn.slice(m[0].length);
+    let withOffsetEnd=onOffsetEnd+m[0].length;
+
+    // Stage 3 — configExpr AS [requestIdent]
+    m=afterWith.match(/^(.+?)\s+AS\s+/i);
+    if(!m){
+      const aOffset=withOffsetEnd+afterWith.length;
+      storm('SYNTAX_STORM',
+        `LISTEN BRANCH: expected "AS" after the config expression, found "${afterWith.trim().split(/\s+/).pop()||'(end of line)'}"`,
+        line, subTokenColumn(stmtRec,aOffset));
+    }
+    const configExpr=m[1].trim();
+    let afterAs=afterWith.slice(m[0].length);
+    let asOffsetEnd=withOffsetEnd+m[0].length;
+
+    // Stage 4 — requestIdent MAP  (explicit type declaration required)
+    m=afterAs.match(/^(\w+)\s+MAP\s*$/i);
+    if(!m){
+      const identMatch=afterAs.match(/^(\w+)/);
+      const mapOffset=asOffsetEnd+(identMatch?identMatch[0].length:0);
+      const found=afterAs.trim().split(/\s+/)[1]||'(missing)';
+      storm('SYNTAX_STORM',
+        `LISTEN BRANCH: expected request identifier followed by "MAP" (e.g. "req MAP"), found "${found}"`,
+        line, subTokenColumn(stmtRec,mapOffset));
+    }
+    const requestIdent=m[1];
+
+    // Header is grammatically valid — collect the nested body up to the
+    // matching depth, sealed by "LISTEN/." (mirrors ACTION/SPECIES closers).
+    let j=i+1;
+    while(j<stmts.length&&!stmts[j].text.match(/^LISTEN\/\.?$/i))j++;
+    const bodyStatements=stmts.slice(i+1,j);
+
+    const node=new ListenBranchStatementNode({
+      portExpr, configExpr, requestIdent, bodyStatements, line, column
+    });
+    node._closerIndex=j; // internal bookkeeping for the caller's {next:...}
+    return node;
+  }
+
+  // GIVE [expr] AS RESPONSE.  →  ResponseStatementNode
+  // Recognized as a distinct grammar from a normal GIVE so it can be
+  // intercepted by handler bodies running inside a LISTEN BRANCH block
+  // without being treated as an ordinary ACTION return value.
+  parseResponseStatement(stmt,stmtRec){
+    const m=stmt.match(/^GIVE\s+(.+?)\s+AS\s+RESPONSE$/i);
+    if(!m)return null;
+    return new ResponseStatementNode({
+      responseExpr: m[1].trim(),
+      line: stmtRec.line,
+      column: stmtRec.column
+    });
+  }
+
+
   _collectDepthBlock(stmts,start,parentDepth){
     const body=[];let j=start;
     while(j<stmts.length){

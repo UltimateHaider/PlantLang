@@ -96,5 +96,63 @@ console.log('\n\x1b[1mDiagnostic System Verification\x1b[0m\n');
   check('CLI did not print a raw Node stack trace', !output.includes('at Interpreter.'));
 }
 
+// ── Test 5: LISTEN BRANCH happy-path grammar parses correctly ──
+{
+  const tmp = require('os').tmpdir() + '/diag_test_listen_ok.plnt';
+  require('fs').writeFileSync(tmp,
+    'MISSION: SAFE.\n' +
+    '1\\ CREATE cfg(MAP).\n' +
+    '1\\ LISTEN BRANCH ON 8080 WITH cfg AS req MAP,\n' +
+    '2\\   CREATE greeting(TX) TO "Hello".\n' +
+    '2\\   GIVE greeting AS RESPONSE.\n' +
+    '1\\ LISTEN/.\n');
+  const { error } = runAndCapture(tmp);
+  check('valid LISTEN BRANCH grammar does not throw', error === null,
+    error ? `${error.stormType}: ${error.message}` : '');
+}
+
+// ── Test 6: SYNTAX_STORM fires with correct line/column/caret for ──
+//           each of the four required connective keywords ────────
+{
+  const cases = [
+    { name: 'missing ON',   line: '1\\ LISTEN BRANCH 8080 WITH cfg AS req MAP,', expectWord: 'ON' },
+    { name: 'missing WITH', line: '1\\ LISTEN BRANCH ON 8080 cfg AS req MAP,',   expectWord: 'WITH' },
+    { name: 'missing AS',   line: '1\\ LISTEN BRANCH ON 8080 WITH cfg req MAP,', expectWord: 'AS' },
+    { name: 'missing MAP',  line: '1\\ LISTEN BRANCH ON 8080 WITH cfg AS req,',  expectWord: 'MAP' },
+  ];
+  for (const c of cases) {
+    const tmp = require('os').tmpdir() + '/diag_test_listen_bad.plnt';
+    require('fs').writeFileSync(tmp,
+      `MISSION: SAFE.\n1\\ CREATE cfg(MAP).\n${c.line}\n2\\   GIVE "x" AS RESPONSE.\n1\\ LISTEN/.\n`);
+    const { error } = runAndCapture(tmp);
+    check(`${c.name}: SYNTAX_STORM is thrown`, error && error.stormType === 'SYNTAX_STORM',
+      error ? `got ${error.stormType}` : 'no error');
+    check(`${c.name}: carries line/column`, error && typeof error.line === 'number' && typeof error.column === 'number');
+    check(`${c.name}: message references "${c.expectWord}"`, error && error.message.includes(c.expectWord),
+      error ? error.message : '');
+
+    const panel = formatStormDiagnostic(error, tmp);
+    check(`${c.name}: panel has caret`, panel.includes('^'));
+    check(`${c.name}: panel has SYNTAX_STORM banner`, panel.includes('SYNTAX_STORM'));
+  }
+}
+
+// ── Test 7: reference example file (07_server_syntax_error.plnt) ──
+{
+  const { execSync } = require('child_process');
+  const file = path.join(__dirname, '..', 'examples', '07_server_syntax_error.plnt');
+  let exitCode = 0, output = '';
+  try {
+    output = execSync(`node ${path.join(__dirname, '..', 'chloroplast.js')} run ${file} 2>&1`, { encoding: 'utf8' });
+  } catch (e) {
+    exitCode = e.status;
+    output = (e.stdout || '') + (e.stderr || '');
+  }
+  check('07_server_syntax_error.plnt: CLI exits with code 1', exitCode === 1, `exit code ${exitCode}`);
+  check('07_server_syntax_error.plnt: shows SYNTAX_STORM panel', output.includes('SYNTAX_STORM'));
+  check('07_server_syntax_error.plnt: shows caret pointer', output.includes('^'));
+  check('07_server_syntax_error.plnt: no leaked JS stack trace', !output.includes('at Interpreter.'));
+}
+
 console.log(`\n${passed} passed, ${failed} failed\n`);
 process.exit(failed > 0 ? 1 : 0);

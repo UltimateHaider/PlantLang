@@ -1,0 +1,25 @@
+# ═══════════════════════════════════════════════════════════
+#  07_server_syntax_error.plnt
+#  Demonstrates SYNTAX_STORM diagnostics for the LISTEN BRANCH
+#  web server grammar. This file INTENTIONALLY omits the "ON"
+#  keyword from the server signature on line 8 to trigger a
+#  grammar validation failure.
+#
+#  Run:  node chloroplast.js run examples/07_server_syntax_error.plnt
+#
+#  Expected: a clean ⛈️  SYNTAX_STORM panel pointing the caret
+#  (^) directly at the token found where "ON" was expected,
+#  not a raw JS stack trace — and the process exits(1) cleanly.
+# ═══════════════════════════════════════════════════════════
+MISSION: SAFE.
+
+1\ CREATE server_cfg(MAP).
+1\ LINK "timeout" WITH 30 IN server_cfg.
+
+# Grammatical mistake below: "ON" is missing between BRANCH and
+# the port expression. Correct form would be:
+#   LISTEN BRANCH ON 8080 WITH server_cfg AS req MAP,
+1\ LISTEN BRANCH 8080 WITH server_cfg AS req MAP,
+2\   CREATE message(TX) TO "Hello, client!".
+2\   GIVE message AS RESPONSE.
+1\ LISTEN/.
