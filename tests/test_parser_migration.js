@@ -177,5 +177,276 @@ console.log('\n\x1b[1mParser / AST Migration Verification\x1b[0m\n');
   check('legacy tests/suite.plnt still passing via the original engine', r2.includes('0 failed'));
 }
 
+// ── 12. WEATHER/SHELTER/CALM: well-formed grammar produces a fully ──
+//       nested AST with accurate coordinates at every level ─────
+{
+  const src =
+    'MISSION: SAFE.\n' +
+    '1\\ WEATHER,\n' +
+    '2\\   SHOW 10 / 0.\n' +
+    '1\\ SHELTER ZERO_STORM AS err,\n' +
+    '2\\   SHOW err.\n' +
+    '1\\ CALM.\n';
+  const ast = parse(src);
+  const node = ast.statements.find(s => s.type === 'WeatherStatement');
+  check('WeatherStatement node produced', !!node);
+  check('conditionExpr is null (unconditional try-block grammar)', node && node.conditionExpr === null);
+  check('bodyStatements has 1 nested statement', node && node.bodyStatements.length === 1);
+  check('1 shelterClause captured', node && node.shelterClauses.length === 1);
+  const shelter = node && node.shelterClauses[0];
+  check('ShelterStatement node produced', shelter && shelter.type === 'ShelterStatement');
+  check('stormType captured as ZERO_STORM', shelter && shelter.stormType === 'ZERO_STORM');
+  check('errVar captured as "err"', shelter && shelter.errVar === 'err');
+  check('shelter body has 1 nested statement', shelter && shelter.bodyStatements.length === 1);
+  check('calmClause produced', node && node.calmClause && node.calmClause.type === 'CalmStatement');
+  check('every node carries line/column/depth', node &&
+    typeof node.line === 'number' && typeof node.column === 'number' && typeof node.depth === 'number' &&
+    typeof shelter.line === 'number' && typeof shelter.column === 'number');
+}
+
+// ── 13. WEATHER: multiple SHELTER clauses + ANY_STORM fallback ──
+{
+  const src =
+    'MISSION: SAFE.\n' +
+    '1\\ WEATHER,\n' +
+    '2\\   SHOW 1.\n' +
+    '1\\ SHELTER ZERO_STORM,\n' +
+    '2\\   SHOW "zero".\n' +
+    '1\\ SHELTER TYPE_STORM,\n' +
+    '2\\   SHOW "type".\n' +
+    '1\\ SHELTER ANY_STORM,\n' +
+    '2\\   SHOW "any".\n' +
+    '1\\ CALM.\n';
+  const ast = parse(src);
+  const node = ast.statements.find(s => s.type === 'WeatherStatement');
+  check('3 SHELTER clauses captured in order', node && node.shelterClauses.length === 3);
+  check('clause order preserved: ZERO_STORM, TYPE_STORM, ANY_STORM',
+    node && node.shelterClauses.map(c => c.stormType).join(',') === 'ZERO_STORM,TYPE_STORM,ANY_STORM');
+}
+
+// ── 14. WEATHER/SHELTER/CALM execution: success path (no storm) ──
+{
+  const out = [];
+  const interp = new Interpreter({ emit: (t, tp) => out.push(t) });
+  interp.runSource(
+    'MISSION: SAFE.\n1\\ CREATE x(NUM) TO 10.\n1\\ WEATHER,\n2\\   SHOW x.\n' +
+    '1\\ SHELTER ANY_STORM,\n2\\   SHOW "caught".\n1\\ CALM.\n');
+  check('protected body runs and SHELTER does not fire on success', out.includes('10') && !out.includes('caught'));
+}
+
+// ── 15. WEATHER/SHELTER/CALM execution: storm caught, errVar bound ──
+{
+  const out = [];
+  const interp = new Interpreter({ emit: (t, tp) => out.push(t) });
+  interp.runSource(
+    'MISSION: SAFE.\n1\\ WEATHER,\n2\\   SHOW 10 / 0.\n' +
+    '1\\ SHELTER ZERO_STORM AS err,\n2\\   SHOW err.\n1\\ CALM.\n1\\ SHOW "after".\n');
+  check('storm caught and errVar bound to the message text', out.some(t => t.includes('صفر')));
+  check('execution continues normally after CALM', out.includes('after'));
+}
+
+// ── 16. WEATHER/SHELTER/CALM: scope sandboxing — no leakage ──────
+{
+  const interp = new Interpreter({ emit: () => {} });
+  interp.runSource(
+    'MISSION: SAFE.\n1\\ WEATHER,\n2\\   CREATE inner_var(NUM) TO 99.\n' +
+    '1\\ SHELTER ANY_STORM,\n2\\   SHOW "x".\n1\\ CALM.\n');
+  check('WEATHER body locals do NOT leak to the outer scope', interp.soil.get('inner_var') === null);
+
+  const interp2 = new Interpreter({ emit: () => {} });
+  interp2.runSource(
+    'MISSION: SAFE.\n1\\ WEATHER,\n2\\   SHOW 1 / 0.\n' +
+    '1\\ SHELTER ZERO_STORM AS err,\n2\\   CREATE recovery_var(TX) TO "r".\n1\\ CALM.\n');
+  check('SHELTER errVar does NOT leak to the outer scope', interp2.soil.get('err') === null);
+  check('SHELTER body locals do NOT leak to the outer scope', interp2.soil.get('recovery_var') === null);
+}
+
+// ── 17. WEATHER/SHELTER/CALM: uncaught storm propagates with the ──
+//        INNERMOST statement's coordinates, not the header's ──────
+//        (regression guard for the location-backfill ordering fix)
+{
+  const src =
+    'MISSION: SAFE.\n1\\ WEATHER,\n2\\   SHOW 10 / 0.\n' +
+    '1\\ SHELTER TYPE_STORM,\n2\\   SHOW "wrong type".\n1\\ CALM.\n';
+  const interp = new Interpreter({ emit: () => {} });
+  let error = null;
+  try { interp.runSource(src); } catch (e) { error = e; }
+  check('non-matching SHELTER does not swallow the storm', error && error.stormType === 'ZERO_STORM');
+  check('propagated storm carries the INNER SHOW statement\'s line (3)', error && error.line === 3,
+    `got line ${error && error.line}`);
+  check('propagated storm carries the INNER SHOW statement\'s column (6)', error && error.column === 6,
+    `got column ${error && error.column}`);
+  const panel = formatStormDiagnostic(error, null, src);
+  check('diagnostic panel renders a caret for the uncaught storm', panel.includes('^'));
+}
+
+// ── 18. WEATHER/SHELTER grammar violations — SYNTAX_STORM accuracy ──
+{
+  let error = null;
+  try {
+    parse('1\\ WEATHER,\n2\\   SHOW 1.\n1\\ SHELTER ANY_STORM,\n2\\   SHOW 2.\n');
+  } catch (e) { error = e; }
+  check('missing CALM throws SYNTAX_STORM', error && error.stormType === 'SYNTAX_STORM');
+  check('missing CALM error message is actionable', error && error.message.includes('CALM'));
+
+  let error2 = null;
+  try {
+    parse('1\\ WEATHER,\n2\\   SHOW 1.\n1\\ SHELTER,\n2\\   SHOW 2.\n1\\ CALM.\n');
+  } catch (e) { error2 = e; }
+  check('SHELTER missing storm type throws SYNTAX_STORM', error2 && error2.stormType === 'SYNTAX_STORM');
+  check('SHELTER missing storm type carries line/column', error2 && typeof error2.line === 'number' && typeof error2.column === 'number');
+}
+
+// ── 19. Full corpus: examples/03_storms.plnt (real pre-existing ──
+//        WEATHER/SHELTER/CALM usage, 7 separate blocks) executes ──
+//        end-to-end through the AST pipeline without throwing ─────
+{
+  const src = fs.readFileSync(path.join(__dirname, '..', 'examples', '03_storms.plnt'), 'utf8');
+  const out = [];
+  const interp = new Interpreter({ emit: (t, tp) => out.push(t) });
+  let threw = false, errInfo = null;
+  try { interp.runSource(src); } catch (e) { threw = true; errInfo = `${e.stormType}: ${e.message} (line ${e.line})`; }
+  check('examples/03_storms.plnt (7 real WEATHER blocks) runs end-to-end without throwing',
+    !threw, errInfo);
+  check('CREATE colors(LIST) TO red, green. produces a real array (LIST special-case regression guard)',
+    out.some(t => t.includes('colors') && t.includes('[red, green]')));
+  check('ROOT MAX_SIZE referenced from inside a WEATHER block resolves correctly (regression guard)',
+    out.some(t => t.includes('LOCK_STORM')));
+}
+
+// ── 20. Conditional WEATHER IF [cond], — new in this milestone ──
+{
+  // Parsing: bare WEATHER, still produces conditionExpr === null
+  const astBare = parse('1\\ WEATHER,\n2\\   SHOW 1.\n1\\ SHELTER ANY_STORM,\n2\\   SHOW 2.\n1\\ CALM.\n');
+  check('bare "WEATHER," still has conditionExpr === null (backward compat)',
+    astBare.statements[0].conditionExpr === null);
+
+  // Parsing: WEATHER IF cond, captures the condition text
+  const astCond = parse('1\\ WEATHER IF flag,\n2\\   SHOW 1.\n1\\ SHELTER ANY_STORM,\n2\\   SHOW 2.\n1\\ CALM.\n');
+  check('"WEATHER IF flag," captures conditionExpr', astCond.statements[0].conditionExpr === 'flag');
+
+  // Execution: condition true -> body runs
+  const out1 = [];
+  new (require('../core/interpreter').Interpreter)({ emit: (t) => out1.push(t) }).runSource(
+    'MISSION: SAFE.\n1\\ CREATE flag(FACT) TO FACT:TRUE.\n1\\ WEATHER IF flag,\n2\\   SHOW "ran".\n' +
+    '1\\ SHELTER ANY_STORM,\n2\\   SHOW "caught".\n1\\ CALM.\n1\\ SHOW "after".\n');
+  check('conditional WEATHER: TRUE condition runs the protected body', out1.includes('ran'));
+  check('conditional WEATHER: TRUE condition does not trigger SHELTER', !out1.includes('caught'));
+  check('conditional WEATHER: execution continues after CALM (true branch)', out1.includes('after'));
+
+  // Execution: condition false -> body AND shelter both skipped, CALM still runs (no-op)
+  const out2 = [];
+  new (require('../core/interpreter').Interpreter)({ emit: (t) => out2.push(t) }).runSource(
+    'MISSION: SAFE.\n1\\ CREATE flag(FACT) TO FACT:FALSE.\n1\\ WEATHER IF flag,\n2\\   SHOW "should not run".\n' +
+    '1\\ SHELTER ANY_STORM,\n2\\   SHOW "should not run either".\n1\\ CALM.\n1\\ SHOW "after".\n');
+  check('conditional WEATHER: FALSE condition skips the protected body', !out2.includes('should not run'));
+  check('conditional WEATHER: FALSE condition skips SHELTER entirely', !out2.includes('should not run either'));
+  check('conditional WEATHER: execution continues normally after CALM (false branch)', out2.includes('after'));
+
+  // SYNTAX_STORM: WEATHER IF with no condition expression before the comma
+  let error = null;
+  try { parse('1\\ WEATHER IF,\n2\\   SHOW 1.\n1\\ CALM.\n'); } catch (e) { error = e; }
+  check('"WEATHER IF," with no condition throws SYNTAX_STORM', error && error.stormType === 'SYNTAX_STORM');
+}
+
+// ── 21. ACTION: parses into typed AST node with params and body ──
+{
+  const ast = parse(
+    'MISSION: SAFE.\n1\\ ACTION add(a(NUM), b(NUM)),\n2\\   GIVE a + b.\n1\\ /ACTION.\n');
+  const node = ast.statements.find(s => s.type === 'ActionDeclaration');
+  check('ActionDeclaration node produced', !!node);
+  check('action name captured', node && node.name === 'add');
+  check('2 params captured', node && node.params.length === 2);
+  check('param a has type NUM', node && node.params[0].name === 'a' && node.params[0].type === 'NUM');
+  check('body has 1 statement', node && node.bodyStatements.length === 1);
+  check('ActionDeclaration has line/column/depth', node && typeof node.line === 'number');
+}
+
+// ── 22. ACTION: executes correctly via AST pipeline ─────────────
+{
+  const out = [];
+  const interp = new Interpreter({ emit: (t) => out.push(t) });
+  interp.runSource(
+    'MISSION: SAFE.\n1\\ ACTION multiply(a(NUM), b(NUM)),\n2\\   GIVE a * b.\n1\\ /ACTION.\n' +
+    '1\\ REAP result FROM multiply, 6, 7.\n1\\ SHOW result.\n');
+  check('ACTION executes and returns correct value via AST pipeline', out.includes('42'),
+    JSON.stringify(out));
+}
+
+// ── 23. SPECIES: parses with fields, methods, inheritance ───────
+{
+  const ast = parse(
+    'MISSION: SAFE.\n1\\ SPECIES Animal,\n2\\   VAR name(TX) TO "?".\n' +
+    '2\\   ACTION speak(),\n3\\     GIVE SELF:name.\n2\\   /ACTION.\n1\\ /SPECIES.\n');
+  const node = ast.statements.find(s => s.type === 'SpeciesDeclaration');
+  check('SpeciesDeclaration node produced', !!node);
+  check('species name captured', node && node.name === 'Animal');
+  check('parentName is null for base species', node && node.parentName === null);
+  check('1 field captured (name)', node && node.fields.length === 1);
+  check('1 method captured (speak)', node && node.actions.length === 1);
+  check('method name captured', node && node.actions[0].name === 'speak');
+}
+
+// ── 24. SPECIES + BLOOM: full execution via AST pipeline ─────────
+{
+  const out = [];
+  const interp = new Interpreter({ emit: (t) => out.push(t) });
+  interp.runSource(
+    'MISSION: SAFE.\n' +
+    '1\\ SPECIES Greeter,\n2\\   VAR msg(TX) TO "Hello".\n' +
+    '2\\   ACTION greet(),\n3\\     GIVE SELF:msg + " world!".\n2\\   /ACTION.\n1\\ /SPECIES.\n' +
+    '1\\ BLOOM Greeter AS g.\n1\\ REAP result FROM g:greet.\n1\\ SHOW result.\n');
+  check('SPECIES + BLOOM + method call via AST pipeline', out.some(t => t.includes('Hello world!')),
+    JSON.stringify(out));
+}
+
+// ── 25. SPECIES inheritance via PARENT ───────────────────────────
+{
+  const out = [];
+  const interp = new Interpreter({ emit: (t) => out.push(t) });
+  interp.runSource(
+    'MISSION: SAFE.\n' +
+    '1\\ SPECIES Base,\n2\\   VAR x(NUM) TO 10.\n1\\ /SPECIES.\n' +
+    '1\\ SPECIES Child PARENT Base,\n2\\   VAR y(NUM) TO 20.\n1\\ /SPECIES.\n' +
+    '1\\ BLOOM Child AS c.\n1\\ SHOW c:x.\n1\\ SHOW c:y.\n');
+  check('inherited field x is visible on Child instance', out.some(t => String(t) === '10' || t.includes('10')));
+  check('own field y is visible on Child instance', out.some(t => String(t) === '20' || t.includes('20')));
+}
+
+// ── 26. symbolPass: forward reference works (ACTION called before its ──
+//        declaration line in the source) ──────────────────────────
+{
+  const out = [];
+  const interp = new Interpreter({ emit: (t) => out.push(t) });
+  interp.runSource(
+    'MISSION: SAFE.\n' +
+    '1\\ REAP result FROM triple, 7.\n' +   // called BEFORE the declaration
+    '1\\ SHOW result.\n' +
+    '1\\ ACTION triple(n(NUM)),\n2\\   GIVE n * 3.\n1\\ /ACTION.\n');
+  check('symbolPass: forward reference to ACTION before declaration succeeds', out.includes('21'));
+}
+
+// ── 27. symbolPass: ROOT constant registered via symbolPass (not ──
+//        legacy _firstPass on raw stmts) ─────────────────────────
+{
+  const out = [];
+  const interp = new Interpreter({ emit: (t) => out.push(t) });
+  interp.runSource(
+    'MISSION: SAFE.\nROOT MAX_VAL TO 100.\n1\\ SHOW MAX_VAL.\n');
+  check('ROOT constant registered via symbolPass and visible at runtime',
+    out.some(t => String(t) === '100'));
+}
+
+// ── 28. _symbolPassDone: ACTION/SPECIES not double-emitted ──────
+{
+  const out = [];
+  const interp = new Interpreter({ emit: (t, tp) => tp === 'ok' && out.push(t) });
+  interp.runSource(
+    'MISSION: SAFE.\n1\\ ACTION foo(),\n2\\   GIVE 1.\n1\\ /ACTION.\n');
+  const actionEmits = out.filter(t => t.includes('ACTION "foo"'));
+  check('ACTION declaration emitted exactly once (not twice)', actionEmits.length === 1,
+    `emitted ${actionEmits.length} times`);
+}
+
 console.log(`\n${passed} passed, ${failed} failed\n`);
 process.exit(failed > 0 ? 1 : 0);

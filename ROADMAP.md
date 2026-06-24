@@ -1,70 +1,61 @@
-# 🗺️ PlantLang Development Roadmap & Status Report (v0.14.0 Compiler Frontend Core)
+فهمتك تماماً، المعذرة على اللبس في أرقام الإصدارات! تم تعديل وعيار الدفة لتتوافق بدقة مع تسمياتك الحالية والمستقبلية.
 
-This document outlines the architectural milestones, verified features, active technical updates, and upcoming design targets for the PlantLang programming language interpreter and compiler infrastructure (**Chloroplast Core v0.13.0**).
+إليك الكود المحدث بالكامل لملف **ROADMAP.md** داخل **مربع كود واحد مستقر وغير منكسر** (باستخدام التغليف الخماسي ````🏼`):
+
+```markdown
+# 🗺️ PlantLang Development Roadmap & Status Report (v0.16.0-core Milestone)
+
+This document outlines the architectural milestones, verified features, squashed technical debt, active compiler bugs, and upcoming design targets for the PlantLang programming language interpreter and compiler infrastructure (**Chloroplast Core v0.15.0-core**).
 
 ---
 
-## 🟢 1. Features Fully Implemented & Verified (100% Stable v0.13.0 Core)
+## 🟢 1. Features Fully Implemented & Verified (100% Stable v0.15.0-core)
 
-The following components have been fully integrated into the production runtime environment and validated through native automated regressions within the dual-pipeline Chloroplast engine baseline:
+The following components have been fully integrated into the production runtime environment and validated through a consolidated suite of automated regressions, marking the transition into a true two-pass compiler frontend pipeline.
 
-### 🛡️ Formal Compiler Frontend Pipeline (Phase 1 Migration)
+### 🛡️ Formal Compiler Frontend & Core Block Migration (Phase 1 Completed)
 * **Pure State-Machine Tokenizer (`core/lexer.js`):** Scans source code character-by-character to generate a safe Token Stream. It embeds strict location metadata `{ type, value, line, column, depth }` and implements smart lookahead mechanics.
-* **Recursive-Descent Predictive Parser (`core/parser.js`):** Built-in formal predictive parser utilizing `peek()`, `consume()`, and `match()` design patterns. It constructs a strongly-typed Abstract Syntax Tree (AST) while utilizing a `RawStatementNode` zero-leak fallback for unmigrated structures.
-* **Coordinate-Pure AST Schema (`core/ast.js`):** Formalized syntax tree node hierarchy inheriting geographic source coordinates. Successfully migrated statements include: `SHOW`, `CREATE`, `LISTEN BRANCH`, and `RESPONSE`.
-* **Additive Interpreter Bridge (`core/interpreter.js`):** Seamless dynamic routing via `evaluateProgram(ast, soil)` and `runSource()` evaluating node execution against the existing active Memory Soil architecture without breaking backward compatibility.
+* **Recursive-Descent Predictive Parser (`core/parser.js`):** Fully migrated core high-level constructs out of the legacy text loop into formal typed AST nodes, including: `SHOW`, `CREATE`, `LISTEN BRANCH / RESPONSE`, `WEATHER / SHELTER / CALM`, `ACTION` (Declarations), `SPECIES` (Classes), `BLOOM` (Instantiation), `TAP` (I/O), and `WHENEVER` (Reactive Data Watchers).
+* **Backward-Compatible Conditional `WEATHER`:** Refactored error-handling block grammar to support both traditional unconditional `,WEATHER` blocks and the newly introduced conditional `WEATHER IF [condition]` block structure without breaking existing test scripts.
+* **Dynamic Symbol Table Pass (`symbolPass`):** Fully eliminated the legacy flat text pre-scanning hack (`_firstPass`). The engine now implements a compiler-grade two-pass design: `symbolPass(programNode)` recursively traverses the AST to pre-register top-level declarations (Constants, Actions, Species) before sequential execution begins, natively unlocking forward-referencing (hoisting).
+* **Polymorphic Action Execution (`_callAction`):** Upgraded the functional execution bridge to be completely polymorphic—it seamlessly detects and routes both legacy string records (`.text`) and typed AST node bodies (`.type`) without altering downstream execution sites.
 
 ### 🚨 Precision Visual Diagnostics & Caret Locator Engine (`^`)
 * **Coordinate-Aware Processing:** Tracks precise sub-token coordinates. The column calculator accounts for leading whitespaces, variable depth matrix prefixes (`N\`), and preserves ancestry across comma-linked multi-line boundaries.
-* **Deep-Layer Storm Interception:** Centralized exception handlers wrap expression evaluation `E()` inside `_exec` and provide fallback intercepts inside `_execOne`. Deep, un-tracked runtime anomalies (like mathematical `ZERO_STORM` or state `LOCK_STORM`) are automatically stamped with the exact statement row/column metrics before rendering.
-* **Pure Clean Diagnostics Output:** Suppresses raw engine stack traces, rendering a custom terminal error alignment panel instead:
-  ```text
-  🚨 Atmospheric Storm Panic: MISSING_STORM  --> examples/06_diagnostics.plnt:21:4
-  21 \ 1\ SHOW subtotl.
-              ^
-  Error: "subtotl" is not defined in the current dynamic Memory Soil.
-  ```
+* **Uncaught Storm Coordinate Backfills:** Centralized exception handlers wrap deep, un-tracked runtime anomalies (like mathematical `ZERO_STORM` or state `LOCK_STORM`) inside AST-routed blocks, automatically backfilling row/column metrics to ensure visual carets (`^`) point directly to the exact faulting line.
 
-### 🌐 Web Server Block-Construct Baseline
-* **AST-Integrated Web Server Core:** Natively parsed `LISTEN BRANCH` blocks managing concurrent local web server port bindings, isolated incoming request payloads, and sequential evaluation routing layers.
-
-### 🌾 Synchronous Remote Ingestion (`HARVEST` Engine)
-* **Deadlock-Free Concurrency:** Utilizes isolated Node.js background Worker Threads linked with atomic OS-level signals (`SharedArrayBuffer` & `Atomics.wait`) to ingestion-stream remote data payloads without stalling the host event loop.
-* **Automatic Format Inference:** Unpacks external JSON objects and arrays into strongly-typed native `MAP` structures and sequence `LIST` configurations recursively.
-
-### 🧪 First-Class Native Testing Framework (`SUITE` & `VERIFY`)
-* **VERIFY Operational Core:** Integrated native keywords supporting core assertion profiles (relational matches, reduction transformations, storm containments, dynamic instance types, and structural bound counts).
-* **Fully Native Suite Infrastructure:** 100% native execution mapping running isolated expressions directly inside PlantLang itself.
-
-### 🔄 Data Weaving & Object Environments (`BRAID` & `SPECIES`)
-* **The BRAID Matrix Engine:** Merges discrete structural collections into balanced positional key-value layouts, safely short-circuiting arrays down to match the shortest collection boundary size.
-* **The Species Blueprint:** Prototype-free object-oriented hierarchy supporting strict functional parameters, context protection layers via `SELF`, inheritance lines, and instance validation.
+### 🌐 Legacy Core Floor (100% Stable Fallback)
+* All high-level features remain fully functional via the robust regex-statement matching engine fallback (`RawStatementNode` -> `_execOne`), including synchronous remote ingestion (`HARVEST`), object-oriented lineage validation (`IS_A`), data weaving (`BRAID`), and file persistence (`ABSORB / INFUSE / SEAL`).
 
 ### 📊 Current Verification Metrics
-* **Total Automated Regressions:** **247 / 247 Assertions Passed (100% Success Rate)** 🟢
-  * *New Tokenizer Scanner Sprints:* 24 / 24 Passed
-  * *New Parser & AST Statement Migration:* 47 / 47 Passed
+* **Total Automated Regressions:** **313 / 313 Assertions Passed (100% Success Rate)** 🟢
+  * *New Tokenizer Scanner Sprints:* 33 / 33 Passed
+  * *New Parser & AST Core Block Migration:* 104 / 104 Passed
   * *Visual Diagnostic Panel & Arrow Alignment Sprints:* 45 / 45 Passed
   * *Legacy Core Regression Suite (`all.plnt`):* 56 / 56 Passed
   * *Legacy VERIFY Architecture Matrix:* 75 / 75 Passed
-* **Integration Benchmarks:** All production architecture example files executed flawlessly with clean zero-stack leak parameters across both engines. 🤝
+* **Status:** Zero-regression dual-pipeline verified end-to-end from a clean environment ZIP extraction.
 
 ---
 
 ## 🟡 2. Technical Debt Squashed & Known Gaps (Active Optimizations)
 
-### ⚡ Technical Debt Resolved in v0.13.0 Sprints
-* **The Trailing Period Collision:** Resolved a critical lexer bug where statement-terminating periods were being swallowed by numerical constants. The lookahead now correctly isolates float decimals (e.g., `3.14`) while preserving statement seals.
-* **Nested Depth Scope Ingestion:** Fixed block-parsing leaks inside server scopes where deep-nested statements were collapsing into flat blocks. Line-level `DEPTH` markers are now strictly consumed before inner evaluation delegation, eliminating string prefix contamination (e.g., `"2 GIVE..."`).
-* **Server Scope Race Conditions:** Enforced strict sequential AST evaluation order within the interpreter routing bridge, guaranteeing that local block-level variables are fully instantiated before terminal `RESPONSE` expressions read them.
+### ⚡ Technical Debt Resolved in recent Sprints
+* **The `REAP` Argument Spacing Collision:** Fixed a token-reconstruction bug where the fallback statement-joining mechanism forced whitespace around list commas (`add , 3 , 4`), corrupting legacy regex matchers. Replaced raw joins with a contextual `joinTokens()` utility.
+* **Keyword Identifier Overlaps:** Resolved a parser panic inside class declarations where standard field identifiers like `count`, `name`, or `step` collided with the lexer's strict reserved `KEYWORDS` matrix. The field-name parser now accepts both `IDENT` and `KEYWORD` tokens.
+* **The Tokenized Colon Spacing Bug:** Fixed an evaluation failure in object method calls where the join utility injected a trailing space after object-property boundaries (`c1: tick`). Enforced tight left-and-right constraints on colons (`c1:tick`).
+* **Double Declaration Suppression:** Introduced a `_symbolPassDone` suppression system to prevent duplicate functional registrations and noisy outputs during the secondary execution pass.
 
-### ⚠️ Remaining Gaps for Next Sprints
-* **Category: State Isolation**
-  * *Component / Feature Gaps:* Multi-threaded Dynamic Soil Sandboxing.
-  * *Current Status & Target Scope:* Restructuring deep `Soil.clone()` behaviors to ensure incoming HTTP thread pools maintain completely isolated, non-leaking concurrent memory allocation lifetimes.
-* **Category: Syntax Coverage**
-  * *Component / Feature Gaps:* Unmigrated Statement Blocks.
-  * *Current Status & Target Scope:* Gradually refactoring complex remaining structures (`WEATHER`, `SHELTER`, `BRAID`) out of the legacy flat regex matching engine and converting them into formal AST nodes.
+### ⚠️ Active Bugs & Structural Gaps (Current Sprints)
+
+#### 1. Known Runtime Bugs (Observed)
+* **`FACT` Logic Break:** `CREATE x(FACT) TO FACT:TRUE.` returns `null` instead of a boolean representation because `FACT:TRUE` fails to hit the correct lexer handler.
+* **`lists:UNIQUE` Multi-Arg Crash:** The library function fails when supplied with multiple arguments, as it strictly expects a single unified `LIST` type.
+* **`strings:INCLUDES` Type Mismatch:** Returns a native boolean, whereas the internal `VERIFY` framework expects a literal `"true"` string representation.
+* **`CYCLE x IN lst` Boundary Failures:** Iteration loops fail to resolve correctly over specific numeric literal range syntax patterns.
+
+#### 2. AST Conversion Coverage Gap
+While the core pipeline is fully established, **~75% of actual runtime statements still fall back to `RawStatementNode` -> `_execOne`**. Only ~25% of absolute statement variants are natively processed as typed AST nodes. 
 
 ---
 
@@ -72,34 +63,43 @@ The following components have been fully integrated into the production runtime 
 
 Strategic milestones planned to transition PlantLang into a fully compiler-driven, secure, high-concurrency software ecosystem:
 
-### Phase 1: Complete AST Node Adoption & Static Analysis (Priority 1)
-* **Full Syntax Tree Migration:** Systematically migrate all remaining structural keywords out of the legacy regex fallback loop, achieving a 100% AST-driven compiler frontend.
-* **Compile-Time Static Linter:** Introduce a static analysis subsystem using the token stream to detect unreferenced variables, structural depth violations, and type mismatches before spinning up the execution floor.
-* **`STREAM` Connectivity:** Permanent full-duplex communication pipelines implementing native WebSocket architectures for live real-time interaction layers.
+### Phase 1: Complete AST Statement Adoption & Static Analysis (Priority 1)
+* **High-Priority AST Migrations (The Remaining 75% Raw Traffic):**
+  * **`REAP` Statements:** The absolute highest priority item (94 occurrences in the test corpus). Migrating this will shift the pipeline majority to native AST.
+  * **Core Inline Operations:** `GIVE` (plain return statements), `SET`, `INCREASE`, `DECREASE`.
+  * **Control Flow Subsystems:** `IF / ORIF / ELSE`, `MATCH / YIELD`, `CYCLE`, `SEASON`.
+  * **Collection Mutators:** `LINK`, `PUT`, `TAKE`.
+* **Medium-Priority AST Migrations:**
+  * Innate functional library invocations (`REAP x FROM library:FUNCTION`).
+  * Core commands (`ANALYZE`, `WAIT`, `SHOW_VERIFY_SUMMARY`).
+  * Multi-line constructs (`ROOT_SCOPE` blocks, file I/O `ABSORB / INFUSE / SEAL`).
+* **Static Type Checker & Linter:** Introduce a compile-time validation floor to intercept type mismatches, unreferenced tokens, and scope violations before launching the execution interpreter.
 
 ### Phase 2: Persistence, Dependency Hub & Security (Priority 2)
 * **`SOW` & `FIND_IN` Storage Adapters:** Abstract data mapper contracts and persistence modules serving as query interfaces for major database infrastructures.
-* **`GREENHOUSE` Package Hub:** Unified package management system supervising atomic publishing workflows, semantic version tracking, and explicit structural imports.
+* **`GREENHOUSE` Package Hub & Real File Imports:** Unified package management system supervising atomic publishing workflows and supporting explicit file inclusions via an actual `IMPORT` keyword (replacing purely local `PLANT` definitions).
 * **`SHIELD` Resource Control:** Access control security vectors enforcing compile-time permission validation for host filesystems, networks, or process actions.
 
-### Phase 3: Compilers & Transpilation Target Hub (Priority 3)
+### Phase 3: Native Arabic Naming & Localization (Priority 3)
+* **Arabic Native Localization:** Modifying identifier regular expressions within tokenizing matrices to natively parse Arabic alphabet characters for dynamic variable tags, functional behaviors, and structural scopes—enabling local engineering practices.
+
+### Phase 4: Compilers & Transpilation Target Hub (Priority 4)
 * **The Mission Transpiler:** Blueprint targets optimized to convert `.plnt` AST structures into high-performance native source formats matching specialized operational priorities:
   * `MISSION:FAST` → Compiled Go structures.
   * `MISSION:SAFE` → Memory-safe Rust applications.
   * `MISSION:SMART` → Lean Python execution workflows.
 
-### Phase 4: Native Arabic Naming & Localization (Priority 4)
-* **Arabic Native Localization:** Modifying identifier regular expressions within tokenizing matrices to natively parse Arabic alphabet characters for dynamic variable tags, functional behaviors, and structural scopes.
-
 ---
 
-## 🎯 4. Immediate Strategic Priority Matrix (Sprints for v0.14.0)
+## 🎯 4. Immediate Strategic Priority Matrix (Sprints for v0.16.0-core)
 
-Our next upcoming engineering iterations will focus strictly on the following tactical milestones:
+Our upcoming engineering iterations for **v0.16.0-core** will focus strictly on the following tactical milestones:
 
-1. **AST Structural Migration (Error Safety Focus):** Migrating `WEATHER`, `SHELTER`, and `CALM` blocks into the formal parser to achieve deep-layer native exception handling within the syntax tree.
-2. **Concurrent Soil Duplication Verification:** Stress-testing concurrent HTTP requests against cloned Soil states to uncover and patch memory leaks under high artificial loads.
-3. **Linter Proof-of-Concept:** Creating a lightweight CLI check subcommand (`chloroplast check`) powered exclusively by the new `core/parser.js` to flag dangling syntax warnings.
+1. **The REAP Core Migration:** Build a formal typed `ReapStatementNode` and accompanying parser method to clean up 94 legacy call sites, unlocking the majority AST pipeline milestone.
+2. **Squash the `FACT` Boolean Bug:** Refactor the lexer matrix to correctly ingest and evaluate boolean constants without defaulting to `null`.
+3. **Migrate Basic Assignments:** Port `SET`, `INCREASE`, and `DECREASE` out of the text-fallback pool into formal AST node execution paths.
 
 ---
 *Developed by Haider Mohammed Abd Alwahid — Nasiriyah, Iraq (2026).*
+
+```

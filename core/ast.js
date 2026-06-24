@@ -121,6 +121,172 @@ class ResponseStatementNode extends AstNode {
   }
 }
 
+// ═══════════════════════════════════════════════════════════════
+//  WEATHER / SHELTER / CALM — error-handling block nodes.
+//
+//  PlantLang's existing grammar (see core/interpreter.js's legacy
+//  handler) shapes this as a try/catch/finally-style construct, NOT
+//  a conditional/if-branch:
+//
+//    WEATHER,
+//      ...protected body, may raise a Storm...
+//    SHELTER STORM_TYPE [AS errVar],
+//      ...recovery body for that specific storm type...
+//    SHELTER ANOTHER_STORM_TYPE,
+//      ...another recovery body...
+//    CALM.
+//
+//  Zero or more SHELTER clauses may follow WEATHER (each catching a
+//  specific storm type, with "ANY_STORM" acting as a catch-all), and
+//  the whole construct is sealed by a single CALM. This AST schema
+//  preserves that exact existing semantic (verified end-to-end
+//  against the legacy engine's WEATHER/SHELTER/CALM tests in
+//  tests/all.plnt and tests/suite.plnt) while exposing an optional
+//  `conditionExpr` field for forward compatibility, since the task
+//  spec names it a "conditional" — it is left null for the current
+//  unconditional try-block grammar and is reserved for a possible
+//  future WEATHER IF [cond] variant without requiring another
+//  breaking AST shape change.
+// ═══════════════════════════════════════════════════════════════
+
+class WeatherStatementNode extends AstNode {
+  /**
+   * @param {Object} fields
+   * @param {AstNode|string|null} [fields.conditionExpr] Reserved for a
+   *        future conditional WEATHER variant; null for the current
+   *        unconditional try-block grammar.
+   * @param {Array} fields.bodyStatements Nested AST statement nodes
+   *        forming the protected ("try") block.
+   * @param {ShelterStatementNode[]} fields.shelterClauses Ordered list
+   *        of SHELTER clauses attached to this WEATHER block.
+   * @param {CalmStatementNode|null} fields.calmClause The terminating
+   *        CALM clause (always present once parsing succeeds).
+   * @param {{line,column,depth}} coords
+   */
+  constructor({ conditionExpr = null, bodyStatements, shelterClauses, calmClause }, coords) {
+    super('WeatherStatement', coords);
+    this.conditionExpr = conditionExpr;
+    this.bodyStatements = bodyStatements || [];
+    this.shelterClauses = shelterClauses || [];
+    this.calmClause = calmClause || null;
+  }
+}
+
+class ShelterStatementNode extends AstNode {
+  /**
+   * @param {Object} fields
+   * @param {string} fields.stormType  The storm type this clause catches
+   *        (e.g. "ZERO_STORM"), or "ANY_STORM" as a catch-all.
+   * @param {string|null} fields.errVar  Optional bound identifier capturing
+   *        the storm's message text (from "SHELTER TYPE AS errVar").
+   * @param {Array} fields.bodyStatements Nested AST statement nodes
+   *        forming this clause's recovery ("catch") block.
+   * @param {{line,column,depth}} coords
+   */
+  constructor({ stormType, errVar = null, bodyStatements }, coords) {
+    super('ShelterStatement', coords);
+    this.stormType = stormType;
+    this.errVar = errVar;
+    this.bodyStatements = bodyStatements || [];
+  }
+}
+
+class CalmStatementNode extends AstNode {
+  /**
+   * @param {Object} fields
+   * @param {Array} [fields.bodyStatements] Nested AST statement nodes
+   *        forming an optional "finally"-style block that always runs
+   *        after WEATHER/SHELTER resolve. Empty for the current grammar,
+   *        where CALM is purely a block-closing terminator with no body
+   *        of its own — reserved for a future CALM-with-body extension.
+   * @param {{line,column,depth}} coords
+   */
+  constructor({ bodyStatements = [] } = {}, coords) {
+    super('CalmStatement', coords);
+    this.bodyStatements = bodyStatements;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ACTION / SPECIES / BLOOM / TAP — declaration and instantiation
+//  nodes for the second compiler-frontend migration milestone.
+// ═══════════════════════════════════════════════════════════════
+
+class ActionDeclarationNode extends AstNode {
+  /**
+   * @param {Object} fields
+   * @param {string} fields.name  The action's identifier.
+   * @param {Array<{name:string,type:string}>} fields.params Declared parameters.
+   * @param {Array} fields.bodyStatements Nested AST statement nodes forming
+   *        the action's executable body.
+   * @param {{line,column,depth}} coords
+   */
+  constructor({ name, params, bodyStatements }, coords) {
+    super('ActionDeclaration', coords);
+    this.name = name;
+    this.params = params || [];
+    this.bodyStatements = bodyStatements || [];
+  }
+}
+
+class SpeciesDeclarationNode extends AstNode {
+  /**
+   * @param {Object} fields
+   * @param {string} fields.name  The species' identifier.
+   * @param {string|null} fields.parentName  Optional PARENT species to inherit from.
+   * @param {Array<{name:string,varType:string,defaultExpr:*}>} fields.fields
+   *        Declared VAR fields with their default value expressions.
+   * @param {ActionDeclarationNode[]} fields.actions Declared methods.
+   * @param {{line,column,depth}} coords
+   */
+  constructor({ name, parentName = null, fields, actions }, coords) {
+    super('SpeciesDeclaration', coords);
+    this.name = name;
+    this.parentName = parentName;
+    this.fields = fields || [];
+    this.actions = actions || [];
+  }
+}
+
+class BloomStatementNode extends AstNode {
+  /**
+   * @param {Object} fields
+   * @param {string} fields.speciesName  The SPECIES being instantiated.
+   * @param {string} fields.instanceIdent  The bound identifier for the new instance.
+   * @param {{line,column,depth}} coords
+   */
+  constructor({ speciesName, instanceIdent }, coords) {
+    super('BloomStatement', coords);
+    this.speciesName = speciesName;
+    this.instanceIdent = instanceIdent;
+  }
+}
+
+class TapStatementNode extends AstNode {
+  /**
+   * @param {Object} fields
+   * @param {string} fields.filename  Quoted-string filename expression text.
+   * @param {string} fields.mode  File open mode (e.g. "MARK", "READ").
+   * @param {string} fields.handleIdent  The bound identifier for the opened handle.
+   * @param {{line,column,depth}} coords
+   */
+  constructor({ filename, mode, handleIdent }, coords) {
+    super('TapStatement', coords);
+    this.filename = filename;
+    this.mode = mode;
+    this.handleIdent = handleIdent;
+  }
+}
+
+
+class WheneverStatementNode extends AstNode {
+  constructor({ watchIdent, bodyStatements }, coords) {
+    super('WheneverStatement', coords);
+    this.watchIdent = watchIdent;
+    this.bodyStatements = bodyStatements || [];
+  }
+}
+
 module.exports = {
   AstNode,
   ProgramNode,
@@ -130,4 +296,12 @@ module.exports = {
   LiteralNode,
   ListenBranchStatementNode,
   ResponseStatementNode,
+  WeatherStatementNode,
+  ShelterStatementNode,
+  CalmStatementNode,
+  ActionDeclarationNode,
+  SpeciesDeclarationNode,
+  BloomStatementNode,
+  TapStatementNode,
+  WheneverStatementNode,
 };

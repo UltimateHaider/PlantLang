@@ -75,5 +75,24 @@ console.log('\n\x1b[1mTokenizer Verification\x1b[0m\n');
   check('stream ends with EOF token', toks[toks.length - 1].type === TOKEN.EOF);
 }
 
+// Test 8: WEATHER / SHELTER / CALM keyword + column accuracy
+// (these were already registered in the original tokenizer build —
+// this test exists to lock that in as a permanent regression guard
+// for the WEATHER/SHELTER/CALM AST migration milestone)
+{
+  const toks = tokenize('1\\ WEATHER,\n1\\ SHELTER ZERO_STORM AS err,\n1\\ CALM.\n');
+  const byVal = (v) => toks.find(t => t.value === v);
+  check('WEATHER tokenized as KEYWORD', byVal('WEATHER').type === TOKEN.KEYWORD);
+  check('WEATHER at col 4', byVal('WEATHER').column === 4);
+  check('SHELTER tokenized as KEYWORD', byVal('SHELTER').type === TOKEN.KEYWORD);
+  check('SHELTER at col 4', byVal('SHELTER').column === 4);
+  check('storm type ZERO_STORM tokenized as IDENT (open set, not reserved)',
+    byVal('ZERO_STORM').type === TOKEN.IDENT);
+  check('AS at col 23', byVal('AS').column === 23);
+  check('err identifier at col 26', byVal('err').column === 26);
+  check('CALM tokenized as KEYWORD', byVal('CALM').type === TOKEN.KEYWORD);
+  check('CALM at col 4', byVal('CALM').column === 4);
+}
+
 console.log(`\n${passed} passed, ${failed} failed\n`);
 process.exit(failed > 0 ? 1 : 0);

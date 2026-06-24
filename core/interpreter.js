@@ -20,6 +20,7 @@ class Interpreter {
     this.rootDir=opts.rootDir||process.cwd();
     this.output=opts.output||[];
     this.emit=opts.emit||((line,type)=>{this.output.push({text:line,type:type||'info'});});
+    this._symbolPassDone=false; // set true once symbolPass() runs; suppresses duplicate output
     // VERIFY tracking
     this.verifyStats={passed:0,failed:0,suite:null,results:[]};
     this.veinFS.write('demo.txt','سطر أول\nسطر ثاني\nسطر ثالث');
@@ -47,15 +48,18 @@ class Interpreter {
 
   /** Run a fully-parsed ProgramNode AST against this interpreter's Soil. */
   runProgram(programNode){
+    // symbolPass() must have already been called before runProgram() —
+    // runSource() calls it automatically. If calling runProgram() directly,
+    // call symbolPass(programNode) first to register declarations.
     for(const stmtNode of programNode.statements){
       this.evaluateNode(stmtNode,this.soil);
     }
   }
 
-  /** Parse source text via the new tokenizer/parser, then run it as an AST. */
   runSource(source){
     const {parse}=require('./parser');
     const programNode=parse(source);
+    this.symbolPass(programNode);         // register declarations before execution
     this.runProgram(programNode);
     return programNode;
   }
@@ -79,12 +83,47 @@ class Interpreter {
   }
 
   /** Central node router — delegator-executes each AST statement kind. */
+  /**
+   * Central node router — delegator-executes each AST statement kind.
+   *
+   * Mirrors the legacy engine's universal location-backfill safety net
+   * (see _execOne's catch block, which stamps any location-less
+   * PlantStorm with the current statement's line/column before it
+   * propagates further). Storms thrown deep inside evalExpr/evalCond
+   * (core/evaluator.js) or Soil mutations (core/runtime.js) — such as
+   * ZERO_STORM from a bare division — carry no coordinates of their
+   * own, since those layers have no access to source position. This
+   * try/catch is the AST pipeline's single choke-point equivalent:
+   * every statement node passes through here exactly once, so this is
+   * where any coordinate-less PlantStorm gets backfilled with the
+   * CURRENT NODE's own precise {line, column} (captured from its
+   * origin token at parse time) before continuing to propagate — this
+   * is what keeps the terminal caret (^) correctly aligned even for
+   * storms raised arbitrarily deep inside a WEATHER/SHELTER body.
+   */
   evaluateNode(node,soil){
+    try{
+      return this._evaluateNodeDispatch(node,soil);
+    }catch(e){
+      if(e instanceof PlantStorm&&(e.line===undefined||e.line===null)){
+        e.line=node.line;e.column=node.column;
+      }
+      throw e;
+    }
+  }
+
+  _evaluateNodeDispatch(node,soil){
     switch(node.type){
       case 'CreateStatement': return this.evaluateCreateStatement(node,soil);
       case 'ShowStatement':   return this.evaluateShowStatement(node,soil);
       case 'ListenBranchStatement': return this.evaluateListenBranch(node,soil);
       case 'ResponseStatement': return this.evaluateResponseStatement(node,soil);
+      case 'WeatherStatement': return this.evaluateWeatherStatement(node,soil);
+      case 'ActionDeclaration': return this.evaluateActionDeclaration(node,soil);
+      case 'SpeciesDeclaration': return this.evaluateSpeciesDeclaration(node,soil);
+      case 'BloomStatement': return this.evaluateBloomStatement(node,soil);
+      case 'TapStatement': return this.evaluateTapStatement(node,soil);
+      case 'WheneverStatement': return this.evaluateWheneverStatement(node,soil);
       case 'RawStatement': {
         // Not yet migrated to a typed node — fall back to the proven
         // legacy single-statement executor so the AST path can still
@@ -99,9 +138,19 @@ class Interpreter {
 
   /** evaluateCreateStatement(node, soil) — CREATE ident(TYPE) TO expr. */
   evaluateCreateStatement(node,soil){
-    const value=node.valueExpr!==null
-      ? this.evaluateExpressionNode(node.valueExpr,soil)
-      : (node.varType==='LIST'?[]:node.varType==='MAP'?{}:node.varType==='FACT'?false:node.varType==='NUM'?0:'');
+    let value;
+    if(node.varType==='LIST'&&node.valueExpr!==null&&node.valueExpr.literalType==='RAW_EXPR'){
+      // Replicate the legacy engine's special-case LIST parsing exactly:
+      // "CREATE x(LIST) TO a, b, c." splits the raw comma-joined text and
+      // coerces each item independently — a single compound expression
+      // (e.g. "a + b") would otherwise be misinterpreted as one giant
+      // string by the generic RAW_EXPR evaluator path below.
+      value=node.valueExpr.value.split(',').map(v=>coerce(v.trim())).filter(v=>v!=='');
+    }else if(node.valueExpr!==null){
+      value=this.evaluateExpressionNode(node.valueExpr,soil);
+    }else{
+      value=node.varType==='LIST'?[]:node.varType==='MAP'?{}:node.varType==='FACT'?false:node.varType==='NUM'?0:'';
+    }
     soil.set(node.identifier,value,node.varType,{pulse:!!node.isPulse});
     this.emit(`CREATE "${node.identifier}"(${node.varType})${node.isPulse?' PULSE':''} = ${Array.isArray(value)?'['+value.join(', ')+']':value}`,'ok');
     return{next:1};
@@ -132,6 +181,277 @@ class Interpreter {
     this.emit(`  → RESPONSE: ${value&&typeof value==='object'?JSON.stringify(value):value}`,'muted');
     return{next:1,returned:true,value};
   }
+
+  /**
+   * evaluateWeatherStatement(node, soil) — WEATHER [IF cond] / SHELTER / CALM.
+   *
+   * Execution model (matches the legacy regex-engine's proven semantics
+   * for the unconditional case, see core/interpreter.js's earlier
+   * `stmt.match(/^WEATHER$/i)` handler which this AST path runs
+   * alongside, not in place of; the conditional "WEATHER IF" form is new
+   * in this milestone and fully backward-compatible — every existing
+   * bare "WEATHER," statement still has `conditionExpr === null` and
+   * behaves byte-for-byte identically to before):
+   *
+   *   0. If node.conditionExpr is non-null, it is evaluated against the
+   *      OUTER soil (not the sandboxed weatherSoil — the condition is a
+   *      guard checked before the protected block's own scope even
+   *      exists, so it can only see variables already in scope at the
+   *      WEATHER statement's own position, matching how IF/STOP IF
+   *      conditions are evaluated elsewhere in the language). If the
+   *      condition evaluates falsy, the protected body and all SHELTER
+   *      clauses are skipped entirely — no storm was ever thrown, so
+   *      there is nothing to catch, and entering SHELTER resolution
+   *      would be meaningless. CALM still runs unconditionally (see
+   *      step 5) since it is the block's structural terminator, not
+   *      part of the conditional protected/recovery logic.
+   *   1. The protected body runs inside its OWN child Soil scope, so any
+   *      CREATE/SET done there does not leak into the enclosing scope —
+   *      this is the "execution state sandboxing" required by the task.
+   *   2. If the body throws a PlantStorm, it is matched against the
+   *      WEATHER's shelterClauses by `stormType` (case-insensitive on
+   *      the stored uppercase type), falling back to a clause whose
+   *      stormType is "ANY_STORM" if no exact match exists.
+   *   3. The matching SHELTER clause's body also runs in its own child
+   *      Soil (sandboxed from both the WEATHER body and the outer
+   *      scope), with `errVar` (if specified) bound to the storm's
+   *      message text — mirroring the legacy engine's `hs.set(errVar,
+   *      e.message,'TX')` behavior exactly.
+   *   4. Any PlantStorm with no matching SHELTER clause propagates
+   *      upward uncaught, exactly like the legacy engine, so it still
+   *      reaches the centralized diagnostic handler in _exec/_execOne
+   *      and gets the visual caret pointer instead of being silently
+   *      swallowed.
+   *   5. evaluateCalmStatement is invoked unconditionally once the
+   *      WEATHER/SHELTER resolution above completes (success, recovered
+   *      failure, or the condition-skip path) — it is currently a no-op
+   *      terminator per the existing grammar, called for forward-
+   *      compatibility and to keep CalmStatementNode's evaluation
+   *      symmetrical with its sibling node types.
+   */
+  evaluateWeatherStatement(node,soil){
+    if(node.conditionExpr!==null){
+      const conditionValue=evalCond(node.conditionExpr,soil);
+      if(!conditionValue){
+        if(node.calmClause)this.evaluateCalmStatement(node.calmClause,soil);
+        return{next:1};
+      }
+    }
+    const weatherSoil=soil.child(); // sandbox: body-local CREATE/SET never leak upward
+    let result=null;
+    try{
+      for(const bodyNode of node.bodyStatements){
+        const r=this.evaluateNode(bodyNode,weatherSoil);
+        if(r&&r.returned){result=r;break;}
+      }
+    }catch(e){
+      if(!(e instanceof PlantStorm))throw e;
+      const clause=node.shelterClauses.find(c=>c.stormType===e.stormType)
+                 ||node.shelterClauses.find(c=>c.stormType==='ANY_STORM');
+      if(clause){
+        result=this.evaluateShelterStatement(clause,soil,e);
+      }else{
+        // No matching SHELTER — propagate, exactly like the legacy engine,
+        // so the central diagnostic handler still renders the caret.
+        throw e;
+      }
+    }
+    if(node.calmClause)this.evaluateCalmStatement(node.calmClause,soil);
+    return result&&result.returned?result:{next:1};
+  }
+
+  /**
+   * evaluateShelterStatement(clauseNode, soil, caughtStorm) — runs a
+   * single SHELTER clause's recovery body in its own sandboxed child
+   * Soil, binding `errVar` to the caught storm's message text if the
+   * clause declared one (e.g. "SHELTER ZERO_STORM AS err,"). Called
+   * internally by evaluateWeatherStatement once a matching clause has
+   * been selected — not reached directly via evaluateNode()'s router,
+   * since a bare SHELTER outside its owning WEATHER has no standalone
+   * meaning (matching the legacy engine, which also treats a
+   * stray SHELTER/CALM line as a structural no-op — see _execOne's
+   * `if(text.match(/^SHELTER\b/i)...)return{next:i+1}` skip rule).
+   */
+  evaluateShelterStatement(clauseNode,soil,caughtStorm){
+    const shelterSoil=soil.child(); // sandbox: recovery-body locals never leak upward
+    if(clauseNode.errVar)shelterSoil.set(clauseNode.errVar,caughtStorm.message,'TX');
+    let result=null;
+    for(const bodyNode of clauseNode.bodyStatements){
+      const r=this.evaluateNode(bodyNode,shelterSoil);
+      if(r&&r.returned){result=r;break;}
+    }
+    return result;
+  }
+
+  /**
+   * evaluateCalmStatement(node, soil) — terminates a WEATHER/SHELTER
+   * chain. Per the current grammar, CALM carries no body of its own
+   * (CalmStatementNode.bodyStatements is always empty today — see
+   * core/ast.js's documentation on the reserved future extension), so
+   * this is intentionally a no-op pass-through. It still exists as a
+   * named evaluator (rather than being skipped silently) so the AST
+   * execution pipeline remains symmetrical and self-documenting, and
+   * so a future "finally"-style CALM body can be wired in here without
+   * touching evaluateWeatherStatement's call site.
+   */
+  evaluateCalmStatement(node,soil){
+    for(const bodyNode of node.bodyStatements){
+      this.evaluateNode(bodyNode,soil);
+    }
+    return{next:1};
+  }
+
+  /**
+   * evaluateActionDeclaration(node, soil) — registers the ACTION into
+   * this.funcs using EXACTLY the same {params, body, line} shape the
+   * legacy _firstPass() uses, with one key addition: body is an array
+   * of AST nodes (rather than legacy text records). _callAction() is
+   * already polymorphic (see its implementation) so all existing call
+   * sites (REAP, FLOW, recursion) work unchanged without modification.
+   */
+  evaluateActionDeclaration(node,soil){
+    this.funcs.set(node.name,{
+      params:node.params,
+      body:node.bodyStatements,
+      line:node.line
+    });
+    if(!this._symbolPassDone)
+      this.emit(`✓ ACTION "${node.name}"(${node.params.map(p=>p.name+'('+p.type+')').join(', ')})`,'ok');
+    return{next:1};
+  }
+
+  /**
+   * evaluateSpeciesDeclaration(node, soil) — registers the SPECIES into
+   * this.species, replicating the exact shape the legacy _firstPass()
+   * produces: {fields:{name:{type,default}}, actions:{name:{params,body}},
+   * parent}. PARENT inheritance deep-clones the parent's fields/actions
+   * first, then the child's own fields/actions overlay — identical to
+   * the legacy engine's JSON.parse(JSON.stringify(...)) deep-clone.
+   */
+  evaluateSpeciesDeclaration(node,soil){
+    const fields={},actions={};
+    if(node.parentName&&this.species.has(node.parentName)){
+      const p=this.species.get(node.parentName);
+      Object.assign(fields,JSON.parse(JSON.stringify(p.fields)));
+      Object.assign(actions,JSON.parse(JSON.stringify(p.actions)));
+    }
+    for(const f of node.fields){
+      const dflt=f.defaultExpr!==null
+        ? this.evaluateExpressionNode(f.defaultExpr,soil)
+        : (f.varType==='NUM'?0:f.varType==='FACT'?false:f.varType==='LIST'?[]:f.varType==='MAP'?{}:'');
+      fields[f.name]={type:f.varType,default:dflt};
+    }
+    for(const a of node.actions){
+      actions[a.name]={params:a.params,body:a.bodyStatements};
+    }
+    this.species.set(node.name,{fields,actions,parent:node.parentName});
+    if(!this._symbolPassDone)
+      this.emit(`✓ SPECIES "${node.name}"${node.parentName?' PARENT '+node.parentName:''}`,'ok');
+    return{next:1};
+  }
+
+  /**
+   * evaluateBloomStatement(node, soil) — instantiates a SPECIES,
+   * creating a concrete instance object {__species, field1, field2, ...}
+   * and binding it to `node.instanceIdent` in the current scope. Mirrors
+   * the legacy BLOOM handler's exact instantiation logic (see line ~873
+   * in _exec's BLOOM handler) so all existing SELF:/method invocation
+   * code in _callAction keeps working with instances created via this
+   * new AST path.
+   */
+  evaluateBloomStatement(node,soil){
+    const spec=this.species.get(node.speciesName);
+    if(!spec)storm('MISSING_STORM',`SPECIES "${node.speciesName}" غير معرّف`,node.line,node.column);
+    const inst={__species:node.speciesName};
+    const ownSpec={fields:spec.fields,actions:spec.actions,parent:spec.parent};
+    for(const[fname,fdef]of Object.entries(ownSpec.fields)){
+      inst[fname]=fdef.default!==null?fdef.default:(fdef.type==='NUM'?0:fdef.type==='FACT'?false:fdef.type==='LIST'?[]:fdef.type==='MAP'?{}:'');
+    }
+    inst.__actions=ownSpec.actions;
+    soil.set(node.instanceIdent,inst,'INSTANCE');
+    this.emit(`BLOOM "${node.speciesName}" AS "${node.instanceIdent}" ✓`,'ok');
+    return{next:1};
+  }
+
+  /**
+   * evaluateTapStatement(node, soil) — opens a file handle, delegating
+   * to the existing VeinFS / TAP legacy handler via a synthetic
+   * RawStatement (since TAP already has a complete, tested implementation
+   * in _exec and VeinFS handles all file state; re-implementing would be
+   * duplication without additional correctness gain).
+   */
+  evaluateTapStatement(node,soil){
+    const synth={depth:node.depth||1,
+      text:`TAP "${node.filename}" MODE:${node.mode} AS ${node.handleIdent}`,
+      line:node.line,column:node.column};
+    return this._execOne([synth],0,1,soil);
+  }
+
+  evaluateWheneverStatement(node,soil){
+    // Build a synthetic body as legacy flat-statement records so the
+    // existing watcher/WHENEVER infrastructure (_exec's WHENEVER handler
+    // which populates this.watchers[]) keeps working unchanged.
+    const bodyAsLegacy=node.bodyStatements.map(s=>({
+      depth:s.depth||2,
+      text:s.type==='RawStatement'?s.text:(s.text||''),
+      line:s.line,column:s.column
+    }));
+    const synth={depth:node.depth||1,
+      text:`WHENEVER ${node.watchIdent} CHANGES`,
+      line:node.line,column:node.column};
+    // Reconstruct the flat statement list that the legacy WHENEVER handler
+    // expects: header + body records + closer (N\.)
+    const closer={depth:node.depth||1,text:'\\\\',line:node.line,column:1};
+    const allStmts=[synth,...bodyAsLegacy,closer];
+    return this._execOne(allStmts,0,allStmts.length,soil);
+  }
+
+  /**
+   * symbolPass(programNode) — AST-based symbol table pre-registration.
+   *
+   * Replaces _firstPass() as the pre-execution declaration registration
+   * step for the new AST pipeline (runSource/runProgram). Walks the
+   * ProgramNode's top-level statements once before main execution and
+   * registers every ActionDeclarationNode, SpeciesDeclarationNode,
+   * ROOT RawStatement, ROOT_SCOPE RawStatement, MISSION RawStatement,
+   * and PLANT RawStatement into the interpreter's symbol tables.
+   *
+   * This is structurally identical to _firstPass()'s contract — forward
+   * references work because declarations are visible before the first
+   * non-declaration statement runs — but it operates on typed AST nodes
+   * rather than flat text records, and it delegates the actual
+   * registration logic to the same evaluateActionDeclaration /
+   * evaluateSpeciesDeclaration methods that the main execution pass
+   * uses, so there's no duplication of registration logic.
+   *
+   * RawStatements that contain legacy pre-pass declarations (ROOT,
+   * ROOT_SCOPE, MISSION, PLANT) are still forwarded to the legacy
+   * _firstPass()-compatible handler via a one-shot flat-statement list
+   * so those constructs keep working during the remaining migration.
+   */
+  symbolPass(programNode){
+    const legacyDecls=[];
+    for(const node of programNode.statements){
+      if(node.type==='ActionDeclaration'){
+        this.evaluateActionDeclaration(node,this.soil);
+      }else if(node.type==='SpeciesDeclaration'){
+        this.evaluateSpeciesDeclaration(node,this.soil);
+      }else if(node.type==='RawStatement'){
+        const t=node.text;
+        if(t&&(
+          /^ROOT\s+\w+\s+TO\s+/i.test(t)||
+          /^ROOT_SCOPE\s+\w+$/i.test(t)||
+          /^MISSION\s*:/i.test(t)||
+          /^PLANT\s+/i.test(t)
+        )){
+          legacyDecls.push({text:t,depth:node.depth||0,line:node.line,column:node.column});
+        }
+      }
+    }
+    if(legacyDecls.length>0)this._firstPass(legacyDecls);
+    this._symbolPassDone=true;
+  }
+
 
   runFile(filePath){
     const source=fs.readFileSync(filePath,'utf8');
@@ -1130,6 +1450,21 @@ class Interpreter {
     return body;
   }
 
+  /**
+   * _callAction(fn, argVals, instance, parentSoil)
+   *
+   * Invokes a registered ACTION. `fn.body` may be EITHER:
+   *   - a legacy flat-statement array ({depth,text,line,column} records,
+   *     produced by the original _firstPass()/core/lexer.js path), or
+   *   - an AST-node array (objects with a `.type` field, produced by
+   *     the new parseActionDeclaration() in core/parser.js).
+   * This polymorphism is what lets every existing call site (FLOW,
+   * REAP, SELF:method invocation, recursive self-calls) keep working
+   * completely unchanged regardless of which pipeline registered the
+   * function — the dispatch decision is made once, here, based on
+   * whether the first body entry looks like an AST node or a legacy
+   * statement record.
+   */
   _callAction(fn,argVals,instance,parentSoil){
     const scope=parentSoil.child();
     fn.params.forEach((p,idx)=>{if(argVals[idx]!==undefined)scope.set(p.name,argVals[idx],p.type);});
@@ -1139,7 +1474,17 @@ class Interpreter {
         scope.set('SELF:'+k,instance[k],inferType(instance[k]));
       });
     }
-    const result=this._execBlock(fn.body,0,fn.body.length,scope);
+    const isAstBody=fn.body.length>0&&typeof fn.body[0].type==='string'&&fn.body[0].text===undefined;
+    let result;
+    if(isAstBody){
+      result=null;
+      for(const bodyNode of fn.body){
+        const r=this.evaluateNode(bodyNode,scope);
+        if(r&&r.returned){result=r;break;}
+      }
+    }else{
+      result=this._execBlock(fn.body,0,fn.body.length,scope);
+    }
     if(instance){
       const self=scope.get('__self');
       if(self&&self.value)Object.assign(instance,self.value);
