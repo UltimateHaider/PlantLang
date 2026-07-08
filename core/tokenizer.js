@@ -182,6 +182,13 @@ function tokenize(source) {
       continue;
     }
 
+    // Compound operator: ** (power) — c is peekChar (not yet consumed)
+    if (c === '*' && peekChar(1) === '*') {
+      advance(); advance(); // consume both *
+      tokens.push(new Token(TOKEN.PUNCT, '**', startLine, startCol, currentDepth));
+      continue;
+    }
+
     // Operators / anything else: consume as a single-char PUNCT so the
     // parser can still see it (kept permissive — full operator grammar
     // is out of scope for this milestone, expressions still delegate

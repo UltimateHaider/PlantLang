@@ -377,8 +377,8 @@ SUITE "HTTP / HARVEST",
   1\ HARVEST "https://pypi.org/pypi/requests/json" AS pkg.
 
   VERIFY "HARVEST GET returns MAP",        TYPE pkg IS MAP.
-  VERIFY "HARVEST result has last_serial", TYPE pkg:"last_serial" IS NUM.
-  VERIFY "last_serial is positive",        pkg:"last_serial" GREATER THAN 0.
+  VERIFY "HARVEST body has info key",        TYPE pkg:"body":"info":"name" IS TX.
+  VERIFY "HARVEST package name is requests", pkg:"body":"info":"name" IS "requests".
 
   1\ CREATE hdr(MAP).
   1\ LINK "User-Agent" WITH "PlantLang-Tests (ci@plantlang.dev)" IN hdr.

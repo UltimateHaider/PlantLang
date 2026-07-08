@@ -20,7 +20,7 @@ function printLine(text,type){
 }
 
 function banner(){
-  console.log(`\n${C.green}${C.bold}🌿 PlantLang — Chloroplast v0.6${C.reset}`);
+  console.log(`\n${C.green}${C.bold}🌿 PlantLang — Chloroplast v0.7${C.reset}`);
   console.log(`${C.gray}   المفسر الحقيقي لملفات .plnt${C.reset}\n`);
 }
 
@@ -32,7 +32,7 @@ function runFile(filePath,opts={}){
   const interp=new Interpreter({mission,rootDir:path.dirname(path.resolve(filePath)),emit:(text,type)=>printLine(text,type)});
   const t0=Date.now();
   try{
-    interp.run(source);
+    interp.runSource(source);
     if(opts.verbose)console.log(`\n${C.gray}  اكتمل في ${Date.now()-t0}ms — MISSION: ${mission}${C.reset}`);
   }catch(e){
     console.error('\n'+formatStormDiagnostic(e,filePath,source));
@@ -48,7 +48,7 @@ function verifyFile(filePath,opts={}){
   console.log(`${C.cyan}Testing: ${filePath}${C.reset}\n`);
   const interp=new Interpreter({mission,rootDir:path.dirname(path.resolve(filePath)),emit:(text,type)=>printLine(text,type)});
   try{
-    interp.run(source);
+    interp.runSource(source);
     process.exit(interp.verifyStats.failed>0?1:0);
   }catch(e){
     console.error('\n'+formatStormDiagnostic(e,filePath,source));

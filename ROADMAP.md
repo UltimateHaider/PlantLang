@@ -1,11 +1,62 @@
-فهمتك تماماً، المعذرة على اللبس في أرقام الإصدارات! تم تعديل وعيار الدفة لتتوافق بدقة مع تسمياتك الحالية والمستقبلية.
+# 🗺️ PlantLang Development Roadmap & Status Report (v0.18.0 Milestone)
 
-إليك الكود المحدث بالكامل لملف **ROADMAP.md** داخل **مربع كود واحد مستقر وغير منكسر** (باستخدام التغليف الخماسي ````🏼`):
+This document outlines the architectural evolution of PlantLang, tracking the transition from the Chloroplast v0.17.0 Interpreter Core into the high-performance Native Compiler infrastructure.
 
-```markdown
-# 🗺️ PlantLang Development Roadmap & Status Report (v0.16.0-core Milestone)
+---
 
-This document outlines the architectural milestones, verified features, squashed technical debt, active compiler bugs, and upcoming design targets for the PlantLang programming language interpreter and compiler infrastructure (**Chloroplast Core v0.15.0-core**).
+## 🟢 1. Milestones Achieved (v0.17.0 Baseline)
+The core infrastructure has reached production-grade stability:
+* **Pure AST Pipeline:** Tokenizer ➔ Parser ➔ AST ➔ SymbolPass ➔ evaluateNode.
+* **Live Network:** `LISTEN BRANCH` native HTTP engine with isolated Soil sandboxing.
+* **Developer Experience:** VSCode Extension (Syntax highlighting, Theme, 30+ Snippets).
+* **Validation:** 313/313 tests passed (100% Zero-Regression).
+
+---
+
+## 🔵 2. The Native Compiler Evolution (v0.18.0 Targets)
+We are moving beyond the interpreter floor to enable bare-metal performance through a multi-pass compilation pipeline.
+
+### Phase 1: Structural Static Analysis (The Validator)
+* **Static Type Checker:** Implementing a type-inference pass over the AST.
+    * Enforce strict typing for `NUM`, `TX`, `MAP`.
+    * Pre-execution validation of variable declarations and scope integrity.
+* **Symbol Table Finalization:** Mapping all identifiers to strict memory locations before binary generation.
+
+### Phase 2: Transpilation (The Generator)
+* **AST-to-C Transpiler:** * Migrating AST nodes to C-compliant syntax trees.
+    * Handling memory allocation and garbage collection logic for PlantLang objects.
+* **Native Binary Integration:** * Invoking GCC/Clang via CLI.
+    * Generating standalone executables (`.bin` / `.exe`) from `.plnt` source code.
+
+### Phase 3: Compiler Service & Web UI
+* **CodeWords Compiler Service:** A backend-as-a-service (BaaS) for remote compilation of PlantLang scripts.
+* **Web REPL UI:** A browser-based IDE offering real-time visualization of the AST and transpilation results.
+
+---
+
+## ⚠️ 3. Known Constraints & Technical Debt
+* **Remaining Legacy Fallback:** While ~96% of the pipeline is native AST, ~4% of edge-case statements still utilize the `RawStatementNode` fallback.
+* **Boolean Evaluation:** Refinement required for `FACT` constants to ensure strict boolean parity with system-level evaluations.
+* **Library Extensibility:** Current `innate` library needs modular migration for the upcoming `GREENHOUSE` package manager.
+
+---
+
+## 🎯 4. Strategic Priority Matrix (v0.18.0 Sprints)
+1. **Static Type Checker:** Establish the validation layer (Priority: Extreme).
+2. **C Code Generator:** Establish the structural mapping between AST and C (Priority: High).
+3. **GREENHOUSE Integration:** Formalizing the import/package system (Priority: Medium).
+
+---
+
+## 🧪 Verification Matrix
+| Component | Status | Target |
+| :--- | :--- | :--- |
+| AST Interpreter | Stable ✅ | v0.17.0 |
+| Static Type Checker | In-Progress 🛠️ | v0.18.0 |
+| C Transpiler | Research 🔍 | v0.18.0 |
+| Native Binary | Roadmap 🔜 | v0.19.0 |
+
+*Developed by Haider Mohammed Al-Khuzai — Nasiriyah, Iraq (2026).*
 
 ---
 

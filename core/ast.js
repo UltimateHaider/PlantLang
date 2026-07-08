@@ -287,6 +287,58 @@ class WheneverStatementNode extends AstNode {
   }
 }
 
+
+class ReapStatementNode extends AstNode {
+  /**
+   * Models all forms of REAP:
+   *
+   *   REAP var FROM action, args...         source:{kind:'ACTION', name}
+   *   REAP var FROM lib:FUNCTION, args...   source:{kind:'LIBRARY', lib, fn}
+   *   REAP var FROM obj:method [, args...]  source:{kind:'INSTANCE', obj, method}
+   *   REAP var FROM SELF:method [, args...] source:{kind:'SELF', method}
+   *   REAP var FROM NOW [FORMAT:X]          source:{kind:'NOW', format}
+   *   REAP var FROM TYPEOF target           source:{kind:'TYPEOF', target}
+   *
+   * `variable` is the bound identifier string, or "_" to discard.
+   * `args` is an array of raw expression strings (split on top-level commas,
+   * NOT yet sub-parsed — they are evaluated at runtime via evalExpr, exactly
+   * as the legacy engine's _splitArgs() + E() pipeline does, preserving
+   * 100% semantic parity with the proven regex handlers).
+   */
+  constructor({ variable, source, args }, coords) {
+    super('ReapStatement', coords);
+    this.variable = variable;
+    this.source   = source;   // { kind, name?, lib?, fn?, obj?, method?, format?, target? }
+    this.args     = args || [];
+  }
+}
+
+
+
+class SetStatementNode extends AstNode {
+  constructor({ identifier, valueExpr }, coords) {
+    super('SetStatement', coords);
+    this.identifier = identifier;  // may be "x", "SELF:x", "obj:x", "obj:"key""
+    this.valueExpr  = valueExpr;   // raw expression text → evalExpr at runtime
+  }
+}
+
+class IncreaseStatementNode extends AstNode {
+  constructor({ identifier, amountExpr }, coords) {
+    super('IncreaseStatement', coords);
+    this.identifier = identifier;
+    this.amountExpr = amountExpr;
+  }
+}
+
+class DecreaseStatementNode extends AstNode {
+  constructor({ identifier, amountExpr }, coords) {
+    super('DecreaseStatement', coords);
+    this.identifier = identifier;
+    this.amountExpr = amountExpr;
+  }
+}
+
 module.exports = {
   AstNode,
   ProgramNode,
@@ -304,4 +356,257 @@ module.exports = {
   BloomStatementNode,
   TapStatementNode,
   WheneverStatementNode,
+  ReapStatementNode,
+  SetStatementNode,
+  IncreaseStatementNode,
+  DecreaseStatementNode,
 };
+
+// appended — remaining statement node types for full migration
+
+class IfStatementNode extends AstNode {
+  // IF cond, body [ORIF cond, body]* [ELSE, body]
+  constructor({ branches }, coords) {
+    super('IfStatement', coords);
+    this.branches = branches || []; // [{cond:string|null, bodyStatements:[]}]
+  }
+}
+
+class CycleStatementNode extends AstNode {
+  // CYCLE var IN expr,  body  1\.
+  // CYCLE var FROM lo TO hi [STEP n],  body  1\.
+  constructor({ iterVar, sourceExpr, fromExpr, toExpr, stepExpr, bodyStatements }, coords) {
+    super('CycleStatement', coords);
+    this.iterVar        = iterVar;
+    this.sourceExpr     = sourceExpr  || null;  // IN list
+    this.fromExpr       = fromExpr    || null;  // FROM n
+    this.toExpr         = toExpr      || null;  // TO m
+    this.stepExpr       = stepExpr    || null;  // STEP k
+    this.bodyStatements = bodyStatements || [];
+  }
+}
+
+class SeasonStatementNode extends AstNode {
+  // SEASON cond, body 1\.
+  constructor({ condExpr, bodyStatements }, coords) {
+    super('SeasonStatement', coords);
+    this.condExpr       = condExpr;
+    this.bodyStatements = bodyStatements || [];
+  }
+}
+
+class MatchStatementNode extends AstNode {
+  // MATCH expr, IS val YIELD action. / ELSE YIELD action. / \\\.
+  constructor({ subjectExpr, clauses }, coords) {
+    super('MatchStatement', coords);
+    this.subjectExpr = subjectExpr;
+    this.clauses     = clauses || []; // [{cond:string, action:string}]
+  }
+}
+
+class GiveStatementNode extends AstNode {
+  // GIVE expr.  (return from ACTION)
+  constructor({ valueExpr }, coords) {
+    super('GiveStatement', coords);
+    this.valueExpr = valueExpr;
+  }
+}
+
+class StopIfStatementNode extends AstNode {
+  // STOP IF cond [, action]
+  constructor({ condExpr, actionExpr }, coords) {
+    super('StopIfStatement', coords);
+    this.condExpr   = condExpr;
+    this.actionExpr = actionExpr || null;
+  }
+}
+
+class PutStatementNode extends AstNode {
+  // PUT val INTO list / SELF:list
+  constructor({ valueExpr, targetExpr }, coords) {
+    super('PutStatement', coords);
+    this.valueExpr  = valueExpr;
+    this.targetExpr = targetExpr;
+  }
+}
+
+class TakeStatementNode extends AstNode {
+  // TAKE val FROM list
+  constructor({ valueExpr, listExpr }, coords) {
+    super('TakeStatement', coords);
+    this.valueExpr = valueExpr;
+    this.listExpr  = listExpr;
+  }
+}
+
+class LinkStatementNode extends AstNode {
+  // LINK "key" WITH val IN map
+  constructor({ keyExpr, valueExpr, mapIdent }, coords) {
+    super('LinkStatement', coords);
+    this.keyExpr   = keyExpr;
+    this.valueExpr = valueExpr;
+    this.mapIdent  = mapIdent;
+  }
+}
+
+class SortStatementNode extends AstNode {
+  constructor({ listIdent }, coords) {
+    super('SortStatement', coords);
+    this.listIdent = listIdent;
+  }
+}
+
+class ShakeStatementNode extends AstNode {
+  constructor({ listIdent }, coords) {
+    super('ShakeStatement', coords);
+    this.listIdent = listIdent;
+  }
+}
+
+class EvaporateStatementNode extends AstNode {
+  constructor({ identifier }, coords) {
+    super('EvaporateStatement', coords);
+    this.identifier = identifier;
+  }
+}
+
+class LockStatementNode extends AstNode {
+  constructor({ identifier }, coords) {
+    super('LockStatement', coords);
+    this.identifier = identifier;
+  }
+}
+
+class BraidStatementNode extends AstNode {
+  // BRAID a WITH b AS result [MAP]
+  constructor({ list1, list2, resultIdent, asMap }, coords) {
+    super('BraidStatement', coords);
+    this.list1       = list1;
+    this.list2       = list2;
+    this.resultIdent = resultIdent;
+    this.asMap       = asMap || false;
+  }
+}
+
+class HarvestStatementNode extends AstNode {
+  // HARVEST "url" [METHOD:x] [BODY:y] [HEADERS:h] [TIMEOUT:n] AS result
+  constructor({ urlExpr, method, bodyExpr, headersIdent, timeoutExpr, resultIdent }, coords) {
+    super('HarvestStatement', coords);
+    this.urlExpr      = urlExpr;
+    this.method       = method || 'GET';
+    this.bodyExpr     = bodyExpr     || null;
+    this.headersIdent = headersIdent || null;
+    this.timeoutExpr  = timeoutExpr  || null;
+    this.resultIdent  = resultIdent;
+  }
+}
+
+class AnalyzeStatementNode extends AstNode {
+  constructor({ identifier }, coords) {
+    super('AnalyzeStatement', coords);
+    this.identifier = identifier;
+  }
+}
+
+class WaitStatementNode extends AstNode {
+  constructor({ secsExpr }, coords) {
+    super('WaitStatement', coords);
+    this.secsExpr = secsExpr;
+  }
+}
+
+class ShowVerifySummaryNode extends AstNode {
+  constructor(coords) { super('ShowVerifySummary', coords); }
+}
+
+class VerifyStatementNode extends AstNode {
+  // VERIFY "label", assertion
+  constructor({ label, assertion }, coords) {
+    super('VerifyStatement', coords);
+    this.label     = label;
+    this.assertion = assertion;
+  }
+}
+
+class SuiteStatementNode extends AstNode {
+  // SUITE "name", ...body... SUITE/.
+  constructor({ name, bodyStatements }, coords) {
+    super('SuiteStatement', coords);
+    this.name           = name;
+    this.bodyStatements = bodyStatements || [];
+  }
+}
+
+class PlantStatementNode extends AstNode {
+  constructor({ libName }, coords) {
+    super('PlantStatement', coords);
+    this.libName = libName;
+  }
+}
+
+class MissionStatementNode extends AstNode {
+  constructor({ mode }, coords) {
+    super('MissionStatement', coords);
+    this.mode = mode;
+  }
+}
+
+class RootStatementNode extends AstNode {
+  // ROOT name TO expr
+  constructor({ identifier, valueExpr }, coords) {
+    super('RootStatement', coords);
+    this.identifier = identifier;
+    this.valueExpr  = valueExpr;
+  }
+}
+
+class RootScopeStatementNode extends AstNode {
+  // ROOT_SCOPE name, LINK ... ROOT_SCOPE/.
+  constructor({ identifier, links }, coords) {
+    super('RootScopeStatement', coords);
+    this.identifier = identifier;
+    this.links      = links || []; // [{key,valueExpr}]
+  }
+}
+
+class FlowStatementNode extends AstNode {
+  // REAP x FROM src FLOW a FLOW b ...
+  // (handled by ReapStatement with flowChain)
+  constructor({ variable, sourceExpr, flowChain, args }, coords) {
+    super('FlowStatement', coords);
+    this.variable   = variable;
+    this.sourceExpr = sourceExpr;
+    this.flowChain  = flowChain || [];
+    this.args       = args || [];
+  }
+}
+
+// Re-export everything
+const _orig = module.exports;
+Object.assign(module.exports, {
+  IfStatementNode,
+  CycleStatementNode,
+  SeasonStatementNode,
+  MatchStatementNode,
+  GiveStatementNode,
+  StopIfStatementNode,
+  PutStatementNode,
+  TakeStatementNode,
+  LinkStatementNode,
+  SortStatementNode,
+  ShakeStatementNode,
+  EvaporateStatementNode,
+  LockStatementNode,
+  BraidStatementNode,
+  HarvestStatementNode,
+  AnalyzeStatementNode,
+  WaitStatementNode,
+  ShowVerifySummaryNode,
+  VerifyStatementNode,
+  SuiteStatementNode,
+  PlantStatementNode,
+  MissionStatementNode,
+  RootStatementNode,
+  RootScopeStatementNode,
+  FlowStatementNode,
+});

@@ -1,0 +1,61 @@
+MISSION: SAFE.
+PLANT math.
+
+# ══════════════════════════════════════════════════════════
+#  Example 08 — LISTEN BRANCH: real HTTP server
+#
+#  Run:  chloroplast run examples/08_listen.plnt
+#  Test: curl http://localhost:3000/
+#        curl http://localhost:3000/health
+#        curl -X POST -H "Content-Type: application/json" \
+#             -d '{"a":7,"b":8}' http://localhost:3000/add
+# ══════════════════════════════════════════════════════════
+
+ROOT PORT TO 3000.
+ROOT APP  TO "PlantLang API".
+
+1\ CREATE cfg(MAP).
+1\ LINK "timeout" WITH 30 IN cfg.
+1\ LINK "host"    WITH "0.0.0.0" IN cfg.
+
+1\ SHOW "".
+1\ SHOW "Starting " + APP + " on port " + PORT + "...".
+
+1\ LISTEN BRANCH ON PORT WITH cfg AS req MAP,
+
+2\   CREATE reqPath(TX)   TO req:"path".
+2\   CREATE reqMethod(TX) TO req:"method".
+
+2\   SHOW reqMethod + " " + reqPath.
+
+2\   IF reqPath IS "/",
+3\     CREATE body(MAP).
+3\     LINK "app"    WITH APP  IN body.
+3\     LINK "port"   WITH PORT IN body.
+3\     LINK "status" WITH "ok" IN body.
+3\     GIVE body AS RESPONSE.
+
+2\   ORIF reqPath IS "/health",
+3\     CREATE hbody(MAP).
+3\     LINK "healthy" WITH TRUE IN hbody.
+3\     GIVE hbody AS RESPONSE.
+
+2\   ORIF reqPath IS "/add",
+3\     CREATE reqBody(MAP) TO req:"body".
+3\     CREATE numA(NUM) TO reqBody:"a".
+3\     CREATE numB(NUM) TO reqBody:"b".
+3\     CREATE result(NUM) TO numA + numB.
+3\     CREATE rbody(MAP).
+3\     LINK "a"      WITH numA   IN rbody.
+3\     LINK "b"      WITH numB   IN rbody.
+3\     LINK "result" WITH result IN rbody.
+3\     GIVE rbody AS RESPONSE.
+
+2\   ELSE,
+3\     CREATE notfound(MAP).
+3\     LINK "error" WITH "Not Found" IN notfound.
+3\     LINK "path"  WITH reqPath     IN notfound.
+3\     GIVE notfound AS RESPONSE.
+
+1\ LISTEN/.
+1\ SHOW "Server stopped.".

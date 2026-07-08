@@ -124,10 +124,36 @@ class Interpreter {
       case 'BloomStatement': return this.evaluateBloomStatement(node,soil);
       case 'TapStatement': return this.evaluateTapStatement(node,soil);
       case 'WheneverStatement': return this.evaluateWheneverStatement(node,soil);
+      case 'ReapStatement':     return this.evaluateReapStatement(node,soil);
+      case 'SetStatement':      return this.evaluateSetStatement(node,soil);
+      case 'IncreaseStatement': return this.evaluateIncreaseStatement(node,soil);
+      case 'DecreaseStatement': return this.evaluateDecreaseStatement(node,soil);
+      // ── new nodes added in full-migration pass ──────────────
+      case 'IfStatement':       return this.evaluateIfStatement(node,soil);
+      case 'CycleStatement':    return this.evaluateCycleStatement(node,soil);
+      case 'SeasonStatement':   return this.evaluateSeasonStatement(node,soil);
+      case 'MatchStatement':    return this.evaluateMatchStatement(node,soil);
+      case 'GiveStatement':     return this.evaluateGiveStatement(node,soil);
+      case 'StopIfStatement':   return this.evaluateStopIfStatement(node,soil);
+      case 'PutStatement':      return this.evaluatePutStatement(node,soil);
+      case 'TakeStatement':     return this.evaluateTakeStatement(node,soil);
+      case 'LinkStatement':     return this.evaluateLinkStatement(node,soil);
+      case 'SortStatement':     return this.evaluateSortStatement(node,soil);
+      case 'ShakeStatement':    return this.evaluateShakeStatement(node,soil);
+      case 'EvaporateStatement':return this.evaluateEvaporateStatement(node,soil);
+      case 'LockStatement':     return this.evaluateLockStatement(node,soil);
+      case 'BraidStatement':    return this.evaluateBraidStatement(node,soil);
+      case 'HarvestStatement':  return this.evaluateHarvestStatement(node,soil);
+      case 'AnalyzeStatement':  return this.evaluateAnalyzeStatement(node,soil);
+      case 'WaitStatement':     return this.evaluateWaitStatement(node,soil);
+      case 'VerifyStatement':   return this.evaluateVerifyStatement(node,soil);
+      case 'SuiteStatement':    return this.evaluateSuiteStatement(node,soil);
+      case 'PlantStatement':    return this.evaluatePlantStatement(node,soil);
+      case 'MissionStatement':  return this.evaluateMissionStatement(node,soil);
+      case 'RootStatement':     return this.evaluateRootStatement(node,soil);
+      case 'RootScopeStatement':return this.evaluateRootScopeStatement(node,soil);
+      case 'ShowVerifySummary': return this.evaluateShowVerifySummary(node,soil);
       case 'RawStatement': {
-        // Not yet migrated to a typed node — fall back to the proven
-        // legacy single-statement executor so the AST path can still
-        // run a complete real-world program during the migration.
         const fakeStmts=[{depth:node.depth,text:node.text,line:node.line,column:node.column}];
         return this._execOne(fakeStmts,0,1,soil);
       }
@@ -166,14 +192,121 @@ class Interpreter {
 
   /** evaluateListenBranch(node, soil) — bridges the AST node to the existing handler logic. */
   evaluateListenBranch(node,soil){
-    this.emit(`LISTEN BRANCH ON ${node.portExpr} WITH ${node.configExpr} AS ${node.requestIdent} MAP — registered ✓`,'ok');
-    const reqSoil=soil.child();
-    reqSoil.set(node.requestIdent,{},'MAP');
-    for(const bodyNode of node.bodyStatements){
-      this.evaluateNode(bodyNode,reqSoil);
+    const http=require('http');
+    const E=expr=>evalExpr(expr,soil);
+
+    // ── VERIFY / dry-run mode ─────────────────────────────────────
+    // When running inside a VERIFY suite, execute body once synchronously
+    // with an empty request so grammar/logic tests pass without a real server.
+    if(this._verifyDryRun||this.verifyStats.suite!==null){
+      const reqMap={method:'GET',path:'/',query:{},headers:{},body:{},raw:''};
+      const reqSoil=soil.child();
+      reqSoil.set(node.requestIdent,reqMap,'MAP');
+      const port=E(node.portExpr)||3000;
+      this.emit(`LISTEN BRANCH ON ${port} WITH ${node.configExpr} AS ${node.requestIdent} MAP — dry-run ✓`,'ok');
+      return this._evalBody(node.bodyStatements,reqSoil);
     }
-    return{next:1};
+
+    // ── Real HTTP server ──────────────────────────────────────────
+    const port=+E(node.portExpr)||3000;
+    const cfgEntry=node.configExpr?soil.get(node.configExpr):null;
+    const cfg=(cfgEntry&&typeof cfgEntry.value==='object')?cfgEntry.value:{};
+    const requestTimeout=+(cfg.timeout||cfg.TIMEOUT||30)*1000;
+    const hostname=cfg.host||cfg.HOST||'0.0.0.0';
+    const self=this;
+
+    this.emit(`LISTEN BRANCH ON ${port} — starting server…`,'ok');
+
+    const server=http.createServer((req,res)=>{
+      let rawBody='';
+      req.setTimeout(requestTimeout,()=>req.destroy());
+      req.on('data',chunk=>rawBody+=chunk);
+      req.on('end',()=>{
+        let parsedBody=rawBody;
+        const ct=req.headers['content-type']||'';
+        if(ct.includes('application/json')&&rawBody){
+          try{parsedBody=JSON.parse(rawBody);}catch(_){parsedBody=rawBody;}
+        }
+        const url=new URL(req.url,'http://localhost');
+        const queryMap={};
+        url.searchParams.forEach((v,k)=>queryMap[k]=v);
+        const reqMap={
+          method:req.method,path:url.pathname,
+          query:queryMap,headers:req.headers,
+          body:typeof parsedBody==='object'?parsedBody:rawBody,raw:rawBody,
+        };
+        const reqSoil=soil.child();
+        reqSoil.set(node.requestIdent,reqMap,'MAP');
+
+        // Capture GIVE expr AS RESPONSE via override
+        let responseValue=null,responseStatus=200;
+        const responseHeaders={'Content-Type':'application/json'};
+        const origResp=self.evaluateResponseStatement.bind(self);
+        self.evaluateResponseStatement=function(rNode,rSoil){
+          responseValue=evalExpr(rNode.responseExpr,rSoil);
+          self.evaluateResponseStatement=origResp;
+          return{next:1,returned:true,value:responseValue};
+        };
+
+        try{
+          // Run body via evaluateNode so ResponseStatement override fires
+          for(const bodyNode of (node.bodyStatements||[])){
+            const r=self.evaluateNode(bodyNode,reqSoil);
+            if(r&&r.returned){
+              // If returned but responseValue still null, check r.value
+              if(responseValue===null&&r.value!==undefined)responseValue=r.value;
+              break;
+            }
+          }
+        }catch(e){
+          self.evaluateResponseStatement=origResp;
+          if(e&&e.stormType==='STOP_STORM'){responseStatus=204;}
+          else{
+            self.emit(`⚡ Request handler error: ${e.message||e}`,'error');
+            responseStatus=500;responseValue={error:String(e.message||e)};
+          }
+        }
+
+        let body;
+        if(responseValue===null||responseValue===undefined){
+          body='';responseStatus=204;
+        }else if(typeof responseValue==='string'){
+          body=responseValue;responseHeaders['Content-Type']='text/plain; charset=utf-8';
+        }else if(typeof responseValue==='object'){
+          body=JSON.stringify(responseValue);
+        }else{
+          body=String(responseValue);responseHeaders['Content-Type']='text/plain; charset=utf-8';
+        }
+        res.writeHead(responseStatus,responseHeaders);
+        res.end(body);
+        self.emit(`  ${req.method} ${url.pathname} → ${responseStatus}`,'muted');
+      });
+      req.on('error',()=>{});
+    });
+
+    server.on('error',e=>this.emit(`⛈️  LISTEN BRANCH: server error — ${e.message}`,'error'));
+    server.listen(port,hostname,()=>this.emit(`✓ LISTEN BRANCH listening on ${hostname}:${port}`,'ok'));
+    this._activeServer=server;
+
+    const shutdown=signal=>{
+      this.emit(`\nLISTEN BRANCH — shutting down (${signal})…`,'muted');
+      server.close(()=>process.exit(0));
+      setTimeout(()=>process.exit(0),1000);
+    };
+    process.once('SIGINT',()=>shutdown('SIGINT'));
+    process.once('SIGTERM',()=>shutdown('SIGTERM'));
+    return null;
   }
+
+  _evalBody(nodes,soil){
+    for(const n of (nodes||[])){
+      const r=this.evaluateNode(n,soil);
+      if(r&&r.returned)return r;
+    }
+    return null;
+  }
+
+
 
   /** evaluateResponseStatement(node, soil) — GIVE expr AS RESPONSE. */
   evaluateResponseStatement(node,soil){
@@ -406,6 +539,291 @@ class Interpreter {
     return this._execOne(allStmts,0,allStmts.length,soil);
   }
 
+  // ── REAP evaluator ─────────────────────────────────────────────
+  evaluateReapStatement(node,soil){
+    const E=(expr)=>{
+      try{return evalExpr(expr,soil);}
+      catch(e){
+        if(e instanceof PlantStorm&&e.line===undefined){e.line=node.line;e.column=node.column;}
+        throw e;
+      }
+    };
+    const splitArgs=(rawArr)=>rawArr.map(a=>E(a));
+    const store=(val)=>{
+      if(node.variable!=='_')soil.set(node.variable,val,inferType(val));
+    };
+
+    const {kind}=node.source;
+
+    if(kind==='NOW'){
+      const fmt=node.source.format||'FULL',now=new Date();
+      const val=fmt==='DATE'?now.toLocaleDateString('ar-IQ')
+        :fmt==='TIME'?now.toLocaleTimeString('ar-IQ')
+        :fmt==='YEAR'?now.getFullYear()
+        :fmt==='STAMP'?now.getTime()
+        :now.toLocaleString('ar-IQ');
+      store(val); return{next:1};
+    }
+
+    if(kind==='TYPEOF'){
+      const e=soil.get(node.source.target);
+      store(e?e.type:'VOID'); return{next:1};
+    }
+
+    if(kind==='SELF'){
+      const selfEntry=soil.get('__self');
+      if(!selfEntry)storm('SEED_STORM','SELF غير متاح',node.line,node.column);
+      const sp=this.species.get(selfEntry.value.__species);
+      if(!sp)storm('MISSING_STORM','SPECIES غير موجود',node.line,node.column);
+      const method=sp.actions[node.source.method];
+      if(!method)storm('MISSING_STORM',`الفعل "${node.source.method}" غير موجود`,node.line,node.column);
+      const result=this._callAction(method,splitArgs(node.args),selfEntry.value,soil);
+      store(result.value!==undefined?result.value:null); return{next:1};
+    }
+
+    if(kind==='INSTANCE_OR_LIBRARY'){
+      const {name,fn}=node.source;
+      // Is it a planted library?
+      if(this.planted.has(name)){
+        const lib=this.planted.get(name);
+        const libFn=lib[fn.toUpperCase()];
+        if(!libFn)storm('MISSING_STORM',`"${fn}" غير موجود في "${name}"`,node.line,node.column);
+        store(libFn(splitArgs(node.args))); return{next:1};
+      }
+      // Is it an instance variable?
+      const instEntry=soil.get(name);
+      if(!instEntry)storm('MISSING_STORM',`"${name}" غير موجود`,node.line,node.column);
+      const spName=instEntry.value&&instEntry.value.__species;
+      const sp=spName&&this.species.get(spName);
+      if(!sp)storm('MISSING_STORM',`SPECIES غير موجود`,node.line,node.column);
+      const method=sp.actions[fn];
+      if(!method)storm('MISSING_STORM',`الفعل "${fn}" غير موجود`,node.line,node.column);
+      const result=this._callAction(method,splitArgs(node.args),instEntry.value,soil);
+      store(result.value!==undefined?result.value:null); return{next:1};
+    }
+
+    if(kind==='ACTION'){
+      const {name}=node.source;
+      if(!this.funcs.has(name))storm('MISSING_STORM',`الفعل "${name}" غير معرّف`,node.line,node.column);
+      const fn=this.funcs.get(name);
+      const result=this._callAction(fn,splitArgs(node.args),null,soil);
+      store(result.value!==undefined?result.value:null); return{next:1};
+    }
+
+    storm('SEED_STORM',`Unknown REAP source kind: ${kind}`,node.line,node.column);
+  }
+
+  // ── SET / INCREASE / DECREASE evaluators ──────────────────────
+  evaluateSetStatement(node,soil){
+    const E=(expr)=>evalExpr(expr,soil);
+    const newVal=E(node.valueExpr);
+    // Delegate to the proven legacy handler via a synthetic statement so
+    // all edge cases (PULSE watchers, SELF:prop, obj:prop, locked vars)
+    // are covered without duplication.
+    const synth={depth:node.depth||1,
+      text:`SET ${node.identifier} TO ${node.valueExpr}`,
+      line:node.line,column:node.column};
+    return this._execOne([synth],0,1,soil);
+  }
+
+  evaluateIncreaseStatement(node,soil){
+    const synth={depth:node.depth||1,
+      text:`INCREASE ${node.identifier} BY ${node.amountExpr}`,
+      line:node.line,column:node.column};
+    return this._execOne([synth],0,1,soil);
+  }
+
+  evaluateDecreaseStatement(node,soil){
+    const synth={depth:node.depth||1,
+      text:`DECREASE ${node.identifier} BY ${node.amountExpr}`,
+      line:node.line,column:node.column};
+    return this._execOne([synth],0,1,soil);
+  }
+
+  // ── New evaluators — bridge each AST node to proven legacy _exec ─────────
+
+  _evalRaw(text,node,soil){
+    const s=[{depth:node.depth||1,text,line:node.line,column:node.column}];
+    return this._execOne(s,0,1,soil);
+  }
+
+  _evalBody(nodes,soil){
+    for(const n of (nodes||[])){
+      const r=this.evaluateNode(n,soil);
+      if(r&&r.returned)return r;
+    }
+    return null;
+  }
+
+  evaluateIfStatement(node,soil){
+    const C=cond=>evalCond(cond,soil);
+    for(const branch of (node.branches||[])){
+      if(branch.cond===null||C(branch.cond)){
+        return this._evalBody(branch.bodyStatements,soil);
+      }
+    }
+    return null;
+  }
+
+  evaluateCycleStatement(node,soil){
+    const E=expr=>evalExpr(expr,soil);
+    if(node.sourceExpr!==null){
+      const listE=soil.get(node.sourceExpr);
+      const list=listE&&Array.isArray(listE.value)?listE.value:
+                 listE?[listE.value]:[E(node.sourceExpr)].flat();
+      for(const item of list){
+        const cs=soil.child();
+        cs.set(node.iterVar,item,inferType(item));
+        const r=this._evalBody(node.bodyStatements,cs);
+        if(r&&r.returned)return r;
+      }
+    }else{
+      const lo=+E(node.fromExpr)||0,hi=+E(node.toExpr)||0;
+      const step=node.stepExpr?(+E(node.stepExpr)||1):(lo<=hi?1:-1);
+      for(let i=lo;(step>0?i<=hi:i>=hi);i+=step){
+        const cs=soil.child();
+        cs.set(node.iterVar,i,'NUM');
+        const r=this._evalBody(node.bodyStatements,cs);
+        if(r&&r.returned)return r;
+      }
+    }
+    return null;
+  }
+
+  evaluateSeasonStatement(node,soil){
+    const C=cond=>evalCond(cond,soil);
+    while(C(node.condExpr)){
+      const r=this._evalBody(node.bodyStatements,soil);
+      if(r&&r.returned)return r;
+    }
+    return null;
+  }
+
+  evaluateMatchStatement(node,soil){
+    const clauses=(node.clauses||[]).map(c=>c.clauseText).join('\n');
+    const fullSrc=`MATCH ${node.subjectExpr},\n${clauses}\n\\.`;
+    const stmts=lex(fullSrc).map(s=>({...s,line:node.line,column:node.column}));
+    return this._execBlock(stmts,0,stmts.length,soil);
+  }
+
+  evaluateGiveStatement(node,soil){
+    const val=evalExpr(node.valueExpr,soil);
+    return{returned:true,value:val};
+  }
+
+  evaluateStopIfStatement(node,soil){
+    const C=cond=>evalCond(cond,soil);
+    if(C(node.condExpr)){
+      if(node.actionExpr)this.emit(String(evalExpr(node.actionExpr,soil)));
+      throw new PlantStorm('STOP_STORM','STOP IF triggered',node.line,node.column);
+    }
+    return null;
+  }
+
+  evaluatePutStatement(node,soil){
+    return this._evalRaw(`PUT ${node.valueExpr} INTO ${node.targetExpr}`,node,soil);
+  }
+
+  evaluateTakeStatement(node,soil){
+    return this._evalRaw(`TAKE ${node.valueExpr} FROM ${node.listExpr}`,node,soil);
+  }
+
+  evaluateLinkStatement(node,soil){
+    return this._evalRaw(`LINK ${node.keyExpr} WITH ${node.valueExpr} IN ${node.mapIdent}`,node,soil);
+  }
+
+  evaluateSortStatement(node,soil){
+    return this._evalRaw(`SORT ${node.listIdent}`,node,soil);
+  }
+
+  evaluateShakeStatement(node,soil){
+    return this._evalRaw(`SHAKE ${node.listIdent}`,node,soil);
+  }
+
+  evaluateEvaporateStatement(node,soil){
+    return this._evalRaw(`EVAPORATE ${node.identifier}`,node,soil);
+  }
+
+  evaluateLockStatement(node,soil){
+    return this._evalRaw(`LOCK ${node.identifier}`,node,soil);
+  }
+
+  evaluateBraidStatement(node,soil){
+    return this._evalRaw(`BRAID ${node.list1} WITH ${node.list2} AS ${node.resultIdent}${node.asMap?' MAP':''}`,node,soil);
+  }
+
+  evaluateHarvestStatement(node,soil){
+    const url=evalExpr(node.urlExpr,soil);
+    let raw=`HARVEST "${url}"`;
+    if(node.method&&node.method!=='GET')raw+=` METHOD:${node.method}`;
+    if(node.bodyExpr)raw+=` BODY:${node.bodyExpr}`;
+    if(node.headersIdent)raw+=` HEADERS:${node.headersIdent}`;
+    if(node.timeoutExpr)raw+=` TIMEOUT:${node.timeoutExpr}`;
+    raw+=` AS ${node.resultIdent}`;
+    return this._evalRaw(raw,node,soil);
+  }
+
+  evaluateAnalyzeStatement(node,soil){
+    return this._evalRaw(`ANALYZE ${node.identifier}`,node,soil);
+  }
+
+  evaluateWaitStatement(node,soil){
+    return this._evalRaw(`WAIT ${node.secsExpr}`,node,soil);
+  }
+
+  evaluateVerifyStatement(node,soil){
+    return this._evalRaw(`VERIFY "${node.label}", ${node.assertion}`,node,soil);
+  }
+
+  evaluateSuiteStatement(node,soil){
+    this.verifyStats.suite=node.name;
+    this.emit(`\nSUITE "${node.name}"`, 'suite');
+    // Don't propagate 'returned' from GIVE AS RESPONSE out of SUITE scope
+    for(const n of (node.bodyStatements||[])){
+      this.evaluateNode(n,soil);
+    }
+    this.verifyStats.suite=null;
+    return null;
+  }
+
+  evaluatePlantStatement(node,soil){
+    const libName=node.libName.trim().toLowerCase();
+    if(INNATE[libName]){
+      this.planted.set(libName,INNATE[libName]);
+      if(!this._symbolPassDone)this.emit(`✓ PLANT "${node.libName.trim()}"`, 'ok');
+    }else{
+      this.emit(`⚠ PLANT "${node.libName.trim()}" — not found`,'warn');
+    }
+    return null;
+  }
+
+  evaluateMissionStatement(node,soil){
+    this.mission=node.mode;
+    return null;
+  }
+
+  evaluateRootStatement(node,soil){
+    const val=evalExpr(node.valueExpr,soil);
+    soil.set(node.identifier,val,inferType(val),{locked:true});
+    if(!this._symbolPassDone)this.emit(`✓ ROOT "${node.identifier}" = ${val}`,'ok');
+    return null;
+  }
+
+  evaluateRootScopeStatement(node,soil){
+    const map={};
+    for(const link of (node.links||[])){
+      const keyStr=link.key.replace(/^"|"$/g,'');
+      map[keyStr]=evalExpr(link.valueExpr,soil);
+    }
+    soil.set(node.identifier,map,'MAP',{locked:true});
+    if(!this._symbolPassDone)this.emit(`✓ ROOT_SCOPE "${node.identifier}" — ${Object.keys(map).length} keys`,'ok');
+    return null;
+  }
+
+  evaluateShowVerifySummary(node,soil){
+    return this._evalRaw('SHOW_VERIFY_SUMMARY',node,soil);
+  }
+
   /**
    * symbolPass(programNode) — AST-based symbol table pre-registration.
    *
@@ -436,6 +854,14 @@ class Interpreter {
         this.evaluateActionDeclaration(node,this.soil);
       }else if(node.type==='SpeciesDeclaration'){
         this.evaluateSpeciesDeclaration(node,this.soil);
+      }else if(node.type==='PlantStatement'){
+        this.evaluatePlantStatement(node,this.soil);
+      }else if(node.type==='MissionStatement'){
+        this.evaluateMissionStatement(node,this.soil);
+      }else if(node.type==='RootStatement'){
+        this.evaluateRootStatement(node,this.soil);
+      }else if(node.type==='RootScopeStatement'){
+        this.evaluateRootScopeStatement(node,this.soil);
       }else if(node.type==='RawStatement'){
         const t=node.text;
         if(t&&(
@@ -456,7 +882,7 @@ class Interpreter {
   runFile(filePath){
     const source=fs.readFileSync(filePath,'utf8');
     this.rootDir=path.dirname(filePath);
-    this.run(source);
+    this.runSource(source);   // ← AST pipeline (tokenize→parse→symbolPass→evaluateNode)
   }
 
   _firstPass(stmts){
@@ -907,6 +1333,16 @@ class Interpreter {
         if(!pass)detail=`count is ${cnt}, expected ${expected}`;
       }
 
+      // TYPE var|expr IS TYPE_NAME — must be checked before general IS condition
+      else if(am=assertion.match(/^TYPE\s+(.+?)\s+IS\s+(\w+)$/i)){
+        let actualType='VOID';
+        const simpleE=soil.get(am[1]);
+        if(simpleE){actualType=simpleE.type;}
+        else{try{const v=E(am[1]);actualType=inferType(v);}catch(_){}}
+        pass=actualType.toUpperCase()===am[2].toUpperCase();
+        if(!pass)detail=`type is ${actualType}`;
+      }
+
       // General condition: expr IS val / BETWEEN / GREATER THAN etc.
       else{
         try{pass=evalCond(assertion,soil);}
@@ -1130,15 +1566,33 @@ class Interpreter {
       this.emit(`HARVEST ${method} ${url} …`,'muted');
       const result=harvestSync(url,{method,headers:headersVal,body:bodyVal,timeoutMs});
 
-      if(!result.success){
+      if(!result.ok && result.error){
         storm('NETWORK_STORM',`HARVEST failed: ${result.error}`,line,column);
       }
 
-      const plantVal=toPlantValue(result.data);
-      const valType=Array.isArray(plantVal)?'LIST':(plantVal&&typeof plantVal==='object')?'MAP':'TX';
-      if(resName!=='_')soil.set(resName,plantVal,valType);
+      // Build a response MAP: {ok, status, body}
+      const responseBodyVal = toPlantValue(result.body !== undefined ? result.body : result);
+      const bodyType = Array.isArray(responseBodyVal) ? 'LIST' : (responseBodyVal && typeof responseBodyVal === 'object') ? 'MAP' : 'TX';
 
-      this.emit(`HARVEST ${method} ${url} → ${result.status} (${valType})`,result.ok?'ok':'warn');
+      // Store either just the body (simple), or a full response map
+      // Full response: result has status field
+      let plantVal, valType;
+      if (result.status !== undefined) {
+        // Full response object: {ok:FACT, status:NUM, body:..., headers:MAP}
+        plantVal = {
+          ok: result.ok,
+          status: result.status,
+          body: responseBodyVal,
+          headers: toPlantValue(result.headers || {}),
+        };
+        valType = 'MAP';
+      } else {
+        plantVal = responseBodyVal;
+        valType = bodyType;
+      }
+
+      if(resName!=='_')soil.set(resName, plantVal, valType);
+      this.emit(`HARVEST ${method} ${url} → ${result.status||'?'} (${valType})`, result.ok?'ok':'warn');
       return{next:i+1};
     }
     // ─────────────────────────────────────────────────────────
@@ -1250,20 +1704,39 @@ class Interpreter {
     // Single-line IF with SHOW
     if(m=stmt.match(/^IF\s+(.+?),?\s+SHOW\s+"([^"]*)"$/i)){if(C(m[1]))this.emit(m[2]);return{next:i+1};}
     if(m=stmt.match(/^IF\s+(.+?),?\s+SHOW\s+(.+)$/i)){if(C(m[1]))this.emit(String(E(m[2])));return{next:i+1};}
-    // Block IF — body is next deeper-depth statements
+    // Block IF — collect full IF/ORIF/ELSE chain, run first matching branch
     if(m=stmt.match(/^IF\s+(.+)$/i)){
-      const cond=m[1].trim();
       const myDepth=stmts[i]?stmts[i].depth:1;
-      const body=this._collectDepthBlock(stmts,i+1,myDepth);
-      if(body.length>0){
-        // Block form - run in same scope so mutations propagate
-        if(C(cond)){
-          const r=this._execBlock(body,0,body.length,soil);
-          if(r&&r.returned)return{next:i+1+body.length,...r};
+      // Build chain: [{cond, body}]   cond===null means ELSE
+      const chain=[];
+      let j=i;
+      while(j<stmts.length){
+        const s=stmts[j];
+        let cm,isIfLine=(j===i);
+        if(isIfLine){
+          cm=s.text.match(/^IF\s+(.+)$/i);
+        }else{
+          if(s.depth!==myDepth)break;
+          cm=s.text.match(/^ORIF\s+(.+)$/i);
+          if(!cm&&!s.text.match(/^ELSE$/i))break;
         }
-        return{next:i+1+body.length};
+        const branchCond=cm?cm[1].trim():null;
+        const body=this._collectDepthBlock(stmts,j+1,myDepth);
+        chain.push({cond:branchCond,body,start:j});
+        j+=1+body.length;
       }
-      return{next:i+1};
+      // Run first matching branch
+      let ran=false;
+      for(const branch of chain){
+        if(branch.cond===null||C(branch.cond)){
+          if(branch.body.length){
+            const r=this._execBlock(branch.body,0,branch.body.length,soil);
+            if(r&&r.returned)return{next:j,...r};
+          }
+          ran=true;break;
+        }
+      }
+      return{next:j};
     }
     if(stmt.match(/^(ELSE|ORIF)\b/i))return{next:i+1};
 

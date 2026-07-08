@@ -1,0 +1,44 @@
+MISSION: SAFE.
+
+# ══════════════════════════════════════════════════
+#  Example 07 — HARVEST: HTTP requests in PlantLang
+# ══════════════════════════════════════════════════
+
+# ── 1. Simple GET ─────────────────────────────────
+1\ SHOW "=== Fetching PyPI package info ===".
+1\ HARVEST "https://pypi.org/pypi/requests/json" AS pkg.
+
+1\ IF pkg:"ok" IS TRUE,
+2\   SHOW "Package : " + pkg:"body":"info":"name".
+2\   SHOW "Version : " + pkg:"body":"info":"version".
+2\   SHOW "Author  : " + pkg:"body":"info":"author".
+2\   SHOW "License : " + pkg:"body":"info":"license".
+1\.
+
+# ── 2. WEATHER: handle HTTP errors gracefully ─────
+1\ SHOW "".
+1\ SHOW "=== Error handling ===".
+
+1\ WEATHER,
+2\   HARVEST "https://pypi.org/pypi/this-package-does-not-exist-xyz/json" AS missing.
+2\   IF missing:"ok" IS FALSE,
+3\     SHOW "HTTP " + missing:"status" + " — package not found".
+1\ SHELTER NETWORK_STORM AS err,
+2\   SHOW "Network error: " + err.
+1\ CALM.
+
+# ── 3. GET with custom headers ────────────────────
+1\ SHOW "".
+1\ SHOW "=== Custom headers ===".
+
+1\ CREATE hdr(MAP).
+1\ LINK "Accept" WITH "application/json" IN hdr.
+1\ LINK "X-Custom" WITH "PlantLang/0.6" IN hdr.
+
+1\ HARVEST "https://pypi.org/pypi/flask/json",
+2\   HEADERS: hdr,
+2\   TIMEOUT: 8,
+2\   AS flask.
+
+1\ SHOW "Flask version: " + flask:"body":"info":"version".
+1\ SHOW "Status code  : " + flask:"status".

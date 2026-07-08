@@ -1,0 +1,67 @@
+MISSION: SAFE.
+PLANT math.
+PLANT strings.
+PLANT lists.
+
+# ══════════════════════════════════════════════════
+#  Example 06 — BRAID: weaving lists together
+# ══════════════════════════════════════════════════
+
+ROOT PASS_MARK TO 60.
+
+1\ CREATE students(LIST) TO Alice, Bob, Carol, Dave, Eve.
+1\ CREATE grades(LIST)   TO 92, 45, 78, 61, 55.
+1\ CREATE subjects(LIST) TO Math, Science, English, History, Art.
+
+# ── 1. BRAID into pairs → iterate ─────────────────
+1\ BRAID students WITH grades AS report.
+1\ SHOW "=== Grade Report ===".
+
+1\ CYCLE pair IN report,
+2\   CREATE pname(TX) TO FIRST pair.
+2\   CREATE pgrade(NUM) TO LAST pair.
+2\   IF pgrade GREATER THAN OR EQUAL 90,
+3\     SHOW pname + " → " + pgrade + "  ★ Excellent".
+2\   ORIF pgrade GREATER THAN OR EQUAL PASS_MARK,
+3\     SHOW pname + " → " + pgrade + "  ✓ Pass".
+2\   ELSE,
+3\     SHOW pname + " → " + pgrade + "  ✗ Fail".
+2\.
+1\.
+
+# ── 2. BRAID into MAP ─────────────────────────────
+1\ BRAID subjects WITH grades AS subject_map MAP.
+1\ SHOW "".
+1\ SHOW "=== By Subject ===".
+1\ SHOW "Math    → " + subject_map:"Math".
+1\ SHOW "Science → " + subject_map:"Science".
+1\ SHOW "Art     → " + subject_map:"Art".
+
+# ── 3. Stats ──────────────────────────────────────
+1\ SHOW "".
+1\ SHOW "=== Statistics ===".
+1\ REAP avg FROM lists:AVERAGE, grades.
+1\ SHOW "Average : " + avg.
+1\ SHOW "Highest : " + MAX grades.
+1\ SHOW "Lowest  : " + MIN grades.
+1\ SHOW "Students: " + COUNT grades.
+
+# ── 4. Split into pass / fail lists ───────────────
+1\ CREATE passing(LIST) TO.
+1\ CREATE failing(LIST) TO.
+
+1\ CYCLE pair IN report,
+2\   CREATE pname(TX) TO FIRST pair.
+2\   CREATE pgrade(NUM) TO LAST pair.
+2\   IF pgrade GREATER THAN OR EQUAL PASS_MARK,
+3\     PUT pname INTO passing.
+2\   ELSE,
+3\     PUT pname INTO failing.
+1\.
+
+1\ SHOW "".
+1\ SHOW "Passing (" + COUNT passing + "): " + FIRST passing + " ... " + LAST passing.
+1\ SHOW "Failing (" + COUNT failing + "):".
+1\ CYCLE name IN failing,
+2\   SHOW "  ✗ " + name + " needs support".
+1\.

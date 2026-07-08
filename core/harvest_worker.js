@@ -1,67 +1,72 @@
 'use strict';
-// This worker performs the synchronous block itself: it receives a request
-// description, runs the async fetch INSIDE the worker (where blocking the
-// worker's own thread via Atomics.wait is safe), and writes the JSON result
-// directly into a SharedArrayBuffer that the main thread polls.
-//
-// Architecture:
-//   main thread -> spawns worker with {url, method, headers, body, sab}
-//   worker      -> does async fetch, writes result bytes into sab, sets flag, notifies
-//   main thread -> Atomics.wait on sab[0] (this WAIT happens on the worker's
-//                  parent — but critically we now wait via Atomics.wait directly
-//                  on the SharedArrayBuffer from the main thread while the
-//                  worker writes to it independently and asynchronously,
-//                  which does NOT require any event on the main thread's
-//                  event loop to fire — Atomics.wait/notify works across
-//                  threads at the OS futex level, independent of either
-//                  thread's JS event loop.)
+// harvest_worker.js — runs inside a Worker thread.
 const { workerData } = require('worker_threads');
+const https = require('https');
+const http  = require('http');
 
-const { url, method, headers, body, timeoutMs, sab, sabBytes } = workerData;
-const flag = new Int32Array(sab, 0, 1);          // [0] = ready flag
-const lenView = new Int32Array(sab, 4, 1);        // [1] = payload byte length
-const bytesView = new Uint8Array(sab, 8, sabBytes - 8);
+const { sab, url, method, bodyStr, headers, timeout } = workerData;
+const ctrl = new Int32Array(sab, 0, 1);
+const DATA_OFFSET = 8;
+const DATA_MAX    = sab.byteLength - DATA_OFFSET;
 
 function writeResult(obj) {
-  const json = JSON.stringify(obj);
-  const encoded = Buffer.from(json, 'utf8');
-  const n = Math.min(encoded.length, bytesView.length);
-  bytesView.set(encoded.subarray(0, n));
-  Atomics.store(lenView, 0, n);
-  Atomics.store(flag, 0, 1);
-  Atomics.notify(flag, 0);
+  try {
+    const enc = Buffer.from(JSON.stringify(obj), 'utf8');
+    enc.slice(0, DATA_MAX).copy(Buffer.from(sab, DATA_OFFSET, DATA_MAX));
+  } catch (_) {}
+  Atomics.store(ctrl, 0, 1);
+  Atomics.notify(ctrl, 0);
 }
 
-(async () => {
-  try {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs || 10000);
-
-    const init = { method: method || 'GET', headers: headers || {}, signal: controller.signal };
-    if (body !== undefined && body !== null && method !== 'GET' && method !== 'HEAD') {
-      if (typeof body === 'object') {
-        init.body = JSON.stringify(body);
-        init.headers = { 'Content-Type': 'application/json', ...init.headers };
-      } else {
-        init.body = String(body);
-      }
-    }
-
-    const res = await fetch(url, init);
-    clearTimeout(timer);
-
-    const status = res.status, ok = res.ok;
-    const contentType = res.headers.get('content-type') || '';
-    const rawText = await res.text();
-    let data;
-    if (contentType.includes('application/json')) {
-      try { data = JSON.parse(rawText); } catch (_) { data = rawText; }
-    } else {
-      data = rawText;
-    }
-
-    writeResult({ success: true, status, ok, data });
-  } catch (e) {
-    writeResult({ success: false, error: e.name === 'AbortError' ? 'TIMEOUT' : (e.message || String(e)) });
+function mapify(v) {
+  if (v === null || v === undefined) return null;
+  if (Array.isArray(v)) return v.map(mapify);
+  if (typeof v === 'object') {
+    const out = {};
+    for (const k of Object.keys(v)) out[k] = mapify(v[k]);
+    return out;
   }
-})();
+  return v;
+}
+
+try {
+  const u = new URL(url);
+  const lib = u.protocol === 'https:' ? https : http;
+  const meth = (method || 'GET').toUpperCase();
+  const reqHeaders = Object.assign({ 'User-Agent': 'PlantLang-Chloroplast/0.6' }, headers || {});
+
+  if (bodyStr) {
+    reqHeaders['Content-Type']   = reqHeaders['Content-Type']   || 'application/json';
+    reqHeaders['Content-Length'] = Buffer.byteLength(bodyStr);
+  }
+
+  const opts = {
+    hostname : u.hostname,
+    port     : u.port || undefined,
+    path     : u.pathname + u.search,
+    method   : meth,
+    headers  : reqHeaders,
+    timeout  : timeout || 10000,
+  };
+
+  const req = lib.request(opts, (res) => {
+    const chunks = [];
+    res.on('data', c => chunks.push(c));
+    res.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8');
+      let body = raw;
+      const ct = res.headers['content-type'] || '';
+      if (ct.includes('application/json') || /^\s*[\[{]/.test(raw)) {
+        try { body = mapify(JSON.parse(raw)); } catch (_) { body = raw; }
+      }
+      writeResult({ ok: res.statusCode >= 200 && res.statusCode < 300, status: res.statusCode, headers: res.headers, body });
+    });
+  });
+
+  req.on('error',   e => writeResult({ ok: false, error: e.message, code: e.code }));
+  req.on('timeout', () => { req.destroy(); writeResult({ ok: false, error: 'Request timed out', code: 'ETIMEDOUT' }); });
+  if (bodyStr) req.write(bodyStr);
+  req.end();
+} catch (e) {
+  writeResult({ ok: false, error: e.message });
+}
