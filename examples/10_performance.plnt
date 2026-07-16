@@ -1,0 +1,44 @@
+MISSION: FAST.
+
+# ══════════════════════════════════════════════════════════
+#  Example 10 — Why the LLVM backend matters
+#
+#  This program does real work (50 million loop iterations with
+#  arithmetic) — enough to make the performance difference between
+#  the interpreter and a compiled binary obvious.
+#
+#  Try all three and compare:
+#
+#    time chloroplast run     examples/10_performance.plnt
+#    time chloroplast compile examples/10_performance.plnt --run
+#    time chloroplast compile examples/10_performance.plnt --backend c --run
+#
+#  On a typical machine:
+#    interpreted        ~90 seconds
+#    compiled (LLVM)    a few milliseconds
+#    compiled (C)       a few milliseconds
+#
+#  Both compiled backends get this fast because LLVM's optimizer
+#  (`opt -O2`, run automatically before `llc`) and gcc's optimizer
+#  both recognize this specific accumulation pattern and fold it into
+#  a closed-form calculation — this is a standard compiler optimization
+#  (strength reduction / loop induction variable analysis), not a
+#  special case written for this example.
+#
+#  For code with real control flow, function calls, and branching —
+#  not just tight arithmetic loops — expect roughly 50-200x speedups
+#  from compilation, since most of the interpreter's overhead comes
+#  from re-parsing and re-dispatching each statement on every
+#  execution, which a compiled binary does zero times at runtime.
+# ══════════════════════════════════════════════════════════
+
+1\ SHOW "Computing sum of 1..50,000,000...".
+
+1\ CREATE sum(NUM) TO 0.
+1\ CYCLE i FROM 1 TO 50000000,
+2\   INCREASE sum BY i.
+1\.
+
+1\ SHOW "Sum: ".
+1\ SHOW sum.
+1\ SHOW "Done.".

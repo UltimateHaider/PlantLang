@@ -1237,9 +1237,24 @@ class Parser {
       this.advance();
       fromExpr = this._collectUntilKeyword(['TO']);
       if (this.match(TOKEN.KEYWORD, 'TO')) this.advance();
-      toExpr = this._collectUntilKeyword(['STEP',',']).replace(/,$/, '').trim();
-      if (this.match(TOKEN.KEYWORD, 'STEP')) { this.advance(); stepExpr = this._collectLineSpan().replace(/,$/, '').trim(); }
-      else { if (this.match(TOKEN.PUNCT, ',')) this.advance(); if (this.match(TOKEN.PUNCT, '.')) this.advance(); }
+      // Collect toExpr manually — STEP is tokenized as IDENT, not KEYWORD,
+      // so the generic _collectUntilKeyword() helper won't stop on it.
+      const toSpan = [];
+      while (!this.isAtEnd()) {
+        const t = this.current();
+        if (t.type === TOKEN.PUNCT && (t.value === ',' || t.value === '.')) break;
+        if (t.type === TOKEN.DEPTH) break;
+        if (t.type === TOKEN.IDENT && t.value.toUpperCase() === 'STEP') break;
+        toSpan.push(this.advance());
+      }
+      toExpr = joinTokens(toSpan).trim();
+      if (this.current().type === TOKEN.IDENT && this.current().value.toUpperCase() === 'STEP') {
+        this.advance(); // consume STEP
+        stepExpr = this._collectLineSpan().replace(/,$/, '').trim();
+      } else {
+        if (this.match(TOKEN.PUNCT, ',')) this.advance();
+        if (this.match(TOKEN.PUNCT, '.')) this.advance();
+      }
     }
     const body = this._collectBodyUntil(coords.depth, []);
     return new CycleStatementNode({ iterVar, sourceExpr, fromExpr, toExpr, stepExpr, bodyStatements: body }, coords);

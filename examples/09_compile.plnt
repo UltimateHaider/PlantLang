@@ -1,0 +1,57 @@
+MISSION: FAST.
+
+# ══════════════════════════════════════════════════════════
+#  Example 09 — Compiling PlantLang to a native binary
+#
+#  Run interpreted:     chloroplast run     examples/09_compile.plnt
+#  Compile (LLVM, auto): chloroplast compile examples/09_compile.plnt --run
+#  Force the C backend:  chloroplast compile examples/09_compile.plnt --backend c --run
+#  Keep intermediate files: add --keep-c (keeps .ll/.opt.ll/.s or .c)
+#
+#  As of v0.22.0, `compile` auto-detects an LLVM toolchain (llc + opt) and
+#  uses it by default — the same backend architecture as Rust, Swift, and
+#  Julia. Falls back to the direct-to-C backend if no llc is found.
+#
+#  Supported for compilation (both backends):
+#    CREATE/SET/INCREASE/DECREASE (NUM, SCL, TX, FACT)
+#    SHOW (literals, identifiers, + concatenation)
+#    IF / ORIF / ELSE
+#    CYCLE var FROM lo TO hi [STEP k]
+#    SEASON (while loop)
+# ══════════════════════════════════════════════════════════
+
+1\ SHOW "=== FizzBuzz ===".
+1\ CYCLE i FROM 1 TO 20,
+2\   IF i GREATER THAN 0,
+3\     SHOW i.
+2\.
+1\.
+
+1\ SHOW "".
+1\ SHOW "=== Sum of squares 1..10 ===".
+1\ CREATE sum(NUM) TO 0.
+1\ CYCLE n FROM 1 TO 10,
+2\   CREATE sq(NUM) TO n * n.
+2\   INCREASE sum BY sq.
+1\.
+1\ SHOW sum.
+
+1\ SHOW "".
+1\ SHOW "=== Countdown ===".
+1\ CREATE t(NUM) TO 5.
+1\ SEASON t GREATER THAN 0,
+2\   SHOW t.
+2\   DECREASE t BY 1.
+1\.
+1\ SHOW "Liftoff!".
+
+1\ SHOW "".
+1\ SHOW "=== Temperature check ===".
+1\ CREATE temp(SCL) TO 37.8.
+1\ IF temp GREATER THAN 38.0,
+2\   SHOW "Fever".
+1\ ORIF temp GREATER THAN OR EQUAL 36.0,
+2\   SHOW "Normal".
+1\ ELSE,
+2\   SHOW "Low".
+1\.

@@ -1,52 +1,15 @@
 {
   "name": "plantlang",
-  "displayName": "PlantLang",
-  "description": "🌿 Syntax highlighting, snippets, and language support for PlantLang (.plnt)",
-  "version": "0.7.0",
-  "publisher": "plantlang",
-  "engines": { "vscode": "^1.75.0" },
-  "categories": ["Programming Languages", "Snippets"],
-  "icon": "icon.png",
-  "keywords": ["plantlang", "plnt", "arabic", "natural language programming"],
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/plantlang/plantlang"
-  },
-  "contributes": {
-    "languages": [
-      {
-        "id": "plantlang",
-        "aliases": ["PlantLang", "plantlang", "plnt"],
-        "extensions": [".plnt"],
-        "configuration": "./language-configuration.json",
-        "icon": {
-          "light": "./icon.png",
-          "dark":  "./icon.png"
-        }
-      }
-    ],
-    "grammars": [
-      {
-        "language": "plantlang",
-        "scopeName": "source.plantlang",
-        "path": "./syntaxes/plantlang.tmLanguage.json"
-      }
-    ],
-    "snippets": [
-      {
-        "language": "plantlang",
-        "path": "./snippets/plantlang.json"
-      }
-    ],
-    "themes": [
-      {
-        "label": "PlantLang Dark",
-        "uiTheme": "vs-dark",
-        "path": "./themes/plantlang-dark-color-theme.json"
-      }
-    ]
-  },
+  "version": "0.22.0",
+  "description": "🌿 PlantLang — Chloroplast Interpreter v0.22 | A programming language designed to read like natural prose",
+  "main": "core/interpreter.js",
+  "bin": { "chloroplast": "./chloroplast.js" },
   "scripts": {
-    "package": "vsce package"
-  }
+    "start":  "node chloroplast.js repl",
+    "test":   "node chloroplast.js run tests/all.plnt && node chloroplast.js verify tests/suite.plnt",
+    "verify": "node chloroplast.js verify tests/suite.plnt"
+  },
+  "keywords": ["plantlang", "programming-language", "arabic", "chloroplast", "interpreter"],
+  "engines": { "node": ">=18.0.0" },
+  "license": "MIT"
 }

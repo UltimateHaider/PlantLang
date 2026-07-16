@@ -110,7 +110,14 @@ function evalCompound(expr,soil){
     if(e&&e.value&&typeof e.value==='object'&&!Array.isArray(e.value)){const v=e.value[prop];if(v===undefined)return'null';return typeof v==='string'?JSON.stringify(v):String(v);}
     return full;
   });
-  resolved=resolved.replace(/\b([a-zA-Z_\u0600-\u06FF][a-zA-Z0-9_\u0600-\u06FF]*)\b/g,(full,name)=>{
+  // Substitute bare identifiers with their variable values — but ONLY in the
+  // segments of the expression that are OUTSIDE double-quoted string literals.
+  // Without this split, a literal like "pi=" would have its "pi" substring
+  // matched by the word-boundary regex below (word boundaries don't know
+  // about quotes) and incorrectly replaced with the value of a variable
+  // named `pi`, corrupting the literal text itself.
+  resolved=resolved.replace(/("(?:[^"\\]|\\.)*")|\b([a-zA-Z_\u0600-\u06FF][a-zA-Z0-9_\u0600-\u06FF]*)\b/g,(full,stringLit,name)=>{
+    if(stringLit!==undefined)return stringLit; // leave string literals untouched
     const SKIPS=['true','false','null','undefined','Infinity','NaN','Math','parseInt','parseFloat','String','Number','Array','Object','JSON','TRUE','FALSE','NULL','VOID'];
     if(SKIPS.includes(name))return name==='TRUE'?'true':name==='FALSE'?'false':name;
     const e=soil.get(name);

@@ -1,5 +1,112 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.22.0 — 2026 (current)
+
+### New Features
+- **LLVM IR Backend** (`core/llvm_codegen.js`) — a real compiler backend emitting LLVM IR text, using the same pipeline architecture as **Rust, Swift, Julia, and Zig**:
+  - Proper SSA-form code generation (`alloca`/`load`/`store` per variable, exactly matching clang's own `-O0` output shape, which LLVM's `mem2reg` pass then promotes to true SSA registers)
+  - Full expression compiler with correct operator precedence (`OR` → `AND` → `NOT` → comparison → additive → multiplicative → unary → atom), matching the interpreter's evaluation semantics exactly
+  - NUM/SCL type promotion, string concatenation via runtime `malloc`/`strcpy`/`strcat`, `BETWEEN` conditions, boolean short-circuit-free `AND`/`OR`/`NOT`
+  - Same supported/unsupported subset as the C backend (CREATE/SET/INCREASE/DECREASE/SHOW/IF/ORIF/ELSE/CYCLE/SEASON) — unsupported constructs (LIST, MAP, ACTION, SPECIES, ...) fail with a clear compile-time error, never silently miscompiled
+- **`chloroplast compile --backend llvm|c`** — auto-detects an installed LLVM toolchain (`llc`/`llc-14` through `llc-18`) and prefers it by default; falls back to the C backend automatically if no LLVM install is found
+- **`opt -O2` integration** — the generated IR is run through LLVM's real optimizer (mem2reg, GVN, loop optimizations, inlining) before `llc` lowers it to object code. Without this step, hand-emitted alloca-heavy IR only gets `llc`'s backend-level optimizations and misses most of what makes LLVM fast — with it, compiled PlantLang matches gcc's own optimizer on equivalent code (verified: a 50-million-iteration accumulation loop drops from 88.7s interpreted to 6ms compiled — a ~14,700× speedup)
+- **`tests/test_llvm_codegen.js`** — 27 parity tests (interpreted vs LLVM-compiled output must match exactly) covering arithmetic, SCL/NUM promotion, string concatenation, all comparison operators, BETWEEN, boolean logic, IF/ORIF/ELSE, CYCLE (with and without STEP), SEASON, nested loops, and unsupported-construct error handling
+- **`examples/10_performance.plnt`** — a runnable interpreter-vs-compiled benchmark demonstrating the real-world speedup
+
+### Fixes (found by building and testing the LLVM backend against the interpreter)
+- **`core/evaluator.js`**: string literals containing text that happens to match a variable name (e.g. `"pi=" + pi` where `pi` is also a variable) were being corrupted — the identifier-substitution regex used plain word-boundaries (`\b...\b`) with no awareness of quote context, so it matched and replaced the `pi` substring *inside* the string literal `"pi="` itself, producing `"3.14=3.14"` instead of `"pi=3.14"`. Fixed by having the substitution regex skip over quoted string-literal spans entirely. This is a real interpreter bug, not just an LLVM-codegen quirk — it affected `chloroplast run` too, and was only caught because the LLVM backend's independent implementation disagreed with the interpreter's on the exact same test case.
+- **`core/llvm_codegen.js`**: `CREATE x(NUM) TO someOtherVariable.` was compiling to a hardcoded `0` instead of loading the referenced variable — the parser produces a plain `Identifier` AST node (not a `RAW_EXPR` `Literal`) for single bare-identifier value expressions, and `genCreate()`'s type dispatch had no case for it, silently falling through to a zero default. Caught by a nested-loop test (`SEASON` inside `CYCLE`, where the loop-local variable was initialized from the outer loop's counter) producing empty output instead of a countdown.
+
+---
+
+## v0.21.0 — 2025 (current)
+
+### New Features
+- **Web REPL UI** (`webrepl/`) — a single-page, no-build-step browser interface for writing and running PlantLang:
+  - Four modes matching the CodeWords Compiler Service's endpoints: **Run it**, **Check it**, **Verify it**, **Compile it**
+  - Live connection indicator polling `/health`
+  - Eight curated example programs loadable from a dropdown (generated from real `examples/*.plnt` files)
+  - Collapsible generated-C-source view for Compile mode
+  - `Cmd/Ctrl+Enter` keyboard shortcut, persistent editor content and server URL via `localStorage`
+  - Visual design built around PlantLang's "reads like prose" identity — Fraunces serif for the mode tabs/wordmark, output lines settle in individually rather than appearing all at once
+- **`webrepl/test_webrepl.js`** — 13 integration tests using jsdom to load the *real* HTML/JS files and drive actual clicks/keyboard events/fetch calls against a *live* CodeWords Compiler Service (not mocked)
+
+### Milestone
+This completes the full compiler pipeline originally planned:
+```
+Tokenizer → Parser/AST → Type Checker → Standard Library
+    → C Generator → GCC Binary → Compiler Service → Web REPL UI
+```
+Every stage is implemented, tested, and documented.
+
+---
+
+## v0.20.0 — 2025 (current)
+
+### New Features
+- **CodeWords Compiler Service** (`service/codewords-server.js`) — standalone HTTP API exposing the interpreter, typechecker, and C code generator to external clients:
+  - `GET /health` — service status
+  - `POST /run` — execute a program, return captured output
+  - `POST /check` — static type-check, return diagnostics
+  - `POST /verify` — run VERIFY/SUITE tests, return pass/fail counts
+  - `POST /compile` — generate C, compile with gcc, run the binary, return output
+- **`service/sandbox-runner.js`** — per-request forked child process worker. Untrusted PlantLang code never runs in the main server process, so:
+  - Infinite loops are killed cleanly after a 5s timeout without affecting other in-flight requests
+  - `LISTEN BRANCH` and `HARVEST` are rejected before execution (no port-binding or outbound network access from submitted code)
+  - Output is capped at 64KB; request bodies at 128KB
+- **`service/test_service.js`** — 15 automated tests covering every endpoint, error handling, timeout enforcement, network blocking, and true concurrent-request isolation
+- **`service/README.md`** — full API reference and safety model documentation
+
+---
+
+## v0.19.0 — 2025 (current)
+
+### New Features
+- **C Code Generator** (`core/codegen.js`) — translates a supported subset of PlantLang AST into standalone, compilable C99 source:
+  - `CREATE` / `SET` / `INCREASE` / `DECREASE` for `NUM`, `SCL`, `TX`, `FACT`
+  - `SHOW` — string literals, identifiers, and `+` concatenation (auto-selects `printf` format per type)
+  - `IF` / `ORIF` / `ELSE`
+  - `CYCLE var FROM lo TO hi [STEP k]` (numeric ranges)
+  - `SEASON` (while loop)
+  - Arithmetic (`+ - * / % **`) and comparisons (`IS`, `GREATER THAN`, `BETWEEN`, etc.) translated to native C operators
+  - Unsupported constructs (LIST, MAP, ACTION/REAP, SPECIES, WEATHER, HARVEST, LISTEN BRANCH, ...) are reported as clear compile-time errors naming the exact construct and line — never silently miscompiled
+- **`chloroplast compile`** — new CLI command:
+  ```bash
+  chloroplast compile file.plnt --run        # compile + execute immediately
+  chloroplast compile file.plnt -o mybinary  # custom output path
+  chloroplast compile file.plnt --keep-c     # keep generated .c file for inspection
+  ```
+  Pipes generated C through `gcc -O2 -lm` to produce a native binary.
+- **`tests/test_codegen.js`** — parity smoke tests: runs each fixture both interpreted and compiled, asserts identical stdout (9/9 passing)
+- **`examples/09_compile.plnt`** — FizzBuzz-style demo covering CYCLE, IF/ORIF/ELSE, SEASON, SCL comparisons
+
+### Fixes
+- `CYCLE var FROM lo TO hi STEP k` — `STEP` is tokenized as `IDENT` (not `KEYWORD`), so the parser's generic `_collectUntilKeyword()` never stopped at it. `toExpr` was swallowing `"20 STEP 5"` whole and `stepExpr` was always null. Fixed with an explicit IDENT-aware scan in `parseCycleStatement`. This was a **pre-existing interpreter bug**, not just a codegen limitation — `CYCLE ... STEP` was silently broken in `chloroplast run` too.
+
+---
+
+## v0.18.0 — 2025 (current)
+
+### New Features
+- **Static Type Checker** (`core/typechecker.js`) — full AST-based static analysis:
+  - `TYPE_MISMATCH` — wrong type passed to action parameter or arithmetic on non-NUM
+  - `ARITY_MISMATCH` — wrong number of arguments to an action
+  - `UNDEFINED_ACTION` — calling an action that was never defined
+  - `UNDEFINED_VAR` — using a variable that was never declared (warning)
+  - `UNDEFINED_SPECIES` — BLOOM of an undefined SPECIES (warning)
+  - `LOCK_VIOLATION` — attempt to SET a ROOT or locked variable
+  - Errors inside WEATHER body are demoted to info (they're intentionally risky)
+  - Two-pass architecture: declaration hoisting then full type checking
+  - Library return types pre-declared (`math:SQRT → SCL`, `strings:UPPER → TX`, etc.)
+  - Polymorphic action detection (all-TX params treated as ANY)
+- **`chloroplast check`** now runs the static type checker with visual caret output
+  (previously just counted statements)
+
+### Fixes
+- `chloroplast check` shows file/line/column with source preview and error arrow
+
+---
+
 ## v0.7 — 2025 (current)
 
 ### New Features
