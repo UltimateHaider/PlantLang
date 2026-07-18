@@ -21,15 +21,22 @@
 //  silently truncating or breaking unmigrated programs.
 // ═══════════════════════════════════════════════════════════════
 
+const fs = require('fs');
+const path = require('path');
 const { tokenize, TOKEN } = require('./tokenizer');
+
+// Determine the project root (parent of core/) for std/ module resolution
+const PROJECT_ROOT = path.resolve(__dirname, '..');
+const STD_DIR = path.join(PROJECT_ROOT, 'std');
 const { storm, PlantStorm } = require('./runtime');
 const {
   ProgramNode, CreateStatementNode, ShowStatementNode,
   IdentifierNode, LiteralNode, AstNode,
+  LenCallNode, CapCallNode, IndexAccessNode,
   ListenBranchStatementNode, ResponseStatementNode,
   WeatherStatementNode, ShelterStatementNode, CalmStatementNode,
   ActionDeclarationNode, SpeciesDeclarationNode, BloomStatementNode, TapStatementNode,
-  WheneverStatementNode, ReapStatementNode,
+  WheneverStatementNode, ReapStatementNode, ImportStatementNode,
   SetStatementNode, IncreaseStatementNode, DecreaseStatementNode,
 } = require('./ast');
 
@@ -153,6 +160,7 @@ class Parser {
     const startTok = this.current();
     const coords = { line: startTok.line, column: startTok.column, depth: startTok.depth };
 
+    if (this.match(TOKEN.KEYWORD, 'IMPORT')) return this.parseImportStatement(coords);
     if (this.match(TOKEN.KEYWORD, 'SHOW')) return this.parseShowStatement(coords);
     if (this.match(TOKEN.KEYWORD, 'CREATE')) return this.parseCreateStatement(coords);
     if (this.match(TOKEN.KEYWORD, 'LISTEN') && this.peek(1).type === TOKEN.KEYWORD && this.peek(1).value === 'BRANCH') {
@@ -531,6 +539,7 @@ class Parser {
   }
 
   // ── ACTION name(a(TYPE), b(TYPE)), ...body... /ACTION. ──────────
+  // ── ACTION name(a(TYPE)) -> external. (FFI external declaration) ───
   parseActionDeclaration(coords) {
     this.consume(TOKEN.KEYWORD, 'ACTION', '"ACTION"');
     const nameTok = this.current();
@@ -542,10 +551,25 @@ class Parser {
     this.consume(TOKEN.PUNCT, '(', '"(" after the action name');
     const params = this.parseParamList();
     this.consume(TOKEN.PUNCT, ')', '")" after the parameter list');
+
+    // FFI external declaration: -> external.
+    const arrow = this.peek(0);
+    const extKw = this.peek(1);
+    if (arrow.type === TOKEN.PUNCT && arrow.value === '->' &&
+        extKw.type === TOKEN.KEYWORD && extKw.value.toUpperCase() === 'EXTERNAL') {
+      this.advance(); // ->
+      this.advance(); // external
+      if (this.match(TOKEN.PUNCT, '.')) this.advance();
+      return new ActionDeclarationNode({ name, params, isExternal: true }, coords);
+    }
+
     this.consume(TOKEN.PUNCT, ',', '"," to open the ACTION body');
 
     const headerDepth = coords.depth;
-    const isActionCloser = (ft) => ft.type === TOKEN.PUNCT && ft.value === '/';
+    // Only stop at /ACTION (not /SEASON, /SPECIES, etc.)
+    const isActionCloser = (ft, st) =>
+      ft.type === TOKEN.PUNCT && ft.value === '/' &&
+      st && st.type === TOKEN.KEYWORD && st.value === 'ACTION';
     const bodyStatements = this.collectNestedBody(headerDepth, isActionCloser);
 
     if (this.match(TOKEN.DEPTH)) this.advance();
@@ -553,7 +577,7 @@ class Parser {
     this.consume(TOKEN.KEYWORD, 'ACTION', '"ACTION" in the "/ACTION." closer');
     if (this.match(TOKEN.PUNCT, '.')) this.advance();
 
-    return new ActionDeclarationNode({ name, params, bodyStatements }, coords);
+    return new ActionDeclarationNode({ name, params, bodyStatements, isExternal: false }, coords);
   }
 
   // ── SPECIES name [PARENT base], ...fields/actions... /SPECIES. ──
@@ -1060,6 +1084,54 @@ class Parser {
       if (t.type === TOKEN.FACT) return new LiteralNode(t.value, 'FACT', coords);
       if (t.type === TOKEN.IDENT) return new IdentifierNode(t.value, coords);
     }
+    // Check for len(x) / cap(x) pattern: IDENT LPAREN inner RPAREN
+    const first = tokensInSpan[0];
+    if (tokensInSpan.length >= 4 &&
+        first.type === TOKEN.IDENT &&
+        tokensInSpan[1].type === TOKEN.PUNCT && tokensInSpan[1].value === '(' &&
+        tokensInSpan[tokensInSpan.length - 1].type === TOKEN.PUNCT && tokensInSpan[tokensInSpan.length - 1].value === ')') {
+      const fnName = first.value.toUpperCase();
+      if (fnName === 'LEN' || fnName === 'CAP') {
+        const innerTokens = tokensInSpan.slice(2, tokensInSpan.length - 1);
+        const innerCoords = { line: innerTokens[0].line, column: innerTokens[0].column, depth: innerTokens[0].depth };
+        let argExpr;
+        if (innerTokens.length === 1 && innerTokens[0].type === TOKEN.IDENT) {
+          argExpr = new IdentifierNode(innerTokens[0].value, innerCoords);
+        } else {
+          const innerText = joinTokens(innerTokens);
+          argExpr = new LiteralNode(innerText, 'RAW_EXPR', innerCoords);
+        }
+        const coords = { line: first.line, column: first.column, depth: first.depth };
+        return new (fnName === 'LEN' ? LenCallNode : CapCallNode)(argExpr, coords);
+      }
+    }
+    // Check for x[i] indexing pattern: target LBRACK index RBRACK
+    if (tokensInSpan.length >= 4 &&
+        tokensInSpan.some(t => t.type === TOKEN.PUNCT && t.value === '[') &&
+        tokensInSpan[tokensInSpan.length - 1].type === TOKEN.PUNCT && tokensInSpan[tokensInSpan.length - 1].value === ']') {
+      const bracketIdx = tokensInSpan.findIndex(t => t.type === TOKEN.PUNCT && t.value === '[');
+      const targetTokens = tokensInSpan.slice(0, bracketIdx);
+      const indexTokens = tokensInSpan.slice(bracketIdx + 1, tokensInSpan.length - 1);
+      const targetCoords = { line: targetTokens[0].line, column: targetTokens[0].column, depth: targetTokens[0].depth };
+      const indexCoords = { line: indexTokens[0].line, column: indexTokens[0].column, depth: indexTokens[0].depth };
+      let targetExpr;
+      if (targetTokens.length === 1 && targetTokens[0].type === TOKEN.IDENT) {
+        targetExpr = new IdentifierNode(targetTokens[0].value, targetCoords);
+      } else {
+        targetExpr = new LiteralNode(joinTokens(targetTokens), 'RAW_EXPR', targetCoords);
+      }
+      let indexExpr;
+      if (indexTokens.length === 1) {
+        const it = indexTokens[0];
+        if (it.type === TOKEN.NUMBER) indexExpr = new LiteralNode(it.value, 'NUMBER', indexCoords);
+        else if (it.type === TOKEN.IDENT) indexExpr = new IdentifierNode(it.value, indexCoords);
+        else indexExpr = new LiteralNode(joinTokens(indexTokens), 'RAW_EXPR', indexCoords);
+      } else {
+        indexExpr = new LiteralNode(joinTokens(indexTokens), 'RAW_EXPR', indexCoords);
+      }
+      const coords = { line: first.line, column: first.column, depth: first.depth };
+      return new IndexAccessNode(targetExpr, indexExpr, coords);
+    }
     // Compound expression: reconstruct as text for the legacy evaluator bridge.
     const coords = { line: tokensInSpan[0].line, column: tokensInSpan[0].column, depth: tokensInSpan[0].depth };
     const text = joinTokens(tokensInSpan);
@@ -1264,8 +1336,26 @@ class Parser {
   parseSeasonStatement(coords) {
     const { SeasonStatementNode } = require('./ast');
     this.advance();
-    const condExpr = this._collectLineSpan().replace(/,$/, '').trim();
+    // Collect condition — stop at comma, period, or depth marker
+    const condSpan = [];
+    while (!this.isAtEnd()) {
+      const t = this.current();
+      if (t.type === TOKEN.PUNCT && (t.value === ',' || t.value === '.')) break;
+      if (t.type === TOKEN.DEPTH) break;
+      if (t.type === TOKEN.EOF) break;
+      if (t.type === TOKEN.NUMBER && this.peek(1).type === TOKEN.PUNCT && this.peek(1).value === '\\') break;
+      condSpan.push(this.advance());
+    }
+    const condExpr = joinTokens(condSpan).trim();
+    // Consume the comma that opens the body (if present)
+    if (this.match(TOKEN.PUNCT, ',')) this.advance();
+    if (this.match(TOKEN.PUNCT, '.')) this.advance(); // empty body
     const body = this._collectBodyUntil(coords.depth, []);
+    // Consume the /SEASON. closer (left unconsumed by _collectBodyUntil)
+    if (this.match(TOKEN.DEPTH)) this.advance();
+    if (this.match(TOKEN.PUNCT, '/')) this.advance();
+    if (this.match(TOKEN.KEYWORD, 'SEASON')) this.advance();
+    if (this.match(TOKEN.PUNCT, '.')) this.advance();
     return new SeasonStatementNode({ condExpr, bodyStatements: body }, coords);
   }
 
@@ -1515,6 +1605,19 @@ class Parser {
     return new RootScopeStatementNode({ identifier, links }, coords);
   }
 
+  // ── IMPORT "filename". ──────────────────────────────────────────
+  parseImportStatement(coords) {
+    this.consume(TOKEN.KEYWORD, 'IMPORT', '"IMPORT"');
+    const pathTok = this.current();
+    if (pathTok.type !== TOKEN.STRING) {
+      storm('SYNTAX_STORM', `Expected a string literal after IMPORT, found "${pathTok.value}"`,
+        pathTok.line, pathTok.column);
+    }
+    const importPath = this.advance().value; // raw string from tokens (already unquoted)
+    if (this.match(TOKEN.PUNCT, '.')) this.advance();
+    return new ImportStatementNode({ path: importPath, resolvedPath: null, importedStatements: [] }, coords);
+  }
+
   parseInfuseStatement(coords) {
     this.advance();
     const rest = this._collectLineSpan().trim();
@@ -1542,11 +1645,112 @@ class Parser {
 
 } // end class Parser
 
-/** Convenience: tokenize + parse source in one call. */
+/** Convenience: tokenize + parse source in one call (no import resolution). */
 function parse(source) {
   const tokens = tokenize(source);
   const parser = new Parser(tokens);
   return parser.parseProgram();
 }
 
-module.exports = { Parser, parse, RawStatementNode };
+/**
+ * Resolve IMPORT statements in a ProgramNode recursively.
+ * Replaces each ImportStatementNode with the imported file's statements.
+ * @param {ProgramNode} program
+ * @param {string} baseDir directory of the current file
+ * @param {Set<string>} importStack paths currently being resolved (cycle detection)
+ * @param {string} currentFilePath the file path of the current program (for cycle tracking)
+ * @returns {Array} newStatements array with imports inlined
+ */
+function resolveImports(program, baseDir, importStack, currentFilePath) {
+  importStack = importStack || new Set();
+  // Track the current file to detect cycles
+  if (currentFilePath) {
+    importStack.add(currentFilePath);
+  }
+  const newStatements = [];
+  for (const stmt of program.statements) {
+    if (stmt instanceof ImportStatementNode) {
+      const importRelPath = stmt.path;
+      let resolvedPath;
+      // Standard library paths (std/...) resolve to the project's std/ directory
+      if (importRelPath.startsWith('std/') || importRelPath.startsWith('std\\')) {
+        const relativePart = importRelPath.replace(/^std[/\\]/, '');
+        resolvedPath = path.resolve(STD_DIR, relativePart);
+      } else if (path.isAbsolute(importRelPath)) {
+        resolvedPath = path.normalize(importRelPath);
+      } else {
+        resolvedPath = path.resolve(baseDir, importRelPath);
+      }
+      // Check for .plnt extension
+      if (!resolvedPath.endsWith('.plnt')) {
+        resolvedPath += '.plnt';
+      }
+      resolvedPath = path.normalize(resolvedPath);
+
+      if (importStack.has(resolvedPath)) {
+        storm('SYNTAX_STORM',
+          `Circular import detected: "${importRelPath}" (${resolvedPath})`,
+          stmt.line, stmt.column);
+      }
+
+      if (!fs.existsSync(resolvedPath)) {
+        // Try without .plnt extension
+        const altPath = resolvedPath.replace(/\.plnt$/, '');
+        if (fs.existsSync(altPath)) {
+          resolvedPath = altPath;
+        } else {
+          storm('SYNTAX_STORM',
+            `Import file not found: "${importRelPath}" (looked at ${resolvedPath})`,
+            stmt.line, stmt.column);
+        }
+      }
+
+      importStack.add(resolvedPath);
+      const source = fs.readFileSync(resolvedPath, 'utf-8');
+      const tokens = tokenize(source);
+      const parser = new Parser(tokens);
+      const importedProgram = parser.parseProgram();
+      // Recursively resolve imports in the imported file
+      const resolved = resolveImports(importedProgram, path.dirname(resolvedPath), importStack, resolvedPath);
+      importStack.delete(resolvedPath);
+
+      stmt.resolvedPath = resolvedPath;
+      stmt.importedStatements = resolved;
+
+      // Inline the imported statements
+      for (const s of resolved) {
+        newStatements.push(s);
+      }
+      continue;
+    }
+    newStatements.push(stmt);
+  }
+  return newStatements;
+}
+
+/**
+ * Parse a .plnt file from disk, resolving IMPORT statements recursively.
+ * @param {string} filePath absolute path to the .plnt file
+ * @returns {ProgramNode} fully resolved program
+ */
+function parseFile(filePath, opts) {
+  opts = opts || {};
+  const absPath = path.resolve(filePath);
+  const source = fs.readFileSync(absPath, 'utf-8');
+  const tokens = tokenize(source);
+  const parser = new Parser(tokens);
+  const program = parser.parseProgram();
+  // Auto-inject std/prelude at the AST level (preserves source line numbers)
+  const isStdFile = absPath.startsWith(STD_DIR + path.sep) || absPath === STD_DIR;
+  if (!isStdFile && !opts.noPrelude) {
+    const preludeStmt = new (require('./ast').ImportStatementNode)(
+      { path: 'std/prelude', resolvedPath: null, importedStatements: [] },
+      { line: 0, column: 0, depth: 0 }
+    );
+    program.statements.unshift(preludeStmt);
+  }
+  const resolvedStmts = resolveImports(program, path.dirname(absPath), new Set(), absPath);
+  return new ProgramNode(resolvedStmts);
+}
+
+module.exports = { Parser, parse, parseFile, resolveImports, RawStatementNode };

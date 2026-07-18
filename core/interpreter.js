@@ -19,6 +19,9 @@ class Interpreter {
     this.watchers=new Map();
     this.rootDir=opts.rootDir||process.cwd();
     this.output=opts.output||[];
+    this._externalFFI=new Map(); // name -> JS function for external FFI stubs in interpreted mode
+    // Auto-register std/io bridge stubs
+    this._registerStdStubs();
     this.emit=opts.emit||((line,type)=>{this.output.push({text:line,type:type||'info'});});
     this._symbolPassDone=false; // set true once symbolPass() runs; suppresses duplicate output
     // VERIFY tracking
@@ -56,9 +59,10 @@ class Interpreter {
     }
   }
 
-  runSource(source){
+  runSource(source, sourcePath){
     const {parse}=require('./parser');
     const programNode=parse(source);
+    if(sourcePath) this.rootDir=path.dirname(path.resolve(sourcePath));
     this.symbolPass(programNode);         // register declarations before execution
     this.runProgram(programNode);
     return programNode;
@@ -75,6 +79,24 @@ class Interpreter {
       const e=soil.get(node.name);
       if(!e)storm('MISSING_STORM',`"${node.name}" غير موجود`,node.line,node.column);
       return e.value;
+    }
+    if(node.type==='LenCall'){
+      const arg=this.evaluateExpressionNode(node.arg,soil);
+      if(typeof arg!=='string')return 0;
+      return arg.length;
+    }
+    if(node.type==='CapCall'){
+      const arg=this.evaluateExpressionNode(node.arg,soil);
+      if(typeof arg!=='string')return 0;
+      return arg.length+1;
+    }
+    if(node.type==='IndexAccess'){
+      const target=this.evaluateExpressionNode(node.target,soil);
+      const idx=this.evaluateExpressionNode(node.index,soil);
+      if(typeof target!=='string')storm('TYPE_STORM','Index access requires a TX value',node.line,node.column);
+      if(typeof idx!=='number'||!Number.isInteger(idx)||idx<0)storm('TYPE_STORM','Index must be a non-negative integer',node.line,node.column);
+      if(idx>=target.length)storm('SEED_STORM',`Index ${idx} out of bounds for TX of length ${target.length}`,node.line,node.column);
+      return target[idx];
     }
     // Fallback: a raw string slipped through (shouldn't normally happen
     // once parseExpressionSpan always wraps in a Literal/Identifier).
@@ -119,6 +141,7 @@ class Interpreter {
       case 'ListenBranchStatement': return this.evaluateListenBranch(node,soil);
       case 'ResponseStatement': return this.evaluateResponseStatement(node,soil);
       case 'WeatherStatement': return this.evaluateWeatherStatement(node,soil);
+      case 'ImportStatement':   return this.evaluateImportStatement(node,soil);
       case 'ActionDeclaration': return this.evaluateActionDeclaration(node,soil);
       case 'SpeciesDeclaration': return this.evaluateSpeciesDeclaration(node,soil);
       case 'BloomStatement': return this.evaluateBloomStatement(node,soil);
@@ -435,6 +458,51 @@ class Interpreter {
   }
 
   /**
+   * evaluateImportStatement(node, soil) — resolves and executes an
+   * imported file.  Merges the imported file's declarations (actions,
+   * species) into this interpreter's symbol tables.
+   */
+  evaluateImportStatement(node, soil) {
+    const importRelPath = node.path;
+    let resolvedPath;
+    // Standard library resolution
+    if (importRelPath.startsWith('std/') || importRelPath.startsWith('std\\')) {
+      const relativePart = importRelPath.replace(/^std[/\\]/, '');
+      const stdDir = path.join(__dirname, '..', 'std');
+      resolvedPath = path.resolve(stdDir, relativePart);
+    } else if (path.isAbsolute(importRelPath)) {
+      resolvedPath = path.normalize(importRelPath);
+    } else {
+      resolvedPath = path.resolve(this.rootDir || process.cwd(), importRelPath);
+    }
+    // Add .plnt extension if missing
+    if (!resolvedPath.endsWith('.plnt')) resolvedPath += '.plnt';
+    resolvedPath = path.normalize(resolvedPath);
+    if (!fs.existsSync(resolvedPath)) {
+      const alt = resolvedPath.replace(/\.plnt$/, '');
+      if (fs.existsSync(alt)) resolvedPath = alt;
+      else {
+        storm('MISSING_STORM',
+          `Import file not found: "${importRelPath}" (looked at ${resolvedPath})`,
+          node.line, node.column);
+      }
+    }
+    // Avoid re-importing the same file
+    if (this._importedFiles && this._importedFiles.has(resolvedPath)) return null;
+    if (!this._importedFiles) this._importedFiles = new Set();
+    this._importedFiles.add(resolvedPath);
+
+    // Parse and resolve the imported file
+    const source = fs.readFileSync(resolvedPath, 'utf-8');
+    const { parseFile } = require('./parser');
+    const importedProgram = parseFile(resolvedPath, { noPrelude: true });
+    // Register imported declarations, then execute
+    this.symbolPass(importedProgram);
+    this.runProgram(importedProgram);
+    return null;
+  }
+
+  /**
    * evaluateActionDeclaration(node, soil) — registers the ACTION into
    * this.funcs using EXACTLY the same {params, body, line} shape the
    * legacy _firstPass() uses, with one key addition: body is an array
@@ -443,6 +511,19 @@ class Interpreter {
    * sites (REAP, FLOW, recursion) work unchanged without modification.
    */
   evaluateActionDeclaration(node,soil){
+    // FFI external actions: register with external flag; body is empty
+    if(node.isExternal){
+      this.funcs.set(node.name,{
+        name:node.name,
+        params:node.params,
+        body:[],
+        line:node.line,
+        isExternal:true
+      });
+      if(!this._symbolPassDone)
+        this.emit(`✓ ACTION "${node.name}"(${node.params.map(p=>p.name+'('+p.type+')').join(', ')}) -> external`,'ok');
+      return{next:1};
+    }
     this.funcs.set(node.name,{
       params:node.params,
       body:node.bodyStatements,
@@ -880,9 +961,13 @@ class Interpreter {
 
 
   runFile(filePath){
-    const source=fs.readFileSync(filePath,'utf8');
-    this.rootDir=path.dirname(filePath);
-    this.runSource(source);   // ← AST pipeline (tokenize→parse→symbolPass→evaluateNode)
+    const {parseFile}=require('./parser');
+    const absPath=path.resolve(filePath);
+    this.rootDir=path.dirname(absPath);
+    const programNode=parseFile(absPath);
+    this.symbolPass(programNode);         // register declarations before execution
+    this.runProgram(programNode);
+    return programNode;
   }
 
   _firstPass(stmts){
@@ -1938,7 +2023,46 @@ class Interpreter {
    * whether the first body entry looks like an AST node or a legacy
    * statement record.
    */
+  /**
+   * Register the standard library FFI bridge functions for interpreted mode.
+   * Each stub mirrors the C bridge in core/runtime_bridge.c.
+   * Keys must match the lowercase action names declared in std/io.plnt.
+   */
+  _registerStdStubs(){
+    // plant_printf(s(TX)) -> external — prints TX without newline
+    this._externalFFI.set('plant_printf',(args)=>{
+      const out=String(args[0]!==undefined?args[0]:'');
+      process.stdout.write(out);
+      this.emit(out,'inf');
+      return out.length;
+    });
+    // plant_puts(s(TX)) -> external — prints TX with newline
+    this._externalFFI.set('plant_puts',(args)=>{
+      const out=String(args[0]!==undefined?args[0]:'')+'\n';
+      process.stdout.write(out);
+      this.emit(out,'inf');
+      return out.length;
+    });
+    // plant_flush() -> external — flushes stdout
+    this._externalFFI.set('plant_flush',()=>{
+      process.stdout.write('');
+      return 0;
+    });
+  }
+
   _callAction(fn,argVals,instance,parentSoil){
+    // FFI external actions: look up JS stub in _externalFFI
+    if(fn.isExternal){
+      const stub=this._externalFFI.get(fn.name);
+      if(stub){
+        const result=stub(argVals,fn,parentSoil);
+        return result!==undefined?{value:result}:{value:null};
+      }
+      storm('MISSING_STORM',
+        `External FFI ACTION "${fn.name}" has no JS fallback in interpreted mode. `+
+        `Use interpreter._externalFFI.set("${fn.name}", fn) or compile with LLVM.`,
+        fn.line,0);
+    }
     const scope=parentSoil.child();
     fn.params.forEach((p,idx)=>{if(argVals[idx]!==undefined)scope.set(p.name,argVals[idx],p.type);});
     if(instance){

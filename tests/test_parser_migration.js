@@ -118,6 +118,7 @@ console.log('\n\x1b[1mParser / AST Migration Verification\x1b[0m\n');
     '1\\ LISTEN/.\n';
   const out = [];
   const interp = new Interpreter({ emit: (t, tp) => out.push({ t, tp }) });
+  interp._verifyDryRun = true;
   interp.runSource(src);
   check('RESPONSE resolved to the correct value (not the bare identifier text)',
     out.some(o => o.t.includes('RESPONSE: Hello AST')),

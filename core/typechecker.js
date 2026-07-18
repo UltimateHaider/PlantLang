@@ -249,6 +249,7 @@ class TypeChecker {
   }
 
   _inferActionReturn(body, params, parentScope) {
+    if (!body || body.length === 0) return T.NUM; // external FFI defaults to NUM (i64)
     const fnScope = parentScope.child();
     for (const p of params) fnScope.setVar(p.name, p.type || T.UNKNOWN);
     let rt = T.VOID;
@@ -312,6 +313,7 @@ class TypeChecker {
       case 'EvaporateStatement': this._checkEvaporate(node, scope); break;
       case 'StopIfStatement':    this._checkStopIf(node, scope);    break;
       // Pass-through (no type errors possible)
+      case 'ImportStatement':
       case 'MissionStatement':
       case 'PlantStatement':
       case 'RootStatement':
@@ -539,6 +541,8 @@ class TypeChecker {
   }
 
   _checkActionBody(node, scope) {
+    // FFI external actions have no body — skip checking
+    if (node.isExternal) return;
     const fnScope = scope.child();
     for (const p of (node.params || [])) {
       fnScope.setVar(p.name, p.type || T.UNKNOWN);
@@ -712,6 +716,12 @@ class TypeChecker {
     if (node.type === 'Identifier') {
       const v = scope.getVar(node.identifier || node.value);
       return v ? v.type : T.UNKNOWN;
+    }
+    if (node.type === 'LenCall' || node.type === 'CapCall') {
+      return T.NUM;
+    }
+    if (node.type === 'IndexAccess') {
+      return T.TX;
     }
     return T.UNKNOWN;
   }

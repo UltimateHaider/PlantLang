@@ -42,7 +42,7 @@ console.log('\n\x1b[1mDiagnostic System Verification\x1b[0m\n');
   const panel = formatStormDiagnostic(error, file);
   check('panel contains storm banner', panel.includes('Atmospheric Storm Panic: MISSING_STORM'));
   check('panel contains --> location arrow', panel.includes('-->'));
-  check('panel contains the exact file:line:column', panel.includes(`${file}:21:4`));
+  check('panel contains the exact file:line:column', panel.includes(`${file}:21:9`));
   check('panel contains the source line text', panel.includes('SHOW subtotl'));
   check('panel contains a caret (^) pointer', panel.includes('^'));
   check('panel does NOT leak a raw JS stack trace', !/at \S+ \(.*:\d+:\d+\)/.test(panel));

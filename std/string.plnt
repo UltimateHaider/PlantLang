@@ -1,0 +1,36 @@
+# ═══════════════════════════════════════════════════════════════
+#  std/string.plnt — String Manipulation Module (Standard Library)
+#
+#  Provides pure-PlantLang string utilities.  All operations
+#  allocate their return values within the active Arena and
+#  respect bounded access (Article VIII).
+# ═══════════════════════════════════════════════════════════════
+
+# ── concat(a(TX), b(TX)) ──
+# Returns a new TX that is the concatenation of a and b.
+# Uses the built-in + operator for TX concatenation.
+ACTION concat(a(TX), b(TX)),
+  CREATE result(TX) TO a + b.
+  GIVE result.
+/ACTION.
+
+# ── substring(t(TX), start(NUM), end(NUM)) ──
+# Returns a substring of t from index start (inclusive) to end (exclusive).
+# Bounds are clamped to the string length automatically via WEATHER/SHELTER.
+# All memory is allocated within the active Arena.
+ACTION substring(t(TX), start(NUM), end(NUM)),
+  CREATE out(TX) TO "".
+  CREATE i(NUM) TO start.
+  # Iterate from start to end, catching out-of-bounds via WEATHER
+  WEATHER,
+    SEASON i < end,
+      CREATE ch(TX) TO t[i].
+      SET out TO out + ch.
+      SET i TO i + 1.
+    /SEASON.
+  SHELTER SEED_STORM,
+    # Out of bounds — we're done
+    CALM.
+  CALM.
+  GIVE out.
+/ACTION.

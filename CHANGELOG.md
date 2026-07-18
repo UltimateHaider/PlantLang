@@ -1,6 +1,52 @@
 # Changelog — PlantLang / Chloroplast
 
-## v0.23.0 — 2026 (current)
+## v0.24.0 — 2026 (current)
+
+### New Features
+- **IMPORT Statement & Module System** — multi-file PlantLang programs:
+  - `IMPORT "path".` syntax for loading external `.plnt` files
+  - Relative, absolute, and `std/`-prefixed path resolution
+  - Cycle detection with clear error messages (`IMPORT cycle detected`)
+  - AST merging — imported statements are spliced into the importing program's AST at parse time
+  - Type checker resolves and validates all imports before semantic analysis
+  - Interpreter resolves `IMPORT` at runtime with file-system lookup
+  - `ImportStatementNode` in AST with `path`, `statements`, `resolvedAbsPath` fields
+- **FFI (Foreign Function Interface)** — call native C functions from PlantLang:
+  - Syntax: `ACTION name(params) -> external.` — marks an ACTION as an external C function
+  - `isExternal` property on `ActionDeclaration` nodes
+  - LLVM backend emits `declare` IR for FFI functions with proper type signatures
+  - FFI stubs pre-registered in the interpreter for all `runtime_bridge` functions
+  - Type checker validates FFI signatures against known bridge functions
+- **Standard Library Foundation** (`std/`):
+  - `std/io.plnt` — `print`, `println`, `plant_printf`, `plant_puts` (FFI-bridged I/O)
+  - `std/string.plnt` — `len`, `upper`, `lower`, `trim`, `contains`, `split`, `replace`, `concat`
+  - `std/prelude.plnt` — auto-injected core definitions (TRUE, FALSE, _BOOT)
+  - Auto-prelude injection — every program implicitly imports `std/prelude.plnt`
+  - `IMPORT "std/io"` and `IMPORT "std/string"` — resolve via `std/` path prefix
+- **Core Runtime Bridge** (`core/runtime_bridge.c`):
+  - C bridge implementing FFI targets: `plant_printf`, `plant_puts`, `plant_len`, `plant_upper`, `plant_lower`, `plant_trim`, `plant_contains`, `plant_split`, `plant_replace`, `plant_concat`
+  - Linked into compiled binaries via the LLVM backend's `declare` + extern resolution
+
+### Test Suite
+- Added **Phase 7 — Module System & FFI** (`tests/test_phase7_import_ffi.js`) — 30 test groups covering:
+  - IMPORT statement parsing path, coords, extension handling, cycle detection, directory traversal, error messages
+  - FFI `-> external` parsing, isExternal flag, param/name capture
+  - File-not-found errors
+- Added **Phase 8 — Standard Library** (`tests/test_phase8_stdlib.js`) — 8 integration test groups covering:
+  - std/ path resolution, I/O module parsing, string module parsing, prelude injection
+  - Full end-to-end `print`/`println` execution, `strings:UPPER` FFI call, `strings:CONCAT` FFI call, mixed usage across modules
+- LLVM backend expanded from 37 → **46 smoke tests** (9 new TX fat-pointer tests: len, cap, index access, concatenation, empty TX, SET after CREATE)
+- All test suites green — 7 test files, ~300+ total assertions
+
+### Documentation
+- `README.md` updated to v0.24.0 with Module System, FFI, and Standard Library sections
+- `ROADMAP.md` — v0.24.0 objectives marked complete, v0.25.0 roadmap drafted
+- `TECHNICAL.md` — added IMPORT resolution algorithm, FFI stub mechanism, std/ layout
+- `Language Tour.md` — added IMPORT and Standard Library usage guide
+
+---
+
+## v0.23.0 — 2026
 
 ### New Features
 - **ACTION/REAP/GIVE** in the LLVM backend (`core/llvm_codegen.js`) — full function support with:

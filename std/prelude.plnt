@@ -1,0 +1,9 @@
+# ═══════════════════════════════════════════════════════════════
+#  std/prelude.plnt — Standard Library Prelude
+#
+#  Automatically injected into every root compilation unit.
+#  Provides basic I/O and string manipulation out of the box.
+# ═══════════════════════════════════════════════════════════════
+
+IMPORT "std/io".
+IMPORT "std/string".

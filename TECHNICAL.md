@@ -1,5 +1,9 @@
 # PlantLang Technical Reference
 
+## 0. Module System & Standard Library
+
+See sections 7–8 below for the IMPORT/FFI and Standard Library architecture.
+
 ## 1. Rooted Depth System (Memory Architecture)
 
 ### 1.1 Depth Prefixes
@@ -279,18 +283,167 @@ Emitted lazily only when a WEATHER block is present.
 
 ---
 
-## 7. Test Suite Architecture
+## 7. Module System (IMPORT) & FFI
+
+### 7.1 IMPORT Resolution Algorithm
+
+The `resolveImports` function in `core/parser.js` handles multi-file program loading:
+
+```
+resolveImports(programNode, baseDir, visited = new Set())
+  1. Check for cycle: if programNode's absolute path is in `visited`, emit error
+  2. Add current path to `visited`
+  3. For each ImportStatement in programNode.statements:
+     a. Resolve the import path:
+        - If starts with "std/" → look in `${PLANTLANG_STD}/std/` or `../std/`
+        - If relative → resolve against baseDir
+        - If absolute → use as-is
+     b. Append ".plnt" if no extension present
+     c. Stat the resolved path — if not found, emit file-not-found error
+     d. Parse the resolved file (recursive-descent parse)
+     e. Recursively call resolveImports on the child's AST
+     f. Replace the ImportStatement with the child's parsed statements (AST merge)
+  4. Return the modified programNode
+```
+
+### 7.2 Cycle Detection
+
+Import cycles are detected during the recursive `resolveImports` pass:
+
+```plantlang
+IMPORT "a".   → resolveImports enters "a" → visited = {"a"}
+  ↳ IMPORT "b". → resolveImports enters "b" → visited = {"a", "b"}
+    ↳ IMPORT "a". → "a" is in visited!
+      → ERROR: "IMPORT cycle detected: a → b → a"
+```
+
+The `visited` set tracks absolute file paths, so the same file imported from different relative paths is still caught.
+
+### 7.3 AST Merging
+
+After resolution, each `ImportStatement` node is replaced in-place with the imported file's `statements` array:
+
+```javascript
+// Before merging:
+[ImportStatement("helpers"), ShowStatement]
+
+// After resolving import of helpers.plnt (which contains CreateStatement):
+[CreateStatement, ShowStatement]
+```
+
+This means depth tracking, type checking, and code generation operate on a flat, merged AST — imported code is indistinguishable from inline code.
+
+### 7.4 FFI Declaration & Stub Mechanism
+
+FFI functions are declared with `-> external` syntax:
+
+```plantlang
+ACTION plant_printf(fmt(TX)) -> external.
+```
+
+**Parser**: Sets `isExternal = true` on the `ActionDeclaration` node. No body is parsed.
+
+**Type Checker**: Validates that the FFI function's signature matches a known bridge function in the runtime registry. Produces `UNDEFINED_ACTION` warning if no matching external is found.
+
+**LLVM Codegen**: Emits LLVM `declare` IR:
+
+```llvm
+declare i64 @plant_printf(i64)
+```
+
+The function name is mangled from the PlantLang identifier. Parameters use the standard type coercion (TX → i64 via ptrtoint, NUM → i64, SCL → i64 via bitcast).
+
+**Interpreter**: FFI stubs are pre-registered in the interpreter's runtime. Each stub wraps the corresponding `runtime_bridge.c` function via a JS implementation. When the interpreter encounters a call to an external ACTION, it dispatches to the registered stub instead of looking for a body.
+
+### 7.5 FFI Stub Registration
+
+```javascript
+// core/interpreter.js
+const FFI_STUBS = {
+  plant_printf: (fmt, ...args) => { /* JS printf equivalent */ },
+  plant_puts: (s) => { /* JS puts equivalent */ },
+  plant_len: (s) => s.length,
+  plant_upper: (s) => s.toUpperCase(),
+  // ...
+};
+```
+
+Stubs are registered at interpreter construction time. All 10 `runtime_bridge.c` functions have matching JS stubs.
+
+---
+
+## 8. Standard Library Architecture
+
+### 8.1 Directory Layout
+
+```
+std/
+├── prelude.plnt    # Auto-injected — TRUE, FALSE, _BOOT
+├── io.plnt         # I/O functions — print, println, plant_printf, plant_puts
+└── string.plnt     # String functions — len, upper, lower, trim, contains, split, replace, concat
+```
+
+### 8.2 Auto-Prelude Injection
+
+Every program automatically imports `std/prelude.plnt` at parse time. This happens in `parser.js` before the main parse:
+
+```javascript
+function prelude() {
+  const preludePath = path.join(__dirname, '..', 'std', 'prelude.plnt');
+  return parseFile(preludePath);
+}
+```
+
+The prelude provides:
+- `TRUE` / `FALSE` — boolean constants
+- `_BOOT` — bootstrap marker for runtime initialization
+- Core type aliases and utility definitions
+
+### 8.3 std/ Path Resolution
+
+When `IMPORT "std/io"` is encountered:
+1. The resolver detects the `std/` prefix
+2. Searches for `std/io.plnt` relative to the PlantLang std library root
+3. If `PLANTLANG_STD` env var is set, uses that; otherwise defaults to `../std/` from the parser directory
+
+### 8.4 Runtime C Bridge (`core/runtime_bridge.c`)
+
+The C bridge implements 10 FFI targets that compiled PlantLang programs link against:
+
+| FFI Function | C Implementation | Purpose |
+|---|---|---|
+| `plant_printf` | `int64_t plant_printf(int64_t fmt)` | Formatted output via `printf` |
+| `plant_puts` | `int64_t plant_puts(int64_t s)` | String output via `puts` |
+| `plant_len` | `int64_t plant_len(int64_t s)` | String length via `strlen` |
+| `plant_upper` | `int64_t plant_upper(int64_t s)` | Uppercase (alloc + toupper) |
+| `plant_lower` | `int64_t plant_lower(int64_t s)` | Lowercase (alloc + tolower) |
+| `plant_trim` | `int64_t plant_trim(int64_t s)` | Trim whitespace |
+| `plant_contains` | `int64_t plant_contains(int64_t s, int64_t sub)` | Substring check via `strstr` |
+| `plant_split` | `int64_t plant_split(int64_t s, int64_t delim)` | String split |
+| `plant_replace` | `int64_t plant_replace(int64_t s, int64_t old, int64_t new)` | String replace |
+| `plant_concat` | `int64_t plant_concat(int64_t a, int64_t b)` | String concatenation via `strcat` |
+
+All functions receive and return `int64_t` (TX pointers as `int64_t` via ptrtoint/inttoptr). String operations use `malloc`/`strdup` for heap-allocated results.
+
+---
+
+## 9. Test Suite Architecture
 
 ### Test Files
-- `tests/test_llvm_codegen.js` — 37 parity tests: each fixture runs via interpreter AND compiled via `llc` + `gcc`, asserts identical stdout
-- `tests/test_codegen.js` — 9 parity tests for the C backend
-- `tests/test_parser_migration.js` — 109 tests covering AST node construction, execution, error messages, and legacy interpreter compatibility
-- `tests/test_diagnostics.js` — 45 tests for error panel rendering with visual caret
+- `tests/test_llvm_codegen.js` — 46 parity tests: each fixture runs via interpreter AND compiled via `llc` + `gcc`, asserts identical stdout
+- `tests/test_codegen.js` — 10 parity tests for the C backend
+- `tests/test_parser_migration.js` — 90 tests covering AST node construction, execution, error messages, and legacy interpreter compatibility
+- `tests/test_diagnostics.js` — 31 tests for error panel rendering with visual caret
+- `tests/test_tokenizer.js` — 29 character-level tokenizer verification tests
+- `tests/test_phase7_import_ffi.js` — 30 test groups for Module System & FFI
+- `tests/test_phase8_stdlib.js` — 8 integration tests for Standard Library
 
 ### Test Methodology
 Each test:
-1. Parses the source with the real parser
-2. Generates LLVM IR (or C)
-3. Compiles to a native binary via `llc -O2` + `gcc -no-pie -lm`
+1. Parses the source with the real parser (resolving any `IMPORT` statements)
+2. For LLVM/C backend tests: generates IR/C code
+3. For LLVM tests: compiles to a native binary via `llc -O2` + `gcc -no-pie -lm` (FFI functions resolved via `core/runtime_bridge.c`)
 4. Runs the binary and captures stdout
 5. Compares against the interpreter's output — must match exactly
+
+Phase 7 and Phase 8 tests use a custom `check(label, condition)` harness that tests specific parser, resolver, and runtime behaviors without requiring LLVM compilation.

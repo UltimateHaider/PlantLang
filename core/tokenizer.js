@@ -16,7 +16,7 @@ const KEYWORDS = new Set([
   'IF','ORIF','ELSE','STOP','PICK','MATCH','YIELD','CYCLE','SEASON',
   'PUT','TAKE','SORT','SHAKE','EMPTY','BRAID','LINK',
   'ACTION','GIVE','REAP','FLOW','SPECIES','BLOOM','PARENT','SELF','VAR',
-  'WEATHER','SHELTER','CALM','TAP','ABSORB','INFUSE','SEAL',
+  'WEATHER','SHELTER','CALM','TAP','ABSORB','INFUSE','SEAL','IMPORT','EXTERNAL',
   'PULSE','WHENEVER','CHANGES','NOW','WAIT','ANALYZE','TYPEOF',
   'ROOT_SCOPE','MISSION','PLANT','VERIFY','SUITE','STORMS','GIVES',
   'HARVEST','METHOD','BODY','HEADERS','TIMEOUT',
@@ -176,16 +176,23 @@ function tokenize(source) {
     }
 
     // Structural punctuation
-    if ('.,:()/'.includes(c)) {
+    if ('.,:()/[]'.includes(c)) {
       advance();
       tokens.push(new Token(TOKEN.PUNCT, c, startLine, startCol, currentDepth));
       continue;
     }
 
-    // Compound operator: ** (power) — c is peekChar (not yet consumed)
+    // Compound operator: ** (power)
     if (c === '*' && peekChar(1) === '*') {
       advance(); advance(); // consume both *
       tokens.push(new Token(TOKEN.PUNCT, '**', startLine, startCol, currentDepth));
+      continue;
+    }
+
+    // Arrow operator: -> (used for FFI external declarations, return types)
+    if (c === '-' && peekChar(1) === '>') {
+      advance(); advance(); // consume -
+      tokens.push(new Token(TOKEN.PUNCT, '->', startLine, startCol, currentDepth));
       continue;
     }
 

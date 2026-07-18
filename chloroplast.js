@@ -144,17 +144,17 @@ function findOpt(llcBin){
 function compileFile(filePath,opts={}){
   if(!fs.existsSync(filePath)){console.error(`${C.red}✕ File not found: ${filePath}${C.reset}`);process.exit(1);}
   const {execFileSync}=require('child_process');
-  const source=fs.readFileSync(filePath,'utf8');
-  const {parse}=require('./core/parser');
+  const {parseFile}=require('./core/parser');
 
   const llcBin=opts.backend==='c'?null:findLLC();
   const useLLVM=!!llcBin&&opts.backend!=='c';
+  const bridgeC=path.join(__dirname,'core','runtime_bridge.c');
 
   console.log(`${C.cyan}Compiling: ${filePath}${C.reset} ${C.gray}(backend: ${useLLVM?'LLVM via '+llcBin:'C via gcc'})${C.reset}`);
 
   let prog;
   try{
-    prog=parse(source);
+    prog=parseFile(filePath); // uses parseFile for import resolution
   }catch(e){
     console.error(`${C.red}✕ Parse error: ${e.message}${C.reset}`);
     process.exit(1);
@@ -203,7 +203,9 @@ function compileFile(filePath,opts={}){
     }
 
     try{
-      execFileSync('gcc',[sPath,'-no-pie','-lm','-o',binPath],{stdio:'inherit'});
+      const linkArgs=[sPath, '-no-pie', '-lm', '-o', binPath];
+      if(fs.existsSync(bridgeC)){linkArgs.splice(1,0,bridgeC);}
+      execFileSync('gcc',linkArgs,{stdio:'inherit'});
     }catch(e){
       console.error(`${C.red}✕ gcc linking failed${C.reset}`);
       if(!opts.keepC){try{fs.unlinkSync(llPath);}catch(_){}try{fs.unlinkSync(optPath);}catch(_){}try{fs.unlinkSync(sPath);}catch(_){}}

@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.23.0
+# 🌿 PlantLang — Chloroplast v0.24.0
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -262,6 +262,76 @@ Features:
 1\ REAP s FROM d:speak.
 1\ SHOW s.              # → Rex speaks.
 ```
+
+### IMPORT (Module System)
+
+Load external `.plnt` files and merge their statements into the current program:
+
+```
+IMPORT "std/io".
+IMPORT "std/string".
+
+# Relative paths resolve from the importing file's directory:
+IMPORT "lib/helpers.plnt".
+IMPORT "../shared/utils".
+```
+
+Features:
+- Cycle detection — circular imports produce a clear error at parse time
+- AST merging — imported statements are spliced directly into the importing program
+- Path resolution — relative, absolute, and `std/`-prefixed paths are supported
+- Auto-prelude — every program implicitly imports `std/prelude.plnt`
+
+**Cycle detection:**
+```
+IMPORT "a".
+  ↳ IMPORT "b".
+      ↳ IMPORT "a".   # ERROR: IMPORT cycle detected
+```
+
+### FFI (Foreign Function Interface)
+
+Declare native C functions and call them directly from PlantLang using the `-> external` syntax:
+
+```
+ACTION plant_printf(fmt(TX)) -> external.
+ACTION plant_puts(s(TX)) -> external.
+ACTION plant_len(s(TX)) -> external.
+
+1\ REAP result FROM plant_puts, "Hello from C!".
+```
+
+FFI functions:
+- Are declared with `ACTION name(params) -> external.` (no body, no `/ACTION.`)
+- Must be backed by a matching C function in `core/runtime_bridge.c` (or linked separately)
+- Are treated as external `declare` in LLVM IR — linked at compile time
+- Are pre-registered in the interpreter with stub implementations
+
+### Standard Library
+
+PlantLang's standard library lives in `std/` and is accessed via `IMPORT "std/..."`:
+
+```
+IMPORT "std/io".
+IMPORT "std/string".
+
+1\ REAP _ FROM print, "Hello from std/io!".
+1\ REAP _ FROM println, "This adds a newline".
+
+1\ REAP upp FROM strings:UPPER, "hello".
+1\ SHOW upp.                          # → HELLO
+
+1\ REAP joined FROM strings:CONCAT, "a", "b", "c".
+1\ SHOW joined.                       # → abc
+```
+
+Available modules:
+
+| Module | Key Functions |
+|--------|--------------|
+| `std/io` | `print`, `println`, `plant_printf`, `plant_puts` |
+| `std/string` | `len`, `upper`, `lower`, `trim`, `contains`, `split`, `replace`, `concat` |
+| `std/prelude` | Auto-injected: TRUE, FALSE, _BOOT |
 
 ### WEATHER / SHELTER / CALM (try / catch / finally)
 
@@ -530,25 +600,32 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.23.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production:
+Chloroplast v0.24.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production:
 
 ```
 Source (.plnt)
    ↓  core/tokenizer.js      — depth-aware lexer (handles \N prefix)
-   ↓  core/parser.js         — recursive-descent, 40+ typed node types
+   ↓  core/parser.js         — recursive-descent, 40+ typed node types, IMPORT resolution
    ↓  core/ast.js            — typed AST node classes (all carry depth)
    ↓
    ├── core/interpreter.js   — evaluateNode() dispatcher (dev/`chloroplast run`)
    │   └── core/evaluator.js — expression evaluator
    │   └── core/runtime.js   — Soil scope chain, PlantStorm
    │   └── core/innate.js    — built-in libs (math/strings/lists)
+   │   └── FFI stubs         — pre-registered runtime_bridge wrappers
+   │
+   ├── std/                   — Standard Library (.plnt modules)
+   │   ├── io.plnt           — print, println (FFI-bridged)
+   │   ├── string.plnt       — len, upper, lower, trim, contains, split, replace, concat
+   │   └── prelude.plnt      — auto-injected core definitions
    │
    └── core/llvm_codegen.js  — LLVM IR generator (production/`chloroplast compile`)
        └── Rooted Depth System: arena-based deterministic memory
            ├── Arena allocation (bump-alloc from per-depth 64KB slabs)
            ├── Depth tracking with automatic arena reset
            ├── Contract Law validation (CREATE destination ≤ current depth)
-           └── Unwinding Protocol (Natural/Forced Exit, Loop Reset, Error Unwind)
+           ├── Unwinding Protocol (Natural/Forced Exit, Loop Reset, Error Unwind)
+           └── FFI declare IR — external function declarations for runtime_bridge
 ```
 
 ### Memory Architecture

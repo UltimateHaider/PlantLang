@@ -219,13 +219,15 @@ class ActionDeclarationNode extends AstNode {
    * @param {Array<{name:string,type:string}>} fields.params Declared parameters.
    * @param {Array} fields.bodyStatements Nested AST statement nodes forming
    *        the action's executable body.
+   * @param {boolean} [fields.isExternal] True for FFI declarations (no body).
    * @param {{line,column,depth}} coords
    */
-  constructor({ name, params, bodyStatements }, coords) {
+  constructor({ name, params, bodyStatements, isExternal }, coords) {
     super('ActionDeclaration', coords);
     this.name = name;
     this.params = params || [];
     this.bodyStatements = bodyStatements || [];
+    this.isExternal = !!isExternal;
   }
 }
 
@@ -339,6 +341,44 @@ class DecreaseStatementNode extends AstNode {
   }
 }
 
+class LenCallNode extends AstNode {
+  constructor(arg, coords) {
+    super('LenCall', coords);
+    this.arg = arg;
+  }
+}
+
+class CapCallNode extends AstNode {
+  constructor(arg, coords) {
+    super('CapCall', coords);
+    this.arg = arg;
+  }
+}
+
+class IndexAccessNode extends AstNode {
+  constructor(target, index, coords) {
+    super('IndexAccess', coords);
+    this.target = target;
+    this.index = index;
+  }
+}
+
+class ImportStatementNode extends AstNode {
+  /**
+   * @param {Object} fields
+   * @param {string} fields.path  The imported file path (as written in source).
+   * @param {string} fields.resolvedPath  The resolved absolute path.
+   * @param {AstNode[]} fields.importedStatements  The merged AST nodes from the imported file.
+   * @param {{line,column,depth}} coords
+   */
+  constructor({ path, resolvedPath, importedStatements }, coords) {
+    super('ImportStatement', coords);
+    this.path = path;
+    this.resolvedPath = resolvedPath;
+    this.importedStatements = importedStatements || [];
+  }
+}
+
 module.exports = {
   AstNode,
   ProgramNode,
@@ -346,6 +386,10 @@ module.exports = {
   ShowStatementNode,
   IdentifierNode,
   LiteralNode,
+  LenCallNode,
+  CapCallNode,
+  IndexAccessNode,
+  ImportStatementNode,
   ListenBranchStatementNode,
   ResponseStatementNode,
   WeatherStatementNode,

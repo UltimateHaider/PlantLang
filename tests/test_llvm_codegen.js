@@ -491,5 +491,63 @@ MISSION: SAFE.
 1\\ SHOW x.
 `);
 
+// ── Phase 6: Fat Pointers & Arena-Backed Dynamic Data ─────────────────────────
+test('TX CREATE with literal — fat pointer stores and prints correctly', `
+MISSION: SAFE.
+1\\ CREATE msg(TX) TO "Hello AST".
+1\\ SHOW msg.
+`);
+
+test('TX SET with new string literal', `
+MISSION: SAFE.
+1\\ CREATE msg(TX) TO "hello".
+1\\ SET msg TO "world".
+1\\ SHOW msg.
+`);
+
+test('len() intrinsic on TX returns correct length', `
+MISSION: SAFE.
+1\\ CREATE msg(TX) TO "Hello".
+1\\ SHOW len(msg).
+`);
+
+test('cap() intrinsic on TX returns capacity >= length', `
+MISSION: SAFE.
+1\\ CREATE msg(TX) TO "Hi".
+1\\ SHOW cap(msg).
+`);
+
+test('index access x[0] returns first character', `
+MISSION: SAFE.
+1\\ CREATE msg(TX) TO "ABC".
+1\\ SHOW msg[0].
+`);
+
+test('index access last character', `
+MISSION: SAFE.
+1\\ CREATE msg(TX) TO "ABC".
+1\\ SHOW msg[2].
+`);
+
+test('TX string concatenation with fat pointers', `
+MISSION: SAFE.
+1\\ CREATE a(TX) TO "Hello ".
+1\\ CREATE b(TX) TO "World".
+1\\ SHOW a + b.
+`);
+
+test('CREATE empty TX, then SET to value', `
+MISSION: SAFE.
+1\\ CREATE msg(TX).
+1\\ SET msg TO "initialized".
+1\\ SHOW msg.
+`);
+
+test('len() of empty TX is 0', `
+MISSION: SAFE.
+1\\ CREATE msg(TX).
+1\\ SHOW len(msg).
+`);
+
 console.log(`\n${passed} passed, ${failed} failed, ${skipped} skipped`);
 process.exit(failed > 0 ? 1 : 0);

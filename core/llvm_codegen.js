@@ -51,13 +51,16 @@ class CodegenError extends Error {
 const LLVM_TYPE = {
   NUM:  'i64',
   SCL:  'double',
-  TX:   'i8*',
+  TX:   '%fat_ptr',   // { i8* ptr, i64 len, i64 cap }
   FACT: 'i1',
 };
 
 function llvmType(plType) {
   return LLVM_TYPE[plType] || null; // null = unsupported (LIST/MAP/INSTANCE/VEIN)
 }
+
+// Fat pointer field accessors (expressed as types for extractvalue/insertvalue)
+const FAT_PTR = { PTR: 0, LEN: 1, CAP: 2 };
 
 const RESERVED = new Set([
   'main', 'printf', 'malloc', 'free', 'realloc', 'strlen', 'strcpy',
@@ -75,6 +78,7 @@ function llvmTypeSize(lt) {
   if (lt === 'i16') return 2;
   if (lt === 'i8' || lt === 'i1') return 1;
   if (lt === 'i8*') return 8;
+  if (lt === '%fat_ptr') return 24; // { i8*, i64, i64 } = 8+8+8
   return 8; // default pointer-sized
 }
 
@@ -138,13 +142,18 @@ class Module {
   arenaAlloc(depth, size) {
     this.usesArena = true;
     const d = String(depth);
-    const s = String(size);
     const offPtr = this.freshReg();
     this.emit(`${offPtr} = getelementptr inbounds [${this.arenaDepthCap} x i64], [${this.arenaDepthCap} x i64]* @arena_offsets, i64 0, i64 ${d}`);
     const oldOff = this.freshReg();
     this.emit(`${oldOff} = load i64, i64* ${offPtr}`);
+    // size can be a number (constant) or an object {reg, type}
+    const sizeVal = (typeof size === 'object' && size !== null) ? size.reg : String(size);
     const newOff = this.freshReg();
-    this.emit(`${newOff} = add i64 ${oldOff}, ${s}`);
+    if (typeof size === 'object' && size !== null) {
+      this.emit(`${newOff} = add i64 ${oldOff}, ${size.reg}`);
+    } else {
+      this.emit(`${newOff} = add i64 ${oldOff}, ${String(size)}`);
+    }
     this.emit(`store i64 ${newOff}, i64* ${offPtr}`);
     const base = this.freshReg();
     this.emit(`${base} = getelementptr inbounds [${this.arenaDepthCap} x [${this.arenaSlotSize} x i8]], [${this.arenaDepthCap} x [${this.arenaSlotSize} x i8]]* @arena_memory, i64 0, i64 ${d}, i64 ${oldOff}`);
@@ -170,6 +179,67 @@ class Module {
     const offPtr = this.freshReg();
     this.emit(`${offPtr} = getelementptr inbounds [${this.arenaDepthCap} x i64], [${this.arenaDepthCap} x i64]* @arena_offsets, i64 0, i64 ${d}`);
     this.emit(`store i64 0, i64* ${offPtr}`);
+  }
+
+  // ── Fat Pointer helpers ────────────────────────────────────────────
+  // Build a %fat_ptr struct from ptr (i8*), len (i64), cap (i64)
+  buildFatPtr(ptrReg, lenVal, capVal) {
+    const fp = this.freshReg();
+    this.emit(`${fp} = insertvalue %fat_ptr undef, i8* ${ptrReg}, ${FAT_PTR.PTR}`);
+    const fp2 = this.freshReg();
+    this.emit(`${fp2} = insertvalue %fat_ptr ${fp}, i64 ${lenVal}, ${FAT_PTR.LEN}`);
+    const fp3 = this.freshReg();
+    this.emit(`${fp3} = insertvalue %fat_ptr ${fp2}, i64 ${capVal}, ${FAT_PTR.CAP}`);
+    return fp3;
+  }
+
+  // Extract the i8* ptr from a %fat_ptr
+  extractPtr(fpReg) {
+    const reg = this.freshReg();
+    this.emit(`${reg} = extractvalue %fat_ptr ${fpReg}, ${FAT_PTR.PTR}`);
+    return reg;
+  }
+
+  // Extract the i64 len from a %fat_ptr
+  extractLen(fpReg) {
+    const reg = this.freshReg();
+    this.emit(`${reg} = extractvalue %fat_ptr ${fpReg}, ${FAT_PTR.LEN}`);
+    return reg;
+  }
+
+  // Extract the i64 cap from a %fat_ptr
+  extractCap(fpReg) {
+    const reg = this.freshReg();
+    this.emit(`${reg} = extractvalue %fat_ptr ${fpReg}, ${FAT_PTR.CAP}`);
+    return reg;
+  }
+
+  // Emit a bounds-check for index access: idx < len, else educational error
+  // Returns a label name to continue at (for the ok-branch)
+  emitBoundsCheck(ptrReg, lenReg, idxReg, node, context) {
+    const okLabel = this.freshLabel('bounds.ok');
+    const errLabel = this.freshLabel('bounds.err');
+    const cmp = this.freshReg();
+    // Use unsigned compare: idx < len (works for non-negative idx)
+    this.emit(`${cmp} = icmp ult i64 ${idxReg}, ${lenReg}`);
+    this.emit(`br i1 ${cmp}, label %${okLabel}, label %${errLabel}`);
+
+    this.emitLabel(errLabel);
+    this.ensureWeatherGlobals();
+    const errMsg = this.addStringConstant(
+      `${context}: index out of bounds — len is `);
+    const idxMsg = this.addStringConstant(` but index was `);
+    const msgGep = this.freshReg();
+    this.emit(`${msgGep} = getelementptr inbounds [${errMsg.len} x i8], [${errMsg.len} x i8]* ${errMsg.name}, i64 0, i64 0`);
+    // Build a human-readable error message using printf to a static buffer
+    // For simplicity, set the weather message and type
+    this.emit(`store i8* ${msgGep}, i8** @_weather_msg`);
+    this.emit(`store i64 6, i64* @_weather_type`); // SEED_STORM type
+    this.emit(`store i1 true, i1* @_weather_flag`);
+    this.emit(`br label %${okLabel}`); // continue (but flag is set)
+
+    this.emitLabel(okLabel);
+    return okLabel;
   }
 }
 
@@ -330,10 +400,17 @@ class ExprCompiler {
       return { value: { reg: t.value, type: isFloat ? 'SCL' : 'NUM' }, pos: pos + 1 };
     }
     if (t.type === 'STRING') {
-      const { name, len } = this.mod.addStringConstant(t.value);
-      const reg = this.mod.freshReg();
-      this.mod.emit(`${reg} = getelementptr inbounds [${len} x i8], [${len} x i8]* ${name}, i64 0, i64 0`);
-      return { value: { reg, type: 'TX' }, pos: pos + 1 };
+      const m = this.mod;
+      const strVal = t.value;
+      const byteLen = Buffer.byteLength(strVal, 'utf8');
+      const cap = byteLen + 1;
+      const { name: gname, len: constLen } = m.addStringConstant(strVal);
+      const srcPtr = m.freshReg();
+      m.emit(`${srcPtr} = getelementptr inbounds [${constLen} x i8], [${constLen} x i8]* ${gname}, i64 0, i64 0`);
+      const bufPtr = m.arenaAlloc(m.currentDepth, cap);
+      m.emit(`call i8* @strcpy(i8* ${bufPtr}, i8* ${srcPtr})`);
+      const fpReg = m.buildFatPtr(bufPtr, String(byteLen), String(cap));
+      return { value: { reg: fpReg, type: 'TX' }, pos: pos + 1 };
     }
     if (t.type === 'BOOL') {
       return { value: { reg: t.value === 'TRUE' ? '1' : '0', type: 'FACT' }, pos: pos + 1 };
@@ -344,9 +421,10 @@ class ExprCompiler {
         this.mod.error(`"${t.value}" was not declared`, this.node);
         return { value: { reg: '0', type: 'NUM' }, pos: pos + 1 };
       }
-      const reg = this.mod.freshReg();
+      const m = this.mod;
       const lt = llvmType(info.plType);
-      this.mod.emit(`${reg} = load ${lt}, ${lt}* ${info.ptr}`);
+      const reg = m.freshReg();
+      m.emit(`${reg} = load ${lt}, ${lt}* ${info.ptr}`);
       return { value: { reg, type: info.plType }, pos: pos + 1 };
     }
 
@@ -438,10 +516,13 @@ class ExprCompiler {
       if (op !== '==' && op !== '!=') {
         this.mod.error(`Cannot use ${op} on TX values — only IS / IS NOT supported for text`, this.node);
       }
-      const cmpReg = this.mod.freshReg();
-      this.mod.emit(`${cmpReg} = call i32 @strcmp(i8* ${left.reg}, i8* ${right.reg})`);
-      const reg = this.mod.freshReg();
-      this.mod.emit(`${reg} = icmp ${op === '==' ? 'eq' : 'ne'} i32 ${cmpReg}, 0`);
+      const m = this.mod;
+      const leftPtr = left.type === 'TX' ? m.extractPtr(left.reg) : left.reg;
+      const rightPtr = right.type === 'TX' ? m.extractPtr(right.reg) : right.reg;
+      const cmpReg = m.freshReg();
+      m.emit(`${cmpReg} = call i32 @strcmp(i8* ${leftPtr}, i8* ${rightPtr})`);
+      const reg = m.freshReg();
+      m.emit(`${reg} = icmp ${op === '==' ? 'eq' : 'ne'} i32 ${cmpReg}, 0`);
       return reg;
     }
     const { l, r, type } = this.promote(left, right);
@@ -453,29 +534,44 @@ class ExprCompiler {
   }
 
   emitStringConcat(left, right) {
-    const leftStr = this.toTXValue(left);
-    const rightStr = this.toTXValue(right);
+    const m = this.mod;
+    // Get ptr and len for left operand
+    let leftPtr, leftLen;
+    if (left.type === 'TX') {
+      leftPtr = m.extractPtr(left.reg);
+      leftLen = m.extractLen(left.reg);
+    } else {
+      leftPtr = this.toTXValue(left);
+      leftLen = m.freshReg();
+      m.emit(`${leftLen} = call i64 @strlen(i8* ${leftPtr})`);
+    }
+    // Get ptr and len for right operand
+    let rightPtr, rightLen;
+    if (right.type === 'TX') {
+      rightPtr = m.extractPtr(right.reg);
+      rightLen = m.extractLen(right.reg);
+    } else {
+      rightPtr = this.toTXValue(right);
+      rightLen = m.freshReg();
+      m.emit(`${rightLen} = call i64 @strlen(i8* ${rightPtr})`);
+    }
 
-    const lenL = this.mod.freshReg();
-    this.mod.emit(`${lenL} = call i64 @strlen(i8* ${leftStr})`);
-    const lenR = this.mod.freshReg();
-    this.mod.emit(`${lenR} = call i64 @strlen(i8* ${rightStr})`);
-    const total = this.mod.freshReg();
-    this.mod.emit(`${total} = add i64 ${lenL}, ${lenR}`);
-    const totalPlus1 = this.mod.freshReg();
-    this.mod.emit(`${totalPlus1} = add i64 ${total}, 1`);
-    const buf = this.mod.freshReg();
-    this.mod.emit(`${buf} = call i8* @malloc(i64 ${totalPlus1})`);
-    this.mod.emit(`call i8* @strcpy(i8* ${buf}, i8* ${leftStr})`);
-    this.mod.emit(`call i8* @strcat(i8* ${buf}, i8* ${rightStr})`);
-    return { reg: buf, type: 'TX' };
+    const total = m.freshReg();
+    m.emit(`${total} = add i64 ${leftLen}, ${rightLen}`);
+    const cap = m.freshReg();
+    m.emit(`${cap} = add i64 ${total}, 1`);
+    // Allocate from arena (uses current module depth)
+    const buf = m.arenaAlloc(m.currentDepth, { reg: cap, type: 'NUM' }); // FIXME
+    m.emit(`call i8* @strcpy(i8* ${buf}, i8* ${leftPtr})`);
+    m.emit(`call i8* @strcat(i8* ${buf}, i8* ${rightPtr})`);
+    const fpReg = m.buildFatPtr(buf, total, cap);
+    return { reg: fpReg, type: 'TX' };
   }
 
   toTXValue(val) {
-    if (val.type === 'TX') return val.reg;
+    if (val.type === 'TX') return this.mod.extractPtr(val.reg);
     this.mod.usesMath = val.type === 'SCL' || this.mod.usesMath;
-    const buf = this.mod.freshReg();
-    this.mod.emit(`${buf} = call i8* @malloc(i64 64)`);
+    const buf = this.mod.arenaAlloc(this.mod.currentDepth, 64);
     if (val.type === 'NUM') {
       const { name, len } = this.mod.addStringConstant('%ld');
       const fmt = this.mod.freshReg();
@@ -572,7 +668,8 @@ class LLVMGenerator {
   constructor() {
     this.mod = new Module();
     this.fnDefs = [];   // { name, params, ir: string[], llvmParamList: string[] }
-    this.fnInfos = new Map(); // name -> { params, bodyStatements, line, column }
+    this.fnInfos = new Map(); // name -> { params, bodyStatements, line, column, isExternal }
+    this.fnDeclares = []; // { name, params, llvmParamList } for extern FFI actions
     this.shelterStack = [];
     // Each entry: { unwindDepth, shelterClause, handlerLabel }
   }
@@ -627,6 +724,7 @@ class LLVMGenerator {
           bodyStatements: node.bodyStatements,
           line: node.line,
           column: node.column,
+          isExternal: !!node.isExternal,
         });
       }
     }
@@ -694,19 +792,9 @@ class LLVMGenerator {
     m.currentDepth = nodeDepth;
   }
 
-  // ── ACTION function definition ─────────────────────────────────────────────
+  // ── ACTION function definition / declaration ──────────────────────────────
   genFnDef(name, info) {
     const m = this.mod;
-    const savedBody = m.body;
-    const savedScope = m.scope;
-    const savedReg = m.regCounter;
-    const savedBlock = m.blockCounter;
-    // strCounter is NOT saved/restored — string globals are shared module-wide
-
-    m.body = [];
-    m.scope = new Map();
-    m.regCounter = 0;
-    m.blockCounter = 0;
 
     const llvmParams = [];
     for (const p of info.params) {
@@ -717,6 +805,23 @@ class LLVMGenerator {
       }
       llvmParams.push(`${lt} %${safeName(p.name)}`);
     }
+
+    // FFI external actions → emit declare instead of define
+    if (info.isExternal) {
+      this.fnDeclares.push({ name, params: info.params, llvmParamList: llvmParams });
+      return;
+    }
+
+    const savedBody = m.body;
+    const savedScope = m.scope;
+    const savedReg = m.regCounter;
+    const savedBlock = m.blockCounter;
+    // strCounter is NOT saved/restored — string globals are shared module-wide
+
+    m.body = [];
+    m.scope = new Map();
+    m.regCounter = 0;
+    m.blockCounter = 0;
 
     m.emit('entry:');
     m.currentDepth = 0;
@@ -837,10 +942,14 @@ class LLVMGenerator {
   genGiveStatement(node) {
     const m = this.mod;
 
-    // 1. Compile the return value FIRST (before any arena cleanup), since
-    //    string/TX operands may allocate heap buffers via @malloc, not arenas.
-    const ec = new ExprCompiler(m, node, this);
-    const val = ec.compileExpr(node.valueExpr);
+    // 1. Compile the return value FIRST (before any arena cleanup)
+    let val;
+    if (typeof node.valueExpr === 'string') {
+      const ec = new ExprCompiler(m, node, this);
+      val = ec.compileExpr(node.valueExpr);
+    } else {
+      val = this.compileAstExpr(node.valueExpr);
+    }
 
     // 2. Arena Unwinding: Forced Exit cleanup chain per Article IX.
     //    Reset all depth levels > 0 from deepest to shallowest, ensuring
@@ -861,8 +970,9 @@ class LLVMGenerator {
       returnReg = m.freshReg();
       m.emit(`${returnReg} = bitcast double ${val.reg} to i64`);
     } else if (val.type === 'TX') {
+      const ptrReg = m.extractPtr(val.reg);
       returnReg = m.freshReg();
-      m.emit(`${returnReg} = ptrtoint i8* ${val.reg} to i64`);
+      m.emit(`${returnReg} = ptrtoint i8* ${ptrReg} to i64`);
     } else if (val.type === 'FACT') {
       returnReg = m.freshReg();
       m.emit(`${returnReg} = zext i1 ${val.reg} to i64`);
@@ -890,6 +1000,11 @@ class LLVMGenerator {
     lines.push('declare i8* @strcat(i8*, i8*)');
     lines.push('declare i32 @strcmp(i8*, i8*)');
     if (m.usesMath) lines.push('declare double @pow(double, double)');
+    // User FFI external declarations
+    for (const fd of this.fnDeclares) {
+      const llvmRetType = 'i64';
+      lines.push(`declare ${llvmRetType} @${safeName(fd.name)}(${fd.llvmParamList.join(', ')})`);
+    }
     lines.push('');
 
     // Arena globals (emitted lazily if any code uses arena allocation)
@@ -898,6 +1013,10 @@ class LLVMGenerator {
       lines.push(`@arena_memory = global [${m.arenaDepthCap} x [${m.arenaSlotSize} x i8]] zeroinitializer`);
       lines.push('');
     }
+
+    // Fat pointer struct type for dynamic data (TX, future arrays)
+    lines.push('%fat_ptr = type { i8*, i64, i64 }');
+    lines.push('');
 
     for (const g of m.globals) lines.push(g);
     if (m.globals.length) lines.push('');
@@ -919,6 +1038,98 @@ class LLVMGenerator {
     lines.push('');
 
     return { ir: lines.join('\n'), errors: m.errors };
+  }
+
+  /** Compile any AST expression node to { reg, type } */
+  compileAstExpr(node) {
+    if (!node) return { reg: '0', type: 'NUM' };
+    const m = this.mod;
+
+    if (node.type === 'Identifier') {
+      const info = m.scope.get(node.name);
+      if (!info) { m.error(`"${node.name}" was not declared`, node); return { reg: '0', type: 'NUM' }; }
+      const reg = m.freshReg();
+      const lt = llvmType(info.plType);
+      m.emit(`${reg} = load ${lt}, ${lt}* ${info.ptr}`);
+      return { reg, type: info.plType };
+    }
+
+    if (node.type === 'Literal') {
+      if (node.literalType === 'NUMBER') return { reg: String(node.value), type: 'NUM' };
+      if (node.literalType === 'STRING') {
+        const strVal = node.value;
+        const byteLen = Buffer.byteLength(strVal, 'utf8');
+        const cap = byteLen + 1;
+        const { name: gname, len: constLen } = m.addStringConstant(strVal);
+        const srcPtr = m.freshReg();
+        m.emit(`${srcPtr} = getelementptr inbounds [${constLen} x i8], [${constLen} x i8]* ${gname}, i64 0, i64 0`);
+        const bufPtr = m.arenaAlloc(m.currentDepth, cap);
+        m.emit(`call i8* @strcpy(i8* ${bufPtr}, i8* ${srcPtr})`);
+        const fpReg = m.buildFatPtr(bufPtr, String(byteLen), String(cap));
+        return { reg: fpReg, type: 'TX' };
+      }
+      if (node.literalType === 'BOOLEAN') return { reg: node.value ? '1' : '0', type: 'FACT' };
+      if (node.literalType === 'RAW_EXPR') {
+        const ec = new ExprCompiler(m, node, this);
+        return ec.compileExpr(node.value);
+      }
+      return { reg: '0', type: 'NUM' };
+    }
+
+    if (node.type === 'LenCall') {
+      const arg = this.compileAstExpr(node.arg);
+      if (arg.type !== 'TX') {
+        m.error(`len() requires a TX argument, got ${arg.type}`, node);
+        return { reg: '0', type: 'NUM' };
+      }
+      const lenReg = m.extractLen(arg.reg);
+      return { reg: lenReg, type: 'NUM' };
+    }
+
+    if (node.type === 'CapCall') {
+      const arg = this.compileAstExpr(node.arg);
+      if (arg.type !== 'TX') {
+        m.error(`cap() requires a TX argument, got ${arg.type}`, node);
+        return { reg: '0', type: 'NUM' };
+      }
+      const capReg = m.extractCap(arg.reg);
+      return { reg: capReg, type: 'NUM' };
+    }
+
+    if (node.type === 'IndexAccess') {
+      const target = this.compileAstExpr(node.target);
+      if (target.type !== 'TX') {
+        m.error(`Index access requires a TX target, got ${target.type}`, node);
+        return { reg: target.reg, type: 'TX' };
+      }
+      const idx = this.compileAstExpr(node.index);
+      if (idx.type !== 'NUM') {
+        m.error(`Index must be a NUM, got ${idx.type}`, node);
+        return { reg: target.reg, type: 'TX' };
+      }
+      const ptr = m.extractPtr(target.reg);
+      const lenReg = m.extractLen(target.reg);
+      m.emitBoundsCheck(ptr, lenReg, idx.reg, node, 'TX index access');
+      const charPtr = m.freshReg();
+      m.emit(`${charPtr} = getelementptr inbounds i8, i8* ${ptr}, i64 ${idx.reg}`);
+      const charVal = m.freshReg();
+      m.emit(`${charVal} = load i8, i8* ${charPtr}`);
+      const singleBuf = m.arenaAlloc(m.currentDepth, 2);
+      m.emit(`store i8 ${charVal}, i8* ${singleBuf}`);
+      const nullReg = m.freshReg();
+      m.emit(`${nullReg} = getelementptr inbounds i8, i8* ${singleBuf}, i64 1`);
+      m.emit(`store i8 0, i8* ${nullReg}`);
+      const fpReg = m.buildFatPtr(singleBuf, '1', '2');
+      return { reg: fpReg, type: 'TX' };
+    }
+
+    if (typeof node === 'string') {
+      const ec = new ExprCompiler(m, node, this);
+      return ec.compileExpr(node);
+    }
+
+    m.unsupported(node, `expression type ${node.type}`);
+    return { reg: '0', type: 'NUM' };
   }
 
   genStatement(node) {
@@ -996,10 +1207,24 @@ class LLVMGenerator {
     const ve = node.valueExpr;
     if (ve && ve.type === 'Literal') {
       if (ve.literalType === 'STRING') {
-        const { name: gname, len } = m.addStringConstant(ve.value);
-        const reg = m.freshReg();
-        m.emit(`${reg} = getelementptr inbounds [${len} x i8], [${len} x i8]* ${gname}, i64 0, i64 0`);
-        val = { reg, type: 'TX' };
+        if (node.varType === 'TX') {
+          // TX with string literal: build a fat pointer with arena-backed buffer
+          const strVal = ve.value;
+          const byteLen = Buffer.byteLength(strVal, 'utf8');
+          const cap = byteLen + 1;
+          const { name: gname, len: constLen } = m.addStringConstant(strVal);
+          const srcPtr = m.freshReg();
+          m.emit(`${srcPtr} = getelementptr inbounds [${constLen} x i8], [${constLen} x i8]* ${gname}, i64 0, i64 0`);
+          const bufPtr = m.arenaAlloc(depth, cap);
+          m.emit(`call i8* @strcpy(i8* ${bufPtr}, i8* ${srcPtr})`);
+          const fpReg = m.buildFatPtr(bufPtr, String(byteLen), String(cap));
+          val = { reg: fpReg, type: 'TX' };
+        } else {
+          const { name: gname, len } = m.addStringConstant(ve.value);
+          const reg = m.freshReg();
+          m.emit(`${reg} = getelementptr inbounds [${len} x i8], [${len} x i8]* ${gname}, i64 0, i64 0`);
+          val = { reg, type: 'TX' };
+        }
       } else if (ve.literalType === 'NUMBER') {
         val = { reg: String(ve.value), type: Number.isInteger(ve.value) ? 'NUM' : 'SCL' };
       } else if (ve.literalType === 'BOOLEAN') {
@@ -1010,15 +1235,19 @@ class LLVMGenerator {
         val = { reg: '0', type: node.varType };
       }
     } else if (ve && ve.type === 'Identifier') {
-      // e.g. "CREATE countdown(NUM) TO i." where the parser produced a
-      // plain Identifier node (single bare identifier) instead of wrapping
-      // it in a RAW_EXPR Literal — must still resolve it via the variable
-      // scope, exactly like the RAW_EXPR/compileExpr path does.
       val = ec.compileExpr(ve.name || ve.identifier || ve.value);
     } else if (typeof ve === 'string') {
       val = ec.compileExpr(ve);
+    } else if (ve && (ve.type === 'LenCall' || ve.type === 'CapCall' || ve.type === 'IndexAccess')) {
+      val = this.compileAstExpr(ve);
+    } else if (node.varType === 'TX') {
+      // Empty TX: zero-length fat pointer with a null-terminated empty string
+      const emptyBuf = m.arenaAlloc(depth, 1);
+      m.emit(`store i8 0, i8* ${emptyBuf}`);
+      const fpReg = m.buildFatPtr(emptyBuf, '0', '1');
+      val = { reg: fpReg, type: 'TX' };
     } else {
-      val = { reg: node.varType === 'TX' ? 'null' : '0', type: node.varType };
+      val = { reg: '0', type: node.varType };
     }
 
     const coerced = this.coerce(val, node.varType, node);
@@ -1039,14 +1268,18 @@ class LLVMGenerator {
       return reg;
     }
     if (declaredType === 'NUM' && val.type === 'TX') {
+      const ptr = this.mod.extractPtr(val.reg);
       const reg = this.mod.freshReg();
-      this.mod.emit(`${reg} = ptrtoint i8* ${val.reg} to i64`);
+      this.mod.emit(`${reg} = ptrtoint i8* ${ptr} to i64`);
       return reg;
     }
     if (declaredType === 'TX' && val.type === 'NUM') {
-      const reg = this.mod.freshReg();
-      this.mod.emit(`${reg} = inttoptr i64 ${val.reg} to i8*`);
-      return reg;
+      const m = this.mod;
+      const ptrReg = m.freshReg();
+      m.emit(`${ptrReg} = inttoptr i64 ${val.reg} to i8*`);
+      // Build a minimal fat pointer: ptr = inttoptr, len = 0, cap = 0
+      const fpReg = m.buildFatPtr(ptrReg, '0', '0');
+      return fpReg;
     }
     if (declaredType === 'NUM' && val.type === 'FACT') {
       const reg = this.mod.freshReg();
@@ -1059,29 +1292,42 @@ class LLVMGenerator {
       return reg;
     }
     if (declaredType === 'TX' && val.type === 'FACT') {
-      const reg = this.mod.freshReg();
-      this.mod.emit(`${reg} = zext i1 ${val.reg} to i64`);
-      const ptr = this.mod.freshReg();
-      this.mod.emit(`${ptr} = inttoptr i64 ${reg} to i8*`);
-      return ptr;
+      const m = this.mod;
+      const reg = m.freshReg();
+      m.emit(`${reg} = zext i1 ${val.reg} to i64`);
+      const ptrReg = m.freshReg();
+      m.emit(`${ptrReg} = inttoptr i64 ${reg} to i8*`);
+      const fpReg = m.buildFatPtr(ptrReg, '0', '0');
+      return fpReg;
     }
     if (declaredType === 'FACT' && val.type === 'TX') {
-      const reg = this.mod.freshReg();
-      this.mod.emit(`${reg} = ptrtoint i8* ${val.reg} to i64`);
-      const bool = this.mod.freshReg();
-      this.mod.emit(`${bool} = icmp ne i64 ${reg}, 0`);
+      const m = this.mod;
+      const ptr = m.extractPtr(val.reg);
+      const reg = m.freshReg();
+      m.emit(`${reg} = ptrtoint i8* ${ptr} to i64`);
+      const bool = m.freshReg();
+      m.emit(`${bool} = icmp ne i64 ${reg}, 0`);
       return bool;
     }
     this.mod.error(`Type mismatch: declared ${declaredType} but value is ${val.type}`, node);
-    return declaredType === 'TX' ? 'null' : '0';
+    if (declaredType === 'TX') {
+      return `zeroinitializer`; // zero-initialized %fat_ptr
+    }
+    return '0';
   }
 
   genSet(node) {
     const m = this.mod;
     const info = m.scope.get(node.identifier);
     if (!info) { m.error(`SET: "${node.identifier}" was not declared with CREATE`, node); return; }
-    const ec = new ExprCompiler(m, node, this);
-    const val = ec.compileExpr(node.valueExpr);
+    let val;
+    const ve = node.valueExpr;
+    if (typeof ve === 'string') {
+      const ec = new ExprCompiler(m, node, this);
+      val = ec.compileExpr(ve);
+    } else {
+      val = this.compileAstExpr(ve);
+    }
     const coerced = this.coerce(val, info.plType, node);
     const lt = llvmType(info.plType);
     m.emit(`store ${lt} ${coerced}, ${lt}* ${info.ptr}`);
@@ -1135,6 +1381,11 @@ class LLVMGenerator {
       this.emitPrintValue(val);
       return;
     }
+    if (expr.type === 'LenCall' || expr.type === 'CapCall' || expr.type === 'IndexAccess') {
+      const val = this.compileAstExpr(expr);
+      this.emitPrintValue(val);
+      return;
+    }
     m.unsupported(node, 'SHOW with this expression form');
   }
 
@@ -1158,7 +1409,7 @@ class LLVMGenerator {
   emitPrintValue(val) {
     const m = this.mod;
     let fmtStr, castVal = val.reg;
-    if (val.type === 'TX') { fmtStr = '%s\n'; }
+    if (val.type === 'TX') { castVal = m.extractPtr(val.reg); fmtStr = '%s\n'; }
     else if (val.type === 'NUM') { fmtStr = '%ld\n'; }
     else if (val.type === 'SCL') { fmtStr = '%.15g\n'; m.usesMath = true; }
     else if (val.type === 'FACT') {
@@ -1382,8 +1633,14 @@ class LLVMGenerator {
       if (sh.clause.errVar) {
         const msgReg = m.freshReg();
         m.emit(`${msgReg} = load i8*, i8** @_weather_msg`);
+        // Get the length of the message
+        const msgLen = m.freshReg();
+        m.emit(`${msgLen} = call i64 @strlen(i8* ${msgReg})`);
+        const msgCap = m.freshReg();
+        m.emit(`${msgCap} = add i64 ${msgLen}, 1`);
         const ptr = m.arenaAllocTyped('TX', unwindDepth);
-        m.emit(`store i8* ${msgReg}, i8** ${ptr}`);
+        const fpReg = m.buildFatPtr(msgReg, msgLen, msgCap);
+        m.emit(`store %fat_ptr ${fpReg}, %fat_ptr* ${ptr}`);
         m.scope.set(sh.clause.errVar, { ptr, plType: 'TX', depth: unwindDepth });
       }
 

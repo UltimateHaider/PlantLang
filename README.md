@@ -1,4 +1,4 @@
-# PlantLang Language Specification & Ecosystem v0.23.0
+# PlantLang Language Specification & Ecosystem v0.24.0
 
 **PlantLang** is a human-centric, prose-based programming language engineered for both high-level readability and native-level execution performance. It transforms "prose-like" syntax into highly optimized machine code via the LLVM compiler infrastructure.
 
@@ -25,6 +25,14 @@ PlantLang utilizes a strict type system for safety and performance:
 * **`SEASON`**: Condition-based while loops.
 * **`WEATHER / SHELTER / CALM`**: Deterministic exception handling — captures runtime errors (e.g., division by zero) with typed storm matching and recovery blocks.
 * **`ACTION / REAP / GIVE`**: Function definitions, calls, and returns — supports recursion, SCL parameters, and TX return values.
+* **`IMPORT`**: Multi-file module system — load and merge external `.plnt` files with cycle detection.
+* **FFI (`-> external`)**: Declare foreign C functions for direct native interop.
+
+### Standard Library (`std/`)
+PlantLang ships with a built-in standard library accessed via `IMPORT "std/..."`:
+* **`std/io.plnt`** — `print`, `println` for console output
+* **`std/string.plnt`** — `len`, `upper`, `lower`, `trim`, `contains`, `split`, `replace`, `concat`
+* **`std/prelude.plnt`** — auto-injected core definitions (TRUE, FALSE, _BOOT)
 
 ### Rooted Depth System (Memory Model)
 PlantLang uses a compile-time depth prefix (`\N`) before every statement to declare its scope level. Each depth owns a dedicated **64KB arena slab** (`Arena_N`), enabling deterministic bump-allocation with no garbage collector:
@@ -43,7 +51,7 @@ Arenas are automatically reclaimed:
 
 ---
 
-## 3. Engineering Architecture (The v0.23.0 Stack)
+## 3. Engineering Architecture (The v0.24.0 Stack)
 The ecosystem is built on a modular, industrial-grade pipeline:
 
 1.  **Core Interpreter (Chloroplast Engine):**
@@ -58,8 +66,16 @@ The ecosystem is built on a modular, industrial-grade pipeline:
     * Integrates with `llc` (LLVM) and `gcc` for final object linking.
 3.  **CodeWords Service API:**
     * A sandboxed HTTP environment using process-level isolation for safe, distributed execution.
-4.  **Web REPL UI:**
+ 4.  **Web REPL UI:**
     * A single-page, browser-native IDE featuring a "settling ink" visualization to reflect the language's prose-based identity.
+ 5.  **Module System & FFI:**
+    * `IMPORT` statement with relative/absolute/std path resolution and cycle detection.
+    * FFI declarations (`ACTION ... -> external.`) for calling native C functions.
+    * AST merging at parse time — imported files are spliced into the importing program.
+ 6.  **Standard Library (`std/`):**
+    * Three core modules: `io.plnt`, `string.plnt`, `prelude.plnt`.
+    * Auto-injected prelude on every parse.
+    * Runtime C bridge (`core/runtime_bridge.c`) implementing FFI targets for I/O and string operations.
 
 ---
 
@@ -86,6 +102,8 @@ PlantLang employs a state-of-the-art compilation chain:
 | **Output** | `SHOW x.` | Print values to standard output. |
 | **Function** | `ACTION f(n(NUM)),` ... `GIVE n.` | Define and return from functions. |
 | **Function Call** | `REAP r FROM f, x.` | Call a function and store the result. |
+| **FFI Declaration** | `ACTION my_fn(n(NUM)) -> external.` | Declare a native C function for FFI. |
+| **Import Module** | `IMPORT "std/io".` | Load and merge an external `.plnt` file. |
 | **Try/Catch** | `WEATHER,` ... `SHELTER ZERO_STORM AS err,` ... `CALM.` | Catch runtime errors with typed handlers. |
 | **Loop** | `CYCLE i FROM 1 TO 10,` ... | Numeric iteration. |
 | **While** | `SEASON condition,` ... | Condition-based loop. |
@@ -95,9 +113,11 @@ PlantLang employs a state-of-the-art compilation chain:
 ---
 
 ## 6. QA & Quality Assurance
-The **v0.23.0** release is verified by an automated regression suite:
-* **~200 Integration Tests** across four test suites (LLVM backend, C codegen, parser migration, diagnostics).
-* **LLVM Backend**: 37 smoke tests covering CREATE/SHOW, arithmetic, strings, comparisons, IF/CYCLE/SEASON, ACTION/REAP/GIVE (recursion, SCL params, TX returns), and WEATHER/SHELTER exception handling.
+The **v0.24.0** release is verified by an automated regression suite:
+* **~300+ Total Assertions** across seven test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7 — Module System & FFI, Phase 8 — Standard Library).
+* **LLVM Backend**: 46 smoke tests covering CREATE/SHOW, arithmetic, strings, comparisons, IF/CYCLE/SEASON, ACTION/REAP/GIVE (recursion, SCL params, TX returns), WEATHER/SHELTER exception handling, and TX fat-pointer operations.
+* **Module System**: 30 test groups covering IMPORT parsing, cycle detection, path resolution, error messages, and FFI syntax.
+* **Standard Library**: 8 integration tests covering std/ path resolution, I/O and string module parsing, prelude injection, and end-to-end FFI calls.
 * **Parity Guarantee**: Exact output matching between the Interpreter and Native Compiler via `llc` + `gcc`.
 * **Performance**: ~15,000x execution speedup on iterative loops via LLVM optimization compared to the JS interpreter.
 
@@ -105,7 +125,7 @@ The **v0.23.0** release is verified by an automated regression suite:
 
 ## 7. Roadmap & Future Scope
 
-### ✅ Complete (v0.23.0)
+### ✅ Complete (v0.24.0)
 - Primitives (`NUM`, `SCL`, `TX`, `FACT`)
 - Control Flow (`IF`, `CYCLE`, `SEASON`)
 - Functions (`ACTION`, `REAP`, `GIVE` with recursion)
@@ -113,15 +133,19 @@ The **v0.23.0** release is verified by an automated regression suite:
 - Rooted Depth System (arena-based deterministic memory)
 - LLVM native compilation with full depth tracking
 - Division-by-zero detection with error propagation
+- **Module System** (`IMPORT` with cycle detection and AST merging)
+- **FFI** (`ACTION ... -> external.` for native C interop)
+- **Standard Library Foundation** (`std/io`, `std/string`, `std/prelude`)
+- **Core Runtime Bridge** (`core/runtime_bridge.c` — 10 FFI targets)
 
-### 🔜 In Progress / Planned
+### 🔜 In Progress / Planned (v0.25.0)
 - `LIST`, `MAP` collection types
 - `SPECIES` / `BLOOM` object-oriented constructs
+- Expanded standard library (math, lists, maps modules)
 - `TAP` file I/O and `HARVEST` networking
-- `WEATHER` conditional blocks
 - `MATCH` pattern matching
 - `PULSE` / `WHENEVER` reactive constructs
 
 ---
 
-*PlantLang v0.23.0 — Compiled via LLVM. Deterministic memory. Prose-native syntax.*
+*PlantLang v0.24.0 — Compiled via LLVM. Modular programs. Standard library.*
