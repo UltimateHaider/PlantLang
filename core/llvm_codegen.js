@@ -17,8 +17,10 @@
  * STILL NOT SUPPORTED in this first LLVM-backend pass (same honesty
  * principle as the old codegen: fail loudly and precisely rather than
  * silently emit broken IR):
- *   LIST, MAP, ACTION/REAP, SPECIES/BLOOM, WEATHER/SHELTER, MATCH, HARVEST,
+ *   LIST, MAP, SPECIES/BLOOM, WEATHER/SHELTER, MATCH, HARVEST,
  *   LISTEN BRANCH, VERIFY/SUITE, PULSE/WHENEVER, BRAID, TAP/ABSORB/INFUSE/SEAL
+ * 
+ * SUPPORTED in this pass: ACTION/REAP/GIVE (functions) — added in v0.22.1.
  *
  * ── Why LLVM IR text instead of an LLVM C++/Node binding ───────────────────
  * Emitting textual .ll and shelling out to `llc` avoids requiring a compiled
@@ -67,6 +69,15 @@ function safeName(name) {
 }
 
 // ── Module-level state ───────────────────────────────────────────────────────
+function llvmTypeSize(lt) {
+  if (lt === 'i64' || lt === 'double') return 8;
+  if (lt === 'i32') return 4;
+  if (lt === 'i16') return 2;
+  if (lt === 'i8' || lt === 'i1') return 1;
+  if (lt === 'i8*') return 8;
+  return 8; // default pointer-sized
+}
+
 class Module {
   constructor() {
     this.regCounter = 0;
@@ -77,6 +88,22 @@ class Module {
     this.errors = [];
     this.usesMath = false;
     this.scope = new Map();
+    // Arena state
+    this.currentDepth = 0;
+    this.usesArena = false;
+    this.arenaDepthCap = 64;
+    this.arenaSlotSize = 65536; // 64KB per arena
+    // Weather / Shelter exception handling state
+    this.weatherGlobalsEmitted = false;
+  }
+
+  /** Ensure the weather-error globals (@_weather_flag, etc.) are declared. */
+  ensureWeatherGlobals() {
+    if (this.weatherGlobalsEmitted) return;
+    this.weatherGlobalsEmitted = true;
+    this.globals.push(`@_weather_flag = global i1 false`);
+    this.globals.push(`@_weather_type = global i64 0`);
+    this.globals.push(`@_weather_msg = global i8* null`);
   }
 
   freshReg() { return `%r${this.regCounter++}`; }
@@ -104,6 +131,46 @@ class Module {
     this.globals.push(`${name} = private unnamed_addr constant [${len} x i8] c"${escaped}\\00"`);
     return { name, len };
   }
+
+  // ── Arena allocation ─────────────────────────────────────────────────────
+  // Allocates `size` bytes from the arena at the given depth.
+  // Returns an LLVM register holding an i8* pointer.
+  arenaAlloc(depth, size) {
+    this.usesArena = true;
+    const d = String(depth);
+    const s = String(size);
+    const offPtr = this.freshReg();
+    this.emit(`${offPtr} = getelementptr inbounds [${this.arenaDepthCap} x i64], [${this.arenaDepthCap} x i64]* @arena_offsets, i64 0, i64 ${d}`);
+    const oldOff = this.freshReg();
+    this.emit(`${oldOff} = load i64, i64* ${offPtr}`);
+    const newOff = this.freshReg();
+    this.emit(`${newOff} = add i64 ${oldOff}, ${s}`);
+    this.emit(`store i64 ${newOff}, i64* ${offPtr}`);
+    const base = this.freshReg();
+    this.emit(`${base} = getelementptr inbounds [${this.arenaDepthCap} x [${this.arenaSlotSize} x i8]], [${this.arenaDepthCap} x [${this.arenaSlotSize} x i8]]* @arena_memory, i64 0, i64 ${d}, i64 ${oldOff}`);
+    return base; // i8*
+  }
+
+  // Allocate from the current depth's arena, automatically determining
+  // the size from the PlantLang type. Returns an LLVM typed pointer.
+  arenaAllocTyped(plType, depth) {
+    const lt = llvmType(plType);
+    if (!lt) return null;
+    const size = llvmTypeSize(lt);
+    const rawPtr = this.arenaAlloc(depth, size);
+    const typedPtr = this.freshReg();
+    this.emit(`${typedPtr} = bitcast i8* ${rawPtr} to ${lt}*`);
+    return typedPtr;
+  }
+
+  // Reset the arena at the given depth (zero the offset).
+  arenaResetDepth(depth) {
+    this.usesArena = true;
+    const d = String(depth);
+    const offPtr = this.freshReg();
+    this.emit(`${offPtr} = getelementptr inbounds [${this.arenaDepthCap} x i64], [${this.arenaDepthCap} x i64]* @arena_offsets, i64 0, i64 ${d}`);
+    this.emit(`store i64 0, i64* ${offPtr}`);
+  }
 }
 
 function llvmEscapeString(s) {
@@ -120,9 +187,10 @@ function llvmEscapeString(s) {
 
 // ── Expression translator ───────────────────────────────────────────────────
 class ExprCompiler {
-  constructor(mod, node) {
+  constructor(mod, node, generator) {
     this.mod = mod;
     this.node = node;
+    this.generator = generator;
   }
 
   compileExpr(exprStr) {
@@ -328,6 +396,7 @@ class ExprCompiler {
   emitDiv(left, right) {
     const l = left.type === 'NUM' ? this.intToDouble(left.reg) : left.reg;
     const r = right.type === 'NUM' ? this.intToDouble(right.reg) : right.reg;
+    if (this.generator) this.generator.emitZeroCheck(r, this.node);
     const reg = this.mod.freshReg();
     this.mod.emit(`${reg} = fdiv double ${l}, ${r}`);
     return { reg, type: 'SCL' };
@@ -336,6 +405,10 @@ class ExprCompiler {
     if (left.type !== 'NUM' || right.type !== 'NUM') {
       this.mod.error('The % operator requires two NUM operands', this.node);
     }
+    if (this.generator) this.generator.emitZeroCheck(
+      left.type === 'NUM' ? left.reg : this.intToDouble(left.reg),
+      this.node
+    );
     const reg = this.mod.freshReg();
     this.mod.emit(`${reg} = srem i64 ${left.reg}, ${right.reg}`);
     return { reg, type: 'NUM' };
@@ -498,13 +571,306 @@ function tokenizeExpr(str) {
 class LLVMGenerator {
   constructor() {
     this.mod = new Module();
+    this.fnDefs = [];   // { name, params, ir: string[], llvmParamList: string[] }
+    this.fnInfos = new Map(); // name -> { params, bodyStatements, line, column }
+    this.shelterStack = [];
+    // Each entry: { unwindDepth, shelterClause, handlerLabel }
+  }
+
+  /** Look up the nearest active SHELTER that catches the given storm type. */
+  getShelterForStorm(stormType) {
+    for (let i = this.shelterStack.length - 1; i >= 0; i--) {
+      const entry = this.shelterStack[i];
+      if (entry.shelterClause.stormType === stormType ||
+          entry.shelterClause.stormType === 'ANY_STORM') {
+        return entry;
+      }
+    }
+    return null;
+  }
+
+  /** Helper: emit a zero-divisor check that sets error globals and branches
+   *  to the nearest matching ZERO_STORM SHELTER handler. Returns true if a
+   *  shelter was found and the check was emitted, false if no shelter is active
+   *  (division proceeds unchecked). */
+  emitZeroCheck(divisorReg, nod) {
+    const m = this.mod;
+    const shelter = this.getShelterForStorm('ZERO_STORM');
+    if (!shelter) return false;
+    m.ensureWeatherGlobals();
+    const errLabel = m.freshLabel('div.err');
+    const okLabel  = m.freshLabel('div.ok');
+    const isZero = m.freshReg();
+    m.emit(`${isZero} = fcmp oeq double ${divisorReg}, 0.0`);
+    m.emit(`br i1 ${isZero}, label %${errLabel}, label %${okLabel}`);
+    // Error setup block — only reached when divisor is zero
+    m.emitLabel(errLabel);
+    const errMsg = m.addStringConstant('\u0642\u0633\u0645\u0629 \u0639\u0644\u0649 \u0635\u0641\u0631');
+    const msgGep = m.freshReg();
+    m.emit(`${msgGep} = getelementptr inbounds [${errMsg.len} x i8], [${errMsg.len} x i8]* ${errMsg.name}, i64 0, i64 0`);
+    m.emit(`store i8* ${msgGep}, i8** @_weather_msg`);
+    m.emit(`store i64 1, i64* @_weather_type`);
+    m.emit(`store i1 true, i1* @_weather_flag`);
+    m.emit(`br label %${shelter.handlerLabel}`);
+    // Normal continuation
+    m.emitLabel(okLabel);
+    return true;
   }
 
   generate(programNode) {
+    const m = this.mod;
+    // First pass: collect ACTION declarations
     for (const node of (programNode.statements || [])) {
+      if (node.type === 'ActionDeclaration') {
+        this.fnInfos.set(node.name, {
+          params: node.params,
+          bodyStatements: node.bodyStatements,
+          line: node.line,
+          column: node.column,
+        });
+      }
+    }
+    // Generate function definitions (before main for forward references)
+    for (const [name, info] of this.fnInfos) {
+      this.genFnDef(name, info);
+    }
+    // Generate main body with depth tracking
+    m.currentDepth = 0;
+    for (const node of (programNode.statements || [])) {
+      if (node.type === 'ActionDeclaration') continue;
+      this.trackDepth(node);
       this.genStatement(node);
     }
+    // Final arena reset at program exit
+    for (let d = m.currentDepth; d >= 0; d--) {
+      m.arenaResetDepth(d);
+    }
     return this.assemble();
+  }
+
+  // ── Contract Law: Depth access validation ───────────────────────────────────
+  // Article II: "No depth (N+1) can access data in depth (N) except through
+  // 'contracting' (pre-allocation)."
+  // Validates that the current depth is not deeper than the variable's
+  // allocation depth — a deeper scope may not access a shallower scope's
+  // variables without explicit contracting.
+  checkDepthAccess(varName, varDepth, node, operation) {
+    const m = this.mod;
+    if (m.currentDepth > varDepth) {
+      m.error(
+        `═══ ⚠ Contract Violation: Unauthorized Access ═══\n` +
+        `  Operation:  ${operation}\n` +
+        `  Variable:   "${varName}"\n` +
+        `  Declared at: depth ${varDepth}  (Arena_${varDepth})\n` +
+        `  Accessed from: depth ${m.currentDepth}  (Arena_${m.currentDepth})\n` +
+        `  Rule: "No depth (N+1) can access data in depth (N) except\n` +
+        `         through 'contracting' (pre-allocation)."\n` +
+        `  Fix: Promote the variable to the current arena using\n` +
+        `       "${varDepth}\\\ ${varName} -> ${m.currentDepth} = ..."\n` +
+        `       or declare a local copy at this depth.`,
+        node
+      );
+    }
+  }
+
+  // ── Depth tracking ──────────────────────────────────────────────────────────
+  // Before generating a statement, check if the depth changed and inject arena
+  // resets for any depth levels that have been exited.
+  trackDepth(node) {
+    const m = this.mod;
+    const nodeDepth = node.depth !== undefined ? node.depth : m.currentDepth;
+    if (nodeDepth === m.currentDepth) return;
+
+    if (nodeDepth > m.currentDepth) {
+      // Entering a deeper scope — no reset needed, just update
+      m.currentDepth = nodeDepth;
+      return;
+    }
+
+    // Exiting depths: reset each arena from currentDepth down to nodeDepth+1
+    for (let d = m.currentDepth; d > nodeDepth; d--) {
+      m.arenaResetDepth(d);
+    }
+    m.currentDepth = nodeDepth;
+  }
+
+  // ── ACTION function definition ─────────────────────────────────────────────
+  genFnDef(name, info) {
+    const m = this.mod;
+    const savedBody = m.body;
+    const savedScope = m.scope;
+    const savedReg = m.regCounter;
+    const savedBlock = m.blockCounter;
+    // strCounter is NOT saved/restored — string globals are shared module-wide
+
+    m.body = [];
+    m.scope = new Map();
+    m.regCounter = 0;
+    m.blockCounter = 0;
+
+    const llvmParams = [];
+    for (const p of info.params) {
+      const lt = llvmType(p.type);
+      if (!lt) {
+        m.error(`Unsupported parameter type "${p.type}" in ACTION "${name}"`, info);
+        continue;
+      }
+      llvmParams.push(`${lt} %${safeName(p.name)}`);
+    }
+
+    m.emit('entry:');
+    m.currentDepth = 0;
+
+    // Store each parameter from register to arena allocation (for mutability)
+    for (const p of info.params) {
+      const lt = llvmType(p.type);
+      if (!lt) continue;
+      const sName = safeName(p.name);
+      const ptr = m.arenaAllocTyped(p.type, 0);
+      if (!ptr) continue;
+      m.emit(`store ${lt} %${sName}, ${lt}* ${ptr}`);
+      m.scope.set(p.name, { ptr, plType: p.type, depth: 0 });
+    }
+
+    // Generate function body with depth tracking
+    m.currentDepth = 0;
+    let hasReturn = false;
+    for (const stmt of (info.bodyStatements || [])) {
+      this.trackDepth(stmt);
+      if (this.genStatement(stmt)) hasReturn = true;
+    }
+
+    // Default return if no GIVE was emitted
+    if (!hasReturn) {
+      m.emit('ret i64 0');
+    }
+
+    const fnBody = m.body;
+
+    // Restore module state
+    m.body = savedBody;
+    m.scope = savedScope;
+    m.regCounter = savedReg;
+    m.blockCounter = savedBlock;
+
+    this.fnDefs.push({ name, params: info.params, ir: fnBody, llvmParamList: llvmParams });
+  }
+
+  // ── REAP (function call) ───────────────────────────────────────────────────
+  genReapStatement(node) {
+    const m = this.mod;
+    const src = node.source;
+
+    // Only ACTION kind is supported for LLVM compilation
+    if (src.kind !== 'ACTION') {
+      m.unsupported(node, `REAP from ${src.kind} source`);
+      return;
+    }
+
+    const fnInfo = this.fnInfos.get(src.name);
+    if (!fnInfo) {
+      m.error(`REAP: ACTION "${src.name}" is not defined`, node);
+      return;
+    }
+
+    // Compile arguments
+    const ec = new ExprCompiler(m, node, this);
+    const argVals = [];
+    for (let i = 0; i < (node.args || []).length; i++) {
+      const argExpr = node.args[i];
+      // If we have a matching param type, compile the arg
+      let argVal;
+      try {
+        argVal = ec.compileExpr(argExpr);
+      } catch (e) {
+        m.error(`Error compiling REAP argument "${argExpr}": ${e.message}`, node);
+        return;
+      }
+
+      // Coerce argument to the declared parameter type
+      if (i < fnInfo.params.length) {
+        const paramType = fnInfo.params[i].type;
+        argVal = { reg: this.coerce(argVal, paramType, node), type: paramType };
+      }
+      argVals.push(argVal);
+    }
+
+    // Build call arguments
+    const callArgs = argVals.map((v, i) => {
+      const pt = i < fnInfo.params.length ? fnInfo.params[i].type : v.type;
+      const lt = llvmType(pt) || 'i64';
+      return `${lt} ${v.reg}`;
+    }).join(', ');
+
+    const resultReg = m.freshReg();
+    const fnName = safeName(src.name);
+    m.emit(`${resultReg} = call i64 @${fnName}(${callArgs})`);
+
+    // Store result in target variable (auto-create if not declared)
+    if (node.variable === '_') return; // discard
+
+    let targetInfo = m.scope.get(node.variable);
+    if (!targetInfo) {
+      // Auto-create the variable — REAP implicitly declares its target
+      const depth = node.depth !== undefined ? node.depth : m.currentDepth;
+      this.checkDepthAccess(node.variable, depth, node, 'REAP (auto-create)');
+      const ptr = m.arenaAllocTyped('NUM', depth);
+      m.emit(`store i64 0, i64* ${ptr}`);
+      m.scope.set(node.variable, { ptr, plType: 'NUM', depth });
+      targetInfo = m.scope.get(node.variable);
+    }
+
+    let storedReg;
+    if (targetInfo.plType === 'SCL') {
+      // The function returned i64 but the bits represent a double — use bitcast
+      storedReg = m.freshReg();
+      m.emit(`${storedReg} = bitcast i64 ${resultReg} to double`);
+    } else {
+      // For all other types, use normal coercion
+      storedReg = this.coerce({ reg: resultReg, type: 'NUM' }, targetInfo.plType, node);
+    }
+    const lt = llvmType(targetInfo.plType);
+    m.emit(`store ${lt} ${storedReg}, ${lt}* ${targetInfo.ptr}`);
+  }
+
+  // ── GIVE (return from ACTION) ──────────────────────────────────────────────
+  genGiveStatement(node) {
+    const m = this.mod;
+
+    // 1. Compile the return value FIRST (before any arena cleanup), since
+    //    string/TX operands may allocate heap buffers via @malloc, not arenas.
+    const ec = new ExprCompiler(m, node, this);
+    const val = ec.compileExpr(node.valueExpr);
+
+    // 2. Arena Unwinding: Forced Exit cleanup chain per Article IX.
+    //    Reset all depth levels > 0 from deepest to shallowest, ensuring
+    //    temporary variables in deeper arenas are freed before shallower ones.
+    //    We skip depth 0 because function parameters live in Arena_0 and must
+    //    survive for the caller — especially critical for recursive functions
+    //    where each call frame shares the global arena state.
+    for (let d = m.currentDepth; d >= 1; d--) {
+      m.arenaResetDepth(d);
+    }
+    m.currentDepth = 0;
+
+    // 3. Convert the value to i64 and return
+    let returnReg;
+    if (val.type === 'NUM') {
+      returnReg = val.reg;
+    } else if (val.type === 'SCL') {
+      returnReg = m.freshReg();
+      m.emit(`${returnReg} = bitcast double ${val.reg} to i64`);
+    } else if (val.type === 'TX') {
+      returnReg = m.freshReg();
+      m.emit(`${returnReg} = ptrtoint i8* ${val.reg} to i64`);
+    } else if (val.type === 'FACT') {
+      returnReg = m.freshReg();
+      m.emit(`${returnReg} = zext i1 ${val.reg} to i64`);
+    } else {
+      m.error(`Cannot GIVE a value of type ${val.type}`, node);
+      return;
+    }
+    m.emit(`ret i64 ${returnReg}`);
   }
 
   assemble() {
@@ -526,8 +892,24 @@ class LLVMGenerator {
     if (m.usesMath) lines.push('declare double @pow(double, double)');
     lines.push('');
 
+    // Arena globals (emitted lazily if any code uses arena allocation)
+    if (m.usesArena) {
+      lines.push(`@arena_offsets = global [${m.arenaDepthCap} x i64] zeroinitializer`);
+      lines.push(`@arena_memory = global [${m.arenaDepthCap} x [${m.arenaSlotSize} x i8]] zeroinitializer`);
+      lines.push('');
+    }
+
     for (const g of m.globals) lines.push(g);
     if (m.globals.length) lines.push('');
+
+    // Emit function definitions (before main for forward references)
+    for (const fd of this.fnDefs) {
+      const llvmRetType = 'i64';
+      lines.push(`define ${llvmRetType} @${safeName(fd.name)}(${fd.llvmParamList.join(', ')}) {`);
+      for (const line of fd.ir) lines.push(line);
+      lines.push('}');
+      lines.push('');
+    }
 
     lines.push('define i32 @main() {');
     lines.push('entry:');
@@ -540,32 +922,46 @@ class LLVMGenerator {
   }
 
   genStatement(node) {
-    if (!node || !node.type) return;
+    if (!node || !node.type) return false;
     const m = this.mod;
+    if (node.depth !== undefined) this.trackDepth(node);
     switch (node.type) {
       case 'MissionStatement':
       case 'PlantStatement':
-        return;
+      case 'ActionDeclaration':
+        return false;
 
-      case 'CreateStatement': return this.genCreate(node);
-      case 'SetStatement':     return this.genSet(node);
-      case 'IncreaseStatement':return this.genIncDec(node, '+');
-      case 'DecreaseStatement':return this.genIncDec(node, '-');
-      case 'ShowStatement':    return this.genShow(node);
-      case 'IfStatement':      return this.genIf(node);
-      case 'CycleStatement':   return this.genCycle(node);
-      case 'SeasonStatement':  return this.genSeason(node);
-      case 'LockStatement':    return;
+      case 'CreateStatement': this.genCreate(node); return false;
+      case 'SetStatement':     this.genSet(node);   return false;
+      case 'IncreaseStatement':this.genIncDec(node, '+'); return false;
+      case 'DecreaseStatement':this.genIncDec(node, '-'); return false;
+      case 'ShowStatement':    this.genShow(node);  return false;
+      case 'IfStatement':      this.genIf(node);    return false;
+      case 'CycleStatement':   this.genCycle(node); return false;
+      case 'SeasonStatement':  this.genSeason(node);return false;
+      case 'LockStatement':    return false;
+
+      case 'WeatherStatement':
+        this.genWeatherStatement(node);
+        return false;
+
+      case 'ReapStatement':
+        this.genReapStatement(node);
+        return false;
+
+      case 'GiveStatement':
+        this.genGiveStatement(node);
+        return true; // ret is a terminator
 
       case 'RawStatement':
         if (node.text && node.text.trim() && !/^\\+$/.test(node.text.trim())) {
           m.unsupported(node, `"${node.text.trim().slice(0, 40)}"`);
         }
-        return;
+        return false;
 
       default:
         m.unsupported(node);
-        return;
+        return false;
     }
   }
 
@@ -575,10 +971,27 @@ class LLVMGenerator {
     if (!lt) { m.unsupported(node, `CREATE with type ${node.varType}`); return; }
 
     const name = safeName(node.identifier);
-    const ptr = `%${name}.addr`;
-    m.emit(`${ptr} = alloca ${lt}`);
+    // Allocate from arena at the variable's depth (defaults to statement depth)
+    const depth = node.depth !== undefined ? node.depth : m.currentDepth;
+    // Validate Contract Law (Article III): destination depth must be ≤ current depth
+    if (depth > m.currentDepth) {
+      m.error(
+        `═══ ⚠ Contract Violation: Illegal Destination ═══\n` +
+        `  Operation:  CREATE\n` +
+        `  Variable:   "${node.identifier}"\n` +
+        `  Destination: depth ${depth}  (Arena_${depth})\n` +
+        `  Current:     depth ${m.currentDepth}  (Arena_${m.currentDepth})\n` +
+        `  Rule: "A seed is not allowed to reside in soil (Arena_M) deeper\n` +
+        `         than the soil it was born in (Arena_N)."\n` +
+        `  Fix: Use CREATE at depth ${m.currentDepth} instead, or specify\n` +
+        `       a destination ≤ ${m.currentDepth}.`,
+        node
+      );
+      return;
+    }
+    const ptr = m.arenaAllocTyped(node.varType, depth);
 
-    const ec = new ExprCompiler(m, node);
+    const ec = new ExprCompiler(m, node, this);
     let val;
     const ve = node.valueExpr;
     if (ve && ve.type === 'Literal') {
@@ -610,7 +1023,7 @@ class LLVMGenerator {
 
     const coerced = this.coerce(val, node.varType, node);
     m.emit(`store ${lt} ${coerced}, ${lt}* ${ptr}`);
-    m.scope.set(node.identifier, { ptr, plType: node.varType });
+    m.scope.set(node.identifier, { ptr, plType: node.varType, depth });
   }
 
   coerce(val, declaredType, node) {
@@ -625,6 +1038,40 @@ class LLVMGenerator {
       this.mod.emit(`${reg} = fptosi double ${val.reg} to i64`);
       return reg;
     }
+    if (declaredType === 'NUM' && val.type === 'TX') {
+      const reg = this.mod.freshReg();
+      this.mod.emit(`${reg} = ptrtoint i8* ${val.reg} to i64`);
+      return reg;
+    }
+    if (declaredType === 'TX' && val.type === 'NUM') {
+      const reg = this.mod.freshReg();
+      this.mod.emit(`${reg} = inttoptr i64 ${val.reg} to i8*`);
+      return reg;
+    }
+    if (declaredType === 'NUM' && val.type === 'FACT') {
+      const reg = this.mod.freshReg();
+      this.mod.emit(`${reg} = zext i1 ${val.reg} to i64`);
+      return reg;
+    }
+    if (declaredType === 'FACT' && val.type === 'NUM') {
+      const reg = this.mod.freshReg();
+      this.mod.emit(`${reg} = trunc i64 ${val.reg} to i1`);
+      return reg;
+    }
+    if (declaredType === 'TX' && val.type === 'FACT') {
+      const reg = this.mod.freshReg();
+      this.mod.emit(`${reg} = zext i1 ${val.reg} to i64`);
+      const ptr = this.mod.freshReg();
+      this.mod.emit(`${ptr} = inttoptr i64 ${reg} to i8*`);
+      return ptr;
+    }
+    if (declaredType === 'FACT' && val.type === 'TX') {
+      const reg = this.mod.freshReg();
+      this.mod.emit(`${reg} = ptrtoint i8* ${val.reg} to i64`);
+      const bool = this.mod.freshReg();
+      this.mod.emit(`${bool} = icmp ne i64 ${reg}, 0`);
+      return bool;
+    }
     this.mod.error(`Type mismatch: declared ${declaredType} but value is ${val.type}`, node);
     return declaredType === 'TX' ? 'null' : '0';
   }
@@ -633,7 +1080,7 @@ class LLVMGenerator {
     const m = this.mod;
     const info = m.scope.get(node.identifier);
     if (!info) { m.error(`SET: "${node.identifier}" was not declared with CREATE`, node); return; }
-    const ec = new ExprCompiler(m, node);
+    const ec = new ExprCompiler(m, node, this);
     const val = ec.compileExpr(node.valueExpr);
     const coerced = this.coerce(val, info.plType, node);
     const lt = llvmType(info.plType);
@@ -651,7 +1098,7 @@ class LLVMGenerator {
     const lt = llvmType(info.plType);
     const cur = m.freshReg();
     m.emit(`${cur} = load ${lt}, ${lt}* ${info.ptr}`);
-    const ec = new ExprCompiler(m, node);
+    const ec = new ExprCompiler(m, node, this);
     const amount = ec.compileExpr(node.amountExpr);
     const amountCoerced = this.coerce(amount, info.plType, node);
     const result = m.freshReg();
@@ -683,7 +1130,7 @@ class LLVMGenerator {
       return;
     }
     if (expr.type === 'Literal' && expr.literalType === 'RAW_EXPR') {
-      const ec = new ExprCompiler(m, node);
+      const ec = new ExprCompiler(m, node, this);
       const val = ec.compileExpr(expr.value);
       this.emitPrintValue(val);
       return;
@@ -752,15 +1199,20 @@ class LLVMGenerator {
       if (branch.cond === null) {
         m.emit(`br label %${bodyLabels[i]}`);
       } else {
-        const ec = new ExprCompiler(m, node);
+        const ec = new ExprCompiler(m, node, this);
         const condReg = ec.compileCond(branch.cond);
         const nextLabel = condLabels[i + 1] || endLabel;
         m.emit(`br i1 ${condReg}, label %${bodyLabels[i]}, label %${nextLabel}`);
       }
 
       m.emitLabel(bodyLabels[i]);
-      for (const stmt of (branch.bodyStatements || [])) this.genStatement(stmt);
-      m.emit(`br label %${endLabel}`);
+      let terminated = false;
+      for (const stmt of (branch.bodyStatements || [])) {
+        terminated = this.genStatement(stmt);
+      }
+      if (!terminated) {
+        m.emit(`br label %${endLabel}`);
+      }
     });
 
     m.emitLabel(endLabel);
@@ -773,16 +1225,16 @@ class LLVMGenerator {
       return;
     }
 
-    const ec = new ExprCompiler(m, node);
+    const ec = new ExprCompiler(m, node, this);
     const fromVal = ec.compileExpr(node.fromExpr);
     const toVal = ec.compileExpr(node.toExpr);
     const stepVal = node.stepExpr ? ec.compileExpr(node.stepExpr) : { reg: '1', type: 'NUM' };
 
     const varName = safeName(node.iterVar);
-    const ptr = `%${varName}.addr`;
-    m.emit(`${ptr} = alloca i64`);
+    const loopVarDepth = node.depth !== undefined ? node.depth : m.currentDepth;
+    const ptr = m.arenaAllocTyped('NUM', loopVarDepth);
     m.emit(`store i64 ${this.coerce(fromVal, 'NUM', node)}, i64* ${ptr}`);
-    m.scope.set(node.iterVar, { ptr, plType: 'NUM' });
+    m.scope.set(node.iterVar, { ptr, plType: 'NUM', depth: loopVarDepth });
 
     const condLabel = m.freshLabel('cycle.cond');
     const bodyLabel = m.freshLabel('cycle.body');
@@ -798,8 +1250,31 @@ class LLVMGenerator {
     m.emit(`br i1 ${cmp}, label %${bodyLabel}, label %${endLabel}`);
 
     m.emitLabel(bodyLabel);
-    for (const stmt of (node.bodyStatements || [])) this.genStatement(stmt);
-    m.emit(`br label %${incLabel}`);
+    // Iteration Breath (Article VII): save Arena_{loopVarDepth} offset before
+    // the body executes, restore after each tick to prevent temporary variable
+    // accumulation. The loop variable's fixed %ptr address survives the restore
+    // because it was allocated before the save point.
+    m.usesArena = true;
+    const saveGep = m.freshReg();
+    m.emit(`${saveGep} = getelementptr inbounds [${m.arenaDepthCap} x i64], [${m.arenaDepthCap} x i64]* @arena_offsets, i64 0, i64 ${loopVarDepth}`);
+    const savedOff = m.freshReg();
+    m.emit(`${savedOff} = load i64, i64* ${saveGep}`);
+
+    let bodyTerminated = false;
+    for (const stmt of (node.bodyStatements || [])) {
+      bodyTerminated = this.genStatement(stmt);
+    }
+    if (!bodyTerminated) {
+      // Restore Arena_{loopVarDepth} and reset any deeper arenas entered
+      // during the body (Article VII — Iteration Breath).
+      const endDepth = m.currentDepth;
+      for (let d = endDepth; d > loopVarDepth; d--) {
+        m.arenaResetDepth(d);
+      }
+      m.emit(`store i64 ${savedOff}, i64* ${saveGep}`);
+      m.currentDepth = loopVarDepth;
+      m.emit(`br label %${incLabel}`);
+    }
 
     m.emitLabel(incLabel);
     const curInc = m.freshReg();
@@ -820,15 +1295,108 @@ class LLVMGenerator {
 
     m.emit(`br label %${condLabel}`);
     m.emitLabel(condLabel);
-    const ec = new ExprCompiler(m, node);
+    const ec = new ExprCompiler(m, node, this);
     const condReg = ec.compileCond(node.condExpr);
     m.emit(`br i1 ${condReg}, label %${bodyLabel}, label %${endLabel}`);
 
     m.emitLabel(bodyLabel);
-    for (const stmt of (node.bodyStatements || [])) this.genStatement(stmt);
-    m.emit(`br label %${condLabel}`);
+    // Iteration Breath (Article VII): save arena offset before body
+    const seasonDepth = node.depth !== undefined ? node.depth : m.currentDepth;
+    m.usesArena = true;
+    const saveGep = m.freshReg();
+    m.emit(`${saveGep} = getelementptr inbounds [${m.arenaDepthCap} x i64], [${m.arenaDepthCap} x i64]* @arena_offsets, i64 0, i64 ${seasonDepth}`);
+    const savedOff = m.freshReg();
+    m.emit(`${savedOff} = load i64, i64* ${saveGep}`);
+
+    let bodyTerminated = false;
+    for (const stmt of (node.bodyStatements || [])) {
+      bodyTerminated = this.genStatement(stmt);
+    }
+    if (!bodyTerminated) {
+      const endDepth = m.currentDepth;
+      for (let d = endDepth; d > seasonDepth; d--) {
+        m.arenaResetDepth(d);
+      }
+      m.emit(`store i64 ${savedOff}, i64* ${saveGep}`);
+      m.currentDepth = seasonDepth;
+      m.emit(`br label %${condLabel}`);
+    }
 
     m.emitLabel(endLabel);
+  }
+
+  // ── WEATHER / SHELTER / CALM (exception handling) ────────────────────────────
+  genWeatherStatement(node) {
+    const m = this.mod;
+    const bodyLabel = m.freshLabel('weather.body');
+    const calmLabel = m.freshLabel('weather.calm');
+
+    const shelterHandlers = node.shelterClauses.map(clause => ({
+      clause,
+      handlerLabel: m.freshLabel('weather.shelter'),
+    }));
+
+    m.ensureWeatherGlobals();
+    const unwindDepth = m.currentDepth;
+
+    // Push shelter entries onto stack so error checks in the body
+    // (e.g. emitZeroCheck) can find the nearest handler label.
+    for (const sh of shelterHandlers) {
+      this.shelterStack.push({
+        unwindDepth,
+        shelterClause: sh.clause,
+        handlerLabel: sh.handlerLabel,
+      });
+    }
+
+    m.emit(`br label %${bodyLabel}`);
+
+    // ── Body block ──
+    m.emitLabel(bodyLabel);
+    let bodyTerminated = false;
+    for (const stmt of node.bodyStatements) {
+      bodyTerminated = this.genStatement(stmt);
+    }
+    if (!bodyTerminated) {
+      m.emit(`br label %${calmLabel}`);
+    }
+
+    // Pop shelter entries BEFORE generating handler bodies, so that if
+    // a handler's own body throws an error it propagates outward rather
+    // than being re-caught by the same WEATHER block.
+    for (const sh of shelterHandlers) {
+      this.shelterStack.pop();
+    }
+
+    // ── Shelter handler blocks ──
+    for (const sh of shelterHandlers) {
+      m.emitLabel(sh.handlerLabel);
+
+      // Unwind arenas from current depth down to unwindDepth + 1
+      for (let d = m.currentDepth; d > unwindDepth; d--) {
+        m.arenaResetDepth(d);
+      }
+      m.currentDepth = unwindDepth;
+
+      // Bind errVar to the error message stored in @_weather_msg
+      if (sh.clause.errVar) {
+        const msgReg = m.freshReg();
+        m.emit(`${msgReg} = load i8*, i8** @_weather_msg`);
+        const ptr = m.arenaAllocTyped('TX', unwindDepth);
+        m.emit(`store i8* ${msgReg}, i8** ${ptr}`);
+        m.scope.set(sh.clause.errVar, { ptr, plType: 'TX', depth: unwindDepth });
+      }
+
+      for (const stmt of sh.clause.bodyStatements) {
+        this.genStatement(stmt);
+      }
+      m.emit(`br label %${calmLabel}`);
+    }
+
+    // ── Calm block ──
+    m.emitLabel(calmLabel);
+    // Reset error flag for clean state after WEATHER/SHELTER
+    m.emit(`store i1 false, i1* @_weather_flag`);
   }
 }
 

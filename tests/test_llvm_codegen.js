@@ -365,12 +365,131 @@ MISSION: SAFE.
 1\\ SHOW undefined_var.
 `, 'was not declared');
 
-testErrors('ACTION/REAP is rejected (not yet supported)', `
+// ── ACTION/REAP/GIVE (functions) ──────────────────────────────────────────────
+test('basic ACTION with two NUM params and GIVE', `
 MISSION: SAFE.
 1\\ ACTION add(a(NUM), b(NUM)),
 2\\   GIVE a + b.
 1\\ /ACTION.
-`, 'Unsupported construct');
+1\\ CREATE result(NUM) TO 0.
+1\\ REAP result FROM add, 3, 4.
+1\\ SHOW result.
+`);
+
+test('ACTION with recursive call (factorial)', `
+MISSION: SAFE.
+1\\ ACTION factorial(n(NUM)),
+2\\   IF n IS 0,
+3\\     GIVE 1.
+2\\   REAP sub FROM factorial, n - 1.
+2\\   GIVE n * sub.
+1\\ /ACTION.
+1\\ CREATE result(NUM) TO 0.
+1\\ REAP result FROM factorial, 5.
+1\\ SHOW result.
+`);
+
+test('ACTION returning TX (string)', `
+MISSION: SAFE.
+1\\ ACTION greet(name(TX)),
+2\\   GIVE "Hello, " + name + "!".
+1\\ /ACTION.
+1\\ CREATE msg(TX) TO "".
+1\\ REAP msg FROM greet, "World".
+1\\ SHOW msg.
+`);
+
+test('ACTION calling another ACTION', `
+MISSION: SAFE.
+1\\ ACTION add(a(NUM), b(NUM)),
+2\\   GIVE a + b.
+1\\ /ACTION.
+1\\ ACTION double(n(NUM)),
+2\\   REAP sum FROM add, n, n.
+2\\   GIVE sum.
+1\\ /ACTION.
+1\\ CREATE result(NUM) TO 0.
+1\\ REAP result FROM double, 21.
+1\\ SHOW result.
+1\\ REAP result FROM add, result, 10.
+1\\ SHOW result.
+`);
+
+test('ACTION with IF/ELSE and multiple GIVEs', `
+MISSION: SAFE.
+1\\ ACTION mymax(a(NUM), b(NUM)),
+2\\   IF a GREATER THAN b,
+3\\     GIVE a.
+2\\   ELSE,
+3\\     GIVE b.
+2\\.
+1\\ /ACTION.
+1\\ CREATE result(NUM) TO 0.
+1\\ REAP result FROM mymax, 100, 42.
+1\\ SHOW result.
+1\\ REAP result FROM mymax, 7, 99.
+1\\ SHOW result.
+`);
+
+test('ACTION with SCL (double) params', `
+MISSION: SAFE.
+1\\ ACTION circle_area(r(SCL)),
+2\\   GIVE 3.14159 * r * r.
+1\\ /ACTION.
+1\\ CREATE area(SCL) TO 0.
+1\\ REAP area FROM circle_area, 2.0.
+1\\ SHOW area.
+`);
+
+test('REAP with discard target "_"', `
+MISSION: SAFE.
+1\\ ACTION side_effect(),
+2\\   SHOW "hello from action".
+1\\ /ACTION.
+1\\ REAP _ FROM side_effect.
+1\\ SHOW "done".
+`);
+
+test('ACTION with no params and no GIVE (void)', `
+MISSION: SAFE.
+1\\ ACTION do_nothing(),
+1\\ /ACTION.
+1\\ REAP _ FROM do_nothing.
+1\\ SHOW "ok".
+`);
+
+// ── WEATHER / SHELTER / CALM (exception handling) ─────────────────────────────
+test('WEATHER body without error — shelter does not fire', `
+MISSION: SAFE.
+1\\ WEATHER,
+2\\   SHOW "body".
+1\\ SHELTER ZERO_STORM,
+2\\   SHOW "shelter".
+1\\ CALM.
+1\\ SHOW "after".
+`);
+
+test('WEATHER catches ZERO_STORM from division by zero', `
+MISSION: SAFE.
+1\\ WEATHER,
+2\\   SHOW "before".
+2\\   SHOW 10 / 0.
+1\\ SHELTER ZERO_STORM AS err,
+2\\   SHOW "caught: " + err.
+1\\ CALM.
+1\\ SHOW "done".
+`);
+
+test('WEATHER — error path arena cleanup does not corrupt outer scope', `
+MISSION: SAFE.
+1\\ CREATE x(NUM) TO 42.
+1\\ WEATHER,
+2\\   SHOW 1 / 0.
+1\\ SHELTER ZERO_STORM,
+2\\   SHOW "shelter".
+1\\ CALM.
+1\\ SHOW x.
+`);
 
 console.log(`\n${passed} passed, ${failed} failed, ${skipped} skipped`);
 process.exit(failed > 0 ? 1 : 0);

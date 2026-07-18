@@ -1,6 +1,44 @@
 # Changelog — PlantLang / Chloroplast
 
-## v0.22.0 — 2026 (current)
+## v0.23.0 — 2026 (current)
+
+### New Features
+- **ACTION/REAP/GIVE** in the LLVM backend (`core/llvm_codegen.js`) — full function support with:
+  - Multiple typed parameters (NUM, SCL, TX, FACT)
+  - Recursive calls (factorial, Fibonacci — verified via llc + gcc)
+  - IF/ELSE bodies with multiple GIVE statements (terminator-aware branching)
+  - SCL (double) params via bitcast through i64 return register
+  - TX (string) returns via ptrtoint/inttoptr
+  - Void actions (no GIVE) default to `ret i64 0`
+- **Rooted Depth System** — deterministic arena-based memory management:
+  - 64 depth levels, each backed by a 64KB arena slab (`@arena_offsets[64 x i64]`, `@arena_memory[64 x [65536 x i8]]`)
+  - Bump allocation (`arenaAlloc`/`arenaAllocTyped`) replaces all `alloca` across all variable creation sites (CREATE, REAP auto-create, CYCLE iter, function params)
+  - Depth tracking (`trackDepth`) injects automatic `arenaResetDepth` on scope exit
+  - Arena globals emitted lazily only when `m.usesArena` is set
+- **Contract Law Validation** (Article III) — compile-time depth enforcement:
+  - CREATE destination must be ≤ current depth, with educational error messages citing the violated rule and suggesting fixes
+  - `checkDepthAccess()` helper infrastructure for future cross-depth read/write enforcement
+  - Scope entries track `{ptr, plType, depth}` for all variables
+- **Forced Exit Arena Cleanup** (Article IX) — `genGiveStatement` emits the Unwinding Chain before every `ret`, resetting all arenas from `currentDepth` down to depth 1 (depth 0 preserved for caller's function params — critical for recursive correctness)
+- **Loop Iteration Reset** (Article VII) — `genCycle` and `genSeason` save the arena offset at the loop's depth before the body and restore it after each tick, preventing temporary-variable accumulation across iterations. Deeper arenas entered during the body are also reset.
+- **Error Unwinding Protocol** (WEATHER/SHELTER/CALM) — deterministic exception handling in LLVM:
+  - `genWeatherStatement` generates the try/catch block structure with body, typed SHELTER handlers, and CALM continuation
+  - Division-by-zero detection (`emitZeroCheck`) emits a `fcmp oeq` + conditional branch that sets `@_weather_msg`/`@_weather_type`/`@_weather_flag` globals and transfers control to the matching ZERO_STORM (or ANY_STORM) shelter handler
+  - Unwind chain in each handler resets arenas from error depth to shelter depth
+  - `errVar` binding loads the error message from `@_weather_msg` into a TX-typed arena slot
+  - `shelterStack` enables proper nesting — inner errors are caught by inner handlers; handler body errors propagate outward
+- **`core/Module`** gains `ensureWeatherGlobals()` and `weatherGlobalsEmitted` flag for lazy global emission
+
+### Test Suite
+- LLVM backend tests expanded from 34 → **37 smoke tests** (3 new: WEATHER body without error, ZERO_STORM caught via division by zero, post-error scope integrity)
+- All four test suites green: LLVM backend 37/37, C codegen 9/9, parser migration 108/109 (1 pre-existing RESPONSE resolution discrepancy), diagnostics 44/45 (1 pre-existing)
+
+### Documentation
+- `README.md` updated to v0.23.0 with new sections on the Rooted Depth System, complete Quick Reference (ACTION/REAP/GIVE, WEATHER/SHELTER/CALM, depth syntax), updated test counts, and reorganized Roadmap
+
+---
+
+## v0.22.0 — 2026
 
 ### New Features
 - **LLVM IR Backend** (`core/llvm_codegen.js`) — a real compiler backend emitting LLVM IR text, using the same pipeline architecture as **Rust, Swift, Julia, and Zig**:

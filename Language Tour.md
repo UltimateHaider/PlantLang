@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.7
+# 🌿 PlantLang — Chloroplast v0.23.0
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -46,6 +46,22 @@ Every statement is prefixed with its nesting depth. Depth 1 = top level, depth 2
 2\   SHOW "big".
 1\.
 ```
+
+Each depth level owns a **dedicated 64KB arena slab** (`Arena_N`). Variables at depth N are bump-allocated from Arena_N. When execution leaves a scope (depth decreases), the arena is automatically reset — no garbage collector needed:
+
+```
+2\   CYCLE i FROM 1 TO 10,      # Arena_2
+3\     CREATE tmp(NUM) TO i.    # Arena_3 — reset on each loop tick
+2\   SHOW "done".               # Arena_3 reset, Arena_2 preserved
+```
+
+**Four automatic cleanup mechanisms:**
+| Mechanism | When | What resets |
+|---|---|---|
+| Natural Exit | Scope depth decreases | Exited arenas |
+| Forced Exit | `GIVE` return from `ACTION` | All arenas > depth 0 |
+| Iteration Breath | End of each `CYCLE`/`SEASON` tick | Loop-depth arena + deeper |
+| Error Unwinding | `WEATHER` throw → `SHELTER` catch | Arenas between error depth and handler |
 
 ### Variables & Types
 
@@ -164,6 +180,8 @@ Every statement is prefixed with its nesting depth. Depth 1 = top level, depth 2
 
 ### Actions (functions)
 
+Supported natively in the LLVM backend — compiled to real function calls, not inlined.
+
 ```
 1\ ACTION add(a(NUM), b(NUM)),
 2\   GIVE a + b.
@@ -175,6 +193,16 @@ Every statement is prefixed with its nesting depth. Depth 1 = top level, depth 2
 # Ignore return value
 1\ REAP _ FROM add, 1, 2.
 ```
+
+Features:
+- Multiple typed params (`NUM`, `SCL`, `TX`, `FACT`)
+- Recursion (factorial, Fibonacci — verified via `llc` + `gcc`)
+- `IF`/`ELSE` bodies with multiple `GIVE` statements
+- `SCL` (double) params preserve bits through `i64` return register
+- `TX` (string) returns via pointer encoding
+- Void actions (no `GIVE`) default to `ret i64 0`
+
+**Memory safety**: Function parameters are arena-allocated at depth 0 and preserved across recursive calls. On `GIVE`, all arenas > depth 0 are automatically reset (Forced Exit cleanup).
 
 ### FLOW (pipeline)
 
@@ -237,6 +265,8 @@ Every statement is prefixed with its nesting depth. Depth 1 = top level, depth 2
 
 ### WEATHER / SHELTER / CALM (try / catch / finally)
 
+Supported natively in the LLVM backend — division-by-zero detection branches directly to the matching handler.
+
 ```
 1\ WEATHER,
 2\   REAP val FROM risky_action, 0.
@@ -245,7 +275,16 @@ Every statement is prefixed with its nesting depth. Depth 1 = top level, depth 2
 1\ SHELTER ANY_STORM,
 2\   SHOW "Unknown error".
 1\ CALM.
+
+# Division by zero caught at compile-time-checked runtime:
+1\ WEATHER,
+2\   SHOW 10 / 0.
+1\ SHELTER ZERO_STORM AS err,
+2\   SHOW "zero! " + err.
+1\ CALM.
 ```
+
+**How it works**: Before every division, the LLVM backend emits a `fcmp oeq %divisor, 0.0` check. If zero, error globals (`@_weather_msg`, `@_weather_type`, `@_weather_flag`) are set and control transfers to the matching SHELTER handler. All arenas between the error source depth and the handler depth are automatically reset (Error Unwinding).
 
 ### VERIFY (built-in testing)
 
@@ -421,15 +460,21 @@ chloroplast compile app.plnt --backend c            # force the direct-to-C back
 
 ### LLVM backend (default when `llc` is available)
 
-`core/llvm_codegen.js` emits LLVM IR text, which is optimized with `opt -O2` (mem2reg, GVN, loop optimizations, inlining — LLVM's real optimization pipeline) and lowered to native object code with `llc -O2`, then linked with `gcc`. This is the same pipeline architecture used by **Rust, Swift, Julia, and Zig** — PlantLang gets decades of LLVM optimization work for free.
+`core/llvm_codegen.js` emits LLVM IR text (SSA form) with arena-based deterministic memory management, which is optimized with `opt -O2` (mem2reg, GVN, loop optimizations, inlining — LLVM's real optimization pipeline) and lowered to native object code with `llc -O2`, then linked with `gcc`. This is the same pipeline architecture used by **Rust, Swift, Julia, and Zig** — PlantLang gets decades of LLVM optimization work for free.
+
+**Key technology: Rooted Depth System**
+Rather than using LLVM's `alloca` (which couples variable lifetime to the LLVM stack frame), PlantLang allocates all variables from per-depth arena slabs. This enables:
+- Deterministic bulk deallocation without GC
+- Automatic cleanup on scope exit, function return, loop iteration, and exception unwind
+- Zero fragmentation — simple bump-pointer allocation
 
 Requires LLVM's `llc` (and ideally `opt`) on `PATH` — e.g. `apt install llvm` on Debian/Ubuntu. Auto-detects `llc`/`llc-14` through `llc-18`.
 
 ### C backend (fallback, no LLVM required)
 
-`core/codegen.js` emits plain C99, compiled with `gcc -O2`. Used automatically when no LLVM toolchain is found, or explicitly via `--backend c`.
+`core/codegen.js` emits plain C99, compiled with `gcc -O2`. Used automatically when no LLVM toolchain is found, or explicitly via `--backend c`. Supports `CREATE`/`SET`/`SHOW`/`IF`/`CYCLE`/`SEASON` for NUM/SCL/TX/FACT (no ACTION, no WEATHER).
 
-### Supported subset (both backends)
+### Supported subset (LLVM backend)
 
 | Feature | Support |
 |---------|---------|
@@ -439,18 +484,18 @@ Requires LLVM's `llc` (and ideally `opt`) on `PATH` — e.g. `apt install llvm` 
 | `CYCLE var FROM lo TO hi [STEP k]` | ✅ numeric ranges |
 | `SEASON` | ✅ while loop |
 | Arithmetic & comparisons | ✅ `+ - * / % **`, `IS`, `GREATER THAN`, `BETWEEN`, `AND`/`OR`/`NOT` |
-| `LIST` / `MAP` | ❌ not yet — use `chloroplast run` |
-| `ACTION` / `REAP` | ❌ not yet |
+| `ACTION` / `REAP` / `GIVE` | ✅ recursion, SCL params, TX returns, void actions |
+| `WEATHER` / `SHELTER` / `CALM` | ✅ ZERO_STORM detection, errVar binding, nested shelters |
+| `LIST` / `MAP` | ❌ use `chloroplast run` |
 | `SPECIES` / `BLOOM` | ❌ not yet |
-| `WEATHER` / `SHELTER` | ❌ not yet |
 | `HARVEST` / `LISTEN BRANCH` | ❌ not yet |
 | `VERIFY` / `SUITE` | ❌ not yet |
 
-Unsupported constructs produce a clear compile-time error naming the exact line and feature on **both backends** — programs are never silently miscompiled.
+Unsupported constructs produce a clear compile-time error naming the exact line and feature — programs are never silently miscompiled.
 
 ### Performance
 
-For compute-heavy code, compiled binaries measure **hundreds of times faster** than the interpreter — see `examples/10_performance.plnt` for a runnable comparison.
+For compute-heavy code, compiled binaries measure **thousands of times faster** than the interpreter — a 50-million-iteration accumulation loop runs in ~6ms compiled vs ~89s interpreted (~14,700× speedup). See `examples/10_performance.plnt` for a runnable comparison.
 
 ## CodeWords Compiler Service
 
@@ -485,19 +530,38 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.7 uses a full compiler frontend:
+Chloroplast v0.23.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production:
 
 ```
 Source (.plnt)
-   ↓  core/tokenizer.js   — character-by-character lexer
-   ↓  core/parser.js      — recursive-descent, 40+ node types
-   ↓  core/ast.js         — typed AST node classes
-   ↓  core/interpreter.js — evaluateNode() dispatcher
-   ↓  core/evaluator.js   — expression evaluator
-   ↓  core/runtime.js     — Soil scope chain, PlantStorm
-   ↓  core/innate.js      — built-in libraries (math/strings/lists)
-   ↓  core/harvest.js     — async HTTP via Worker + SharedArrayBuffer
+   ↓  core/tokenizer.js      — depth-aware lexer (handles \N prefix)
+   ↓  core/parser.js         — recursive-descent, 40+ typed node types
+   ↓  core/ast.js            — typed AST node classes (all carry depth)
+   ↓
+   ├── core/interpreter.js   — evaluateNode() dispatcher (dev/`chloroplast run`)
+   │   └── core/evaluator.js — expression evaluator
+   │   └── core/runtime.js   — Soil scope chain, PlantStorm
+   │   └── core/innate.js    — built-in libs (math/strings/lists)
+   │
+   └── core/llvm_codegen.js  — LLVM IR generator (production/`chloroplast compile`)
+       └── Rooted Depth System: arena-based deterministic memory
+           ├── Arena allocation (bump-alloc from per-depth 64KB slabs)
+           ├── Depth tracking with automatic arena reset
+           ├── Contract Law validation (CREATE destination ≤ current depth)
+           └── Unwinding Protocol (Natural/Forced Exit, Loop Reset, Error Unwind)
 ```
+
+### Memory Architecture
+
+```
+Arena_0  [████████████████░░░░░░░░░░░░░░░░░░]  ← function params
+Arena_1  [████████████████████░░░░░░░░░░░░░░]  ← root scope variables
+Arena_2  [████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]  ← loop scope (reset each iteration)
+Arena_3  [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]  ← inner scope
+...up to Arena_63
+```
+
+Each arena is 64KB (65536 bytes). The bump pointer (`@arena_offsets[N]`) tracks the next free byte. When a scope exits, the pointer is reset to zero — no free-list, no GC, no fragmentation.
 
 96% of all statements are parsed to typed AST nodes. The remaining 4% (empty block closers) use a safe RawStatement fallback.
 
