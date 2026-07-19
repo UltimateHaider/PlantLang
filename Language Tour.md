@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.24.0
+# 🌿 PlantLang — Chloroplast v0.25.0
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -73,6 +73,8 @@ Each depth level owns a **dedicated 64KB arena slab** (`Arena_N`). Variables at 
 | Boolean | `FACT` | `CREATE active(FACT) TO TRUE.` |
 | List | `LIST` | `CREATE fruits(LIST) TO apple, banana.` |
 | Map | `MAP` | `CREATE cfg(MAP).` |
+| Struct | `SHAPE` | `CREATE p(Point) TO Point{ 10, 20 }.` |
+| Tagged Union | `CHOICE` | `CREATE opt TO Option.Some(10).` |
 
 ```
 1\ SET name TO "World".
@@ -81,6 +83,73 @@ Each depth level owns a **dedicated 64KB arena slab** (`Arena_N`). Variables at 
 1\ LOCK pi.          # make immutable
 1\ EVAPORATE temp.   # delete variable
 ```
+
+### SHAPE (Struct Types)
+
+```
+1\ SHAPE Point { x(NUM), y(NUM) }.
+1\ CREATE p(Point) TO Point{ 10, 20 }.
+1\ SHOW p.x.              # → 10
+1\ SET p.y TO 99.
+1\ SHOW p.y.              # → 99
+```
+
+Structs can be composed:
+
+```
+1\ SHAPE Line { start(Point), end(Point) }.
+1\ CREATE l(Line) TO Line{ Point{0, 0}, Point{10, 20} }.
+1\ SHOW l.start.x.        # → 0
+```
+
+### Methods on Structs
+
+Actions can receive a typed `SELF` parameter using colon syntax:
+
+```
+1\ SHAPE Counter { count(NUM), step(NUM) }.
+
+1\ ACTION (self(Counter)) tick(),
+2\   INCREASE SELF:count BY SELF:step.
+2\   GIVE SELF:count.
+1\ /ACTION.
+
+1\ CREATE c(Counter) TO Counter{ 0, 5 }.
+1\ REAP v FROM c:tick.
+1\ SHOW v.                # → 5
+1\ REAP v FROM c:tick.
+1\ SHOW v.                # → 10
+```
+
+### CHOICE (Tagged Unions)
+
+```
+1\ CHOICE Option { Some(NUM), None }.
+1\ CREATE opt TO Option.Some(10).
+1\ CREATE empty TO Option.None.
+```
+
+Variant names may use keywords like `Num` or `Empty`:
+
+```
+1\ CHOICE Value { Num(NUM), Str(TX), Empty }.
+1\ CREATE v TO Value.Num(42).
+1\ CREATE s TO Value.Str("hello").
+1\ CREATE e TO Value.Empty.
+```
+
+### MATCH (Pattern Matching)
+
+Exhaustive case analysis on CHOICE values — every variant must have a clause:
+
+```
+1\ MATCH opt { Some(v) -> { SHOW v } None -> { SHOW 0 } }.
+```
+
+Features:
+- **Payload binding**: `Some(v)` binds the inner `NUM` value to `v` inside the clause body
+- **Payload-free clause**: `None -> { ... }` — no variable binding
+- **Exhaustiveness**: the type checker rejects matches that don't cover all variants of the CHOICE type
 
 ### Output
 
@@ -600,7 +669,7 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.24.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production:
+Chloroplast v0.25.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production:
 
 ```
 Source (.plnt)

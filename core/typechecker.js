@@ -31,8 +31,20 @@ const T = {
 // Types that support arithmetic
 const NUMERIC = new Set([T.NUM, T.SCL]);
 
-// Types that support + (concatenation)
+  // Types that support + (concatenation)
 const ADDABLE = new Set([T.NUM, T.SCL, T.TX, T.UNKNOWN, T.ANY]);
+
+// Helper: extract inner type from array type string "[NUM]" → "NUM"
+function arrayInnerType(typeStr) {
+  if (typeof typeStr === 'string' && typeStr.startsWith('[') && typeStr.endsWith(']')) {
+    return typeStr.slice(1, -1);
+  }
+  return null;
+}
+
+function isArrayType(typeStr) {
+  return typeof typeStr === 'string' && typeStr.startsWith('[') && typeStr.endsWith(']') && typeStr.length >= 3;
+}
 
 // ── Diagnostic ──────────────────────────────────────────────────────────────
 class Diagnostic {
@@ -65,6 +77,9 @@ class TypeScope {
     this._vars   = new Map();
     this._fns    = new Map();   // ACTION definitions
     this._species = new Map();  // SPECIES definitions
+    this._structs = new Map();  // SHAPE definitions
+    this._methods = new Map();  // type name -> Map(method name -> action info)
+    this._choices = new Map();  // CHOICE name -> [{ name, type }]
   }
 
   child() { return new TypeScope(this); }
@@ -89,6 +104,16 @@ class TypeScope {
     return this.parent ? this.parent.getFn(name) : null;
   }
 
+  // Structs (SHAPE)
+  setStruct(name, fields) {
+    this._structs.set(name, fields);
+  }
+
+  getStruct(name) {
+    if (this._structs.has(name)) return this._structs.get(name);
+    return this.parent ? this.parent.getStruct(name) : null;
+  }
+
   // Species / classes
   setSpecies(name, { fields, methods }) {
     this._species.set(name, { fields, methods });
@@ -97,6 +122,34 @@ class TypeScope {
   getSpecies(name) {
     if (this._species.has(name)) return this._species.get(name);
     return this.parent ? this.parent.getSpecies(name) : null;
+  }
+
+  // Methods (receiver-bound actions)
+  setMethod(typeName, methodName, info) {
+    if (!this._methods.has(typeName)) this._methods.set(typeName, new Map());
+    this._methods.get(typeName).set(methodName, info);
+  }
+
+  getMethod(typeName, methodName) {
+    if (this._methods.has(typeName) && this._methods.get(typeName).has(methodName)) {
+      return this._methods.get(typeName).get(methodName);
+    }
+    return this.parent ? this.parent.getMethod(typeName, methodName) : null;
+  }
+
+  hasMethodsFor(typeName) {
+    if (this._methods.has(typeName) && this._methods.get(typeName).size > 0) return true;
+    return this.parent ? this.parent.hasMethodsFor(typeName) : false;
+  }
+
+  // Choices / tagged unions (CHOICE)
+  setChoice(name, variants) {
+    this._choices.set(name, variants);
+  }
+
+  getChoice(name) {
+    if (this._choices.has(name)) return this._choices.get(name);
+    return this.parent ? this.parent.getChoice(name) : null;
   }
 }
 
@@ -141,6 +194,9 @@ function inferExprString(expr, scope) {
 
   // String concat: anything containing " + " with a TX operand → TX
   if (s.includes(' + ') && s.includes('"')) return T.TX;
+
+  // Array literal [...] — return UNKNOWN (too complex for static inference)
+  if (s.startsWith('[') && s.endsWith(']')) return T.LIST;
 
   // math:SQRT etc. → SCL
   if (/^math:\w+/.test(s)) return T.SCL;
@@ -233,6 +289,8 @@ class TypeChecker {
         scope.setVar(`__plant_${node.libName}`, T.FACT);
       } else if (node.type === 'RootScopeStatement') {
         scope.setVar(node.identifier, T.MAP, { locked: true, line: node.line });
+      } else if (node.type === 'StructDeclaration') {
+        scope.setStruct(node.name, node.fields);
       }
     }
   }
@@ -242,7 +300,13 @@ class TypeChecker {
     // If ALL params are TX, mark them as ANY — common pattern for polymorphic helpers
     // like `assert(label(TX), actual(TX), expected(TX))` which accept any value type
     const allTX = params.length > 0 && params.every(p => p.type === T.TX);
-    if (allTX) params = params.map(p => ({ ...p, type: T.ANY }));
+    if (allTX && !node.receiver) params = params.map(p => ({ ...p, type: T.ANY }));
+    // If this is a receiver-bound method, register as method instead
+    if (node.receiver) {
+      const returnType = this._inferActionReturn(node.body || node.bodyStatements || [], params, scope);
+      scope.setMethod(node.receiver.type, node.name, { params, returnType, receiverName: node.receiver.name });
+      return;
+    }
     // Infer return type from body GiveStatements
     const returnType = this._inferActionReturn(node.body || node.bodyStatements || [], params, scope);
     scope.setFn(node.name, { params, returnType });
@@ -289,6 +353,7 @@ class TypeChecker {
     if (!node || !node.type) return;
     switch (node.type) {
       case 'CreateStatement':    this._checkCreate(node, scope);    break;
+      case 'MethodCall':         this._checkMethodCall(node, scope); break;
       case 'SetStatement':       this._checkSet(node, scope);       break;
       case 'IncreaseStatement':
       case 'DecreaseStatement':  this._checkArithmetic(node, scope);break;
@@ -318,6 +383,7 @@ class TypeChecker {
       case 'PlantStatement':
       case 'RootStatement':
       case 'RootScopeStatement':
+      case 'StructDeclaration':
       case 'LinkStatement':
       case 'SortStatement':
       case 'ShakeStatement':
@@ -332,6 +398,7 @@ class TypeChecker {
       case 'ListenBranchStatement':
       case 'ResponseStatement':
       case 'RawStatement':       break;
+      case 'VariantDeclaration': this._checkVariantDeclaration(node, scope); break;
       default:                   break;
     }
   }
@@ -341,6 +408,59 @@ class TypeChecker {
   _checkCreate(node, scope) {
     const declaredType = node.varType;
     const inferredType = this._inferExprNode(node.valueExpr, scope);
+
+    // Handle array types: [NUM], [TX], [Point], etc.
+    if (isArrayType(declaredType)) {
+      const innerType = arrayInnerType(declaredType);
+      // Register variable as array type
+      scope.setVar(node.identifier, declaredType, { line: node.line });
+      // Validate array literal if present
+      const ve = node.valueExpr;
+      if (ve && ve.type === 'ArrayLiteral') {
+        for (let i = 0; i < ve.elements.length; i++) {
+          const elType = this._inferExprNode(ve.elements[i], scope);
+          if (elType !== T.UNKNOWN && elType !== T.ANY && !this._compatible(innerType, elType)) {
+            this.error('TYPE_MISMATCH',
+              `Array element ${i}: expected ${innerType}, got ${elType}`,
+              ve.elements[i].line, ve.elements[i].column);
+          }
+        }
+      }
+      return;
+    }
+
+    // Check if this is a struct type
+    const structDef = scope.getStruct(declaredType);
+    if (structDef) {
+      // Register as a struct instance variable
+      scope.setVar(node.identifier, declaredType, { line: node.line });
+      // Validate struct instantiation
+      if (node.valueExpr && (node.valueExpr.type === 'StructInstantiation' || node.valueExpr.structName)) {
+        const inst = node.valueExpr;
+        if (inst.structName !== declaredType) {
+          this.error('TYPE_MISMATCH',
+            `CREATE "${node.identifier}": declared struct type ${declaredType} but instantiated ${inst.structName}`,
+            node.line, node.column);
+          return;
+        }
+        if (inst.args.length !== structDef.length) {
+          this.error('ARITY_MISMATCH',
+            `CREATE "${node.identifier}": struct ${declaredType} expects ${structDef.length} field(s), got ${inst.args.length}`,
+            node.line, node.column);
+          return;
+        }
+        for (let i = 0; i < inst.args.length; i++) {
+          const argType = this._inferExprNode(inst.args[i], scope);
+          const fieldDef = structDef[i];
+          if (argType !== T.UNKNOWN && fieldDef.varType !== argType && argType !== T.ANY) {
+            this.error('TYPE_MISMATCH',
+              `CREATE "${node.identifier}": field "${fieldDef.name}" expects ${fieldDef.varType}, got ${argType}`,
+              node.line, node.column);
+          }
+        }
+      }
+      return;
+    }
 
     if (declaredType && inferredType !== T.UNKNOWN && inferredType !== T.ANY) {
       if (!this._compatible(declaredType, inferredType)) {
@@ -353,9 +473,43 @@ class TypeChecker {
   }
 
   _checkSet(node, scope) {
-    // SET x TO expr  or  SET x:prop TO expr
+    // SET x TO expr  or  SET x:prop TO expr  or  SET x.field TO expr
     const target = node.identifier;
     if (!target) return;
+
+    // Struct member access: SET obj.field TO expr
+    if (node.isMemberAccess) {
+      const obj = scope.getVar(node.memberObject);
+      if (!obj) {
+        this.error('UNDEFINED_VAR',
+          `SET: "${node.memberObject}" is not defined`,
+          node.line, node.column);
+        return;
+      }
+      const structDef = scope.getStruct(obj.type);
+      if (!structDef) {
+        this.error('TYPE_MISMATCH',
+          `SET: "${node.memberObject}" is not a struct — cannot access .${node.memberField}`,
+          node.line, node.column);
+        return;
+      }
+      const field = structDef.find(f => f.name === node.memberField);
+      if (!field) {
+        this.error('TYPE_MISMATCH',
+          `SET: struct "${node.memberObject}" has no field "${node.memberField}"`,
+          node.line, node.column);
+        return;
+      }
+      const valType = this._inferExprString(node.valueExpr, scope);
+      if (valType !== T.UNKNOWN && field.varType !== valType && !NUMERIC.has(field.varType) === !NUMERIC.has(valType)) {
+        if (field.varType !== valType) {
+          this.error('TYPE_MISMATCH',
+            `SET: field "${node.memberField}" expects ${field.varType}, got ${valType}`,
+            node.line, node.column);
+        }
+      }
+      return;
+    }
 
     // Check target:prop form — object must exist
     if (node.propExpr || (target && target.includes(':'))) {
@@ -416,8 +570,10 @@ class TypeChecker {
   }
 
   _checkShow(node, scope) {
-    // SHOW is permissive — only warn for plain Identifier nodes (not RAW_EXPR)
     if (!node.expr) return;
+    // Always infer expression type to validate method calls etc.
+    this._inferExprNode(node.expr, scope);
+    // Additional warning for plain Identifier nodes that may be undefined
     if (node.expr.type === 'Identifier') {
       const name = node.expr.identifier || node.expr.value;
       if (name && name !== 'undefined') {
@@ -429,7 +585,6 @@ class TypeChecker {
         }
       }
     }
-    // RAW_EXPR, Literal, and compound expressions — skip (too complex for static analysis)
   }
 
   _checkReap(node, scope) {
@@ -501,6 +656,11 @@ class TypeChecker {
     }
   }
 
+  _checkVariantDeclaration(node, scope) {
+    // Register the CHOICE type and its variants
+    scope.setChoice(node.name, node.variants);
+  }
+
   _checkIf(node, scope) {
     for (const branch of (node.branches || [])) {
       const branchScope = scope.child();
@@ -530,13 +690,72 @@ class TypeChecker {
   }
 
   _checkMatch(node, scope) {
-    const subjectVar = scope.getVar(node.subjectExpr);
-    // Clauses are raw text — can't deeply type-check without a full expression parser
-    // Just verify subject is defined
-    if (!subjectVar && /^[a-zA-Z_]\w*$/.test(node.subjectExpr)) {
-      this.warn('UNDEFINED_VAR',
-        `MATCH: subject "${node.subjectExpr}" may not be defined`,
+    // Legacy MATCH format — just check subject is defined
+    if (node.clauses.length > 0 && node.clauses[0].clauseText !== undefined) {
+      const subjectVar = scope.getVar(node.subjectExpr);
+      if (!subjectVar && /^[a-zA-Z_]\w*$/.test(node.subjectExpr)) {
+        this.warn('UNDEFINED_VAR',
+          `MATCH: subject "${node.subjectExpr}" may not be defined`,
+          node.line, node.column);
+      }
+      return;
+    }
+
+    // New pattern-matching MATCH
+    const subjectType = this._inferExprNode(node.subjectExpr, scope);
+    if (!subjectType || subjectType === T.UNKNOWN) {
+      this.warn('UNKNOWN_TYPE',
+        `MATCH: subject type is unknown`,
         node.line, node.column);
+      return;
+    }
+
+    // Check if subject is a CHOICE type
+    const choiceDef = scope.getChoice(subjectType);
+    if (!choiceDef) {
+      this.warn('TYPE_MISMATCH',
+        `MATCH: "${subjectType}" is not a CHOICE type`,
+        node.line, node.column);
+      return;
+    }
+
+    // Exhaustiveness check: every variant must have a clause
+    const covered = new Set(node.clauses.map(c => c.variantName.toUpperCase()));
+    for (const variant of choiceDef) {
+      if (!covered.has(variant.name.toUpperCase())) {
+        this.warn('INCOMPLETE_MATCH',
+          `MATCH: missing clause for variant "${variant.name}" in CHOICE "${subjectType}"`,
+          node.line, node.column);
+      }
+    }
+
+    // Check each clause — bind the payload variable if present
+    for (const clause of node.clauses) {
+      const variant = choiceDef.find(v => v.name.toUpperCase() === clause.variantName.toUpperCase());
+      if (!variant) {
+        this.error('UNDEFINED_VARIANT',
+          `MATCH: "${clause.variantName}" is not a variant of "${subjectType}"`,
+          node.line, node.column);
+        continue;
+      }
+      if (clause.binding && !variant.type) {
+        this.warn('UNUSED_BINDING',
+          `MATCH: variant "${variant.name}" has no payload, but binding "${clause.binding}" provided`,
+          node.line, node.column);
+      }
+      if (!clause.binding && variant.type) {
+        this.warn('MISSING_BINDING',
+          `MATCH: variant "${variant.name}" has payload type ${variant.type}, but no binding variable`,
+          node.line, node.column);
+      }
+      // Check body statements in a child scope with the payload bound
+      if (clause.binding && variant.type) {
+        const clauseScope = scope.child();
+        clauseScope.setVar(clause.binding, variant.type, { line: node.line });
+        this._checkBlock(clause.bodyStatements, clauseScope);
+      } else {
+        this._checkBlock(clause.bodyStatements, scope);
+      }
     }
   }
 
@@ -544,6 +763,10 @@ class TypeChecker {
     // FFI external actions have no body — skip checking
     if (node.isExternal) return;
     const fnScope = scope.child();
+    // Inject receiver (self) into scope for methods
+    if (node.receiver) {
+      fnScope.setVar(node.receiver.name, node.receiver.type, { line: node.line });
+    }
     for (const p of (node.params || [])) {
       fnScope.setVar(p.name, p.type || T.UNKNOWN);
     }
@@ -702,6 +925,104 @@ class TypeChecker {
     // No specific type errors — just walk
   }
 
+  _checkMethodCall(node, scope) {
+    const targetType = this._inferExprNode(node.target, scope);
+    if (!targetType || targetType === T.UNKNOWN) {
+      this.warn('UNKNOWN_TYPE',
+        `Method call "${node.methodName}" on unknown type — cannot validate`,
+        node.line, node.column);
+      return;
+    }
+
+    // ── Intrinsic array methods: push and pop ──────────────────────────
+    if (isArrayType(targetType)) {
+      const innerType = arrayInnerType(targetType);
+      if (node.methodName === 'push') {
+        const got = (node.args || []).length;
+        if (got !== 1) {
+          this.error('ARITY_MISMATCH',
+            `Array push expects 1 argument (item of type ${innerType}), got ${got}`,
+            node.line, node.column);
+          return;
+        }
+        const argType = this._inferExprNode(node.args[0], scope);
+        if (argType !== T.UNKNOWN && argType !== T.ANY && !this._compatible(innerType, argType)) {
+          this.error('TYPE_MISMATCH',
+            `Array push: expected ${innerType}, got ${argType}`,
+            node.args[0].line || node.line, node.args[0].column || node.column);
+        }
+        return;
+      }
+      if (node.methodName === 'pop') {
+        const got = (node.args || []).length;
+        if (got !== 0) {
+          this.error('ARITY_MISMATCH',
+            `Array pop expects 0 arguments, got ${got}`,
+            node.line, node.column);
+        }
+        return;
+      }
+    }
+
+    // ── Choice/variant construction ────────────────────────────────
+    const choiceDef = scope.getChoice(targetType);
+    if (choiceDef) {
+      const variant = choiceDef.find(v => v.name.toUpperCase() === node.methodName.toUpperCase());
+      if (!variant) {
+        this.error('UNDEFINED_VARIANT',
+          `CHOICE "${targetType}" has no variant "${node.methodName}"`,
+          node.line, node.column);
+        return;
+      }
+      const got = (node.args || []).length;
+      const expected = variant.type ? 1 : 0;
+      if (got !== expected) {
+        this.error('ARITY_MISMATCH',
+          `Variant "${targetType}.${variant.name}" expects ${expected} argument(s) (payload of type "${variant.type || 'none'}"), got ${got}`,
+          node.line, node.column);
+        return;
+      }
+      if (variant.type && got === 1) {
+        const argType = this._inferExprNode(node.args[0], scope);
+        if (argType !== T.UNKNOWN && argType !== T.ANY && !this._compatible(variant.type, argType)) {
+          this.error('TYPE_MISMATCH',
+            `Variant "${targetType}.${variant.name}" expects payload type ${variant.type}, got ${argType}`,
+            node.args[0].line || node.line, node.args[0].column || node.column);
+        }
+      }
+      return;
+    }
+
+    // ── User-defined methods (structs) ─────────────────────────────
+    const method = scope.getMethod(targetType, node.methodName);
+    if (!method) {
+      this.error('UNDEFINED_METHOD',
+        `Type "${targetType}" has no method "${node.methodName}"`,
+        node.line, node.column);
+      return;
+    }
+    // Validate argument count
+    const expected = (method.params || []).length;
+    const got = (node.args || []).length;
+    if (expected !== got) {
+      this.error('ARITY_MISMATCH',
+        `Method "${node.methodName}" on ${targetType} expects ${expected} argument(s), got ${got}`,
+        node.line, node.column);
+    }
+    // Validate argument types
+    for (let i = 0; i < Math.min(expected, got); i++) {
+      const param = method.params[i];
+      const argType = this._inferExprNode(node.args[i], scope);
+      if (param.type && param.type !== T.UNKNOWN && argType !== T.UNKNOWN && argType !== T.ANY) {
+        if (!this._compatible(param.type, argType)) {
+          this.error('TYPE_MISMATCH',
+            `Method "${node.methodName}" arg "${param.name}": expected ${param.type}, got ${argType}`,
+            node.args[i].line || node.line, node.args[i].column || node.column);
+        }
+      }
+    }
+  }
+
   // ── Expression type inference ────────────────────────────────────────────────
 
   _inferExprNode(node, scope) {
@@ -714,14 +1035,79 @@ class TypeChecker {
       if (node.literalType === 'RAW_EXPR') return this._inferExprString(node.value, scope);
     }
     if (node.type === 'Identifier') {
-      const v = scope.getVar(node.identifier || node.value);
-      return v ? v.type : T.UNKNOWN;
+      const v = scope.getVar(node.name || node.identifier || node.value);
+      if (v) return v.type;
+      // Check if the name is a CHOICE type (for variant construction like Option.Some(10))
+      const choice = scope.getChoice(node.name || node.identifier || node.value);
+      if (choice) return node.name || node.identifier || node.value;
+      return T.UNKNOWN;
+    }
+    if (node.type === 'ArrayLiteral') {
+      // Infer array type from elements if possible
+      if (node.elements.length === 0) return T.LIST; // generic LIST
+      const firstType = this._inferExprNode(node.elements[0], scope);
+      if (firstType === T.UNKNOWN) return T.LIST;
+      return `[${firstType}]`;
     }
     if (node.type === 'LenCall' || node.type === 'CapCall') {
       return T.NUM;
     }
     if (node.type === 'IndexAccess') {
-      return T.TX;
+      const targetType = this._inferExprNode(node.target, scope);
+      // If target is an array type like [NUM], return the inner type
+      if (isArrayType(targetType)) {
+        return arrayInnerType(targetType);
+      }
+      // If target is a struct type, return UNKNOWN (field-level index not supported)
+      if (targetType && scope.getStruct(targetType)) {
+        return T.UNKNOWN;
+      }
+      return T.TX; // default: TX indexing (string characters)
+    }
+    if (node.type === 'MemberAccess') {
+      const objType = this._inferExprNode(node.object, scope);
+      if (typeof objType === 'string' && scope.getStruct(objType)) {
+        const structDef = scope.getStruct(objType);
+        const field = structDef.find(f => f.name === node.member);
+        if (field) return field.varType;
+      }
+      // CHOICE variant access (e.g., Option.None, Option.Bad)
+      if (typeof objType === 'string' && scope.getChoice(objType)) {
+        const choiceDef = scope.getChoice(objType);
+        const variant = choiceDef.find(v => v.name.toUpperCase() === node.member.toUpperCase());
+        if (!variant) {
+          this.error('UNDEFINED_VARIANT',
+            `CHOICE "${objType}" has no variant "${node.member}"`,
+            node.line, node.column);
+          return T.UNKNOWN;
+        }
+        return objType;
+      }
+      return T.UNKNOWN;
+    }
+    if (node.type === 'StructInstantiation') {
+      const st = scope.getStruct(node.structName);
+      return st ? node.structName : T.UNKNOWN;
+    }
+    if (node.type === 'MethodCall') {
+      // Validate via _checkMethodCall (emits diagnostics)
+      this._checkMethodCall(node, scope);
+      const targetType = this._inferExprNode(node.target, scope);
+      // Intrinsic array methods
+      if (targetType && isArrayType(targetType)) {
+        if (node.methodName === 'push') return T.VOID;
+        if (node.methodName === 'pop') return arrayInnerType(targetType);
+      }
+      // Choice variant construction returns the choice type
+      if (targetType && scope.getChoice(targetType)) {
+        return targetType;
+      }
+      // User-defined methods
+      if (targetType && targetType !== T.UNKNOWN) {
+        const method = scope.getMethod(targetType, node.methodName);
+        if (method) return method.returnType || T.UNKNOWN;
+      }
+      return T.UNKNOWN;
     }
     return T.UNKNOWN;
   }

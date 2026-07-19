@@ -23,7 +23,7 @@ const KEYWORDS = new Set([
   'LISTEN','BRANCH','RESPONSE','ON','WITH','AS','MAP',
   'TRUE','FALSE','TO','FROM','IS','IN','BETWEEN','AND','OR','NOT',
   'GREATER','LESS','THAN','COUNT','FIRST','LAST','SUM','MAX','MIN','REVERSE',
-  'NUM','SCL','TX','FACT','LIST','INSTANCE','VEIN',
+  'NUM','SCL','TX','FACT','LIST','INSTANCE','VEIN','SHAPE','CHOICE',
 ]);
 
 const TOKEN = {
@@ -176,7 +176,7 @@ function tokenize(source) {
     }
 
     // Structural punctuation
-    if ('.,:()/[]'.includes(c)) {
+    if ('.,:()/[]{}'.includes(c)) {
       advance();
       tokens.push(new Token(TOKEN.PUNCT, c, startLine, startCol, currentDepth));
       continue;

@@ -220,14 +220,33 @@ class ActionDeclarationNode extends AstNode {
    * @param {Array} fields.bodyStatements Nested AST statement nodes forming
    *        the action's executable body.
    * @param {boolean} [fields.isExternal] True for FFI declarations (no body).
+   * @param {{name:string,type:string}|null} [fields.receiver] Optional receiver binding,
+   *        e.g. {name:'self', type:'Point'} for methods.
    * @param {{line,column,depth}} coords
    */
-  constructor({ name, params, bodyStatements, isExternal }, coords) {
+  constructor({ name, params, bodyStatements, isExternal, receiver }, coords) {
     super('ActionDeclaration', coords);
     this.name = name;
     this.params = params || [];
     this.bodyStatements = bodyStatements || [];
     this.isExternal = !!isExternal;
+    this.receiver = receiver || null;
+  }
+}
+
+class MethodCallNode extends AstNode {
+  /**
+   * @param {Object} fields
+   * @param {AstNode} fields.target  The receiver expression (e.g. IdentifierNode for obj).
+   * @param {string} fields.methodName  The called method name.
+   * @param {Array<AstNode|string>} fields.args  Argument expressions.
+   * @param {{line,column,depth}} coords
+   */
+  constructor({ target, methodName, args }, coords) {
+    super('MethodCall', coords);
+    this.target = target;
+    this.methodName = methodName;
+    this.args = args || [];
   }
 }
 
@@ -363,6 +382,37 @@ class IndexAccessNode extends AstNode {
   }
 }
 
+class ArrayLiteralNode extends AstNode {
+  constructor(elements, coords) {
+    super('ArrayLiteral', coords);
+    this.elements = elements || [];
+  }
+}
+
+class StructDeclarationNode extends AstNode {
+  constructor({ name, fields }, coords) {
+    super('StructDeclaration', coords);
+    this.name = name;
+    this.fields = fields || []; // [{ name, varType }]
+  }
+}
+
+class StructInstantiationExpr extends AstNode {
+  constructor({ structName, args }, coords) {
+    super('StructInstantiation', coords);
+    this.structName = structName;
+    this.args = args || []; // expression nodes
+  }
+}
+
+class MemberAccessNode extends AstNode {
+  constructor({ object, member }, coords) {
+    super('MemberAccess', coords);
+    this.object = object;
+    this.member = member;
+  }
+}
+
 class ImportStatementNode extends AstNode {
   /**
    * @param {Object} fields
@@ -389,6 +439,10 @@ module.exports = {
   LenCallNode,
   CapCallNode,
   IndexAccessNode,
+  StructDeclarationNode,
+  StructInstantiationExpr,
+  MemberAccessNode,
+  ArrayLiteralNode,
   ImportStatementNode,
   ListenBranchStatementNode,
   ResponseStatementNode,
@@ -396,6 +450,7 @@ module.exports = {
   ShelterStatementNode,
   CalmStatementNode,
   ActionDeclarationNode,
+  MethodCallNode,
   SpeciesDeclarationNode,
   BloomStatementNode,
   TapStatementNode,
@@ -440,11 +495,12 @@ class SeasonStatementNode extends AstNode {
 }
 
 class MatchStatementNode extends AstNode {
-  // MATCH expr, IS val YIELD action. / ELSE YIELD action. / \\\.
+  // Pattern-matching MATCH:
+  //   MATCH expr { Variant1(binding) -> { stmts } Variant2 -> { stmts } }
   constructor({ subjectExpr, clauses }, coords) {
     super('MatchStatement', coords);
     this.subjectExpr = subjectExpr;
-    this.clauses     = clauses || []; // [{cond:string, action:string}]
+    this.clauses     = clauses || []; // [{variantName, binding, bodyStatements}]
   }
 }
 
@@ -613,6 +669,15 @@ class RootScopeStatementNode extends AstNode {
   }
 }
 
+class VariantDeclarationNode extends AstNode {
+  // CHOICE Name { Variant1(Type), Variant2 }
+  constructor({ name, variants }, coords) {
+    super('VariantDeclaration', coords);
+    this.name = name;
+    this.variants = variants || []; // [{ name, type }] — type may be null for empty variants
+  }
+}
+
 class FlowStatementNode extends AstNode {
   // REAP x FROM src FLOW a FLOW b ...
   // (handled by ReapStatement with flowChain)
@@ -628,6 +693,11 @@ class FlowStatementNode extends AstNode {
 // Re-export everything
 const _orig = module.exports;
 Object.assign(module.exports, {
+  StructDeclarationNode,
+  StructInstantiationExpr,
+  MemberAccessNode,
+  ArrayLiteralNode,
+  MethodCallNode,
   IfStatementNode,
   CycleStatementNode,
   SeasonStatementNode,
@@ -653,4 +723,5 @@ Object.assign(module.exports, {
   RootStatementNode,
   RootScopeStatementNode,
   FlowStatementNode,
+  VariantDeclarationNode,
 });

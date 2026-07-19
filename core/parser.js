@@ -38,6 +38,8 @@ const {
   ActionDeclarationNode, SpeciesDeclarationNode, BloomStatementNode, TapStatementNode,
   WheneverStatementNode, ReapStatementNode, ImportStatementNode,
   SetStatementNode, IncreaseStatementNode, DecreaseStatementNode,
+  StructDeclarationNode, StructInstantiationExpr, MemberAccessNode,
+  ArrayLiteralNode, MethodCallNode,
 } = require('./ast');
 
 
@@ -180,6 +182,8 @@ class Parser {
     if (this.match(TOKEN.KEYWORD, 'SET')) return this.parseSetStatement(coords);
     if (this.match(TOKEN.KEYWORD, 'INCREASE')) return this.parseIncreaseStatement(coords);
     if (this.match(TOKEN.KEYWORD, 'DECREASE')) return this.parseDecreaseStatement(coords);
+    if (this.match(TOKEN.KEYWORD, 'SHAPE')) return this.parseStructDeclaration(coords);
+    if (this.match(TOKEN.KEYWORD, 'CHOICE')) return this.parseVariantDeclaration(coords);
 
     // New dispatches — remaining statement types
     if (this.match(TOKEN.KEYWORD, 'IF'))     return this.parseIfStatement(coords);
@@ -542,6 +546,24 @@ class Parser {
   // ── ACTION name(a(TYPE)) -> external. (FFI external declaration) ───
   parseActionDeclaration(coords) {
     this.consume(TOKEN.KEYWORD, 'ACTION', '"ACTION"');
+    // Check for receiver syntax: ACTION (self(Type)) methodName(x(TYPE)), ...
+    let receiver = null;
+    if (this.match(TOKEN.PUNCT, '(') &&
+        this.peek(1) && (this.peek(1).type === TOKEN.IDENT || this.peek(1).type === TOKEN.KEYWORD) &&
+        this.peek(2) && this.peek(2).type === TOKEN.PUNCT && this.peek(2).value === '(' &&
+        this.peek(4) && this.peek(4).type === TOKEN.PUNCT && this.peek(4).value === ')') {
+      // This is ACTION (self(Type)) methodName(...)
+      this.advance(); // consume (
+      const recvNameTok = this.current();
+      const recvName = this.advance().value.toLowerCase();
+      this.consume(TOKEN.PUNCT, '(', '"(" after receiver name');
+      const recvType = this.current().value;
+      this.advance();
+      this.consume(TOKEN.PUNCT, ')', '")" after receiver type');
+      this.consume(TOKEN.PUNCT, ')', '")" to close receiver block');
+      receiver = { name: recvName, type: recvType };
+    }
+
     const nameTok = this.current();
     if (nameTok.type !== TOKEN.IDENT) {
       storm('SYNTAX_STORM', `Expected an action name after ACTION, found "${nameTok.value}"`,
@@ -560,7 +582,7 @@ class Parser {
       this.advance(); // ->
       this.advance(); // external
       if (this.match(TOKEN.PUNCT, '.')) this.advance();
-      return new ActionDeclarationNode({ name, params, isExternal: true }, coords);
+      return new ActionDeclarationNode({ name, params, isExternal: true, receiver }, coords);
     }
 
     this.consume(TOKEN.PUNCT, ',', '"," to open the ACTION body');
@@ -577,7 +599,7 @@ class Parser {
     this.consume(TOKEN.KEYWORD, 'ACTION', '"ACTION" in the "/ACTION." closer');
     if (this.match(TOKEN.PUNCT, '.')) this.advance();
 
-    return new ActionDeclarationNode({ name, params, bodyStatements, isExternal: false }, coords);
+    return new ActionDeclarationNode({ name, params, bodyStatements, isExternal: false, receiver }, coords);
   }
 
   // ── SPECIES name [PARENT base], ...fields/actions... /SPECIES. ──
@@ -869,19 +891,40 @@ class Parser {
     this.consume(TOKEN.KEYWORD, 'SET', '"SET"');
     // Collect the full identifier token span up to TO
     // Supports: SET x TO val, SET SELF:x TO val, SET obj:prop TO val, SET obj:"key" TO val
+    // SET p.x TO val (member access)
     const identSpan = [];
     while (!this.isAtEnd()) {
       const t = this.current();
       if (t.type === TOKEN.KEYWORD && t.value === 'TO') break;
-      if (t.type === TOKEN.PUNCT && t.value === '.') break;
+      if (t.type === TOKEN.PUNCT && t.value === '.' &&
+          this.peek(1) && this.peek(1).type === TOKEN.IDENT) {
+        // Part of member access like p.x — include the dot and continue
+        identSpan.push(this.advance()); // push '.'
+        identSpan.push(this.advance()); // push field name
+        continue;
+      }
+      if (t.type === TOKEN.PUNCT && t.value === '.') break; // statement terminator
       identSpan.push(this.advance());
     }
     const identifier = joinTokens(identSpan).trim();
+
     this.consume(TOKEN.KEYWORD, 'TO', '"TO" in SET statement');
     const valSpan = [];
     while (!this.isAtEnd() && !(this.match(TOKEN.PUNCT, '.'))) valSpan.push(this.advance());
     this.consume(TOKEN.PUNCT, '.', 'a terminating period (.) after SET');
-    return new SetStatementNode({ identifier, valueExpr: joinTokens(valSpan).trim() }, coords);
+
+    // If the identifier contains a dot but not a colon, it's member access
+    const node = new SetStatementNode({ identifier, valueExpr: joinTokens(valSpan).trim() }, coords);
+    if (identifier.includes('.') && !identifier.includes(':')) {
+      const parts = identifier.split('.').map(s => s.trim());
+      if (parts.length === 2 && parts[0].length > 0 && parts[1].length > 0) {
+        node.isMemberAccess = true;
+        // Lowercase the object name if it's a keyword token like SELF
+        node.memberObject = parts[0].toLowerCase();
+        node.memberField = parts[1];
+      }
+    }
+    return node;
   }
 
   parseIncreaseStatement(coords) {
@@ -1023,15 +1066,37 @@ class Parser {
     }
     const identifier = this.advance().value;
 
-    this.consume(TOKEN.PUNCT, '(', '"(" after the identifier');
-    const typeTok = this.current();
-    if (typeTok.type !== TOKEN.KEYWORD || !['NUM', 'SCL', 'TX', 'FACT', 'LIST', 'MAP', 'INSTANCE', 'VEIN'].includes(typeTok.value)) {
-      storm('SYNTAX_STORM',
-        `Expected a type (NUM, SCL, TX, FACT, LIST, MAP...), found "${typeTok.value}"`,
-        typeTok.line, typeTok.column);
+    // Optional type annotation: CREATE ident(TYPE) TO expr.
+    // If the next token is not '(', infer type from value expression
+    let varType = null;
+    if (this.match(TOKEN.PUNCT, '(')) {
+      this.advance(); // consume (
+      // Handle array type: [TYPE] syntax
+      if (this.match(TOKEN.PUNCT, '[')) {
+        this.advance(); // consume [
+        const innerTok = this.current();
+        if (innerTok.type !== TOKEN.KEYWORD && innerTok.type !== TOKEN.IDENT) {
+          storm('SYNTAX_STORM',
+            `Expected a type inside [ ], found "${innerTok.value}"`,
+            innerTok.line, innerTok.column);
+        }
+        const innerType = this.advance().value;
+        this.consume(TOKEN.PUNCT, ']', '"]" to close array type');
+        varType = `[${innerType}]`;
+      } else {
+        const typeTok = this.current();
+        const VALID_TYPES = new Set(['NUM', 'SCL', 'TX', 'FACT', 'LIST', 'MAP', 'INSTANCE', 'VEIN']);
+        const isBuiltin = typeTok.type === TOKEN.KEYWORD && VALID_TYPES.has(typeTok.value);
+        const isStruct = typeTok.type === TOKEN.IDENT || typeTok.type === TOKEN.KEYWORD;
+        if (!isBuiltin && !isStruct) {
+          storm('SYNTAX_STORM',
+            `Expected a type (NUM, SCL, TX, FACT, LIST, MAP, or struct name), found "${typeTok.value}"`,
+            typeTok.line, typeTok.column);
+        }
+        varType = this.advance().value;
+      }
+      this.consume(TOKEN.PUNCT, ')', '")" after the type');
     }
-    const varType = this.advance().value;
-    this.consume(TOKEN.PUNCT, ')', '")" after the type');
 
     // Optional PULSE modifier: CREATE x(NUM) PULSE TO 20.
     let isPulse = false;
@@ -1045,7 +1110,14 @@ class Parser {
     if (this.match(TOKEN.KEYWORD, 'TO')) {
       this.advance();
       if (!(this.match(TOKEN.PUNCT, '.'))) {
-        valueExpr = this.parseExpressionSpan();
+        // Check for struct instantiation syntax: StructName{ args }
+        if (this.peek(0).type === TOKEN.IDENT && this.peek(1).type === TOKEN.PUNCT && this.peek(1).value === '{') {
+          valueExpr = this.parseStructInstantiation();
+        } else if (this.match(TOKEN.PUNCT, '[')) {
+          valueExpr = this.parseArrayLiteral();
+        } else {
+          valueExpr = this.parseExpressionSpan();
+        }
       }
     }
 
@@ -1069,13 +1141,91 @@ class Parser {
     const tokensInSpan = [];
     while (!this.isAtEnd()) {
       const t = this.current();
-      if (t.type === TOKEN.PUNCT && t.value === '.') break;
+      if (t.type === TOKEN.PUNCT && t.value === '.') {
+        // Check for member access / method call pattern: IDENT/KW . IDENT/KW
+        // Target variable may be a keyword (e.g. EMPTY); field/method name
+        // may also be a keyword (CHOICE variant like Num, Empty).
+        // To avoid false matches like "b . GIVE" inside "a + b. GIVE result",
+        // KEYWORD field names are accepted only when:
+        //   1. The field is on the same line as '.'
+        //   2. The token immediately after the field is NOT an IDENT
+        //      (which would indicate a statement keyword like SET followed by
+        //       its subject).
+        const isTarget = (tok) => tok && (tok.type === TOKEN.IDENT || tok.type === TOKEN.KEYWORD);
+        const isFieldName = (dotTok, fieldTok) => {
+          if (!fieldTok) return false;
+          if (fieldTok.type === TOKEN.IDENT) return true;
+          if (fieldTok.type === TOKEN.KEYWORD) {
+            if (dotTok.line !== fieldTok.line) return false;
+            const afterField = this.peek(2);
+            return !(afterField && afterField.type === TOKEN.IDENT);
+          }
+          return false;
+        };
+        if (tokensInSpan.length > 0 &&
+            isTarget(tokensInSpan[tokensInSpan.length - 1]) &&
+            this.peek(1) && isFieldName(t, this.peek(1))) {
+          tokensInSpan.push(this.advance()); // push '.'
+          const fieldTok = this.current();
+          tokensInSpan.push(this.advance()); // push field name
+          // Check for method call: IDENT . IDENT/KW ( args )
+          if (this.match(TOKEN.PUNCT, '(')) {
+            this.advance(); // consume (
+            const objCoords = { line: tokensInSpan[0].line, column: tokensInSpan[0].column, depth: tokensInSpan[0].depth };
+            const obj = new IdentifierNode(tokensInSpan[0].value, objCoords);
+            const methodName = fieldTok.value;
+            const args = [];
+            let depth = 1;
+            const argSpan = [];
+            while (!this.isAtEnd() && depth > 0) {
+              const at = this.current();
+              if (at.type === TOKEN.PUNCT && (at.value === '(' || at.value === '[')) { depth++; argSpan.push(this.advance()); }
+              else if (at.type === TOKEN.PUNCT && (at.value === ')' || at.value === ']')) {
+                depth--;
+                if (depth === 0) break;
+                argSpan.push(this.advance());
+              } else if (at.type === TOKEN.PUNCT && at.value === ',' && depth === 1) {
+                this.advance();
+                if (argSpan.length > 0) {
+                  args.push(new LiteralNode(joinTokens(argSpan), 'RAW_EXPR', objCoords));
+                  argSpan.length = 0;
+                }
+              } else {
+                argSpan.push(this.advance());
+              }
+            }
+            if (argSpan.length > 0) {
+              args.push(new LiteralNode(joinTokens(argSpan), 'RAW_EXPR', objCoords));
+            }
+            if (!this.isAtEnd()) this.advance(); // consume )
+            const coords = { line: tokensInSpan[0].line, column: tokensInSpan[0].column, depth: tokensInSpan[0].depth };
+            return new MethodCallNode({ target: obj, methodName, args }, coords);
+          }
+          continue;
+        }
+        break; // statement terminator
+      }
       tokensInSpan.push(this.advance());
     }
     if (tokensInSpan.length === 0) {
       const t = this.current();
       storm('SYNTAX_STORM', 'Expected an expression', t.line, t.column);
     }
+    // Check for member access pattern: IDENT/KW . IDENT/KW (span has 3 tokens)
+    // Target may be a keyword variable name; field may also be a keyword (CHOICE variant).
+    const isTarget = (tok) => tok && (tok.type === TOKEN.IDENT || tok.type === TOKEN.KEYWORD);
+    if (tokensInSpan.length === 3 &&
+        isTarget(tokensInSpan[0]) &&
+        tokensInSpan[1].type === TOKEN.PUNCT && tokensInSpan[1].value === '.' &&
+        (tokensInSpan[2].type === TOKEN.IDENT ||
+         tokensInSpan[2].type === TOKEN.KEYWORD)) {
+      const objCoords = { line: tokensInSpan[0].line, column: tokensInSpan[0].column, depth: tokensInSpan[0].depth };
+      const obj = new IdentifierNode(tokensInSpan[0].value, objCoords);
+      const member = tokensInSpan[2].value;
+      const coords = { line: tokensInSpan[0].line, column: tokensInSpan[0].column, depth: tokensInSpan[0].depth };
+      return new MemberAccessNode({ object: obj, member }, coords);
+    }
+
     if (tokensInSpan.length === 1) {
       const t = tokensInSpan[0];
       const coords = { line: t.line, column: t.column, depth: t.depth };
@@ -1359,21 +1509,138 @@ class Parser {
     return new SeasonStatementNode({ condExpr, bodyStatements: body }, coords);
   }
 
-  // MATCH expr, clauses \\\.
+  // Pattern-matching MATCH (new) and legacy MATCH (backward compat):
+  //   New: MATCH expr { Variant1(binding) -> { ... } Variant2 -> { ... } }
+  //   Legacy: MATCH expr, IS val YIELD action. / ELSE YIELD action. / \\\.
   parseMatchStatement(coords) {
     const { MatchStatementNode } = require('./ast');
-    this.advance();
-    const subjectExpr = this._collectLineSpan().replace(/,$/, '').trim();
-    const clauses = [];
+    this.consume(TOKEN.KEYWORD, 'MATCH', '"MATCH"');
+
+    // Detect legacy syntax: if next non-depth token is IDENT followed by ','
+    const savedPos = this.pos;
+    // Skip depth markers
+    while (this.current() && this.current().type === TOKEN.DEPTH) this.advance();
+    const afterDepth = this.pos;
+    const subjectTokens = [];
+    // Collect tokens until we see ',' or '{' or '.'
     while (!this.isAtEnd()) {
-      if (this.match(TOKEN.DEPTH)) this.advance();
       const t = this.current();
-      if (!t || t.type === TOKEN.EOF) break;
-      if (t.type === TOKEN.PUNCT && (t.value === '\\' || t.value === '/')) { this.advance(); break; }
-      const text = this._collectLineSpan().trim();
-      if (!text || /^\\+$/.test(text)) break;
-      clauses.push({ clauseText: text });
+      if (t.type === TOKEN.PUNCT && t.value === ',') {
+        // Legacy syntax: MATCH expr, ...
+        this.pos = savedPos; // rewind to right after MATCH (already consumed)
+        const subjectExpr = this._collectLineSpan().replace(/,$/, '').trim();
+        const clauses = [];
+        while (!this.isAtEnd()) {
+          if (this.match(TOKEN.DEPTH)) this.advance();
+          const t2 = this.current();
+          if (!t2 || t2.type === TOKEN.EOF) break;
+          if (t2.type === TOKEN.PUNCT && (t2.value === '\\' || t2.value === '/')) { this.advance(); break; }
+          const text = this._collectLineSpan().trim();
+          if (!text || /^\\+$/.test(text)) break;
+          clauses.push({ clauseText: text });
+        }
+        return new MatchStatementNode({ subjectExpr, clauses }, coords);
+      }
+      if (t.type === TOKEN.PUNCT && t.value === '{') {
+        // New syntax: MATCH expr { ... }
+        break;
+      }
+      if (t.type === TOKEN.PUNCT && t.value === '.') break;
+      this.advance();
     }
+    this.pos = savedPos; // rewind to right after MATCH (already consumed)
+
+    // New syntax: MATCH expr { Variant1(binding) -> { ... } ... }
+    // Collect the subject expression up to (but not including) '{'
+    const subjSpan = [];
+    while (!this.isAtEnd()) {
+      const pk = this.current();
+      if (pk.type === TOKEN.PUNCT && pk.value === '{') break;
+      if (pk.type === TOKEN.DEPTH) { this.advance(); continue; }
+      subjSpan.push(this.advance());
+    }
+    const subjectExpr = joinTokens(subjSpan).trim();
+    this.consume(TOKEN.PUNCT, '{', '"{" to open MATCH body');
+
+    const clauses = [];
+    while (!this.isAtEnd() && !this.match(TOKEN.PUNCT, '}')) {
+      // Skip leading depth markers
+      if (this.match(TOKEN.DEPTH)) { this.advance(); continue; }
+      // Check for closing brace
+      if (this.match(TOKEN.PUNCT, '}')) break;
+
+      const variantTok = this.current();
+      if (variantTok.type !== TOKEN.IDENT && variantTok.type !== TOKEN.KEYWORD) break;
+      const variantName = this.advance().value;
+      let binding = null;
+
+      // Optional parenthesized binding: Variant(val)
+      if (this.match(TOKEN.PUNCT, '(')) {
+        this.advance();
+        const bindTok = this.current();
+        if (bindTok.type === TOKEN.IDENT) {
+          binding = this.advance().value;
+        }
+        this.consume(TOKEN.PUNCT, ')', '")" after MATCH binding');
+      }
+
+      // Arrow -> { body }
+      if (this.match(TOKEN.PUNCT, '->')) {
+        // Single -> token
+        this.advance();
+      } else if (this.match(TOKEN.PUNCT, '-')) {
+        // Separate '-' '>' tokens
+        this.advance();
+        this.consume(TOKEN.PUNCT, '>', '">" after -> in MATCH clause');
+      }
+
+      this.consume(TOKEN.PUNCT, '{', '"{" to open MATCH clause body');
+
+      const bodyStatements = [];
+      while (!this.isAtEnd() && !this.match(TOKEN.PUNCT, '}')) {
+        if (this.match(TOKEN.DEPTH)) { this.advance(); continue; }
+        if (this.match(TOKEN.PUNCT, '}')) break;
+        if (this.match(TOKEN.KEYWORD, 'SHOW')) {
+          this.advance();
+          const exprSpan = [];
+          while (!this.isAtEnd()) {
+            const t2 = this.current();
+            if (t2.type === TOKEN.PUNCT && (t2.value === '}' || t2.value === '.')) break;
+            exprSpan.push(this.advance());
+          }
+          const exprText = joinTokens(exprSpan).trim();
+          bodyStatements.push({ type: 'ShowStatement', expr: exprText });
+        } else if (this.match(TOKEN.KEYWORD, 'GIVE')) {
+          this.advance();
+          const exprSpan = [];
+          while (!this.isAtEnd()) {
+            const t2 = this.current();
+            if (t2.type === TOKEN.PUNCT && (t2.value === '}' || t2.value === '.')) break;
+            exprSpan.push(this.advance());
+          }
+          const exprText = joinTokens(exprSpan).trim();
+          bodyStatements.push({ type: 'GiveStatement', valueExpr: exprText });
+        } else {
+          // Any other statement — collect until '}' or '.'
+          const bodySpan = [];
+          while (!this.isAtEnd()) {
+            const t2 = this.current();
+            if (t2.type === TOKEN.PUNCT && (t2.value === '}' || t2.value === '.')) break;
+            bodySpan.push(this.advance());
+          }
+          const stmtText = joinTokens(bodySpan).trim();
+          if (stmtText) {
+            bodyStatements.push({ type: 'GenericStatement', text: stmtText });
+          }
+        }
+      }
+      this.consume(TOKEN.PUNCT, '}', '"}" to close MATCH clause body');
+
+      clauses.push({ variantName, binding, bodyStatements });
+    }
+    this.consume(TOKEN.PUNCT, '}', '"}" to close MATCH');
+    if (this.match(TOKEN.PUNCT, '.')) this.advance();
+
     return new MatchStatementNode({ subjectExpr, clauses }, coords);
   }
 
@@ -1618,6 +1885,127 @@ class Parser {
     return new ImportStatementNode({ path: importPath, resolvedPath: null, importedStatements: [] }, coords);
   }
 
+  // ── StructName{ arg1, arg2, ... } ─────────────────────────────
+  parseStructInstantiation() {
+    const nameTok = this.current();
+    const structName = this.advance().value;
+    const coords = { line: nameTok.line, column: nameTok.column, depth: nameTok.depth };
+    this.consume(TOKEN.PUNCT, '{', '"{" after struct name');
+    const args = [];
+    while (!this.isAtEnd() && !this.match(TOKEN.PUNCT, '}')) {
+      // Collect tokens until , or }
+      const span = [];
+      while (!this.isAtEnd()) {
+        if (this.match(TOKEN.PUNCT, ',') || this.match(TOKEN.PUNCT, '}')) break;
+        span.push(this.advance());
+      }
+      if (span.length === 0) break;
+      // Parse the span as an expression
+      let argExpr;
+      if (span.length === 1) {
+        const t = span[0];
+        const ac = { line: t.line, column: t.column, depth: t.depth };
+        if (t.type === TOKEN.NUMBER) argExpr = new LiteralNode(t.value, 'NUMBER', ac);
+        else if (t.type === TOKEN.STRING) argExpr = new LiteralNode(t.value, 'STRING', ac);
+        else if (t.type === TOKEN.FACT) argExpr = new LiteralNode(t.value, 'FACT', ac);
+        else if (t.type === TOKEN.IDENT) argExpr = new IdentifierNode(t.value, ac);
+        else argExpr = new LiteralNode(joinTokens(span), 'RAW_EXPR', ac);
+      } else {
+        // Check for member access: IDENT . IDENT
+        if (span.length === 3 &&
+            span[0].type === TOKEN.IDENT &&
+            span[1].type === TOKEN.PUNCT && span[1].value === '.' &&
+            span[2].type === TOKEN.IDENT) {
+          const objCoords = { line: span[0].line, column: span[0].column, depth: span[0].depth };
+          const obj = new IdentifierNode(span[0].value, objCoords);
+          argExpr = new MemberAccessNode({ object: obj, member: span[2].value }, objCoords);
+        } else {
+          argExpr = new LiteralNode(joinTokens(span), 'RAW_EXPR', { line: span[0].line, column: span[0].column, depth: span[0].depth });
+        }
+      }
+      args.push(argExpr);
+      if (this.match(TOKEN.PUNCT, ',')) this.advance();
+    }
+    this.consume(TOKEN.PUNCT, '}', '"}" to close struct instantiation');
+    return new StructInstantiationExpr({ structName, args }, coords);
+  }
+
+  // ── SHAPE name { field1(TYPE), field2(TYPE), ... } ────────────
+  parseStructDeclaration(coords) {
+    this.consume(TOKEN.KEYWORD, 'SHAPE', '"SHAPE"');
+    const nameTok = this.current();
+    // Accept IDENT or KEYWORD as struct name (e.g. "Empty" tokenized as KEYWORD)
+    if (nameTok.type !== TOKEN.IDENT && nameTok.type !== TOKEN.KEYWORD) {
+      storm('SYNTAX_STORM', `Expected a struct name after SHAPE, found "${nameTok.value}"`,
+        nameTok.line, nameTok.column);
+    }
+    const name = this.advance().value;
+    this.consume(TOKEN.PUNCT, '{', '"{" to open struct body');
+
+    const fields = [];
+    while (!this.isAtEnd() && !this.match(TOKEN.PUNCT, '}')) {
+      const fNameTok = this.current();
+      if (fNameTok.type !== TOKEN.IDENT && fNameTok.type !== TOKEN.KEYWORD) break;
+      const fName = this.advance().value;
+      this.consume(TOKEN.PUNCT, '(', '"(" after field name');
+      const fTypeTok = this.current();
+      let fType;
+      if (fTypeTok.type === TOKEN.KEYWORD && ['NUM','SCL','TX','FACT','LIST','MAP'].includes(fTypeTok.value)) {
+        fType = this.advance().value;
+      } else if (fTypeTok.type === TOKEN.IDENT) {
+        fType = this.advance().value;
+      } else {
+        storm('SYNTAX_STORM', `Expected a type for field "${fName}", found "${fTypeTok.value}"`,
+          fTypeTok.line, fTypeTok.column);
+      }
+      this.consume(TOKEN.PUNCT, ')', '")" after field type');
+      fields.push({ name: fName, varType: fType.toUpperCase() });
+      if (this.match(TOKEN.PUNCT, ',')) this.advance();
+    }
+    this.consume(TOKEN.PUNCT, '}', '"}" to close struct body');
+    if (this.match(TOKEN.PUNCT, '.')) this.advance();
+    return new StructDeclarationNode({ name, fields }, coords);
+  }
+
+  parseVariantDeclaration(coords) {
+    this.consume(TOKEN.KEYWORD, 'CHOICE', '"CHOICE"');
+    const nameTok = this.current();
+    if (nameTok.type !== TOKEN.IDENT && nameTok.type !== TOKEN.KEYWORD) {
+      storm('SYNTAX_STORM', `Expected a CHOICE name, found "${nameTok.value}"`,
+        nameTok.line, nameTok.column);
+    }
+    const name = this.advance().value;
+    this.consume(TOKEN.PUNCT, '{', '"{" to open CHOICE body');
+
+    const variants = [];
+    while (!this.isAtEnd() && !this.match(TOKEN.PUNCT, '}')) {
+      const vNameTok = this.current();
+      if (vNameTok.type !== TOKEN.IDENT && vNameTok.type !== TOKEN.KEYWORD) break;
+      const vName = this.advance().value;
+      let vType = null;
+      if (this.match(TOKEN.PUNCT, '(')) {
+        this.advance();
+        const typeTok = this.current();
+        if (typeTok.type === TOKEN.KEYWORD && ['NUM','SCL','TX','FACT','LIST'].includes(typeTok.value)) {
+          vType = this.advance().value;
+        } else if (typeTok.type === TOKEN.IDENT) {
+          vType = this.advance().value;
+        } else {
+          storm('SYNTAX_STORM', `Expected a type for variant "${vName}", found "${typeTok.value}"`,
+            typeTok.line, typeTok.column);
+        }
+        this.consume(TOKEN.PUNCT, ')', '")" after variant type');
+      }
+      variants.push({ name: vName, type: vType ? vType.toUpperCase() : null });
+      if (this.match(TOKEN.PUNCT, ',')) this.advance();
+    }
+    this.consume(TOKEN.PUNCT, '}', '"}" to close CHOICE body');
+    if (this.match(TOKEN.PUNCT, '.')) this.advance();
+
+    const { VariantDeclarationNode } = require('./ast');
+    return new VariantDeclarationNode({ name, variants }, coords);
+  }
+
   parseInfuseStatement(coords) {
     this.advance();
     const rest = this._collectLineSpan().trim();
@@ -1641,6 +2029,37 @@ class Parser {
     this.advance();
     const rest = this._collectLineSpan().trim();
     return this._rawFallback('EMPTY ' + rest, coords);
+  }
+
+  // ── Array literal [a, b, c, ...] ──────────────────────────
+  parseArrayLiteral() {
+    this.consume(TOKEN.PUNCT, '[', '"[" to start array literal');
+    const coords = { line: this.current().line, column: this.current().column, depth: this.current().depth };
+    const elements = [];
+    while (!this.isAtEnd() && !this.match(TOKEN.PUNCT, ']')) {
+      const span = [];
+      while (!this.isAtEnd()) {
+        if (this.match(TOKEN.PUNCT, ',') || this.match(TOKEN.PUNCT, ']')) break;
+        span.push(this.advance());
+      }
+      if (span.length === 0) break;
+      let el;
+      if (span.length === 1) {
+        const t = span[0];
+        const ac = { line: t.line, column: t.column, depth: t.depth };
+        if (t.type === TOKEN.NUMBER) el = new LiteralNode(t.value, 'NUMBER', ac);
+        else if (t.type === TOKEN.STRING) el = new LiteralNode(t.value, 'STRING', ac);
+        else if (t.type === TOKEN.FACT) el = new LiteralNode(t.value, 'FACT', ac);
+        else if (t.type === TOKEN.IDENT) el = new IdentifierNode(t.value, ac);
+        else el = new LiteralNode(joinTokens(span), 'RAW_EXPR', ac);
+      } else {
+        el = new LiteralNode(joinTokens(span), 'RAW_EXPR', { line: span[0].line, column: span[0].column, depth: span[0].depth });
+      }
+      elements.push(el);
+      if (this.match(TOKEN.PUNCT, ',')) this.advance();
+    }
+    this.consume(TOKEN.PUNCT, ']', '"]" to close array literal');
+    return new ArrayLiteralNode(elements, coords);
   }
 
 } // end class Parser

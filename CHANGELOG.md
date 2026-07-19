@@ -1,6 +1,59 @@
 # Changelog — PlantLang / Chloroplast
 
-## v0.24.0 — 2026 (current)
+## v0.25.0 — 2026 (current)
+
+### New Features
+- **SHAPE (Struct Types)** — user-defined aggregate types:
+  - Syntax: `SHAPE Point { x(NUM), y(NUM) }.` with named, typed fields
+  - Instantiation: `CREATE p(Point) TO Point{ 10, 20 }.`
+  - Field access: `p.x`, `p.y`
+  - Field mutation: `SET p.x TO 99.`
+  - Support for zero-field structs (`SHAPE Unit { }.`)
+  - Struct-of-struct composition and deep field access
+- **Methods on Structs** — ACTIONs that receive a typed `SELF` parameter:
+  - Syntax: `ACTION (self(Point)) move(x(NUM), y(NUM)), SET self.x TO x. SET self.y TO y. /ACTION.`
+  - Method call: `REAP _ FROM p:move, 5, 10.` via colon dispatch
+  - `SelfReferenceNode` in AST for `SELF` keyword
+  - Type checker validates receiver type on method calls
+- **Dynamic Arrays (push/pop)** — runtime array growth:
+  - `PUT val INTO xs.` — amortized-O(1) appends with capacity doubling
+  - `TAKE val FROM xs.` — pop from end with shrink
+  - `CREATE xs(LIST) TO.` — empty list declaration
+  - Type checker validates list operations
+- **Tagged Unions via CHOICE** — type-safe sum types:
+  - Syntax: `CHOICE Option { Some(NUM), None }.`
+  - Variant construction: `Option.Some(10)`, `Option.None`
+  - Variant names may collide with keywords (`Num`, `Empty`), handled by parser
+  - Static type checker validates variant existence, payload types, arity
+- **Pattern Matching via MATCH** — exhaustive case analysis on CHOICE values:
+  - Syntax: `MATCH opt { Some(v) -> { SHOW v } None -> { SHOW 0 } }.`
+  - Payload binding: `Some(v)` binds the inner value to `v` in the clause body
+  - Payload-free clause: `None -> { SHOW "none" }`
+  - Non-exhaustive match detection (missing variant = compile-time error)
+  - `MatchStatementNode` in AST with `{variantName, binding, bodyStatements}` clause array
+- **Member Access / Method Call Parsing** — full expression-level member access:
+  - `Option.Some(10)` parsed as `MethodCallNode` with target `Option`, method `Some`
+  - `Option.None` parsed as `MemberAccessNode` with object `Option`, member `None`
+  - KEYWORD field names (e.g. `Num`, `Empty`) accepted after `.` in member-access position, with same-line + statement-avoidance heuristics to prevent false matches
+- **Inferred CREATE types** — `(TYPE)` annotation optional when the value expression type can be inferred from a CHOICE variant construction or array literal
+
+### Test Suite
+- Added **Phase 9 — Structs** (`tests/test_phase9_structs.js`) — 70 tests covering SHAPE declaration, instantiation, field access/mutation, struct-of-struct, type checking, LLVM codegen parity
+- Added **Phase 10 — Dynamic Arrays** (`tests/test_phase10_arrays.js`) — 58 tests covering push/pop, capacity growth, type checking, LLVM codegen, interpreter parity
+- Added **Phase 11 — Methods** (`tests/test_phase11_methods.js`) — 47 tests covering method declaration, call dispatch, SELF receiver, type checking, LLVM codegen
+- Added **Phase 12 — Array Growth** (`tests/test_phase12_arrays_growth.js`) — 64 tests covering amortized capacity doubling, shrink-on-pop, edge cases
+- Added **Phase 13 — CHOICE & Pattern Matching** (`tests/test_phase13_choices_matching.js`) — 64 tests covering variant declaration, construction, member access, MATCH exhaustiveness, payload binding, type checking, interpreter execution
+- Total test suites expanded to **12 files, ~613 total assertions** — all green
+
+### Documentation
+- `README.md` updated to v0.25.0 with SHAPE, Methods, Dynamic Arrays, CHOICE/MATCH sections
+- `ROADMAP.md` — v0.25.0 objectives marked complete, v0.26.0 roadmap drafted
+- `Language Tour.md` — added SHAPE, CHOICE/MATCH, method call syntax
+- `TECHNICAL.md` — updated test counts and architecture diagrams
+
+---
+
+## v0.24.0 — 2026
 
 ### New Features
 - **IMPORT Statement & Module System** — multi-file PlantLang programs:
@@ -28,21 +81,10 @@
   - Linked into compiled binaries via the LLVM backend's `declare` + extern resolution
 
 ### Test Suite
-- Added **Phase 7 — Module System & FFI** (`tests/test_phase7_import_ffi.js`) — 30 test groups covering:
-  - IMPORT statement parsing path, coords, extension handling, cycle detection, directory traversal, error messages
-  - FFI `-> external` parsing, isExternal flag, param/name capture
-  - File-not-found errors
-- Added **Phase 8 — Standard Library** (`tests/test_phase8_stdlib.js`) — 8 integration test groups covering:
-  - std/ path resolution, I/O module parsing, string module parsing, prelude injection
-  - Full end-to-end `print`/`println` execution, `strings:UPPER` FFI call, `strings:CONCAT` FFI call, mixed usage across modules
-- LLVM backend expanded from 37 → **46 smoke tests** (9 new TX fat-pointer tests: len, cap, index access, concatenation, empty TX, SET after CREATE)
+- Added **Phase 7 — Module System & FFI** (30 test groups)
+- Added **Phase 8 — Standard Library** (8 integration test groups)
+- LLVM backend expanded from 37 → **46 smoke tests**
 - All test suites green — 7 test files, ~300+ total assertions
-
-### Documentation
-- `README.md` updated to v0.24.0 with Module System, FFI, and Standard Library sections
-- `ROADMAP.md` — v0.24.0 objectives marked complete, v0.25.0 roadmap drafted
-- `TECHNICAL.md` — added IMPORT resolution algorithm, FFI stub mechanism, std/ layout
-- `Language Tour.md` — added IMPORT and Standard Library usage guide
 
 ---
 

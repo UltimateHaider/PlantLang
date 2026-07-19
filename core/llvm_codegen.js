@@ -56,7 +56,38 @@ const LLVM_TYPE = {
 };
 
 function llvmType(plType) {
-  return LLVM_TYPE[plType] || null; // null = unsupported (LIST/MAP/INSTANCE/VEIN)
+  if (LLVM_TYPE[plType]) return LLVM_TYPE[plType];
+  // Array types [NUM], [TX], [Point] — use %fat_ptr (i8* ptr + i64 len + i64 cap)
+  if (typeof plType === 'string' && plType.startsWith('[') && plType.endsWith(']')) {
+    return '%fat_ptr';
+  }
+  // Check if it's a registered struct type
+  if (STRUCT_SIZES.has(`%struct.${plType}`)) return `%struct.${plType}`;
+  return null; // unsupported
+}
+
+// Get the LLVM element type for an array type string like "[NUM]" → "i64"
+function arrayElemLlvmType(arrayPlType) {
+  const inner = typeof arrayPlType === 'string' && arrayPlType.startsWith('[') && arrayPlType.endsWith(']')
+    ? arrayPlType.slice(1, -1) : null;
+  if (!inner) return null;
+  return llvmType(inner);
+}
+
+// Get the size of an array element type
+function arrayElemSize(innerPlType) {
+  const lt = llvmType(innerPlType);
+  if (!lt) {
+    // Try as struct type
+    const structType = `%struct.${innerPlType}`;
+    return STRUCT_SIZES.get(structType) || 8;
+  }
+  return llvmTypeSize(lt);
+}
+
+// Check if a string is an array type like [NUM], [TX], [Point]
+function isArrayTypeStr(s) {
+  return typeof s === 'string' && s.startsWith('[') && s.endsWith(']') && s.length >= 3;
 }
 
 // Fat pointer field accessors (expressed as types for extractvalue/insertvalue)
@@ -79,7 +110,34 @@ function llvmTypeSize(lt) {
   if (lt === 'i8' || lt === 'i1') return 1;
   if (lt === 'i8*') return 8;
   if (lt === '%fat_ptr') return 24; // { i8*, i64, i64 } = 8+8+8
+  // Named struct types: store registered size
+  if (typeof lt === 'string' && lt.startsWith('%')) {
+    return STRUCT_SIZES.get(lt) || 8;
+  }
   return 8; // default pointer-sized
+}
+
+// Register struct type sizes for LLVM codegen
+const STRUCT_SIZES = new Map();
+function registerStructType(name, fields) {
+  let totalSize = 0;
+  const llvmFields = fields.map(f => {
+    const lt = llvmType(f.varType) || 'i64';
+    const sz = llvmTypeSize(lt);
+    // Align to 8 bytes for struct field
+    const aligned = Math.ceil(totalSize / 8) * 8;
+    const padding = aligned - totalSize;
+    totalSize += padding + sz;
+    return lt;
+  });
+  // Total struct alignment to 8 bytes
+  totalSize = Math.ceil(totalSize / 8) * 8;
+  const structType = `%struct.${name}`;
+  STRUCT_SIZES.set(structType, totalSize);
+  // Store field name -> index mapping
+  const fieldIndex = {};
+  fields.forEach((f, i) => { fieldIndex[f.name] = i; });
+  return { structType, llvmFields, totalSize, fieldIndex, rawFields: fields };
 }
 
 class Module {
@@ -672,6 +730,8 @@ class LLVMGenerator {
     this.fnDeclares = []; // { name, params, llvmParamList } for extern FFI actions
     this.shelterStack = [];
     // Each entry: { unwindDepth, shelterClause, handlerLabel }
+    this.structTypes = new Map(); // name -> { structType, llvmFields, totalSize }
+    this.structDeclLines = []; // LLVM IR lines for type declarations
   }
 
   /** Look up the nearest active SHELTER that catches the given storm type. */
@@ -684,6 +744,13 @@ class LLVMGenerator {
       }
     }
     return null;
+  }
+
+  /** Look up the field index for a struct type by field name. */
+  _getStructFieldIndex(structName, fieldName) {
+    const info = this.structTypes.get(structName);
+    if (!info || !info.fieldIndex) return -1;
+    return info.fieldIndex[fieldName] !== undefined ? info.fieldIndex[fieldName] : -1;
   }
 
   /** Helper: emit a zero-divisor check that sets error globals and branches
@@ -716,15 +783,23 @@ class LLVMGenerator {
 
   generate(programNode) {
     const m = this.mod;
-    // First pass: collect ACTION declarations
+    // First pass: collect ACTION declarations and SHAPE definitions
     for (const node of (programNode.statements || [])) {
+      if (node.type === 'StructDeclaration') {
+        const reg = registerStructType(node.name, node.fields);
+        this.structTypes.set(node.name, reg);
+        this.structDeclLines.push(`${reg.structType} = type { ${reg.llvmFields.join(', ')} }`);
+        continue;
+      }
       if (node.type === 'ActionDeclaration') {
-        this.fnInfos.set(node.name, {
+        const fnName = node.receiver ? `${node.receiver.type}_${node.name}` : node.name;
+        this.fnInfos.set(fnName, {
           params: node.params,
           bodyStatements: node.bodyStatements,
           line: node.line,
           column: node.column,
           isExternal: !!node.isExternal,
+          receiver: node.receiver,
         });
       }
     }
@@ -797,6 +872,15 @@ class LLVMGenerator {
     const m = this.mod;
 
     const llvmParams = [];
+    // For receiver methods, the first parameter is the receiver pointer
+    if (info.receiver) {
+      const recvLt = llvmType(info.receiver.type);
+      if (recvLt) {
+        llvmParams.push(`${recvLt}* %${safeName(info.receiver.name)}`);
+      } else {
+        m.error(`Unsupported receiver type "${info.receiver.type}" in ACTION "${name}"`, info);
+      }
+    }
     for (const p of info.params) {
       const lt = llvmType(p.type);
       if (!lt) {
@@ -827,6 +911,15 @@ class LLVMGenerator {
     m.currentDepth = 0;
 
     // Store each parameter from register to arena allocation (for mutability)
+    // Handle receiver first if present
+    if (info.receiver) {
+      const recvLt = llvmType(info.receiver.type);
+      if (recvLt) {
+        const sName = safeName(info.receiver.name);
+        // Receiver is already a pointer — store it directly in scope
+        m.scope.set(info.receiver.name, { ptr: `%${sName}`, plType: info.receiver.type, depth: 0 });
+      }
+    }
     for (const p of info.params) {
       const lt = llvmType(p.type);
       if (!lt) continue;
@@ -859,6 +952,119 @@ class LLVMGenerator {
     m.blockCounter = savedBlock;
 
     this.fnDefs.push({ name, params: info.params, ir: fnBody, llvmParamList: llvmParams });
+  }
+
+  // ── CREATE with struct type ────────────────────────────────────────────────
+  genCreateStruct(node, structInfo) {
+    const m = this.mod;
+    const depth = node.depth !== undefined ? node.depth : m.currentDepth;
+    if (depth > m.currentDepth) {
+      m.error(`Contract violation: struct CREATE at depth ${depth} > current ${m.currentDepth}`, node);
+      return;
+    }
+    // Allocate arena space for the struct
+    const rawPtr = m.arenaAlloc(depth, structInfo.totalSize);
+    const structPtr = m.freshReg();
+    m.emit(`${structPtr} = bitcast i8* ${rawPtr} to ${structInfo.structType}*`);
+    m.scope.set(node.identifier, { ptr: structPtr, plType: node.varType, depth });
+
+    // If there's a struct instantiation expression, store each field
+    const ve = node.valueExpr;
+    if (ve && (ve.type === 'StructInstantiation' || (ve.structName && ve.args))) {
+      const args = ve.args || [];
+      for (let i = 0; i < args.length; i++) {
+        const fieldInfo = structInfo.llvmFields[i];
+        const fieldType = fieldInfo;
+        const fieldPtr = m.freshReg();
+        m.emit(`${fieldPtr} = getelementptr inbounds ${structInfo.structType}, ${structInfo.structType}* ${structPtr}, i32 0, i32 ${i}`);
+        let val;
+        const arg = args[i];
+        if (arg.type === 'StructInstantiation') {
+          // Nested struct — not supported in LLVM yet
+          m.error(`Nested struct not yet supported in LLVM codegen`, arg);
+          continue;
+        } else if (arg.type === 'Literal' || arg.type === 'Identifier') {
+          val = this.compileAstExpr(arg);
+        } else if (typeof arg === 'string') {
+          const ec = new ExprCompiler(m, node, this);
+          val = ec.compileExpr(arg);
+        } else if (arg && arg.type === 'LenCall' || arg && arg.type === 'CapCall' || arg && arg.type === 'IndexAccess') {
+          val = this.compileAstExpr(arg);
+        } else {
+          val = { reg: '0', type: 'NUM' };
+        }
+        // Coerce to the declared field type
+        const fieldPlType = structInfo.llvmFields[i] === '%fat_ptr' ? 'TX' :
+                            structInfo.llvmFields[i] === 'double' ? 'SCL' :
+                            structInfo.llvmFields[i] === 'i1' ? 'FACT' : 'NUM';
+        const coerced = this.coerce(val, fieldPlType, node);
+        const storeType = structInfo.llvmFields[i];
+        m.emit(`store ${storeType} ${coerced}, ${storeType}* ${fieldPtr}`);
+      }
+    }
+  }
+
+  // ── CREATE array ([NUM], [TX], [Point], etc.) ──────────────────────────────
+  genCreateArray(node) {
+    const m = this.mod;
+    const depth = node.depth !== undefined ? node.depth : m.currentDepth;
+    if (depth > m.currentDepth) {
+      m.error(
+        `═══ ⚠ Contract Violation: Illegal Destination ═══\n` +
+        `  Operation:  CREATE\n` +
+        `  Variable:   "${node.identifier}"\n` +
+        `  Destination: depth ${depth}  (Arena_${depth})\n` +
+        `  Current:     depth ${m.currentDepth}  (Arena_${m.currentDepth})\n` +
+        `  Rule: "A seed is not allowed to reside in soil (Arena_M) deeper\n` +
+        `         than the soil it was born in (Arena_N)."\n` +
+        `  Fix: Use CREATE at depth ${m.currentDepth} instead, or specify\n` +
+        `       a destination ≤ ${m.currentDepth}.`,
+        node
+      );
+      return;
+    }
+
+    const innerType = node.varType.slice(1, -1); // "[NUM]" → "NUM"
+    const elemLt = llvmType(innerType);
+    if (!elemLt) { m.unsupported(node, `array element type ${innerType}`); return; }
+    const elemSize = arrayElemSize(innerType);
+
+    const ve = node.valueExpr;
+    let len = 0;
+    let cap = 0;
+    let arrVal; // { reg: fatPtrReg, type: node.varType }
+
+    if (ve && ve.type === 'ArrayLiteral') {
+      len = ve.elements.length;
+      cap = len;
+      const bufSize = cap * elemSize;
+      const rawBuf = m.arenaAlloc(depth, bufSize);
+      // Bitcast to element type pointer
+      const typedBuf = m.freshReg();
+      m.emit(`${typedBuf} = bitcast i8* ${rawBuf} to ${elemLt}*`);
+      // Store each element
+      for (let i = 0; i < ve.elements.length; i++) {
+        const elExpr = this.compileAstExpr(ve.elements[i]);
+        const elPtr = m.freshReg();
+        m.emit(`${elPtr} = getelementptr inbounds ${elemLt}, ${elemLt}* ${typedBuf}, i64 ${i}`);
+        const elPlType = innerType === 'TX' ? 'TX' : innerType === 'SCL' ? 'SCL' : innerType === 'FACT' ? 'FACT' : 'NUM';
+        const coerced = this.coerce(elExpr, elPlType, node);
+        m.emit(`store ${elemLt} ${coerced}, ${elemLt}* ${elPtr}`);
+      }
+      const fpReg = m.buildFatPtr(rawBuf, String(len), String(cap));
+      arrVal = { reg: fpReg, type: node.varType };
+    } else {
+      // Empty array
+      const rawBuf = m.arenaAlloc(depth, 1);
+      m.emit(`store i8 0, i8* ${rawBuf}`);
+      const fpReg = m.buildFatPtr(rawBuf, '0', '1');
+      arrVal = { reg: fpReg, type: node.varType };
+    }
+
+    const ptr = m.arenaAllocTyped(node.varType, depth);
+    const lt = llvmType(node.varType);
+    m.emit(`store ${lt} ${arrVal.reg}, ${lt}* ${ptr}`);
+    m.scope.set(node.identifier, { ptr, plType: node.varType, depth });
   }
 
   // ── REAP (function call) ───────────────────────────────────────────────────
@@ -1018,6 +1224,12 @@ class LLVMGenerator {
     lines.push('%fat_ptr = type { i8*, i64, i64 }');
     lines.push('');
 
+    // User-defined struct type declarations
+    for (const declLine of this.structDeclLines) {
+      lines.push(declLine);
+    }
+    if (this.structDeclLines.length) lines.push('');
+
     for (const g of m.globals) lines.push(g);
     if (m.globals.length) lines.push('');
 
@@ -1048,9 +1260,17 @@ class LLVMGenerator {
     if (node.type === 'Identifier') {
       const info = m.scope.get(node.name);
       if (!info) { m.error(`"${node.name}" was not declared`, node); return { reg: '0', type: 'NUM' }; }
-      const reg = m.freshReg();
       const lt = llvmType(info.plType);
+      // For struct types, return the pointer itself (structs are pass-by-reference)
+      if (lt && lt.startsWith('%struct.')) {
+        return { reg: info.ptr, type: info.plType, ptr: info.ptr };
+      }
+      const reg = m.freshReg();
       m.emit(`${reg} = load ${lt}, ${lt}* ${info.ptr}`);
+      // For array types, also pass through the memory pointer for mutation
+      if (lt === '%fat_ptr') {
+        return { reg, type: info.plType, ptr: info.ptr };
+      }
       return { reg, type: info.plType };
     }
 
@@ -1076,10 +1296,22 @@ class LLVMGenerator {
       return { reg: '0', type: 'NUM' };
     }
 
+    if (node.type === 'ArrayLiteral') {
+      // Build array in arena and return a fat pointer
+      const innerType = 'NUM'; // default inner type
+      // For now, compile as RAW_EXPR since we need type info from variable
+      // Instead, we handle arrays primarily through CREATE with genCreateArray
+      return { reg: '0', type: 'NUM' };
+    }
+
     if (node.type === 'LenCall') {
       const arg = this.compileAstExpr(node.arg);
+      if (isArrayTypeStr(arg.type)) {
+        const lenReg = m.extractLen(arg.reg);
+        return { reg: lenReg, type: 'NUM' };
+      }
       if (arg.type !== 'TX') {
-        m.error(`len() requires a TX argument, got ${arg.type}`, node);
+        m.error(`len() requires a TX or array argument, got ${arg.type}`, node);
         return { reg: '0', type: 'NUM' };
       }
       const lenReg = m.extractLen(arg.reg);
@@ -1088,23 +1320,224 @@ class LLVMGenerator {
 
     if (node.type === 'CapCall') {
       const arg = this.compileAstExpr(node.arg);
+      if (isArrayTypeStr(arg.type)) {
+        const capReg = m.extractCap(arg.reg);
+        return { reg: capReg, type: 'NUM' };
+      }
       if (arg.type !== 'TX') {
-        m.error(`cap() requires a TX argument, got ${arg.type}`, node);
+        m.error(`cap() requires a TX or array argument, got ${arg.type}`, node);
         return { reg: '0', type: 'NUM' };
       }
       const capReg = m.extractCap(arg.reg);
       return { reg: capReg, type: 'NUM' };
     }
 
+    if (node.type === 'MethodCall') {
+      const target = this.compileAstExpr(node.target);
+      const targetPtr = target.ptr || target.reg;
+      const targetType = target.type;
+
+      // ── Intrinsic array methods: push and pop ───────────────────────
+      if (isArrayTypeStr(targetType)) {
+        const innerType = targetType.slice(1, -1);
+        const innerLt = llvmType(innerType) || `%struct.${innerType}`;
+        const innerSize = arrayElemSize(innerType);
+
+        if (node.methodName === 'push') {
+          // Compile the new element argument
+          const ec = new ExprCompiler(m, node, this);
+          let itemVal;
+          if (node.args && node.args.length > 0) {
+            if (typeof node.args[0] === 'string') {
+              itemVal = ec.compileExpr(node.args[0]);
+            } else {
+              itemVal = this.compileAstExpr(node.args[0]);
+            }
+            itemVal = { reg: this.coerce(itemVal, innerType, node), type: innerType };
+          } else {
+            m.error('push requires an argument', node);
+            return { reg: '0', type: targetType };
+          }
+
+          // target.reg is the loaded fat pointer value, target.ptr is %fat_ptr* in arena
+          const fpReg = target.reg;
+          const fpPtr = target.ptr; // %fat_ptr* for storing back
+          const ptrReg = m.extractPtr(fpReg);
+          const lenReg = m.extractLen(fpReg);
+          const capReg = m.extractCap(fpReg);
+
+          // Check if len == cap → need reallocation
+          const needRealloc = m.freshReg();
+          m.emit(`${needRealloc} = icmp eq i64 ${lenReg}, ${capReg}`);
+          const reallocLabel = m.freshLabel('array.push.realloc');
+          const skipLabel = m.freshLabel('array.push.append');
+          m.emit(`br i1 ${needRealloc}, label %${reallocLabel}, label %${skipLabel}`);
+
+          // ── Reallocation block ──
+          m.emitLabel(reallocLabel);
+          const isZero = m.freshReg();
+          m.emit(`${isZero} = icmp eq i64 ${capReg}, 0`);
+          const doubleCap = m.freshReg();
+          m.emit(`${doubleCap} = mul i64 ${capReg}, 2`);
+          const newCap = m.freshReg();
+          m.emit(`${newCap} = select i1 ${isZero}, i64 8, i64 ${doubleCap}`);
+          const newSize = m.freshReg();
+          m.emit(`${newSize} = mul i64 ${newCap}, ${String(innerSize)}`);
+          const newBuf = m.arenaAlloc(m.currentDepth, { reg: newSize, type: 'i64' });
+          const oldSize = m.freshReg();
+          m.emit(`${oldSize} = mul i64 ${lenReg}, ${String(innerSize)}`);
+          m.emit(`call void @llvm.memcpy.p0i8.p0i8.i64(i8* ${newBuf}, i8* ${ptrReg}, i64 ${oldSize}, i1 false)`);
+          const reallocFp = m.buildFatPtr(newBuf, lenReg, newCap);
+          m.emit(`store %fat_ptr ${reallocFp}, %fat_ptr* ${fpPtr}`);
+          m.emit(`br label %${skipLabel}`);
+
+          // ── Append (common tail) ──
+          m.emitLabel(skipLabel);
+          // Reload fat pointer from memory (it may have been updated by realloc)
+          const curFp = m.freshReg();
+          m.emit(`${curFp} = load %fat_ptr, %fat_ptr* ${fpPtr}`);
+          const finalPtr = m.extractPtr(curFp);
+          const finalLen = m.extractLen(curFp);
+          const finalCap = m.extractCap(curFp);
+          const typedBuf = m.freshReg();
+          m.emit(`${typedBuf} = bitcast i8* ${finalPtr} to ${innerLt}*`);
+          const elemPtr = m.freshReg();
+          m.emit(`${elemPtr} = getelementptr inbounds ${innerLt}, ${innerLt}* ${typedBuf}, i64 ${finalLen}`);
+          m.emit(`store ${innerLt} ${itemVal.reg}, ${innerLt}* ${elemPtr}`);
+          const newLen = m.freshReg();
+          m.emit(`${newLen} = add i64 ${finalLen}, 1`);
+          const resultFp = m.buildFatPtr(finalPtr, newLen, finalCap);
+          m.emit(`store %fat_ptr ${resultFp}, %fat_ptr* ${fpPtr}`);
+          return { reg: resultFp, type: targetType };
+        }
+
+        if (node.methodName === 'pop') {
+          const fpReg = target.reg;
+          const fpPtr = target.ptr;
+          const lenReg = m.extractLen(fpReg);
+          const ptrReg = m.extractPtr(fpReg);
+          // Bounds check: len must be > 0
+          const isZero = m.freshReg();
+          m.emit(`${isZero} = icmp eq i64 ${lenReg}, 0`);
+          const okLabel = m.freshLabel('array.pop.ok');
+          const errLabel = m.freshLabel('array.pop.err');
+          m.emit(`br i1 ${isZero}, label %${errLabel}, label %${okLabel}`);
+          m.emitLabel(errLabel);
+          m.ensureWeatherGlobals();
+          const errMsg = m.addStringConstant('pop on empty array');
+          const msgGep = m.freshReg();
+          m.emit(`${msgGep} = getelementptr inbounds [${errMsg.len} x i8], [${errMsg.len} x i8]* ${errMsg.name}, i64 0, i64 0`);
+          m.emit(`store i8* ${msgGep}, i8** @_weather_msg`);
+          m.emit(`store i64 6, i64* @_weather_type`);
+          m.emit(`store i1 true, i1* @_weather_flag`);
+          m.emit(`br label %${okLabel}`);
+          m.emitLabel(okLabel);
+          const newLen = m.freshReg();
+          m.emit(`${newLen} = sub i64 ${lenReg}, 1`);
+          const typedBuf = m.freshReg();
+          m.emit(`${typedBuf} = bitcast i8* ${ptrReg} to ${innerLt}*`);
+          const elemPtr = m.freshReg();
+          m.emit(`${elemPtr} = getelementptr inbounds ${innerLt}, ${innerLt}* ${typedBuf}, i64 ${newLen}`);
+          const elemVal = m.freshReg();
+          m.emit(`${elemVal} = load ${innerLt}, ${innerLt}* ${elemPtr}`);
+          const capReg = m.extractCap(fpReg);
+          const newFp = m.buildFatPtr(ptrReg, newLen, capReg);
+          m.emit(`store %fat_ptr ${newFp}, %fat_ptr* ${fpPtr}`);
+          const retLt = innerLt === 'double' ? 'double' : innerLt === 'i1' ? 'i1' : 'i64';
+          const retType = innerLt === 'double' ? 'SCL' : innerLt === 'i1' ? 'FACT' : 'NUM';
+          return { reg: elemVal, type: retType };
+        }
+
+        m.error(`Array type has no method "${node.methodName}"`, node);
+        return { reg: '0', type: targetType };
+      }
+
+      // ── User-defined struct methods ─────────────────────────────
+      const mangled = `${targetType}_${node.methodName}`;
+      const fnInfo = this.fnInfos.get(mangled);
+      if (!fnInfo) {
+        m.error(`Method "${node.methodName}" not defined for type "${targetType}"`, node);
+        return { reg: '0', type: 'NUM' };
+      }
+      // Compile arguments
+      const ec = new ExprCompiler(m, node, this);
+      const argVals = [];
+      for (let i = 0; i < (node.args || []).length; i++) {
+        let argVal;
+        if (typeof node.args[i] === 'string') {
+          argVal = ec.compileExpr(node.args[i]);
+        } else {
+          argVal = this.compileAstExpr(node.args[i]);
+        }
+        if (i < fnInfo.params.length) {
+          const paramType = fnInfo.params[i].type;
+          argVal = { reg: this.coerce(argVal, paramType, node), type: paramType };
+        }
+        argVals.push(argVal);
+      }
+      // Build call args: receiver ptr first, then explicit args
+      const receiverLt = llvmType(targetType);
+      const callArgs = [`${receiverLt}* ${targetPtr}`];
+      for (let i = 0; i < argVals.length; i++) {
+        const pt = i < fnInfo.params.length ? fnInfo.params[i].type : argVals[i].type;
+        const lt = llvmType(pt) || 'i64';
+        callArgs.push(`${lt} ${argVals[i].reg}`);
+      }
+      const resultReg = m.freshReg();
+      m.emit(`${resultReg} = call i64 @${safeName(mangled)}(${callArgs.join(', ')})`);
+      return { reg: resultReg, type: 'NUM' };
+    }
+
+    if (node.type === 'MemberAccess') {
+      const objExpr = node.object;
+      const objName = objExpr.name || objExpr.value;
+      const objInfo = m.scope.get(objName);
+      if (!objInfo) { m.error(`Cannot access member of unknown variable "${objName}"`, node); return { reg: '0', type: 'NUM' }; }
+      const structName = objInfo.plType;
+      const sInfo = this.structTypes.get(structName);
+      if (!sInfo) { m.error(`"${structName}" is not a struct type`, node); return { reg: '0', type: 'NUM' }; }
+      const actualIdx = this._getStructFieldIndex(structName, node.member);
+      if (actualIdx === -1) { m.error(`Struct "${structName}" has no field "${node.member}"`, node); return { reg: '0', type: 'NUM' }; }
+      const fieldType = sInfo.llvmFields[actualIdx];
+      const fieldPtr = m.freshReg();
+      m.emit(`${fieldPtr} = getelementptr inbounds ${sInfo.structType}, ${sInfo.structType}* ${objInfo.ptr}, i32 0, i32 ${actualIdx}`);
+      const valReg = m.freshReg();
+      m.emit(`${valReg} = load ${fieldType}, ${fieldType}* ${fieldPtr}`);
+      const plType = fieldType === '%fat_ptr' ? 'TX' : fieldType === 'double' ? 'SCL' : fieldType === 'i1' ? 'FACT' : 'NUM';
+      return { reg: valReg, type: plType };
+    }
+
     if (node.type === 'IndexAccess') {
       const target = this.compileAstExpr(node.target);
-      if (target.type !== 'TX') {
-        m.error(`Index access requires a TX target, got ${target.type}`, node);
-        return { reg: target.reg, type: 'TX' };
-      }
       const idx = this.compileAstExpr(node.index);
       if (idx.type !== 'NUM') {
         m.error(`Index must be a NUM, got ${idx.type}`, node);
+        return { reg: target.reg, type: target.type === 'TX' ? 'TX' : 'NUM' };
+      }
+
+      // Handle array type index access: arr[0] on [NUM], [TX], [Point], etc.
+      if (isArrayTypeStr(target.type)) {
+        const innerType = target.type.slice(1, -1);
+        const innerLt = llvmType(innerType);
+        if (!innerLt) {
+          m.error(`Index access: unknown element type ${innerType}`, node);
+          return { reg: '0', type: 'NUM' };
+        }
+        const ptr = m.extractPtr(target.reg);
+        const lenReg = m.extractLen(target.reg);
+        m.emitBoundsCheck(ptr, lenReg, idx.reg, node, 'array index access');
+        const typedBuf = m.freshReg();
+        m.emit(`${typedBuf} = bitcast i8* ${ptr} to ${innerLt}*`);
+        const elemPtr = m.freshReg();
+        m.emit(`${elemPtr} = getelementptr inbounds ${innerLt}, ${innerLt}* ${typedBuf}, i64 ${idx.reg}`);
+        const elemVal = m.freshReg();
+        m.emit(`${elemVal} = load ${innerLt}, ${innerLt}* ${elemPtr}`);
+        const plType = innerType;
+        return { reg: elemVal, type: plType };
+      }
+
+      if (target.type !== 'TX') {
+        m.error(`Index access requires a TX or array target, got ${target.type}`, node);
         return { reg: target.reg, type: 'TX' };
       }
       const ptr = m.extractPtr(target.reg);
@@ -1140,6 +1573,8 @@ class LLVMGenerator {
       case 'MissionStatement':
       case 'PlantStatement':
       case 'ActionDeclaration':
+      case 'StructDeclaration':
+      case 'VariantDeclaration':
         return false;
 
       case 'CreateStatement': this.genCreate(node); return false;
@@ -1178,6 +1613,19 @@ class LLVMGenerator {
 
   genCreate(node) {
     const m = this.mod;
+    // Check if this is a struct type
+    const structInfo = this.structTypes.get(node.varType);
+    if (structInfo) {
+      this.genCreateStruct(node, structInfo);
+      return;
+    }
+
+    // Check if this is an array type [NUM], [TX], [Point], etc.
+    if (isArrayTypeStr(node.varType)) {
+      this.genCreateArray(node);
+      return;
+    }
+
     const lt = llvmType(node.varType);
     if (!lt) { m.unsupported(node, `CREATE with type ${node.varType}`); return; }
 
@@ -1239,6 +1687,8 @@ class LLVMGenerator {
     } else if (typeof ve === 'string') {
       val = ec.compileExpr(ve);
     } else if (ve && (ve.type === 'LenCall' || ve.type === 'CapCall' || ve.type === 'IndexAccess')) {
+      val = this.compileAstExpr(ve);
+    } else if (ve && ve.type === 'ArrayLiteral') {
       val = this.compileAstExpr(ve);
     } else if (node.varType === 'TX') {
       // Empty TX: zero-length fat pointer with a null-terminated empty string
@@ -1318,6 +1768,32 @@ class LLVMGenerator {
 
   genSet(node) {
     const m = this.mod;
+    // Struct member access: SET obj.field TO val
+    if (node.isMemberAccess) {
+      const objInfo = m.scope.get(node.memberObject);
+      if (!objInfo) { m.error(`SET: "${node.memberObject}" was not declared`, node); return; }
+      const structName = objInfo.plType;
+      const sInfo = this.structTypes.get(structName);
+      if (!sInfo) { m.error(`SET: "${node.memberObject}" is not a struct`, node); return; }
+      const fieldIdx = this._getStructFieldIndex(structName, node.memberField);
+      if (fieldIdx === -1) { m.error(`SET: struct "${structName}" has no field "${node.memberField}"`, node); return; }
+      const fieldType = sInfo.llvmFields[fieldIdx];
+      const fieldPtr = m.freshReg();
+      m.emit(`${fieldPtr} = getelementptr inbounds ${sInfo.structType}, ${sInfo.structType}* ${objInfo.ptr}, i32 0, i32 ${fieldIdx}`);
+      let val;
+      const ve = node.valueExpr;
+      if (typeof ve === 'string') {
+        const ec = new ExprCompiler(m, node, this);
+        val = ec.compileExpr(ve);
+      } else {
+        val = this.compileAstExpr(ve);
+      }
+      const fieldPlType = fieldType === '%fat_ptr' ? 'TX' : fieldType === 'double' ? 'SCL' : fieldType === 'i1' ? 'FACT' : 'NUM';
+      const coerced = this.coerce(val, fieldPlType, node);
+      m.emit(`store ${fieldType} ${coerced}, ${fieldType}* ${fieldPtr}`);
+      return;
+    }
+
     const info = m.scope.get(node.identifier);
     if (!info) { m.error(`SET: "${node.identifier}" was not declared with CREATE`, node); return; }
     let val;
@@ -1370,9 +1846,19 @@ class LLVMGenerator {
       const info = m.scope.get(name);
       if (!info) { m.error(`SHOW: "${name}" was not declared`, node); return; }
       const lt = llvmType(info.plType);
+      // Struct types — show as unsupported for now (LLVM can't easily print arbitrary structs)
+      if (lt && lt.startsWith('%struct.')) {
+        m.unsupported(node, `SHOW on struct type "${info.plType}"`);
+        return;
+      }
       const reg = m.freshReg();
       m.emit(`${reg} = load ${lt}, ${lt}* ${info.ptr}`);
       this.emitPrintValue({ reg, type: info.plType });
+      return;
+    }
+    if (expr.type === 'MemberAccess') {
+      const val = this.compileAstExpr(expr);
+      this.emitPrintValue(val);
       return;
     }
     if (expr.type === 'Literal' && expr.literalType === 'RAW_EXPR') {

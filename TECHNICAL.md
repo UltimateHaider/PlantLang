@@ -432,11 +432,17 @@ All functions receive and return `int64_t` (TX pointers as `int64_t` via ptrtoin
 ### Test Files
 - `tests/test_llvm_codegen.js` — 46 parity tests: each fixture runs via interpreter AND compiled via `llc` + `gcc`, asserts identical stdout
 - `tests/test_codegen.js` — 10 parity tests for the C backend
-- `tests/test_parser_migration.js` — 90 tests covering AST node construction, execution, error messages, and legacy interpreter compatibility
-- `tests/test_diagnostics.js` — 31 tests for error panel rendering with visual caret
-- `tests/test_tokenizer.js` — 29 character-level tokenizer verification tests
-- `tests/test_phase7_import_ffi.js` — 30 test groups for Module System & FFI
-- `tests/test_phase8_stdlib.js` — 8 integration tests for Standard Library
+- `tests/test_parser_migration.js` — 109 tests covering AST node construction, execution, error messages, and legacy interpreter compatibility
+- `tests/test_diagnostics.js` — 45 tests for error panel rendering with visual caret
+- `tests/test_tokenizer.js` — 33 character-level tokenizer verification tests
+- `tests/test_phase7_import_ffi.js` — 40 test groups for Module System & FFI
+- `tests/test_phase8_stdlib.js` — 28 integration tests for Standard Library
+- `tests/test_phase9_structs.js` — 70 tests for SHAPE struct types
+- `tests/test_phase10_arrays.js` — 58 tests for dynamic arrays
+- `tests/test_phase11_methods.js` — 47 tests for method dispatch
+- `tests/test_phase12_arrays_growth.js` — 64 tests for dynamic array growth
+- `tests/test_phase13_choices_matching.js` — 64 tests for CHOICE/MATCH
+- **Total: 12 test files, ~613 assertions, all green**
 
 ### Test Methodology
 Each test:

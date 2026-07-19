@@ -16,6 +16,9 @@ class Interpreter {
     this.funcs=new Map();
     this.species=new Map();
     this.planted=new Map();
+    this.structs=new Map(); // SHAPE definitions: name -> [{ name, varType }]
+    this.choices=new Map(); // CHOICE definitions: name -> [{ name, type }]
+    this.typeMethods=new Map(); // type name -> Map(methodName -> fnInfo)
     this.watchers=new Map();
     this.rootDir=opts.rootDir||process.cwd();
     this.output=opts.output||[];
@@ -77,26 +80,116 @@ class Interpreter {
     }
     if(node.type==='Identifier'){
       const e=soil.get(node.name);
-      if(!e)storm('MISSING_STORM',`"${node.name}" غير موجود`,node.line,node.column);
-      return e.value;
+      if(e)return e.value;
+      // Check if it's a CHOICE type name — return a sentinel marker
+      if(this.choices.has(node.name))return{__choiceType:node.name};
+      storm('MISSING_STORM',`"${node.name}" غير موجود`,node.line,node.column);
+    }
+    if(node.type==='ArrayLiteral'){
+      return this.evaluateArrayLiteral(node, soil);
     }
     if(node.type==='LenCall'){
       const arg=this.evaluateExpressionNode(node.arg,soil);
+      if(Array.isArray(arg))return arg.length;
       if(typeof arg!=='string')return 0;
       return arg.length;
     }
     if(node.type==='CapCall'){
       const arg=this.evaluateExpressionNode(node.arg,soil);
+      if(Array.isArray(arg))return arg.length;
       if(typeof arg!=='string')return 0;
       return arg.length+1;
     }
     if(node.type==='IndexAccess'){
       const target=this.evaluateExpressionNode(node.target,soil);
       const idx=this.evaluateExpressionNode(node.index,soil);
-      if(typeof target!=='string')storm('TYPE_STORM','Index access requires a TX value',node.line,node.column);
       if(typeof idx!=='number'||!Number.isInteger(idx)||idx<0)storm('TYPE_STORM','Index must be a non-negative integer',node.line,node.column);
+      if(Array.isArray(target)){
+        if(idx>=target.length)storm('SEED_STORM',`Index ${idx} out of bounds for array of length ${target.length}`,node.line,node.column);
+        return target[idx];
+      }
+      if(typeof target!=='string')storm('TYPE_STORM','Index access requires a TX or array value',node.line,node.column);
       if(idx>=target.length)storm('SEED_STORM',`Index ${idx} out of bounds for TX of length ${target.length}`,node.line,node.column);
       return target[idx];
+    }
+    if(node.type==='MethodCall'){
+      const target=this.evaluateExpressionNode(node.target,soil);
+      // ── Intrinsic array methods ──────────────────────────────
+      if(Array.isArray(target)){
+        if(node.methodName==='push'){
+          const argVals=(node.args||[]).map(a=>this.evaluateExpressionNode(a,soil));
+          if(argVals.length!==1)storm('ARITY_STORM','push expects exactly 1 argument',node.line,node.column);
+          target.push(argVals[0]);
+          return target;
+        }
+        if(node.methodName==='pop'){
+          if(target.length===0)storm('SEED_STORM','pop on empty array',node.line,node.column);
+          return target.pop();
+        }
+        storm('MISSING_STORM',`Array has no method "${node.methodName}"`,node.line,node.column);
+      }
+      // ── CHOICE variant construction ──────────────────────────
+      if(typeof target==='object'&&target!==null&&target.__choiceType){
+        const choiceName=target.__choiceType;
+        const choiceDef=this.choices.get(choiceName);
+        if(!choiceDef)storm('MISSING_STORM',`CHOICE "${choiceName}" is not defined`,node.line,node.column);
+        const variant=choiceDef.find(v=>v.name.toUpperCase()===node.methodName.toUpperCase());
+        if(!variant)storm('MISSING_STORM',`CHOICE "${choiceName}" has no variant "${node.methodName}"`,node.line,node.column);
+        const argVals=(node.args||[]).map(a=>this.evaluateExpressionNode(a,soil));
+        if(variant.type&&argVals.length!==1)
+          storm('ARITY_STORM',`Variant "${choiceName}.${variant.name}" expects 1 payload argument, got ${argVals.length}`,node.line,node.column);
+        if(!variant.type&&argVals.length!==0)
+          storm('ARITY_STORM',`Variant "${choiceName}.${variant.name}" expects 0 arguments, got ${argVals.length}`,node.line,node.column);
+        return{__choiceType:choiceName,tag:variant.name,payload:variant.type?argVals[0]:null};
+      }
+
+      // ── Struct methods ───────────────────────────────────────
+      if(typeof target!=='object'||target===null)
+        storm('TYPE_STORM',`Cannot call method "${node.methodName}" on a non-struct value`,node.line,node.column);
+      const typeName=target.__structType;
+      if(!typeName)
+        storm('TYPE_STORM',`Cannot determine type for method call "${node.methodName}" — target is not a tagged struct`,node.line,node.column);
+      const typeMap=this.typeMethods.get(typeName);
+      if(!typeMap||!typeMap.has(node.methodName))
+        storm('MISSING_STORM',`Type "${typeName}" has no method "${node.methodName}"`,node.line,node.column);
+      const method=typeMap.get(node.methodName);
+      const argVals=(node.args||[]).map(a=>this.evaluateExpressionNode(a,soil));
+      const result=this._callAction(method,argVals,target,soil);
+      return result.value!==undefined?result.value:null;
+    }
+
+    if(node.type==='MemberAccess'){
+      const obj=this.evaluateExpressionNode(node.object,soil);
+      // CHOICE variant construction without args: Option.None
+      if(typeof obj==='object'&&obj!==null&&obj.__choiceType){
+        const choiceName=obj.__choiceType;
+        const choiceDef=this.choices.get(choiceName);
+        if(choiceDef){
+          const variant=choiceDef.find(v=>v.name.toUpperCase()===node.member.toUpperCase());
+          if(variant)return{__choiceType:choiceName,tag:variant.name,payload:variant.type?null:null};
+        }
+      }
+      if(typeof obj!=='object'||obj===null||Array.isArray(obj))
+        storm('TYPE_STORM',`Cannot access member "${node.member}" on a non-struct value`,node.line,node.column);
+      if(!(node.member in obj))
+        storm('MISSING_STORM',`Struct has no field "${node.member}"`,node.line,node.column);
+      return obj[node.member];
+    }
+    if(node.type==='StructInstantiation'){
+      const structDef=this.structs.get(node.structName);
+      if(!structDef)
+        storm('MISSING_STORM',`Struct "${node.structName}" is not defined`,node.line,node.column);
+      const instance={};
+      for(let i=0;i<structDef.length;i++){
+        const field=structDef[i];
+        const argNode=node.args[i];
+        let val;
+        if(argNode) val=this.evaluateExpressionNode(argNode,soil);
+        if(val===undefined||val===null)
+          val=field.varType==='NUM'?0:field.varType==='SCL'?0.0:field.varType==='FACT'?false:field.varType==='TX'?'':field.varType==='LIST'?[]:{};
+        instance[field.name]=val;
+      }
+      return instance;
     }
     // Fallback: a raw string slipped through (shouldn't normally happen
     // once parseExpressionSpan always wraps in a Literal/Identifier).
@@ -172,6 +265,8 @@ class Interpreter {
       case 'VerifyStatement':   return this.evaluateVerifyStatement(node,soil);
       case 'SuiteStatement':    return this.evaluateSuiteStatement(node,soil);
       case 'PlantStatement':    return this.evaluatePlantStatement(node,soil);
+      case 'StructDeclaration': return this.evaluateStructDeclaration(node,soil);
+      case 'VariantDeclaration': return this.evaluateVariantDeclaration(node,soil);
       case 'MissionStatement':  return this.evaluateMissionStatement(node,soil);
       case 'RootStatement':     return this.evaluateRootStatement(node,soil);
       case 'RootScopeStatement':return this.evaluateRootScopeStatement(node,soil);
@@ -187,6 +282,12 @@ class Interpreter {
 
   /** evaluateCreateStatement(node, soil) — CREATE ident(TYPE) TO expr. */
   evaluateCreateStatement(node,soil){
+    // Check if this is a struct type
+    const structDef = this.structs.get(node.varType);
+    if (structDef) {
+      return this.evaluateCreateStruct(node, soil, structDef);
+    }
+
     let value;
     if(node.varType==='LIST'&&node.valueExpr!==null&&node.valueExpr.literalType==='RAW_EXPR'){
       // Replicate the legacy engine's special-case LIST parsing exactly:
@@ -195,20 +296,77 @@ class Interpreter {
       // (e.g. "a + b") would otherwise be misinterpreted as one giant
       // string by the generic RAW_EXPR evaluator path below.
       value=node.valueExpr.value.split(',').map(v=>coerce(v.trim())).filter(v=>v!=='');
+    }else if(node.varType && isArrayTypeStr(node.varType) && node.valueExpr && node.valueExpr.type==='ArrayLiteral'){
+      value=this.evaluateArrayLiteral(node.valueExpr,soil);
     }else if(node.valueExpr!==null){
       value=this.evaluateExpressionNode(node.valueExpr,soil);
     }else{
       value=node.varType==='LIST'?[]:node.varType==='MAP'?{}:node.varType==='FACT'?false:node.varType==='NUM'?0:'';
     }
     soil.set(node.identifier,value,node.varType,{pulse:!!node.isPulse});
-    this.emit(`CREATE "${node.identifier}"(${node.varType})${node.isPulse?' PULSE':''} = ${Array.isArray(value)?'['+value.join(', ')+']':value}`,'ok');
+    const display = Array.isArray(value) ? '[' + value.join(', ') + ']' : String(value);
+    this.emit(`CREATE "${node.identifier}"(${node.varType})${node.isPulse?' PULSE':''} = ${display}`,'ok');
+    return{next:1};
+  }
+
+  /** Evaluate an array literal into a JS array. */
+  evaluateArrayLiteral(node, soil) {
+    if (!node || node.type !== 'ArrayLiteral') return [];
+    return node.elements.map(el => this.evaluateExpressionNode(el, soil));
+  }
+
+  /** evaluateCreateStruct(node, soil, structDef) — CREATE instance of a SHAPE. */
+  evaluateCreateStruct(node, soil, structDef){
+    const instance = { __structType: node.varType };
+    const ve = node.valueExpr;
+    if (ve && (ve.type === 'StructInstantiation' || (ve.structName && ve.args))) {
+      const args = ve.args || [];
+      for (let i = 0; i < structDef.length; i++) {
+        const field = structDef[i];
+        const argNode = args[i];
+        let val;
+        if (argNode) {
+          val = this.evaluateExpressionNode(argNode, soil);
+        }
+        // Default values
+        if (val === undefined || val === null) {
+          val = field.varType === 'NUM' ? 0 : field.varType === 'SCL' ? 0.0 : field.varType === 'FACT' ? false : field.varType === 'TX' ? '' : field.varType === 'LIST' ? [] : field.varType === 'MAP' ? {} : null;
+        }
+        instance[field.name] = val;
+      }
+    } else {
+      // Empty struct instance (all defaults)
+      for (const field of structDef) {
+        instance[field.name] = field.varType === 'NUM' ? 0 : field.varType === 'SCL' ? 0.0 : field.varType === 'FACT' ? false : field.varType === 'TX' ? '' : field.varType === 'LIST' ? [] : field.varType === 'MAP' ? {} : null;
+      }
+    }
+    soil.set(node.identifier, instance, node.varType);
+    this.emit(`CREATE "${node.identifier}"(${node.varType}) = ${JSON.stringify(instance)}`,'ok');
     return{next:1};
   }
 
   /** evaluateShowStatement(node, soil) — SHOW expr. */
   evaluateShowStatement(node,soil){
-    const value=this.evaluateExpressionNode(node.expr,soil);
-    const display=value&&typeof value==='object'?(Array.isArray(value)?'['+value.join(', ')+']':JSON.stringify(value)):String(value);
+    let value=this.evaluateExpressionNode(node.expr,soil);
+    let display;
+    if (Array.isArray(value)) {
+      display = '[' + value.map(v => typeof v === 'string' ? '"' + v + '"' : String(v)).join(', ') + ']';
+    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      // Check if it's a struct instance (via __structType tag or soil entry)
+      const structType = value.__structType;
+      const entry = !structType && typeof node.expr === 'object' && node.expr.name ? soil.get(node.expr.name) : null;
+      const typeName = structType || (entry && entry.type && this.structs.has(entry.type) ? entry.type : null);
+      if (typeName) {
+        const clean = Object.fromEntries(Object.entries(value).filter(([k]) => k !== '__structType'));
+        display = typeName + '{ ' + Object.entries(clean).map(([k,v]) => k + ': ' + (typeof v === 'string' ? '"' + v + '"' : v)).join(', ') + ' }';
+      } else if (entry && entry.type && this.structs.has(entry.type)) {
+        display = entry.type + '{ ' + Object.entries(value).map(([k,v]) => k + ': ' + (typeof v === 'string' ? '"' + v + '"' : v)).join(', ') + ' }';
+      } else {
+        display = JSON.stringify(value);
+      }
+    } else {
+      display = value && typeof value === 'object' ? (Array.isArray(value) ? '[' + value.join(', ') + ']' : JSON.stringify(value)) : String(value);
+    }
     this.emit(display,'inf');
     return{next:1};
   }
@@ -458,6 +616,21 @@ class Interpreter {
   }
 
   /**
+   * evaluateStructDeclaration(node, soil) — registers a SHAPE definition.
+   */
+  evaluateStructDeclaration(node,soil){
+    this.structs.set(node.name, node.fields);
+    this.emit(`SHAPE "${node.name}" { ${node.fields.map(f=>f.name+'('+f.varType+')').join(', ')} }`,'ok');
+    return{next:1};
+  }
+
+  evaluateVariantDeclaration(node,soil){
+    this.choices.set(node.name, node.variants);
+    this.emit(`CHOICE "${node.name}" { ${node.variants.map(v=>v.name+(v.type?'('+v.type+')':'')).join(', ')} }`,'ok');
+    return{next:1};
+  }
+
+  /**
    * evaluateImportStatement(node, soil) — resolves and executes an
    * imported file.  Merges the imported file's declarations (actions,
    * species) into this interpreter's symbol tables.
@@ -513,15 +686,25 @@ class Interpreter {
   evaluateActionDeclaration(node,soil){
     // FFI external actions: register with external flag; body is empty
     if(node.isExternal){
-      this.funcs.set(node.name,{
-        name:node.name,
-        params:node.params,
-        body:[],
-        line:node.line,
-        isExternal:true
-      });
-      if(!this._symbolPassDone)
-        this.emit(`✓ ACTION "${node.name}"(${node.params.map(p=>p.name+'('+p.type+')').join(', ')}) -> external`,'ok');
+      if(node.receiver){
+        // External receiver action (unusual but handle gracefully)
+        this._registerTypeMethod(node);
+      } else {
+        this.funcs.set(node.name,{
+          name:node.name,
+          params:node.params,
+          body:[],
+          line:node.line,
+          isExternal:true
+        });
+        if(!this._symbolPassDone)
+          this.emit(`✓ ACTION "${node.name}"(${node.params.map(p=>p.name+'('+p.type+')').join(', ')}) -> external`,'ok');
+      }
+      return{next:1};
+    }
+    // Receiver-bound method: register in typeMethods
+    if(node.receiver){
+      this._registerTypeMethod(node);
       return{next:1};
     }
     this.funcs.set(node.name,{
@@ -532,6 +715,20 @@ class Interpreter {
     if(!this._symbolPassDone)
       this.emit(`✓ ACTION "${node.name}"(${node.params.map(p=>p.name+'('+p.type+')').join(', ')})`,'ok');
     return{next:1};
+  }
+
+  _registerTypeMethod(node){
+    const typeName = node.receiver.type;
+    if(!this.typeMethods.has(typeName)) this.typeMethods.set(typeName, new Map());
+    this.typeMethods.get(typeName).set(node.name, {
+      params: node.params,
+      body: node.bodyStatements || [],
+      line: node.line,
+      isExternal: !!node.isExternal,
+      receiverName: node.receiver.name,
+    });
+    if(!this._symbolPassDone)
+      this.emit(`✓ METHOD "${typeName}.${node.name}"(${node.params.map(p=>p.name+'('+p.type+')').join(', ')})`,'ok');
   }
 
   /**
@@ -696,6 +893,25 @@ class Interpreter {
 
   // ── SET / INCREASE / DECREASE evaluators ──────────────────────
   evaluateSetStatement(node,soil){
+    // Struct member access: SET obj.field TO val
+    if (node.isMemberAccess) {
+      const objEntry = soil.get(node.memberObject);
+      if (!objEntry) storm('MISSING_STORM',`SET: "${node.memberObject}" is not defined`,node.line,node.column);
+      if (typeof objEntry.value !== 'object' || objEntry.value === null || Array.isArray(objEntry.value))
+        storm('TYPE_STORM',`SET: "${node.memberObject}" is not a struct`,node.line,node.column);
+      if (!(node.memberField in objEntry.value))
+        storm('MISSING_STORM',`SET: struct "${node.memberObject}" has no field "${node.memberField}"`,node.line,node.column);
+      const newVal = evalExpr(node.valueExpr, soil);
+      objEntry.value[node.memberField] = newVal;
+      // Fire PULSE watchers if any
+      if (this.watchers.has(node.memberObject)) {
+        for (const w of this.watchers.get(node.memberObject)) {
+          this.evaluateNode(w, soil);
+        }
+      }
+      return {next:1};
+    }
+
     const E=(expr)=>evalExpr(expr,soil);
     const newVal=E(node.valueExpr);
     // Delegate to the proven legacy handler via a synthetic statement so
@@ -781,10 +997,33 @@ class Interpreter {
   }
 
   evaluateMatchStatement(node,soil){
-    const clauses=(node.clauses||[]).map(c=>c.clauseText).join('\n');
-    const fullSrc=`MATCH ${node.subjectExpr},\n${clauses}\n\\.`;
-    const stmts=lex(fullSrc).map(s=>({...s,line:node.line,column:node.column}));
-    return this._execBlock(stmts,0,stmts.length,soil);
+    // Legacy MATCH format (clauseText-based)
+    if(node.clauses.length>0&&node.clauses[0].clauseText!==undefined){
+      const clauses=(node.clauses||[]).map(c=>c.clauseText).join('\n');
+      const fullSrc=`MATCH ${node.subjectExpr},\n${clauses}\n\\.`;
+      const stmts=lex(fullSrc).map(s=>({...s,line:node.line,column:node.column}));
+      return this._execBlock(stmts,0,stmts.length,soil);
+    }
+    // New pattern-matching MATCH (variantName-based)
+    const subject=this.evaluateExpressionNode(node.subjectExpr,soil);
+    if(typeof subject!=='object'||subject===null||!subject.__choiceType)
+      storm('TYPE_STORM','MATCH requires a CHOICE value',node.line,node.column);
+
+    for(const clause of node.clauses){
+      if(clause.variantName===subject.tag){
+        let clauseSoil=soil;
+        if(clause.binding&&subject.payload!==undefined){
+          clauseSoil=soil.child();
+          clauseSoil.set(clause.binding,subject.payload);
+        }
+        for(const stmt of clause.bodyStatements){
+          const r=this.evaluateNode(stmt,clauseSoil);
+          if(r&&r.returned)return r;
+        }
+        return null;
+      }
+    }
+    storm('SEED_STORM',`MATCH: no clause handles variant "${subject.tag}"`,node.line,node.column);
   }
 
   evaluateGiveStatement(node,soil){
@@ -937,6 +1176,8 @@ class Interpreter {
         this.evaluateSpeciesDeclaration(node,this.soil);
       }else if(node.type==='PlantStatement'){
         this.evaluatePlantStatement(node,this.soil);
+      }else if(node.type==='StructDeclaration'){
+        this.evaluateStructDeclaration(node,this.soil);
       }else if(node.type==='MissionStatement'){
         this.evaluateMissionStatement(node,this.soil);
       }else if(node.type==='RootStatement'){
@@ -2067,9 +2308,15 @@ class Interpreter {
     fn.params.forEach((p,idx)=>{if(argVals[idx]!==undefined)scope.set(p.name,argVals[idx],p.type);});
     if(instance){
       scope.set('__self',instance,'INSTANCE');
-      Object.keys(instance).filter(k=>!k.startsWith('__')).forEach(k=>{
-        scope.set('SELF:'+k,instance[k],inferType(instance[k]));
-      });
+      // Bind the receiver variable name (e.g., "self") for receiver-based methods
+      if(fn.receiverName){
+        scope.set(fn.receiverName, instance, inferType(instance));
+      }else{
+        // Species methods use SELF:field convention
+        Object.keys(instance).filter(k=>!k.startsWith('__')).forEach(k=>{
+          scope.set('SELF:'+k,instance[k],inferType(instance[k]));
+        });
+      }
     }
     const isAstBody=fn.body.length>0&&typeof fn.body[0].type==='string'&&fn.body[0].text===undefined;
     let result;
@@ -2085,9 +2332,13 @@ class Interpreter {
     if(instance){
       const self=scope.get('__self');
       if(self&&self.value)Object.assign(instance,self.value);
-      Object.keys(instance).filter(k=>!k.startsWith('__')).forEach(k=>{
-        const e=scope.get('SELF:'+k);if(e)instance[k]=e.value;
-      });
+      // For receiver-based methods (struct methods), skip SELF: writeback
+      // since member access modifies the struct directly.
+      if(!fn.receiverName){
+        Object.keys(instance).filter(k=>!k.startsWith('__')).forEach(k=>{
+          const e=scope.get('SELF:'+k);if(e)instance[k]=e.value;
+        });
+      }
     }
     return result||{value:null};
   }
@@ -2119,4 +2370,12 @@ class Interpreter {
   }
 }
 
-module.exports={Interpreter};
+// ── Array helpers (shared between interpreter and evaluator) ─────────────────
+function isArrayTypeStr(s) {
+  return typeof s === 'string' && s.startsWith('[') && s.endsWith(']') && s.length >= 3;
+}
+function arrayInnerType(s) {
+  return isArrayTypeStr(s) ? s.slice(1, -1) : null;
+}
+
+module.exports={Interpreter, isArrayTypeStr, arrayInnerType};
