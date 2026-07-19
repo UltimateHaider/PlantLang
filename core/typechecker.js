@@ -46,6 +46,22 @@ function isArrayType(typeStr) {
   return typeof typeStr === 'string' && typeStr.startsWith('[') && typeStr.endsWith(']') && typeStr.length >= 3;
 }
 
+// Helper: extract key/value types from MAP[K,V] → { keyType, valueType }
+function isMapType(typeStr) {
+  return typeof typeStr === 'string' && typeStr.startsWith('MAP[') && typeStr.endsWith(']');
+}
+function mapInnerTypes(typeStr) {
+  if (!isMapType(typeStr)) return null;
+  const inner = typeStr.slice(4, -1); // MAP[K,V] → K,V
+  const parts = inner.split(',');
+  if (parts.length !== 2) return null;
+  return { keyType: parts[0].trim(), valueType: parts[1].trim() };
+}
+function mapValueType(typeStr) {
+  const m = mapInnerTypes(typeStr);
+  return m ? m.valueType : null;
+}
+
 // ── Diagnostic ──────────────────────────────────────────────────────────────
 class Diagnostic {
   /**
@@ -412,9 +428,7 @@ class TypeChecker {
     // Handle array types: [NUM], [TX], [Point], etc.
     if (isArrayType(declaredType)) {
       const innerType = arrayInnerType(declaredType);
-      // Register variable as array type
       scope.setVar(node.identifier, declaredType, { line: node.line });
-      // Validate array literal if present
       const ve = node.valueExpr;
       if (ve && ve.type === 'ArrayLiteral') {
         for (let i = 0; i < ve.elements.length; i++) {
@@ -423,6 +437,32 @@ class TypeChecker {
             this.error('TYPE_MISMATCH',
               `Array element ${i}: expected ${innerType}, got ${elType}`,
               ve.elements[i].line, ve.elements[i].column);
+          }
+        }
+      }
+      return;
+    }
+
+    // Handle MAP[K,V] types
+    if (isMapType(declaredType)) {
+      scope.setVar(node.identifier, declaredType, { line: node.line });
+      const mt = mapInnerTypes(declaredType);
+      // Validate map literal if present
+      const ve = node.valueExpr;
+      if (ve && ve.type === 'MapLiteral') {
+        for (let i = 0; i < ve.entries.length; i++) {
+          const entry = ve.entries[i];
+          const keyType = this._inferExprNode(entry.key, scope);
+          const valType = this._inferExprNode(entry.value, scope);
+          if (keyType !== T.UNKNOWN && keyType !== T.ANY && !this._compatible(mt.keyType, keyType)) {
+            this.error('TYPE_MISMATCH',
+              `Map entry ${i}: expected key type ${mt.keyType}, got ${keyType}`,
+              entry.key.line, entry.key.column);
+          }
+          if (valType !== T.UNKNOWN && valType !== T.ANY && !this._compatible(mt.valueType, valType)) {
+            this.error('TYPE_MISMATCH',
+              `Map entry ${i}: expected value type ${mt.valueType}, got ${valType}`,
+              entry.value.line, entry.value.column);
           }
         }
       }
@@ -964,6 +1004,70 @@ class TypeChecker {
       }
     }
 
+    // ── Intrinsic MAP methods: put, get, has ───────────────────────────
+    if (isMapType(targetType)) {
+      const mt = mapInnerTypes(targetType);
+      if (node.methodName === 'put') {
+        const got = (node.args || []).length;
+        if (got !== 2) {
+          this.error('ARITY_MISMATCH',
+            `Map put expects 2 arguments (key of type ${mt.keyType}, value of type ${mt.valueType}), got ${got}`,
+            node.line, node.column);
+          return;
+        }
+        const keyType = this._inferExprNode(node.args[0], scope);
+        const valType = this._inferExprNode(node.args[1], scope);
+        if (keyType !== T.UNKNOWN && keyType !== T.ANY && !this._compatible(mt.keyType, keyType)) {
+          this.error('TYPE_MISMATCH',
+            `Map put: expected key type ${mt.keyType}, got ${keyType}`,
+            node.args[0].line || node.line, node.args[0].column || node.column);
+        }
+        if (valType !== T.UNKNOWN && valType !== T.ANY && !this._compatible(mt.valueType, valType)) {
+          this.error('TYPE_MISMATCH',
+            `Map put: expected value type ${mt.valueType}, got ${valType}`,
+            node.args[1].line || node.line, node.args[1].column || node.column);
+        }
+        return;
+      }
+      if (node.methodName === 'get') {
+        const got = (node.args || []).length;
+        if (got !== 1) {
+          this.error('ARITY_MISMATCH',
+            `Map get expects 1 argument (key of type ${mt.keyType}), got ${got}`,
+            node.line, node.column);
+          return;
+        }
+        const keyType = this._inferExprNode(node.args[0], scope);
+        if (keyType !== T.UNKNOWN && keyType !== T.ANY && !this._compatible(mt.keyType, keyType)) {
+          this.error('TYPE_MISMATCH',
+            `Map get: expected key type ${mt.keyType}, got ${keyType}`,
+            node.args[0].line || node.line, node.args[0].column || node.column);
+        }
+        // get() returns Option<V> — return type is the choice type name
+        return;
+      }
+      if (node.methodName === 'has') {
+        const got = (node.args || []).length;
+        if (got !== 1) {
+          this.error('ARITY_MISMATCH',
+            `Map has expects 1 argument (key of type ${mt.keyType}), got ${got}`,
+            node.line, node.column);
+          return;
+        }
+        const keyType = this._inferExprNode(node.args[0], scope);
+        if (keyType !== T.UNKNOWN && keyType !== T.ANY && !this._compatible(mt.keyType, keyType)) {
+          this.error('TYPE_MISMATCH',
+            `Map has: expected key type ${mt.keyType}, got ${keyType}`,
+            node.args[0].line || node.line, node.args[0].column || node.column);
+        }
+        return;
+      }
+      this.error('UNDEFINED_METHOD',
+        `MAP[${mt.keyType},${mt.valueType}] has no method "${node.methodName}" (available: put, get, has)`,
+        node.line, node.column);
+      return;
+    }
+
     // ── Choice/variant construction ────────────────────────────────
     const choiceDef = scope.getChoice(targetType);
     if (choiceDef) {
@@ -1044,10 +1148,18 @@ class TypeChecker {
     }
     if (node.type === 'ArrayLiteral') {
       // Infer array type from elements if possible
-      if (node.elements.length === 0) return T.LIST; // generic LIST
+      if (node.elements.length === 0) return T.LIST;
       const firstType = this._inferExprNode(node.elements[0], scope);
       if (firstType === T.UNKNOWN) return T.LIST;
       return `[${firstType}]`;
+    }
+    if (node.type === 'MapLiteral') {
+      // Infer MAP type from entries if possible
+      if (node.entries.length === 0) return T.MAP;
+      const firstKeyType = this._inferExprNode(node.entries[0].key, scope);
+      const firstValType = this._inferExprNode(node.entries[0].value, scope);
+      if (firstKeyType === T.UNKNOWN || firstValType === T.UNKNOWN) return T.MAP;
+      return `MAP[${firstKeyType},${firstValType}]`;
     }
     if (node.type === 'LenCall' || node.type === 'CapCall') {
       return T.NUM;
@@ -1097,6 +1209,13 @@ class TypeChecker {
       if (targetType && isArrayType(targetType)) {
         if (node.methodName === 'push') return T.VOID;
         if (node.methodName === 'pop') return arrayInnerType(targetType);
+      }
+      // Intrinsic MAP methods
+      if (targetType && isMapType(targetType)) {
+        const mt = mapInnerTypes(targetType);
+        if (node.methodName === 'put') return T.VOID;
+        if (node.methodName === 'has') return T.FACT;
+        if (node.methodName === 'get') return `Option<${mt.valueType}>`;
       }
       // Choice variant construction returns the choice type
       if (targetType && scope.getChoice(targetType)) {

@@ -61,6 +61,10 @@ function llvmType(plType) {
   if (typeof plType === 'string' && plType.startsWith('[') && plType.endsWith(']')) {
     return '%fat_ptr';
   }
+  // MAP types are stored as %fat_ptr (same layout: { i8* buckets, i64 len, i64 cap })
+  if (isMapTypeStr(plType)) {
+    return '%fat_ptr';
+  }
   // Check if it's a registered struct type
   if (STRUCT_SIZES.has(`%struct.${plType}`)) return `%struct.${plType}`;
   return null; // unsupported
@@ -90,8 +94,59 @@ function isArrayTypeStr(s) {
   return typeof s === 'string' && s.startsWith('[') && s.endsWith(']') && s.length >= 3;
 }
 
+// Check if a string is a MAP type like MAP[NUM,TX], MAP[TX,NUM]
+function isMapTypeStr(s) {
+  return typeof s === 'string' && s.startsWith('MAP[') && s.endsWith(']');
+}
+
+// Extract key/value types from MAP[NUM,TX] → { keyType, valueType }
+function mapInnerTypes(s) {
+  if (!isMapTypeStr(s)) return null;
+  const inner = s.slice(4, -1);
+  const parts = inner.split(',');
+  if (parts.length !== 2) return null;
+  return { keyType: parts[0].trim(), valueType: parts[1].trim() };
+}
+
+// Generate the LLVM bucket struct name for a MAP type
+function mapBucketTypeName(keyType, valueType) {
+  return `%map_bucket.${keyType}.${valueType}`;
+}
+
+// Generate the LLVM bucket struct type definition { i1, keyType, valueType }
+function mapBucketLlvmType(keyPlType, valuePlType) {
+  const keyLt = llvmType(keyPlType) || 'i64';
+  const valLt = llvmType(valuePlType) || 'i64';
+  return `{ i1, ${keyLt}, ${valLt} }`;
+}
+
+// Compute the size of a single bucket for a MAP type
+function mapBucketSize(keyPlType, valuePlType) {
+  const keyLt = llvmType(keyPlType) || 'i64';
+  const valLt = llvmType(valuePlType) || 'i64';
+  // Natural alignment: max(1, align(keyLt), align(valLt))
+  const maxAlign = 8; // i64 and %fat_ptr both have 8-byte alignment
+  // i1 at offset 0, padded to align of next field
+  let off = 1;
+  // Align to 8 for key
+  off = Math.ceil(off / 8) * 8;
+  off += llvmTypeSize(keyLt);
+  // Align to 8 for value
+  off = Math.ceil(off / 8) * 8;
+  off += llvmTypeSize(valLt);
+  // Round up to maxAlign
+  off = Math.ceil(off / maxAlign) * maxAlign;
+  return off;
+}
+
+// Compute the LLVM type for the composite map struct: { bucket_ptr, i64, i64 }
+function mapPtrLlvmType() { return '%fat_ptr'; }
+
 // Fat pointer field accessors (expressed as types for extractvalue/insertvalue)
 const FAT_PTR = { PTR: 0, LEN: 1, CAP: 2 };
+
+// Map field offsets (same layout as fat_ptr: { i8* buckets, i64 len, i64 cap })
+const MAP_FIELDS = { BUCKETS: 0, LEN: 1, CAP: 2 };
 
 const RESERVED = new Set([
   'main', 'printf', 'malloc', 'free', 'realloc', 'strlen', 'strcpy',
@@ -149,6 +204,7 @@ class Module {
     this.body = [];
     this.errors = [];
     this.usesMath = false;
+    this.usesMemset = false;
     this.scope = new Map();
     // Arena state
     this.currentDepth = 0;
@@ -1067,6 +1123,518 @@ class LLVMGenerator {
     m.scope.set(node.identifier, { ptr, plType: node.varType, depth });
   }
 
+  // ── MAP[NUM,TX] codegen helpers ──────────────────────────────────
+
+  genCreateMap(node) {
+    const m = this.mod;
+    const depth = node.depth !== undefined ? node.depth : m.currentDepth;
+    if (depth > m.currentDepth) {
+      m.error(
+        `═══ ⚠ Contract Violation: Illegal Destination ═══\n` +
+        `  Operation:  CREATE\n` +
+        `  Variable:   "${node.identifier}"\n` +
+        `  Destination: depth ${depth}\n` +
+        `  Current:     depth ${m.currentDepth}\n`,
+        node
+      );
+      return;
+    }
+
+    // Initial capacity: 8 buckets
+    const initialCap = 8;
+    const mt = mapInnerTypes(node.varType);
+    const bucketType = mapBucketLlvmType(mt.keyType, mt.valueType);
+    const bktSize = mapBucketSize(mt.keyType, mt.valueType);
+    const initBytes = initialCap * bktSize;
+
+    // Allocate bucket array
+    const rawBuckets = m.arenaAlloc(depth, initBytes);
+    // Zero-initialize: set all bytes to 0 (is_occupied = false for all buckets)
+    m.usesMemset = true;
+    m.emit(`call void @llvm.memset.p0i8.i64(i8* ${rawBuckets}, i8 0, i64 ${initBytes}, i1 false)`);
+
+    // Build the map struct (reuse %fat_ptr layout: { i8* buckets, i64 len, i64 cap })
+    const mapReg = m.buildFatPtr(rawBuckets, '0', String(initialCap));
+    const ptr = m.arenaAllocTyped(node.varType, depth);
+    m.emit(`store %fat_ptr ${mapReg}, %fat_ptr* ${ptr}`);
+    m.scope.set(node.identifier, { ptr, plType: node.varType, depth });
+  }
+
+  // Emit a djb2 hash of a TX fat pointer value → i64 register
+  emitTxHash(txFpReg, node) {
+    const m = this.mod;
+    const ptrReg = m.extractPtr(txFpReg);
+    const lenReg = m.extractLen(txFpReg);
+
+    // hash = 5381; i = 0
+    const hashReg = m.freshReg();
+    m.emit(`${hashReg} = alloca i64`);
+    m.emit(`store i64 5381, i64* ${hashReg}`);
+
+    const entryL = m.freshLabel('txhash.entry');
+    const loopL = m.freshLabel('txhash.loop');
+    const doneL = m.freshLabel('txhash.done');
+    m.emit(`br label %${entryL}`);
+
+    // entry: initialize i = 0
+    m.emitLabel(entryL);
+    const iReg = m.freshReg();
+    m.emit(`${iReg} = alloca i64`);
+    m.emit(`store i64 0, i64* ${iReg}`);
+    m.emit(`br label %${loopL}`);
+
+    // loop: check i < len
+    m.emitLabel(loopL);
+    const curI = m.freshReg();
+    m.emit(`${curI} = load i64, i64* ${iReg}`);
+    const cmp = m.freshReg();
+    m.emit(`${cmp} = icmp ult i64 ${curI}, ${lenReg}`);
+    m.emit(`br i1 ${cmp}, label %${doneL}, label %${doneL}`);
+
+    // Read byte at ptr[i]
+    const charPtr = m.freshReg();
+    m.emit(`${charPtr} = getelementptr inbounds i8, i8* ${ptrReg}, i64 ${curI}`);
+    const ch = m.freshReg();
+    m.emit(`${ch} = load i8, i8* ${charPtr}`);
+    const chZext = m.freshReg();
+    m.emit(`${chZext} = zext i8 ${ch} to i64`);
+
+    // hash = hash * 33 + ch
+    const oldHash = m.freshReg();
+    m.emit(`${oldHash} = load i64, i64* ${hashReg}`);
+    const mult = m.freshReg();
+    m.emit(`${mult} = mul i64 ${oldHash}, 33`);
+    const newHash = m.freshReg();
+    m.emit(`${newHash} = add i64 ${mult}, ${chZext}`);
+    m.emit(`store i64 ${newHash}, i64* ${hashReg}`);
+
+    // i++
+    const nextI = m.freshReg();
+    m.emit(`${nextI} = add i64 ${curI}, 1`);
+    m.emit(`store i64 ${nextI}, i64* ${iReg}`);
+    m.emit(`br label %${loopL}`);
+
+    // done
+    m.emitLabel(doneL);
+    const finalHash = m.freshReg();
+    m.emit(`${finalHash} = load i64, i64* ${hashReg}`);
+    return finalHash;
+  }
+
+  // Emit the map put operation inline — modifies the map through its fat_ptr pointer
+  // Returns nothing (void-like, but returns a dummy i64 0 for consistency)
+  genMapPut(node, mapTypeStr, mapPtr, keyVal, valueVal) {
+    const m = this.mod;
+    const mt = mapInnerTypes(mapTypeStr);
+    const bucketType = mapBucketLlvmType(mt.keyType, mt.valueType);
+    const bktSize = mapBucketSize(mt.keyType, mt.valueType);
+    const keyLt = llvmType(mt.keyType) || 'i64';
+    const valLt = llvmType(mt.valueType) || 'i64';
+
+    // Load the map struct (fat_ptr)
+    const fpReg = m.freshReg();
+    m.emit(`${fpReg} = load %fat_ptr, %fat_ptr* ${mapPtr}`);
+    const bucketsPtr = m.extractPtr(fpReg);
+    const lenReg = m.extractLen(fpReg);
+    const capReg = m.extractCap(fpReg);
+
+    // Check load factor: len >= cap * 3 / 4
+    const cap3 = m.freshReg();
+    m.emit(`${cap3} = mul i64 ${capReg}, 3`);
+    const threshold = m.freshReg();
+    m.emit(`${threshold} = udiv i64 ${cap3}, 4`);
+    const doGrow = m.freshReg();
+    m.emit(`${doGrow} = icmp uge i64 ${lenReg}, ${threshold}`);
+    const growL = m.freshLabel('map.put.grow');
+    const skipGrowL = m.freshLabel('map.put.skipgrow');
+    m.emit(`br i1 ${doGrow}, label %${growL}, label %${skipGrowL}`);
+
+    // ── Grow block ──
+    m.emitLabel(growL);
+    const newCapG = m.freshReg();
+    m.emit(`${newCapG} = mul i64 ${capReg}, 2`);
+    this.emitMapGrow(node, mapTypeStr, bucketsPtr, lenReg, capReg, newCapG, mapPtr);
+    // Reload the map struct after grow
+    const fpG = m.freshReg();
+    m.emit(`${fpG} = load %fat_ptr, %fat_ptr* ${mapPtr}`);
+    const newBucketsG = m.extractPtr(fpG);
+    const newCapG2 = m.extractCap(fpG);
+    m.emit(`br label %${skipGrowL}`);
+
+    // ── Common tail after potential grow ──
+    m.emitLabel(skipGrowL);
+    // Reload fresh from pointer (may have been updated by grow)
+    const fp2 = m.freshReg();
+    m.emit(`${fp2} = load %fat_ptr, %fat_ptr* ${mapPtr}`);
+    const bucketsFinal = m.extractPtr(fp2);
+    const capFinal = m.extractCap(fp2);
+    const lenFinal = m.extractLen(fp2);
+
+    // Compute hash: for NUM keys, just use the key value; for TX, emit djb2
+    let hashReg;
+    let keyReg = keyVal.reg;
+    if (mt.keyType === 'TX') {
+      hashReg = this.emitTxHash(keyReg, node);
+    } else if (mt.keyType === 'NUM') {
+      hashReg = keyReg; // identity hash
+    } else {
+      // Fallback: just use the key as-is (unsafe but allows compilation)
+      hashReg = keyReg;
+    }
+
+    // start_index = hash % cap
+    const startIdx = m.freshReg();
+    m.emit(`${startIdx} = urem i64 ${hashReg}, ${capFinal}`);
+
+    // Probe loop labels
+    const probeL = m.freshLabel('map.put.probe');
+    const foundL = m.freshLabel('map.put.found');
+    const emptyL = m.freshLabel('map.put.empty');
+    const exitL = m.freshLabel('map.put.exit');
+    const idxAlloca = m.freshReg();
+    m.emit(`${idxAlloca} = alloca i64`);
+    m.emit(`store i64 ${startIdx}, i64* ${idxAlloca}`);
+    m.emit(`br label %${probeL}`);
+
+    // ── Probe loop ──
+    m.emitLabel(probeL);
+    const curIdx = m.freshReg();
+    m.emit(`${curIdx} = load i64, i64* ${idxAlloca}`);
+
+    // bucket_ptr = buckets + curIdx * bucketSize
+    const byteOff = m.freshReg();
+    m.emit(`${byteOff} = mul i64 ${curIdx}, ${bktSize}`);
+    const bucketPtr = m.freshReg();
+    m.emit(`${bucketPtr} = getelementptr inbounds i8, i8* ${bucketsFinal}, i64 ${byteOff}`);
+    const bktTyped = m.freshReg();
+    m.emit(`${bktTyped} = bitcast i8* ${bucketPtr} to ${bucketType}*`);
+
+    // Check is_occupied (at offset 0)
+    const occPtr = m.freshReg();
+    m.emit(`${occPtr} = getelementptr inbounds ${bucketType}, ${bucketType}* ${bktTyped}, i64 0, i32 0`);
+    const isOcc = m.freshReg();
+    m.emit(`${isOcc} = load i1, i1* ${occPtr}`);
+
+    // If empty: branch to emptyL
+    m.emit(`br i1 ${isOcc}, label %${foundL}, label %${emptyL}`);
+
+    // ── Found (is_occupied == 1): check key match ──
+    m.emitLabel(foundL);
+    const keyPtr = m.freshReg();
+    m.emit(`${keyPtr} = getelementptr inbounds ${bucketType}, ${bucketType}* ${bktTyped}, i64 0, i32 1`);
+    const existingKey = m.freshReg();
+    m.emit(`${existingKey} = load ${keyLt}, ${keyLt}* ${keyPtr}`);
+
+    // Compare keys
+    let keysMatch;
+    if (keyLt === 'i64') {
+      const km = m.freshReg();
+      m.emit(`${km} = icmp eq i64 ${existingKey}, ${keyReg}`);
+      keysMatch = km;
+    } else if (keyLt === '%fat_ptr') {
+      // TX key comparison: use strcmp
+      const existingPtr = m.extractPtr(existingKey);
+      const keyPtr2 = m.extractPtr(keyReg);
+      const scmp = m.freshReg();
+      m.emit(`${scmp} = call i32 @strcmp(i8* ${existingPtr}, i8* ${keyPtr2})`);
+      const sm = m.freshReg();
+      m.emit(`${sm} = icmp eq i32 ${scmp}, 0`);
+      keysMatch = sm;
+    } else {
+      // fallback: use bitcast to i64 comparison
+      const km = m.freshReg();
+      m.emit(`${km} = icmp eq i64 ${existingKey}, ${keyReg}`);
+      keysMatch = km;
+    }
+
+    m.emit(`br i1 ${keysMatch}, label %${exitL}, label %${emptyL}`);
+
+    // ── Empty/Not-Matched: write if empty, else continue probing ──
+    m.emitLabel(emptyL);
+    // If is_occupied == 0: this is an empty slot → write
+    // If is_occupied == 1: this is a collision → probe next
+    const collisionLabel = m.freshLabel('map.put.collision');
+    m.emit(`br i1 ${isOcc}, label %${collisionLabel}, label %${exitL}`);
+
+    // ── Collision: index = (index + 1) % cap ──
+    m.emitLabel(collisionLabel);
+    const nextIdx = m.freshReg();
+    m.emit(`${nextIdx} = add i64 ${curIdx}, 1`);
+    const wrappedIdx = m.freshReg();
+    m.emit(`${wrappedIdx} = urem i64 ${nextIdx}, ${capFinal}`);
+    m.emit(`store i64 ${wrappedIdx}, i64* ${idxAlloca}`);
+    m.emit(`br label %${probeL}`);
+
+    // ── Exit: store key and value, update is_occupied, increment len ──
+    m.emitLabel(exitL);
+    // Set is_occupied = true (only if was empty — idempotent for found case)
+    m.emit(`store i1 true, i1* ${occPtr}`);
+    // Store key
+    const keyPtr2 = m.freshReg();
+    m.emit(`${keyPtr2} = getelementptr inbounds ${bucketType}, ${bucketType}* ${bktTyped}, i64 0, i32 1`);
+    m.emit(`store ${keyLt} ${keyReg}, ${keyLt}* ${keyPtr2}`);
+    // Store value
+    const valPtr = m.freshReg();
+    m.emit(`${valPtr} = getelementptr inbounds ${bucketType}, ${bucketType}* ${bktTyped}, i64 0, i32 2`);
+    m.emit(`store ${valLt} ${valueVal.reg}, ${valLt}* ${valPtr}`);
+
+    // Increment len (only if was empty — but idempotent)
+    const newLen = m.freshReg();
+    m.emit(`${newLen} = add i64 ${lenFinal}, 1`);
+    // Store updated map struct back
+    const updatedFp = m.buildFatPtr(bucketsFinal, newLen, capFinal);
+    m.emit(`store %fat_ptr ${updatedFp}, %fat_ptr* ${mapPtr}`);
+  }
+
+  // Emit map grow: allocate new bucket array, rehash all entries, update map pointer
+  emitMapGrow(node, mapTypeStr, oldBuckets, oldLen, oldCap, newCapReg, mapPtr) {
+    const m = this.mod;
+    const mt = mapInnerTypes(mapTypeStr);
+    const bucketType = mapBucketLlvmType(mt.keyType, mt.valueType);
+    const bktSize = mapBucketSize(mt.keyType, mt.valueType);
+    const keyLt = llvmType(mt.keyType) || 'i64';
+
+    const depth = node.depth !== undefined ? node.depth : m.currentDepth;
+
+    // newSize = newCap * bucketSize
+    const newSize = m.freshReg();
+    m.emit(`${newSize} = mul i64 ${newCapReg}, ${bktSize}`);
+    const newBuckets = m.arenaAlloc(depth, { reg: newSize, type: 'i64' });
+    // Zero-initialize
+    m.usesMemset = true;
+    m.emit(`call void @llvm.memset.p0i8.i64(i8* ${newBuckets}, i8 0, i64 ${newSize}, i1 false)`);
+
+    // Loop over old buckets, rehash occupied ones
+    const loopL = m.freshLabel('map.grow.loop');
+    const doneL = m.freshLabel('map.grow.done');
+    const iAlloca = m.freshReg();
+    m.emit(`${iAlloca} = alloca i64`);
+    m.emit(`store i64 0, i64* ${iAlloca}`);
+    m.emit(`br label %${loopL}`);
+
+    m.emitLabel(loopL);
+    const i = m.freshReg();
+    m.emit(`${i} = load i64, i64* ${iAlloca}`);
+    const icmp = m.freshReg();
+    m.emit(`${icmp} = icmp ult i64 ${i}, ${oldLen}`);
+    const bodyL = m.freshLabel('map.grow.body');
+    m.emit(`br i1 ${icmp}, label %${bodyL}, label %${doneL}`);
+    m.emitLabel(bodyL);
+
+    // Read old bucket at index i
+    const byteOff = m.freshReg();
+    m.emit(`${byteOff} = mul i64 ${i}, ${bktSize}`);
+    const oldBktRaw = m.freshReg();
+    m.emit(`${oldBktRaw} = getelementptr inbounds i8, i8* ${oldBuckets}, i64 ${byteOff}`);
+    const oldBkt = m.freshReg();
+    m.emit(`${oldBkt} = bitcast i8* ${oldBktRaw} to ${bucketType}*`);
+
+    const occOld = m.freshReg();
+    m.emit(`${occOld} = getelementptr inbounds ${bucketType}, ${bucketType}* ${oldBkt}, i64 0, i32 0`);
+    const isOccOld = m.freshReg();
+    m.emit(`${isOccOld} = load i1, i1* ${occOld}`);
+
+    const skipL = m.freshLabel('map.grow.skip');
+    const rehashL = m.freshLabel('map.grow.rehash');
+    m.emit(`br i1 ${isOccOld}, label %${rehashL}, label %${skipL}`);
+
+    // ── Rehash this entry ──
+    m.emitLabel(rehashL);
+    const oldKeyPtr = m.freshReg();
+    m.emit(`${oldKeyPtr} = getelementptr inbounds ${bucketType}, ${bucketType}* ${oldBkt}, i64 0, i32 1`);
+    const oldKey = m.freshReg();
+    m.emit(`${oldKey} = load ${keyLt}, ${keyLt}* ${oldKeyPtr}`);
+
+    const oldValPtr = m.freshReg();
+    m.emit(`${oldValPtr} = getelementptr inbounds ${bucketType}, ${bucketType}* ${oldBkt}, i64 0, i32 2`);
+    const oldVal = m.freshReg();
+    const valLt = llvmType(mt.valueType) || 'i64';
+    m.emit(`${oldVal} = load ${valLt}, ${valLt}* ${oldValPtr}`);
+
+    // Hash the key
+    let hashG;
+    if (mt.keyType === 'NUM') {
+      hashG = oldKey;
+    } else if (mt.keyType === 'TX') {
+      hashG = this.emitTxHash(oldKey, node);
+    } else {
+      hashG = oldKey;
+    }
+    const newIdx = m.freshReg();
+    m.emit(`${newIdx} = urem i64 ${hashG}, ${newCapReg}`);
+
+    // Probe for empty slot in new array
+    const probeGL = m.freshLabel('map.grow.probe');
+    const foundGL = m.freshLabel('map.grow.found');
+    const storeL = m.freshLabel('map.grow.store');
+    const idxAllocaG = m.freshReg();
+    m.emit(`${idxAllocaG} = alloca i64`);
+    m.emit(`store i64 ${newIdx}, i64* ${idxAllocaG}`);
+    m.emit(`br label %${probeGL}`);
+
+    m.emitLabel(probeGL);
+    const curIdxG = m.freshReg();
+    m.emit(`${curIdxG} = load i64, i64* ${idxAllocaG}`);
+    const byteOffG = m.freshReg();
+    m.emit(`${byteOffG} = mul i64 ${curIdxG}, ${bktSize}`);
+    const newBktRaw = m.freshReg();
+    m.emit(`${newBktRaw} = getelementptr inbounds i8, i8* ${newBuckets}, i64 ${byteOffG}`);
+    const newBkt = m.freshReg();
+    m.emit(`${newBkt} = bitcast i8* ${newBktRaw} to ${bucketType}*`);
+
+    const occNew = m.freshReg();
+    m.emit(`${occNew} = getelementptr inbounds ${bucketType}, ${bucketType}* ${newBkt}, i64 0, i32 0`);
+    const isOccNew = m.freshReg();
+    m.emit(`${isOccNew} = load i1, i1* ${occNew}`);
+
+    m.emit(`br i1 ${isOccNew}, label %${foundGL}, label %${storeL}`);
+    // foundGL: collision in new array → probe next
+    m.emitLabel(foundGL);
+    const nextG = m.freshReg();
+    m.emit(`${nextG} = add i64 ${curIdxG}, 1`);
+    const wrapG = m.freshReg();
+    m.emit(`${wrapG} = urem i64 ${nextG}, ${newCapReg}`);
+    m.emit(`store i64 ${wrapG}, i64* ${idxAllocaG}`);
+    m.emit(`br label %${probeGL}`);
+
+    // storeL: found empty slot in new array
+    m.emitLabel(storeL);
+    m.emit(`store i1 true, i1* ${occNew}`);
+    const newKeyPtr = m.freshReg();
+    m.emit(`${newKeyPtr} = getelementptr inbounds ${bucketType}, ${bucketType}* ${newBkt}, i64 0, i32 1`);
+    m.emit(`store ${keyLt} ${oldKey}, ${keyLt}* ${newKeyPtr}`);
+    const newValPtr = m.freshReg();
+    m.emit(`${newValPtr} = getelementptr inbounds ${bucketType}, ${bucketType}* ${newBkt}, i64 0, i32 2`);
+    m.emit(`store ${valLt} ${oldVal}, ${valLt}* ${newValPtr}`);
+    m.emit(`br label %${skipL}`);
+
+    // skipL: old bucket was empty, or done storing rehashed entry
+    m.emitLabel(skipL);
+    // i++
+    const nextI = m.freshReg();
+    m.emit(`${nextI} = add i64 ${i}, 1`);
+    m.emit(`store i64 ${nextI}, i64* ${iAlloca}`);
+    m.emit(`br label %${loopL}`);
+
+    m.emitLabel(doneL);
+    // Update map pointer with new bucket array and capacity (len stays same)
+    const newFp = m.buildFatPtr(newBuckets, oldLen, newCapReg);
+    m.emit(`store %fat_ptr ${newFp}, %fat_ptr* ${mapPtr}`);
+  }
+
+  // Emit map has check: returns i64 (0 = not found, 1 = found)
+  genMapHas(node, mapTypeStr, mapReg, keyVal) {
+    const m = this.mod;
+    const mt = mapInnerTypes(mapTypeStr);
+    const bucketType = mapBucketLlvmType(mt.keyType, mt.valueType);
+    const bktSize = mapBucketSize(mt.keyType, mt.valueType);
+    const keyLt = llvmType(mt.keyType) || 'i64';
+
+    const bucketsPtr = m.extractPtr(mapReg);
+    const capReg = m.extractCap(mapReg);
+
+    // Compute hash
+    let hashReg;
+    let keyReg = keyVal.reg;
+    if (mt.keyType === 'TX') {
+      hashReg = this.emitTxHash(keyReg, node);
+    } else if (mt.keyType === 'NUM') {
+      hashReg = keyReg;
+    } else {
+      hashReg = keyReg;
+    }
+
+    const startIdx = m.freshReg();
+    m.emit(`${startIdx} = urem i64 ${hashReg}, ${capReg}`);
+
+    // Result flag (alloca so we can set it from any block)
+    const resAlloca = m.freshReg();
+    m.emit(`${resAlloca} = alloca i64`);
+    m.emit(`store i64 0, i64* ${resAlloca}`);
+
+    const probeL = m.freshLabel('map.has.probe');
+    const foundL = m.freshLabel('map.has.found');
+    const emptyL = m.freshLabel('map.has.empty');
+    const exitL = m.freshLabel('map.has.exit');
+    const idxAlloca = m.freshReg();
+    m.emit(`${idxAlloca} = alloca i64`);
+    m.emit(`store i64 ${startIdx}, i64* ${idxAlloca}`);
+    m.emit(`br label %${probeL}`);
+
+    m.emitLabel(probeL);
+    const curIdx = m.freshReg();
+    m.emit(`${curIdx} = load i64, i64* ${idxAlloca}`);
+    const byteOff = m.freshReg();
+    m.emit(`${byteOff} = mul i64 ${curIdx}, ${bktSize}`);
+    const bktRaw = m.freshReg();
+    m.emit(`${bktRaw} = getelementptr inbounds i8, i8* ${bucketsPtr}, i64 ${byteOff}`);
+    const bkt = m.freshReg();
+    m.emit(`${bkt} = bitcast i8* ${bktRaw} to ${bucketType}*`);
+
+    const occPtr = m.freshReg();
+    m.emit(`${occPtr} = getelementptr inbounds ${bucketType}, ${bucketType}* ${bkt}, i64 0, i32 0`);
+    const isOcc = m.freshReg();
+    m.emit(`${isOcc} = load i1, i1* ${occPtr}`);
+
+    m.emit(`br i1 ${isOcc}, label %${foundL}, label %${emptyL}`);
+
+    // ── Found: check key match ──
+    m.emitLabel(foundL);
+    const keyPtr = m.freshReg();
+    m.emit(`${keyPtr} = getelementptr inbounds ${bucketType}, ${bucketType}* ${bkt}, i64 0, i32 1`);
+    const existingKey = m.freshReg();
+    m.emit(`${existingKey} = load ${keyLt}, ${keyLt}* ${keyPtr}`);
+
+    let keysMatch;
+    if (keyLt === 'i64') {
+      const km = m.freshReg();
+      m.emit(`${km} = icmp eq i64 ${existingKey}, ${keyReg}`);
+      keysMatch = km;
+    } else if (keyLt === '%fat_ptr') {
+      const existingPtr = m.extractPtr(existingKey);
+      const keyPtr2 = m.extractPtr(keyReg);
+      const scmp = m.freshReg();
+      m.emit(`${scmp} = call i32 @strcmp(i8* ${existingPtr}, i8* ${keyPtr2})`);
+      const sm = m.freshReg();
+      m.emit(`${sm} = icmp eq i32 ${scmp}, 0`);
+      keysMatch = sm;
+    } else {
+      const km = m.freshReg();
+      m.emit(`${km} = icmp eq i64 ${existingKey}, ${keyReg}`);
+      keysMatch = km;
+    }
+
+    // If match: set result=1, exit. Otherwise: treat as collision → probe next
+    const matchExit = m.freshLabel('map.has.matchexit');
+    const collisionL = m.freshLabel('map.has.collision');
+    m.emit(`br i1 ${keysMatch}, label %${matchExit}, label %${collisionL}`);
+
+    m.emitLabel(matchExit);
+    m.emit(`store i64 1, i64* ${resAlloca}`);
+    m.emit(`br label %${exitL}`);
+
+    // ── Collision: probe next slot ──
+    m.emitLabel(collisionL);
+    const nextIdx = m.freshReg();
+    m.emit(`${nextIdx} = add i64 ${curIdx}, 1`);
+    const wrappedIdx = m.freshReg();
+    m.emit(`${wrappedIdx} = urem i64 ${nextIdx}, ${capReg}`);
+    m.emit(`store i64 ${wrappedIdx}, i64* ${idxAlloca}`);
+    m.emit(`br label %${probeL}`);
+
+    // ── Empty slot: not found ──
+    m.emitLabel(emptyL);
+    m.emit(`br label %${exitL}`);
+
+    // ── Exit ──
+    m.emitLabel(exitL);
+    const finalRes = m.freshReg();
+    m.emit(`${finalRes} = load i64, i64* ${resAlloca}`);
+    const boolRes = m.freshReg();
+    m.emit(`${boolRes} = icmp ne i64 ${finalRes}, 0`);
+    return { reg: boolRes, type: 'FACT' };
+  }
+
   // ── REAP (function call) ───────────────────────────────────────────────────
   genReapStatement(node) {
     const m = this.mod;
@@ -1206,6 +1774,7 @@ class LLVMGenerator {
     lines.push('declare i8* @strcat(i8*, i8*)');
     lines.push('declare i32 @strcmp(i8*, i8*)');
     if (m.usesMath) lines.push('declare double @pow(double, double)');
+    if (m.usesMemset) lines.push('declare void @llvm.memset.p0i8.i64(i8*, i8, i64, i1)');
     // User FFI external declarations
     for (const fd of this.fnDeclares) {
       const llvmRetType = 'i64';
@@ -1452,6 +2021,44 @@ class LLVMGenerator {
         return { reg: '0', type: targetType };
       }
 
+      // ── Intrinsic MAP methods: put, get, has ──────────────────────
+      if (isMapTypeStr(targetType)) {
+        if (node.methodName === 'put') {
+          const ec = new ExprCompiler(m, node, this);
+          let keyVal, valueVal;
+          if (node.args && node.args.length >= 2) {
+            if (typeof node.args[0] === 'string') keyVal = ec.compileExpr(node.args[0]);
+            else keyVal = this.compileAstExpr(node.args[0]);
+            if (typeof node.args[1] === 'string') valueVal = ec.compileExpr(node.args[1]);
+            else valueVal = this.compileAstExpr(node.args[1]);
+          } else {
+            m.error('MAP put expects 2 arguments (key, value)', node);
+            return { reg: '0', type: targetType };
+          }
+          this.genMapPut(node, targetType, targetPtr, keyVal, valueVal);
+          return { reg: '0', type: 'NUM' };
+        }
+        if (node.methodName === 'has') {
+          const ec = new ExprCompiler(m, node, this);
+          let keyVal;
+          if (node.args && node.args.length >= 1) {
+            if (typeof node.args[0] === 'string') keyVal = ec.compileExpr(node.args[0]);
+            else keyVal = this.compileAstExpr(node.args[0]);
+          } else {
+            m.error('MAP has expects 1 argument (key)', node);
+            return { reg: '0', type: 'NUM' };
+          }
+          return this.genMapHas(node, targetType, target.reg, keyVal);
+        }
+        if (node.methodName === 'get') {
+          // get returns Option<V> — not yet supported in compiled mode (needs MATCH)
+          m.unsupported(node, `MAP get() not yet supported in compiled mode — use has() instead`);
+          return { reg: '0', type: targetType };
+        }
+        m.error(`MAP type has no method "${node.methodName}"`, node);
+        return { reg: '0', type: targetType };
+      }
+
       // ── User-defined struct methods ─────────────────────────────
       const mangled = `${targetType}_${node.methodName}`;
       const fnInfo = this.fnInfos.get(mangled);
@@ -1587,6 +2194,21 @@ class LLVMGenerator {
       case 'SeasonStatement':  this.genSeason(node);return false;
       case 'LockStatement':    return false;
 
+      case 'LinkStatement': {
+        const mapInfo = m.scope.get(node.mapIdent);
+        if (!mapInfo) { m.error(`"${node.mapIdent}" is not defined`, node); return false; }
+        if (!isMapTypeStr(mapInfo.plType)) { m.error(`"${node.mapIdent}" is not a MAP`, node); return false; }
+        const ec = new ExprCompiler(m, node, this);
+        const keyVal = ec.compileExpr(node.keyExpr);
+        const valueVal = ec.compileExpr(node.valueExpr);
+        // Coerce key to map key type
+        const mt = mapInnerTypes(mapInfo.plType);
+        const coercedKey = { reg: this.coerce(keyVal, mt.keyType, node), type: mt.keyType };
+        const coercedVal = { reg: this.coerce(valueVal, mt.valueType, node), type: mt.valueType };
+        this.genMapPut(node, mapInfo.plType, mapInfo.ptr, coercedKey, coercedVal);
+        return false;
+      }
+
       case 'WeatherStatement':
         this.genWeatherStatement(node);
         return false;
@@ -1623,6 +2245,12 @@ class LLVMGenerator {
     // Check if this is an array type [NUM], [TX], [Point], etc.
     if (isArrayTypeStr(node.varType)) {
       this.genCreateArray(node);
+      return;
+    }
+
+    // Check if this is a MAP type MAP[NUM,TX], etc.
+    if (isMapTypeStr(node.varType)) {
+      this.genCreateMap(node);
       return;
     }
 
@@ -1867,7 +2495,7 @@ class LLVMGenerator {
       this.emitPrintValue(val);
       return;
     }
-    if (expr.type === 'LenCall' || expr.type === 'CapCall' || expr.type === 'IndexAccess') {
+    if (expr.type === 'LenCall' || expr.type === 'CapCall' || expr.type === 'IndexAccess' || expr.type === 'MethodCall') {
       const val = this.compileAstExpr(expr);
       this.emitPrintValue(val);
       return;

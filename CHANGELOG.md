@@ -1,6 +1,48 @@
 # Changelog — PlantLang / Chloroplast
 
-## v0.25.0 — 2026 (current)
+## v0.26.0 — 2026 (current)
+
+### New Features
+- **MAP Type (Hash Table) — Full LLVM Codegen** — open-addressing HashMap with linear probing:
+  - Syntax: `CREATE m(MAP[NUM,TX]).` with typed key/value parameters
+  - Map literals: `CREATE m(MAP[NUM,TX]) TO { 1: "a", 2: "b" }.`
+  - `LINK key WITH value IN map.` — key-value insertion (also `link`/`LINK` in regex pipeline)
+  - `m.put(key, value)` — runtime method for insertion
+  - `m.has(key)` — returns FACT (true/false) — **compiled natively** via linear probing
+  - `m.get(key)` — returns `Option<V>` — interpreter-only (needs MATCH codegen)
+  - **Native bucket layout**: `{ i1 is_occupied, key_type, value_type }` with arena-allocated bucket arrays
+  - **djb2 hash** for TX keys (emitted as inline LLVM IR loop), identity hash for NUM keys
+  - **Automatic growth**: load factor > 0.75 triggers 2× capacity doubling with full rehash
+  - **Rooted Depth integration**: maps stored as `%fat_ptr` struct `{ i8* buckets, i64 len, i64 cap }` within arena slabs
+  - **Backward compatibility**: legacy untyped `MAP` (plain object) still works in interpreter
+  - Full type-checker validation: key/value arity, type matching, MAP[K,V] vs MAP inference
+
+### LLVM Codegen Fixes
+- `llvmType()` — added MAP type support (`isMapTypeStr`) so arena allocation returns a valid `%fat_ptr*`
+- `@llvm.memset.p0i8.i64` declaration — conditional declare for bucket array zeroing
+- Grow loop branch fix — rehash loop was a no-op (both branch targets pointed to exit); now properly iterates old buckets
+- `storeL`/`skipL` label separation — fixed unterminated basic block in grow rehash by adding explicit `br` terminator
+- `genMapHas` return type changed from `NUM` to `FACT` — SHOW now prints `true`/`false` matching the interpreter
+- `mapBucketSize` padding fix — bucket stride now computes correct padded struct size (40 bytes for `{i1,i64,%fat_ptr}` instead of 33), fixing data corruption on multi-element maps
+
+### SHOW Expression Support
+- `genShow` now handles `MethodCall` expressions (enables `SHOW m.has(1).` in compiled mode)
+- LinkStatement added to `genStatement` switch — compiled via `ExprCompiler.compileExpr` + `genMapPut`
+
+### Test Suite
+- Added **Phase 14 — MAP Types** (`tests/test_phase14_maps.js`) — 17 tests covering empty map create, map literals, LINK/put semantics, has/get, overwrite, growth (10 entries), SHOW display, type-checker validation
+- LLVM backend expanded from 46 → **50 smoke tests** (4 new MAP tests: create+has, all-keys, growth, overwrite)
+- Total test suites expanded to **13 files, ~634 total assertions** — all green
+
+### Documentation
+- All `.md` files bumped to v0.26.0
+- ROADMAP.md — MAP objective marked complete, v0.27.0 objectives drafted
+- Language Tour.md — supported subset table now shows MAP as ✅ for `has()` in compiled mode
+- TECHNICAL.md — updated test counts from ~613 → ~634, 12 → 13 test files
+
+---
+
+## v0.25.0 — 2026
 
 ### New Features
 - **SHAPE (Struct Types)** — user-defined aggregate types:

@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.25.0
+# 🌿 PlantLang — Chloroplast v0.26.0
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -72,7 +72,7 @@ Each depth level owns a **dedicated 64KB arena slab** (`Arena_N`). Variables at 
 | Text | `TX` | `CREATE name(TX) TO "Haider".` |
 | Boolean | `FACT` | `CREATE active(FACT) TO TRUE.` |
 | List | `LIST` | `CREATE fruits(LIST) TO apple, banana.` |
-| Map | `MAP` | `CREATE cfg(MAP).` |
+| Map | `MAP` | `CREATE m(MAP[NUM,TX]).` — typed hash table |
 | Struct | `SHAPE` | `CREATE p(Point) TO Point{ 10, 20 }.` |
 | Tagged Union | `CHOICE` | `CREATE opt TO Option.Some(10).` |
 
@@ -83,6 +83,21 @@ Each depth level owns a **dedicated 64KB arena slab** (`Arena_N`). Variables at 
 1\ LOCK pi.          # make immutable
 1\ EVAPORATE temp.   # delete variable
 ```
+
+### Maps (Hash Tables)
+
+Typed key-value storage with native LLVM compilation — `LINK`, `has()`, and `put()` are all fully compiled:
+
+```
+1\ CREATE m(MAP[NUM,TX]).
+1\ LINK 1 WITH "hello" IN m.
+1\ LINK 2 WITH "world" IN m.
+1\ SHOW m.has(1).            # → true (compiled natively)
+1\ SHOW m.has(99).           # → false
+1\ m.put(3, "foo").          # intrinsic method
+```
+
+Internally uses open-addressing with linear probing, djb2 hash for TX keys, automatic capacity doubling when load factor exceeds 0.75, and arena-allocated bucket arrays.
 
 ### SHAPE (Struct Types)
 
@@ -224,14 +239,13 @@ Features:
 1\ SHOW MIN scores.
 ```
 
-### Maps
+### LINK (MAP insert)
 
 ```
-1\ CREATE user(MAP).
-1\ LINK "name"  WITH "Haider" IN user.
-1\ LINK "score" WITH 94       IN user.
-1\ SET user:"name" TO "Ali".
-1\ SHOW user:"score".
+1\ CREATE user(MAP[NUM,TX]).
+1\ LINK 1 WITH "Haider" IN user.
+1\ LINK 2 WITH 94        IN user.
+1\ SHOW user.has(2).     # → true (compiled natively)
 ```
 
 ### BRAID (zip two lists)
@@ -618,15 +632,17 @@ Requires LLVM's `llc` (and ideally `opt`) on `PATH` — e.g. `apt install llvm` 
 | Feature | Support |
 |---------|---------|
 | `CREATE` / `SET` / `INCREASE` / `DECREASE` | ✅ `NUM`, `SCL`, `TX`, `FACT` |
-| `SHOW` | ✅ literals, identifiers, `+` concatenation |
+| `SHOW` | ✅ literals, identifiers, `+` concatenation, method calls |
 | `IF` / `ORIF` / `ELSE` | ✅ |
 | `CYCLE var FROM lo TO hi [STEP k]` | ✅ numeric ranges |
 | `SEASON` | ✅ while loop |
 | Arithmetic & comparisons | ✅ `+ - * / % **`, `IS`, `GREATER THAN`, `BETWEEN`, `AND`/`OR`/`NOT` |
 | `ACTION` / `REAP` / `GIVE` | ✅ recursion, SCL params, TX returns, void actions |
 | `WEATHER` / `SHELTER` / `CALM` | ✅ ZERO_STORM detection, errVar binding, nested shelters |
-| `LIST` / `MAP` | ❌ use `chloroplast run` |
+| `MAP` (hash table) | ✅ `LINK`, `has()`, `put()` — open-addressing, linear probing, djb2 hash, auto-growth |
+| `LIST` (dynamic array) | ❌ use `chloroplast run` |
 | `SPECIES` / `BLOOM` | ❌ not yet |
+| `CHOICE` / `MATCH` | ❌ not yet (interpreter-only) |
 | `HARVEST` / `LISTEN BRANCH` | ❌ not yet |
 | `VERIFY` / `SUITE` | ❌ not yet |
 
@@ -669,7 +685,7 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.25.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production:
+Chloroplast v0.26.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production:
 
 ```
 Source (.plnt)
@@ -694,6 +710,7 @@ Source (.plnt)
            ├── Depth tracking with automatic arena reset
            ├── Contract Law validation (CREATE destination ≤ current depth)
            ├── Unwinding Protocol (Natural/Forced Exit, Loop Reset, Error Unwind)
+           ├── MAP hash tables: open-addressing, linear probing, djb2 hash, auto-growth
            └── FFI declare IR — external function declarations for runtime_bridge
 ```
 

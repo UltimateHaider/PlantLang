@@ -1071,8 +1071,24 @@ class Parser {
     let varType = null;
     if (this.match(TOKEN.PUNCT, '(')) {
       this.advance(); // consume (
-      // Handle array type: [TYPE] syntax
-      if (this.match(TOKEN.PUNCT, '[')) {
+      // Handle MAP[K,V] syntax: MAP [ K , V ]
+      if (this.match(TOKEN.KEYWORD, 'MAP') && this.peek(1) && this.peek(1).type === TOKEN.PUNCT && this.peek(1).value === '[') {
+        this.advance(); // consume MAP
+        this.advance(); // consume [
+        const keyTok = this.current();
+        if (keyTok.type !== TOKEN.KEYWORD && keyTok.type !== TOKEN.IDENT) {
+          storm('SYNTAX_STORM', `Expected a key type inside MAP[ ], found "${keyTok.value}"`, keyTok.line, keyTok.column);
+        }
+        const keyType = this.advance().value;
+        this.consume(TOKEN.PUNCT, ',', '"," between key and value types in MAP[K,V]');
+        const valTok = this.current();
+        if (valTok.type !== TOKEN.KEYWORD && valTok.type !== TOKEN.IDENT) {
+          storm('SYNTAX_STORM', `Expected a value type inside MAP[ ], found "${valTok.value}"`, valTok.line, valTok.column);
+        }
+        const valType = this.advance().value;
+        this.consume(TOKEN.PUNCT, ']', '"]" to close MAP type');
+        varType = `MAP[${keyType},${valType}]`;
+      } else if (this.match(TOKEN.PUNCT, '[')) {
         this.advance(); // consume [
         const innerTok = this.current();
         if (innerTok.type !== TOKEN.KEYWORD && innerTok.type !== TOKEN.IDENT) {
@@ -1115,6 +1131,8 @@ class Parser {
           valueExpr = this.parseStructInstantiation();
         } else if (this.match(TOKEN.PUNCT, '[')) {
           valueExpr = this.parseArrayLiteral();
+        } else if (this.match(TOKEN.PUNCT, '{')) {
+          valueExpr = this.parseMapLiteral();
         } else {
           valueExpr = this.parseExpressionSpan();
         }
@@ -2060,6 +2078,61 @@ class Parser {
     }
     this.consume(TOKEN.PUNCT, ']', '"]" to close array literal');
     return new ArrayLiteralNode(elements, coords);
+  }
+
+  // ── Map literal { key: value, key: value, ... } ────────────
+  parseMapLiteral() {
+    this.consume(TOKEN.PUNCT, '{', '"{" to start map literal');
+    const coords = { line: this.current().line, column: this.current().column, depth: this.current().depth };
+    const entries = [];
+    while (!this.isAtEnd() && !this.match(TOKEN.PUNCT, '}')) {
+      // Parse key
+      const keySpan = [];
+      while (!this.isAtEnd()) {
+        if (this.match(TOKEN.PUNCT, ':') || this.match(TOKEN.PUNCT, ',') || this.match(TOKEN.PUNCT, '}')) break;
+        keySpan.push(this.advance());
+      }
+      if (keySpan.length === 0) break;
+      let key;
+      if (keySpan.length === 1) {
+        const t = keySpan[0];
+        const ac = { line: t.line, column: t.column, depth: t.depth };
+        if (t.type === TOKEN.NUMBER) key = new LiteralNode(t.value, 'NUMBER', ac);
+        else if (t.type === TOKEN.STRING) key = new LiteralNode(t.value, 'STRING', ac);
+        else if (t.type === TOKEN.IDENT || t.type === TOKEN.KEYWORD) key = new IdentifierNode(t.value, ac);
+        else key = new LiteralNode(joinTokens(keySpan), 'RAW_EXPR', ac);
+      } else {
+        key = new LiteralNode(joinTokens(keySpan), 'RAW_EXPR', { line: keySpan[0].line, column: keySpan[0].column, depth: keySpan[0].depth });
+      }
+      // Expect colon
+      if (!this.match(TOKEN.PUNCT, ':')) {
+        storm('SYNTAX_STORM', 'Expected ":" after key in map literal', this.current().line, this.current().column);
+      }
+      this.advance(); // consume :
+      // Parse value
+      const valSpan = [];
+      while (!this.isAtEnd()) {
+        if (this.match(TOKEN.PUNCT, ',') || this.match(TOKEN.PUNCT, '}')) break;
+        valSpan.push(this.advance());
+      }
+      let value;
+      if (valSpan.length === 1) {
+        const t = valSpan[0];
+        const ac = { line: t.line, column: t.column, depth: t.depth };
+        if (t.type === TOKEN.NUMBER) value = new LiteralNode(t.value, 'NUMBER', ac);
+        else if (t.type === TOKEN.STRING) value = new LiteralNode(t.value, 'STRING', ac);
+        else if (t.type === TOKEN.FACT) value = new LiteralNode(t.value, 'FACT', ac);
+        else if (t.type === TOKEN.IDENT || t.type === TOKEN.KEYWORD) value = new IdentifierNode(t.value, ac);
+        else value = new LiteralNode(joinTokens(valSpan), 'RAW_EXPR', ac);
+      } else {
+        value = new LiteralNode(joinTokens(valSpan), 'RAW_EXPR', { line: valSpan[0].line, column: valSpan[0].column, depth: valSpan[0].depth });
+      }
+      const pairCoords = { line: keySpan[0].line, column: keySpan[0].column, depth: keySpan[0].depth };
+      entries.push(new (require('./ast').KeyValuePairNode)({ key, value }, pairCoords));
+      if (this.match(TOKEN.PUNCT, ',')) this.advance();
+    }
+    this.consume(TOKEN.PUNCT, '}', '"}" to close map literal');
+    return new (require('./ast').MapLiteralNode)({ entries }, coords);
   }
 
 } // end class Parser

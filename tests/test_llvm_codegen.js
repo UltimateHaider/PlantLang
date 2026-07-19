@@ -549,5 +549,53 @@ MISSION: SAFE.
 1\\ SHOW len(msg).
 `);
 
+// ── Phase 14: MAP codegen ──────────────────────────────────────────────
+
+test('MAP — create and check has()', `
+MISSION: SAFE.
+1\\ CREATE m(MAP[NUM,TX]).
+1\\ LINK 1 WITH "hello" IN m.
+1\\ LINK 2 WITH "world" IN m.
+1\\ SHOW m.has(1).
+1\\ SHOW m.has(99).
+`);
+
+test('MAP — check has() on all inserted keys (no growth)', `
+MISSION: SAFE.
+1\\ CREATE m(MAP[NUM,TX]).
+1\\ LINK 1 WITH "a" IN m.
+1\\ LINK 2 WITH "b" IN m.
+1\\ LINK 3 WITH "c" IN m.
+1\\ SHOW m.has(1).
+1\\ SHOW m.has(2).
+1\\ SHOW m.has(3).
+1\\ SHOW m.has(4).
+`);
+
+test('MAP — growth (7 entries triggers grow at 6th threshold)', `
+MISSION: SAFE.
+1\\ CREATE m(MAP[NUM,TX]).
+1\\ LINK 1 WITH "hello" IN m.
+1\\ LINK 2 WITH "world" IN m.
+1\\ LINK 3 WITH "foo" IN m.
+1\\ LINK 4 WITH "bar" IN m.
+1\\ LINK 5 WITH "baz" IN m.
+1\\ LINK 6 WITH "qux" IN m.
+1\\ LINK 7 WITH "quux" IN m.
+1\\ SHOW m.has(1).
+1\\ SHOW m.has(7).
+1\\ SHOW m.has(99).
+`);
+
+test('MAP — overwrite existing key (only 6 unique keys stored)', `
+MISSION: SAFE.
+1\\ CREATE m(MAP[NUM,TX]).
+1\\ LINK 1 WITH "hello" IN m.
+1\\ LINK 2 WITH "world" IN m.
+1\\ LINK 1 WITH "updated" IN m.
+1\\ SHOW m.has(1).
+1\\ SHOW m.has(2).
+`);
+
 console.log(`\n${passed} passed, ${failed} failed, ${skipped} skipped`);
 process.exit(failed > 0 ? 1 : 0);

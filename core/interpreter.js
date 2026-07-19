@@ -88,6 +88,15 @@ class Interpreter {
     if(node.type==='ArrayLiteral'){
       return this.evaluateArrayLiteral(node, soil);
     }
+    if(node.type==='MapLiteral'){
+      const map = new Map();
+      for (const entry of node.entries) {
+        const key = this.evaluateExpressionNode(entry.key, soil);
+        const val = this.evaluateExpressionNode(entry.value, soil);
+        map.set(key, val);
+      }
+      return map;
+    }
     if(node.type==='LenCall'){
       const arg=this.evaluateExpressionNode(node.arg,soil);
       if(Array.isArray(arg))return arg.length;
@@ -127,6 +136,31 @@ class Interpreter {
           return target.pop();
         }
         storm('MISSING_STORM',`Array has no method "${node.methodName}"`,node.line,node.column);
+      }
+      // ── Intrinsic MAP methods ────────────────────────────────
+      if (target instanceof Map) {
+        if (node.methodName === 'put') {
+          const argVals = (node.args||[]).map(a=>this.evaluateExpressionNode(a,soil));
+          if (argVals.length !== 2) storm('ARITY_STORM','put expects exactly 2 arguments (key, value)',node.line,node.column);
+          target.set(argVals[0], argVals[1]);
+          return target;
+        }
+        if (node.methodName === 'get') {
+          const argVals = (node.args||[]).map(a=>this.evaluateExpressionNode(a,soil));
+          if (argVals.length !== 1) storm('ARITY_STORM','get expects exactly 1 argument (key)',node.line,node.column);
+          const val = target.get(argVals[0]);
+          if (val !== undefined) {
+            return { __choiceType: 'Option', tag: 'Some', payload: val };
+          } else {
+            return { __choiceType: 'Option', tag: 'None', payload: null };
+          }
+        }
+        if (node.methodName === 'has') {
+          const argVals = (node.args||[]).map(a=>this.evaluateExpressionNode(a,soil));
+          if (argVals.length !== 1) storm('ARITY_STORM','has expects exactly 1 argument (key)',node.line,node.column);
+          return target.has(argVals[0]);
+        }
+        storm('MISSING_STORM',`MAP has no method "${node.methodName}" (available: put, get, has)`,node.line,node.column);
       }
       // ── CHOICE variant construction ──────────────────────────
       if(typeof target==='object'&&target!==null&&target.__choiceType){
@@ -186,7 +220,7 @@ class Interpreter {
         let val;
         if(argNode) val=this.evaluateExpressionNode(argNode,soil);
         if(val===undefined||val===null)
-          val=field.varType==='NUM'?0:field.varType==='SCL'?0.0:field.varType==='FACT'?false:field.varType==='TX'?'':field.varType==='LIST'?[]:{};
+          val=field.varType==='NUM'?0:field.varType==='SCL'?0.0:field.varType==='FACT'?false:field.varType==='TX'?'':field.varType==='LIST'?[]:isMapTypeStr(field.varType)?new Map():{};
         instance[field.name]=val;
       }
       return instance;
@@ -301,10 +335,12 @@ class Interpreter {
     }else if(node.valueExpr!==null){
       value=this.evaluateExpressionNode(node.valueExpr,soil);
     }else{
-      value=node.varType==='LIST'?[]:node.varType==='MAP'?{}:node.varType==='FACT'?false:node.varType==='NUM'?0:'';
+      value=node.varType==='LIST'?[]:isMapTypeStr(node.varType)?new Map():node.varType==='MAP'?{}:node.varType==='FACT'?false:node.varType==='NUM'?0:'';
     }
     soil.set(node.identifier,value,node.varType,{pulse:!!node.isPulse});
-    const display = Array.isArray(value) ? '[' + value.join(', ') + ']' : String(value);
+    const display = Array.isArray(value) ? '[' + value.join(', ') + ']' :
+      value instanceof Map ? '{ ' + [...value.entries()].map(([k,v]) => (typeof k === 'string' ? '"' + k + '"' : String(k)) + ': ' + (typeof v === 'string' ? '"' + v + '"' : String(v))).join(', ') + ' }' :
+      String(value);
     this.emit(`CREATE "${node.identifier}"(${node.varType})${node.isPulse?' PULSE':''} = ${display}`,'ok');
     return{next:1};
   }
@@ -330,14 +366,14 @@ class Interpreter {
         }
         // Default values
         if (val === undefined || val === null) {
-          val = field.varType === 'NUM' ? 0 : field.varType === 'SCL' ? 0.0 : field.varType === 'FACT' ? false : field.varType === 'TX' ? '' : field.varType === 'LIST' ? [] : field.varType === 'MAP' ? {} : null;
+          val = field.varType === 'NUM' ? 0 : field.varType === 'SCL' ? 0.0 : field.varType === 'FACT' ? false : field.varType === 'TX' ? '' : field.varType === 'LIST' ? [] : isMapTypeStr(field.varType) ? new Map() : null;
         }
         instance[field.name] = val;
       }
     } else {
       // Empty struct instance (all defaults)
       for (const field of structDef) {
-        instance[field.name] = field.varType === 'NUM' ? 0 : field.varType === 'SCL' ? 0.0 : field.varType === 'FACT' ? false : field.varType === 'TX' ? '' : field.varType === 'LIST' ? [] : field.varType === 'MAP' ? {} : null;
+        instance[field.name] = field.varType === 'NUM' ? 0 : field.varType === 'SCL' ? 0.0 : field.varType === 'FACT' ? false : field.varType === 'TX' ? '' : field.varType === 'LIST' ? [] : isMapTypeStr(field.varType) ? new Map() : null;
       }
     }
     soil.set(node.identifier, instance, node.varType);
@@ -351,6 +387,12 @@ class Interpreter {
     let display;
     if (Array.isArray(value)) {
       display = '[' + value.map(v => typeof v === 'string' ? '"' + v + '"' : String(v)).join(', ') + ']';
+    } else if (value instanceof Map) {
+      const entries = [];
+      for (const [k, v] of value) {
+        entries.push((typeof k === 'string' ? '"' + k + '"' : String(k)) + ': ' + (typeof v === 'string' ? '"' + v + '"' : String(v)));
+      }
+      display = '{ ' + entries.join(', ') + ' }';
     } else if (value && typeof value === 'object' && !Array.isArray(value)) {
       // Check if it's a struct instance (via __structType tag or soil entry)
       const structType = value.__structType;
@@ -1049,6 +1091,16 @@ class Interpreter {
   }
 
   evaluateLinkStatement(node,soil){
+    // Direct AST evaluation (bypass _evalRaw regex) for MAP[NUM,...] types
+    const keyVal = this.evaluateExpressionNode(node.keyExpr, soil);
+    const valExpr = this.evaluateExpressionNode(node.valueExpr, soil);
+    const mapEntry = soil.get(node.mapIdent);
+    if (mapEntry && mapEntry.value instanceof Map) {
+      mapEntry.value.set(keyVal, valExpr);
+      this.emit(`LINK ${keyVal} → ${node.mapIdent}`,'ok');
+      return {next:1};
+    }
+    // Fallback to legacy regex pipeline for plain objects
     return this._evalRaw(`LINK ${node.keyExpr} WITH ${node.valueExpr} IN ${node.mapIdent}`,node,soil);
   }
 
@@ -1518,7 +1570,18 @@ class Interpreter {
     if(m=stmt.match(/^LINK\s+"([^"]+)"\s+WITH\s+(.+?)\s+IN\s+(\w+)$/i)){
       const e=soil.get(m[3]);
       if(!e||typeof e.value!=='object'||Array.isArray(e.value))storm('TYPE_STORM',`"${m[3]}" ليس MAP`,line,column);
-      e.value[m[1]]=E(m[2]);this.emit(`LINK "${m[1]}" → ${m[3]}`,'ok');return{next:i+1};
+      const val=E(m[2]);
+      if(e.value instanceof Map){e.value.set(m[1],val);}else{e.value[m[1]]=val;}
+      this.emit(`LINK "${m[1]}" → ${m[3]}`,'ok');return{next:i+1};
+    }
+    // LINK unquoted-key WITH val IN map (e.g. LINK 1 WITH "hello" IN m)
+    if(m=stmt.match(/^LINK\s+(\S+)\s+WITH\s+(.+?)\s+IN\s+(\w+)$/i)){
+      const e=soil.get(m[3]);
+      if(!e||typeof e.value!=='object'||Array.isArray(e.value))storm('TYPE_STORM',`"${m[3]}" ليس MAP`,line,column);
+      const key=E(m[1]);
+      const val=E(m[2]);
+      if(e.value instanceof Map){e.value.set(key,val);}else{e.value[key]=val;}
+      this.emit(`LINK ${key} → ${m[3]}`,'ok');return{next:i+1};
     }
 
     // REAP SELF:method (call own method inside ACTION)
@@ -2378,4 +2441,16 @@ function arrayInnerType(s) {
   return isArrayTypeStr(s) ? s.slice(1, -1) : null;
 }
 
-module.exports={Interpreter, isArrayTypeStr, arrayInnerType};
+// ── MAP type helpers ──────────────────────────────────────────────────────────
+function isMapTypeStr(s) {
+  return typeof s === 'string' && s.startsWith('MAP[') && s.endsWith(']');
+}
+function mapInnerTypes(s) {
+  if (!isMapTypeStr(s)) return null;
+  const inner = s.slice(4, -1);
+  const parts = inner.split(',');
+  if (parts.length !== 2) return null;
+  return { keyType: parts[0].trim(), valueType: parts[1].trim() };
+}
+
+module.exports={Interpreter, isArrayTypeStr, arrayInnerType, isMapTypeStr, mapInnerTypes};

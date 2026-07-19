@@ -1,4 +1,4 @@
-# PlantLang Language Specification & Ecosystem v0.25.0
+# PlantLang Language Specification & Ecosystem v0.26.0
 
 **PlantLang** is a human-centric, prose-based programming language engineered for both high-level readability and native-level execution performance. It transforms "prose-like" syntax into highly optimized machine code via the LLVM compiler infrastructure.
 
@@ -34,7 +34,7 @@ PlantLang utilizes a strict type system for safety and performance:
 * **`SHAPE`**: User-defined struct types with named, typed fields — `SHAPE Point { x(NUM), y(NUM) }.`
 * **`CHOICE`**: Tagged unions with optional payload per variant — `CHOICE Option { Some(NUM), None }.`
 * **`LIST`**: Dynamic arrays with push/pop growth — `CREATE xs(LIST) TO 1, 2, 3.`
-* **`MAP`**: Key-value storage — `CREATE cfg(MAP).`
+* **`MAP`**: Typed key-value hash table — `CREATE m(MAP[NUM,TX]).` — with native LLVM compilation for `LINK`, `has()`, `put()`
 
 ### Standard Library (`std/`)
 PlantLang ships with a built-in standard library accessed via `IMPORT "std/..."`:
@@ -59,7 +59,7 @@ Arenas are automatically reclaimed:
 
 ---
 
-## 3. Engineering Architecture (The v0.25.0 Stack)
+## 3. Engineering Architecture (The v0.26.0 Stack)
 The ecosystem is built on a modular, industrial-grade pipeline:
 
 1.  **Core Interpreter (Chloroplast Engine):**
@@ -72,26 +72,31 @@ The ecosystem is built on a modular, industrial-grade pipeline:
     * Full function support (`ACTION`/`REAP`/`GIVE`) with recursive safety.
     * Deterministic unwind chain for exception handling.
     * Integrates with `llc` (LLVM) and `gcc` for final object linking.
-3.  **CodeWords Service API:**
+3.  **MAP Hash Tables:**
+    * Open-addressing with linear probing — fully compiled via LLVM IR.
+    * djb2 hash for TX keys, identity hash for NUM keys.
+    * Automatic growth at load factor > 0.75 with full rehash.
+    * Arena-allocated bucket arrays within the Rooted Depth System.
+4.  **CodeWords Service API:**
     * A sandboxed HTTP environment using process-level isolation for safe, distributed execution.
- 4.  **Web REPL UI:**
-     * A single-page, browser-native IDE featuring a "settling ink" visualization to reflect the language's prose-based identity.
- 5.  **Module System & FFI:**
-     * `IMPORT` statement with relative/absolute/std path resolution and cycle detection.
-     * FFI declarations (`ACTION ... -> external.`) for calling native C functions.
-     * AST merging at parse time — imported files are spliced into the importing program.
- 6.  **Standard Library (`std/`):**
-     * Three core modules: `io.plnt`, `string.plnt`, `prelude.plnt`.
-     * Auto-injected prelude on every parse.
-     * Runtime C bridge (`core/runtime_bridge.c`) implementing FFI targets for I/O and string operations.
- 7.  **Struct Types & Methods:**
-     * `SHAPE` declarations with compile-time field offset computation.
-     * Methods via `ACTION (self(Point)) ...` with colon-dispatch call syntax.
-     * SELF parameter, field access/mutation in LLVM codegen.
- 8.  **Tagged Unions & Pattern Matching:**
-     * `CHOICE` declarations with typed payloads and keyword-compatible variant names.
-     * `MATCH` with exhaustive clause validation and payload binding.
-     * Variant construction via dot-notation: `Option.Some(10)`.
+5.  **Web REPL UI:**
+    * A single-page, browser-native IDE featuring a "settling ink" visualization to reflect the language's prose-based identity.
+6.  **Module System & FFI:**
+    * `IMPORT` statement with relative/absolute/std path resolution and cycle detection.
+    * FFI declarations (`ACTION ... -> external.`) for calling native C functions.
+    * AST merging at parse time — imported files are spliced into the importing program.
+7.  **Standard Library (`std/`):**
+    * Three core modules: `io.plnt`, `string.plnt`, `prelude.plnt`.
+    * Auto-injected prelude on every parse.
+    * Runtime C bridge (`core/runtime_bridge.c`) implementing FFI targets for I/O and string operations.
+8.  **Struct Types & Methods:**
+    * `SHAPE` declarations with compile-time field offset computation.
+    * Methods via `ACTION (self(Point)) ...` with colon-dispatch call syntax.
+    * SELF parameter, field access/mutation in LLVM codegen.
+9.  **Tagged Unions & Pattern Matching:**
+    * `CHOICE` declarations with typed payloads and keyword-compatible variant names.
+    * `MATCH` with exhaustive clause validation and payload binding.
+    * Variant construction via dot-notation: `Option.Some(10)`.
 
 ---
 
@@ -103,6 +108,7 @@ PlantLang employs a state-of-the-art compilation chain:
    - Arena allocation (`arenaAlloc`) for all variable storage.
    - Depth tracking with automatic arena reset on scope boundaries.
    - Zero-cost division-by-zero checks when inside `WEATHER` blocks.
+   - MAP hash tables with inline djb2, linear probing, and automatic growth.
 4. **Optimization**: `llc -O2` production-grade optimization passes.
 5. **Native Linking**: Object code linked via `gcc` into a standalone binary.
 
@@ -133,13 +139,17 @@ PlantLang employs a state-of-the-art compilation chain:
 | **Pattern Match** | `MATCH opt { Some(v) -> { SHOW v } None -> { SHOW 0 } }.` | Exhaustive case analysis with binding. |
 | **Array Push** | `PUT val INTO xs.` | Amortized-O(1) append. |
 | **Array Pop** | `TAKE val FROM xs.` | Pop from end with shrink. |
+| **MAP Create** | `CREATE m(MAP[NUM,TX]).` | Typed key-value hash table. |
+| **MAP Insert** | `LINK key WITH value IN m.` | Insert key-value pair (compiled natively). |
+| **MAP Has** | `SHOW m.has(key).` | Key existence check (compiled natively). |
 
 ---
 
 ## 6. QA & Quality Assurance
-The **v0.25.0** release is verified by an automated regression suite:
-* **~613 Total Assertions** across twelve test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7 — Module System & FFI, Phase 8 — Standard Library, Phase 9 — Structs, Phase 10 — Arrays, Phase 11 — Methods, Phase 12 — Array Growth, Phase 13 — CHOICE & Pattern Matching).
-* **LLVM Backend**: 46 smoke tests covering CREATE/SHOW, arithmetic, strings, comparisons, IF/CYCLE/SEASON, ACTION/REAP/GIVE (recursion, SCL params, TX returns), WEATHER/SHELTER exception handling, and TX fat-pointer operations.
+The **v0.26.0** release is verified by an automated regression suite:
+* **~634 Total Assertions** across thirteen test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7 — Module System & FFI, Phase 8 — Standard Library, Phase 9 — Structs, Phase 10 — Arrays, Phase 11 — Methods, Phase 12 — Array Growth, Phase 13 — CHOICE & Pattern Matching, Phase 14 — MAP Types).
+* **LLVM Backend**: 50 smoke tests covering CREATE/SHOW, arithmetic, strings, comparisons, IF/CYCLE/SEASON, ACTION/REAP/GIVE (recursion, SCL params, TX returns), WEATHER/SHELTER exception handling, TX fat-pointer operations, and MAP hash tables (LINK, has(), growth, overwrite).
+* **MAP Types**: 17 tests covering empty map create, map literals, LINK/put semantics, has/get, overwrite, growth (10 entries), SHOW display, type-checker validation.
 * **Module System**: 30 test groups covering IMPORT parsing, cycle detection, path resolution, error messages, and FFI syntax.
 * **Standard Library**: 8 integration tests covering std/ path resolution, I/O and string module parsing, prelude injection, and end-to-end FFI calls.
 * **Structs & Methods**: 117 tests covering SHAPE declaration, instantiation, field access/mutation, method dispatch, SELF receiver, type checking, LLVM codegen parity.
@@ -152,7 +162,7 @@ The **v0.25.0** release is verified by an automated regression suite:
 
 ## 7. Roadmap & Future Scope
 
-### ✅ Complete (v0.25.0)
+### ✅ Complete (v0.26.0)
 - Primitives (`NUM`, `SCL`, `TX`, `FACT`)
 - Control Flow (`IF`, `CYCLE`, `SEASON`)
 - Functions (`ACTION`, `REAP`, `GIVE` with recursion)
@@ -169,14 +179,16 @@ The **v0.25.0** release is verified by an automated regression suite:
 - **Dynamic Arrays** (`PUT`/`TAKE` push/pop with amortized capacity doubling)
 - **Tagged Unions** (`CHOICE` with payload variants)
 - **Pattern Matching** (`MATCH` with exhaustive validation and binding)
+- **MAP Hash Tables** (typed key-value store with native LLVM compilation, open-addressing, linear probing, djb2 hash, automatic growth)
 
-### 🔜 In Progress / Planned (v0.26.0)
-- `MAP` hash table type with LINK/key access
+### 🔜 In Progress / Planned (v0.27.0)
 - `SPECIES` / `BLOOM` object-oriented constructs in LLVM backend
+- `CHOICE` / `MATCH` codegen in LLVM backend
 - `LIST` operations (`SORT`, `SHAKE`, `COUNT`, ...) in LLVM backend
+- `MAP.get()` compiled via `Option<V>` MATCH codegen
 - Expanded standard library (math, lists, maps modules)
 - `TAP` file I/O and `HARVEST` networking in LLVM backend
 
 ---
 
-*PlantLang v0.25.0 — Compiled via LLVM. Struct types. Tagged unions. Pattern matching.*
+*PlantLang v0.26.0 — MAP hash tables. Native LLVM codegen. 634 tests all green.*

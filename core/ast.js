@@ -678,6 +678,23 @@ class VariantDeclarationNode extends AstNode {
   }
 }
 
+class KeyValuePairNode extends AstNode {
+  // key: value  (inside MAP literal)
+  constructor({ key, value }, coords) {
+    super('KeyValuePair', coords);
+    this.key = key;
+    this.value = value;
+  }
+}
+
+class MapLiteralNode extends AstNode {
+  // { key: value, key: value, ... }
+  constructor({ entries }, coords) {
+    super('MapLiteral', coords);
+    this.entries = entries || []; // [KeyValuePairNode]
+  }
+}
+
 class FlowStatementNode extends AstNode {
   // REAP x FROM src FLOW a FLOW b ...
   // (handled by ReapStatement with flowChain)
@@ -724,4 +741,6 @@ Object.assign(module.exports, {
   RootScopeStatementNode,
   FlowStatementNode,
   VariantDeclarationNode,
+  KeyValuePairNode,
+  MapLiteralNode,
 });
