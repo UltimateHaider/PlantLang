@@ -1,4 +1,4 @@
-# PlantLang Language Specification & Ecosystem v0.26.0
+# PlantLang Language Specification & Ecosystem v0.27.0
 
 **PlantLang** is a human-centric, prose-based programming language engineered for both high-level readability and native-level execution performance. It transforms "prose-like" syntax into highly optimized machine code via the LLVM compiler infrastructure.
 
@@ -23,6 +23,7 @@ PlantLang utilizes a strict type system for safety and performance:
 * **`IF / ORIF / ELSE`**: Contextual branching with multi-branch support.
 * **`CYCLE`**: Numeric iteration (`FROM`/`TO`/`STEP`).
 * **`SEASON`**: Condition-based while loops.
+* **`FOR name IN expr, ... /FOR.`**: Iteration over LIST values, MAP keys, or TX strings.
 * **`WEATHER / SHELTER / CALM`**: Deterministic exception handling — captures runtime errors (e.g., division by zero) with typed storm matching and recovery blocks.
 * **`MATCH`**: Exhaustive pattern matching on tagged unions (CHOICE) — payload binding with scope-isolated clause bodies.
 * **`ACTION / REAP / GIVE`**: Function definitions, calls, and returns — supports recursion, SCL parameters, and TX return values.
@@ -32,6 +33,7 @@ PlantLang utilizes a strict type system for safety and performance:
 ### Data Types:
 * **`NUM` / `SCL` / `TX` / `FACT`**: Primitives — integer, double-precision scalar, text string, boolean.
 * **`SHAPE`**: User-defined struct types with named, typed fields — `SHAPE Point { x(NUM), y(NUM) }.`
+* **`STRUCT`**: Alternative struct syntax with `field: TYPE` — `STRUCT Person { name: TX, age: NUM }.` + anonymous literals `{ name: "Alice", age: 30 }`
 * **`CHOICE`**: Tagged unions with optional payload per variant — `CHOICE Option { Some(NUM), None }.`
 * **`LIST`**: Dynamic arrays with push/pop growth — `CREATE xs(LIST) TO 1, 2, 3.`
 * **`MAP`**: Typed key-value hash table — `CREATE m(MAP[NUM,TX]).` — with native LLVM compilation for `LINK`, `has()`, `put()`
@@ -59,7 +61,7 @@ Arenas are automatically reclaimed:
 
 ---
 
-## 3. Engineering Architecture (The v0.26.0 Stack)
+## 3. Engineering Architecture (The v0.27.0 Stack)
 The ecosystem is built on a modular, industrial-grade pipeline:
 
 1.  **Core Interpreter (Chloroplast Engine):**
@@ -131,7 +133,10 @@ PlantLang employs a state-of-the-art compilation chain:
 | **While** | `SEASON condition,` ... | Condition-based loop. |
 | **Branch** | `IF cond,` ... `ORIF cond2,` ... `ELSE,` ... | Multi-branch conditional. |
 | **Depth** | `\N` before statement | Declare scope level for arena allocation. |
-| **Struct** | `SHAPE Point { x(NUM), y(NUM) }.` | User-defined aggregate type. |
+| **Struct (SHAPE)** | `SHAPE Point { x(NUM), y(NUM) }.` | User-defined aggregate type (classic syntax). |
+| **Struct (STRUCT)** | `STRUCT Person { name: TX, age: NUM }.` | Alt. struct syntax with `field: TYPE`. |
+| **Struct Literal** | `CREATE p(Person) TO { name: "A", age: 30 }.` | Anonymous struct literal in CREATE context. |
+| **FOR...IN Loop** | `FOR x IN items, SHOW x. /FOR.` | Iterate over LIST, MAP keys, or TX string. |
 | **Method** | `ACTION (self(Point)) move(x(NUM), y(NUM)),` ... `/ACTION.` | Typed method with SELF receiver. |
 | **Method Call** | `REAP _ FROM p:move, 5, 10.` | Colon-dispatch method invocation. |
 | **Tagged Union** | `CHOICE Option { Some(NUM), None }.` | Sum type with payload variants. |
@@ -146,13 +151,13 @@ PlantLang employs a state-of-the-art compilation chain:
 ---
 
 ## 6. QA & Quality Assurance
-The **v0.26.0** release is verified by an automated regression suite:
-* **~634 Total Assertions** across thirteen test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7 — Module System & FFI, Phase 8 — Standard Library, Phase 9 — Structs, Phase 10 — Arrays, Phase 11 — Methods, Phase 12 — Array Growth, Phase 13 — CHOICE & Pattern Matching, Phase 14 — MAP Types).
+The **v0.27.0** release is verified by an automated regression suite:
+* **~669 Total Assertions** across fifteen test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7 — Module System & FFI, Phase 8 — Standard Library, Phase 9 — Structs, Phase 10 — Arrays, Phase 11 — Methods, Phase 12 — Array Growth, Phase 13 — CHOICE & Pattern Matching, Phase 14 — MAP Types, Phase 15 — FOR...IN, Phase 16 — STRUCT).
 * **LLVM Backend**: 50 smoke tests covering CREATE/SHOW, arithmetic, strings, comparisons, IF/CYCLE/SEASON, ACTION/REAP/GIVE (recursion, SCL params, TX returns), WEATHER/SHELTER exception handling, TX fat-pointer operations, and MAP hash tables (LINK, has(), growth, overwrite).
 * **MAP Types**: 17 tests covering empty map create, map literals, LINK/put semantics, has/get, overwrite, growth (10 entries), SHOW display, type-checker validation.
 * **Module System**: 30 test groups covering IMPORT parsing, cycle detection, path resolution, error messages, and FFI syntax.
 * **Standard Library**: 8 integration tests covering std/ path resolution, I/O and string module parsing, prelude injection, and end-to-end FFI calls.
-* **Structs & Methods**: 117 tests covering SHAPE declaration, instantiation, field access/mutation, method dispatch, SELF receiver, type checking, LLVM codegen parity.
+* **Structs & Methods**: 133 tests covering SHAPE and STRUCT declaration, instantiation, field access/mutation, method dispatch, SELF receiver, anonymous struct literals, type checking, LLVM codegen parity.
 * **Dynamic Arrays**: 122 tests covering push/pop, capacity growth, type checking, LLVM codegen, interpreter parity.
 * **CHOICE & MATCH**: 64 tests covering variant declaration, construction, member access, MATCH exhaustiveness, payload binding, type checking, interpreter execution.
 * **Parity Guarantee**: Exact output matching between the Interpreter and Native Compiler via `llc` + `gcc`.
@@ -162,9 +167,9 @@ The **v0.26.0** release is verified by an automated regression suite:
 
 ## 7. Roadmap & Future Scope
 
-### ✅ Complete (v0.26.0)
+### ✅ Complete (v0.27.0)
 - Primitives (`NUM`, `SCL`, `TX`, `FACT`)
-- Control Flow (`IF`, `CYCLE`, `SEASON`)
+- Control Flow (`IF`, `CYCLE`, `SEASON`, `FOR...IN`)
 - Functions (`ACTION`, `REAP`, `GIVE` with recursion)
 - Exception Handling (`WEATHER`, `SHELTER`, `CALM`)
 - Rooted Depth System (arena-based deterministic memory)
@@ -174,14 +179,16 @@ The **v0.26.0** release is verified by an automated regression suite:
 - FFI (`ACTION ... -> external.` for native C interop)
 - Standard Library Foundation (`std/io`, `std/string`, `std/prelude`)
 - Core Runtime Bridge (`core/runtime_bridge.c` — 10 FFI targets)
-- **Struct Types** (`SHAPE` with fields, instantiation, access/mutation)
+- **Struct Types** (`SHAPE` and `STRUCT` with fields, instantiation, access/mutation, anonymous literals)
 - **Methods** on structs (typed `SELF` receiver, colon-dispatch call syntax)
 - **Dynamic Arrays** (`PUT`/`TAKE` push/pop with amortized capacity doubling)
 - **Tagged Unions** (`CHOICE` with payload variants)
 - **Pattern Matching** (`MATCH` with exhaustive validation and binding)
 - **MAP Hash Tables** (typed key-value store with native LLVM compilation, open-addressing, linear probing, djb2 hash, automatic growth)
+- **FOR...IN loops** (iterate over LIST values, MAP keys, or TX strings)
+- **English-Language Cleanup** (all Arabic strings translated to English)
 
-### 🔜 In Progress / Planned (v0.27.0)
+### 🔜 In Progress / Planned (v0.28.0)
 - `SPECIES` / `BLOOM` object-oriented constructs in LLVM backend
 - `CHOICE` / `MATCH` codegen in LLVM backend
 - `LIST` operations (`SORT`, `SHAKE`, `COUNT`, ...) in LLVM backend
@@ -191,4 +198,4 @@ The **v0.26.0** release is verified by an automated regression suite:
 
 ---
 
-*PlantLang v0.26.0 — MAP hash tables. Native LLVM codegen. 634 tests all green.*
+*PlantLang v0.27.0 — MAP hash tables. FOR...IN loops. STRUCT types. 669 tests all green.*

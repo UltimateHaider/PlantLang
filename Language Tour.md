@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.26.0
+# 🌿 PlantLang — Chloroplast v0.27.0
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -99,8 +99,11 @@ Typed key-value storage with native LLVM compilation — `LINK`, `has()`, and `p
 
 Internally uses open-addressing with linear probing, djb2 hash for TX keys, automatic capacity doubling when load factor exceeds 0.75, and arena-allocated bucket arrays.
 
-### SHAPE (Struct Types)
+### SHAPE / STRUCT (Struct Types)
 
+Two syntaxes for user-defined aggregate types:
+
+**SHAPE** (classic — `field(TYPE)`):
 ```
 1\ SHAPE Point { x(NUM), y(NUM) }.
 1\ CREATE p(Point) TO Point{ 10, 20 }.
@@ -109,13 +112,25 @@ Internally uses open-addressing with linear probing, djb2 hash for TX keys, auto
 1\ SHOW p.y.              # → 99
 ```
 
+**STRUCT** (alt — `field: TYPE`):
+```
+1\ STRUCT Person { name: TX, age: NUM }.
+1\ CREATE p(Person) TO { name: "Alice", age: 30 }.
+1\ SHOW p.name.           # → Alice
+1\ INCREASE p.age BY 1.
+1\ SHOW p.age.            # → 31
+```
+
 Structs can be composed:
 
 ```
+1\ SHAPE Point { x(NUM), y(NUM) }.
 1\ SHAPE Line { start(Point), end(Point) }.
 1\ CREATE l(Line) TO Line{ Point{0, 0}, Point{10, 20} }.
 1\ SHOW l.start.x.        # → 0
 ```
+
+STRUCT also supports anonymous struct literals in `CREATE` context and INCREASE/DECREASE on fields.
 
 ### Methods on Structs
 
@@ -214,6 +229,33 @@ Features:
 2\   SHOW i.
 1\.
 ```
+
+### FOR...IN (iteration)
+
+Iterate over LIST values, MAP keys, or TX character spans:
+
+```
+1\ CREATE items(LIST) TO apple, banana, cherry.
+1\ FOR item IN items,
+2\   SHOW item.
+1\ /FOR.
+
+1\ CREATE m(MAP[NUM,TX]).
+1\ LINK 1 WITH "a" IN m.
+1\ LINK 2 WITH "b" IN m.
+1\ FOR k IN m,
+2\   SHOW k.
+1\ /FOR.
+
+1\ FOR ch IN "hello",
+2\   SHOW ch.
+1\ /FOR.
+```
+
+Features:
+- **STOP IF** works correctly inside `FOR` bodies — `STOP_STORM` is caught and propagated
+- **Nested IF** with inline syntax: `IF cond, SHOW x.`
+- **DEPTH-aware** — each `FOR` creates its own scope level
 
 ### SEASON (while)
 
@@ -640,6 +682,7 @@ Requires LLVM's `llc` (and ideally `opt`) on `PATH` — e.g. `apt install llvm` 
 | `ACTION` / `REAP` / `GIVE` | ✅ recursion, SCL params, TX returns, void actions |
 | `WEATHER` / `SHELTER` / `CALM` | ✅ ZERO_STORM detection, errVar binding, nested shelters |
 | `MAP` (hash table) | ✅ `LINK`, `has()`, `put()` — open-addressing, linear probing, djb2 hash, auto-growth |
+| `FOR...IN` | ✅ iterate over LIST, MAP, TX |
 | `LIST` (dynamic array) | ❌ use `chloroplast run` |
 | `SPECIES` / `BLOOM` | ❌ not yet |
 | `CHOICE` / `MATCH` | ❌ not yet (interpreter-only) |
@@ -685,7 +728,7 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.26.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production:
+Chloroplast v0.27.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production:
 
 ```
 Source (.plnt)

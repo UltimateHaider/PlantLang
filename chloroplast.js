@@ -21,11 +21,11 @@ function printLine(text,type){
 
 function banner(){
   console.log(`\n${C.green}${C.bold}🌿 PlantLang — Chloroplast v0.22${C.reset}`);
-  console.log(`${C.gray}   المفسر الحقيقي لملفات .plnt${C.reset}\n`);
+   console.log(`${C.gray}   The real interpreter for .plnt files${C.reset}\n`);
 }
 
 function runFile(filePath,opts={}){
-  if(!fs.existsSync(filePath)){console.error(`${C.red}✕ الملف غير موجود: ${filePath}${C.reset}`);process.exit(1);}
+  if(!fs.existsSync(filePath)){console.error(`${C.red}✕ File not found: ${filePath}${C.reset}`);process.exit(1);}
   const source=fs.readFileSync(filePath,'utf8');
   const mission=opts.mission||'SAFE';
   if(opts.verbose)console.log(`${C.gray}  mission: ${mission}  |  ${filePath}${C.reset}\n`);
@@ -33,7 +33,7 @@ function runFile(filePath,opts={}){
   const t0=Date.now();
   try{
     interp.runSource(source);
-    if(opts.verbose)console.log(`\n${C.gray}  اكتمل في ${Date.now()-t0}ms — MISSION: ${mission}${C.reset}`);
+    if(opts.verbose)console.log(`\n${C.gray}  completed in ${Date.now()-t0}ms — MISSION: ${mission}${C.reset}`);
   }catch(e){
     console.error('\n'+formatStormDiagnostic(e,filePath,source));
     process.exit(1);
@@ -260,7 +260,7 @@ function compileFile(filePath,opts={}){
 
 function startREPL(opts={}){
   banner();
-  console.log(`${C.gray}اكتب كود PlantLang مباشرة. .help للمساعدة. .exit للخروج.${C.reset}\n`);
+  console.log(`${C.gray}Write PlantLang code directly. .help for help. .exit to quit.${C.reset}\n`);
   const mission=opts.mission||'SAFE';
   const interp=new Interpreter({mission,emit:(text,type)=>printLine(text,type)});
   const rl=readline.createInterface({input:process.stdin,output:process.stdout,prompt:`${C.green}🌿${C.reset} `});
@@ -268,21 +268,21 @@ function startREPL(opts={}){
   let buffer='';
   rl.on('line',(line)=>{
     const t=line.trim();
-    if(t==='.exit'||t==='exit'){console.log(`${C.green}إلى اللقاء 🌿${C.reset}`);process.exit(0);}
+    if(t==='.exit'||t==='exit'){console.log(`${C.green}Goodbye 🌿${C.reset}`);process.exit(0);}
     if(t==='.help'){
-      console.log(`${C.gray}  .soil    — عرض الذاكرة\n  .funcs   — الأفعال المعرّفة\n  .species — الكائنات\n  .clear   — مسح الذاكرة\n  .exit    — خروج${C.reset}`);
+      console.log(`${C.gray}  .soil    — view memory\n  .funcs   — defined actions\n  .species — objects\n  .clear   — clear memory\n  .exit    — exit${C.reset}`);
       rl.prompt();return;
     }
     if(t==='.soil'||t==='.memory'){
       const snap=interp.soil.snapshot();
       const keys=Object.keys(snap);
-      if(!keys.length){console.log(`${C.gray}  التربة فارغة${C.reset}`);}
+      if(!keys.length){console.log(`${C.gray}  soil is empty${C.reset}`);}
       else keys.forEach(k=>{const e=snap[k];const v=Array.isArray(e.value)?`[${e.value.join(', ')}]`:String(e.value);console.log(`  ${C.cyan}${k}${C.reset} ${C.gray}(${e.type})${C.reset} = ${v}${e.locked?' 🔒':''}${e.pulse?' ⚡':''}`);});
       rl.prompt();return;
     }
     if(t==='.funcs'){interp.funcs.forEach((fn,name)=>console.log(`  ${C.cyan}ACTION ${name}${C.reset}(${fn.params.map(p=>p.name).join(', ')})`));rl.prompt();return;}
     if(t==='.species'){interp.species.forEach((sp,name)=>console.log(`  ${C.cyan}SPECIES ${name}${C.reset}${sp.parent?' PARENT '+sp.parent:''}`));rl.prompt();return;}
-    if(t==='.clear'){interp.soil=new(require('./core/runtime').Soil)();interp.funcs.clear();interp.species.clear();console.log(`${C.gray}  تمت إعادة التهيئة${C.reset}`);rl.prompt();return;}
+    if(t==='.clear'){interp.soil=new(require('./core/runtime').Soil)();interp.funcs.clear();interp.species.clear();console.log(`${C.gray}  re-initialized${C.reset}`);rl.prompt();return;}
     buffer+=(buffer?'\n':'')+t;
     if(buffer.endsWith(',')){process.stdout.write(`${C.gray}...${C.reset} `);return;}
     const toRun=buffer.endsWith('.')?buffer:buffer+'.';
@@ -297,7 +297,7 @@ function startREPL(opts={}){
     }
     rl.prompt();
   });
-  rl.on('close',()=>{console.log(`\n${C.green}إلى اللقاء 🌿${C.reset}`);});
+  rl.on('close',()=>{console.log(`\n${C.green}Goodbye 🌿${C.reset}`);});
 }
 
 function main(){

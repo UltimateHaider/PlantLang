@@ -1,8 +1,36 @@
 # PlantLang Roadmap: v0.27.0 (The OOP & Systems Release)
 
-## What v0.26.0 Delivered
+## What v0.27.0 Delivered
 
-The previous roadmap targeted MAP hash tables with native LLVM compilation for Phase 14. Here's what was completed in **v0.26.0 (The Collections Release)**:
+The previous roadmap targeted MAP hash tables, FOR...IN loops, and STRUCT types. Here's what was completed in **v0.27.0**:
+
+### ✅ Completed: FOR...IN Loop (Phase 15)
+
+| Sub-goal | Status |
+|---|---|
+| **FOR...IN syntax** | `FOR name IN expr, body /FOR.` with DEPTH-aware parsing |
+| **LIST iteration** | Iterates over dynamic array values |
+| **MAP iteration** | Iterates over hash-table keys |
+| **TX iteration** | Iterates over character spans |
+| **STOP IF propagation** | `STOP_STORM` correctly caught and handled in `FOR` bodies |
+| **Nested IF support** | `IF cond, SHOW x.` inline syntax inside loop bodies |
+
+### ✅ Completed: STRUCT Type (Phase 16)
+
+| Sub-goal | Status |
+|---|---|
+| **STRUCT syntax** | `STRUCT Person { name: TX, age: NUM }.` — `field: TYPE` style alongside existing `SHAPE … field(TYPE)` |
+| **Anonymous struct literals** | `CREATE p(Person) TO { name: "Alice", age: 30 }.` in CREATE context |
+| **Field access/mutation** | `p.age`, `SET p.age TO 25.`, `INCREASE p.age BY 1.` |
+| **Struct nesting** | Struct-of-struct composition with deep field access |
+| **Type checker** | Field existence validation, literal arity checking |
+| **LLVM codegen** | Struct literals emit GEP-based field stores |
+
+### ✅ Completed: English-Language Cleanup
+- All Arabic strings in engine `.js` files translated to English
+- `ar-IQ` locale → `en-US` for date/time formatting
+- Unicode-escaped Arabic error string in LLVM codegen replaced
+- ~58 storm messages in interpreter, all CLI strings in `chloroplast.js`, example data in webrepl
 
 ### ✅ Completed: MAP Type (Hash Table) — Full LLVM Codegen
 
@@ -34,8 +62,10 @@ Open-addressing HashMap with linear probing, fully compiled:
 
 ### ✅ Completed: Test Expansion
 - Phase 14 (MAP): 17 tests
+- Phase 15 (FOR...IN): 19 tests
+- Phase 16 (STRUCT): 16 tests
 - LLVM backend: 50 tests (was 46)
-- **13 test files total, ~634 assertions, all green**
+- **15 test files total, ~669 assertions, all green**
 
 ---
 
@@ -108,7 +138,7 @@ Open-addressing HashMap with linear probing, fully compiled:
 
 - **Full Parity**: SPECIES, LIST, and CHOICE/MATCH operations behave identically in interpreter and LLVM-compiled binary
 - **No Memory Leaks**: Valgrind-clean on all collection operations (no leaks, no use-after-free)
-- **Test Count**: Test suite grows from ~634 → **850+** covering all new constructs
+- **Test Count**: Test suite grows from ~669 → **850+** covering all new constructs
 - **Performance**: Compiled SPECIES/LIST operations within 2× of equivalent C
 
 ---
@@ -123,4 +153,4 @@ Open-addressing HashMap with linear probing, fully compiled:
 
 ---
 
-*PlantLang v0.26.0: MAP hash tables. Native LLVM codegen. 634 tests all green.*
+*PlantLang v0.27.0: MAP hash tables. FOR...IN loops. STRUCT types. 669 tests all green.*

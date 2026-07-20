@@ -133,7 +133,7 @@ function evalCompound(expr,soil){
   resolved=resolved.replace(/(\S+)\s*\*\*\s*(\S+)/g,'Math.pow($1,$2)');
   try{
     const result=Function('"use strict";return('+resolved+')')();
-    if(!isFinite(result)&&typeof result==='number')storm('ZERO_STORM','قسمة على صفر');
+    if(!isFinite(result)&&typeof result==='number')storm('ZERO_STORM','division by zero');
     return result;
   }catch(e){if(e&&e.stormType)throw e;return coerce(expr);}
 }

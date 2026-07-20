@@ -29,7 +29,7 @@ class Interpreter {
     this._symbolPassDone=false; // set true once symbolPass() runs; suppresses duplicate output
     // VERIFY tracking
     this.verifyStats={passed:0,failed:0,suite:null,results:[]};
-    this.veinFS.write('demo.txt','سطر أول\nسطر ثاني\nسطر ثالث');
+    this.veinFS.write('demo.txt','line one\nline two\nline three');
   }
 
   run(source){
@@ -83,7 +83,7 @@ class Interpreter {
       if(e)return e.value;
       // Check if it's a CHOICE type name — return a sentinel marker
       if(this.choices.has(node.name))return{__choiceType:node.name};
-      storm('MISSING_STORM',`"${node.name}" غير موجود`,node.line,node.column);
+      storm('MISSING_STORM',`"${node.name}" not found`,node.line,node.column);
     }
     if(node.type==='ArrayLiteral'){
       return this.evaluateArrayLiteral(node, soil);
@@ -223,6 +223,21 @@ class Interpreter {
           val=field.varType==='NUM'?0:field.varType==='SCL'?0.0:field.varType==='FACT'?false:field.varType==='TX'?'':field.varType==='LIST'?[]:isMapTypeStr(field.varType)?new Map():{};
         instance[field.name]=val;
       }
+      instance.__structType=node.structName;
+      return instance;
+    }
+    if(node.type==='StructLiteral'){
+      const structDef=node.structName?this.structs.get(node.structName):null;
+      const instance={};
+      for(const field of node.fields){
+        let val=this.evaluateExpressionNode(field.value,soil);
+        if(val===undefined||val===null&&structDef){
+          const fd=structDef.find(f=>f.name===field.name);
+          if(fd) val=fd.varType==='NUM'?0:fd.varType==='SCL'?0.0:fd.varType==='FACT'?false:fd.varType==='TX'?'':fd.varType==='LIST'?[]:isMapTypeStr(fd.varType)?new Map():{};
+        }
+        instance[field.name]=val;
+      }
+      if(node.structName)instance.__structType=node.structName;
       return instance;
     }
     // Fallback: a raw string slipped through (shouldn't normally happen
@@ -280,6 +295,7 @@ class Interpreter {
       case 'DecreaseStatement': return this.evaluateDecreaseStatement(node,soil);
       // ── new nodes added in full-migration pass ──────────────
       case 'IfStatement':       return this.evaluateIfStatement(node,soil);
+      case 'ForInStatement':    return this.evaluateForInStatement(node,soil);
       case 'CycleStatement':    return this.evaluateCycleStatement(node,soil);
       case 'SeasonStatement':   return this.evaluateSeasonStatement(node,soil);
       case 'MatchStatement':    return this.evaluateMatchStatement(node,soil);
@@ -355,7 +371,7 @@ class Interpreter {
   evaluateCreateStruct(node, soil, structDef){
     const instance = { __structType: node.varType };
     const ve = node.valueExpr;
-    if (ve && (ve.type === 'StructInstantiation' || (ve.structName && ve.args))) {
+    if (ve && ve.type === 'StructInstantiation') {
       const args = ve.args || [];
       for (let i = 0; i < structDef.length; i++) {
         const field = structDef[i];
@@ -364,14 +380,26 @@ class Interpreter {
         if (argNode) {
           val = this.evaluateExpressionNode(argNode, soil);
         }
-        // Default values
         if (val === undefined || val === null) {
           val = field.varType === 'NUM' ? 0 : field.varType === 'SCL' ? 0.0 : field.varType === 'FACT' ? false : field.varType === 'TX' ? '' : field.varType === 'LIST' ? [] : isMapTypeStr(field.varType) ? new Map() : null;
         }
         instance[field.name] = val;
       }
+    } else if (ve && ve.type === 'StructLiteral') {
+      for (const fv of ve.fields) {
+        const fieldDef = structDef.find(f => f.name === fv.name);
+        if (!fieldDef) {
+          storm('TYPE_STORM', `CREATE "${node.identifier}": struct ${node.varType} has no field "${fv.name}"`, node.line, node.column);
+        }
+        instance[fv.name] = this.evaluateExpressionNode(fv.value, soil);
+      }
+      // Fill missing fields with defaults
+      for (const field of structDef) {
+        if (!(field.name in instance)) {
+          instance[field.name] = field.varType === 'NUM' ? 0 : field.varType === 'SCL' ? 0.0 : field.varType === 'FACT' ? false : field.varType === 'TX' ? '' : field.varType === 'LIST' ? [] : isMapTypeStr(field.varType) ? new Map() : null;
+        }
+      }
     } else {
-      // Empty struct instance (all defaults)
       for (const field of structDef) {
         instance[field.name] = field.varType === 'NUM' ? 0 : field.varType === 'SCL' ? 0.0 : field.varType === 'FACT' ? false : field.varType === 'TX' ? '' : field.varType === 'LIST' ? [] : isMapTypeStr(field.varType) ? new Map() : null;
       }
@@ -814,7 +842,7 @@ class Interpreter {
    */
   evaluateBloomStatement(node,soil){
     const spec=this.species.get(node.speciesName);
-    if(!spec)storm('MISSING_STORM',`SPECIES "${node.speciesName}" غير معرّف`,node.line,node.column);
+    if(!spec)storm('MISSING_STORM',`SPECIES "${node.speciesName}" not defined`,node.line,node.column);
     const inst={__species:node.speciesName};
     const ownSpec={fields:spec.fields,actions:spec.actions,parent:spec.parent};
     for(const[fname,fdef]of Object.entries(ownSpec.fields)){
@@ -877,11 +905,11 @@ class Interpreter {
 
     if(kind==='NOW'){
       const fmt=node.source.format||'FULL',now=new Date();
-      const val=fmt==='DATE'?now.toLocaleDateString('ar-IQ')
-        :fmt==='TIME'?now.toLocaleTimeString('ar-IQ')
+      const val=fmt==='DATE'?now.toLocaleDateString('en-US')
+        :fmt==='TIME'?now.toLocaleTimeString('en-US')
         :fmt==='YEAR'?now.getFullYear()
         :fmt==='STAMP'?now.getTime()
-        :now.toLocaleString('ar-IQ');
+        :now.toLocaleString('en-US');
       store(val); return{next:1};
     }
 
@@ -892,11 +920,11 @@ class Interpreter {
 
     if(kind==='SELF'){
       const selfEntry=soil.get('__self');
-      if(!selfEntry)storm('SEED_STORM','SELF غير متاح',node.line,node.column);
+      if(!selfEntry)storm('SEED_STORM','SELF not available',node.line,node.column);
       const sp=this.species.get(selfEntry.value.__species);
-      if(!sp)storm('MISSING_STORM','SPECIES غير موجود',node.line,node.column);
+      if(!sp)storm('MISSING_STORM','SPECIES not found',node.line,node.column);
       const method=sp.actions[node.source.method];
-      if(!method)storm('MISSING_STORM',`الفعل "${node.source.method}" غير موجود`,node.line,node.column);
+      if(!method)storm('MISSING_STORM',`action "${node.source.method}" not found`,node.line,node.column);
       const result=this._callAction(method,splitArgs(node.args),selfEntry.value,soil);
       store(result.value!==undefined?result.value:null); return{next:1};
     }
@@ -907,24 +935,24 @@ class Interpreter {
       if(this.planted.has(name)){
         const lib=this.planted.get(name);
         const libFn=lib[fn.toUpperCase()];
-        if(!libFn)storm('MISSING_STORM',`"${fn}" غير موجود في "${name}"`,node.line,node.column);
+        if(!libFn)storm('MISSING_STORM',`"${fn}" not found in "${name}"`,node.line,node.column);
         store(libFn(splitArgs(node.args))); return{next:1};
       }
       // Is it an instance variable?
       const instEntry=soil.get(name);
-      if(!instEntry)storm('MISSING_STORM',`"${name}" غير موجود`,node.line,node.column);
+      if(!instEntry)storm('MISSING_STORM',`"${name}" not found`,node.line,node.column);
       const spName=instEntry.value&&instEntry.value.__species;
       const sp=spName&&this.species.get(spName);
-      if(!sp)storm('MISSING_STORM',`SPECIES غير موجود`,node.line,node.column);
+      if(!sp)storm('MISSING_STORM',`SPECIES not found`,node.line,node.column);
       const method=sp.actions[fn];
-      if(!method)storm('MISSING_STORM',`الفعل "${fn}" غير موجود`,node.line,node.column);
+      if(!method)storm('MISSING_STORM',`action "${fn}" not found`,node.line,node.column);
       const result=this._callAction(method,splitArgs(node.args),instEntry.value,soil);
       store(result.value!==undefined?result.value:null); return{next:1};
     }
 
     if(kind==='ACTION'){
       const {name}=node.source;
-      if(!this.funcs.has(name))storm('MISSING_STORM',`الفعل "${name}" غير معرّف`,node.line,node.column);
+      if(!this.funcs.has(name))storm('MISSING_STORM',`action "${name}" not defined`,node.line,node.column);
       const fn=this.funcs.get(name);
       const result=this._callAction(fn,splitArgs(node.args),null,soil);
       store(result.value!==undefined?result.value:null); return{next:1};
@@ -1027,6 +1055,44 @@ class Interpreter {
       }
     }
     return null;
+  }
+
+  evaluateForInStatement(node, soil) {
+    const raw = soil.get(node.sourceExpr);
+    if (!raw) storm('MISSING_STORM', `"${node.sourceExpr}" is not defined`, node.line, node.column);
+    const collection = raw.value;
+    const collType = raw.type;
+    if (Array.isArray(collection)) {
+      for (const item of collection) {
+        const cs = soil.child();
+        cs.set(node.iterVar, item, inferType(item));
+        try {
+          const r = this._evalBody(node.bodyStatements, cs);
+          if (r && r.returned) return r;
+        } catch (e) {
+          if (e.name === 'STOP_STORM') return null;
+          throw e;
+        }
+      }
+      return null;
+    }
+    if (collection instanceof Map) {
+      const mt = collType && isMapTypeStr(collType) ? mapInnerTypes(collType) : null;
+      const valType = mt ? mt.valueType : null;
+      for (const [key, val] of collection) {
+        const cs = soil.child();
+        cs.set(node.iterVar, val, valType || inferType(val));
+        try {
+          const r = this._evalBody(node.bodyStatements, cs);
+          if (r && r.returned) return r;
+        } catch (e) {
+          if (e.name === 'STOP_STORM') return null;
+          throw e;
+        }
+      }
+      return null;
+    }
+    storm('TYPE_STORM', `FOR IN: "${node.sourceExpr}" is not iterable (not an array or MAP)`, node.line, node.column);
   }
 
   evaluateSeasonStatement(node,soil){
@@ -1282,14 +1348,14 @@ class Interpreter {
           j++;
         }
         this.soil.set(scopeName,map,'MAP',{locked:true});
-        this.emit(`✓ ROOT_SCOPE "${scopeName}" — ${Object.keys(map).length} مفاتيح`,'ok');
+          this.emit(`✓ ROOT_SCOPE "${scopeName}" — ${Object.keys(map).length} keys`,'ok');
         i=j+1;continue;
       }
       if(m=text.match(/^MISSION\s*:\s*(\w+)$/i)){this.mission=m[1].toUpperCase();i++;continue;}
       if(m=text.match(/^PLANT\s+(\w+)(?:\s+AS\s+(\w+))?$/i)){
         const libName=m[1].toLowerCase(),alias=m[2]||m[1];
         if(INNATE[libName]){this.planted.set(alias,INNATE[libName]);this.emit(`✓ PLANT "${m[1]}"`, 'ok');}
-        else this.emit(`⚠ PLANT "${m[1]}" — غير موجود`,'warn');
+        else this.emit(`⚠ PLANT "${m[1]}" — not found`,'warn');
         i++;continue;
       }
       if(m=text.match(/^ACTION\s+(\w+)\((.*)\)$/i)){
@@ -1375,10 +1441,10 @@ class Interpreter {
 
     // SHOW
     if(m=stmt.match(/^SHOW\s+"([^"]*)"$/i)){this.emit(m[1]);return{next:i+1};}
-    if(m=stmt.match(/^SHOW\s+NOW$/)){this.emit(new Date().toLocaleString('ar-IQ'));return{next:i+1};}
+    if(m=stmt.match(/^SHOW\s+NOW$/)){this.emit(new Date().toLocaleString('en-US'));return{next:i+1};}
     if(m=stmt.match(/^SHOW\s+(COUNT|SUM|MAX|MIN|FIRST|LAST)\s+(\w+)$/i)){
       const e=soil.get(m[2]);
-      if(!e)storm('MISSING_STORM',`"${m[2]}" غير موجود`,line,column);
+      if(!e)storm('MISSING_STORM',`"${m[2]}" not found`,line,column);
       const v=e.value,op=m[1].toUpperCase();
       let res;
       if(op==='COUNT')res=Array.isArray(v)?v.length:1;
@@ -1393,17 +1459,17 @@ class Interpreter {
     if(m=stmt.match(/^SHOW\s+TYPE\s+(\w+)$/i)){const e=soil.get(m[1]);this.emit(`TYPE "${m[1]}": ${e?e.type:'VOID'}`);return{next:i+1};}
     if(m=stmt.match(/^SHOW\s+(\w+):"([^"]*)"$/i)){
       const e=soil.get(m[1]);
-      if(!e||!e.value)storm('MISSING_STORM',`"${m[1]}" غير موجود`,line,column);
+      if(!e||!e.value)storm('MISSING_STORM',`"${m[1]}" not found`,line,column);
       const _rv=e.value[m[2]];const _rd=(_rv&&typeof _rv==='object')?(Array.isArray(_rv)?'['+_rv.join(', ')+']':JSON.stringify(_rv)):String(_rv===undefined?'void':_rv);this.emit(`${m[1]}:"${m[2]}" = ${_rd}`,'inf');return{next:i+1};
     }
     if(m=stmt.match(/^SHOW\s+(\w+):(\w+)$/i)){
       const e=soil.get(m[1]);
-      if(!e||!e.value)storm('MISSING_STORM',`"${m[1]}" غير موجود`,line,column);
+      if(!e||!e.value)storm('MISSING_STORM',`"${m[1]}" not found`,line,column);
       const _rv=e.value[m[2]];const _rd=(_rv&&typeof _rv==='object')?(Array.isArray(_rv)?'['+_rv.join(', ')+']':JSON.stringify(_rv)):String(_rv===undefined?'void':_rv);this.emit(`${m[1]}:${m[2]} = ${_rd}`,'inf');return{next:i+1};
     }
     if(m=stmt.match(/^SHOW\s+(\w+)$/i)){
       const e=soil.get(m[1]);
-      if(!e)storm('MISSING_STORM',`"${m[1]}" غير موجود`,line,column);
+      if(!e)storm('MISSING_STORM',`"${m[1]}" not found`,line,column);
       const display=Array.isArray(e.value)?`[${e.value.join(', ')}]`:
         (e.value&&typeof e.value==='object'&&!Array.isArray(e.value)?
           `{${Object.entries(e.value).filter(([k])=>!k.startsWith('__')).map(([k,v])=>`${k}:${v}`).join(', ')}}`:
@@ -1436,7 +1502,7 @@ class Interpreter {
     // SET SELF:prop (inside ACTION)
     if(m=stmt.match(/^SET\s+SELF:(\w+)\s+TO\s+(.+)$/i)){
       const selfEntry=soil.get('__self');
-      if(!selfEntry)storm('SEED_STORM','SELF غير متاح',line,column);
+      if(!selfEntry)storm('SEED_STORM','SELF not available',line,column);
       const newVal=E(m[2]);
       selfEntry.value[m[1]]=newVal;
       const scoped=soil.get('SELF:'+m[1]);
@@ -1446,16 +1512,16 @@ class Interpreter {
     // SET obj:"key" TO  (quoted MAP key)
     if(m=stmt.match(/^SET\s+(\w+):"([^"]*)"\s+TO\s+(.+)$/i)){
       const e=soil.get(m[1]);
-      if(!e||!e.value||typeof e.value!=='object')storm('TYPE_STORM',`"${m[1]}" ليس كائناً`,line,column);
-      if(e.locked)storm('LOCK_STORM',`"${m[1]}" محمي — لا يمكن تعديله`,line,column);
+      if(!e||!e.value||typeof e.value!=='object')storm('TYPE_STORM',`"${m[1]}" is not an object`,line,column);
+      if(e.locked)storm('LOCK_STORM',`"${m[1]}" protected — cannot be modified`,line,column);
       e.value[m[2]]=E(m[3]);
       this.emit(`SET ${m[1]}:"${m[2]}" → ${e.value[m[2]]}`,'ok');return{next:i+1};
     }
     // SET inst:prop
     if(m=stmt.match(/^SET\s+(\w+):(\w+)\s+TO\s+(.+)$/i)){
       const e=soil.get(m[1]);
-      if(!e||!e.value||typeof e.value!=='object')storm('TYPE_STORM',`"${m[1]}" ليس كائناً`,line,column);
-      if(e.locked)storm('LOCK_STORM',`"${m[1]}" محمي — لا يمكن تعديله`,line,column);
+      if(!e||!e.value||typeof e.value!=='object')storm('TYPE_STORM',`"${m[1]}" is not an object`,line,column);
+      if(e.locked)storm('LOCK_STORM',`"${m[1]}" protected — cannot be modified`,line,column);
       e.value[m[2]]=E(m[3]);
       this.emit(`SET ${m[1]}:${m[2]} → ${e.value[m[2]]}`,'ok');return{next:i+1};
     }
@@ -1475,7 +1541,7 @@ class Interpreter {
     // INCREASE / DECREASE
     if(m=stmt.match(/^(INCREASE|DECREASE)\s+SELF:(\w+)\s+BY\s+(.+)$/i)){
       const selfEntry=soil.get('__self');
-      if(!selfEntry)storm('SEED_STORM','SELF غير متاح',line,column);
+      if(!selfEntry)storm('SEED_STORM','SELF not available',line,column);
       const n=+E(m[3]),prop=m[2];
       const newVal=m[1].toUpperCase()==='INCREASE'?(+selfEntry.value[prop]||0)+n:(+selfEntry.value[prop]||0)-n;
       selfEntry.value[prop]=newVal;
@@ -1485,10 +1551,22 @@ class Interpreter {
       else soil.set('SELF:'+prop,newVal);
       return{next:i+1};
     }
+    // INCREASE/DECREASE obj.field BY amount (struct member access)
+    if(m=stmt.match(/^(INCREASE|DECREASE)\s+(\w+)\s*\.\s*(\w+)\s+BY\s+(.+)$/i)){
+      const objEntry=soil.get(m[2]);
+      if(!objEntry)storm('MISSING_STORM',`"${m[2]}" not found`,line,column);
+      if(typeof objEntry.value!=='object'||objEntry.value===null)
+        storm('TYPE_STORM',`cannot ${m[1]} on ${objEntry.type}`,line,column);
+      if(!(m[3] in objEntry.value))
+        storm('MISSING_STORM',`"${m[2]}" does not have a property "${m[3]}"`,line,column);
+      const n=+E(m[4]);
+      objEntry.value[m[3]]=m[1].toUpperCase()==='INCREASE'?(+objEntry.value[m[3]]||0)+n:(+objEntry.value[m[3]]||0)-n;
+      return{next:i+1};
+    }
     if(m=stmt.match(/^(INCREASE|DECREASE)\s+(\w+)\s+BY\s+(.+)$/i)){
       const e=soil.get(m[2]);
-      if(!e)storm('MISSING_STORM',`"${m[2]}" غير موجود`,line,column);
-      if(Array.isArray(e.value)||typeof e.value==='object')storm('TYPE_STORM',`لا يمكن ${m[1]} على ${e.type}`,line,column);
+      if(!e)storm('MISSING_STORM',`"${m[2]}" not found`,line,column);
+      if(Array.isArray(e.value)||typeof e.value==='object')storm('TYPE_STORM',`cannot ${m[1]} on ${e.type}`,line,column);
       const n=+E(m[3]);
       e.value=m[1].toUpperCase()==='INCREASE'?(+e.value||0)+n:(+e.value||0)-n;
       return{next:i+1};
@@ -1498,25 +1576,25 @@ class Interpreter {
     // PUT val INTO SELF:list
     if(m=stmt.match(/^PUT\s+(.+?)\s+INTO\s+SELF:(\w+)$/i)){
       const selfEntry=soil.get('__self');
-      if(!selfEntry)storm('SEED_STORM','SELF غير متاح',line,column);
-      if(!Array.isArray(selfEntry.value[m[2]]))storm('TYPE_STORM',`SELF:${m[2]} ليس LIST`,line,column);
+      if(!selfEntry)storm('SEED_STORM','SELF not available',line,column);
+      if(!Array.isArray(selfEntry.value[m[2]]))storm('TYPE_STORM',`SELF:${m[2]} is not a LIST`,line,column);
       selfEntry.value[m[2]].push(E(m[1]));return{next:i+1};
     }
     if(m=stmt.match(/^PUT\s+(.+?)\s+INTO\s+(\w+)$/i)){
       const e=soil.get(m[2]);
-      if(!e||!Array.isArray(e.value))storm('TYPE_STORM',`"${m[2]}" ليس LIST`,line,column);
+      if(!e||!Array.isArray(e.value))storm('TYPE_STORM',`"${m[2]}" is not a LIST`,line,column);
       e.value.push(E(m[1]));return{next:i+1};
     }
     if(m=stmt.match(/^TAKE\s+(.+?)\s+FROM\s+(\w+)$/i)){
       const e=soil.get(m[2]);
-      if(!e||!Array.isArray(e.value))storm('TYPE_STORM',`"${m[2]}" ليس LIST`,line,column);
+      if(!e||!Array.isArray(e.value))storm('TYPE_STORM',`"${m[2]}" is not a LIST`,line,column);
       const idx=e.value.indexOf(E(m[1]));
-      if(idx===-1)storm('LOST_STORM',`عنصر غير موجود في "${m[2]}"`,line,column);
+      if(idx===-1)storm('LOST_STORM',`element not found in "${m[2]}"`,line,column);
       e.value.splice(idx,1);return{next:i+1};
     }
     if(m=stmt.match(/^SORT\s+(\w+)$/i)){
       const e=soil.get(m[1]);
-      if(!e||!Array.isArray(e.value))storm('TYPE_STORM',`"${m[1]}" ليس LIST`,line,column);
+      if(!e||!Array.isArray(e.value))storm('TYPE_STORM',`"${m[1]}" is not a LIST`,line,column);
       e.value.sort((a,b)=>typeof a==='number'&&typeof b==='number'?a-b:String(a).localeCompare(String(b)));
       return{next:i+1};
     }
@@ -1559,7 +1637,7 @@ class Interpreter {
     // LINK "key" WITH val IN SELF:map
     if(m=stmt.match(/^LINK\s+(\S+)\s+WITH\s+(.+?)\s+IN\s+SELF:(\w+)$/i)){
       const selfEntry=soil.get('__self');
-      if(!selfEntry)storm('SEED_STORM','SELF غير متاح',line,column);
+      if(!selfEntry)storm('SEED_STORM','SELF not available',line,column);
       // m[1] can be a quoted string "key" or a variable name
       const mapKey=String(E(m[1]));
       const mapVal=E(m[2]);
@@ -1569,7 +1647,7 @@ class Interpreter {
     }
     if(m=stmt.match(/^LINK\s+"([^"]+)"\s+WITH\s+(.+?)\s+IN\s+(\w+)$/i)){
       const e=soil.get(m[3]);
-      if(!e||typeof e.value!=='object'||Array.isArray(e.value))storm('TYPE_STORM',`"${m[3]}" ليس MAP`,line,column);
+      if(!e||typeof e.value!=='object'||Array.isArray(e.value))storm('TYPE_STORM',`"${m[3]}" is not a MAP`,line,column);
       const val=E(m[2]);
       if(e.value instanceof Map){e.value.set(m[1],val);}else{e.value[m[1]]=val;}
       this.emit(`LINK "${m[1]}" → ${m[3]}`,'ok');return{next:i+1};
@@ -1577,7 +1655,7 @@ class Interpreter {
     // LINK unquoted-key WITH val IN map (e.g. LINK 1 WITH "hello" IN m)
     if(m=stmt.match(/^LINK\s+(\S+)\s+WITH\s+(.+?)\s+IN\s+(\w+)$/i)){
       const e=soil.get(m[3]);
-      if(!e||typeof e.value!=='object'||Array.isArray(e.value))storm('TYPE_STORM',`"${m[3]}" ليس MAP`,line,column);
+      if(!e||typeof e.value!=='object'||Array.isArray(e.value))storm('TYPE_STORM',`"${m[3]}" is not a MAP`,line,column);
       const key=E(m[1]);
       const val=E(m[2]);
       if(e.value instanceof Map){e.value.set(key,val);}else{e.value[key]=val;}
@@ -1587,12 +1665,12 @@ class Interpreter {
     // REAP SELF:method (call own method inside ACTION)
     if(m=stmt.match(/^REAP\s+(\w+)\s+FROM\s+SELF:(\w+)(?:,\s*(.*))?$/i)){
       const selfEntry=soil.get('__self');
-      if(!selfEntry)storm('SEED_STORM','SELF غير متاح',line,column);
+      if(!selfEntry)storm('SEED_STORM','SELF not available',line,column);
       const spName=selfEntry.value.__species;
       const sp=spName&&this.species.get(spName);
-      if(!sp)storm('MISSING_STORM','SPECIES غير موجود',line,column);
+      if(!sp)storm('MISSING_STORM','SPECIES not found',line,column);
       const method=sp.actions[m[2]];
-      if(!method)storm('MISSING_STORM',`الفعل "${m[2]}" غير موجود`,line,column);
+      if(!method)storm('MISSING_STORM',`action "${m[2]}" not found`,line,column);
       const rawArgs=m[3]||'';
       const argVals=rawArgs?this._splitArgs(rawArgs).map(a=>E(a.trim())):[];
       const result=this._callAction(method,argVals,selfEntry.value,soil);
@@ -1615,7 +1693,7 @@ class Interpreter {
           if(_st==='FLATTEN'){if(Array.isArray(current))current=current.flat();continue;}
           const fn=this.funcs.get(_st);
           if(fn){const r=this._callAction(fn,[current],null,soil);current=r.value!==undefined?r.value:current;}
-          else this.emit(`FLOW: "${_st}" غير معرّف`,'warn');
+          else this.emit(`FLOW: "${_st}" not defined`,'warn');
         }
         if(resName!=='_')soil.set(resName,current,inferType(current));
         return{next:i+1};
@@ -1627,19 +1705,19 @@ class Interpreter {
       if(this.planted.has(libOrObj)){
         const lib=this.planted.get(libOrObj);
         const fn=lib[funcName.toUpperCase()];
-        if(!fn)storm('MISSING_STORM',`"${funcName}" غير موجود في "${libOrObj}"`,line,column);
+        if(!fn)storm('MISSING_STORM',`"${funcName}" not found in "${libOrObj}"`,line,column);
         const argVals=rawArgs?this._splitArgs(rawArgs).map(a=>E(a.trim())):[];
         const result=fn(argVals);
         if(resName!=='_')soil.set(resName,result,inferType(result));
         return{next:i+1};
       }
       const instEntry=soil.get(libOrObj);
-      if(!instEntry)storm('MISSING_STORM',`"${libOrObj}" غير موجود`,line,column);
+      if(!instEntry)storm('MISSING_STORM',`"${libOrObj}" not found`,line,column);
       const spName=instEntry.value&&instEntry.value.__species;
       const sp=spName&&this.species.get(spName);
-      if(!sp)storm('MISSING_STORM',`SPECIES غير موجود`,line,column);
+      if(!sp)storm('MISSING_STORM',`SPECIES not found`,line,column);
       const method=sp.actions[funcName];
-      if(!method)storm('MISSING_STORM',`الفعل "${funcName}" غير موجود`,line,column);
+      if(!method)storm('MISSING_STORM',`action "${funcName}" not found`,line,column);
       const argVals=rawArgs?this._splitArgs(rawArgs).map(a=>E(a.trim())):[];
       const result=this._callAction(method,argVals,instEntry.value,soil);
       if(resName!=='_')soil.set(resName,result.value!==undefined?result.value:null,inferType(result.value));
@@ -1685,7 +1763,7 @@ class Interpreter {
         const _tryStorm=()=>{
           // Bare undefined variable check: single word not in soil
           if(/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(testExpr)&&!soil.get(testExpr)){
-            storm('MISSING_STORM',`"${testExpr}" غير موجود`,line,column);
+            storm('MISSING_STORM',`"${testExpr}" not found`,line,column);
           }
           // Try as statement (SET, INCREASE etc)
           const stmtM=testExpr.match(/^(SET|INCREASE|DECREASE|LOCK|EVAPORATE|HARVEST|PUT|TAKE|REAP|LISTEN)\s/i);
@@ -1785,7 +1863,7 @@ class Interpreter {
     // ANALYZE x — type-aware data inspection report
     if(m=stmt.match(/^ANALYZE\s+(\w+)$/i)){
       const e=soil.get(m[1]);
-      if(!e)storm('MISSING_STORM',`"${m[1]}" غير موجود`,line,column);
+      if(!e)storm('MISSING_STORM',`"${m[1]}" not found`,line,column);
       const v=e.value,t=e.type;
       if(Array.isArray(v)){
         this.emit(`ANALYZE "${m[1]}" → LIST[${v.length}]`,'inf');
@@ -1801,14 +1879,14 @@ class Interpreter {
         }
       }else if(t==='MAP'||(v&&typeof v==='object'&&!v.__species&&!v.__vein)){
         const keys=Object.keys(v);
-        this.emit(`ANALYZE "${m[1]}" → MAP{${keys.length} مفاتيح}`,'inf');
+        this.emit(`ANALYZE "${m[1]}" → MAP{${keys.length} keys}`,'inf');
         for(const k of keys)this.emit(`  "${k}": ${v[k]} (${inferType(v[k])})`,'muted');
       }else if(t==='TX'||typeof v==='string'){
-        this.emit(`ANALYZE "${m[1]}" → TX[${[...String(v)].length} حرف]`,'inf');
+        this.emit(`ANALYZE "${m[1]}" → TX[${[...String(v)].length} characters]`,'inf');
         this.emit(`  "${v}"`,'muted');
       }else if(v&&v.__species){
         const fields=Object.keys(v).filter(k=>!k.startsWith('__'));
-        this.emit(`ANALYZE "${m[1]}" → INSTANCE(${v.__species}){${fields.length} خصائص}`,'inf');
+        this.emit(`ANALYZE "${m[1]}" → INSTANCE(${v.__species}){${fields.length} properties}`,'inf');
         for(const k of fields)this.emit(`  ${k}: ${v[k]} (${inferType(v[k])})`,'muted');
       }else{
         this.emit(`ANALYZE "${m[1]}" → ${t}`,'inf');
@@ -1827,14 +1905,14 @@ class Interpreter {
 
     if(m=stmt.match(/^REAP\s+(\w+)\s+FROM\s+NOW(?:\s+FORMAT:(\w+))?$/i)){
       const fmt=(m[2]||'FULL').toUpperCase(),now=new Date();
-      const val=fmt==='DATE'?now.toLocaleDateString('ar-IQ'):fmt==='TIME'?now.toLocaleTimeString('ar-IQ'):fmt==='YEAR'?now.getFullYear():fmt==='STAMP'?now.getTime():now.toLocaleString('ar-IQ');
+      const val=fmt==='DATE'?now.toLocaleDateString('en-US'):fmt==='TIME'?now.toLocaleTimeString('en-US'):fmt==='YEAR'?now.getFullYear():fmt==='STAMP'?now.getTime():now.toLocaleString('en-US');
       if(m[1]!=='_')soil.set(m[1],val,fmt==='STAMP'?'NUM':'TX');return{next:i+1};
     }
 
     // REAP ACTION
     if(m=stmt.match(/^REAP\s+(\w+)\s+FROM\s+(\w+)(?:,\s*(.*))?$/i)){
       const resName=m[1],fnName=m[2],rawArgs=m[3]||'';
-      if(!this.funcs.has(fnName))storm('MISSING_STORM',`الفعل "${fnName}" غير معرّف`,line,column);
+      if(!this.funcs.has(fnName))storm('MISSING_STORM',`action "${fnName}" not defined`,line,column);
       const fn=this.funcs.get(fnName);
       const argVals=rawArgs?this._splitArgs(rawArgs).map(a=>E(a.trim())):[];
       const result=this._callAction(fn,argVals,null,soil);
@@ -1846,7 +1924,7 @@ class Interpreter {
     // BLOOM
     if(m=stmt.match(/^BLOOM\s+(\w+)\s+AS\s+(\w+)$/i)){
       const sp=this.species.get(m[1]);
-      if(!sp)storm('MISSING_STORM',`SPECIES "${m[1]}" غير معرّفة`,line,column);
+      if(!sp)storm('MISSING_STORM',`SPECIES "${m[1]}" not found`,line,column);
       const inst={__species:m[1],__parent:sp.parent};
       Object.entries(sp.fields).forEach(([fn,fd])=>{
         inst[fn]=fd.default!==null?fd.default:fd.type==='NUM'?0:fd.type==='LIST'?[]:fd.type==='FACT'?false:fd.type==='MAP'?{}:'';
@@ -1998,19 +2076,19 @@ class Interpreter {
       this.emit(`TAP "${fname}" [${mode}] → "${m[3]}"`,'ok');return{next:i+1};
     }
     if(m=stmt.match(/^ABSORB\s+LINE\s+(\w+)\s+AS\s+(\w+)$/i)){
-      const e=soil.get(m[1]);if(!e||!e.value||!e.value.__vein)storm('TYPE_STORM',`"${m[1]}" ليس VEIN`,line,column);
+      const e=soil.get(m[1]);if(!e||!e.value||!e.value.__vein)storm('TYPE_STORM',`"${m[1]}" is not a VEIN`,line,column);
       const lines=this.veinFS.read(e.value.file).split('\n');
       const pos=e.value.pos||0,lineContent=lines[pos]||'';
       e.value.pos=pos+1;soil.set(m[2],lineContent,'TX');
       this.emit(`ABSORB LINE → "${lineContent}"`,'ok');return{next:i+1};
     }
     if(m=stmt.match(/^ABSORB\s+(\w+)\s+AS\s+(\w+)$/i)){
-      const e=soil.get(m[1]);if(!e||!e.value||!e.value.__vein)storm('TYPE_STORM',`"${m[1]}" ليس VEIN`,line,column);
+      const e=soil.get(m[1]);if(!e||!e.value||!e.value.__vein)storm('TYPE_STORM',`"${m[1]}" is not a VEIN`,line,column);
       soil.set(m[2],this.veinFS.read(e.value.file),'TX');
       this.emit(`ABSORB "${e.value.file}" ✓`,'ok');return{next:i+1};
     }
     if(m=stmt.match(/^INFUSE\s+(\w+)\s+WITH\s+(.+)$/i)){
-      const e=soil.get(m[1]);if(!e||!e.value||!e.value.__vein)storm('TYPE_STORM',`"${m[1]}" ليس VEIN`,line,column);
+      const e=soil.get(m[1]);if(!e||!e.value||!e.value.__vein)storm('TYPE_STORM',`"${m[1]}" is not a VEIN`,line,column);
       const val=String(E(m[2]));
       this.veinFS.append(e.value.file,val);
       if(e.value.mode==='MARK'){
@@ -2029,7 +2107,7 @@ class Interpreter {
       const watchName=m[1],body=this._collectBlock(stmts,i+1);
       if(!this.watchers.has(watchName))this.watchers.set(watchName,[]);
       this.watchers.get(watchName).push(body);
-      this.emit(`WHENEVER "${watchName}" — مراقب ✓`,'muted');
+      this.emit(`WHENEVER "${watchName}" — watcher ✓`,'muted');
       return{next:i+1+body.length+1};
     }
 
@@ -2132,7 +2210,7 @@ class Interpreter {
     // CYCLE x IN list
     if(m=stmt.match(/^CYCLE\s+(\w+)\s+IN\s+(\w+)$/i)){
       const e=soil.get(m[2]);
-      if(!e||!Array.isArray(e.value))storm('TYPE_STORM',`"${m[2]}" ليس LIST`,line,column);
+      if(!e||!Array.isArray(e.value))storm('TYPE_STORM',`"${m[2]}" is not a LIST`,line,column);
       const body=this._collectBlock(stmts,i+1);
       for(const el of e.value){
         const cs=soil.child();cs.set(m[1],el,inferType(el));
@@ -2172,7 +2250,7 @@ class Interpreter {
     if(m=stmt.match(/^CONVERT\s+(\w+)\s+TO\s+(NUM|SCL|TX|FACT)$/i)){
       const e=soil.get(m[1]);if(!e)storm('MISSING_STORM',`"${m[1]}"`,line,column);
       const t=m[2].toUpperCase();
-      if(t==='NUM'){const cv=parseInt(e.value);if(isNaN(cv))storm('SEED_STORM','تعذر التحويل',line,column);e.value=cv;}
+      if(t==='NUM'){const cv=parseInt(e.value);if(isNaN(cv))storm('SEED_STORM','conversion failed',line,column);e.value=cv;}
       else if(t==='SCL')e.value=parseFloat(e.value);
       else if(t==='TX')e.value=String(e.value);
       else e.value=!!e.value;
@@ -2183,7 +2261,7 @@ class Interpreter {
     if(m=stmt.match(/^WAIT\s+(.+)$/i)){this.emit(`WAIT ${E(m[1])}s`,'muted');return{next:i+1};}
     if(stmt.startsWith('NOTE ')||stmt.startsWith('#'))return{next:i+1};
 
-    storm('SEED_STORM',`جملة غير معروفة: "${stmt}"`,line,column);
+    storm('SEED_STORM',`unknown statement: "${stmt}"`,line,column);
   }
 
   // Collect statements deeper than parentDepth

@@ -500,7 +500,9 @@ All functions receive and return `int64_t` (TX pointers as `int64_t` via ptrtoin
 - `tests/test_phase12_arrays_growth.js` — 64 tests for dynamic array growth
 - `tests/test_phase13_choices_matching.js` — 64 tests for CHOICE/MATCH
 - `tests/test_phase14_maps.js` — 17 tests for MAP hash tables
-- **Total: 13 test files, ~634 assertions, all green**
+- `tests/test_phase15_for_in.js` — 19 tests for FOR...IN loops
+- `tests/test_phase16_structs.js` — 16 tests for STRUCT types
+- **Total: 15 test files, ~669 assertions, all green**
 
 ### Test Methodology
 Each test:

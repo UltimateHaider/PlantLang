@@ -401,7 +401,15 @@ class StructInstantiationExpr extends AstNode {
   constructor({ structName, args }, coords) {
     super('StructInstantiation', coords);
     this.structName = structName;
-    this.args = args || []; // expression nodes
+    this.args = args || []; // expression nodes (positional)
+  }
+}
+
+class StructLiteralNode extends AstNode {
+  constructor({ structName, fields }, coords) {
+    super('StructLiteral', coords);
+    this.structName = structName;
+    this.fields = fields || []; // [{ name, value: exprNode }]
   }
 }
 
@@ -707,11 +715,24 @@ class FlowStatementNode extends AstNode {
   }
 }
 
+class ForInStatementNode extends AstNode {
+  // FOR item IN collection,
+  //   body...
+  // .
+  constructor({ iterVar, sourceExpr, bodyStatements }, coords) {
+    super('ForInStatement', coords);
+    this.iterVar        = iterVar;
+    this.sourceExpr     = sourceExpr;
+    this.bodyStatements = bodyStatements || [];
+  }
+}
+
 // Re-export everything
 const _orig = module.exports;
 Object.assign(module.exports, {
   StructDeclarationNode,
   StructInstantiationExpr,
+  StructLiteralNode,
   MemberAccessNode,
   ArrayLiteralNode,
   MethodCallNode,
@@ -743,4 +764,5 @@ Object.assign(module.exports, {
   VariantDeclarationNode,
   KeyValuePairNode,
   MapLiteralNode,
+  ForInStatementNode,
 });

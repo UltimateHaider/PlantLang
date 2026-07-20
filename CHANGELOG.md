@@ -1,8 +1,28 @@
 # Changelog — PlantLang / Chloroplast
 
-## v0.26.0 — 2026 (current)
+## v0.27.0 — 2026 (current)
 
 ### New Features
+- **FOR...IN Loop (Phase 15)** — iterate over list/array/map values:
+  - Syntax: `FOR name IN expr, ... /FOR.` with optional depth prefix and `.` terminator
+  - Iterates over LIST values, MAP keys, or TX character spans
+  - Supports nested loops with `DEPTH`-aware parsing
+  - `STOP_STORM` from `STOP IF` propagates correctly through `FOR` bodies
+  - 19 new tests covering empty arrays, typed arrays, TX strings, MAPs, nested IF
+- **STRUCT Type (Phase 16)** — alternative struct declaration syntax with `field: TYPE`:
+  - Syntax: `STRUCT Person { name: TX, age: NUM }.` (alongside existing `SHAPE … field(TYPE)`)
+  - Anonymous struct literals: `CREATE p(Person) TO { name: "Alice", age: 30 }.` in `CREATE` context
+  - INCREASE/DECREASE support on struct fields: `INCREASE p.age BY 1.`
+  - Full type-checker validation of struct fields and literal arity
+  - LLVM codegen: struct literals emit GEP-based field stores
+  - 16 new tests covering declaration, nested structs, field access/mutation, type checking, LLVM codegen
+- **English-Language Cleanup** — all Arabic-language strings in engine `.js` files translated to English:
+  - `core/interpreter.js` — ~58 storm messages and CLI strings converted
+  - `core/llvm_codegen.js` — Unicode-escaped Arabic error message replaced
+  - `core/runtime.js`, `core/evaluator.js` — Arabic error text translated
+  - `chloroplast.js` — CLI banner, error messages, REPL prompts converted
+  - `webrepl/examples-data.js` — all example data strings translated
+  - `ar-IQ` locale → `en-US` in all date/time formatting calls
 - **MAP Type (Hash Table) — Full LLVM Codegen** — open-addressing HashMap with linear probing:
   - Syntax: `CREATE m(MAP[NUM,TX]).` with typed key/value parameters
   - Map literals: `CREATE m(MAP[NUM,TX]) TO { 1: "a", 2: "b" }.`
@@ -31,14 +51,16 @@
 
 ### Test Suite
 - Added **Phase 14 — MAP Types** (`tests/test_phase14_maps.js`) — 17 tests covering empty map create, map literals, LINK/put semantics, has/get, overwrite, growth (10 entries), SHOW display, type-checker validation
+- Added **Phase 15 — FOR...IN** (`tests/test_phase15_for_in.js`) — 19 tests covering empty arrays, typed arrays, TX strings, MAPs, nested IF, STOP IF propagation
+- Added **Phase 16 — STRUCT** (`tests/test_phase16_structs.js`) — 16 tests covering declaration, nested structs, field access/mutation, type checking, LLVM codegen
 - LLVM backend expanded from 46 → **50 smoke tests** (4 new MAP tests: create+has, all-keys, growth, overwrite)
-- Total test suites expanded to **13 files, ~634 total assertions** — all green
+- Total test suites expanded to **15 files, ~669 total assertions** — all green
 
 ### Documentation
-- All `.md` files bumped to v0.26.0
-- ROADMAP.md — MAP objective marked complete, v0.27.0 objectives drafted
-- Language Tour.md — supported subset table now shows MAP as ✅ for `has()` in compiled mode
-- TECHNICAL.md — updated test counts from ~613 → ~634, 12 → 13 test files
+- All `.md` files bumped to v0.27.0
+- ROADMAP.md — FOR...IN and STRUCT objectives marked complete, v0.27.0 objectives updated
+- Language Tour.md — supported subset table now shows FOR...IN as ✅ and STRUCT syntax documented
+- TECHNICAL.md — updated test counts from ~634 → ~669, 13 → 15 test files
 
 ---
 

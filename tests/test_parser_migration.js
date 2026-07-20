@@ -242,7 +242,7 @@ console.log('\n\x1b[1mParser / AST Migration Verification\x1b[0m\n');
   interp.runSource(
     'MISSION: SAFE.\n1\\ WEATHER,\n2\\   SHOW 10 / 0.\n' +
     '1\\ SHELTER ZERO_STORM AS err,\n2\\   SHOW err.\n1\\ CALM.\n1\\ SHOW "after".\n');
-  check('storm caught and errVar bound to the message text', out.some(t => t.includes('صفر')));
+  check('storm caught and errVar bound to the message text', out.some(t => t.includes('zero')));
   check('execution continues normally after CALM', out.includes('after'));
 }
 

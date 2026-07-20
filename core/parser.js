@@ -38,7 +38,7 @@ const {
   ActionDeclarationNode, SpeciesDeclarationNode, BloomStatementNode, TapStatementNode,
   WheneverStatementNode, ReapStatementNode, ImportStatementNode,
   SetStatementNode, IncreaseStatementNode, DecreaseStatementNode,
-  StructDeclarationNode, StructInstantiationExpr, MemberAccessNode,
+  StructDeclarationNode, StructInstantiationExpr, StructLiteralNode, MemberAccessNode,
   ArrayLiteralNode, MethodCallNode,
 } = require('./ast');
 
@@ -79,6 +79,7 @@ class Parser {
   constructor(tokens) {
     this.tokens = tokens;
     this.pos = 0;
+    this.structNames = new Set(); // known struct names for literal disambiguation
   }
 
   peek(offset = 0) {
@@ -182,10 +183,12 @@ class Parser {
     if (this.match(TOKEN.KEYWORD, 'SET')) return this.parseSetStatement(coords);
     if (this.match(TOKEN.KEYWORD, 'INCREASE')) return this.parseIncreaseStatement(coords);
     if (this.match(TOKEN.KEYWORD, 'DECREASE')) return this.parseDecreaseStatement(coords);
-    if (this.match(TOKEN.KEYWORD, 'SHAPE')) return this.parseStructDeclaration(coords);
+    if (this.match(TOKEN.KEYWORD, 'SHAPE'))  return this.parseStructDeclaration(coords);
+    if (this.match(TOKEN.KEYWORD, 'STRUCT')) return this.parseStructDeclaration(coords);
     if (this.match(TOKEN.KEYWORD, 'CHOICE')) return this.parseVariantDeclaration(coords);
 
     // New dispatches — remaining statement types
+    if (this.match(TOKEN.KEYWORD, 'FOR'))    return this.parseForInStatement(coords);
     if (this.match(TOKEN.KEYWORD, 'IF'))     return this.parseIfStatement(coords);
     if (this.match(TOKEN.KEYWORD, 'CYCLE'))  return this.parseCycleStatement(coords);
     if (this.match(TOKEN.KEYWORD, 'SEASON')) return this.parseSeasonStatement(coords);
@@ -950,11 +953,16 @@ class Parser {
     while (!this.isAtEnd()) {
       const t = this.current();
       if ((t.type === TOKEN.KEYWORD || t.type === TOKEN.IDENT) && t.value.toUpperCase() === 'BY') break;
+      if (t.type === TOKEN.PUNCT && t.value === '.' &&
+          this.peek(1) && this.peek(1).type === TOKEN.IDENT) {
+        identSpan.push(this.advance());
+        identSpan.push(this.advance());
+        continue;
+      }
       if (t.type === TOKEN.PUNCT && t.value === '.') break;
       identSpan.push(this.advance());
     }
     const identifier = joinTokens(identSpan).trim();
-    // consume BY (IDENT or KEYWORD)
     if ((this.current().type === TOKEN.KEYWORD || this.current().type === TOKEN.IDENT) && this.current().value.toUpperCase() === 'BY') this.advance();
     else { const t=this.current(); storm('SYNTAX_STORM',`Expected "BY" in INCREASE, found "${t.value}"`,t.line,t.column); }
     const amtSpan = [];
@@ -969,6 +977,12 @@ class Parser {
     while (!this.isAtEnd()) {
       const t = this.current();
       if ((t.type === TOKEN.KEYWORD || t.type === TOKEN.IDENT) && t.value.toUpperCase() === 'BY') break;
+      if (t.type === TOKEN.PUNCT && t.value === '.' &&
+          this.peek(1) && this.peek(1).type === TOKEN.IDENT) {
+        identSpan.push(this.advance());
+        identSpan.push(this.advance());
+        continue;
+      }
       if (t.type === TOKEN.PUNCT && t.value === '.') break;
       identSpan.push(this.advance());
     }
@@ -1132,7 +1146,13 @@ class Parser {
         } else if (this.match(TOKEN.PUNCT, '[')) {
           valueExpr = this.parseArrayLiteral();
         } else if (this.match(TOKEN.PUNCT, '{')) {
-          valueExpr = this.parseMapLiteral();
+          // If the declared type is a known struct, parse as struct literal
+          if (varType && this.structNames.has(varType)) {
+            valueExpr = this.parseStructLiteral();
+            valueExpr.structName = varType;
+          } else {
+            valueExpr = this.parseMapLiteral();
+          }
         } else {
           valueExpr = this.parseExpressionSpan();
         }
@@ -1525,6 +1545,39 @@ class Parser {
     if (this.match(TOKEN.KEYWORD, 'SEASON')) this.advance();
     if (this.match(TOKEN.PUNCT, '.')) this.advance();
     return new SeasonStatementNode({ condExpr, bodyStatements: body }, coords);
+  }
+
+  // FOR item IN collection,
+  //   body...
+  // .
+  parseForInStatement(coords) {
+    const { ForInStatementNode } = require('./ast');
+    this.advance(); // FOR
+    const iterVar = this.current().value; this.advance();
+    if (!this.match(TOKEN.KEYWORD, 'IN')) {
+      // Provide a clear error
+      const { RawStatementNode } = require('./ast');
+      this.error(`Expected "IN" after FOR loop variable`, this.current().line, this.current().column);
+      return new RawStatementNode({ text: `FOR ${iterVar} ...` }, coords);
+    }
+    this.advance(); // IN
+    const span = [];
+    while (!this.isAtEnd()) {
+      const t = this.current();
+      if (t.type === TOKEN.PUNCT && (t.value === ',' || t.value === '.')) break;
+      if (t.type === TOKEN.EOF) break;
+      span.push(this.advance());
+    }
+    const sourceExpr = joinTokens(span).trim();
+    if (this.match(TOKEN.PUNCT, ',')) this.advance();
+    if (this.match(TOKEN.PUNCT, '.')) this.advance(); // empty body
+    const body = this._collectBodyUntil(coords.depth, []);
+    // Consume the /FOR. closer (left unconsumed by _collectBodyUntil)
+    if (this.match(TOKEN.DEPTH)) this.advance();
+    if (this.match(TOKEN.PUNCT, '/')) this.advance();
+    if (this.match(TOKEN.KEYWORD, 'FOR')) this.advance();
+    if (this.match(TOKEN.PUNCT, '.')) this.advance();
+    return new ForInStatementNode({ iterVar, sourceExpr, bodyStatements: body }, coords);
   }
 
   // Pattern-matching MATCH (new) and legacy MATCH (backward compat):
@@ -1948,16 +2001,52 @@ class Parser {
     return new StructInstantiationExpr({ structName, args }, coords);
   }
 
-  // ── SHAPE name { field1(TYPE), field2(TYPE), ... } ────────────
+  // ── { name: expr, ... } anonymous struct literal ─────────────────
+  parseStructLiteral() {
+    const coords = { line: this.current().line, column: this.current().column, depth: this.current().depth };
+    this.consume(TOKEN.PUNCT, '{', '"{" to start struct literal');
+    const fields = [];
+    while (!this.isAtEnd() && !this.match(TOKEN.PUNCT, '}')) {
+      const keyTok = this.current();
+      if (keyTok.type !== TOKEN.IDENT && keyTok.type !== TOKEN.KEYWORD) break;
+      const name = this.advance().value;
+      this.consume(TOKEN.PUNCT, ':', '":" after field name');
+      const span = [];
+      while (!this.isAtEnd()) {
+        if (this.match(TOKEN.PUNCT, ',') || this.match(TOKEN.PUNCT, '}')) break;
+        span.push(this.advance());
+      }
+      let valExpr;
+      if (span.length === 1) {
+        const t = span[0];
+        const ac = { line: t.line, column: t.column, depth: t.depth };
+        if (t.type === TOKEN.NUMBER) valExpr = new LiteralNode(t.value, 'NUMBER', ac);
+        else if (t.type === TOKEN.STRING) valExpr = new LiteralNode(t.value, 'STRING', ac);
+        else if (t.type === TOKEN.FACT) valExpr = new LiteralNode(t.value, 'FACT', ac);
+        else if (t.type === TOKEN.IDENT) valExpr = new IdentifierNode(t.value, ac);
+        else valExpr = new LiteralNode(joinTokens(span), 'RAW_EXPR', ac);
+      } else {
+        valExpr = new LiteralNode(joinTokens(span), 'RAW_EXPR',
+          { line: span[0].line, column: span[0].column, depth: span[0].depth });
+      }
+      fields.push({ name, value: valExpr });
+      if (this.match(TOKEN.PUNCT, ',')) this.advance();
+    }
+    this.consume(TOKEN.PUNCT, '}', '"}" to close struct literal');
+    return new StructLiteralNode({ structName: null, fields }, coords);
+  }
+
+  // ── SHAPE/STRUCT name { field1(TYPE) or field1: TYPE, ... } ───
   parseStructDeclaration(coords) {
-    this.consume(TOKEN.KEYWORD, 'SHAPE', '"SHAPE"');
+    const keyword = ['SHAPE', 'STRUCT'].find(kw => this.match(TOKEN.KEYWORD, kw));
+    this.consume(TOKEN.KEYWORD, keyword, '"SHAPE" or "STRUCT"');
     const nameTok = this.current();
-    // Accept IDENT or KEYWORD as struct name (e.g. "Empty" tokenized as KEYWORD)
     if (nameTok.type !== TOKEN.IDENT && nameTok.type !== TOKEN.KEYWORD) {
-      storm('SYNTAX_STORM', `Expected a struct name after SHAPE, found "${nameTok.value}"`,
+      storm('SYNTAX_STORM', `Expected a struct name after ${keyword}, found "${nameTok.value}"`,
         nameTok.line, nameTok.column);
     }
     const name = this.advance().value;
+    this.structNames.add(name);
     this.consume(TOKEN.PUNCT, '{', '"{" to open struct body');
 
     const fields = [];
@@ -1965,18 +2054,30 @@ class Parser {
       const fNameTok = this.current();
       if (fNameTok.type !== TOKEN.IDENT && fNameTok.type !== TOKEN.KEYWORD) break;
       const fName = this.advance().value;
-      this.consume(TOKEN.PUNCT, '(', '"(" after field name');
-      const fTypeTok = this.current();
       let fType;
-      if (fTypeTok.type === TOKEN.KEYWORD && ['NUM','SCL','TX','FACT','LIST','MAP'].includes(fTypeTok.value)) {
-        fType = this.advance().value;
-      } else if (fTypeTok.type === TOKEN.IDENT) {
-        fType = this.advance().value;
+      // STRUCT uses colon syntax (field: TYPE), SHAPE uses parens (field(TYPE))
+      if (this.match(TOKEN.PUNCT, ':')) {
+        this.advance();
+        const fTypeTok = this.current();
+        if (fTypeTok.type === TOKEN.KEYWORD || fTypeTok.type === TOKEN.IDENT) {
+          fType = this.advance().value;
+        } else {
+          storm('SYNTAX_STORM', `Expected a type for field "${fName}", found "${fTypeTok.value}"`,
+            fTypeTok.line, fTypeTok.column);
+        }
       } else {
-        storm('SYNTAX_STORM', `Expected a type for field "${fName}", found "${fTypeTok.value}"`,
-          fTypeTok.line, fTypeTok.column);
+        this.consume(TOKEN.PUNCT, '(', '"(" or ":" after field name');
+        const fTypeTok = this.current();
+        if (fTypeTok.type === TOKEN.KEYWORD && ['NUM','SCL','TX','FACT','LIST','MAP'].includes(fTypeTok.value)) {
+          fType = this.advance().value;
+        } else if (fTypeTok.type === TOKEN.IDENT) {
+          fType = this.advance().value;
+        } else {
+          storm('SYNTAX_STORM', `Expected a type for field "${fName}", found "${fTypeTok.value}"`,
+            fTypeTok.line, fTypeTok.column);
+        }
+        this.consume(TOKEN.PUNCT, ')', '")" after field type');
       }
-      this.consume(TOKEN.PUNCT, ')', '")" after field type');
       fields.push({ name: fName, varType: fType.toUpperCase() });
       if (this.match(TOKEN.PUNCT, ',')) this.advance();
     }
@@ -2055,6 +2156,12 @@ class Parser {
     const coords = { line: this.current().line, column: this.current().column, depth: this.current().depth };
     const elements = [];
     while (!this.isAtEnd() && !this.match(TOKEN.PUNCT, ']')) {
+      // Detect struct instantiation: IdentName{ ... }
+      if (this.peek(0).type === TOKEN.IDENT && this.peek(1).type === TOKEN.PUNCT && this.peek(1).value === '{') {
+        elements.push(this.parseStructInstantiation());
+        if (this.match(TOKEN.PUNCT, ',')) this.advance();
+        continue;
+      }
       const span = [];
       while (!this.isAtEnd()) {
         if (this.match(TOKEN.PUNCT, ',') || this.match(TOKEN.PUNCT, ']')) break;

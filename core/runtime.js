@@ -35,11 +35,11 @@ class Soil {
   update(name,value){
     if(this._vars.has(name)){
       const e=this._vars.get(name);
-      if(e.locked)storm('LOCK_STORM',`"${name}" محمي — لا يمكن تعديله`);
+      if(e.locked)storm('LOCK_STORM',`"${name}" is protected — cannot be modified`);
       e.value=value;e.type=inferType(value);return e;
     }
     if(this._parent)return this._parent.update(name,value);
-    storm('MISSING_STORM',`"${name}" غير موجود`);
+    storm('MISSING_STORM',`"${name}" not found`);
   }
   delete(name){
     if(this._vars.has(name)){this._vars.delete(name);return true;}

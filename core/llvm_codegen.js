@@ -825,7 +825,7 @@ class LLVMGenerator {
     m.emit(`br i1 ${isZero}, label %${errLabel}, label %${okLabel}`);
     // Error setup block — only reached when divisor is zero
     m.emitLabel(errLabel);
-    const errMsg = m.addStringConstant('\u0642\u0633\u0645\u0629 \u0639\u0644\u0649 \u0635\u0641\u0631');
+    const errMsg = m.addStringConstant('division by zero');
     const msgGep = m.freshReg();
     m.emit(`${msgGep} = getelementptr inbounds [${errMsg.len} x i8], [${errMsg.len} x i8]* ${errMsg.name}, i64 0, i64 0`);
     m.emit(`store i8* ${msgGep}, i8** @_weather_msg`);
@@ -1026,7 +1026,7 @@ class LLVMGenerator {
 
     // If there's a struct instantiation expression, store each field
     const ve = node.valueExpr;
-    if (ve && (ve.type === 'StructInstantiation' || (ve.structName && ve.args))) {
+    if (ve && ve.type === 'StructInstantiation') {
       const args = ve.args || [];
       for (let i = 0; i < args.length; i++) {
         const fieldInfo = structInfo.llvmFields[i];
@@ -1036,7 +1036,6 @@ class LLVMGenerator {
         let val;
         const arg = args[i];
         if (arg.type === 'StructInstantiation') {
-          // Nested struct — not supported in LLVM yet
           m.error(`Nested struct not yet supported in LLVM codegen`, arg);
           continue;
         } else if (arg.type === 'Literal' || arg.type === 'Identifier') {
@@ -1049,12 +1048,35 @@ class LLVMGenerator {
         } else {
           val = { reg: '0', type: 'NUM' };
         }
-        // Coerce to the declared field type
         const fieldPlType = structInfo.llvmFields[i] === '%fat_ptr' ? 'TX' :
                             structInfo.llvmFields[i] === 'double' ? 'SCL' :
                             structInfo.llvmFields[i] === 'i1' ? 'FACT' : 'NUM';
         const coerced = this.coerce(val, fieldPlType, node);
         const storeType = structInfo.llvmFields[i];
+        m.emit(`store ${storeType} ${coerced}, ${storeType}* ${fieldPtr}`);
+      }
+    } else if (ve && ve.type === 'StructLiteral') {
+      for (const fv of ve.fields) {
+        const fieldIdx = structInfo.fieldIndex[fv.name];
+        if (fieldIdx === undefined) {
+          m.error(`Struct "${node.varType}" has no field "${fv.name}"`, node);
+          continue;
+        }
+        const fieldPtr = m.freshReg();
+        m.emit(`${fieldPtr} = getelementptr inbounds ${structInfo.structType}, ${structInfo.structType}* ${structPtr}, i32 0, i32 ${fieldIdx}`);
+        let val;
+        if (fv.value.type === 'Literal' || fv.value.type === 'Identifier') {
+          val = this.compileAstExpr(fv.value);
+        } else if (fv.value.type === 'LenCall' || fv.value.type === 'CapCall' || fv.value.type === 'IndexAccess') {
+          val = this.compileAstExpr(fv.value);
+        } else {
+          val = { reg: '0', type: 'NUM' };
+        }
+        const fieldPlType = structInfo.llvmFields[fieldIdx] === '%fat_ptr' ? 'TX' :
+                            structInfo.llvmFields[fieldIdx] === 'double' ? 'SCL' :
+                            structInfo.llvmFields[fieldIdx] === 'i1' ? 'FACT' : 'NUM';
+        const coerced = this.coerce(val, fieldPlType, node);
+        const storeType = structInfo.llvmFields[fieldIdx];
         m.emit(`store ${storeType} ${coerced}, ${storeType}* ${fieldPtr}`);
       }
     }
@@ -2192,6 +2214,7 @@ class LLVMGenerator {
       case 'IfStatement':      this.genIf(node);    return false;
       case 'CycleStatement':   this.genCycle(node); return false;
       case 'SeasonStatement':  this.genSeason(node);return false;
+      case 'ForInStatement':   this.genForIn(node); return false;
       case 'LockStatement':    return false;
 
       case 'LinkStatement': {
@@ -2688,6 +2711,221 @@ class LLVMGenerator {
     }
 
     m.emitLabel(endLabel);
+  }
+
+  // ── FOR ... IN (unified iteration) ─────────────────────────────────
+  genForIn(node) {
+    const m = this.mod;
+    const srcInfo = m.scope.get(node.sourceExpr);
+    if (!srcInfo) { m.error(`"${node.sourceExpr}" is not defined`, node); return; }
+    const plType = srcInfo.plType;
+
+    let elemPlType;
+    if (isArrayTypeStr(plType)) {
+      elemPlType = arrayInnerType(plType);
+    } else if (isMapTypeStr(plType)) {
+      elemPlType = mapInnerTypes(plType).valueType;
+    } else {
+      m.error(`FOR IN: "${node.sourceExpr}" must be [T] or MAP[K,V]`, node);
+      return;
+    }
+    const elemLt = llvmType(elemPlType);
+
+    const loopVarDepth = node.depth !== undefined ? node.depth : m.currentDepth;
+    const loopVarPtr = m.arenaAllocTyped(elemPlType, loopVarDepth);
+    m.scope.set(node.iterVar, { ptr: loopVarPtr, plType: elemPlType, depth: loopVarDepth });
+
+    const fpReg = m.freshReg();
+    m.emit(`${fpReg} = load %fat_ptr, %fat_ptr* ${srcInfo.ptr}`);
+
+    // Iterator state allocas: type_id, state_ptr, index, limit, value
+    const itTypeA = m.freshReg(); m.emit(`${itTypeA} = alloca i64`);
+    const itPtrA  = m.freshReg(); m.emit(`${itPtrA} = alloca i8*`);
+    const itIdxA  = m.freshReg(); m.emit(`${itIdxA} = alloca i64`);
+    const itLimA  = m.freshReg(); m.emit(`${itLimA} = alloca i64`);
+    const itValA  = m.freshReg(); m.emit(`${itValA} = alloca ${elemLt}`);
+
+    this.genIteratorInit(node, plType, fpReg, { typeA: itTypeA, ptrA: itPtrA, idxA: itIdxA, limA: itLimA });
+
+    const condL = m.freshLabel('forin.cond');
+    const bodyL = m.freshLabel('forin.body');
+    const incL  = m.freshLabel('forin.inc');
+    const endL  = m.freshLabel('forin.end');
+
+    m.emit(`br label %${condL}`);
+    m.emitLabel(condL);
+
+    const doneReg = this.genIteratorNext(node, plType, { typeA: itTypeA, ptrA: itPtrA, idxA: itIdxA, limA: itLimA, valA: itValA, elemPlType });
+    m.emit(`br i1 ${doneReg}, label %${endL}, label %${bodyL}`);
+
+    // ── Body ──
+    m.emitLabel(bodyL);
+    const loadedVal = m.freshReg();
+    m.emit(`${loadedVal} = load ${elemLt}, ${elemLt}* ${itValA}`);
+    m.emit(`store ${elemLt} ${loadedVal}, ${elemLt}* ${loopVarPtr}`);
+
+    // Iteration Breath: save arena offset before body
+    m.usesArena = true;
+    const saveGep = m.freshReg();
+    m.emit(`${saveGep} = getelementptr inbounds [${m.arenaDepthCap} x i64], [${m.arenaDepthCap} x i64]* @arena_offsets, i64 0, i64 ${loopVarDepth}`);
+    const savedOff = m.freshReg();
+    m.emit(`${savedOff} = load i64, i64* ${saveGep}`);
+
+    let bodyTerminated = false;
+    for (const stmt of (node.bodyStatements || [])) {
+      bodyTerminated = this.genStatement(stmt);
+    }
+    if (!bodyTerminated) {
+      const endDepth = m.currentDepth;
+      for (let d = endDepth; d > loopVarDepth; d--) m.arenaResetDepth(d);
+      m.emit(`store i64 ${savedOff}, i64* ${saveGep}`);
+      m.currentDepth = loopVarDepth;
+      m.emit(`br label %${incL}`);
+    }
+
+    m.emitLabel(incL);
+    m.emit(`br label %${condL}`);
+    m.emitLabel(endL);
+  }
+
+  genIteratorInit(node, plType, fpReg, iter) {
+    const m = this.mod;
+    const { typeA, ptrA, idxA, limA } = iter;
+    if (isArrayTypeStr(plType)) {
+      m.emit(`store i64 0, i64* ${typeA}`);
+      const dataPtr = m.extractPtr(fpReg);
+      m.emit(`store i8* ${dataPtr}, i8** ${ptrA}`);
+      m.emit(`store i64 0, i64* ${idxA}`);
+      const len = m.extractLen(fpReg);
+      m.emit(`store i64 ${len}, i64* ${limA}`);
+    } else {
+      m.emit(`store i64 1, i64* ${typeA}`);
+      const bktPtr = m.extractPtr(fpReg);
+      m.emit(`store i8* ${bktPtr}, i8** ${ptrA}`);
+      m.emit(`store i64 0, i64* ${idxA}`);
+      const cap = m.extractCap(fpReg);
+      m.emit(`store i64 ${cap}, i64* ${limA}`);
+    }
+  }
+
+  genIteratorNext(node, plType, iter) {
+    const m = this.mod;
+    const { typeA, ptrA, idxA, limA, valA, elemPlType } = iter;
+    const elemLt = llvmType(elemPlType);
+
+    const doneA = m.freshReg();
+    m.emit(`${doneA} = alloca i1`);
+    m.emit(`store i1 true, i1* ${doneA}`);
+
+    const itT = m.freshReg();
+    m.emit(`${itT} = load i64, i64* ${typeA}`);
+    const isArr = m.freshReg();
+    m.emit(`${isArr} = icmp eq i64 ${itT}, 0`);
+
+    const arrL  = m.freshLabel('forin.next.arr');
+    const mapL  = m.freshLabel('forin.next.map');
+    const contL = m.freshLabel('forin.next.cont');
+    m.emit(`br i1 ${isArr}, label %${arrL}, label %${mapL}`);
+
+    // ── Array path ──
+    m.emitLabel(arrL);
+    const ai = m.freshReg();
+    m.emit(`${ai} = load i64, i64* ${idxA}`);
+    const al = m.freshReg();
+    m.emit(`${al} = load i64, i64* ${limA}`);
+    const aDone = m.freshReg();
+    m.emit(`${aDone} = icmp slt i64 ${ai}, ${al}`);
+    const aLoadL = m.freshLabel('forin.next.arrload');
+    const aSkipL = m.freshLabel('forin.next.arrskip');
+    m.emit(`br i1 ${aDone}, label %${aLoadL}, label %${aSkipL}`);
+
+    m.emitLabel(aLoadL);
+    const ap = m.freshReg();
+    m.emit(`${ap} = load i8*, i8** ${ptrA}`);
+    const aBuf = m.freshReg();
+    m.emit(`${aBuf} = bitcast i8* ${ap} to ${elemLt}*`);
+    const aEp = m.freshReg();
+    m.emit(`${aEp} = getelementptr inbounds ${elemLt}, ${elemLt}* ${aBuf}, i64 ${ai}`);
+    const aEv = m.freshReg();
+    m.emit(`${aEv} = load ${elemLt}, ${elemLt}* ${aEp}`);
+    m.emit(`store ${elemLt} ${aEv}, ${elemLt}* ${valA}`);
+    // Increment index for next call
+    const aNi = m.freshReg();
+    m.emit(`${aNi} = add i64 ${ai}, 1`);
+    m.emit(`store i64 ${aNi}, i64* ${idxA}`);
+    m.emit(`store i1 false, i1* ${doneA}`);
+    m.emit(`br label %${contL}`);
+
+    m.emitLabel(aSkipL);
+    m.emit(`br label %${contL}`);
+
+    // ── MAP path ──
+    m.emitLabel(mapL);
+    const mt = mapInnerTypes(plType);
+    const bktType = mapBucketLlvmType(mt.keyType, mt.valueType);
+    const bktSz = mapBucketSize(mt.keyType, mt.valueType);
+    const vLt = llvmType(mt.valueType);
+
+    const scanL  = m.freshLabel('forin.next.map.scan');
+    const checkL = m.freshLabel('forin.next.map.check');
+    const foundL = m.freshLabel('forin.next.map.found');
+    const advL   = m.freshLabel('forin.next.map.advance');
+    const exhL   = m.freshLabel('forin.next.map.exhausted');
+    m.emit(`br label %${scanL}`);
+
+    m.emitLabel(scanL);
+    const mi = m.freshReg();
+    m.emit(`${mi} = load i64, i64* ${idxA}`);
+    const ml = m.freshReg();
+    m.emit(`${ml} = load i64, i64* ${limA}`);
+    const mScanDone = m.freshReg();
+    m.emit(`${mScanDone} = icmp slt i64 ${mi}, ${ml}`);
+    m.emit(`br i1 ${mScanDone}, label %${checkL}, label %${exhL}`);
+
+    m.emitLabel(checkL);
+    const mp = m.freshReg();
+    m.emit(`${mp} = load i8*, i8** ${ptrA}`);
+    const mOff = m.freshReg();
+    m.emit(`${mOff} = mul i64 ${mi}, ${bktSz}`);
+    const mRaw = m.freshReg();
+    m.emit(`${mRaw} = getelementptr inbounds i8, i8* ${mp}, i64 ${mOff}`);
+    const mBkt = m.freshReg();
+    m.emit(`${mBkt} = bitcast i8* ${mRaw} to ${bktType}*`);
+    const mOccP = m.freshReg();
+    m.emit(`${mOccP} = getelementptr inbounds ${bktType}, ${bktType}* ${mBkt}, i64 0, i32 0`);
+    const mOcc = m.freshReg();
+    m.emit(`${mOcc} = load i1, i1* ${mOccP}`);
+    m.emit(`br i1 ${mOcc}, label %${foundL}, label %${advL}`);
+
+    m.emitLabel(foundL);
+    const mValP = m.freshReg();
+    m.emit(`${mValP} = getelementptr inbounds ${bktType}, ${bktType}* ${mBkt}, i64 0, i32 2`);
+    const mVal = m.freshReg();
+    m.emit(`${mVal} = load ${vLt}, ${vLt}* ${mValP}`);
+    m.emit(`store ${vLt} ${mVal}, ${vLt}* ${valA}`);
+    // Advance index past this bucket
+    const mNi = m.freshReg();
+    m.emit(`${mNi} = add i64 ${mi}, 1`);
+    m.emit(`store i64 ${mNi}, i64* ${idxA}`);
+    m.emit(`store i1 false, i1* ${doneA}`);
+    m.emit(`br label %${contL}`);
+
+    // Unoccupied: advance index, continue scan
+    m.emitLabel(advL);
+    const mNext = m.freshReg();
+    m.emit(`${mNext} = add i64 ${mi}, 1`);
+    m.emit(`store i64 ${mNext}, i64* ${idxA}`);
+    m.emit(`br label %${scanL}`);
+
+    // Exhausted: all buckets scanned
+    m.emitLabel(exhL);
+    m.emit(`br label %${contL}`);
+
+    // ── Continue ──
+    m.emitLabel(contL);
+    const done = m.freshReg();
+    m.emit(`${done} = load i1, i1* ${doneA}`);
+    return done;
   }
 
   // ── WEATHER / SHELTER / CALM (exception handling) ────────────────────────────

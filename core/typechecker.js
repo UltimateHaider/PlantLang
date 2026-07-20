@@ -376,6 +376,7 @@ class TypeChecker {
       case 'ShowStatement':      this._checkShow(node, scope);      break;
       case 'ReapStatement':      this._checkReap(node, scope);      break;
       case 'IfStatement':        this._checkIf(node, scope);        break;
+      case 'ForInStatement':     this._checkForIn(node, scope);     break;
       case 'CycleStatement':     this._checkCycle(node, scope);     break;
       case 'SeasonStatement':    this._checkSeason(node, scope);    break;
       case 'MatchStatement':     this._checkMatch(node, scope);     break;
@@ -475,7 +476,7 @@ class TypeChecker {
       // Register as a struct instance variable
       scope.setVar(node.identifier, declaredType, { line: node.line });
       // Validate struct instantiation
-      if (node.valueExpr && (node.valueExpr.type === 'StructInstantiation' || node.valueExpr.structName)) {
+      if (node.valueExpr && node.valueExpr.type === 'StructInstantiation') {
         const inst = node.valueExpr;
         if (inst.structName !== declaredType) {
           this.error('TYPE_MISMATCH',
@@ -495,6 +496,31 @@ class TypeChecker {
           if (argType !== T.UNKNOWN && fieldDef.varType !== argType && argType !== T.ANY) {
             this.error('TYPE_MISMATCH',
               `CREATE "${node.identifier}": field "${fieldDef.name}" expects ${fieldDef.varType}, got ${argType}`,
+              node.line, node.column);
+          }
+        }
+      } else if (node.valueExpr && node.valueExpr.type === 'StructLiteral') {
+        const inst = node.valueExpr;
+        for (const fv of inst.fields) {
+          const fieldDef = structDef.find(f => f.name === fv.name);
+          if (!fieldDef) {
+            this.error('TYPE_MISMATCH',
+              `CREATE "${node.identifier}": struct ${declaredType} has no field "${fv.name}"`,
+              node.line, node.column);
+            continue;
+          }
+          const argType = this._inferExprNode(fv.value, scope);
+          if (argType !== T.UNKNOWN && fieldDef.varType !== argType && argType !== T.ANY) {
+            this.error('TYPE_MISMATCH',
+              `CREATE "${node.identifier}": field "${fieldDef.name}" expects ${fieldDef.varType}, got ${argType}`,
+              node.line, node.column);
+          }
+        }
+        // Check for missing required fields
+        for (const fieldDef of structDef) {
+          if (!inst.fields.find(f => f.name === fieldDef.name)) {
+            this.error('TYPE_MISMATCH',
+              `CREATE "${node.identifier}": missing required field "${fieldDef.name}" of type ${fieldDef.varType}`,
               node.line, node.column);
           }
         }
@@ -726,6 +752,39 @@ class TypeChecker {
   }
 
   _checkSeason(node, scope) {
+    this._checkBlock(node.bodyStatements, scope.child());
+  }
+
+  _checkForIn(node, scope) {
+    // FOR item IN collection: collection must be [T] or MAP[K,V]
+    const srcType = scope.getVar(node.sourceExpr);
+    if (srcType) {
+      const st = srcType.type;
+      if (st === T.UNKNOWN) {
+        // Unknown type — accept but warn
+      } else if (isArrayType(st)) {
+        // Array iteration: item type = element type
+        const innerT = arrayInnerType(st);
+        scope.child().setVar(node.iterVar, innerT);
+        this._checkBlock(node.bodyStatements, scope.child());
+        return;
+      } else if (isMapType(st)) {
+        // Map iteration: item type = value type
+        const mt = mapInnerTypes(st);
+        if (mt) {
+          scope.child().setVar(node.iterVar, mt.valueType);
+          this._checkBlock(node.bodyStatements, scope.child());
+          return;
+        }
+      } else {
+        this.error('TYPE_MISMATCH',
+          `FOR IN: "${node.sourceExpr}" is ${st} — requires [T] or MAP[K,V]`,
+          node.line, node.column);
+        this._checkBlock(node.bodyStatements, scope.child());
+        return;
+      }
+    }
+    // If source type is unknown, just check the body
     this._checkBlock(node.bodyStatements, scope.child());
   }
 
@@ -1200,6 +1259,9 @@ class TypeChecker {
     if (node.type === 'StructInstantiation') {
       const st = scope.getStruct(node.structName);
       return st ? node.structName : T.UNKNOWN;
+    }
+    if (node.type === 'StructLiteral') {
+      return node.structName || T.UNKNOWN;
     }
     if (node.type === 'MethodCall') {
       // Validate via _checkMethodCall (emits diagnostics)
