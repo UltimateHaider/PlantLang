@@ -345,13 +345,26 @@ class TypeChecker {
   _registerSpecies(node, scope) {
     const fields  = {};
     const methods = {};
-    for (const m of (node.members || [])) {
+    // Support both old (node.members) and new (node.fields + node.actions) AST formats
+    const members = node.members || [...(node.fields || []).map(f => ({ type: 'VarDeclaration', identifier: f.name, varType: f.varType })), ...(node.actions || [])];
+    for (const m of members) {
       if (!m) continue;
       if (m.type === 'VarDeclaration') {
         fields[m.identifier] = m.varType || T.UNKNOWN;
       } else if (m.type === 'ActionDeclaration') {
-        this._registerAction(m, scope); // also into parent scope
+        this._registerAction(m, scope);
         methods[m.name] = scope.getFn(m.name);
+      }
+    }
+    // Handle inheritance: merge parent fields/methods
+    if (node.parentName) {
+      const parentSpec = scope.getSpecies(node.parentName);
+      if (parentSpec) {
+        // Parent fields come first (overwritten by own fields)
+        const mergedFields = { ...parentSpec.fields, ...fields };
+        const mergedMethods = { ...parentSpec.methods, ...methods };
+        scope.setSpecies(node.name, { fields: mergedFields, methods: mergedMethods });
+        return;
       }
     }
     scope.setSpecies(node.name, { fields, methods });
@@ -394,6 +407,7 @@ class TypeChecker {
       case 'LockStatement':      this._checkLock(node, scope);      break;
       case 'EvaporateStatement': this._checkEvaporate(node, scope); break;
       case 'StopIfStatement':    this._checkStopIf(node, scope);    break;
+      case 'MethodCallStatement': this._checkMethodCallStatement(node, scope); break;
       // Pass-through (no type errors possible)
       case 'ImportStatement':
       case 'MissionStatement':
@@ -865,6 +879,8 @@ class TypeChecker {
     // Inject receiver (self) into scope for methods
     if (node.receiver) {
       fnScope.setVar(node.receiver.name, node.receiver.type, { line: node.line });
+      // Also register __self for species-style field access (SET __self.x TO ...)
+      fnScope.setVar('__self', node.receiver.type, { line: node.line });
     }
     for (const p of (node.params || [])) {
       fnScope.setVar(p.name, p.type || T.UNKNOWN);
@@ -882,7 +898,8 @@ class TypeChecker {
         classScope.setVar(k, t);
       }
     }
-    for (const m of (node.members || [])) {
+    const members = node.members || node.actions || [];
+    for (const m of members) {
       if (!m) continue;
       if (m.type === 'ActionDeclaration') this._checkActionBody(m, classScope);
     }
@@ -900,6 +917,24 @@ class TypeChecker {
     }
     if (instanceName) {
       scope.setVar(instanceName, T.INSTANCE, { line: node.line });
+    }
+  }
+
+  _checkMethodCallStatement(node, scope) {
+    // obj:method(args) — validate method exists on the instance's species
+    const targetName = node.target && node.target.name;
+    if (!targetName) return;
+    const targetVar = scope.getVar(targetName);
+    if (!targetVar) {
+      this.warn('UNDEFINED_VAR', `"${targetName}" is not defined`, node.line, node.column);
+      return;
+    }
+    // Look up the instance's species
+    const spec = targetVar.speciesName ? scope.getSpecies(targetVar.speciesName) : null;
+    if (spec && !spec.methods[node.methodName]) {
+      this.error('UNDEFINED_ACTION',
+        `"${node.methodName}" is not a method on "${targetName}"`,
+        node.line, node.column);
     }
   }
 

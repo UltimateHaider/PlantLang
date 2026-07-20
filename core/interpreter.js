@@ -240,6 +240,21 @@ class Interpreter {
       if(node.structName)instance.__structType=node.structName;
       return instance;
     }
+    if(node.type==='BloomExpression'){
+      const spec=this.species.get(node.speciesName);
+      if(!spec)storm('MISSING_STORM',`SPECIES "${node.speciesName}" not defined`,node.line,node.column);
+      const inst={__species:node.speciesName};
+      for(const[fname,fdef]of Object.entries(spec.fields)){
+        inst[fname]=fdef.default!==null?fdef.default:(fdef.type==='NUM'?0:fdef.type==='FACT'?false:fdef.type==='LIST'?[]:fdef.type==='MAP'?{}:'');
+      }
+      inst.__actions=spec.actions;
+      return inst;
+    }
+    if(node.type==='SelfExpression'){
+      const selfEntry=soil.get('__self');
+      if(!selfEntry)storm('SEED_STORM','SELF not available',node.line,node.column);
+      return selfEntry.value;
+    }
     // Fallback: a raw string slipped through (shouldn't normally happen
     // once parseExpressionSpan always wraps in a Literal/Identifier).
     if(typeof node==='string')return evalExpr(node,soil);
@@ -309,6 +324,7 @@ class Interpreter {
       case 'EvaporateStatement':return this.evaluateEvaporateStatement(node,soil);
       case 'LockStatement':     return this.evaluateLockStatement(node,soil);
       case 'BraidStatement':    return this.evaluateBraidStatement(node,soil);
+      case 'MethodCallStatement': return this._evalMethodCallStatement(node,soil);
       case 'HarvestStatement':  return this.evaluateHarvestStatement(node,soil);
       case 'AnalyzeStatement':  return this.evaluateAnalyzeStatement(node,soil);
       case 'WaitStatement':     return this.evaluateWaitStatement(node,soil);
@@ -353,7 +369,7 @@ class Interpreter {
     }else{
       value=node.varType==='LIST'?[]:isMapTypeStr(node.varType)?new Map():node.varType==='MAP'?{}:node.varType==='FACT'?false:node.varType==='NUM'?0:'';
     }
-    soil.set(node.identifier,value,node.varType,{pulse:!!node.isPulse});
+    soil.set(node.identifier,value,node.varType||(value&&value.__species?'INSTANCE':null),{pulse:!!node.isPulse});
     const display = Array.isArray(value) ? '[' + value.join(', ') + ']' :
       value instanceof Map ? '{ ' + [...value.entries()].map(([k,v]) => (typeof k === 'string' ? '"' + k + '"' : String(k)) + ': ' + (typeof v === 'string' ? '"' + v + '"' : String(v))).join(', ') + ' }' :
       String(value);
@@ -959,6 +975,27 @@ class Interpreter {
     }
 
     storm('SEED_STORM',`Unknown REAP source kind: ${kind}`,node.line,node.column);
+  }
+
+  _evalMethodCallStatement(node,soil){
+    // obj:method(args) — standalone dispatch
+    const targetName=node.target&&node.target.name;
+    if(!targetName)storm('SEED_STORM','Invalid method call target',node.line,node.column);
+    const instEntry=soil.get(targetName);
+    if(!instEntry)storm('MISSING_STORM',`"${targetName}" not found`,node.line,node.column);
+    const inst=instEntry.value;
+    const spName=inst&&inst.__species;
+    const sp=spName&&this.species.get(spName);
+    if(!sp)storm('MISSING_STORM','SPECIES not found',node.line,node.column);
+    const methodDef=sp.actions[node.methodName];
+    if(!methodDef)storm('MISSING_STORM',`action "${node.methodName}" not found on ${targetName}`,node.line,node.column);
+    const splitArgs=(args)=>args.map(a=>evalExpr(a instanceof Object&&a.type?this.evaluateExpressionNode(a,soil):a,soil));
+    const argVals=(node.args||[]).map(a=>{
+      if(a&&a.type)return this.evaluateExpressionNode(a,soil);
+      return evalExpr(a,soil);
+    });
+    const result=this._callAction(methodDef,argVals,inst,soil);
+    return{next:1};
   }
 
   // ── SET / INCREASE / DECREASE evaluators ──────────────────────

@@ -35,6 +35,7 @@ PlantLang utilizes a strict type system for safety and performance:
 * **`SHAPE`**: User-defined struct types with named, typed fields — `SHAPE Point { x(NUM), y(NUM) }.`
 * **`STRUCT`**: Alternative struct syntax with `field: TYPE` — `STRUCT Person { name: TX, age: NUM }.` + anonymous literals `{ name: "Alice", age: 30 }`
 * **`CHOICE`**: Tagged unions with optional payload per variant — `CHOICE Option { Some(NUM), None }.`
+* **`SPECIES`**: Object-oriented classes with `{ }` body syntax, `FROM` inheritance, BLOOM instantiation — `SPECIES Greeter { msg: TX, ACTION greet() { GIVE SELF:msg. } }`
 * **`LIST`**: Dynamic arrays with push/pop growth — `CREATE xs(LIST) TO 1, 2, 3.`
 * **`MAP`**: Typed key-value hash table — `CREATE m(MAP[NUM,TX]).` — with native LLVM compilation for `LINK`, `has()`, `put()`
 
@@ -99,6 +100,13 @@ The ecosystem is built on a modular, industrial-grade pipeline:
     * `CHOICE` declarations with typed payloads and keyword-compatible variant names.
     * `MATCH` with exhaustive clause validation and payload binding.
     * Variant construction via dot-notation: `Option.Some(10)`.
+10. **Species / Bloom (Object-Oriented):**
+    * `SPECIES` declarations with `{ }` body syntax, typed fields, and ACTION methods.
+    * `FROM` / `PARENT` inheritance with deep-clone field merging.
+    * `BLOOM` expression in `CREATE` — instance allocation with field defaults.
+    * Colon-dispatch method calls via `REAP result FROM obj:method.`
+    * `SELF:field` access (read/write) in species action bodies.
+    * LLVM codegen — species registered as LLVM struct types with static method dispatch.
 
 ---
 
@@ -139,6 +147,10 @@ PlantLang employs a state-of-the-art compilation chain:
 | **FOR...IN Loop** | `FOR x IN items, SHOW x. /FOR.` | Iterate over LIST, MAP keys, or TX string. |
 | **Method** | `ACTION (self(Point)) move(x(NUM), y(NUM)),` ... `/ACTION.` | Typed method with SELF receiver. |
 | **Method Call** | `REAP _ FROM p:move, 5, 10.` | Colon-dispatch method invocation. |
+| **SPECIES Decl** | `SPECIES Greeter { msg: TX, ACTION greet() { GIVE SELF:msg. } }` | Class/object declaration with `{ }` body syntax. |
+| **SPECIES Inherit** | `SPECIES Dog FROM Animal { ... }` | Inheritance via `FROM`/`PARENT` keyword. |
+| **BLOOM Instantiation** | `CREATE g TO BLOOM Greeter.` | Create species instance in CREATE expression. |
+| **SELF-field Access** | `SET SELF:count TO SELF:count + 1.` | Read/write instance fields in action body. |
 | **Tagged Union** | `CHOICE Option { Some(NUM), None }.` | Sum type with payload variants. |
 | **Variant Construction** | `Option.Some(10)` / `Option.None` | Create tagged union values. |
 | **Pattern Match** | `MATCH opt { Some(v) -> { SHOW v } None -> { SHOW 0 } }.` | Exhaustive case analysis with binding. |
@@ -152,9 +164,10 @@ PlantLang employs a state-of-the-art compilation chain:
 
 ## 6. QA & Quality Assurance
 The **v0.27.0** release is verified by an automated regression suite:
-* **~669 Total Assertions** across fifteen test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7 — Module System & FFI, Phase 8 — Standard Library, Phase 9 — Structs, Phase 10 — Arrays, Phase 11 — Methods, Phase 12 — Array Growth, Phase 13 — CHOICE & Pattern Matching, Phase 14 — MAP Types, Phase 15 — FOR...IN, Phase 16 — STRUCT).
+* **~709 Total Assertions** across sixteen test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7 — Module System & FFI, Phase 8 — Standard Library, Phase 9 — Structs, Phase 10 — Arrays, Phase 11 — Methods, Phase 12 — Array Growth, Phase 13 — CHOICE & Pattern Matching, Phase 14 — MAP Types, Phase 15 — FOR...IN, Phase 16 — STRUCT, Phase 17 — SPECIES/BLOOM).
 * **LLVM Backend**: 50 smoke tests covering CREATE/SHOW, arithmetic, strings, comparisons, IF/CYCLE/SEASON, ACTION/REAP/GIVE (recursion, SCL params, TX returns), WEATHER/SHELTER exception handling, TX fat-pointer operations, and MAP hash tables (LINK, has(), growth, overwrite).
 * **MAP Types**: 17 tests covering empty map create, map literals, LINK/put semantics, has/get, overwrite, growth (10 entries), SHOW display, type-checker validation.
+* **SPECIES/BLOOM**: 10 tests covering `{ }` body syntax, BLOOM instantiation, method dispatch, inheritance, SELF mutation, type checking.
 * **Module System**: 30 test groups covering IMPORT parsing, cycle detection, path resolution, error messages, and FFI syntax.
 * **Standard Library**: 8 integration tests covering std/ path resolution, I/O and string module parsing, prelude injection, and end-to-end FFI calls.
 * **Structs & Methods**: 133 tests covering SHAPE and STRUCT declaration, instantiation, field access/mutation, method dispatch, SELF receiver, anonymous struct literals, type checking, LLVM codegen parity.
@@ -187,9 +200,10 @@ The **v0.27.0** release is verified by an automated regression suite:
 - **MAP Hash Tables** (typed key-value store with native LLVM compilation, open-addressing, linear probing, djb2 hash, automatic growth)
 - **FOR...IN loops** (iterate over LIST values, MAP keys, or TX strings)
 - **English-Language Cleanup** (all Arabic strings translated to English)
+- **SPECIES / BLOOM OOP** (`{ }` body syntax, `FROM` inheritance, BLOOM instantiation, colon-dispatch method calls, SELF:field access)
 
 ### 🔜 In Progress / Planned (v0.28.0)
-- `SPECIES` / `BLOOM` object-oriented constructs in LLVM backend
+- `SPECIES` advanced LLVM codegen (vtable dispatch, dynamic dispatch)
 - `CHOICE` / `MATCH` codegen in LLVM backend
 - `LIST` operations (`SORT`, `SHAKE`, `COUNT`, ...) in LLVM backend
 - `MAP.get()` compiled via `Option<V>` MATCH codegen
@@ -198,4 +212,4 @@ The **v0.27.0** release is verified by an automated regression suite:
 
 ---
 
-*PlantLang v0.27.0 — MAP hash tables. FOR...IN loops. STRUCT types. 669 tests all green.*
+*PlantLang v0.27.0 — SPECIES OOP. MAP hash tables. FOR...IN loops. STRUCT types. 709 tests all green.*

@@ -350,6 +350,21 @@ Features:
 
 ### SPECIES / BLOOM (classes & instances)
 
+Two syntax styles — new `{ }` body style and legacy `,`/`/SPECIES.` style:
+
+**New `{ }` body syntax:**
+```
+1\ SPECIES Counter {
+2\   count: NUM
+3\   step: NUM
+4\   ACTION tick(),
+5\     INCREASE SELF:count BY SELF:step.
+6\     GIVE SELF:count.
+7\   /ACTION.
+8\ }
+```
+
+**Legacy `,`/`/SPECIES.` syntax:**
 ```
 1\ SPECIES Counter,
 2\   VAR count(NUM) TO 0.
@@ -359,15 +374,19 @@ Features:
 3\     GIVE SELF:count.
 2\   /ACTION.
 1\ /SPECIES.
+```
 
-1\ BLOOM Counter AS c.
+**Instantiation & method call:**
+```
+1\ CREATE c TO BLOOM Counter.
 1\ SET c:step TO 5.
 1\ REAP v FROM c:tick.
 1\ SHOW v.              # → 5
 ```
 
-### Inheritance (PARENT)
+### Inheritance (PARENT / FROM)
 
+Legacy `PARENT` syntax:
 ```
 1\ SPECIES Animal,
 2\   VAR name(TX) TO "?".
@@ -381,7 +400,26 @@ Features:
 3\     GIVE SELF:name + " fetches!".
 2\   /ACTION.
 1\ /SPECIES.
+```
 
+New `FROM` syntax with `{ }` body:
+```
+1\ SPECIES Animal {
+2\   name: TX
+3\   ACTION speak(),
+4\     GIVE SELF:name + " speaks.".
+5\   /ACTION.
+6\ }
+
+1\ SPECIES Dog FROM Animal {
+2\   ACTION fetch(),
+3\     GIVE SELF:name + " fetches!".
+4\   /ACTION.
+5\ }
+```
+
+Usage:
+```
 1\ BLOOM Dog AS d.
 1\ SET d:name TO "Rex".
 1\ REAP s FROM d:speak.
@@ -684,7 +722,7 @@ Requires LLVM's `llc` (and ideally `opt`) on `PATH` — e.g. `apt install llvm` 
 | `MAP` (hash table) | ✅ `LINK`, `has()`, `put()` — open-addressing, linear probing, djb2 hash, auto-growth |
 | `FOR...IN` | ✅ iterate over LIST, MAP, TX |
 | `LIST` (dynamic array) | ❌ use `chloroplast run` |
-| `SPECIES` / `BLOOM` | ❌ not yet |
+| `SPECIES` / `BLOOM` | ✅ interpreter: `{ }` body syntax, FROM inheritance, BLOOM instantiation, method dispatch, SELF:field access |
 | `CHOICE` / `MATCH` | ❌ not yet (interpreter-only) |
 | `HARVEST` / `LISTEN BRANCH` | ❌ not yet |
 | `VERIFY` / `SUITE` | ❌ not yet |
@@ -736,25 +774,27 @@ Source (.plnt)
    ↓  core/parser.js         — recursive-descent, 40+ typed node types, IMPORT resolution
    ↓  core/ast.js            — typed AST node classes (all carry depth)
    ↓
-   ├── core/interpreter.js   — evaluateNode() dispatcher (dev/`chloroplast run`)
-   │   └── core/evaluator.js — expression evaluator
-   │   └── core/runtime.js   — Soil scope chain, PlantStorm
-   │   └── core/innate.js    — built-in libs (math/strings/lists)
-   │   └── FFI stubs         — pre-registered runtime_bridge wrappers
-   │
-   ├── std/                   — Standard Library (.plnt modules)
-   │   ├── io.plnt           — print, println (FFI-bridged)
-   │   ├── string.plnt       — len, upper, lower, trim, contains, split, replace, concat
-   │   └── prelude.plnt      — auto-injected core definitions
-   │
-   └── core/llvm_codegen.js  — LLVM IR generator (production/`chloroplast compile`)
-       └── Rooted Depth System: arena-based deterministic memory
-           ├── Arena allocation (bump-alloc from per-depth 64KB slabs)
-           ├── Depth tracking with automatic arena reset
-           ├── Contract Law validation (CREATE destination ≤ current depth)
-           ├── Unwinding Protocol (Natural/Forced Exit, Loop Reset, Error Unwind)
-           ├── MAP hash tables: open-addressing, linear probing, djb2 hash, auto-growth
-           └── FFI declare IR — external function declarations for runtime_bridge
+    ├── core/interpretm.js   — evaluateNode() dispatcher (dev/`chloroplast run`)
+    │   └── core/evaluator.js — expression evaluator
+    │   └── core/runtime.js   — Soil scope chain, PlantStorm
+    │   └── core/innate.js    — built-in libs (math/strings/lists)
+    │   └── FFI stubs         — pre-registered runtime_bridge wrappers
+    │
+    ├── std/                   — Standard Library (.plnt modules)
+    │   ├── io.plnt           — print, println (FFI-bridged)
+    │   ├── string.plnt       — len, upper, lower, trim, contains, split, replace, concat
+    │   └── prelude.plnt      — auto-injected core definitions
+    │
+    ├── core/llvm_codegen.js  — LLVM IR generator (production/`chloroplast compile`)
+    │   └── Rooted Depth System: arena-based deterministic memory
+    │       ├── Arena allocation (bump-alloc from per-depth 64KB slabs)
+    │       ├── Depth tracking with automatic arena reset
+    │       ├── Contract Law validation (CREATE destination ≤ current depth)
+    │       ├── Unwinding Protocol (Natural/Forced Exit, Loop Reset, Error Unwind)
+    │       ├── MAP hash tables: open-addressing, linear probing, djb2 hash, auto-growth
+    │       ├── SPECIES struct types: %species.Name with parent-field prefixing
+    │       ├── SPECIES method dispatch: static call with bitcast for inheritance
+    │       └── FFI declare IR — external function declarations for runtime_bridge
 ```
 
 ### Memory Architecture

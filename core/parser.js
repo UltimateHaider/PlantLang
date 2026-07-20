@@ -235,6 +235,14 @@ class Parser {
       return this.parseResponseStatementAst(coords);
     }
 
+    // Method call statement: obj:method(args).
+    if (this.current().type === TOKEN.IDENT &&
+        this.peek(1) && this.peek(1).type === TOKEN.PUNCT && this.peek(1).value === ':' &&
+        this.peek(2) && (this.peek(2).type === TOKEN.IDENT || this.peek(2).type === TOKEN.KEYWORD) &&
+        this.peek(3) && this.peek(3).type === TOKEN.PUNCT && this.peek(3).value === '(') {
+      return this.parseMethodCallStatement(coords);
+    }
+
     // Not yet migrated — consume through to the terminating period (or a
     // depth-marker boundary acting as an implicit terminator, matching the
     // legacy lexer's own leniency) and wrap as a RawStatementNode so the
@@ -577,6 +585,33 @@ class Parser {
     const params = this.parseParamList();
     this.consume(TOKEN.PUNCT, ')', '")" after the parameter list');
 
+    // Check for { } body syntax (new style: ACTION name(params) { body })
+    if (this.match(TOKEN.PUNCT, '{')) {
+      this.advance(); // consume {
+      const bodyStatements = [];
+      let braceDepth = 1;
+      while (!this.isAtEnd() && braceDepth > 0) {
+        if (this.match(TOKEN.PUNCT, '{')) { braceDepth++; this.advance(); continue; }
+        if (this.match(TOKEN.PUNCT, '}')) {
+          braceDepth--;
+          if (braceDepth === 0) { this.advance(); break; }
+          this.advance();
+          continue;
+        }
+        // Collect statements up to '.' or '}' or '{'
+        const stmt = this.parseStatement();
+        if (stmt) bodyStatements.push(stmt);
+        // Skip stray closers and depth markers
+        if (this.match(TOKEN.DEPTH)) this.advance();
+        while (!this.isAtEnd() && (this.match(TOKEN.PUNCT, '.') || this.match(TOKEN.KEYWORD, 'ORIF') || this.match(TOKEN.KEYWORD, 'ELSE') || this.match(TOKEN.KEYWORD, 'SHELTER') || this.match(TOKEN.KEYWORD, 'CALM'))) {
+          if (this.match(TOKEN.PUNCT, '.')) { this.advance(); break; }
+          this.advance();
+        }
+      }
+      if (this.match(TOKEN.PUNCT, '.')) this.advance();
+      return new ActionDeclarationNode({ name, params, bodyStatements, isExternal: false, receiver }, coords);
+    }
+
     // FFI external declaration: -> external.
     const arrow = this.peek(0);
     const extKw = this.peek(1);
@@ -605,7 +640,7 @@ class Parser {
     return new ActionDeclarationNode({ name, params, bodyStatements, isExternal: false, receiver }, coords);
   }
 
-  // ── SPECIES name [PARENT base], ...fields/actions... /SPECIES. ──
+  // ── SPECIES name [FROM|PARENT base] { ... } or , ... /SPECIES. ──
   parseSpeciesDeclaration(coords) {
     this.consume(TOKEN.KEYWORD, 'SPECIES', '"SPECIES"');
     const nameTok = this.current();
@@ -616,15 +651,57 @@ class Parser {
     const name = this.advance().value;
 
     let parentName = null;
-    if (this.match(TOKEN.KEYWORD, 'PARENT')) {
+    if (this.match(TOKEN.KEYWORD, 'FROM') || this.match(TOKEN.KEYWORD, 'PARENT')) {
       this.advance();
       const pTok = this.current();
       if (pTok.type !== TOKEN.IDENT) {
-        storm('SYNTAX_STORM', `Expected a parent species name after PARENT, found "${pTok.value}"`,
+        storm('SYNTAX_STORM', `Expected a parent species name, found "${pTok.value}"`,
           pTok.line, pTok.column);
       }
       parentName = this.advance().value;
     }
+
+    // New syntax: SPECIES Name { field: TYPE ... }
+    if (this.match(TOKEN.PUNCT, '{')) {
+      this.advance();
+      const fields = [], actions = [];
+      while (!this.isAtEnd() && !this.match(TOKEN.PUNCT, '}')) {
+        if (this.match(TOKEN.DEPTH)) { this.advance(); continue; }
+        // Skip bare numbers (legacy depth prefix remnants inside blocks)
+        if (this.current().type === TOKEN.NUMBER && this.peek(1) && this.peek(1).type === TOKEN.PUNCT && this.peek(1).value === '\\') {
+          this.advance(); this.advance(); continue;
+        }
+
+        if (this.match(TOKEN.KEYWORD, 'ACTION')) {
+          const action = this.parseActionDeclaration(coords);
+          actions.push(action);
+          continue;
+        }
+        // Field: fieldName: Type
+        const tok = this.current();
+        if (tok.type === TOKEN.IDENT || tok.type === TOKEN.KEYWORD) {
+          if (this.peek(1) && this.peek(1).type === TOKEN.PUNCT && this.peek(1).value === ':') {
+            const fName = this.advance().value;
+            this.advance(); // consume ':'
+            const fTypeTok = this.current();
+            const fType = (fTypeTok.type === TOKEN.IDENT || fTypeTok.type === TOKEN.KEYWORD) ? fTypeTok.value : 'TX';
+            this.advance();
+            if (this.match(TOKEN.PUNCT, '.')) this.advance();
+            fields.push({ name: fName, varType: fType.toUpperCase(), defaultExpr: null });
+            continue;
+          }
+        }
+        // Skip bare tokens (newlines, etc.)
+        if (this.match(TOKEN.PUNCT, '.')) { this.advance(); continue; }
+        if (this.isAtEnd() || this.match(TOKEN.PUNCT, '}')) break;
+        this.advance();
+      }
+      if (this.match(TOKEN.PUNCT, '}')) this.advance();
+      if (this.match(TOKEN.PUNCT, '.')) this.advance();
+      return new SpeciesDeclarationNode({ name, parentName, fields, actions }, coords);
+    }
+
+    // Old syntax: SPECIES name, ... /SPECIES.
     this.consume(TOKEN.PUNCT, ',', '"," to open the SPECIES body');
 
     const headerDepth = coords.depth;
@@ -633,21 +710,15 @@ class Parser {
       const aheadIsDepth = this.match(TOKEN.DEPTH);
       const off = aheadIsDepth ? 1 : 0;
       const lineFirstTok = this.peek(off);
-      // Closer detection: /SPECIES.
       if (lineFirstTok.type === TOKEN.PUNCT && lineFirstTok.value === '/') {
         if (aheadIsDepth) this.advance();
         break;
       }
       if (aheadIsDepth) this.advance();
-
       const memberCoords = { line: this.current().line, column: this.current().column, depth: this.current().depth };
-
-      // VAR field declaration
       if (this.match(TOKEN.KEYWORD, 'VAR')) {
         this.advance();
         const fNameTok = this.current();
-        // Field names may overlap with reserved keywords (e.g. "count", "name", "step")
-        // Accept both IDENT and KEYWORD tokens as valid identifiers here.
         if (fNameTok.type !== TOKEN.IDENT && fNameTok.type !== TOKEN.KEYWORD) {
           storm('SYNTAX_STORM', `Expected a field name after VAR, found "${fNameTok.value}"`,
             fNameTok.line, fNameTok.column);
@@ -668,15 +739,11 @@ class Parser {
         fields.push({ name: fName, varType: fType.toUpperCase(), defaultExpr });
         continue;
       }
-
-      // Nested ACTION method
       if (this.match(TOKEN.KEYWORD, 'ACTION')) {
         const action = this.parseActionDeclaration(memberCoords);
         actions.push(action);
         continue;
       }
-
-      // Anything else — skip to next line boundary
       while (!this.isAtEnd() && !(this.match(TOKEN.PUNCT, '.') || this.match(TOKEN.DEPTH))) {
         this.advance();
       }
@@ -688,6 +755,28 @@ class Parser {
     if (this.match(TOKEN.PUNCT, '.')) this.advance();
 
     return new SpeciesDeclarationNode({ name, parentName, fields, actions }, coords);
+  }
+
+  // ── obj:method(args). ────────────────────────────────────────────
+  parseMethodCallStatement(coords) {
+    const targetTok = this.current();
+    const target = new IdentifierNode(targetTok.value, { line: targetTok.line, column: targetTok.column, depth: targetTok.depth });
+    this.advance(); // consume obj
+    this.consume(TOKEN.PUNCT, ':', '":" after the target in method call');
+    const methodTok = this.current();
+    const methodName = methodTok.value;
+    this.advance(); // consume method name
+    this.consume(TOKEN.PUNCT, '(', '"(" after method name');
+    const args = [];
+    while (!this.isAtEnd() && !this.match(TOKEN.PUNCT, ')')) {
+      if (this.match(TOKEN.PUNCT, ',')) { this.advance(); continue; }
+      const expr = this.parseExpressionSpan();
+      if (expr) args.push(expr);
+    }
+    if (this.match(TOKEN.PUNCT, ')')) this.advance();
+    if (this.match(TOKEN.PUNCT, '.')) this.advance();
+    const { MethodCallStatementNode } = require('./ast');
+    return new MethodCallStatementNode({ target, methodName, args }, coords);
   }
 
   // ── BLOOM SpeciesName AS instanceIdent. ─────────────────────────
@@ -922,8 +1011,9 @@ class Parser {
       const parts = identifier.split('.').map(s => s.trim());
       if (parts.length === 2 && parts[0].length > 0 && parts[1].length > 0) {
         node.isMemberAccess = true;
-        // Lowercase the object name if it's a keyword token like SELF
-        node.memberObject = parts[0].toLowerCase();
+        // Normalize SELF/self → __self for consistent receiver access
+        const objName = parts[0].toLowerCase();
+        node.memberObject = objName === 'self' ? '__self' : objName;
         node.memberField = parts[1];
       }
     }
@@ -1143,6 +1233,16 @@ class Parser {
         // Check for struct instantiation syntax: StructName{ args }
         if (this.peek(0).type === TOKEN.IDENT && this.peek(1).type === TOKEN.PUNCT && this.peek(1).value === '{') {
           valueExpr = this.parseStructInstantiation();
+        } else if (this.match(TOKEN.KEYWORD, 'BLOOM')) {
+          this.advance(); // consume BLOOM keyword
+          const speciesTok = this.current();
+          if (speciesTok.type !== TOKEN.IDENT) {
+            storm('SYNTAX_STORM', `Expected a species name after BLOOM, found "${speciesTok.value}"`,
+              speciesTok.line, speciesTok.column);
+          }
+          const speciesName = this.advance().value;
+          const { BloomExpressionNode } = require('./ast');
+          valueExpr = new BloomExpressionNode({ speciesName }, { line: speciesTok.line, column: speciesTok.column, depth: speciesTok.depth });
         } else if (this.match(TOKEN.PUNCT, '[')) {
           valueExpr = this.parseArrayLiteral();
         } else if (this.match(TOKEN.PUNCT, '{')) {

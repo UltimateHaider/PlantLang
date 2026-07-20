@@ -727,6 +727,32 @@ class ForInStatementNode extends AstNode {
   }
 }
 
+class MethodCallStatementNode extends AstNode {
+  // obj:method(args).
+  constructor({ target, methodName, params, args }, coords) {
+    super('MethodCallStatement', coords);
+    this.target = target;         // IdentifierNode — the instance
+    this.methodName = methodName; // string
+    this.params = params || [];   // [{name, type}] from declaration
+    this.args = args || [];       // [AstNode] argument expressions
+  }
+}
+
+class SelfExpressionNode extends AstNode {
+  // SELF — reference to the current instance inside a method
+  constructor(coords) {
+    super('SelfExpression', coords);
+  }
+}
+
+class BloomExpressionNode extends AstNode {
+  // BLOOM SpeciesName — instantiation operator (expression form)
+  constructor({ speciesName }, coords) {
+    super('BloomExpression', coords);
+    this.speciesName = speciesName;
+  }
+}
+
 // Re-export everything
 const _orig = module.exports;
 Object.assign(module.exports, {
@@ -765,4 +791,7 @@ Object.assign(module.exports, {
   KeyValuePairNode,
   MapLiteralNode,
   ForInStatementNode,
+  MethodCallStatementNode,
+  SelfExpressionNode,
+  BloomExpressionNode,
 });

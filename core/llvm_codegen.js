@@ -67,8 +67,12 @@ function llvmType(plType) {
   }
   // Check if it's a registered struct type
   if (STRUCT_SIZES.has(`%struct.${plType}`)) return `%struct.${plType}`;
+  // Check if it's a species type
+  if (LLVM_SPECIES_MAP.has(plType)) return LLVM_SPECIES_MAP.get(plType).structType;
   return null; // unsupported
 }
+
+const LLVM_SPECIES_MAP = new Map(); // populated by LLVMGenerator
 
 // Get the LLVM element type for an array type string like "[NUM]" → "i64"
 function arrayElemLlvmType(arrayPlType) {
@@ -786,8 +790,10 @@ class LLVMGenerator {
     this.fnDeclares = []; // { name, params, llvmParamList } for extern FFI actions
     this.shelterStack = [];
     // Each entry: { unwindDepth, shelterClause, handlerLabel }
-    this.structTypes = new Map(); // name -> { structType, llvmFields, totalSize }
+    this.structTypes = new Map(); // name -> { structType, llvmFields, totalSize, fieldIndex }
     this.structDeclLines = []; // LLVM IR lines for type declarations
+    this.speciesTypes = new Map(); // name -> { structType, llvmFields, totalSize, fieldIndex, fields, actions, parentName }
+    this.speciesDeclLines = [];
   }
 
   /** Look up the nearest active SHELTER that catches the given storm type. */
@@ -807,6 +813,46 @@ class LLVMGenerator {
     const info = this.structTypes.get(structName);
     if (!info || !info.fieldIndex) return -1;
     return info.fieldIndex[fieldName] !== undefined ? info.fieldIndex[fieldName] : -1;
+  }
+
+  /** Register a species as an LLVM struct type with parent field prefixing. */
+  _registerSpeciesType(node) {
+    const allFields = [];
+    const fieldIndex = {};
+    let idx = 0;
+    if (node.parentName) {
+      const parentInfo = this.speciesTypes.get(node.parentName);
+      if (parentInfo) {
+        for (const f of parentInfo.fields) {
+          allFields.push(f);
+          fieldIndex[f.name] = idx++;
+        }
+      }
+    }
+    for (const f of (node.fields || [])) {
+      allFields.push(f);
+      fieldIndex[f.name] = idx++;
+    }
+    const llvmFields = [];
+    let totalSize = 0;
+    for (const f of allFields) {
+      const lt = llvmType(f.varType) || 'i64';
+      const sz = llvmTypeSize(lt);
+      const aligned = Math.ceil(totalSize / 8) * 8;
+      const padding = aligned - totalSize;
+      totalSize += padding + sz;
+      llvmFields.push(lt);
+    }
+    totalSize = Math.ceil(totalSize / 8) * 8;
+    const structType = `%species.${node.name}`;
+    this.speciesTypes.set(node.name, {
+      structType, llvmFields, totalSize, fieldIndex,
+      fields: allFields,
+      actions: node.actions || [],
+      parentName: node.parentName,
+    });
+    LLVM_SPECIES_MAP.set(node.name, { structType, llvmFields, totalSize, fieldIndex });
+    this.speciesDeclLines.push(`${structType} = type { ${llvmFields.join(', ')} }`);
   }
 
   /** Helper: emit a zero-divisor check that sets error globals and branches
@@ -839,12 +885,28 @@ class LLVMGenerator {
 
   generate(programNode) {
     const m = this.mod;
-    // First pass: collect ACTION declarations and SHAPE definitions
+    // First pass: collect ACTION declarations, SHAPE definitions, and SPECIES definitions
     for (const node of (programNode.statements || [])) {
       if (node.type === 'StructDeclaration') {
         const reg = registerStructType(node.name, node.fields);
         this.structTypes.set(node.name, reg);
         this.structDeclLines.push(`${reg.structType} = type { ${reg.llvmFields.join(', ')} }`);
+        continue;
+      }
+      if (node.type === 'SpeciesDeclaration') {
+        this._registerSpeciesType(node);
+        // Register each ACTION as a function info entry for later compilation
+        for (const action of (node.actions || [])) {
+          const fnName = `${node.name}_${action.name}`;
+          this.fnInfos.set(fnName, {
+            params: action.params || [],
+            bodyStatements: action.bodyStatements || [],
+            line: action.line || node.line,
+            column: action.column || node.column,
+            isExternal: false,
+            receiver: { name: 'self', type: node.name },
+          });
+        }
         continue;
       }
       if (node.type === 'ActionDeclaration') {
@@ -859,6 +921,10 @@ class LLVMGenerator {
         });
       }
     }
+    // Emit species type declarations
+    for (const line of this.speciesDeclLines) {
+      m.globals.push(line);
+    }
     // Generate function definitions (before main for forward references)
     for (const [name, info] of this.fnInfos) {
       this.genFnDef(name, info);
@@ -866,7 +932,7 @@ class LLVMGenerator {
     // Generate main body with depth tracking
     m.currentDepth = 0;
     for (const node of (programNode.statements || [])) {
-      if (node.type === 'ActionDeclaration') continue;
+      if (node.type === 'ActionDeclaration' || node.type === 'SpeciesDeclaration') continue;
       this.trackDepth(node);
       this.genStatement(node);
     }
@@ -1079,6 +1145,46 @@ class LLVMGenerator {
         const storeType = structInfo.llvmFields[fieldIdx];
         m.emit(`store ${storeType} ${coerced}, ${storeType}* ${fieldPtr}`);
       }
+    }
+  }
+
+  // ── CREATE with species type ───────────────────────────────────────────────
+  genCreateSpecies(node, speciesInfo) {
+    const m = this.mod;
+    const depth = node.depth !== undefined ? node.depth : m.currentDepth;
+    if (depth > m.currentDepth) { m.error(`Contract violation`, node); return; }
+    const rawPtr = m.arenaAlloc(depth, speciesInfo.totalSize);
+    const structPtr = m.freshReg();
+    m.emit(`${structPtr} = bitcast i8* ${rawPtr} to ${speciesInfo.structType}*`);
+    m.scope.set(node.identifier, { ptr: structPtr, plType: node.varType, depth });
+    // Store default values for each field
+    for (let i = 0; i < speciesInfo.llvmFields.length; i++) {
+      const lt = speciesInfo.llvmFields[i];
+      const fieldPtr = m.freshReg();
+      m.emit(`${fieldPtr} = getelementptr inbounds ${speciesInfo.structType}, ${speciesInfo.structType}* ${structPtr}, i32 0, i32 ${i}`);
+      const defaultVal = lt === 'i64' ? '0' : lt === 'double' ? '0.0' : lt === 'i1' ? 'false' : 'zeroinitializer';
+      m.emit(`store ${lt} ${defaultVal}, ${lt}* ${fieldPtr}`);
+    }
+  }
+
+  genCreateBloomed(node) {
+    const m = this.mod;
+    const expr = node.valueExpr;
+    const sname = expr.speciesName;
+    const speciesInfo = this.speciesTypes.get(sname);
+    if (!speciesInfo) { m.unsupported(node, `unknown species "${sname}"`); return; }
+    const depth = node.depth !== undefined ? node.depth : m.currentDepth;
+    if (depth > m.currentDepth) { m.error(`Contract violation`, node); return; }
+    const rawPtr = m.arenaAlloc(depth, speciesInfo.totalSize);
+    const structPtr = m.freshReg();
+    m.emit(`${structPtr} = bitcast i8* ${rawPtr} to ${speciesInfo.structType}*`);
+    m.scope.set(node.identifier, { ptr: structPtr, plType: sname, depth });
+    for (let i = 0; i < speciesInfo.llvmFields.length; i++) {
+      const lt = speciesInfo.llvmFields[i];
+      const fieldPtr = m.freshReg();
+      m.emit(`${fieldPtr} = getelementptr inbounds ${speciesInfo.structType}, ${speciesInfo.structType}* ${structPtr}, i32 0, i32 ${i}`);
+      const defaultVal = lt === 'i64' ? '0' : lt === 'double' ? '0.0' : lt === 'i1' ? 'false' : 'zeroinitializer';
+      m.emit(`store ${lt} ${defaultVal}, ${lt}* ${fieldPtr}`);
     }
   }
 
@@ -1779,6 +1885,64 @@ class LLVMGenerator {
     m.emit(`ret i64 ${returnReg}`);
   }
 
+  genMethodCallStatement(node) {
+    const m = this.mod;
+    // node.target is an IdentifierNode with .name
+    const targetName = node.target && node.target.name;
+    if (!targetName) { m.unsupported(node, 'method call without target'); return; }
+    const targetInfo = m.scope.get(targetName);
+    if (!targetInfo) { m.error(`"${targetName}" is not defined`, node); return; }
+    // Look up the species from the target variable's type
+    const speciesName = targetInfo.plType;
+    const speciesInfo = this.speciesTypes.get(speciesName);
+    if (!speciesInfo) { m.unsupported(node, `species "${speciesName}" not found for method call`); return; }
+    const methodDef = speciesInfo.actions.find(a => a.name === node.methodName);
+    if (!methodDef) { m.error(`"${node.methodName}" is not a method of "${speciesName}"`, node); return; }
+    const fnName = `${speciesName}_${node.methodName}`;
+    // Build call args: self pointer first, then method args
+    const callArgs = [`${speciesInfo.structType}* ${targetInfo.ptr}`];
+    // Check if the method is defined in a parent species
+    let actualFnName = fnName;
+    if (!this.fnInfos.has(fnName) && speciesInfo.parentName) {
+      // Walk up the parent chain
+      let parent = speciesInfo.parentName;
+      while (parent) {
+        const parentFnName = `${parent}_${node.methodName}`;
+        if (this.fnInfos.has(parentFnName)) {
+          actualFnName = parentFnName;
+          const parentInfo = this.speciesTypes.get(parent);
+          if (parentInfo) {
+            const castPtr = m.freshReg();
+            m.emit(`${castPtr} = bitcast ${speciesInfo.structType}* ${targetInfo.ptr} to ${parentInfo.structType}*`);
+            callArgs[0] = `${parentInfo.structType}* ${castPtr}`;
+          }
+          break;
+        }
+        parent = this.speciesTypes.get(parent);
+        parent = parent ? parent.parentName : null;
+      }
+    }
+    // Compile method arguments
+    const ec = new ExprCompiler(m, node, this);
+    for (let i = 0; i < (node.args || []).length; i++) {
+      const arg = node.args[i];
+      let argVal;
+      if (arg && arg.type) {
+        argVal = this.compileAstExpr(arg);
+      } else if (typeof arg === 'string') {
+        argVal = ec.compileExpr(arg);
+      } else {
+        argVal = { reg: '0', type: 'NUM' };
+      }
+      const pt = methodDef.params[i] ? methodDef.params[i].type : argVal.type;
+      const coerced = this.coerce(argVal, pt, node);
+      const lt = llvmType(pt) || 'i64';
+      callArgs.push(`${lt} ${coerced}`);
+    }
+    const resultReg = m.freshReg();
+    m.emit(`${resultReg} = call i64 @${safeName(actualFnName)}(${callArgs.join(', ')})`);
+  }
+
   assemble() {
     const m = this.mod;
     const lines = [];
@@ -2216,6 +2380,8 @@ class LLVMGenerator {
       case 'SeasonStatement':  this.genSeason(node);return false;
       case 'ForInStatement':   this.genForIn(node); return false;
       case 'LockStatement':    return false;
+      case 'MethodCallStatement': this.genMethodCallStatement(node); return false;
+      case 'BloomStatement':   return false; // old-style BLOOM AS handled by interpreter
 
       case 'LinkStatement': {
         const mapInfo = m.scope.get(node.mapIdent);
@@ -2262,6 +2428,19 @@ class LLVMGenerator {
     const structInfo = this.structTypes.get(node.varType);
     if (structInfo) {
       this.genCreateStruct(node, structInfo);
+      return;
+    }
+
+    // Check if this is a species type (BLOOM or direct struct creation)
+    const speciesInfo = this.speciesTypes.get(node.varType);
+    if (speciesInfo) {
+      this.genCreateSpecies(node, speciesInfo);
+      return;
+    }
+
+    // Check for BloomExpression in valueExpr (CREATE x TO BLOOM SpeciesName.)
+    if (node.valueExpr && node.valueExpr.type === 'BloomExpression') {
+      this.genCreateBloomed(node);
       return;
     }
 
@@ -2424,9 +2603,9 @@ class LLVMGenerator {
       const objInfo = m.scope.get(node.memberObject);
       if (!objInfo) { m.error(`SET: "${node.memberObject}" was not declared`, node); return; }
       const structName = objInfo.plType;
-      const sInfo = this.structTypes.get(structName);
-      if (!sInfo) { m.error(`SET: "${node.memberObject}" is not a struct`, node); return; }
-      const fieldIdx = this._getStructFieldIndex(structName, node.memberField);
+      const sInfo = this.structTypes.get(structName) || this.speciesTypes.get(structName);
+      if (!sInfo) { m.error(`SET: "${node.memberObject}" is not a struct or species`, node); return; }
+      const fieldIdx = sInfo.fieldIndex ? sInfo.fieldIndex[node.memberField] : -1;
       if (fieldIdx === -1) { m.error(`SET: struct "${structName}" has no field "${node.memberField}"`, node); return; }
       const fieldType = sInfo.llvmFields[fieldIdx];
       const fieldPtr = m.freshReg();

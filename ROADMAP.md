@@ -4,6 +4,20 @@
 
 The previous roadmap targeted MAP hash tables, FOR...IN loops, and STRUCT types. Here's what was completed in **v0.27.0**:
 
+### ✅ Completed: SPECIES / BLOOM Object-Oriented (Phase 17)
+
+| Sub-goal | Status |
+|---|---|
+| **SPECIES with `{ }` body syntax** | `SPECIES Name { field: TYPE, ACTION method(params) { body } }` — parsed with `{ }` blocks or legacy `,` syntax |
+| **FROM / PARENT inheritance** | Parent fields deep-cloned during registration; child can access parent methods |
+| **BLOOM in CREATE** | `CREATE x TO BLOOM SpeciesName.` — expression-level instantiation |
+| **Colon-dispatch method calls** | `REAP result FROM obj:method.` works in full pipeline |
+| **SELF:field access** | Read, SET, INCREASE/DECREASE on `SELF:field` inside species action bodies |
+| **LLVM codegen — species struct types** | Registered as LLVM struct types with parent-field prefixing |
+| **LLVM codegen — method dispatch** | Static dispatch with name-mangled functions and bitcast for inherited methods |
+| **Type checker** | Species registration validates fields/actions; `__self` registered in scope for receiver access |
+| **Interpreter** | `_evalMethodCallStatement`, `BloomExpression`, `SelfExpression` all implemented |
+
 ### ✅ Completed: FOR...IN Loop (Phase 15)
 
 | Sub-goal | Status |
@@ -64,24 +78,23 @@ Open-addressing HashMap with linear probing, fully compiled:
 - Phase 14 (MAP): 17 tests
 - Phase 15 (FOR...IN): 19 tests
 - Phase 16 (STRUCT): 16 tests
-- LLVM backend: 50 tests (was 46)
-- **15 test files total, ~669 assertions, all green**
+- Phase 17 (SPECIES/BLOOM): 10 tests
+- LLVM backend: 50 tests
+- **16 test files total, ~709 assertions, all green**
 
 ---
 
-## 🚀 v0.27.0 Objectives
+## 🚀 v0.28.0 Objectives
 
-### 1. SPECIES / BLOOM (Object-Oriented) in LLVM Backend
+### 1. SPECIES / BLOOM Full LLVM Codegen (Advanced)
 
 | Sub-goal | Approach |
 |---|---|
-| **SPECIES declaration** | LLVM struct with field offsets computed at compile time; vtable for methods |
-| **BLOOM instantiation** | Heap allocation via arena; species methods receive `SELF` pointer |
-| **PARENT inheritance** | Struct prefixing (parent fields at base, child fields appended) |
-| **SELF reference** | Hidden first parameter in method ACTIONs |
-| **Method dispatch** | Colon syntax `obj:method` — compiled to function call with SELF pointer |
+| **SPECIES vtable dispatch** | Virtual method dispatch for polymorphic methods |
+| **SELF mutation across method calls** | Compiled SET/INCREASE on SELF fields propagate correctly |
+| **Dynamic dispatch** | Support METHOD call statements (`obj:method().`) as standalone expressions in compiled mode |
 
-### 2. LIST Operations in LLVM Backend
+### 2. LLVM Codegen: LIST Operations
 
 | Sub-goal | Approach |
 |---|---|
@@ -138,7 +151,7 @@ Open-addressing HashMap with linear probing, fully compiled:
 
 - **Full Parity**: SPECIES, LIST, and CHOICE/MATCH operations behave identically in interpreter and LLVM-compiled binary
 - **No Memory Leaks**: Valgrind-clean on all collection operations (no leaks, no use-after-free)
-- **Test Count**: Test suite grows from ~669 → **850+** covering all new constructs
+- **Test Count**: Test suite grows from ~709 → **850+** covering all new constructs
 - **Performance**: Compiled SPECIES/LIST operations within 2× of equivalent C
 
 ---
@@ -146,11 +159,12 @@ Open-addressing HashMap with linear probing, fully compiled:
 ## 📅 Target Timeline
 
 | Phase | Focus | Target |
-|---|---|---|
-| **v0.27.0** | **SPECIES OOP + CHOICE/MATCH native + LIST native** | **Q2 2027** |
-| v0.28.0 | TAP file I/O, HARVEST networking, Flow pipeline | Q3 2027 |
-| v0.29.0 | PULSE/WHENEVER reactive, VERIFY/SUITE native | Q4 2027 |
+|---|---|---|---|
+| **v0.27.0** | **SPECIES OOP (interpreter + LLVM basic) + MAP/FOR...IN/STRUCT** | **Q2 2026** |
+| v0.28.0 | CHOICE/MATCH native, LIST native, SPECIES advanced LLVM | Q3 2026 |
+| v0.29.0 | TAP file I/O, HARVEST networking, Flow pipeline | Q4 2026 |
+| v0.30.0 | PULSE/WHENEVER reactive, VERIFY/SUITE native | Q1 2027 |
 
 ---
 
-*PlantLang v0.27.0: MAP hash tables. FOR...IN loops. STRUCT types. 669 tests all green.*
+*PlantLang v0.27.0: SPECIES OOP. MAP hash tables. FOR...IN loops. STRUCT types. 709 tests all green.*

@@ -3,6 +3,15 @@
 ## v0.27.0 — 2026 (current)
 
 ### New Features
+- **SPECIES / BLOOM — Object-Oriented Foundations (Phase 17)** — class-based OOP with `{ }` body syntax:
+  - Syntax: `SPECIES Name { field: TYPE, ACTION method(params) { body } }` — `{ }` body blocks (new) alongside legacy `,`/`/SPECIES.` syntax
+  - `FROM` / `PARENT` inheritance — parent fields prefixed in LLVM struct layout, methods accessible via bitcast
+  - `BLOOM SpeciesName` expression usable in `CREATE x TO BLOOM SpeciesName.`
+  - Colon-dispatch method calls: `REAP result FROM obj:method.`
+  - `SELF:field` access in species action bodies (read, SET, INCREASE/DECREASE)
+  - LLVM codegen: species registered as LLVM struct types; method calls emit static dispatch with name-mangled function names and bitcast for inherited methods
+  - Full interpreter pipeline: `_evalMethodCallStatement`, `BloomExpression`, `SelfExpression` evaluation
+  - 10 new tests covering `{ }` body parsing, BLOOM instantiation, method dispatch, inheritance, type checking, SELF mutation
 - **FOR...IN Loop (Phase 15)** — iterate over list/array/map values:
   - Syntax: `FOR name IN expr, ... /FOR.` with optional depth prefix and `.` terminator
   - Iterates over LIST values, MAP keys, or TX character spans
@@ -53,14 +62,15 @@
 - Added **Phase 14 — MAP Types** (`tests/test_phase14_maps.js`) — 17 tests covering empty map create, map literals, LINK/put semantics, has/get, overwrite, growth (10 entries), SHOW display, type-checker validation
 - Added **Phase 15 — FOR...IN** (`tests/test_phase15_for_in.js`) — 19 tests covering empty arrays, typed arrays, TX strings, MAPs, nested IF, STOP IF propagation
 - Added **Phase 16 — STRUCT** (`tests/test_phase16_structs.js`) — 16 tests covering declaration, nested structs, field access/mutation, type checking, LLVM codegen
+- Added **Phase 17 — SPECIES/BLOOM** (`tests/test_phase17_species.js`) — 10 tests covering `{ }` body syntax, BLOOM instantiation, method dispatch, inheritance, SELF mutation, type checking
 - LLVM backend expanded from 46 → **50 smoke tests** (4 new MAP tests: create+has, all-keys, growth, overwrite)
-- Total test suites expanded to **15 files, ~669 total assertions** — all green
+- Total test suites expanded to **16 files, ~709 total assertions** — all green
 
 ### Documentation
 - All `.md` files bumped to v0.27.0
-- ROADMAP.md — FOR...IN and STRUCT objectives marked complete, v0.27.0 objectives updated
-- Language Tour.md — supported subset table now shows FOR...IN as ✅ and STRUCT syntax documented
-- TECHNICAL.md — updated test counts from ~634 → ~669, 13 → 15 test files
+- ROADMAP.md — FOR...IN, STRUCT, and SPECIES/BLOOM objectives marked complete
+- Language Tour.md — supported subset table now shows FOR...IN and SPECIES/BLOOM as ✅
+- TECHNICAL.md — updated test counts from ~634 → ~709, 13 → 16 test files
 
 ---
 
