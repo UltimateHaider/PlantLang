@@ -2,7 +2,7 @@
 
 ## 0. Module System & Standard Library
 
-See sections 7–8 below for the IMPORT/FFI and Standard Library architecture.
+See sections 9–10 below for the IMPORT/FFI and Standard Library architecture.
 
 ## 1. Rooted Depth System (Memory Architecture)
 
@@ -165,7 +165,121 @@ Enforced in `genCreate` before any allocation.
 
 ---
 
-## 4. LLVM IR Generation Pipeline
+## 4. Species Vtable Dispatch System
+
+### 4.1 Vtable Layout
+
+Every species struct gets a hidden `i8*` vtable pointer as field 0:
+
+```llvm
+%species.Animal = type { i8*, i64 }           ; vtable ptr + fields
+%species.Dog    = type { i8*, i64, i64 }      ; vtable ptr + inherited + new fields
+```
+
+The vtable itself is a constant global array of function pointers:
+
+```llvm
+@species.Animal.vtable = constant [1 x i8*] [
+  i8* bitcast (i64 (i8*, i64)* @Animal_speak to i8*)
+]
+```
+
+### 4.2 Method Slot Allocation
+
+`_computeMethodSlots()` walks the parent chain to assign stable slot indices:
+
+1. Parent methods get slots 0..N-1 (preserving parent order)
+2. Child overrides reuse the same slot as the parent method
+3. New methods (not in parent) get slots N, N+1, ...
+
+This ensures the parent vtable is a prefix of the child vtable — a child instance's vtable can be safely indexed using parent slot numbers, enabling dynamic dispatch upcast.
+
+### 4.3 Uniform Calling Convention
+
+Species method functions use a uniform calling convention with `i8*` receiver:
+
+```llvm
+define i64 @Animal_speak(i8* %self) {
+  ; bitcast to concrete type for field access
+  %typed_self = bitcast i8* %self to %species.Animal*
+  ...
+}
+```
+
+This allows any species method to be called through the vtable without type mismatches.
+
+### 4.4 Dispatch Path
+
+```
+genMethodCallStatement:
+  1. Load vtable pointer from instance field 0
+  2. Bitcast i8* to [N x i8*]*
+  3. GEP to method slot index
+  4. Load function pointer (i8*)
+  5. Bitcast to i64 (i8*, i64, ...)*
+  6. Call with receiver bitcast to i8*
+```
+
+## 5. CHOICE/MATCH LLVM Codegen
+
+### 5.1 Choice Value Layout
+
+CHOICE values are stored as a fixed-size struct:
+
+```llvm
+%choice.Option = type { i64, i64 }  ; { tag, payload }
+```
+
+- `tag`: variant index (0-based, in declaration order)
+- `payload`: variant's value, stored as i64 (all PlantLang types fit in i64: NUM→i64, SCL→bitcast, TX→ptrtoint, FACT→zext)
+
+### 5.2 Variant Construction
+
+**No-payload variant** (`Option.None`):
+```llvm
+%tagged = insertvalue %choice.Option zeroinitializer, i64 1, 0  ; tag=1
+%val    = insertvalue %choice.Option %tagged, i64 0, 1          ; payload=0
+```
+
+**Payload-bearing variant** (`Option.Some(10)`):
+```llvm
+%tagged = insertvalue %choice.Option zeroinitializer, i64 0, 0  ; tag=0
+%val    = insertvalue %choice.Option %tagged, i64 10, 1         ; payload=10
+```
+
+### 5.3 MATCH Switch Chain
+
+```
+genMatchStatement:
+  1. Compile subject expression → get CHOICE struct value
+  2. Extract tag with extractvalue
+  3. For each clause: icmp eq tag, variant_idx
+  4. Branch to matching clause body
+  5. If binding exists: extractvalue payload, store in arena, register in scope
+  6. Execute clause body statements
+  7. Branch to merge block
+```
+
+### 5.4 MAP `get()` → Option
+
+MAP `get()` returns an `Option<V>` value instead of erroring. The implementation:
+
+1. Probes the map with `genMapHas()` to check key existence
+2. If found: probes again with `_emitMapGetValue()`, wraps value in `Option.Some(v)`
+3. If not found: returns `Option.None`
+4. Both branches store the result in a common arena slot, merged after conditional
+
+The `Option` CHOICE type is registered lazily on first `get()` call:
+```javascript
+choiceTypes.set('Option', [
+  { name: 'Some', type: null },
+  { name: 'None', type: null },
+]);
+```
+
+---
+
+## 6. LLVM IR Generation Pipeline
 
 ### 4.1 Module Structure (`core/llvm_codegen.js`)
 
@@ -219,9 +333,9 @@ Caller reverses via the target variable's declared type.
 
 ---
 
-## 5. MAP Hash Table Implementation
+## 7. MAP Hash Table Implementation
 
-### 5.1 Data Layout
+### 7.1 Data Layout
 
 MAPs are stored as `%fat_ptr` structs: `{ i8* buckets, i64 len, i64 cap }` — same layout as arrays and TX fat pointers.
 
@@ -238,14 +352,14 @@ For `MAP[NUM,TX]` this is `{ i1, i64, %fat_ptr }` with ABI alignment:
 
 The bucket size is computed by `mapBucketSize()` which accounts for natural alignment padding. Initial capacity is 8 buckets; growth doubles capacity when load factor exceeds 0.75.
 
-### 5.2 Hash Functions
+### 7.2 Hash Functions
 
 | Key Type | Hash | Implementation |
 |---|---|---|
 | `NUM` | Identity | Key value used directly (modulo capacity) |
 | `TX` | djb2 | Inline LLVM IR loop: `hash = hash * 33 + byte[i]` over string bytes |
 
-### 5.3 Linear Probing
+### 7.3 Linear Probing
 
 Both `genMapPut` and `genMapHas` implement open-addressing with linear probing:
 
@@ -254,7 +368,7 @@ Both `genMapPut` and `genMapHas` implement open-addressing with linear probing:
 3. **Occupied + key differs** → collision → `idx = (idx + 1) % cap` → goto 2
 4. **Empty** → not found (insert in put, fail in has)
 
-### 5.4 Growth
+### 7.4 Growth
 
 When `len >= cap * 3 / 4` during a put:
 1. Allocate new bucket array at 2× capacity in the current arena
@@ -262,7 +376,7 @@ When `len >= cap * 3 / 4` during a put:
 3. Loop over old buckets, rehash each occupied entry into the new array using the same probing logic
 4. Update the map `%fat_ptr` to point to the new bucket array
 
-### 5.5 Codegen Functions
+### 7.5 Codegen Functions
 
 | Function | Purpose |
 |---|---|
@@ -276,7 +390,7 @@ When `len >= cap * 3 / 4` during a put:
 
 ---
 
-## 6. AST Node Types
+## 8. AST Node Types
 
 All nodes inherit from `AstNode` (`core/ast.js`) with `type`, `line`, `column`, `depth`.
 
@@ -306,9 +420,9 @@ All nodes inherit from `AstNode` (`core/ast.js`) with `type`, `line`, `column`, 
 
 ---
 
-## 7. Error Handling Architecture
+## 9. Error Handling Architecture
 
-### 7.1 Compile-Time Errors
+### 9.1 Compile-Time Errors
 
 The LLVM backend produces structured `CodegenError` objects for:
 - Unsupported constructs (LIST, MAP without explicit key/value type, SPECIES, etc.)
@@ -318,7 +432,7 @@ The LLVM backend produces structured `CodegenError` objects for:
 
 Errors are collected in `Module.errors` and returned alongside the partial IR for inspection.
 
-### 7.2 Runtime Errors (WEATHER/SHELTER)
+### 9.2 Runtime Errors (WEATHER/SHELTER)
 
 The only runtime error currently detected by the LLVM backend is **division by zero** (ZERO_STORM). Detection mechanism:
 
@@ -328,7 +442,7 @@ The only runtime error currently detected by the LLVM backend is **division by z
 4. The error setup block stores the error message in `@_weather_msg`, sets `@_weather_flag = true`, and branches to the handler
 5. If no handler is found (no active WEATHER block), the check is skipped and division proceeds normally (producing ±Infinity per IEEE 754)
 
-### 7.3 Error Globals
+### 9.3 Error Globals
 
 ```llvm
 @_weather_flag = global i1 false
@@ -340,9 +454,9 @@ Emitted lazily only when a WEATHER block is present.
 
 ---
 
-## 8. Module System (IMPORT) & FFI
+## 10. Module System (IMPORT) & FFI
 
-### 8.1 IMPORT Resolution Algorithm
+### 10.1 IMPORT Resolution Algorithm
 
 The `resolveImports` function in `core/parser.js` handles multi-file program loading:
 
@@ -363,7 +477,7 @@ resolveImports(programNode, baseDir, visited = new Set())
   4. Return the modified programNode
 ```
 
-### 8.2 Cycle Detection
+### 10.2 Cycle Detection
 
 Import cycles are detected during the recursive `resolveImports` pass:
 
@@ -376,7 +490,7 @@ IMPORT "a".   → resolveImports enters "a" → visited = {"a"}
 
 The `visited` set tracks absolute file paths, so the same file imported from different relative paths is still caught.
 
-### 8.3 AST Merging
+### 10.3 AST Merging
 
 After resolution, each `ImportStatement` node is replaced in-place with the imported file's `statements` array:
 
@@ -390,7 +504,7 @@ After resolution, each `ImportStatement` node is replaced in-place with the impo
 
 This means depth tracking, type checking, and code generation operate on a flat, merged AST — imported code is indistinguishable from inline code.
 
-### 8.4 FFI Declaration & Stub Mechanism
+### 10.4 FFI Declaration & Stub Mechanism
 
 FFI functions are declared with `-> external` syntax:
 
@@ -412,7 +526,7 @@ The function name is mangled from the PlantLang identifier. Parameters use the s
 
 **Interpreter**: FFI stubs are pre-registered in the interpreter's runtime. Each stub wraps the corresponding `runtime_bridge.c` function via a JS implementation. When the interpreter encounters a call to an external ACTION, it dispatches to the registered stub instead of looking for a body.
 
-### 8.5 FFI Stub Registration
+### 10.5 FFI Stub Registration
 
 ```javascript
 // core/interpreter.js
@@ -429,9 +543,9 @@ Stubs are registered at interpreter construction time. All 10 `runtime_bridge.c`
 
 ---
 
-## 9. Standard Library Architecture
+## 11. Standard Library Architecture
 
-### 9.1 Directory Layout
+### 11.1 Directory Layout
 
 ```
 std/
@@ -440,7 +554,7 @@ std/
 └── string.plnt     # String functions — len, upper, lower, trim, contains, split, replace, concat
 ```
 
-### 9.2 Auto-Prelude Injection
+### 11.2 Auto-Prelude Injection
 
 Every program automatically imports `std/prelude.plnt` at parse time. This happens in `parser.js` before the main parse:
 
@@ -456,14 +570,14 @@ The prelude provides:
 - `_BOOT` — bootstrap marker for runtime initialization
 - Core type aliases and utility definitions
 
-### 9.3 std/ Path Resolution
+### 11.3 std/ Path Resolution
 
 When `IMPORT "std/io"` is encountered:
 1. The resolver detects the `std/` prefix
 2. Searches for `std/io.plnt` relative to the PlantLang std library root
 3. If `PLANTLANG_STD` env var is set, uses that; otherwise defaults to `../std/` from the parser directory
 
-### 9.4 Runtime C Bridge (`core/runtime_bridge.c`)
+### 11.4 Runtime C Bridge (`core/runtime_bridge.c`)
 
 The C bridge implements 10 FFI targets that compiled PlantLang programs link against:
 
@@ -484,7 +598,7 @@ All functions receive and return `int64_t` (TX pointers as `int64_t` via ptrtoin
 
 ---
 
-## 10. Test Suite Architecture
+## 12. Test Suite Architecture
 
 ### Test Files
 - `tests/test_llvm_codegen.js` — 50 parity tests: each fixture runs via interpreter AND compiled via `llc` + `gcc`, asserts identical stdout
@@ -503,7 +617,8 @@ All functions receive and return `int64_t` (TX pointers as `int64_t` via ptrtoin
 - `tests/test_phase15_for_in.js` — 19 tests for FOR...IN loops
 - `tests/test_phase16_structs.js` — 16 tests for STRUCT types
 - `tests/test_phase17_species.js` — 10 tests for SPECIES/BLOOM OOP
-- **Total: 16 test files, ~709 assertions, all green**
+- `tests/test_phase18_lists.js` — 15 tests for native LIST operations (COUNT, FIRST, LAST, SUM)
+- **Total: 17 test files, ~724 assertions, all green**
 
 ### Test Methodology
 Each test:

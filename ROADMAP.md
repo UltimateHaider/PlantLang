@@ -1,135 +1,74 @@
-# PlantLang Roadmap: v0.27.0 (The OOP & Systems Release)
+# PlantLang Roadmap: v0.29.0 (The Polymorphic Dispatch Release)
 
-## What v0.27.0 Delivered
+## What v0.29.0 Delivered
 
-The previous roadmap targeted MAP hash tables, FOR...IN loops, and STRUCT types. Here's what was completed in **v0.27.0**:
+The previous roadmap targeted SPECIES vtable dispatch, CHOICE/MATCH codegen, and compiler hardening. Here's what was completed in **v0.29.0**:
 
-### ✅ Completed: SPECIES / BLOOM Object-Oriented (Phase 17)
+### ✅ Completed: SPECIES Vtable & Dynamic Dispatch (Phase 19)
 
-| Sub-goal | Status |
+| Sub-goal | Approach |
 |---|---|
-| **SPECIES with `{ }` body syntax** | `SPECIES Name { field: TYPE, ACTION method(params) { body } }` — parsed with `{ }` blocks or legacy `,` syntax |
-| **FROM / PARENT inheritance** | Parent fields deep-cloned during registration; child can access parent methods |
-| **BLOOM in CREATE** | `CREATE x TO BLOOM SpeciesName.` — expression-level instantiation |
-| **Colon-dispatch method calls** | `REAP result FROM obj:method.` works in full pipeline |
-| **SELF:field access** | Read, SET, INCREASE/DECREASE on `SELF:field` inside species action bodies |
-| **LLVM codegen — species struct types** | Registered as LLVM struct types with parent-field prefixing |
-| **LLVM codegen — method dispatch** | Static dispatch with name-mangled functions and bitcast for inherited methods |
-| **Type checker** | Species registration validates fields/actions; `__self` registered in scope for receiver access |
-| **Interpreter** | `_evalMethodCallStatement`, `BloomExpression`, `SelfExpression` all implemented |
+| **Vtable struct layout** | `i8*` vtable pointer added as field 0 of every species LLVM struct |
+| **Method slot allocation** | Parent fields inherited first, method slots computed across the full parent chain |
+| **Vtable globals** | Per-species `@species.Name.vtable = constant [N x i8*]` with function pointers for each method |
+| **Constructor init** | Both `genCreateSpecies` and `genCreateBloomed` store the vtable pointer after zeroing fields |
+| **Indirect dispatch** | `genMethodCallStatement` loads vtable from field 0, indexes to method slot, calls through function pointer |
+| **Uniform calling convention** | All species method functions use `i8*` receiver (bitcast to concrete type inside function body) |
+| **`__self` receiver** | LLVM `genFnDef` registers both `self` and `__self` in scope for SET field access |
+| **Dynamic dispatch on expressions** | `MethodCall` expression nodes (`obj:method()`) in `compileAstExpr` also dispatch through vtable |
 
-### ✅ Completed: FOR...IN Loop (Phase 15)
+### ✅ Completed: CHOICE / MATCH LLVM Codegen (Phase 20)
 
-| Sub-goal | Status |
+| Sub-goal | Approach |
 |---|---|
-| **FOR...IN syntax** | `FOR name IN expr, body /FOR.` with DEPTH-aware parsing |
-| **LIST iteration** | Iterates over dynamic array values |
-| **MAP iteration** | Iterates over hash-table keys |
-| **TX iteration** | Iterates over character spans |
-| **STOP IF propagation** | `STOP_STORM` correctly caught and handled in `FOR` bodies |
-| **Nested IF support** | `IF cond, SHOW x.` inline syntax inside loop bodies |
+| **CHOICE struct layout** | `{ i64 tag, i64 payload }` — tag is variant index, payload is i64-compatible value |
+| **Variant construction** | `Option.None` → `insertvalue {i64,i64} zeroinitializer, i64 tag, 0` |
+| **Payload-bearing variants** | `Option.Some(10)` → `insertvalue` with tag + compiled payload value |
+| **MATCH switch chain** | Extract tag via `extractvalue`, compare against each variant index, branch to clause body |
+| **Payload binding** | `extractvalue` extracts payload, stored in arena for clause body access |
+| **MAP `get()` → Option** | `genMapHas` for existence check + `_emitMapGetValue` for value probe → returns `{ tag, payload }` |
 
-### ✅ Completed: STRUCT Type (Phase 16)
+### ✅ Completed: SPECIES LLVM Bug Fixes
 
-| Sub-goal | Status |
+| Bug | Fix |
 |---|---|
-| **STRUCT syntax** | `STRUCT Person { name: TX, age: NUM }.` — `field: TYPE` style alongside existing `SHAPE … field(TYPE)` |
-| **Anonymous struct literals** | `CREATE p(Person) TO { name: "Alice", age: 30 }.` in CREATE context |
-| **Field access/mutation** | `p.age`, `SET p.age TO 25.`, `INCREASE p.age BY 1.` |
-| **Struct nesting** | Struct-of-struct composition with deep field access |
-| **Type checker** | Field existence validation, literal arity checking |
-| **LLVM codegen** | Struct literals emit GEP-based field stores |
-
-### ✅ Completed: English-Language Cleanup
-- All Arabic strings in engine `.js` files translated to English
-- `ar-IQ` locale → `en-US` for date/time formatting
-- Unicode-escaped Arabic error string in LLVM codegen replaced
-- ~58 storm messages in interpreter, all CLI strings in `chloroplast.js`, example data in webrepl
-
-### ✅ Completed: MAP Type (Hash Table) — Full LLVM Codegen
-
-Open-addressing HashMap with linear probing, fully compiled:
-
-| Sub-goal | Status |
-|---|---|
-| **MAP syntax** | `CREATE m(MAP[NUM,TX]).` with typed key/value parameters; `{ key: value }` dict literals |
-| **LINK statement** | `LINK key WITH value IN map.` — compiled via `genMapPut` |
-| **Bucket layout** | `{ i1 is_occupied, key_type, value_type }` — arena-allocated arrays |
-| **Hash function** | djb2 for TX keys (inline LLVM IR), identity hash for NUM keys |
-| **Linear probing** | Full probe loop with match/empty/collision three-way branching |
-| **Automatic growth** | Load factor > 0.75 triggers 2× capacity doubling with full rehash |
-| **`m.has(key)`** | Compiled natively — returns FACT (true/false) |
-| **`m.get(key)`** | Interpreter-only (returns `Option<V>`, needs MATCH codegen) |
-| **`m.put(key, value)`** | Compiled via `LinkStatement` → `genMapPut` |
-| **Backward compat** | Legacy untyped `MAP` (plain object) still works in interpreter |
-| **Type checker** | Full validation: key/value arity, type matching, MAP[K,V] inference |
-
-### ✅ Completed: LLVM Codegen Robustness Fixes
-
-- `llvmType()` — MAP types return `%fat_ptr` (was `null`, causing null-pointer stores)
-- `@llvm.memset.p0i8.i64` — conditional declaration for bucket array zeroing
-- Grow loop rehash branch — fixed no-op loop (both targets pointed to exit)
-- `storeL`/`skipL` separation — fixed unterminated basic block in grow rehash
-- `genMapHas` returns `FACT` — SHOW now prints `true`/`false` matching interpreter
-- `mapBucketSize` padding — bucket stride now 40 bytes (was 33), fixing multi-element corruption
-- `genShow` handles `MethodCall` — enables `SHOW m.has(1).` in compiled mode
-
-### ✅ Completed: Test Expansion
-- Phase 14 (MAP): 17 tests
-- Phase 15 (FOR...IN): 19 tests
-- Phase 16 (STRUCT): 16 tests
-- Phase 17 (SPECIES/BLOOM): 10 tests
-- LLVM backend: 50 tests
-- **16 test files total, ~709 assertions, all green**
+| `_checkMethodCallStatement` used `targetVar.speciesName` (undefined for BLOOM instances) | Store `speciesName` in typechecker variable info; use it for method resolution |
+| `genSet` lacked `__self` in LLVM scope | Register `__self` alongside `self` in `genFnDef` receiver setup |
+| `SelfExpression`/`BloomExpression` missing from `compileAstExpr` | Added cases: SelfExpression returns receiver pointer, BloomExpression allocates + zeroes instance |
+| `BloomStatement` silently skipped | Now emits clear error: use `CREATE x TO BLOOM SpeciesName.` instead |
 
 ---
 
-## 🚀 v0.28.0 Objectives
+## 🚀 v0.30.0 Objectives
 
-### 1. SPECIES / BLOOM Full LLVM Codegen (Advanced)
-
-| Sub-goal | Approach |
-|---|---|
-| **SPECIES vtable dispatch** | Virtual method dispatch for polymorphic methods |
-| **SELF mutation across method calls** | Compiled SET/INCREASE on SELF fields propagate correctly |
-| **Dynamic dispatch** | Support METHOD call statements (`obj:method().`) as standalone expressions in compiled mode |
-
-### 2. LLVM Codegen: LIST Operations
+### 1. Runtime Library (`libplantlang.so`)
 
 | Sub-goal | Approach |
 |---|---|
-| **LIST literal** | `CREATE xs(LIST) TO 1, 2, 3.` → compile-time array initialization |
-| **LIST operations** | `SORT`, `SHAKE`, `COUNT`, `FIRST`, `LAST`, `SUM`, `AVG`, `MIN`, `MAX` |
-| **CYCLE ... IN list** | Iteration over dynamic arrays |
-| **Index access** | `xs[0]`, `SET xs[0] TO val` |
+| **Sorting (NUM/TX arrays)** | Quicksort / mergesort implemented in C, callable via FFI |
+| **String operations** | `split`, `join`, `reverse`, `pad` — C implementations |
+| **Math library expansion** | `sin`, `cos`, `tan`, `floor`, `ceil`, `round` as FFI functions |
+| **Build system** | `Makefile` for `libplantlang.so`, auto-detected by `chloroplast compile` |
+| **Format string** | Shared `printf`-style format dispatch for SHOW |
 
-### 3. CHOICE / MATCH in LLVM Backend
-
-| Sub-goal | Approach |
-|---|---|
-| **CHOICE struct layout** | Tag + payload union — `{ i64 tag, { i64, %fat_ptr } payload }` |
-| **MATCH codegen** | Switch on tag, branch to clause body with payload binding |
-| **`m.get(key)`** | Enable in compiled mode by compiling the returned `Option<V>` |
-
-### 4. Runtime Library (`runtime.c` → `libplantlang.so`)
-
-| Sub-goal | Approach |
-|---|---|
-| **Hash table** | Open-addressing with FNV-1a (`runtime.c`) |
-| **Dynamic array (mature)** | Stabilize realloc/shrink patterns |
-| **Sorting** | Quicksort / mergesort for LIST (`runtime.c`) |
-| **Std library expansion** | Add `math`, `lists`, `maps` standard modules |
-| **Printf formatting** | Shared format-string dispatch for SHOW output |
-
-### 5. Compiler & Language Hardening
+### 2. Language & Compiler Hardening
 
 | Sub-goal | Approach |
 |---|---|
 | **Contract Law: cross-depth access** | Enable `checkDepthAccess()` for SET/INCREASE/DECREASE/SHOW |
 | **Contract Law: contracting syntax** | Implement `\N var -> M = expr` for explicit depth promotion |
+| **IMPORT re-export / symbols** | Selective symbol import from modules |
 | **Error coverage** | `srem` (modulo) zero-divisor check for WEATHER blocks |
 | **String null safety** | Guard `@malloc(0)` in edge cases |
-| **IMPORT re-export / symbols** | Selective symbol import from modules |
+
+### 3. Integration Testing & Parity
+
+| Sub-goal | Approach |
+|---|---|
+| **SPECIES integration tests** | Test vtable dispatch, method overriding, SELF mutation across inheritance |
+| **CHOICE/MATCH parity tests** | Verify interpreter and LLVM-compiled output match exactly for all CHOICE features |
+| **LIST SORT parity** | Compiled sort matches interpreter's SORT behavior |
+| **Benchmark suite** | Interpreter vs compiled for OOP-heavy workloads |
 
 ---
 
@@ -137,34 +76,33 @@ Open-addressing HashMap with linear probing, fully compiled:
 
 | Milestone | Task | Priority | Est. Effort |
 | :--- | :--- | :--- | :--- |
-| **M1** | SPECIES struct layout + BLOOM instantiation in LLVM IR | High | 3 weeks |
-| **M2** | SPECIES method dispatch + SELF parameter | High | 2 weeks |
-| **M3** | CHOICE/MATCH codegen for LLVM backend | High | 2 weeks |
-| **M4** | LLVM codegen: LIST literal, SORT, CYCLE IN | Medium | 2 weeks |
-| **M5** | Std library expansion (math, lists, maps modules) | Medium | 1 week |
-| **M6** | Integration test suite for SPECIES/LIST/CHOICE parity | High | 1 week |
-| **M7** | Benchmark suite: interpreter vs compiled for OOP-heavy workloads | Medium | 1 week |
+| **M1** | Runtime library C implementation (sort, strings, math) | High | 3 weeks |
+| **M2** | Contract Law cross-depth access enforcement | Medium | 1 week |
+| **M3** | IMPORT re-export / selective symbols | Medium | 1 week |
+| **M4** | Integration test suite for SPECIES/CHOICE/MATCH parity | High | 1 week |
+| **M5** | Benchmark suite: interpreter vs compiled | Medium | 1 week |
 
 ---
 
 ## 🎯 Success Criteria
 
-- **Full Parity**: SPECIES, LIST, and CHOICE/MATCH operations behave identically in interpreter and LLVM-compiled binary
-- **No Memory Leaks**: Valgrind-clean on all collection operations (no leaks, no use-after-free)
-- **Test Count**: Test suite grows from ~709 → **850+** covering all new constructs
-- **Performance**: Compiled SPECIES/LIST operations within 2× of equivalent C
+- **No Regressions**: All 17 existing test suites (~724 assertions) continue to pass
+- **Full Parity**: SPECIES, CHOICE/MATCH, and LIST operations behave identically in interpreter and LLVM-compiled binary
+- **No Memory Leaks**: Valgrind-clean on all collection operations
+- **Test Count**: Test suite grows from ~724 → **850+** covering all new constructs
+- **Performance**: Compiled SPECIES/CHOICE operations within 2× of equivalent C
 
 ---
 
 ## 📅 Target Timeline
 
 | Phase | Focus | Target |
-|---|---|---|---|
-| **v0.27.0** | **SPECIES OOP (interpreter + LLVM basic) + MAP/FOR...IN/STRUCT** | **Q2 2026** |
-| v0.28.0 | CHOICE/MATCH native, LIST native, SPECIES advanced LLVM | Q3 2026 |
-| v0.29.0 | TAP file I/O, HARVEST networking, Flow pipeline | Q4 2026 |
-| v0.30.0 | PULSE/WHENEVER reactive, VERIFY/SUITE native | Q1 2027 |
+|---|---|---|
+| **v0.29.0** | **SPECIES vtable dispatch, CHOICE/MATCH native, MAP get()** | **Q3 2026** |
+| v0.30.0 | Runtime library (sort, strings, math), compiler hardening | Q4 2026 |
+| v0.31.0 | TAP file I/O, HARVEST networking, Flow pipeline | Q1 2027 |
+| v0.32.0 | PULSE/WHENEVER reactive, VERIFY/SUITE native | Q2 2027 |
 
 ---
 
-*PlantLang v0.27.0: SPECIES OOP. MAP hash tables. FOR...IN loops. STRUCT types. 709 tests all green.*
+*PlantLang v0.29.0: SPECIES vtable dispatch, CHOICE/MATCH LLVM codegen, MAP get() → Option. All 17 test suites green.*

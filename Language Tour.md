@@ -281,6 +281,20 @@ Features:
 1\ SHOW MIN scores.
 ```
 
+### Native List Operations (COUNT / FIRST / LAST / SUM)
+
+The recommended syntax for aggregate list operations uses typed arrays `[NUM]`:
+
+```
+1\ CREATE nums([NUM]) TO [10, 20, 30, 40].
+1\ SHOW COUNT(nums).    # → 4 (O(1) — extractvalue on %fat_ptr length)
+1\ SHOW SUM(nums).      # → 100 (O(n) — inline LLVM phi loop)
+1\ SHOW FIRST(nums).    # → 10 (O(1) — GEP to index 0)
+1\ SHOW LAST(nums).     # → 40 (O(1) — GEP to len-1)
+```
+
+All four operations are compiled to native LLVM IR — no external calls. COUNT, FIRST, and LAST are O(1). SUM is O(n) with inline emission. Type checker enforces: SUM requires `[NUM]`; COUNT/FIRST/LAST work on any `[T]` array.
+
 ### LINK (MAP insert)
 
 ```
@@ -722,6 +736,8 @@ Requires LLVM's `llc` (and ideally `opt`) on `PATH` — e.g. `apt install llvm` 
 | `MAP` (hash table) | ✅ `LINK`, `has()`, `put()` — open-addressing, linear probing, djb2 hash, auto-growth |
 | `FOR...IN` | ✅ iterate over LIST, MAP, TX |
 | `LIST` (dynamic array) | ❌ use `chloroplast run` |
+| `COUNT(xs)` / `FIRST(xs)` / `LAST(xs)` | ✅ O(1) via GEP/extractvalue — compiled natively |
+| `SUM(xs)` | ✅ O(n) inline phi loop — compiled natively |
 | `SPECIES` / `BLOOM` | ✅ interpreter: `{ }` body syntax, FROM inheritance, BLOOM instantiation, method dispatch, SELF:field access |
 | `CHOICE` / `MATCH` | ❌ not yet (interpreter-only) |
 | `HARVEST` / `LISTEN BRANCH` | ❌ not yet |
@@ -766,7 +782,7 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.27.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production:
+Chloroplast v0.28.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production:
 
 ```
 Source (.plnt)

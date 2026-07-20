@@ -374,6 +374,14 @@ class CapCallNode extends AstNode {
   }
 }
 
+class ListOpNode extends AstNode {
+  constructor(arg, operation, coords) {
+    super('ListOp', coords);
+    this.arg = arg;
+    this.operation = operation;
+  }
+}
+
 class IndexAccessNode extends AstNode {
   constructor(target, index, coords) {
     super('IndexAccess', coords);
@@ -446,6 +454,7 @@ module.exports = {
   LiteralNode,
   LenCallNode,
   CapCallNode,
+  ListOpNode,
   IndexAccessNode,
   StructDeclarationNode,
   StructInstantiationExpr,

@@ -109,6 +109,27 @@ class Interpreter {
       if(typeof arg!=='string')return 0;
       return arg.length+1;
     }
+    if(node.type==='ListOp'){
+      const arg=this.evaluateExpressionNode(node.arg,soil);
+      if(!Array.isArray(arg))storm('TYPE_STORM',`${node.operation} requires an array argument`,node.line,node.column);
+      if(node.operation==='COUNT')return arg.length;
+      if(node.operation==='FIRST'){
+        if(arg.length===0)storm('SEED_STORM','FIRST on empty array',node.line,node.column);
+        return arg[0];
+      }
+      if(node.operation==='LAST'){
+        if(arg.length===0)storm('SEED_STORM','LAST on empty array',node.line,node.column);
+        return arg[arg.length-1];
+      }
+      if(node.operation==='SUM'){
+        return arg.reduce((a,b)=>{
+          const na=typeof a==='number'?a:0;
+          const nb=typeof b==='number'?b:0;
+          return na+nb;
+        },0);
+      }
+      storm('TYPE_STORM',`Unknown list operation "${node.operation}"`,node.line,node.column);
+    }
     if(node.type==='IndexAccess'){
       const target=this.evaluateExpressionNode(node.target,soil);
       const idx=this.evaluateExpressionNode(node.index,soil);

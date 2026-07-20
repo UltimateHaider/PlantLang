@@ -1,6 +1,64 @@
 # Changelog — PlantLang / Chloroplast
 
-## v0.27.0 — 2026 (current)
+## v0.29.0 — 2026 (current)
+
+### New Features
+- **SPECIES Vtable Dispatch (Phase 19)** — virtual method dispatch via polymorphic vtables in LLVM codegen:
+  - Vtable pointer (i8*) added as field 0 of every species LLVM struct
+  - Method slots computed across the full parent chain (parent methods prefix, child overrides reuse slots)
+  - Per-species `@species.Name.vtable = constant [N x i8*]` globals emitted with function pointers
+  - `genCreateSpecies` and `genCreateBloomed` store vtable pointer after zeroing fields
+  - `genMethodCallStatement` dispatches through vtable: load → GEP → load function pointer → bitcast → call
+  - Uniform `i8*` receiver convention for all species methods (bitcast to concrete type inside function body)
+  - Dynamic dispatch also works in expression-level `MethodCall` nodes in `compileAstExpr`
+- **CHOICE / MATCH LLVM Codegen (Phase 20)** — tagged unions and pattern matching compiled to native LLVM IR:
+  - CHOICE values stored as `{ i64 tag, i64 payload }` struct (`insertvalue` / `extractvalue`)
+  - Variant construction: `Option.None` and `Option.Some(10)` emit struct construction inline
+  - MATCH statement: extract tag, icmp chain against variant indices, branch to clause body
+  - Payload binding: extractvalue payload, store in arena, register in clause scope
+  - MAP `get()` returns `Option<V>` (probes map, branches on found/not found, wraps result)
+- **SPECIES LLVM Bug Fixes**:
+  - Typechecker stores `speciesName` in variable info for BLOOM instances, fixing method resolution
+  - LLVM `genFnDef` registers both `self` and `__self` in scope for SET field access
+  - `SelfExpression` and `BloomExpression` nodes handled in `compileAstExpr`
+  - `BloomStatement` emits clear error message (old-style `BLOOM x AS y.` not supported in compiled mode)
+
+### Full Test Suite
+- All **17 test files, ~724 total assertions** — all green
+- No regressions from any Phase 17–20 changes
+
+### Documentation
+- All `.md` files bumped to v0.29.0
+- ROADMAP.md — v0.29.0 objectives marked complete, v0.30.0 roadmap drafted
+- TECHNICAL.md — new sections: Species Vtable Dispatch (4), CHOICE/MATCH Codegen (5), MAP get() Option
+
+---
+
+## v0.28.0 — 2026
+
+### New Features
+- **Native LIST Operations (Phase 18)** — built-in aggregate operations on dynamic arrays compiled to native LLVM IR:
+  - `COUNT(xs)` — O(1) length extraction via `extractvalue` from `%fat_ptr` struct
+  - `FIRST(xs)` / `LAST(xs)` — O(1) element access via GEP with element-size offset
+  - `SUM(xs)` — O(n) inline accumulation loop emitted as LLVM IR (no external C call)
+  - Type checker validates: COUNT/FIRST/LAST require `[T]` array; SUM requires `[NUM]`
+  - Interpreter: JS-native implementations via `Array.length`, `Array.reduce`, index access
+  - 15 new tests covering empty/populated arrays, single elements, type checking, FOR...IN parity
+
+### LLVM Codegen
+- `ListOp` dispatch in `compileAstExpr` — COUNT/FIRST/LAST emit GEP/load; SUM emits phi-based accumulation loop
+- All expression contexts updated: SHOW, CREATE RHS, struct field defaults, SET RHS
+
+### Test Suite
+- Added **Phase 18 — Native LIST Ops** (`tests/test_phase18_lists.js`) — 15 tests
+- Total test suites expanded to **17 files, ~724 total assertions** — all green
+
+### Documentation
+- All `.md` files bumped to v0.28.0
+
+---
+
+## v0.27.0 — 2026
 
 ### New Features
 - **SPECIES / BLOOM — Object-Oriented Foundations (Phase 17)** — class-based OOP with `{ }` body syntax:

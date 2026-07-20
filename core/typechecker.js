@@ -102,7 +102,7 @@ class TypeScope {
 
   // Variables
   setVar(name, type, opts = {}) {
-    this._vars.set(name, { type, locked: opts.locked || false, line: opts.line || 0 });
+    this._vars.set(name, { type, locked: opts.locked || false, line: opts.line || 0, speciesName: opts.speciesName || null });
   }
 
   getVar(name) {
@@ -916,7 +916,7 @@ class TypeChecker {
         node.line, node.column);
     }
     if (instanceName) {
-      scope.setVar(instanceName, T.INSTANCE, { line: node.line });
+      scope.setVar(instanceName, T.INSTANCE, { line: node.line, speciesName: className });
     }
   }
 
@@ -929,9 +929,10 @@ class TypeChecker {
       this.warn('UNDEFINED_VAR', `"${targetName}" is not defined`, node.line, node.column);
       return;
     }
-    // Look up the instance's species
-    const spec = targetVar.speciesName ? scope.getSpecies(targetVar.speciesName) : null;
-    if (spec && !spec.methods[node.methodName]) {
+    // Look up the instance's species (stored in speciesName for BLOOM or type for CREATE)
+    const speciesName = targetVar.speciesName || targetVar.type;
+    const spec = speciesName ? scope.getSpecies(speciesName) : null;
+    if (spec && (!spec.methods || !spec.methods[node.methodName])) {
       this.error('UNDEFINED_ACTION',
         `"${node.methodName}" is not a method on "${targetName}"`,
         node.line, node.column);
@@ -1257,6 +1258,26 @@ class TypeChecker {
     }
     if (node.type === 'LenCall' || node.type === 'CapCall') {
       return T.NUM;
+    }
+    if (node.type === 'ListOp') {
+      const argType = this._inferExprNode(node.arg, scope);
+      if (node.operation === 'COUNT') return T.NUM;
+      if (node.operation === 'SUM') {
+        if (argType === '[NUM]') return T.NUM;
+        if (argType === '[SCL]') return T.SCL;
+        if (isArrayType(argType)) {
+          this.error('TYPE_MISMATCH', `SUM requires [NUM] array, got ${argType}`, node.line, node.column);
+          return T.NUM;
+        }
+        return T.NUM;
+      }
+      if (node.operation === 'FIRST' || node.operation === 'LAST') {
+        if (isArrayType(argType)) {
+          return arrayInnerType(argType);
+        }
+        return T.UNKNOWN;
+      }
+      return T.UNKNOWN;
     }
     if (node.type === 'IndexAccess') {
       const targetType = this._inferExprNode(node.target, scope);

@@ -794,6 +794,8 @@ class LLVMGenerator {
     this.structDeclLines = []; // LLVM IR lines for type declarations
     this.speciesTypes = new Map(); // name -> { structType, llvmFields, totalSize, fieldIndex, fields, actions, parentName }
     this.speciesDeclLines = [];
+    this.speciesVtableLines = [];
+    this.choiceTypes = new Map(); // name -> [{ name: string, type: string|null }]
   }
 
   /** Look up the nearest active SHELTER that catches the given storm type. */
@@ -815,15 +817,43 @@ class LLVMGenerator {
     return info.fieldIndex[fieldName] !== undefined ? info.fieldIndex[fieldName] : -1;
   }
 
+  /** Compute method slot indices for a species (including inherited methods). */
+  _computeMethodSlots(speciesName) {
+    const slots = new Map(); // methodName → slotIndex
+    const speciesInfo = this.speciesTypes.get(speciesName);
+    if (!speciesInfo) return slots;
+    // Walk the parent chain to collect inherited method slots first
+    if (speciesInfo.parentName) {
+      const parentSlots = this._computeMethodSlots(speciesInfo.parentName);
+      for (const [name, idx] of parentSlots) {
+        slots.set(name, idx);
+      }
+    }
+    // Add new methods (or override existing slots) in declaration order
+    let nextSlot = slots.size;
+    for (const action of (speciesInfo.actions || [])) {
+      if (!slots.has(action.name)) {
+        slots.set(action.name, nextSlot++);
+      }
+    }
+    return slots;
+  }
+
   /** Register a species as an LLVM struct type with parent field prefixing. */
   _registerSpeciesType(node) {
     const allFields = [];
     const fieldIndex = {};
     let idx = 0;
+    // Field 0 is reserved for the vtable pointer
+    const vtableField = { name: '__vtable', varType: 'NUM' }; // stored as i8*
+    allFields.push(vtableField);
+    fieldIndex.__vtable = idx++;
     if (node.parentName) {
       const parentInfo = this.speciesTypes.get(node.parentName);
       if (parentInfo) {
-        for (const f of parentInfo.fields) {
+        // Skip parent's field 0 (vtable) since we have our own
+        for (let fi = 1; fi < parentInfo.fields.length; fi++) {
+          const f = parentInfo.fields[fi];
           allFields.push(f);
           fieldIndex[f.name] = idx++;
         }
@@ -843,16 +873,150 @@ class LLVMGenerator {
       totalSize += padding + sz;
       llvmFields.push(lt);
     }
+    // Store vtable field type as i8* (pointer to function pointer array)
+    llvmFields[0] = 'i8*';
     totalSize = Math.ceil(totalSize / 8) * 8;
+    // Ensure at least 8 bytes for vtable pointer even if no user fields
+    if (totalSize < 8) totalSize = 8;
     const structType = `%species.${node.name}`;
-    this.speciesTypes.set(node.name, {
+    // Temporarily store the species info so _computeMethodSlots can recurse
+    const speciesEntry = {
       structType, llvmFields, totalSize, fieldIndex,
       fields: allFields,
       actions: node.actions || [],
       parentName: node.parentName,
-    });
+      methodSlots: null, // computed below
+      vtableEntries: [], // function pointer strings for @vtable global
+    };
+    this.speciesTypes.set(node.name, speciesEntry);
+    // Now compute method slots (needs speciesTypes populated for parent chain)
+    speciesEntry.methodSlots = this._computeMethodSlots(node.name);
+    // Build vtable entry list: for each slot, find the implementing species
+    for (const [methodName, slotIdx] of speciesEntry.methodSlots) {
+      // Walk the concrete species + parent chain to find the definition
+      let implSpecies = node.name;
+      let implInfo = this.speciesTypes.get(implSpecies);
+      // Check if this species directly defines the method
+      const hasDirectDef = implInfo.actions.some(a => a.name === methodName);
+      if (!hasDirectDef && implInfo.parentName) {
+        // Walk up looking for a definition
+        let walkName = implInfo.parentName;
+        while (walkName) {
+          const walkInfo = this.speciesTypes.get(walkName);
+          if (walkInfo && walkInfo.actions.some(a => a.name === methodName)) {
+            implSpecies = walkName;
+            break;
+          }
+          walkName = walkInfo ? walkInfo.parentName : null;
+        }
+      }
+      const vtFnName = `${implSpecies}_${methodName}`;
+      const vtFnSig = `i64 (i8*, i64)*`; // uniform vtable calling convention
+      speciesEntry.vtableEntries.push(`i8* bitcast (${vtFnSig} @${safeName(vtFnName)} to i8*)`);
+    }
+    const vtableType = `[${speciesEntry.methodSlots.size} x i8*]`;
+    const vtableName = `@species.${node.name}.vtable`;
+    speciesEntry.vtableName = vtableName;
+    speciesEntry.vtableType = vtableType;
+    // Emit vtable global (function pointers are resolved later, but we emit the structure)
+    const vtableEntryStr = speciesEntry.vtableEntries.length > 0
+      ? `[ ${speciesEntry.vtableEntries.join(', ')} ]`
+      : `zeroinitializer`;
+    this.speciesVtableLines.push(`${vtableName} = constant ${vtableType} ${vtableEntryStr}`);
     LLVM_SPECIES_MAP.set(node.name, { structType, llvmFields, totalSize, fieldIndex });
     this.speciesDeclLines.push(`${structType} = type { ${llvmFields.join(', ')} }`);
+  }
+
+  /** Probe a MAP and return the value for a given key (assumes key exists). */
+  _emitMapGetValue(node, mapTypeStr, mapReg, keyVal) {
+    const m = this.mod;
+    const mt = mapInnerTypes(mapTypeStr);
+    const bucketType = mapBucketLlvmType(mt.keyType, mt.valueType);
+    const bktSize = mapBucketSize(mt.keyType, mt.valueType);
+    const keyLt = llvmType(mt.keyType) || 'i64';
+    const valLt = llvmType(mt.valueType) || 'i64';
+    const bucketsPtr = m.extractPtr(mapReg);
+    const capReg = m.extractCap(mapReg);
+    let hashReg;
+    let keyReg = keyVal.reg;
+    if (mt.keyType === 'TX') {
+      hashReg = this.emitTxHash(keyReg, node);
+    } else {
+      hashReg = keyReg;
+    }
+    const startIdx = m.freshReg();
+    m.emit(`${startIdx} = urem i64 ${hashReg}, ${capReg}`);
+    const resSlot = m.freshReg();
+    m.emit(`${resSlot} = alloca ${valLt}`);
+    const probeL = m.freshLabel('map.getv.probe');
+    const foundL = m.freshLabel('map.getv.found');
+    const emptyL = m.freshLabel('map.getv.empty');
+    const exitL = m.freshLabel('map.getv.exit');
+    const idxSlot = m.freshReg();
+    m.emit(`${idxSlot} = alloca i64`);
+    m.emit(`store i64 ${startIdx}, i64* ${idxSlot}`);
+    m.emit(`br label %${probeL}`);
+    m.emitLabel(probeL);
+    const curIdx = m.freshReg();
+    m.emit(`${curIdx} = load i64, i64* ${idxSlot}`);
+    const byteOff = m.freshReg();
+    m.emit(`${byteOff} = mul i64 ${curIdx}, ${bktSize}`);
+    const bktRaw = m.freshReg();
+    m.emit(`${bktRaw} = getelementptr inbounds i8, i8* ${bucketsPtr}, i64 ${byteOff}`);
+    const bkt = m.freshReg();
+    m.emit(`${bkt} = bitcast i8* ${bktRaw} to ${bucketType}*`);
+    const occPtr = m.freshReg();
+    m.emit(`${occPtr} = getelementptr inbounds ${bucketType}, ${bucketType}* ${bkt}, i64 0, i32 0`);
+    const isOcc = m.freshReg();
+    m.emit(`${isOcc} = load i1, i1* ${occPtr}`);
+    m.emit(`br i1 ${isOcc}, label %${foundL}, label %${emptyL}`);
+    m.emitLabel(foundL);
+    const keyPtr = m.freshReg();
+    m.emit(`${keyPtr} = getelementptr inbounds ${bucketType}, ${bucketType}* ${bkt}, i64 0, i32 1`);
+    const existingKey = m.freshReg();
+    m.emit(`${existingKey} = load ${keyLt}, ${keyLt}* ${keyPtr}`);
+    let keysMatch;
+    if (keyLt === 'i64') {
+      const km = m.freshReg();
+      m.emit(`${km} = icmp eq i64 ${existingKey}, ${keyReg}`);
+      keysMatch = km;
+    } else if (keyLt === '%fat_ptr') {
+      const existingPtr = m.extractPtr(existingKey);
+      const keyPtr2 = m.extractPtr(keyReg);
+      const scmp = m.freshReg();
+      m.emit(`${scmp} = call i32 @strcmp(i8* ${existingPtr}, i8* ${keyPtr2})`);
+      const sm = m.freshReg();
+      m.emit(`${sm} = icmp eq i32 ${scmp}, 0`);
+      keysMatch = sm;
+    } else {
+      const km = m.freshReg();
+      m.emit(`${km} = icmp eq i64 ${existingKey}, ${keyReg}`);
+      keysMatch = km;
+    }
+    const matchExit = m.freshLabel('map.getv.matchexit');
+    const collisionL = m.freshLabel('map.getv.collision');
+    m.emit(`br i1 ${keysMatch}, label %${matchExit}, label %${collisionL}`);
+    m.emitLabel(matchExit);
+    const valPtr = m.freshReg();
+    m.emit(`${valPtr} = getelementptr inbounds ${bucketType}, ${bucketType}* ${bkt}, i64 0, i32 2`);
+    const loadedVal = m.freshReg();
+    m.emit(`${loadedVal} = load ${valLt}, ${valLt}* ${valPtr}`);
+    m.emit(`store ${valLt} ${loadedVal}, ${valLt}* ${resSlot}`);
+    m.emit(`br label %${exitL}`);
+    m.emitLabel(collisionL);
+    const nextIdx = m.freshReg();
+    m.emit(`${nextIdx} = add i64 ${curIdx}, 1`);
+    const wrappedIdx = m.freshReg();
+    m.emit(`${wrappedIdx} = urem i64 ${nextIdx}, ${capReg}`);
+    m.emit(`store i64 ${wrappedIdx}, i64* ${idxSlot}`);
+    m.emit(`br label %${probeL}`);
+    m.emitLabel(emptyL);
+    m.emit(`br label %${exitL}`);
+    m.emitLabel(exitL);
+    const finalVal = m.freshReg();
+    m.emit(`${finalVal} = load ${valLt}, ${valLt}* ${resSlot}`);
+    const plType = valLt === 'double' ? 'SCL' : valLt === 'i1' ? 'FACT' : valLt === '%fat_ptr' ? 'TX' : 'NUM';
+    return { reg: finalVal, type: plType };
   }
 
   /** Helper: emit a zero-divisor check that sets error globals and branches
@@ -919,6 +1083,11 @@ class LLVMGenerator {
           isExternal: !!node.isExternal,
           receiver: node.receiver,
         });
+      }
+      if (node.type === 'VariantDeclaration') {
+        this.choiceTypes.set(node.name, node.variants);
+        // CHOICE values are stored as { i64 tag, i64 payload }
+        this.structDeclLines.push(`%choice.${node.name} = type { i64, i64 }`);
       }
     }
     // Emit species type declarations
@@ -998,7 +1167,8 @@ class LLVMGenerator {
     if (info.receiver) {
       const recvLt = llvmType(info.receiver.type);
       if (recvLt) {
-        llvmParams.push(`${recvLt}* %${safeName(info.receiver.name)}`);
+        // Use uniform i8* receiver type for vtable-compatible calling convention
+        llvmParams.push(`i8* %${safeName(info.receiver.name)}`);
       } else {
         m.error(`Unsupported receiver type "${info.receiver.type}" in ACTION "${name}"`, info);
       }
@@ -1038,8 +1208,13 @@ class LLVMGenerator {
       const recvLt = llvmType(info.receiver.type);
       if (recvLt) {
         const sName = safeName(info.receiver.name);
-        // Receiver is already a pointer — store it directly in scope
-        m.scope.set(info.receiver.name, { ptr: `%${sName}`, plType: info.receiver.type, depth: 0 });
+        // Receiver is passed as i8* for vtable-compatible calling convention
+        // Bitcast to the concrete struct pointer type for field access
+        const typedPtr = m.freshReg();
+        m.emit(`${typedPtr} = bitcast i8* %${sName} to ${recvLt}*`);
+        m.scope.set(info.receiver.name, { ptr: typedPtr, plType: info.receiver.type, depth: 0 });
+        // Also register __self for SET __self.field access (parser normalizes SELF/self → __self)
+        m.scope.set('__self', { ptr: typedPtr, plType: info.receiver.type, depth: 0 });
       }
     }
     for (const p of info.params) {
@@ -1109,7 +1284,7 @@ class LLVMGenerator {
         } else if (typeof arg === 'string') {
           const ec = new ExprCompiler(m, node, this);
           val = ec.compileExpr(arg);
-        } else if (arg && arg.type === 'LenCall' || arg && arg.type === 'CapCall' || arg && arg.type === 'IndexAccess') {
+        } else if (arg && arg.type === 'LenCall' || arg && arg.type === 'CapCall' || arg && arg.type === 'ListOp' || arg && arg.type === 'IndexAccess') {
           val = this.compileAstExpr(arg);
         } else {
           val = { reg: '0', type: 'NUM' };
@@ -1133,7 +1308,7 @@ class LLVMGenerator {
         let val;
         if (fv.value.type === 'Literal' || fv.value.type === 'Identifier') {
           val = this.compileAstExpr(fv.value);
-        } else if (fv.value.type === 'LenCall' || fv.value.type === 'CapCall' || fv.value.type === 'IndexAccess') {
+        } else if (fv.value.type === 'LenCall' || fv.value.type === 'CapCall' || fv.value.type === 'ListOp' || fv.value.type === 'IndexAccess') {
           val = this.compileAstExpr(fv.value);
         } else {
           val = { reg: '0', type: 'NUM' };
@@ -1162,8 +1337,14 @@ class LLVMGenerator {
       const lt = speciesInfo.llvmFields[i];
       const fieldPtr = m.freshReg();
       m.emit(`${fieldPtr} = getelementptr inbounds ${speciesInfo.structType}, ${speciesInfo.structType}* ${structPtr}, i32 0, i32 ${i}`);
-      const defaultVal = lt === 'i64' ? '0' : lt === 'double' ? '0.0' : lt === 'i1' ? 'false' : 'zeroinitializer';
+      const defaultVal = lt === 'i64' ? '0' : lt === 'double' ? '0.0' : lt === 'i1' ? 'false' : lt === 'i8*' ? 'null' : 'zeroinitializer';
       m.emit(`store ${lt} ${defaultVal}, ${lt}* ${fieldPtr}`);
+    }
+    // Store vtable pointer in field 0
+    if (speciesInfo.vtableName) {
+      const vtPtr = m.freshReg();
+      m.emit(`${vtPtr} = getelementptr inbounds ${speciesInfo.structType}, ${speciesInfo.structType}* ${structPtr}, i32 0, i32 0`);
+      m.emit(`store i8* bitcast (${speciesInfo.vtableType} ${speciesInfo.vtableName} to i8*), i8** ${vtPtr}`);
     }
   }
 
@@ -1183,8 +1364,14 @@ class LLVMGenerator {
       const lt = speciesInfo.llvmFields[i];
       const fieldPtr = m.freshReg();
       m.emit(`${fieldPtr} = getelementptr inbounds ${speciesInfo.structType}, ${speciesInfo.structType}* ${structPtr}, i32 0, i32 ${i}`);
-      const defaultVal = lt === 'i64' ? '0' : lt === 'double' ? '0.0' : lt === 'i1' ? 'false' : 'zeroinitializer';
+      const defaultVal = lt === 'i64' ? '0' : lt === 'double' ? '0.0' : lt === 'i1' ? 'false' : lt === 'i8*' ? 'null' : 'zeroinitializer';
       m.emit(`store ${lt} ${defaultVal}, ${lt}* ${fieldPtr}`);
+    }
+    // Store vtable pointer in field 0
+    if (speciesInfo.vtableName) {
+      const vtPtr = m.freshReg();
+      m.emit(`${vtPtr} = getelementptr inbounds ${speciesInfo.structType}, ${speciesInfo.structType}* ${structPtr}, i32 0, i32 0`);
+      m.emit(`store i8* bitcast (${speciesInfo.vtableType} ${speciesInfo.vtableName} to i8*), i8** ${vtPtr}`);
     }
   }
 
@@ -1887,43 +2074,41 @@ class LLVMGenerator {
 
   genMethodCallStatement(node) {
     const m = this.mod;
-    // node.target is an IdentifierNode with .name
     const targetName = node.target && node.target.name;
     if (!targetName) { m.unsupported(node, 'method call without target'); return; }
     const targetInfo = m.scope.get(targetName);
     if (!targetInfo) { m.error(`"${targetName}" is not defined`, node); return; }
-    // Look up the species from the target variable's type
     const speciesName = targetInfo.plType;
     const speciesInfo = this.speciesTypes.get(speciesName);
     if (!speciesInfo) { m.unsupported(node, `species "${speciesName}" not found for method call`); return; }
-    const methodDef = speciesInfo.actions.find(a => a.name === node.methodName);
-    if (!methodDef) { m.error(`"${node.methodName}" is not a method of "${speciesName}"`, node); return; }
-    const fnName = `${speciesName}_${node.methodName}`;
-    // Build call args: self pointer first, then method args
-    const callArgs = [`${speciesInfo.structType}* ${targetInfo.ptr}`];
-    // Check if the method is defined in a parent species
-    let actualFnName = fnName;
-    if (!this.fnInfos.has(fnName) && speciesInfo.parentName) {
-      // Walk up the parent chain
-      let parent = speciesInfo.parentName;
-      while (parent) {
-        const parentFnName = `${parent}_${node.methodName}`;
-        if (this.fnInfos.has(parentFnName)) {
-          actualFnName = parentFnName;
-          const parentInfo = this.speciesTypes.get(parent);
-          if (parentInfo) {
-            const castPtr = m.freshReg();
-            m.emit(`${castPtr} = bitcast ${speciesInfo.structType}* ${targetInfo.ptr} to ${parentInfo.structType}*`);
-            callArgs[0] = `${parentInfo.structType}* ${castPtr}`;
-          }
-          break;
-        }
-        parent = this.speciesTypes.get(parent);
-        parent = parent ? parent.parentName : null;
-      }
+    const methodSlots = speciesInfo.methodSlots;
+    if (!methodSlots) { m.error(`"${speciesName}" has no method slots`, node); return; }
+    const slotIdx = methodSlots.get(node.methodName);
+    if (slotIdx === undefined) {
+      m.error(`"${node.methodName}" is not a method of "${speciesName}"`, node);
+      return;
     }
-    // Compile method arguments
+
+    // Vtable dispatch:
+    // 1. Load vtable pointer from instance field 0
+    const vtFieldPtr = m.freshReg();
+    m.emit(`${vtFieldPtr} = getelementptr inbounds ${speciesInfo.structType}, ${speciesInfo.structType}* ${targetInfo.ptr}, i32 0, i32 0`);
+    const vtRaw = m.freshReg();
+    m.emit(`${vtRaw} = load i8*, i8** ${vtFieldPtr}`);
+
+    // 2. Cast i8* vtable pointer to the vtable array type
+    const vtType = speciesInfo.vtableType; // e.g., "[2 x i8*]"
+    const vtArrayPtr = m.freshReg();
+    m.emit(`${vtArrayPtr} = bitcast i8* ${vtRaw} to ${vtType}*`);
+
+    // 3. Cast receiver to i8* for uniform vtable calling convention
+    const selfCast = m.freshReg();
+    m.emit(`${selfCast} = bitcast ${speciesInfo.structType}* ${targetInfo.ptr} to i8*`);
+
+    // 4. Compile method arguments
     const ec = new ExprCompiler(m, node, this);
+    const callArgs = [`i8* ${selfCast}`];
+    let numParams = 0;
     for (let i = 0; i < (node.args || []).length; i++) {
       const arg = node.args[i];
       let argVal;
@@ -1934,13 +2119,78 @@ class LLVMGenerator {
       } else {
         argVal = { reg: '0', type: 'NUM' };
       }
-      const pt = methodDef.params[i] ? methodDef.params[i].type : argVal.type;
+      const pt = argVal.type;
       const coerced = this.coerce(argVal, pt, node);
       const lt = llvmType(pt) || 'i64';
       callArgs.push(`${lt} ${coerced}`);
+      numParams++;
     }
+
+    // 5. Build the function signature and call through vtable
+    const paramTypes = numParams > 0 ? Array(numParams).fill('i64').join(', ') : '';
+    const fnSig = `i64 (i8*${paramTypes ? ', ' + paramTypes : ''})`;
+    const slotPtr = m.freshReg();
+    m.emit(`${slotPtr} = getelementptr inbounds ${vtType}, ${vtType}* ${vtArrayPtr}, i64 0, i64 ${slotIdx}`);
+    const fnPtr = m.freshReg();
+    m.emit(`${fnPtr} = load i8*, i8** ${slotPtr}`);
+    const fnTyped = m.freshReg();
+    m.emit(`${fnTyped} = bitcast i8* ${fnPtr} to ${fnSig}*`);
     const resultReg = m.freshReg();
-    m.emit(`${resultReg} = call i64 @${safeName(actualFnName)}(${callArgs.join(', ')})`);
+    m.emit(`${resultReg} = call ${fnSig} ${fnTyped}(${callArgs.join(', ')})`);
+  }
+
+  genMatchStatement(node) {
+    const m = this.mod;
+    // Compile the subject expression (raw text string → ExprCompiler)
+    const ec = new ExprCompiler(m, node, this);
+    const subjectVal = ec.compileExpr(node.subjectExpr);
+    // The subject should be a CHOICE value: { i64 tag, i64 payload }
+    // Extract the tag
+    const tagReg = m.freshReg();
+    const choiceType = `%choice.${subjectVal.type}`;
+    m.emit(`${tagReg} = extractvalue ${choiceType} ${subjectVal.reg}, 0`);
+    // Generate a switch chain: compare tag against each variant index
+    const doneLabel = m.freshLabel('match.done');
+    const clauseLabels = node.clauses.map((_, i) => m.freshLabel(`match.clause${i}`));
+    const nextLabels = node.clauses.map((_, i) => m.freshLabel(`match.next${i}`));
+    for (let i = 0; i < node.clauses.length; i++) {
+      const clause = node.clauses[i];
+      const variantIdx = i; // variants are checked in order
+      // If not the last clause, check if tag matches this variant
+      if (i < node.clauses.length - 1) {
+        const isMatch = m.freshReg();
+        m.emit(`${isMatch} = icmp eq i64 ${tagReg}, ${i}`);
+        m.emit(`br i1 ${isMatch}, label %${clauseLabels[i]}, label %${nextLabels[i]}`);
+        m.emitLabel(nextLabels[i]);
+      } else {
+        // Last clause: unconditional branch (acts as default/else)
+        m.emit(`br label %${clauseLabels[i]}`);
+      }
+      // Clause body
+      m.emitLabel(clauseLabels[i]);
+      // If binding exists, extract payload into a local variable
+      if (clause.binding) {
+        const payloadReg = m.freshReg();
+        m.emit(`${payloadReg} = extractvalue ${choiceType} ${subjectVal.reg}, 1`);
+        // Store payload in arena for the clause body to access
+        const varType = 'NUM'; // payload is always i64-compatible
+        const lt = 'i64';
+        const ptr = m.arenaAllocTyped(varType, m.currentDepth);
+        if (ptr) {
+          m.emit(`store ${lt} ${payloadReg}, ${lt}* ${ptr}`);
+          m.scope.set(clause.binding, { ptr, plType: varType, depth: m.currentDepth });
+        }
+      }
+      // Generate clause body statements
+      let hasReturn = false;
+      for (const stmt of (clause.bodyStatements || [])) {
+        if (this.genStatement(stmt)) hasReturn = true;
+      }
+      if (!hasReturn) {
+        m.emit(`br label %${doneLabel}`);
+      }
+    }
+    m.emitLabel(doneLabel);
   }
 
   assemble() {
@@ -1984,6 +2234,12 @@ class LLVMGenerator {
       lines.push(declLine);
     }
     if (this.structDeclLines.length) lines.push('');
+
+    // Species vtable globals
+    for (const vtLine of this.speciesVtableLines) {
+      lines.push(vtLine);
+    }
+    if (this.speciesVtableLines.length) lines.push('');
 
     for (const g of m.globals) lines.push(g);
     if (m.globals.length) lines.push('');
@@ -2087,7 +2343,122 @@ class LLVMGenerator {
       return { reg: capReg, type: 'NUM' };
     }
 
+    if (node.type === 'ListOp') {
+      const arg = this.compileAstExpr(node.arg);
+      if (!isArrayTypeStr(arg.type)) {
+        m.error(`${node.operation} requires an array argument, got ${arg.type}`, node);
+        return { reg: '0', type: 'NUM' };
+      }
+      const innerType = arg.type.slice(1, -1);
+      const innerLt = llvmType(innerType) || 'i64';
+      const elSize = arrayElemSize(innerType);
+
+      if (node.operation === 'COUNT') {
+        const lenReg = m.extractLen(arg.reg);
+        return { reg: lenReg, type: 'NUM' };
+      }
+
+      if (node.operation === 'FIRST') {
+        const ptrReg = m.extractPtr(arg.reg);
+        const elemPtr = m.freshReg();
+        m.emit(`${elemPtr} = getelementptr inbounds i8, i8* ${ptrReg}, i64 0`);
+        const castPtr = m.freshReg();
+        m.emit(`${castPtr} = bitcast i8* ${elemPtr} to ${innerLt}*`);
+        const valReg = m.freshReg();
+        m.emit(`${valReg} = load ${innerLt}, ${innerLt}* ${castPtr}`);
+        return { reg: valReg, type: innerType };
+      }
+
+      if (node.operation === 'LAST') {
+        const lenReg = m.extractLen(arg.reg);
+        const lastIdx = m.freshReg();
+        m.emit(`${lastIdx} = sub i64 ${lenReg}, 1`);
+        const ptrReg = m.extractPtr(arg.reg);
+        const byteOff = m.freshReg();
+        const elSizeI64 = m.freshReg();
+        m.emit(`${elSizeI64} = mul i64 ${lastIdx}, ${elSize}`);
+        m.emit(`${byteOff} = getelementptr inbounds i8, i8* ${ptrReg}, i64 ${elSizeI64}`);
+        const castPtr = m.freshReg();
+        m.emit(`${castPtr} = bitcast i8* ${byteOff} to ${innerLt}*`);
+        const valReg = m.freshReg();
+        m.emit(`${valReg} = load ${innerLt}, ${innerLt}* ${castPtr}`);
+        return { reg: valReg, type: innerType };
+      }
+
+      if (node.operation === 'SUM') {
+        if (innerType !== 'NUM') {
+          m.error(`SUM requires [NUM] array, got ${arg.type}`, node);
+          return { reg: '0', type: 'NUM' };
+        }
+        const ptrReg = m.extractPtr(arg.reg);
+        const lenReg = m.extractLen(arg.reg);
+        // Loop: accumulate sum
+        const loopLabel = m.freshLabel('sum.loop');
+        const doneLabel = m.freshLabel('sum.done');
+        const iReg = m.freshReg();
+        const accReg = m.freshReg();
+        m.emit(`br label %${loopLabel}`);
+        m.emitLabel(loopLabel);
+        const phiI = m.freshReg();
+        m.emit(`${phiI} = phi i64 [ 0, %entry ], [ %nextI, %${loopLabel} ]`);
+        const phiAcc = m.freshReg();
+        m.emit(`${phiAcc} = phi i64 [ 0, %entry ], [ %newAcc, %${loopLabel} ]`);
+        const done = m.freshReg();
+        m.emit(`${done} = icmp ult i64 ${phiI}, ${lenReg}`);
+        m.emit(`br i1 ${done}, label %sum.body, label %${doneLabel}`);
+        m.emitLabel('sum.body');
+        const byteOff = m.freshReg();
+        const elSizeVal = m.freshReg();
+        m.emit(`${elSizeVal} = mul i64 ${phiI}, ${elSize}`);
+        m.emit(`${byteOff} = getelementptr inbounds i8, i8* ${ptrReg}, i64 ${elSizeVal}`);
+        const castPtr = m.freshReg();
+        m.emit(`${castPtr} = bitcast i8* ${byteOff} to i64*`);
+        const elVal = m.freshReg();
+        m.emit(`${elVal} = load i64, i64* ${castPtr}`);
+        const newAcc = m.freshReg();
+        m.emit(`${newAcc} = add i64 ${phiAcc}, ${elVal}`);
+        const nextI = m.freshReg();
+        m.emit(`${nextI} = add i64 ${phiI}, 1`);
+        m.emit(`br label %${loopLabel}`);
+        m.emitLabel(doneLabel);
+        return { reg: phiAcc, type: 'NUM' };
+      }
+
+      m.error(`Unknown ListOp "${node.operation}"`, node);
+      return { reg: '0', type: 'NUM' };
+    }
+
     if (node.type === 'MethodCall') {
+      // Check for CHOICE variant construction: Option.Some(10)
+      const targetIdent = node.target && node.target.type === 'Identifier' ? node.target.name : null;
+      const choiceVariants = targetIdent ? this.choiceTypes.get(targetIdent) : null;
+      if (choiceVariants) {
+        const variantIdx = choiceVariants.findIndex(v => v.name === node.methodName);
+        if (variantIdx === -1) {
+          m.error(`"${targetIdent}" has no variant "${node.methodName}"`, node);
+          return { reg: '0', type: 'NUM' };
+        }
+        const variantDef = choiceVariants[variantIdx];
+        const choiceType = `%choice.${targetIdent}`;
+        // Compile the payload argument (if any)
+        let payloadReg = '0';
+        if (variantDef.type && node.args && node.args.length > 0) {
+          let argVal;
+          if (typeof node.args[0] === 'string') {
+            const ec = new ExprCompiler(m, node, this);
+            argVal = ec.compileExpr(node.args[0]);
+          } else {
+            argVal = this.compileAstExpr(node.args[0]);
+          }
+          payloadReg = this.coerce(argVal, variantDef.type, node);
+        }
+        const tagged = m.freshReg();
+        m.emit(`${tagged} = insertvalue ${choiceType} zeroinitializer, i64 ${variantIdx}, 0`);
+        const val = m.freshReg();
+        m.emit(`${val} = insertvalue ${choiceType} ${tagged}, i64 ${payloadReg}, 1`);
+        return { reg: val, type: targetIdent };
+      }
+
       const target = this.compileAstExpr(node.target);
       const targetPtr = target.ptr || target.reg;
       const targetType = target.type;
@@ -2237,12 +2608,111 @@ class LLVMGenerator {
           return this.genMapHas(node, targetType, target.reg, keyVal);
         }
         if (node.methodName === 'get') {
-          // get returns Option<V> — not yet supported in compiled mode (needs MATCH)
-          m.unsupported(node, `MAP get() not yet supported in compiled mode — use has() instead`);
-          return { reg: '0', type: targetType };
+          // Register Option CHOICE type if not already registered
+          if (!this.choiceTypes.has('Option')) {
+            this.choiceTypes.set('Option', [
+              { name: 'Some', type: null },
+              { name: 'None', type: null },
+            ]);
+            if (!this.structDeclLines.some(l => l.startsWith('%choice.Option'))) {
+              this.structDeclLines.push(`%choice.Option = type { i64, i64 }`);
+            }
+          }
+          const mt = mapInnerTypes(targetType);
+          const ec = new ExprCompiler(m, node, this);
+          let keyVal;
+          if (node.args && node.args.length >= 1) {
+            if (typeof node.args[0] === 'string') keyVal = ec.compileExpr(node.args[0]);
+            else keyVal = this.compileAstExpr(node.args[0]);
+          } else {
+            m.error('MAP get expects 1 argument (key)', node);
+            return { reg: '0', type: 'NUM' };
+          }
+          // Allocate storage for the result Option value
+          const optionType = '%choice.Option';
+          const resultSlot = m.arenaAllocTyped('NUM', m.currentDepth);
+          // Use genMapHas to check existence
+          const hasResult = this.genMapHas(node, targetType, target.reg, keyVal);
+          const foundLabel = m.freshLabel('map.get.found');
+          const notFoundLabel = m.freshLabel('map.get.notfound');
+          const doneLabel = m.freshLabel('map.get.done');
+          m.emit(`br i1 ${hasResult.reg}, label %${foundLabel}, label %${notFoundLabel}`);
+          // Some(v) branch
+          m.emitLabel(foundLabel);
+          const probedVal = this._emitMapGetValue(node, targetType, target.reg, keyVal);
+          const taggedSome = m.freshReg();
+          m.emit(`${taggedSome} = insertvalue ${optionType} zeroinitializer, i64 0, 0`);
+          const valSome = m.freshReg();
+          m.emit(`${valSome} = insertvalue ${optionType} ${taggedSome}, i64 ${probedVal.reg}, 1`);
+          m.emit(`store ${optionType} ${valSome}, ${optionType}* ${resultSlot}`);
+          m.emit(`br label %${doneLabel}`);
+          // None branch
+          m.emitLabel(notFoundLabel);
+          const taggedNone = m.freshReg();
+          m.emit(`${taggedNone} = insertvalue ${optionType} zeroinitializer, i64 1, 0`);
+          const valNone = m.freshReg();
+          m.emit(`${valNone} = insertvalue ${optionType} ${taggedNone}, i64 0, 1`);
+          m.emit(`store ${optionType} ${valNone}, ${optionType}* ${resultSlot}`);
+          m.emit(`br label %${doneLabel}`);
+          // Merge
+          m.emitLabel(doneLabel);
+          const resultReg = m.freshReg();
+          m.emit(`${resultReg} = load ${optionType}, ${optionType}* ${resultSlot}`);
+          return { reg: resultReg, type: 'Option' };
         }
         m.error(`MAP type has no method "${node.methodName}"`, node);
         return { reg: '0', type: targetType };
+      }
+
+      // ── Species method (vtable dispatch) ────────────────────────
+      const speciesInfo = this.speciesTypes.get(targetType);
+      if (speciesInfo) {
+        const methodSlots = speciesInfo.methodSlots;
+        if (!methodSlots) {
+          m.error(`"${targetType}" has no method slots`, node);
+          return { reg: '0', type: 'NUM' };
+        }
+        const slotIdx = methodSlots.get(node.methodName);
+        if (slotIdx === undefined) {
+          m.error(`"${node.methodName}" is not a method of "${targetType}"`, node);
+          return { reg: '0', type: 'NUM' };
+        }
+        // Vtable dispatch
+        const vtFieldPtr = m.freshReg();
+        m.emit(`${vtFieldPtr} = getelementptr inbounds ${speciesInfo.structType}, ${speciesInfo.structType}* ${targetPtr}, i32 0, i32 0`);
+        const vtRaw = m.freshReg();
+        m.emit(`${vtRaw} = load i8*, i8** ${vtFieldPtr}`);
+        const vtType = speciesInfo.vtableType;
+        const vtArrayPtr = m.freshReg();
+        m.emit(`${vtArrayPtr} = bitcast i8* ${vtRaw} to ${vtType}*`);
+        const selfCast = m.freshReg();
+        m.emit(`${selfCast} = bitcast ${speciesInfo.structType}* ${targetPtr} to i8*`);
+        const ec = new ExprCompiler(m, node, this);
+        const callArgs = [`i8* ${selfCast}`];
+        let numParams = 0;
+        for (let i = 0; i < (node.args || []).length; i++) {
+          let argVal;
+          if (typeof node.args[i] === 'string') {
+            argVal = ec.compileExpr(node.args[i]);
+          } else {
+            argVal = this.compileAstExpr(node.args[i]);
+          }
+          const coerced = this.coerce(argVal, argVal.type, node);
+          const lt = llvmType(argVal.type) || 'i64';
+          callArgs.push(`${lt} ${coerced}`);
+          numParams++;
+        }
+        const paramTypes = numParams > 0 ? Array(numParams).fill('i64').join(', ') : '';
+        const fnSig = `i64 (i8*${paramTypes ? ', ' + paramTypes : ''})`;
+        const slotPtr = m.freshReg();
+        m.emit(`${slotPtr} = getelementptr inbounds ${vtType}, ${vtType}* ${vtArrayPtr}, i64 0, i64 ${slotIdx}`);
+        const fnPtr = m.freshReg();
+        m.emit(`${fnPtr} = load i8*, i8** ${slotPtr}`);
+        const fnTyped = m.freshReg();
+        m.emit(`${fnTyped} = bitcast i8* ${fnPtr} to ${fnSig}*`);
+        const resultReg = m.freshReg();
+        m.emit(`${resultReg} = call ${fnSig} ${fnTyped}(${callArgs.join(', ')})`);
+        return { reg: resultReg, type: 'NUM' };
       }
 
       // ── User-defined struct methods ─────────────────────────────
@@ -2281,9 +2751,50 @@ class LLVMGenerator {
       return { reg: resultReg, type: 'NUM' };
     }
 
+    if (node.type === 'SelfExpression') {
+      const info = m.scope.get('self') || m.scope.get('__self');
+      if (!info) { m.error(`"SELF" is not available in this context`, node); return { reg: '0', type: 'NUM' }; }
+      // Return the receiver pointer (structs/species are pass-by-reference)
+      return { reg: info.ptr, type: info.plType, ptr: info.ptr };
+    }
+
+    if (node.type === 'BloomExpression') {
+      const sname = node.speciesName;
+      const speciesInfo = this.speciesTypes.get(sname);
+      if (!speciesInfo) { m.error(`Species "${sname}" not found for BLOOM expression`, node); return { reg: '0', type: 'NUM' }; }
+      // Allocate and zero-init a new instance, return the pointer
+      const depth = node.depth !== undefined ? node.depth : m.currentDepth;
+      const rawPtr = m.arenaAlloc(depth, speciesInfo.totalSize);
+      const structPtr = m.freshReg();
+      m.emit(`${structPtr} = bitcast i8* ${rawPtr} to ${speciesInfo.structType}*`);
+      for (let i = 0; i < speciesInfo.llvmFields.length; i++) {
+        const lt = speciesInfo.llvmFields[i];
+        const fieldPtr = m.freshReg();
+        m.emit(`${fieldPtr} = getelementptr inbounds ${speciesInfo.structType}, ${speciesInfo.structType}* ${structPtr}, i32 0, i32 ${i}`);
+        m.emit(`store ${lt} 0, ${lt}* ${fieldPtr}`);
+      }
+      return { reg: structPtr, type: sname, ptr: structPtr };
+    }
+
     if (node.type === 'MemberAccess') {
       const objExpr = node.object;
       const objName = objExpr.name || objExpr.value;
+      // Check if the object is a CHOICE type name (variant construction: Option.None)
+      const choiceVariants = objName ? this.choiceTypes.get(objName) : null;
+      if (choiceVariants) {
+        // Construct a CHOICE value with the given variant (no payload)
+        const variantIdx = choiceVariants.findIndex(v => v.name === node.member);
+        if (variantIdx === -1) {
+          m.error(`"${objName}" has no variant "${node.member}"`, node);
+          return { reg: '0', type: 'NUM' };
+        }
+        const choiceType = `%choice.${objName}`;
+        const tagged = m.freshReg();
+        m.emit(`${tagged} = insertvalue ${choiceType} zeroinitializer, i64 ${variantIdx}, 0`);
+        const val = m.freshReg();
+        m.emit(`${val} = insertvalue ${choiceType} ${tagged}, i64 0, 1`);
+        return { reg: val, type: objName };
+      }
       const objInfo = m.scope.get(objName);
       if (!objInfo) { m.error(`Cannot access member of unknown variable "${objName}"`, node); return { reg: '0', type: 'NUM' }; }
       const structName = objInfo.plType;
@@ -2380,8 +2891,9 @@ class LLVMGenerator {
       case 'SeasonStatement':  this.genSeason(node);return false;
       case 'ForInStatement':   this.genForIn(node); return false;
       case 'LockStatement':    return false;
+      case 'MatchStatement':   this.genMatchStatement(node); return false;
       case 'MethodCallStatement': this.genMethodCallStatement(node); return false;
-      case 'BloomStatement':   return false; // old-style BLOOM AS handled by interpreter
+      case 'BloomStatement':   m.error('BLOOM AS statement is not supported in compiled mode — use CREATE x TO BLOOM SpeciesName. instead', node); return false;
 
       case 'LinkStatement': {
         const mapInfo = m.scope.get(node.mapIdent);
@@ -2516,7 +3028,7 @@ class LLVMGenerator {
       val = ec.compileExpr(ve.name || ve.identifier || ve.value);
     } else if (typeof ve === 'string') {
       val = ec.compileExpr(ve);
-    } else if (ve && (ve.type === 'LenCall' || ve.type === 'CapCall' || ve.type === 'IndexAccess')) {
+    } else if (ve && (ve.type === 'LenCall' || ve.type === 'CapCall' || ve.type === 'ListOp' || ve.type === 'IndexAccess')) {
       val = this.compileAstExpr(ve);
     } else if (ve && ve.type === 'ArrayLiteral') {
       val = this.compileAstExpr(ve);
@@ -2697,7 +3209,7 @@ class LLVMGenerator {
       this.emitPrintValue(val);
       return;
     }
-    if (expr.type === 'LenCall' || expr.type === 'CapCall' || expr.type === 'IndexAccess' || expr.type === 'MethodCall') {
+    if (expr.type === 'LenCall' || expr.type === 'CapCall' || expr.type === 'ListOp' || expr.type === 'IndexAccess' || expr.type === 'MethodCall') {
       const val = this.compileAstExpr(expr);
       this.emitPrintValue(val);
       return;

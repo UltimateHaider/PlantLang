@@ -32,7 +32,7 @@ const { storm, PlantStorm } = require('./runtime');
 const {
   ProgramNode, CreateStatementNode, ShowStatementNode,
   IdentifierNode, LiteralNode, AstNode,
-  LenCallNode, CapCallNode, IndexAccessNode,
+  LenCallNode, CapCallNode, ListOpNode, IndexAccessNode,
   ListenBranchStatementNode, ResponseStatementNode,
   WeatherStatementNode, ShelterStatementNode, CalmStatementNode,
   ActionDeclarationNode, SpeciesDeclarationNode, BloomStatementNode, TapStatementNode,
@@ -1372,14 +1372,14 @@ class Parser {
       if (t.type === TOKEN.FACT) return new LiteralNode(t.value, 'FACT', coords);
       if (t.type === TOKEN.IDENT) return new IdentifierNode(t.value, coords);
     }
-    // Check for len(x) / cap(x) pattern: IDENT LPAREN inner RPAREN
+    // Check for len(x) / cap(x) / COUNT(x) / SUM(x) pattern: IDENT|KEYWORD LPAREN inner RPAREN
     const first = tokensInSpan[0];
     if (tokensInSpan.length >= 4 &&
-        first.type === TOKEN.IDENT &&
+        (first.type === TOKEN.IDENT || first.type === TOKEN.KEYWORD) &&
         tokensInSpan[1].type === TOKEN.PUNCT && tokensInSpan[1].value === '(' &&
         tokensInSpan[tokensInSpan.length - 1].type === TOKEN.PUNCT && tokensInSpan[tokensInSpan.length - 1].value === ')') {
       const fnName = first.value.toUpperCase();
-      if (fnName === 'LEN' || fnName === 'CAP') {
+      if (fnName === 'LEN' || fnName === 'CAP' || fnName === 'COUNT' || fnName === 'SUM' || fnName === 'FIRST' || fnName === 'LAST') {
         const innerTokens = tokensInSpan.slice(2, tokensInSpan.length - 1);
         const innerCoords = { line: innerTokens[0].line, column: innerTokens[0].column, depth: innerTokens[0].depth };
         let argExpr;
@@ -1390,7 +1390,9 @@ class Parser {
           argExpr = new LiteralNode(innerText, 'RAW_EXPR', innerCoords);
         }
         const coords = { line: first.line, column: first.column, depth: first.depth };
-        return new (fnName === 'LEN' ? LenCallNode : CapCallNode)(argExpr, coords);
+        if (fnName === 'LEN') return new LenCallNode(argExpr, coords);
+        if (fnName === 'CAP') return new CapCallNode(argExpr, coords);
+        return new ListOpNode(argExpr, fnName, coords);
       }
     }
     // Check for x[i] indexing pattern: target LBRACK index RBRACK

@@ -1,4 +1,4 @@
-# PlantLang Language Specification & Ecosystem v0.27.0
+# PlantLang Language Specification & Ecosystem v0.28.0
 
 **PlantLang** is a human-centric, prose-based programming language engineered for both high-level readability and native-level execution performance. It transforms "prose-like" syntax into highly optimized machine code via the LLVM compiler infrastructure.
 
@@ -62,7 +62,7 @@ Arenas are automatically reclaimed:
 
 ---
 
-## 3. Engineering Architecture (The v0.27.0 Stack)
+## 3. Engineering Architecture (The v0.28.0 Stack)
 The ecosystem is built on a modular, industrial-grade pipeline:
 
 1.  **Core Interpreter (Chloroplast Engine):**
@@ -159,13 +159,18 @@ PlantLang employs a state-of-the-art compilation chain:
 | **MAP Create** | `CREATE m(MAP[NUM,TX]).` | Typed key-value hash table. |
 | **MAP Insert** | `LINK key WITH value IN m.` | Insert key-value pair (compiled natively). |
 | **MAP Has** | `SHOW m.has(key).` | Key existence check (compiled natively). |
+| **LIST Count** | `SHOW COUNT(xs).` | O(1) array length — compiled via `extractvalue` on `%fat_ptr`. |
+| **LIST First** | `SHOW FIRST(xs).` | O(1) first element — compiled via GEP + load. |
+| **LIST Last** | `SHOW LAST(xs).` | O(1) last element — compiled via GEP to `len-1`. |
+| **LIST Sum** | `SHOW SUM(xs).` | O(n) inline accumulation — compiled as LLVM phi loop. |
 
 ---
 
 ## 6. QA & Quality Assurance
-The **v0.27.0** release is verified by an automated regression suite:
-* **~709 Total Assertions** across sixteen test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7 — Module System & FFI, Phase 8 — Standard Library, Phase 9 — Structs, Phase 10 — Arrays, Phase 11 — Methods, Phase 12 — Array Growth, Phase 13 — CHOICE & Pattern Matching, Phase 14 — MAP Types, Phase 15 — FOR...IN, Phase 16 — STRUCT, Phase 17 — SPECIES/BLOOM).
+The **v0.28.0** release is verified by an automated regression suite:
+* **~724 Total Assertions** across seventeen test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7—18).
 * **LLVM Backend**: 50 smoke tests covering CREATE/SHOW, arithmetic, strings, comparisons, IF/CYCLE/SEASON, ACTION/REAP/GIVE (recursion, SCL params, TX returns), WEATHER/SHELTER exception handling, TX fat-pointer operations, and MAP hash tables (LINK, has(), growth, overwrite).
+* **Native LIST Ops**: 15 tests covering COUNT, FIRST, LAST, SUM on empty/populated arrays, type-checker validation.
 * **MAP Types**: 17 tests covering empty map create, map literals, LINK/put semantics, has/get, overwrite, growth (10 entries), SHOW display, type-checker validation.
 * **SPECIES/BLOOM**: 10 tests covering `{ }` body syntax, BLOOM instantiation, method dispatch, inheritance, SELF mutation, type checking.
 * **Module System**: 30 test groups covering IMPORT parsing, cycle detection, path resolution, error messages, and FFI syntax.
@@ -175,12 +180,14 @@ The **v0.27.0** release is verified by an automated regression suite:
 * **CHOICE & MATCH**: 64 tests covering variant declaration, construction, member access, MATCH exhaustiveness, payload binding, type checking, interpreter execution.
 * **Parity Guarantee**: Exact output matching between the Interpreter and Native Compiler via `llc` + `gcc`.
 * **Performance**: ~15,000x execution speedup on iterative loops via LLVM optimization compared to the JS interpreter.
+* **Parity Guarantee**: Exact output matching between the Interpreter and Native Compiler via `llc` + `gcc`.
+* **Performance**: ~15,000x execution speedup on iterative loops via LLVM optimization compared to the JS interpreter.
 
 ---
 
 ## 7. Roadmap & Future Scope
 
-### ✅ Complete (v0.27.0)
+### ✅ Complete (v0.28.0)
 - Primitives (`NUM`, `SCL`, `TX`, `FACT`)
 - Control Flow (`IF`, `CYCLE`, `SEASON`, `FOR...IN`)
 - Functions (`ACTION`, `REAP`, `GIVE` with recursion)
@@ -201,15 +208,16 @@ The **v0.27.0** release is verified by an automated regression suite:
 - **FOR...IN loops** (iterate over LIST values, MAP keys, or TX strings)
 - **English-Language Cleanup** (all Arabic strings translated to English)
 - **SPECIES / BLOOM OOP** (`{ }` body syntax, `FROM` inheritance, BLOOM instantiation, colon-dispatch method calls, SELF:field access)
+- **Native LIST Operations** (`COUNT`, `FIRST`, `LAST` — O(1) via GEP; `SUM` — O(n) via inline LLVM loop; full interpreter and LLVM codegen)
 
-### 🔜 In Progress / Planned (v0.28.0)
+### 🔜 In Progress / Planned (v0.29.0)
 - `SPECIES` advanced LLVM codegen (vtable dispatch, dynamic dispatch)
 - `CHOICE` / `MATCH` codegen in LLVM backend
-- `LIST` operations (`SORT`, `SHAKE`, `COUNT`, ...) in LLVM backend
+- `LIST` literal and SORT operations in LLVM backend
 - `MAP.get()` compiled via `Option<V>` MATCH codegen
 - Expanded standard library (math, lists, maps modules)
 - `TAP` file I/O and `HARVEST` networking in LLVM backend
 
 ---
 
-*PlantLang v0.27.0 — SPECIES OOP. MAP hash tables. FOR...IN loops. STRUCT types. 709 tests all green.*
+*PlantLang v0.28.0 — Native LIST Ops. SPECIES OOP. MAP hash tables. FOR...IN loops. 724 tests all green.*
