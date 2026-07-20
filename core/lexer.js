@@ -34,6 +34,7 @@ const RESERVED_KEYWORDS = {
   'ON':       'KW_ON',
   'WITH':     'KW_WITH',
   'AS':       'KW_AS',
+  'NATIVE':   'KW_NATIVE',
 };
 
 function keywordLength(word) {

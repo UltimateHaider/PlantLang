@@ -1,6 +1,33 @@
 # Changelog — PlantLang / Chloroplast
 
-## v0.29.0 — 2026 (current)
+## v0.30.0 — 2026 (in development)
+
+### New Features
+- **C Runtime Library (`libplantlang.so`)** — native C implementations of performance-critical operations callable via LLVM FFI:
+  - Math functions: `sqrt`, `sin`, `cos`, `tan`, `floor`, `ceil`, `abs` — thin wrappers around libm
+  - Array sort: `plnt_sort_i64`, `plnt_sort_double` — quicksort via `qsort`
+  - String operations: `plnt_string_concat` (heap-allocated concat), `plnt_string_len` (length query)
+  - `Makefile` with `runtime`, `exec`, `test`, `clean` targets
+  - `chloroplast.js` compile pipeline automatically links `-Lruntime -lplantlang`
+  - LLVM test harness (`test_llvm_codegen.js`) also links against runtime lib
+- **NATIVE Keyword** — parser recognizes `NATIVE ACTION name(params) -> external.` syntax; sets `isExternal = true`
+- **RUNTIME_FFI Signature Map** — `core/llvm_codegen.js` maps 12 PlantLang FFI action names to their correct LLVM signatures (`double`, `void`, `%fat_ptr`, `i64` return types)
+- **FFI Return Type Handling** — `genReapStatement` now handles `double`, `void`, `i64`, and `%fat_ptr` return types from external C functions:
+  - `double` returns: stored directly or bitcast to `i64` for NUM targets
+  - `void` returns: call emitted with no result binding
+  - `i64` returns: legacy return-register convention preserved
+- **Declare Cleanup** — parameter names stripped from `declare` lines for cleaner LLVM IR output
+
+### Test Suite
+- New `tests/test_phase21_runtime.js` — 7 tests: 3 IR smoke tests (declare signatures), 4 execution tests (sqrt, floor, ceil, fabs via FFI)
+- All **19 test suites, ~800+ assertions** — all green
+
+### Documentation
+- ROADMAP.md bumped to v0.30.0 — completed items marked, remaining objectives listed
+
+---
+
+## v0.29.0 — 2026
 
 ### New Features
 - **SPECIES Vtable Dispatch (Phase 19)** — virtual method dispatch via polymorphic vtables in LLVM codegen:

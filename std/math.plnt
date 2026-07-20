@@ -1,0 +1,15 @@
+# ═══════════════════════════════════════════════════════════════
+#  std/math.plnt — Math Module (Standard Library)
+#
+#  Provides basic math operations backed by FFI bindings to
+#  libm / the PlantLang C runtime.  All functions receive and
+#  return SCL (double) values.
+# ═══════════════════════════════════════════════════════════════
+
+ACTION sqrt(x(SCL)) -> external.
+ACTION sin(x(SCL)) -> external.
+ACTION cos(x(SCL)) -> external.
+ACTION tan(x(SCL)) -> external.
+ACTION floor(x(SCL)) -> external.
+ACTION ceil(x(SCL)) -> external.
+ACTION abs(x(SCL)) -> external.

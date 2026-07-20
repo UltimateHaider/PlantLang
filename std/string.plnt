@@ -1,10 +1,14 @@
 # ═══════════════════════════════════════════════════════════════
 #  std/string.plnt — String Manipulation Module (Standard Library)
 #
-#  Provides pure-PlantLang string utilities.  All operations
+#  Provides string utilities backed by FFI bindings to the C
+#  runtime and pure-PlantLang helper functions.  All operations
 #  allocate their return values within the active Arena and
 #  respect bounded access (Article VIII).
 # ═══════════════════════════════════════════════════════════════
+
+ACTION plnt_string_concat(a(TX), b(TX)) -> external.
+ACTION plnt_string_len(s(TX)) -> external.
 
 # ── concat(a(TX), b(TX)) ──
 # Returns a new TX that is the concatenation of a and b.

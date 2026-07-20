@@ -157,6 +157,28 @@ const RESERVED = new Set([
   'strcat', 'strcmp', 'sprintf', 'snprintf', 'pow', 'llvm',
 ]);
 
+// Runtime FFI function signatures for libplantlang.so / libm
+// Maps PlantLang function name → { retType, paramTypes, ffiName }
+// retType and paramTypes are LLVM IR type strings.
+// ffiName: optional — if different from the PlantLang action name.
+const RUNTIME_FFI = new Map([
+  // Math functions (libm) — all SCL → SCL
+  ['sqrt',  { retType: 'double', paramTypes: ['double'] }],
+  ['sin',   { retType: 'double', paramTypes: ['double'] }],
+  ['cos',   { retType: 'double', paramTypes: ['double'] }],
+  ['tan',   { retType: 'double', paramTypes: ['double'] }],
+  ['floor', { retType: 'double', paramTypes: ['double'] }],
+  ['ceil',  { retType: 'double', paramTypes: ['double'] }],
+  ['abs',   { retType: 'double', paramTypes: ['double'], ffiName: 'plnt_abs' }],
+  ['fabs',  { retType: 'double', paramTypes: ['double'] }],
+  // Array sort functions (runtime.c) — void return, pointer + count params
+  ['plnt_sort_i64',    { retType: 'void', paramTypes: ['i8*', 'i64'] }],
+  ['plnt_sort_double', { retType: 'void', paramTypes: ['i8*', 'i64'] }],
+  // String operations (runtime.c)
+  ['plnt_string_concat', { retType: '%fat_ptr', paramTypes: ['%fat_ptr', '%fat_ptr'] }],
+  ['plnt_string_len',    { retType: 'i64', paramTypes: ['%fat_ptr'] }],
+]);
+
 function safeName(name) {
   return RESERVED.has(name) ? `pl_${name}` : name;
 }
@@ -1184,7 +1206,10 @@ class LLVMGenerator {
 
     // FFI external actions → emit declare instead of define
     if (info.isExternal) {
-      this.fnDeclares.push({ name, params: info.params, llvmParamList: llvmParams });
+      const ffi = RUNTIME_FFI.get(name);
+      const llvmRetType = ffi ? ffi.retType : 'i64';
+      const llvmName = ffi && ffi.ffiName ? ffi.ffiName : name;
+      this.fnDeclares.push({ name: llvmName, params: info.params, llvmParamList: llvmParams, llvmRetType });
       return;
     }
 
@@ -1989,6 +2014,11 @@ class LLVMGenerator {
       argVals.push(argVal);
     }
 
+    // Determine LLVM function name and return type (from RUNTIME_FFI or default)
+    const ffi = RUNTIME_FFI.get(src.name);
+    const fnName = safeName(ffi && ffi.ffiName ? ffi.ffiName : src.name);
+    const llvmRetType = ffi ? ffi.retType : 'i64';
+
     // Build call arguments
     const callArgs = argVals.map((v, i) => {
       const pt = i < fnInfo.params.length ? fnInfo.params[i].type : v.type;
@@ -1997,8 +2027,18 @@ class LLVMGenerator {
     }).join(', ');
 
     const resultReg = m.freshReg();
-    const fnName = safeName(src.name);
-    m.emit(`${resultReg} = call i64 @${fnName}(${callArgs})`);
+
+    // Handle void return — call with no result binding
+    if (llvmRetType === 'void') {
+      m.emit(`call void @${fnName}(${callArgs})`);
+      if (node.variable === '_') return;
+      // For void functions, store nothing — skip result
+      // But if a variable was requested, this is likely an error
+      m.error(`REAP: external function "${src.name}" returns void but a result variable "${node.variable}" was specified`, node);
+      return;
+    }
+
+    m.emit(`${resultReg} = call ${llvmRetType} @${fnName}(${callArgs})`);
 
     // Store result in target variable (auto-create if not declared)
     if (node.variable === '_') return; // discard
@@ -2008,23 +2048,44 @@ class LLVMGenerator {
       // Auto-create the variable — REAP implicitly declares its target
       const depth = node.depth !== undefined ? node.depth : m.currentDepth;
       this.checkDepthAccess(node.variable, depth, node, 'REAP (auto-create)');
-      const ptr = m.arenaAllocTyped('NUM', depth);
+      // Default to NUM type, but if we know the return type we can infer
+      const inferType = ffi && ffi.retType === 'double' ? 'SCL' : 'NUM';
+      const ptr = m.arenaAllocTyped(inferType, depth);
       m.emit(`store i64 0, i64* ${ptr}`);
-      m.scope.set(node.variable, { ptr, plType: 'NUM', depth });
+      m.scope.set(node.variable, { ptr, plType: inferType, depth });
       targetInfo = m.scope.get(node.variable);
     }
 
     let storedReg;
-    if (targetInfo.plType === 'SCL') {
-      // The function returned i64 but the bits represent a double — use bitcast
-      storedReg = m.freshReg();
-      m.emit(`${storedReg} = bitcast i64 ${resultReg} to double`);
+    if (ffi) {
+      // Runtime FFI functions return their natural types
+      if (ffi.retType === 'double') {
+        if (targetInfo.plType === 'SCL') {
+          storedReg = resultReg; // already double
+        } else {
+          // Store double bits into NUM — bitcast
+          storedReg = m.freshReg();
+          m.emit(`${storedReg} = bitcast double ${resultReg} to i64`);
+        }
+      } else if (ffi.retType === 'i64') {
+        storedReg = this.coerce({ reg: resultReg, type: 'NUM' }, targetInfo.plType, node);
+      } else {
+        // For %fat_ptr and other struct types, use normal coercion
+        storedReg = this.coerce({ reg: resultReg, type: 'NUM' }, targetInfo.plType, node);
+      }
     } else {
-      // For all other types, use normal coercion
-      storedReg = this.coerce({ reg: resultReg, type: 'NUM' }, targetInfo.plType, node);
+      // Legacy path: function returned i64 (return register convention)
+      if (targetInfo.plType === 'SCL') {
+        storedReg = m.freshReg();
+        m.emit(`${storedReg} = bitcast i64 ${resultReg} to double`);
+      } else {
+        storedReg = this.coerce({ reg: resultReg, type: 'NUM' }, targetInfo.plType, node);
+      }
     }
     const lt = llvmType(targetInfo.plType);
-    m.emit(`store ${lt} ${storedReg}, ${lt}* ${targetInfo.ptr}`);
+    if (lt) {
+      m.emit(`store ${lt} ${storedReg}, ${lt}* ${targetInfo.ptr}`);
+    }
   }
 
   // ── GIVE (return from ACTION) ──────────────────────────────────────────────
@@ -2213,8 +2274,9 @@ class LLVMGenerator {
     if (m.usesMemset) lines.push('declare void @llvm.memset.p0i8.i64(i8*, i8, i64, i1)');
     // User FFI external declarations
     for (const fd of this.fnDeclares) {
-      const llvmRetType = 'i64';
-      lines.push(`declare ${llvmRetType} @${safeName(fd.name)}(${fd.llvmParamList.join(', ')})`);
+      // Strip parameter names for cleaner declare output
+      const cleanParams = fd.llvmParamList.map(p => p.replace(/%\w+$/, '').trim());
+      lines.push(`declare ${fd.llvmRetType} @${safeName(fd.name)}(${cleanParams.join(', ')})`);
     }
     lines.push('');
 

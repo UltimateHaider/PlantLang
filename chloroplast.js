@@ -203,7 +203,7 @@ function compileFile(filePath,opts={}){
     }
 
     try{
-      const linkArgs=[sPath, '-no-pie', '-lm', '-o', binPath];
+      const linkArgs=[sPath, '-no-pie', '-L'+path.join(__dirname,'runtime'), '-lplantlang', '-lm', '-o', binPath];
       if(fs.existsSync(bridgeC)){linkArgs.splice(1,0,bridgeC);}
       execFileSync('gcc',linkArgs,{stdio:'inherit'});
     }catch(e){
@@ -234,7 +234,7 @@ function compileFile(filePath,opts={}){
     console.log(`${C.gray}  → generated ${cPath}${C.reset}`);
 
     try{
-      execFileSync('gcc',[cPath,'-O2','-lm','-o',binPath],{stdio:'inherit'});
+      execFileSync('gcc',[cPath,'-O2','-L'+path.join(__dirname,'runtime'),'-lplantlang','-lm','-o',binPath],{stdio:'inherit'});
     }catch(e){
       console.error(`${C.red}✕ gcc compilation failed${C.reset}`);
       if(!opts.keepC)try{fs.unlinkSync(cPath);}catch(_){}

@@ -184,7 +184,7 @@ ACTION use_add(a(NUM), b(NUM)),
   const prog = parse(src);
   const { ir, errors } = generate(prog);
   check('LLVM codegen succeeds', errors.length === 0);
-  check('FFI declare emitted', ir.includes('declare i64 @external_add(i64 %a, i64 %b)'));
+  check('FFI declare emitted', ir.includes('declare i64 @external_add(i64, i64)'));
   check('define uses call', ir.includes('call i64 @external_add'));
 }
 

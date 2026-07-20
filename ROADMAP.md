@@ -1,4 +1,4 @@
-# PlantLang Roadmap: v0.29.0 (The Polymorphic Dispatch Release)
+# PlantLang Roadmap: v0.30.0 (The Runtime Library Release)
 
 ## What v0.29.0 Delivered
 
@@ -39,17 +39,34 @@ The previous roadmap targeted SPECIES vtable dispatch, CHOICE/MATCH codegen, and
 
 ---
 
-## 🚀 v0.30.0 Objectives
+## ✅ v0.30.0 Progress So Far
 
-### 1. Runtime Library (`libplantlang.so`)
+### ✅ Completed: Runtime Library Infrastructure
 
 | Sub-goal | Approach |
 |---|---|
-| **Sorting (NUM/TX arrays)** | Quicksort / mergesort implemented in C, callable via FFI |
-| **String operations** | `split`, `join`, `reverse`, `pad` — C implementations |
-| **Math library expansion** | `sin`, `cos`, `tan`, `floor`, `ceil`, `round` as FFI functions |
-| **Build system** | `Makefile` for `libplantlang.so`, auto-detected by `chloroplast compile` |
+| **Math FFI (sqrt, sin, cos, tan, floor, ceil, abs)** | C wrappers in `runtime/runtime.c` calling libm; `RUNTIME_FFI` map in `llvm_codegen.js` for proper `declare double @sqrt(double)` emission |
+| **Array sort (NUM / SCL)** | `plnt_sort_i64`, `plnt_sort_double` in C using `qsort`; void return, pointer+count params |
+| **String concat** | `plnt_string_concat` in C with `%fat_ptr` struct return |
+| **String length** | `plnt_string_len` in C returning `i64` |
+| **Build system** | `Makefile` with `runtime`, `exec`, `test`, `clean` targets; `libplantlang.so` built with `-fPIC -shared` |
+| **NATIVE keyword** | Parser recognizes `NATIVE ACTION name(params) -> external.` syntax; sets `isExternal = true` |
+| **FFI linkage in `chloroplast.js`** | `compileFile()` passes `-Lruntime -lplantlang` to gcc linker |
+| **FFI linkage in tests** | `runCompiledLLVM` in `test_llvm_codegen.js` and `compileAndRun` in `test_phase21_runtime.js` both link against runtime lib |
+| **RUNTIME_FFI map** | 12 function signatures: math (double→double), sort (void), string (fat_ptr→fat_ptr, fat_ptr→i64) |
+| **Test suite** | `test_phase21_runtime.js` — 7 tests: 3 IR smoke tests, 4 execution tests (sqrt, floor, ceil, fabs) |
+
+### 🚀 v0.30.0 Remaining Objectives
+
+### 1. Runtime Library Expansion
+
+| Sub-goal | Approach |
+|---|---|
+| **String operations** | `split`, `join`, `reverse`, `pad` — C implementations in runtime.c, std/string.plnt bindings |
+| **Sort for TX string arrays** | `plnt_sort_tx` in C using `qsort` + fat_ptr comparison |
+| **LIST SORT parity** | Compiled `SORT` on `[NUM]`, `[SCL]` arrays calls `plnt_sort_i64` / `plnt_sort_double` |
 | **Format string** | Shared `printf`-style format dispatch for SHOW |
+| **MAP `get()` return type** | Fix codegen to correctly return `Option<V>` (see v0.29.0 MAP `get()` note) |
 
 ### 2. Language & Compiler Hardening
 
@@ -65,7 +82,7 @@ The previous roadmap targeted SPECIES vtable dispatch, CHOICE/MATCH codegen, and
 
 | Sub-goal | Approach |
 |---|---|
-| **SPECIES integration tests** | Test vtable dispatch, method overriding, SELF mutation across inheritance |
+| **SPECIES integration tests** | Test vtable dispatch, method overriding, SELF mutation across inheritance (LLVM compiled vs interpreted) |
 | **CHOICE/MATCH parity tests** | Verify interpreter and LLVM-compiled output match exactly for all CHOICE features |
 | **LIST SORT parity** | Compiled sort matches interpreter's SORT behavior |
 | **Benchmark suite** | Interpreter vs compiled for OOP-heavy workloads |

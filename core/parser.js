@@ -170,6 +170,12 @@ class Parser {
       return this.parseListenBranchStatement(coords);
     }
     if (this.match(TOKEN.KEYWORD, 'WEATHER')) return this.parseWeatherStatement(coords);
+    if (this.match(TOKEN.KEYWORD, 'NATIVE')) {
+      this.advance();
+      const action = this.parseActionDeclaration(coords);
+      action.isExternal = true;
+      return action;
+    }
     if (this.match(TOKEN.KEYWORD, 'ACTION')) return this.parseActionDeclaration(coords);
     if (this.match(TOKEN.KEYWORD, 'SPECIES')) return this.parseSpeciesDeclaration(coords);
     if (this.match(TOKEN.KEYWORD, 'BLOOM')) return this.parseBloomStatement(coords);

@@ -60,7 +60,8 @@ function runCompiledLLVM(source, tmpBase) {
 
   fs.writeFileSync(llPath, ir, 'utf8');
   execFileSync(LLC_BIN, [llPath, '-O2', '-o', sPath], { stdio: 'pipe' });
-  execFileSync('gcc', [sPath, '-no-pie', '-lm', '-o', binPath], { stdio: 'pipe' });
+  const runtimeLibDir = path.join(__dirname, '..', 'runtime');
+  execFileSync('gcc', [sPath, '-no-pie', '-L' + runtimeLibDir, '-lplantlang', '-lm', '-o', binPath], { stdio: 'pipe' });
   const out = execFileSync(binPath, [], { encoding: 'utf8' });
 
   fs.unlinkSync(llPath);

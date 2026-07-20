@@ -7,3 +7,4 @@
 
 IMPORT "std/io".
 IMPORT "std/string".
+IMPORT "std/math".
