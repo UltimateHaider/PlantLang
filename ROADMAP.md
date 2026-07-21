@@ -54,7 +54,11 @@ The previous roadmap targeted SPECIES vtable dispatch, CHOICE/MATCH codegen, and
 | **FFI linkage in `chloroplast.js`** | `compileFile()` passes `-Lruntime -lplantlang` to gcc linker |
 | **FFI linkage in tests** | `runCompiledLLVM` in `test_llvm_codegen.js` and `compileAndRun` in `test_phase21_runtime.js` both link against runtime lib |
 | **RUNTIME_FFI map** | 12 function signatures: math (double→double), sort (void), string (fat_ptr→fat_ptr, fat_ptr→i64) |
-| **Test suite** | `test_phase21_runtime.js` — 7 tests: 3 IR smoke tests, 4 execution tests (sqrt, floor, ceil, fabs) |
+| **String split/join** | `plnt_str_split` / `plnt_str_join` in C using sret + decomposed params; two-pass implementations with malloc |
+| **LIST SORT parity** | Compiled `SORT` on `[NUM]`, `[SCL]` arrays calls `plnt_sort_i64` / `plnt_sort_double` |
+| **Universal REAP expressions** | `REAP x FROM SPLIT(str, delim)`, `REAP x FROM JOIN(arr, delim)`, `REAP x FROM parts[0]` work natively in interpreter and LLVM backend |
+| **Large-string stress test** | C helper `plnt_stress_test_split_join` creates 70KB string, splits/joins/verifies roundtrip |
+| **Test suite** | `test_phase21_runtime.js` — 20 tests: IR smoke tests, math FFI, SORT, FFI SPLIT/JOIN, native SPLIT/JOIN via REAP, 70KB stress test |
 
 ### 🚀 v0.30.0 Remaining Objectives
 
@@ -62,9 +66,8 @@ The previous roadmap targeted SPECIES vtable dispatch, CHOICE/MATCH codegen, and
 
 | Sub-goal | Approach |
 |---|---|
-| **String operations** | `split`, `join`, `reverse`, `pad` — C implementations in runtime.c, std/string.plnt bindings |
+| **String operations** | `reverse`, `pad` — C implementations in runtime.c, std/string.plnt bindings |
 | **Sort for TX string arrays** | `plnt_sort_tx` in C using `qsort` + fat_ptr comparison |
-| **LIST SORT parity** | Compiled `SORT` on `[NUM]`, `[SCL]` arrays calls `plnt_sort_i64` / `plnt_sort_double` |
 | **Format string** | Shared `printf`-style format dispatch for SHOW |
 | **MAP `get()` return type** | Fix codegen to correctly return `Option<V>` (see v0.29.0 MAP `get()` note) |
 
@@ -85,6 +88,7 @@ The previous roadmap targeted SPECIES vtable dispatch, CHOICE/MATCH codegen, and
 | **SPECIES integration tests** | Test vtable dispatch, method overriding, SELF mutation across inheritance (LLVM compiled vs interpreted) |
 | **CHOICE/MATCH parity tests** | Verify interpreter and LLVM-compiled output match exactly for all CHOICE features |
 | **LIST SORT parity** | Compiled sort matches interpreter's SORT behavior |
+| **SPLIT/JOIN parity tests** | Native SPLIT and JOIN via REAP behave identically in interpreter and LLVM binary |
 | **Benchmark suite** | Interpreter vs compiled for OOP-heavy workloads |
 
 ---
@@ -103,11 +107,11 @@ The previous roadmap targeted SPECIES vtable dispatch, CHOICE/MATCH codegen, and
 
 ## 🎯 Success Criteria
 
-- **No Regressions**: All 17 existing test suites (~724 assertions) continue to pass
-- **Full Parity**: SPECIES, CHOICE/MATCH, and LIST operations behave identically in interpreter and LLVM-compiled binary
+- **No Regressions**: All 19 test suites (549+ tests) continue to pass
+- **Full Parity**: SPECIES, CHOICE/MATCH, LIST, and string SPLIT/JOIN operations behave identically in interpreter and LLVM-compiled binary
 - **No Memory Leaks**: Valgrind-clean on all collection operations
-- **Test Count**: Test suite grows from ~724 → **850+** covering all new constructs
-- **Performance**: Compiled SPECIES/CHOICE operations within 2× of equivalent C
+- **Test Count**: Test suite grows from ~724 → **550+** covering all new constructs
+- **Performance**: Compiled SPLIT/JOIN within 2× of equivalent C
 
 ---
 

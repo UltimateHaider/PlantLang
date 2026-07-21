@@ -128,7 +128,28 @@ class Interpreter {
           return na+nb;
         },0);
       }
+      if(node.operation==='SORT'){
+        arg.sort((a,b)=>a-b);
+        return null;
+      }
       storm('TYPE_STORM',`Unknown list operation "${node.operation}"`,node.line,node.column);
+    }
+    if(node.type==='StringOp'){
+      if(node.operation==='SPLIT'){
+        const src=this.evaluateExpressionNode(node.arg1,soil);
+        const delim=this.evaluateExpressionNode(node.arg2,soil);
+        if(typeof src!=='string')storm('TYPE_STORM','SPLIT requires TX first argument',node.line,node.column);
+        if(typeof delim!=='string')storm('TYPE_STORM','SPLIT requires TX delimiter',node.line,node.column);
+        return src.split(delim);
+      }
+      if(node.operation==='JOIN'){
+        const arr=this.evaluateExpressionNode(node.arg1,soil);
+        const delim=this.evaluateExpressionNode(node.arg2,soil);
+        if(!Array.isArray(arr))storm('TYPE_STORM','JOIN requires [TX] array first argument',node.line,node.column);
+        if(typeof delim!=='string')storm('TYPE_STORM','JOIN requires TX delimiter',node.line,node.column);
+        return arr.join(delim);
+      }
+      storm('TYPE_STORM',`Unknown string operation "${node.operation}"`,node.line,node.column);
     }
     if(node.type==='IndexAccess'){
       const target=this.evaluateExpressionNode(node.target,soil);
@@ -993,6 +1014,11 @@ class Interpreter {
       const fn=this.funcs.get(name);
       const result=this._callAction(fn,splitArgs(node.args),null,soil);
       store(result.value!==undefined?result.value:null); return{next:1};
+    }
+
+    if(kind==='EXPR'){
+      const val=this.evaluateExpressionNode(node.source.expr,soil);
+      store(val); return{next:1};
     }
 
     storm('SEED_STORM',`Unknown REAP source kind: ${kind}`,node.line,node.column);

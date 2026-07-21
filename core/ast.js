@@ -382,6 +382,15 @@ class ListOpNode extends AstNode {
   }
 }
 
+class StringOpNode extends AstNode {
+  constructor(arg1, arg2, operation, coords) {
+    super('StringOp', coords);
+    this.arg1 = arg1;
+    this.arg2 = arg2;
+    this.operation = operation;
+  }
+}
+
 class IndexAccessNode extends AstNode {
   constructor(target, index, coords) {
     super('IndexAccess', coords);
@@ -455,6 +464,7 @@ module.exports = {
   LenCallNode,
   CapCallNode,
   ListOpNode,
+  StringOpNode,
   IndexAccessNode,
   StructDeclarationNode,
   StructInstantiationExpr,

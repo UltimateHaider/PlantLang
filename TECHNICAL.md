@@ -407,7 +407,7 @@ All nodes inherit from `AstNode` (`core/ast.js`) with `type`, `line`, `column`, 
 | `ShelterStatement` | `stormType`, `errVar`, `bodyStatements` |
 | `CalmStatement` | `bodyStatements` |
 | `GiveStatement` | `valueExpr` |
-| `ReapStatement` | `variable`, `source`, `args` |
+| `ReapStatement` | `variable`, `source`, `args` — `source.kind` can be `'ACTION'`, `'EXPR'`, `'NOW'`, `'TYPEOF'`, `'SELF'`, `'INSTANCE_OR_LIBRARY'`, `'LITERAL'` |
 | `ActionDeclaration` | `name`, `params`, `bodyStatements` |
 | `LockStatement` | — |
 | `RawStatement` | `text` (fallback for unmigrated constructs) |
@@ -454,9 +454,73 @@ Emitted lazily only when a WEATHER block is present.
 
 ---
 
-## 10. Module System (IMPORT) & FFI
+## 10. REAP Expression Sources (Universal REAP)
 
-### 10.1 IMPORT Resolution Algorithm
+### 10.1 Background
+
+In v0.29.0 and earlier, `REAP` only accepted `ACTION` sources:
+```plantlang
+REAP r FROM my_action, arg1, arg2.
+```
+
+Native expressions like `SPLIT(str, delim)` or `parts[0]` could not be used directly with REAP — they required wrapping in an FFI `ACTION` declaration.
+
+### 10.2 Parser Changes
+
+`parseReapStatement` in `core/parser.js` now detects expression sources by checking the token after `FROM`:
+- If `IDENT/KW` followed by `(` → function call expression (SPLIT, JOIN, COUNT, etc.)
+- If `IDENT/KW` followed by `[` → index access expression (`parts[0]`)
+- Otherwise → existing ACTION parsing
+
+Expression sources call `parseExpressionSpan()` to build full AST nodes (`StringOpNode`, `IndexAccessNode`, `ListOpNode`) and store them as `source = { kind: 'EXPR', expr: astNode }`.
+
+### 10.3 Typechecker
+
+`_checkReap` handles `EXPR` kind by calling `_inferExprNode(source.expr, scope)` to derive the return type dynamically and set the target variable's type.
+
+### 10.4 Interpreter
+
+`evaluateReapStatement` handles `EXPR` kind:
+```javascript
+if (kind === 'EXPR') {
+  const val = this.evaluateExpressionNode(node.source.expr, soil);
+  store(val);
+  return { next: 1 };
+}
+```
+
+### 10.5 LLVM Codegen
+
+`genReapStatement` evaluates the expression via `compileAstExpr`, then auto-creates or stores into the target variable:
+```javascript
+if (src.kind === 'EXPR') {
+  const val = this.compileAstExpr(src.expr);
+  // auto-create target variable with inferred type
+  const inferType = val.type;
+  const ptr = m.arenaAllocTyped(inferType, depth);
+  m.scope.set(node.variable, { ptr, plType: inferType, depth });
+  // store
+  m.emit(`store ${lt} ${val.reg}, ${lt}* ${targetInfo.ptr}`);
+}
+```
+
+The expression itself handles `sret` allocation internally (e.g., `StringOpNode` allocates an sret slot, calls `@plnt_str_split`, and loads the result). No sret handling is needed in `genReapStatement` for EXPR sources.
+
+### 10.6 Supported Expressions
+
+| Expression | Return Type | LLVM Path |
+|---|---|---|
+| `SPLIT(str, delim)` | `[TX]` | `%fat_ptr` via `plnt_str_split` sret call |
+| `JOIN(arr, delim)` | `TX` | `%fat_ptr` via `plnt_str_join` sret call |
+| `COUNT(arr)` | `NUM` | `extractvalue` on `%fat_ptr` length field |
+| `arr[index]` | Element type | GEP + load on array pointer |
+| `SORT(arr)` | `NUM` (statement) | `plnt_sort_i64` / `plnt_sort_double` call |
+
+---
+
+## 11. Module System (IMPORT) & FFI
+
+### 11.1 IMPORT Resolution Algorithm
 
 The `resolveImports` function in `core/parser.js` handles multi-file program loading:
 
@@ -477,7 +541,7 @@ resolveImports(programNode, baseDir, visited = new Set())
   4. Return the modified programNode
 ```
 
-### 10.2 Cycle Detection
+### 11.2 Cycle Detection
 
 Import cycles are detected during the recursive `resolveImports` pass:
 
@@ -490,7 +554,7 @@ IMPORT "a".   → resolveImports enters "a" → visited = {"a"}
 
 The `visited` set tracks absolute file paths, so the same file imported from different relative paths is still caught.
 
-### 10.3 AST Merging
+### 11.3 AST Merging
 
 After resolution, each `ImportStatement` node is replaced in-place with the imported file's `statements` array:
 
@@ -504,7 +568,7 @@ After resolution, each `ImportStatement` node is replaced in-place with the impo
 
 This means depth tracking, type checking, and code generation operate on a flat, merged AST — imported code is indistinguishable from inline code.
 
-### 10.4 FFI Declaration & Stub Mechanism
+### 11.4 FFI Declaration & Stub Mechanism
 
 FFI functions are declared with `-> external` syntax:
 
@@ -526,7 +590,7 @@ The function name is mangled from the PlantLang identifier. Parameters use the s
 
 **Interpreter**: FFI stubs are pre-registered in the interpreter's runtime. Each stub wraps the corresponding `runtime_bridge.c` function via a JS implementation. When the interpreter encounters a call to an external ACTION, it dispatches to the registered stub instead of looking for a body.
 
-### 10.5 FFI Stub Registration
+### 11.5 FFI Stub Registration
 
 ```javascript
 // core/interpreter.js
@@ -543,9 +607,9 @@ Stubs are registered at interpreter construction time. All 10 `runtime_bridge.c`
 
 ---
 
-## 11. Standard Library Architecture
+## 12. Standard Library Architecture
 
-### 11.1 Directory Layout
+### 12.1 Directory Layout
 
 ```
 std/
@@ -554,7 +618,7 @@ std/
 └── string.plnt     # String functions — len, upper, lower, trim, contains, split, replace, concat
 ```
 
-### 11.2 Auto-Prelude Injection
+### 12.2 Auto-Prelude Injection
 
 Every program automatically imports `std/prelude.plnt` at parse time. This happens in `parser.js` before the main parse:
 
@@ -570,14 +634,14 @@ The prelude provides:
 - `_BOOT` — bootstrap marker for runtime initialization
 - Core type aliases and utility definitions
 
-### 11.3 std/ Path Resolution
+### 12.3 std/ Path Resolution
 
 When `IMPORT "std/io"` is encountered:
 1. The resolver detects the `std/` prefix
 2. Searches for `std/io.plnt` relative to the PlantLang std library root
 3. If `PLANTLANG_STD` env var is set, uses that; otherwise defaults to `../std/` from the parser directory
 
-### 11.4 Runtime C Bridge (`core/runtime_bridge.c`)
+### 12.4 Runtime C Bridge (`core/runtime_bridge.c`)
 
 The C bridge implements 10 FFI targets that compiled PlantLang programs link against:
 
@@ -598,7 +662,7 @@ All functions receive and return `int64_t` (TX pointers as `int64_t` via ptrtoin
 
 ---
 
-## 12. Test Suite Architecture
+## 13. Test Suite Architecture
 
 ### Test Files
 - `tests/test_llvm_codegen.js` — 50 parity tests: each fixture runs via interpreter AND compiled via `llc` + `gcc`, asserts identical stdout
@@ -618,7 +682,8 @@ All functions receive and return `int64_t` (TX pointers as `int64_t` via ptrtoin
 - `tests/test_phase16_structs.js` — 16 tests for STRUCT types
 - `tests/test_phase17_species.js` — 10 tests for SPECIES/BLOOM OOP
 - `tests/test_phase18_lists.js` — 15 tests for native LIST operations (COUNT, FIRST, LAST, SUM)
-- **Total: 17 test files, ~724 assertions, all green**
+- `tests/test_phase21_runtime.js` — 20 tests for C runtime FFI: math, sort, string split/join (FFI and native via REAP), 70KB large-string stress test
+- **Total: 19 test files, ~550+ tests, all green**
 
 ### Test Methodology
 Each test:

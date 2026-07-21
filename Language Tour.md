@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.27.0
+# 🌿 PlantLang — Chloroplast v0.30.0
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -280,6 +280,22 @@ Features:
 1\ SHOW MAX scores.
 1\ SHOW MIN scores.
 ```
+
+### Native String Split/Join via REAP Expressions
+
+`SPLIT(str, delim)` splits a TX string by a delimiter and returns a `[TX]` array. `JOIN(arr, delim)` joins a `[TX]` array with a delimiter and returns a TX string. Both work as REAP expression sources — no ACTION declaration needed:
+
+```
+1\ REAP parts FROM SPLIT("apple,banana,cherry", ",").
+1\ SHOW COUNT(parts).        # → 3
+1\ REAP first FROM parts[0].
+1\ SHOW first.               # → apple
+
+1\ REAP joined FROM JOIN(parts, ":").
+1\ SHOW joined.              # → apple:banana:cherry
+```
+
+Both are compiled natively via LLVM — `SPLIT` calls `plnt_str_split` (two-pass, sret convention), `JOIN` calls `plnt_str_join`. Roundtrips through split-then-join produce identical output. Large strings (>64KB) are supported via `malloc`-backed part arrays.
 
 ### Native List Operations (COUNT / FIRST / LAST / SUM)
 
@@ -738,6 +754,7 @@ Requires LLVM's `llc` (and ideally `opt`) on `PATH` — e.g. `apt install llvm` 
 | `LIST` (dynamic array) | ❌ use `chloroplast run` |
 | `COUNT(xs)` / `FIRST(xs)` / `LAST(xs)` | ✅ O(1) via GEP/extractvalue — compiled natively |
 | `SUM(xs)` | ✅ O(n) inline phi loop — compiled natively |
+| `SPLIT(str, delim)` / `JOIN(arr, delim)` | ✅ via REAP expression sources — calls `plnt_str_split` / `plnt_str_join` with sret |
 | `SPECIES` / `BLOOM` | ✅ interpreter: `{ }` body syntax, FROM inheritance, BLOOM instantiation, method dispatch, SELF:field access |
 | `CHOICE` / `MATCH` | ❌ not yet (interpreter-only) |
 | `HARVEST` / `LISTEN BRANCH` | ❌ not yet |
@@ -782,7 +799,7 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.28.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production:
+Chloroplast v0.30.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production:
 
 ```
 Source (.plnt)

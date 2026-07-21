@@ -25,6 +25,7 @@ const KEYWORDS = new Set([
   'TRUE','FALSE','TO','FROM','IS','IN','BETWEEN','AND','OR','NOT',
   'GREATER','LESS','THAN','COUNT','FIRST','LAST','SUM','MAX','MIN','REVERSE',
   'NUM','SCL','TX','FACT','LIST','INSTANCE','VEIN','SHAPE','STRUCT','CHOICE','NATIVE',
+  'SPLIT','JOIN',
 ]);
 
 const TOKEN = {

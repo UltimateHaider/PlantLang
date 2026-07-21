@@ -3,6 +3,12 @@
 ## v0.30.0 — 2026 (in development)
 
 ### New Features
+- **Universal REAP Expression Support** — `REAP x FROM SPLIT(str, delim)`, `REAP x FROM JOIN(arr, delim)`, `REAP x FROM parts[0]` now work natively in both interpreter and LLVM backend:
+  - Parser: `parseReapStatement` detects expression sources (`(` or `[` after FROM) and delegates to `parseExpressionSpan` for full AST construction
+  - Typechecker: `_checkReap` handles `EXPR` source kind by calling `_inferExprNode` to derive return type
+  - Interpreter: `evaluateReapStatement` handles `EXPR` source kind via `evaluateExpressionNode`
+  - LLVM Codegen: `genReapStatement` accepts `EXPR` source kind, evaluates via `compileAstExpr`, and auto-creates target variable with inferred type
+  - `SHOW` on `[TX]` arrays prints element count
 - **C Runtime Library (`libplantlang.so`)** — native C implementations of performance-critical operations callable via LLVM FFI:
   - Math functions: `sqrt`, `sin`, `cos`, `tan`, `floor`, `ceil`, `abs` — thin wrappers around libm
   - Array sort: `plnt_sort_i64`, `plnt_sort_double` — quicksort via `qsort`
@@ -19,8 +25,8 @@
 - **Declare Cleanup** — parameter names stripped from `declare` lines for cleaner LLVM IR output
 
 ### Test Suite
-- New `tests/test_phase21_runtime.js` — 7 tests: 3 IR smoke tests (declare signatures), 4 execution tests (sqrt, floor, ceil, fabs via FFI)
-- All **19 test suites, ~800+ assertions** — all green
+- New `tests/test_phase21_runtime.js` — 20 tests: IR smoke tests, math FFI, SORT, SPLIT/JOIN (FFI), native SPLIT/JOIN via REAP (expression sources), 70KB large-string stress test
+- All **19 test suites, 549+ tests** — all green
 
 ### Documentation
 - ROADMAP.md bumped to v0.30.0 — completed items marked, remaining objectives listed

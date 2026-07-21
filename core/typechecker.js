@@ -685,6 +685,13 @@ class TypeChecker {
       return;
     }
 
+    // REAP x FROM expr(...) — arbitrary expression (SPLIT, JOIN, COUNT, etc.)
+    if (node.source.kind === 'EXPR') {
+      const exprType = this._inferExprNode(node.source.expr, scope);
+      if (varName && varName !== '_') scope.setVar(varName, exprType, { line: node.line });
+      return;
+    }
+
     // REAP x FROM action, args
     if (node.source.kind === 'ACTION') {
       const fnName = node.source.name;
@@ -1276,6 +1283,43 @@ class TypeChecker {
           return arrayInnerType(argType);
         }
         return T.UNKNOWN;
+      }
+      if (node.operation === 'SORT') {
+        if (!isArrayType(argType)) {
+          this.error('TYPE_MISMATCH', `SORT requires an array argument, got ${argType}`, node.line, node.column);
+          return T.VOID;
+        }
+        const inner = arrayInnerType(argType);
+        if (inner !== T.NUM && inner !== T.SCL) {
+          this.error('TYPE_MISMATCH', `SORT operation is currently unsupported for non-numeric arrays, got [${inner}]`, node.line, node.column);
+          return T.VOID;
+        }
+        return T.VOID;
+      }
+      return T.UNKNOWN;
+    }
+    if (node.type === 'StringOp') {
+      if (node.operation === 'SPLIT') {
+        const arg1Type = this._inferExprNode(node.arg1, scope);
+        const arg2Type = this._inferExprNode(node.arg2, scope);
+        if (arg1Type !== T.TX && arg1Type !== T.UNKNOWN && arg1Type !== T.ANY) {
+          this.error('TYPE_MISMATCH', `SPLIT requires a TX (string) as first argument, got ${arg1Type}`, node.line, node.column);
+        }
+        if (arg2Type !== T.TX && arg2Type !== T.UNKNOWN && arg2Type !== T.ANY) {
+          this.error('TYPE_MISMATCH', `SPLIT requires a TX (string) as delimiter, got ${arg2Type}`, node.line, node.column);
+        }
+        return '[TX]';
+      }
+      if (node.operation === 'JOIN') {
+        const arg1Type = this._inferExprNode(node.arg1, scope);
+        const arg2Type = this._inferExprNode(node.arg2, scope);
+        if (arg1Type !== '[TX]' && arg1Type !== T.UNKNOWN && arg1Type !== T.ANY) {
+          this.error('TYPE_MISMATCH', `JOIN requires a [TX] array as first argument, got ${arg1Type}`, node.line, node.column);
+        }
+        if (arg2Type !== T.TX && arg2Type !== T.UNKNOWN && arg2Type !== T.ANY) {
+          this.error('TYPE_MISMATCH', `JOIN requires a TX (string) as delimiter, got ${arg2Type}`, node.line, node.column);
+        }
+        return T.TX;
       }
       return T.UNKNOWN;
     }

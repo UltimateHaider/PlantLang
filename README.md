@@ -1,4 +1,4 @@
-# PlantLang Language Specification & Ecosystem v0.28.0
+# PlantLang Language Specification & Ecosystem v0.30.0
 
 **PlantLang** is a human-centric, prose-based programming language engineered for both high-level readability and native-level execution performance. It transforms "prose-like" syntax into highly optimized machine code via the LLVM compiler infrastructure.
 
@@ -163,12 +163,14 @@ PlantLang employs a state-of-the-art compilation chain:
 | **LIST First** | `SHOW FIRST(xs).` | O(1) first element — compiled via GEP + load. |
 | **LIST Last** | `SHOW LAST(xs).` | O(1) last element — compiled via GEP to `len-1`. |
 | **LIST Sum** | `SHOW SUM(xs).` | O(n) inline accumulation — compiled as LLVM phi loop. |
+| **SPLIT String** | `REAP parts FROM SPLIT(str, delim).` | Split string by delimiter — returns `[TX]` array (native REAP expression). |
+| **JOIN Strings** | `REAP joined FROM JOIN(parts, delim).` | Join `[TX]` array with delimiter — returns `TX` (native REAP expression). |
 
 ---
 
 ## 6. QA & Quality Assurance
-The **v0.28.0** release is verified by an automated regression suite:
-* **~724 Total Assertions** across seventeen test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7—18).
+The **v0.30.0** release is verified by an automated regression suite:
+* **~550+ Total Tests** across nineteen test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7—21).
 * **LLVM Backend**: 50 smoke tests covering CREATE/SHOW, arithmetic, strings, comparisons, IF/CYCLE/SEASON, ACTION/REAP/GIVE (recursion, SCL params, TX returns), WEATHER/SHELTER exception handling, TX fat-pointer operations, and MAP hash tables (LINK, has(), growth, overwrite).
 * **Native LIST Ops**: 15 tests covering COUNT, FIRST, LAST, SUM on empty/populated arrays, type-checker validation.
 * **MAP Types**: 17 tests covering empty map create, map literals, LINK/put semantics, has/get, overwrite, growth (10 entries), SHOW display, type-checker validation.
@@ -210,7 +212,15 @@ The **v0.28.0** release is verified by an automated regression suite:
 - **SPECIES / BLOOM OOP** (`{ }` body syntax, `FROM` inheritance, BLOOM instantiation, colon-dispatch method calls, SELF:field access)
 - **Native LIST Operations** (`COUNT`, `FIRST`, `LAST` — O(1) via GEP; `SUM` — O(n) via inline LLVM loop; full interpreter and LLVM codegen)
 
-### 🔜 In Progress / Planned (v0.29.0)
+### ✅ Completed (v0.30.0)
+- Runtime C library (`libplantlang.so`) — math FFI, sort, string split/join
+- `NATIVE ACTION ... -> external.` syntax for FFI declarations
+- Compiled `SORT` on `[NUM]` and `[SCL]` arrays via `plnt_sort_i64` / `plnt_sort_double`
+- String `SPLIT(str, delim)` / `JOIN(arr, delim)` — native syntax with REAP expression support
+- Universal REAP expression sources — `REAP x FROM SPLIT(...)`, `REAP x FROM JOIN(...)`, `REAP x FROM expr[index]`
+- 70KB large-string stress test for split/join roundtrip
+
+### 🔜 In Progress / Planned (v0.31.0)
 - `SPECIES` advanced LLVM codegen (vtable dispatch, dynamic dispatch)
 - `CHOICE` / `MATCH` codegen in LLVM backend
 - `LIST` literal and SORT operations in LLVM backend
@@ -220,4 +230,4 @@ The **v0.28.0** release is verified by an automated regression suite:
 
 ---
 
-*PlantLang v0.28.0 — Native LIST Ops. SPECIES OOP. MAP hash tables. FOR...IN loops. 724 tests all green.*
+*PlantLang v0.30.0 — Runtime Library. Native SPLIT/JOIN. REAP expression sources. Large-string stress tests. 550+ tests all green.*

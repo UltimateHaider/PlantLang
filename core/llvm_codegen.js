@@ -177,6 +177,9 @@ const RUNTIME_FFI = new Map([
   // String operations (runtime.c)
   ['plnt_string_concat', { retType: '%fat_ptr', paramTypes: ['%fat_ptr', '%fat_ptr'] }],
   ['plnt_string_len',    { retType: 'i64', paramTypes: ['%fat_ptr'] }],
+  // Split/join (runtime.c) — fat_ptr in/out
+  ['plnt_str_split', { retType: 'void', paramTypes: ['%fat_ptr*', 'i8*', 'i64', 'i64', 'i8*', 'i64', 'i64'], sret: true }],
+  ['plnt_str_join',  { retType: 'void', paramTypes: ['%fat_ptr*', 'i8*', 'i64', 'i64', 'i8*', 'i64', 'i64'], sret: true }],
 ]);
 
 function safeName(name) {
@@ -231,6 +234,10 @@ class Module {
     this.errors = [];
     this.usesMath = false;
     this.usesMemset = false;
+    this.usesSortI64 = false;
+    this.usesSortDouble = false;
+    this.usesStrSplit = false;
+    this.usesStrJoin = false;
     this.scope = new Map();
     // Arena state
     this.currentDepth = 0;
@@ -1209,7 +1216,27 @@ class LLVMGenerator {
       const ffi = RUNTIME_FFI.get(name);
       const llvmRetType = ffi ? ffi.retType : 'i64';
       const llvmName = ffi && ffi.ffiName ? ffi.ffiName : name;
-      this.fnDeclares.push({ name: llvmName, params: info.params, llvmParamList: llvmParams, llvmRetType });
+      // If FFI expects decomposed params (e.g. i8*, i64, i64 per fat_ptr, plus sret), expand
+      let finalParams = llvmParams;
+      if (ffi) {
+        finalParams = [];
+        // Add sret pointer first if applicable
+        if (ffi.sret) {
+          finalParams.push('%fat_ptr*');
+        }
+        // For each user-declared param, expand if FFI expects decomposed
+        for (let i = 0; i < info.params.length; i++) {
+          const pt = llvmType(info.params[i].type) || 'i64';
+          // Check if this param maps to 3 decomposed params in FFI
+          const base = (ffi.sret ? 1 : 0) + i * 3;
+          if (ffi.paramTypes[base] === 'i8*' && ffi.paramTypes[base+1] === 'i64' && ffi.paramTypes[base+2] === 'i64') {
+            finalParams.push('i8*', 'i64', 'i64');
+          } else {
+            finalParams.push(pt);
+          }
+        }
+      }
+      this.fnDeclares.push({ name: llvmName, params: info.params, llvmParamList: finalParams, llvmRetType });
       return;
     }
 
@@ -1980,7 +2007,28 @@ class LLVMGenerator {
     const m = this.mod;
     const src = node.source;
 
-    // Only ACTION kind is supported for LLVM compilation
+    // REAP x FROM expr — SPLIT, JOIN, COUNT, etc.
+    if (src.kind === 'EXPR') {
+      const val = this.compileAstExpr(src.expr);
+      if (node.variable === '_') return;
+      let targetInfo = m.scope.get(node.variable);
+      if (!targetInfo) {
+        const depth = node.depth !== undefined ? node.depth : m.currentDepth;
+        this.checkDepthAccess(node.variable, depth, node, 'REAP (auto-create)');
+        const inferType = val.type;
+        const ptr = m.arenaAllocTyped(inferType, depth);
+        const lt = llvmType(inferType);
+        if (lt) m.emit(`store ${lt} zeroinitializer, ${lt}* ${ptr}`);
+        m.scope.set(node.variable, { ptr, plType: inferType, depth });
+        targetInfo = m.scope.get(node.variable);
+      }
+      const lt = llvmType(targetInfo.plType);
+      if (lt) {
+        m.emit(`store ${lt} ${val.reg}, ${lt}* ${targetInfo.ptr}`);
+      }
+      return;
+    }
+
     if (src.kind !== 'ACTION') {
       m.unsupported(node, `REAP from ${src.kind} source`);
       return;
@@ -2019,25 +2067,67 @@ class LLVMGenerator {
     const fnName = safeName(ffi && ffi.ffiName ? ffi.ffiName : src.name);
     const llvmRetType = ffi ? ffi.retType : 'i64';
 
-    // Build call arguments
-    const callArgs = argVals.map((v, i) => {
+    // Build call arguments (decompose %fat_ptr into i8*, i64, i64 when FFI expects it)
+    // Handle sret (struct return via pointer): add hidden sret pointer as first arg
+    let sretSlot = null;
+    const callParts = [];
+    if (ffi && ffi.sret) {
+      sretSlot = m.freshReg();
+      m.emit(`${sretSlot} = alloca %fat_ptr`);
+      callParts.push(`%fat_ptr* sret(%fat_ptr) ${sretSlot}`);
+    }
+    for (let i = 0; i < argVals.length; i++) {
+      const v = argVals[i];
       const pt = i < fnInfo.params.length ? fnInfo.params[i].type : v.type;
       const lt = llvmType(pt) || 'i64';
-      return `${lt} ${v.reg}`;
-    }).join(', ');
-
-    const resultReg = m.freshReg();
+      // If FFI expects decomposed params for this arg (more params than user declared)
+      const ffiExtra = ffi && ffi.sret
+        ? ffi.paramTypes.length - 1 - argVals.length  // -1 for sret pointer
+        : ffi ? ffi.paramTypes.length - argVals.length : 0;
+      if (ffi && lt === '%fat_ptr' && ffiExtra > 0) {
+        const base = (ffi.sret ? 1 : 0) + i * 3;
+        if (ffi.paramTypes[base] === 'i8*' && ffi.paramTypes[base+1] === 'i64' && ffi.paramTypes[base+2] === 'i64') {
+          callParts.push(`i8* ${m.extractPtr(v.reg)}`);
+          callParts.push(`i64 ${m.extractLen(v.reg)}`);
+          callParts.push(`i64 ${m.extractCap(v.reg)}`);
+          continue;
+        }
+      }
+      callParts.push(`${lt} ${v.reg}`);
+    }
+    const callArgs = callParts.join(', ');
 
     // Handle void return — call with no result binding
     if (llvmRetType === 'void') {
       m.emit(`call void @${fnName}(${callArgs})`);
-      if (node.variable === '_') return;
-      // For void functions, store nothing — skip result
-      // But if a variable was requested, this is likely an error
-      m.error(`REAP: external function "${src.name}" returns void but a result variable "${node.variable}" was specified`, node);
+      // For sret calls, load the result from the sret slot
+      if (sretSlot) {
+        const resultReg = m.freshReg();
+        m.emit(`${resultReg} = load %fat_ptr, %fat_ptr* ${sretSlot}`);
+        // Store result in target variable (auto-create if not declared)
+        if (node.variable === '_') return;
+        let targetInfo = m.scope.get(node.variable);
+        if (!targetInfo) {
+          const depth = node.depth !== undefined ? node.depth : m.currentDepth;
+          this.checkDepthAccess(node.variable, depth, node, 'REAP (auto-create)');
+          const inferType = 'TX';
+          const ptr = m.arenaAllocTyped(inferType, depth);
+          m.emit(`store %fat_ptr zeroinitializer, %fat_ptr* ${ptr}`);
+          m.scope.set(node.variable, { ptr, plType: inferType, depth });
+          targetInfo = m.scope.get(node.variable);
+        }
+        const lt = llvmType(targetInfo.plType);
+        if (lt) {
+          m.emit(`store ${lt} ${resultReg}, ${lt}* ${targetInfo.ptr}`);
+        }
+      } else {
+        if (node.variable === '_') return;
+        m.error(`REAP: external function "${src.name}" returns void but a result variable "${node.variable}" was specified`, node);
+      }
       return;
     }
 
+    const resultReg = m.freshReg();
     m.emit(`${resultReg} = call ${llvmRetType} @${fnName}(${callArgs})`);
 
     // Store result in target variable (auto-create if not declared)
@@ -2049,9 +2139,14 @@ class LLVMGenerator {
       const depth = node.depth !== undefined ? node.depth : m.currentDepth;
       this.checkDepthAccess(node.variable, depth, node, 'REAP (auto-create)');
       // Default to NUM type, but if we know the return type we can infer
-      const inferType = ffi && ffi.retType === 'double' ? 'SCL' : 'NUM';
+      const inferType = ffi && ffi.retType === 'double' ? 'SCL' : ffi && ffi.retType === '%fat_ptr' ? 'TX' : 'NUM';
       const ptr = m.arenaAllocTyped(inferType, depth);
-      m.emit(`store i64 0, i64* ${ptr}`);
+      const lt = llvmType(inferType);
+      if (lt === '%fat_ptr') {
+        m.emit(`store %fat_ptr zeroinitializer, %fat_ptr* ${ptr}`);
+      } else {
+        m.emit(`store i64 0, i64* ${ptr}`);
+      }
       m.scope.set(node.variable, { ptr, plType: inferType, depth });
       targetInfo = m.scope.get(node.variable);
     }
@@ -2067,10 +2162,13 @@ class LLVMGenerator {
           storedReg = m.freshReg();
           m.emit(`${storedReg} = bitcast double ${resultReg} to i64`);
         }
+      } else if (ffi.retType === '%fat_ptr') {
+        // Store fat_ptr result directly into target (should be TX or [TX])
+        storedReg = resultReg;
       } else if (ffi.retType === 'i64') {
         storedReg = this.coerce({ reg: resultReg, type: 'NUM' }, targetInfo.plType, node);
       } else {
-        // For %fat_ptr and other struct types, use normal coercion
+        // For other types, use normal coercion
         storedReg = this.coerce({ reg: resultReg, type: 'NUM' }, targetInfo.plType, node);
       }
     } else {
@@ -2085,6 +2183,28 @@ class LLVMGenerator {
     const lt = llvmType(targetInfo.plType);
     if (lt) {
       m.emit(`store ${lt} ${storedReg}, ${lt}* ${targetInfo.ptr}`);
+    }
+  }
+
+  // ── SORT on array (ListOp statement) ───────────────────────────────────────
+  genListOpStatement(node) {
+    const m = this.mod;
+    const arg = this.compileAstExpr(node.arg);
+    if (!isArrayTypeStr(arg.type)) {
+      m.error(`SORT requires an array argument, got ${arg.type}`, node);
+      return;
+    }
+    const innerType = arg.type.slice(1, -1);
+    const ptrReg = m.extractPtr(arg.reg);
+    const lenReg = m.extractLen(arg.reg);
+    if (innerType === 'NUM') {
+      m.usesSortI64 = true;
+      m.emit(`call void @plnt_sort_i64(i8* ${ptrReg}, i64 ${lenReg})`);
+    } else if (innerType === 'SCL') {
+      m.usesSortDouble = true;
+      m.emit(`call void @plnt_sort_double(i8* ${ptrReg}, i64 ${lenReg})`);
+    } else {
+      m.error(`SORT requires [NUM] or [SCL] array, got ${arg.type}`, node);
     }
   }
 
@@ -2272,10 +2392,14 @@ class LLVMGenerator {
     lines.push('declare i32 @strcmp(i8*, i8*)');
     if (m.usesMath) lines.push('declare double @pow(double, double)');
     if (m.usesMemset) lines.push('declare void @llvm.memset.p0i8.i64(i8*, i8, i64, i1)');
-    // User FFI external declarations
+    if (m.usesSortI64) lines.push('declare void @plnt_sort_i64(i8*, i64)');
+    if (m.usesSortDouble) lines.push('declare void @plnt_sort_double(i8*, i64)');
+    if (m.usesStrSplit) lines.push('declare void @plnt_str_split(%fat_ptr*, i8*, i64, i64, i8*, i64, i64)');
+    if (m.usesStrJoin) lines.push('declare void @plnt_str_join(%fat_ptr*, i8*, i64, i64, i8*, i64, i64)');
+    // User FFI external declarations (including split/join with decomposed params)
     for (const fd of this.fnDeclares) {
       // Strip parameter names for cleaner declare output
-      const cleanParams = fd.llvmParamList.map(p => p.replace(/%\w+$/, '').trim());
+      const cleanParams = fd.llvmParamList.map(p => p.replace(/\s%\w+$/, '').trim());
       lines.push(`declare ${fd.llvmRetType} @${safeName(fd.name)}(${cleanParams.join(', ')})`);
     }
     lines.push('');
@@ -2348,7 +2472,10 @@ class LLVMGenerator {
     }
 
     if (node.type === 'Literal') {
-      if (node.literalType === 'NUMBER') return { reg: String(node.value), type: 'NUM' };
+      if (node.literalType === 'NUMBER') {
+        const numStr = String(node.value);
+        return { reg: numStr, type: numStr.includes('.') ? 'SCL' : 'NUM' };
+      }
       if (node.literalType === 'STRING') {
         const strVal = node.value;
         const byteLen = Buffer.byteLength(strVal, 'utf8');
@@ -2486,8 +2613,69 @@ class LLVMGenerator {
         return { reg: phiAcc, type: 'NUM' };
       }
 
+      if (node.operation === 'SORT') {
+        const ptrReg = m.extractPtr(arg.reg);
+        const lenReg = m.extractLen(arg.reg);
+        if (innerType === 'NUM') {
+          m.usesSortI64 = true;
+          m.emit(`call void @plnt_sort_i64(i8* ${ptrReg}, i64 ${lenReg})`);
+        } else if (innerType === 'SCL') {
+          m.usesSortDouble = true;
+          m.emit(`call void @plnt_sort_double(i8* ${ptrReg}, i64 ${lenReg})`);
+        } else {
+          m.error(`SORT requires [NUM] or [SCL] array, got ${arg.type}`, node);
+        }
+        return { reg: '0', type: 'NUM' };
+      }
+
       m.error(`Unknown ListOp "${node.operation}"`, node);
       return { reg: '0', type: 'NUM' };
+    }
+
+    if (node.type === 'StringOp') {
+      if (node.operation === 'SPLIT') {
+        const srcVal = this.compileAstExpr(node.arg1);
+        const delimVal = this.compileAstExpr(node.arg2);
+        if (srcVal.type !== 'TX') { m.error(`SPLIT requires TX first arg, got ${srcVal.type}`, node); return { reg: '0', type: '[TX]' }; }
+        if (delimVal.type !== 'TX') { m.error(`SPLIT requires TX delimiter, got ${delimVal.type}`, node); return { reg: '0', type: '[TX]' }; }
+        m.usesStrSplit = true;
+        const srcPtr = m.extractPtr(srcVal.reg);
+        const srcLen = m.extractLen(srcVal.reg);
+        const srcCap = m.extractCap(srcVal.reg);
+        const delPtr = m.extractPtr(delimVal.reg);
+        const delLen = m.extractLen(delimVal.reg);
+        const delCap = m.extractCap(delimVal.reg);
+        const sretSlot = m.freshReg();
+        m.emit(`${sretSlot} = alloca %fat_ptr`);
+        m.emit(`call void @plnt_str_split(%fat_ptr* sret(%fat_ptr) ${sretSlot}, i8* ${srcPtr}, i64 ${srcLen}, i64 ${srcCap}, i8* ${delPtr}, i64 ${delLen}, i64 ${delCap})`);
+        const result = m.freshReg();
+        m.emit(`${result} = load %fat_ptr, %fat_ptr* ${sretSlot}`);
+        return { reg: result, type: '[TX]' };
+      }
+      if (node.operation === 'JOIN') {
+        const arrVal = this.compileAstExpr(node.arg1);
+        const delimVal = this.compileAstExpr(node.arg2);
+        if (!isArrayTypeStr(arrVal.type) || arrVal.type.slice(1, -1) !== 'TX') {
+          m.error(`JOIN requires [TX] array as first argument, got ${arrVal.type}`, node);
+          return { reg: '0', type: 'TX' };
+        }
+        if (delimVal.type !== 'TX') { m.error(`JOIN requires TX delimiter, got ${delimVal.type}`, node); return { reg: '0', type: 'TX' }; }
+        m.usesStrJoin = true;
+        const arrPtr = m.extractPtr(arrVal.reg);
+        const arrLen = m.extractLen(arrVal.reg);
+        const arrCap = m.extractCap(arrVal.reg);
+        const delPtr = m.extractPtr(delimVal.reg);
+        const delLen = m.extractLen(delimVal.reg);
+        const delCap = m.extractCap(delimVal.reg);
+        const sretSlot = m.freshReg();
+        m.emit(`${sretSlot} = alloca %fat_ptr`);
+        m.emit(`call void @plnt_str_join(%fat_ptr* sret(%fat_ptr) ${sretSlot}, i8* ${arrPtr}, i64 ${arrLen}, i64 ${arrCap}, i8* ${delPtr}, i64 ${delLen}, i64 ${delCap})`);
+        const result = m.freshReg();
+        m.emit(`${result} = load %fat_ptr, %fat_ptr* ${sretSlot}`);
+        return { reg: result, type: 'TX' };
+      }
+      m.error(`Unknown StringOp "${node.operation}"`, node);
+      return { reg: '0', type: 'TX' };
     }
 
     if (node.type === 'MethodCall') {
@@ -2957,6 +3145,21 @@ class LLVMGenerator {
       case 'MethodCallStatement': this.genMethodCallStatement(node); return false;
       case 'BloomStatement':   m.error('BLOOM AS statement is not supported in compiled mode — use CREATE x TO BLOOM SpeciesName. instead', node); return false;
 
+      case 'ListOp': {
+        // SORT(arr) used as a standalone statement
+        if (node.operation === 'SORT') {
+          this.genListOpStatement(node);
+          return false;
+        }
+        m.error(`ListOp "${node.operation}" used as a statement`, node);
+        return false;
+      }
+
+      case 'StringOp': {
+        this.compileAstExpr(node);
+        return false;
+      }
+
       case 'LinkStatement': {
         const mapInfo = m.scope.get(node.mapIdent);
         if (!mapInfo) { m.error(`"${node.mapIdent}" is not defined`, node); return false; }
@@ -3145,6 +3348,11 @@ class LLVMGenerator {
       this.mod.emit(`${reg} = trunc i64 ${val.reg} to i1`);
       return reg;
     }
+    // Handle array types — [TX] and TX are both %fat_ptr
+    // Same LLVM type → identity coercion (e.g. [TX] ↔ TX, both %fat_ptr)
+    if (llvmType(declaredType) && llvmType(declaredType) === llvmType(val.type)) {
+      return val.reg;
+    }
     if (declaredType === 'TX' && val.type === 'FACT') {
       const m = this.mod;
       const reg = m.freshReg();
@@ -3271,7 +3479,7 @@ class LLVMGenerator {
       this.emitPrintValue(val);
       return;
     }
-    if (expr.type === 'LenCall' || expr.type === 'CapCall' || expr.type === 'ListOp' || expr.type === 'IndexAccess' || expr.type === 'MethodCall') {
+    if (expr.type === 'LenCall' || expr.type === 'CapCall' || expr.type === 'ListOp' || expr.type === 'IndexAccess' || expr.type === 'MethodCall' || expr.type === 'StringOp') {
       const val = this.compileAstExpr(expr);
       this.emitPrintValue(val);
       return;
@@ -3313,6 +3521,10 @@ class LLVMGenerator {
       m.emit(`${chosen} = select i1 ${val.reg}, i8* ${tPtr}, i8* ${fPtr}`);
       castVal = chosen;
       fmtStr = '%s\n';
+    } else if (typeof val.type === 'string' && val.type.startsWith('[') && val.type.endsWith(']')) {
+      // Array type — show element count
+      castVal = m.extractLen(val.reg);
+      fmtStr = '[%ld elements]\n';
     } else {
       m.error(`Cannot SHOW a value of type ${val.type}`, {});
       return;

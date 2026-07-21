@@ -29,7 +29,7 @@ function compileAndRun(name, source) {
   fs.writeFileSync(llPath, ir, 'utf8');
   execFileSync(LLC_BIN, [llPath, '-O2', '-o', sPath], { stdio: 'pipe' });
   const runtimeLibDir = path.join(__dirname, '..', 'runtime');
-  execFileSync('gcc', [sPath, '-no-pie', '-L' + runtimeLibDir, '-lplantlang', '-lm', '-o', binPath], { stdio: 'pipe' });
+  execFileSync('gcc', [sPath, '-no-pie', '-L' + runtimeLibDir, '-Wl,-rpath,' + runtimeLibDir, '-lplantlang', '-lm', '-o', binPath], { stdio: 'pipe' });
   const out = execFileSync(binPath, [], { encoding: 'utf8' });
 
   fs.unlinkSync(llPath);
@@ -153,6 +153,108 @@ ACTION fabs(x(SCL)) -> external.
 1\\ REAP r FROM fabs, x.
 1\\ SHOW r.
 `, '2.5');
+
+// ── SORT execution tests ──────────────────────────────────────────
+testIR('IR: SORT [NUM] emits plnt_sort_i64 declare', `
+MISSION: SAFE.
+1\\ CREATE arr([NUM]) TO [3, 1, 2].
+1\\ SORT(arr).
+`, 'declare void @plnt_sort_i64(i8*, i64)');
+
+test('SORT [NUM] array in-place', `
+MISSION: SAFE.
+1\\ CREATE arr([NUM]) TO [3, 1, 2].
+1\\ SORT(arr).
+1\\ SHOW FIRST(arr).
+1\\ SHOW LAST(arr).
+1\\ SHOW COUNT(arr).
+`, '1\n3\n3');
+
+test('SORT [SCL] array in-place', `
+MISSION: SAFE.
+1\\ CREATE arr([SCL]) TO [3.0, 1.5, 2.0].
+1\\ SORT(arr).
+1\\ SHOW FIRST(arr).
+1\\ SHOW LAST(arr).
+`, '1.5\n3');
+
+// ── String split/join tests ────────────────────────────────────────────
+testIR('IR: SPLIT emits plnt_str_split declare', `
+MISSION: SAFE.
+ACTION plnt_str_split(s(TX), d(TX)) -> external.
+1\\ CREATE s(TX) TO "a,b".
+1\\ CREATE d(TX) TO ",".
+1\\ CREATE r([TX]) TO [""].
+1\\ REAP r FROM plnt_str_split, s, d.
+`, 'declare void @plnt_str_split(%fat_ptr*, i8*, i64, i64, i8*, i64, i64)');
+
+testIR('IR: JOIN emits plnt_str_join declare', `
+MISSION: SAFE.
+ACTION plnt_str_join(parts(TX), d(TX)) -> external.
+1\\ CREATE parts(TX) TO "".
+1\\ CREATE d(TX) TO ",".
+1\\ CREATE r(TX) TO "".
+1\\ REAP r FROM plnt_str_join, parts, d.
+`, 'declare void @plnt_str_join(%fat_ptr*, i8*, i64, i64, i8*, i64, i64)');
+
+test('JOIN ["a","b","c"] by "," -> "a,b,c"', `
+MISSION: SAFE.
+ACTION plnt_str_join(parts(TX), d(TX)) -> external.
+1\\ CREATE parts([TX]) TO ["a", "b", "c"].
+1\\ CREATE d(TX) TO ",".
+1\\ CREATE r(TX) TO "".
+1\\ REAP r FROM plnt_str_join, parts, d.
+1\\ SHOW r.
+`, 'a,b,c');
+
+test('JOIN ["hello","world"] by " " -> "hello world"', `
+MISSION: SAFE.
+ACTION plnt_str_join(parts(TX), d(TX)) -> external.
+1\\ CREATE parts([TX]) TO ["hello", "world"].
+1\\ CREATE d(TX) TO " ".
+1\\ CREATE r(TX) TO "".
+1\\ REAP r FROM plnt_str_join, parts, d.
+1\\ SHOW r.
+`, 'hello world');
+
+// ── Native SPLIT/JOIN via REAP (expression sources) ──────────
+testIR('IR: native SPLIT via REAP emits plnt_str_split declare', `
+MISSION: SAFE.
+1\\ REAP parts FROM SPLIT("a,b", ",").
+`, 'declare void @plnt_str_split(%fat_ptr*, i8*, i64, i64, i8*, i64, i64)');
+
+testIR('IR: native JOIN via REAP emits plnt_str_join declare', `
+MISSION: SAFE.
+1\\ REAP parts FROM SPLIT("a,b", ",").
+1\\ REAP joined FROM JOIN(parts, ":").
+`, 'declare void @plnt_str_join(%fat_ptr*, i8*, i64, i64, i8*, i64, i64)');
+
+test('native SPLIT via REAP + COUNT', `
+MISSION: SAFE.
+1\\ REAP parts FROM SPLIT("a,b,c", ",").
+1\\ SHOW COUNT(parts).
+`, '3');
+
+test('native SPLIT→JOIN roundtrip via REAP', `
+MISSION: SAFE.
+1\\ REAP parts FROM SPLIT("hello,world,test", ",").
+1\\ REAP joined FROM JOIN(parts, "-").
+1\\ SHOW joined.
+`, 'hello-world-test');
+
+test('native SPLIT + index access via REAP', `
+MISSION: SAFE.
+1\\ REAP parts FROM SPLIT("apple,banana", ",").
+1\\ REAP first FROM parts[0].
+1\\ SHOW first.
+`, 'apple');
+
+// ── Large-string stress test (~70KB split/join roundtrip) ──────
+test('stress test: 70KB string split/join roundtrip', `
+MISSION: SAFE.
+ACTION plnt_stress_test_split_join() -> external.
+1\\ REAP _ FROM plnt_stress_test_split_join.
+`, 'Stress test: input len=70000, expected parts=6364\nSplit count: 6364\nJoined length: 70000\nPASS: stress test roundtrip OK');
 
 console.log(`\nPhase 21: ${passed} passed, ${failed} failed, ${skipped} skipped`);
 process.exit(failed > 0 ? 1 : 0);

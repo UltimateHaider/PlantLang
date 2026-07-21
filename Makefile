@@ -22,16 +22,19 @@ BRIDGE_OBJ := $(RUNTIME_DIR)/runtime_bridge.o
 all: runtime
 
 # ── Build the shared runtime library ──────────────────────────
+# NOTE: Use clang to match llc's struct-passing ABI for %fat_ptr.
+CC ?= clang
+
 runtime: $(RUNTIME_LIB)
 
 $(RUNTIME_OBJ): $(RUNTIME_SRC)
-	gcc -c -fPIC -O2 -Wall -Wextra -o $@ $< -lm
+	$(CC) -c -fPIC -O2 -Wall -Wextra -o $@ $< -lm
 
 $(BRIDGE_OBJ): $(BRIDGE_SRC)
-	gcc -c -fPIC -O2 -Wall -Wextra -o $@ $<
+	$(CC) -c -fPIC -O2 -Wall -Wextra -o $@ $<
 
 $(RUNTIME_LIB): $(RUNTIME_OBJ) $(BRIDGE_OBJ)
-	gcc -shared -o $@ $^ -lm
+	$(CC) -shared -o $@ $^ -lm
 
 # ── Compile and run a PlantLang file ─────────────────────────
 run: $(RUNTIME_LIB)

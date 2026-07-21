@@ -946,9 +946,16 @@ class Parser {
 
     // ── FROM action [, args] ──────────────────────────────────
     } else if (firstTok.type === TOKEN.IDENT || firstTok.type === TOKEN.KEYWORD) {
-      const name = this.advance().value;
-      source = { kind: 'ACTION', name };
-      if (this.match(TOKEN.PUNCT, ',')) { this.advance(); args = this.parseReapArgs(); }
+      // If followed by '(' or '[', it's an expression (SPLIT, JOIN, COUNT, parts[0])
+      const nextIsPunct = this.peek(1) && this.peek(1).type === TOKEN.PUNCT;
+      if (nextIsPunct && (this.peek(1).value === '(' || this.peek(1).value === '[')) {
+        const expr = this.parseExpressionSpan();
+        source = { kind: 'EXPR', expr };
+      } else {
+        const name = this.advance().value;
+        source = { kind: 'ACTION', name };
+        if (this.match(TOKEN.PUNCT, ',')) { this.advance(); args = this.parseReapArgs(); }
+      }
 
     } else {
       storm('SYNTAX_STORM', `Expected a source after FROM in REAP, found "${firstTok.value}"`,
@@ -1378,15 +1385,45 @@ class Parser {
       if (t.type === TOKEN.FACT) return new LiteralNode(t.value, 'FACT', coords);
       if (t.type === TOKEN.IDENT) return new IdentifierNode(t.value, coords);
     }
-    // Check for len(x) / cap(x) / COUNT(x) / SUM(x) pattern: IDENT|KEYWORD LPAREN inner RPAREN
+    // Check for len(x) / cap(x) / COUNT(x) / SPLIT(x, delim) pattern:
+    // IDENT|KEYWORD LPAREN ... RPAREN
     const first = tokensInSpan[0];
     if (tokensInSpan.length >= 4 &&
         (first.type === TOKEN.IDENT || first.type === TOKEN.KEYWORD) &&
         tokensInSpan[1].type === TOKEN.PUNCT && tokensInSpan[1].value === '(' &&
         tokensInSpan[tokensInSpan.length - 1].type === TOKEN.PUNCT && tokensInSpan[tokensInSpan.length - 1].value === ')') {
       const fnName = first.value.toUpperCase();
-      if (fnName === 'LEN' || fnName === 'CAP' || fnName === 'COUNT' || fnName === 'SUM' || fnName === 'FIRST' || fnName === 'LAST') {
-        const innerTokens = tokensInSpan.slice(2, tokensInSpan.length - 1);
+      const coords = { line: first.line, column: first.column, depth: first.depth };
+      const innerTokens = tokensInSpan.slice(2, tokensInSpan.length - 1);
+
+      // Multi-argument functions: SPLIT(str, delim), JOIN(arr, delim)
+      if (fnName === 'SPLIT' || fnName === 'JOIN') {
+        const { StringOpNode } = require('./ast');
+        // Find comma to split arguments
+        const commaIdx = innerTokens.findIndex(t => t.type === TOKEN.PUNCT && t.value === ',');
+        let arg1, arg2;
+        const leftTokens = commaIdx >= 0 ? innerTokens.slice(0, commaIdx) : innerTokens;
+        const rightTokens = commaIdx >= 0 ? innerTokens.slice(commaIdx + 1) : [];
+        const leftCoords = { line: leftTokens[0].line, column: leftTokens[0].column, depth: leftTokens[0].depth };
+        const rightCoords = rightTokens.length > 0
+          ? { line: rightTokens[0].line, column: rightTokens[0].column, depth: rightTokens[0].depth }
+          : leftCoords;
+        if (leftTokens.length === 1 && leftTokens[0].type === TOKEN.IDENT) {
+          arg1 = new IdentifierNode(leftTokens[0].value, leftCoords);
+        } else {
+          arg1 = new LiteralNode(joinTokens(leftTokens), 'RAW_EXPR', leftCoords);
+        }
+        if (rightTokens.length === 1 && rightTokens[0].type === TOKEN.IDENT) {
+          arg2 = new IdentifierNode(rightTokens[0].value, rightCoords);
+        } else if (rightTokens.length > 0) {
+          arg2 = new LiteralNode(joinTokens(rightTokens), 'RAW_EXPR', rightCoords);
+        } else {
+          arg2 = new LiteralNode('', 'STRING', rightCoords);
+        }
+        return new StringOpNode(arg1, arg2, fnName, coords);
+      }
+
+      if (fnName === 'SORT' || fnName === 'LEN' || fnName === 'CAP' || fnName === 'COUNT' || fnName === 'SUM' || fnName === 'FIRST' || fnName === 'LAST') {
         const innerCoords = { line: innerTokens[0].line, column: innerTokens[0].column, depth: innerTokens[0].depth };
         let argExpr;
         if (innerTokens.length === 1 && innerTokens[0].type === TOKEN.IDENT) {
@@ -1395,7 +1432,6 @@ class Parser {
           const innerText = joinTokens(innerTokens);
           argExpr = new LiteralNode(innerText, 'RAW_EXPR', innerCoords);
         }
-        const coords = { line: first.line, column: first.column, depth: first.depth };
         if (fnName === 'LEN') return new LenCallNode(argExpr, coords);
         if (fnName === 'CAP') return new CapCallNode(argExpr, coords);
         return new ListOpNode(argExpr, fnName, coords);
@@ -1874,8 +1910,39 @@ class Parser {
   }
 
   parseSortStatement(coords) {
-    const { SortStatementNode } = require('./ast');
     this.advance();
+    // Check for SORT(expr) expression syntax
+    if (this.match(TOKEN.PUNCT, '(')) {
+      const { ListOpNode, IdentifierNode, LiteralNode } = require('./ast');
+      this.advance(); // consume (
+      const argTokens = [];
+      let parenDepth = 1;
+      while (!this.isAtEnd() && parenDepth > 0) {
+        const t = this.current();
+        if (t.type === TOKEN.PUNCT && t.value === '(') { parenDepth++; argTokens.push(this.advance()); }
+        else if (t.type === TOKEN.PUNCT && t.value === ')') {
+          parenDepth--;
+          if (parenDepth === 0) break;
+          argTokens.push(this.advance());
+        } else {
+          argTokens.push(this.advance());
+        }
+      }
+      if (this.isAtEnd() && parenDepth > 0) {
+        storm('SYNTAX_STORM', 'Unclosed parenthesis in SORT()', coords.line, coords.column);
+      }
+      this.advance(); // consume )
+      let argExpr;
+      if (argTokens.length === 1 && argTokens[0].type === TOKEN.IDENT) {
+        argExpr = new IdentifierNode(argTokens[0].value, { line: argTokens[0].line, column: argTokens[0].column, depth: argTokens[0].depth });
+      } else {
+        argExpr = new LiteralNode(joinTokens(argTokens), 'RAW_EXPR', coords);
+      }
+      if (this.match(TOKEN.PUNCT, '.')) this.advance();
+      return new ListOpNode(argExpr, 'SORT', coords);
+    }
+    // Legacy: SORT ident.
+    const { SortStatementNode } = require('./ast');
     const id = this.current().value; this.advance();
     if (this.match(TOKEN.PUNCT, '.')) this.advance();
     return new SortStatementNode({ listIdent: id }, coords);

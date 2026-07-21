@@ -35,6 +35,8 @@ const RESERVED_KEYWORDS = {
   'WITH':     'KW_WITH',
   'AS':       'KW_AS',
   'NATIVE':   'KW_NATIVE',
+  'SPLIT':    'KW_SPLIT',
+  'JOIN':     'KW_JOIN',
 };
 
 function keywordLength(word) {

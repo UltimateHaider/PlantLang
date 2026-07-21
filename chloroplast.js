@@ -203,7 +203,8 @@ function compileFile(filePath,opts={}){
     }
 
     try{
-      const linkArgs=[sPath, '-no-pie', '-L'+path.join(__dirname,'runtime'), '-lplantlang', '-lm', '-o', binPath];
+      const runtimeDir = path.join(__dirname,'runtime');
+      const linkArgs=[sPath, '-no-pie', '-L'+runtimeDir, '-Wl,-rpath,'+runtimeDir, '-lplantlang', '-lm', '-o', binPath];
       if(fs.existsSync(bridgeC)){linkArgs.splice(1,0,bridgeC);}
       execFileSync('gcc',linkArgs,{stdio:'inherit'});
     }catch(e){
@@ -234,7 +235,8 @@ function compileFile(filePath,opts={}){
     console.log(`${C.gray}  → generated ${cPath}${C.reset}`);
 
     try{
-      execFileSync('gcc',[cPath,'-O2','-L'+path.join(__dirname,'runtime'),'-lplantlang','-lm','-o',binPath],{stdio:'inherit'});
+      const runtimeDirC = path.join(__dirname,'runtime');
+      execFileSync('gcc',[cPath,'-O2','-L'+runtimeDirC,'-Wl,-rpath,'+runtimeDirC,'-lplantlang','-lm','-o',binPath],{stdio:'inherit'});
     }catch(e){
       console.error(`${C.red}✕ gcc compilation failed${C.reset}`);
       if(!opts.keepC)try{fs.unlinkSync(cPath);}catch(_){}
