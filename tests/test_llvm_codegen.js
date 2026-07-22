@@ -365,12 +365,26 @@ MISSION: SAFE.
 1\\ SHOW undefined_var.
 `, 'was not declared');
 
-testErrors('ACTION/REAP is rejected (not yet supported)', `
+{
+  process.stdout.write(`  ACTION declaration compiles without errors ... `);
+  try {
+    const { errors } = generate(parse(`
 MISSION: SAFE.
 1\\ ACTION add(a(NUM), b(NUM)),
 2\\   GIVE a + b.
 1\\ /ACTION.
-`, 'Unsupported construct');
+`));
+    if (errors.length === 0) {
+      console.log('\x1b[32m✓\x1b[0m'); passed++;
+    } else {
+      console.log('\x1b[31m✗\x1b[0m');
+      console.log('    got errors:', errors.map(e => e.message)); failed++;
+    }
+  } catch (e) {
+    console.log('\x1b[31m✗ (threw)\x1b[0m');
+    console.log('   ', e.message); failed++;
+  }
+}
 
 console.log(`\n${passed} passed, ${failed} failed, ${skipped} skipped`);
 process.exit(failed > 0 ? 1 : 0);

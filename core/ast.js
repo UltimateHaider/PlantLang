@@ -678,6 +678,23 @@ class MissionStatementNode extends AstNode {
   }
 }
 
+class MissionBlockNode extends AstNode {
+  /**
+   * Wraps an ACTION declaration with a mission mode for the 5-Mission Architecture.
+   * @param {Object} fields
+   * @param {string} fields.mode  'BALANCED' | 'FAST' | 'SAFE' | 'SMART' | 'PERSISTENT'
+   * @param {number} fields.scopeId  Auto-incrementing scope identifier
+   * @param {ActionDeclarationNode} fields.action  The wrapped action
+   * @param {{line,column,depth}} coords
+   */
+  constructor({ mode, scopeId, action }, coords) {
+    super('MissionBlock', coords);
+    this.mode = mode || 'BALANCED';
+    this.scopeId = scopeId;
+    this.action = action;
+  }
+}
+
 class RootStatementNode extends AstNode {
   // ROOT name TO expr
   constructor({ identifier, valueExpr }, coords) {
@@ -803,6 +820,7 @@ Object.assign(module.exports, {
   SuiteStatementNode,
   PlantStatementNode,
   MissionStatementNode,
+  MissionBlockNode,
   RootStatementNode,
   RootScopeStatementNode,
   FlowStatementNode,

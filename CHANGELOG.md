@@ -1,6 +1,37 @@
 # Changelog — PlantLang / Chloroplast
 
-## v0.30.0 — 2026 (in development)
+## v0.31.0 — 2026
+
+### New Features
+- **Five-Mission Execution Architecture** — five mission modes with distinct memory policies, optimization paths, and cross-mode call permissions:
+  - `MISSION: BALANCED/FAST/SAFE/SMART/PERSISTENT.` — parser recognizes `MISSION <MODE>.` via `MissionStatementNode` AST
+  - `MissionBlockNode` wraps all top-level statements under a mission declaration
+  - `MissionStack` — runtime context tracking via `push(mode)`/`pop()`
+  - `ScopedArena` — depth-level memory slabs with per-mission overflow policies (`expand`, `snapshot`, `reset`)
+  - `MissionDispatcher` — routes AST nodes to mission-specific evaluators with SMART mission-aware call routing
+  - `BoundaryHandshakeMatrix` — 5×5 permission table (`BOUNDARY_MATRIX`) specifying which source modes may call ACTIONs in which target modes
+  - `BoundaryViolationError` — structured error with `fromMode`, `toMode`, `reason` fields
+  - LLVM codegen: `genMissionStatement` emits `@_mission_mode` global; `genReapStatement` emits mode-check guard IR
+  - Typechecker: `_checkMissionStatement` validates mode string and permission matrix entries
+  - 75 new tests across `tests/matrix.test.js` (28) and `tests/dispatcher.test.js` (47) — all green
+
+### Test Suite
+- 3 new test files: `tests/matrix.test.js` (28 tests), `tests/dispatcher.test.js` (47 tests)
+- Total test count grows from ~560+ → **~635+** across **23 test suites**
+- All pre-existing failures fixed — every test suite at 100% pass rate:
+  - `test_diagnostics.js`: column assertion corrected (4→9) to match actual error column
+  - `test_parser_migration.js`: RESPONSE body execution via `_verifyDryRun`; errVar expectation updated to `"division by zero"`
+  - `test_llvm_codegen.js`: ACTION/REAP rejection test replaced with positive compilation test
+
+### Documentation
+- All `.md` files bumped to v0.31.0
+- ROADMAP.md — v0.30.0 objectives marked complete, v0.31.0 Five-Mission Architecture documented with detailed sub-goals
+- README.md — Five-Mission Architecture section under v0.31.0 completed; v0.32.0 planned section drafted
+- CHANGELOG.md — new v0.31.0 entry describing all Five-Mission features
+
+---
+
+## v0.30.0 — 2026
 
 ### New Features
 - **Block-Depth Contract Law Enforcement** — semantic depth validation ensuring well-structured code scope:

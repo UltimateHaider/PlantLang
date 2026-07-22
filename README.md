@@ -1,4 +1,4 @@
-# PlantLang Language Specification & Ecosystem v0.30.0
+# PlantLang Language Specification & Ecosystem v0.31.0
 
 **PlantLang** is a human-centric, prose-based programming language engineered for both high-level readability and native-level execution performance. It transforms "prose-like" syntax into highly optimized machine code via the LLVM compiler infrastructure.
 
@@ -62,7 +62,7 @@ Arenas are automatically reclaimed:
 
 ---
 
-## 3. Engineering Architecture (The v0.28.0 Stack)
+## 3. Engineering Architecture (The v0.31.0 Stack)
 The ecosystem is built on a modular, industrial-grade pipeline:
 
 1.  **Core Interpreter (Chloroplast Engine):**
@@ -170,8 +170,8 @@ PlantLang employs a state-of-the-art compilation chain:
 ---
 
 ## 6. QA & Quality Assurance
-The **v0.30.0** release is verified by an automated regression suite:
-* **~560+ Total Tests** across twenty test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7—21, depth contract).
+The **v0.31.0** release is verified by an automated regression suite:
+* **~635+ Total Tests** across twenty-three test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7—21, depth contract, matrix, dispatcher).
 * **LLVM Backend**: 50 smoke tests covering CREATE/SHOW, arithmetic, strings, comparisons, IF/CYCLE/SEASON, ACTION/REAP/GIVE (recursion, SCL params, TX returns), WEATHER/SHELTER exception handling, TX fat-pointer operations, and MAP hash tables (LINK, has(), growth, overwrite).
 * **Native LIST Ops**: 15 tests covering COUNT, FIRST, LAST, SUM on empty/populated arrays, type-checker validation.
 * **MAP Types**: 17 tests covering empty map create, map literals, LINK/put semantics, has/get, overwrite, growth (10 entries), SHOW display, type-checker validation.
@@ -221,19 +221,32 @@ The **v0.30.0** release is verified by an automated regression suite:
 - Universal REAP expression sources — `REAP x FROM SPLIT(...)`, `REAP x FROM JOIN(...)`, `REAP x FROM expr[index]`
 - 70KB large-string stress test for split/join roundtrip
 - **Block-Depth Contract Law Enforcement** — semantic depth validation:
-  - Parser: `enforceDepthContract(nodeType, minDepth, maxDepth, token)` with `this.currentDepth` tracking (increment on ACTION/CYCLE entry, decrement on exit via try/finally)
+  - Parser: `enforceDepthContract(nodeType, minDepth, maxDepth, token)` with `this.currentDepth` tracking
   - Typechecker: `validateDepthInvariants(ast)` second-pass AST walker verifying depth invariants
   - ACTION/SPECIES restricted to Depth 0; REAP/GIVE/CYCLE restricted to Depth ≥ 1; nested ACTION rejected
   - 13 new tests in `test_depth_contract.js`
 
-### 🔜 In Progress / Planned (v0.31.0)
-- `SPECIES` advanced LLVM codegen (vtable dispatch, dynamic dispatch)
-- `CHOICE` / `MATCH` codegen in LLVM backend
-- `LIST` literal and SORT operations in LLVM backend
-- `MAP.get()` compiled via `Option<V>` MATCH codegen
+### ✅ Completed (v0.31.0)
+- **Five-Mission Execution Architecture** — five distinct mission modes:
+  - `MISSION: BALANCED/FAST/SAFE/SMART/PERSISTENT.` with per-mode memory, optimization, and boundary policies
+  - `MissionBlockNode` AST, `MissionStack` runtime, `ScopedArena` depth-level memory
+  - `MissionDispatcher` with SMART router for mission-aware ACTION dispatch
+  - `BoundaryHandshakeMatrix` — 5×5 permission table governing cross-mode calls
+  - LLVM codegen: `@_mission_mode` global, mode-check guards in `genReapStatement`
+  - Typechecker: `_checkMissionStatement` validates mode string and matrix permissions
+  - 75 new tests (28 matrix, 47 dispatcher) — all green
+- **100% Test Pass Rate** — all pre-existing failures fixed:
+  - Diagnostics column assertion corrected
+  - RESPONSE emission + errVar binding fixed in parser migration tests
+  - LLVM codegen ACTION test updated to reflect full support
+
+### 🔜 In Progress / Planned (v0.32.0)
+- `PULSE` / `WHENEVER` reactive programming
+- `VERIFY` / `SUITE` native compilation
+- `TAP` file I/O in LLVM backend
+- `HARVEST` networking in LLVM backend
 - Expanded standard library (math, lists, maps modules)
-- `TAP` file I/O and `HARVEST` networking in LLVM backend
 
 ---
 
-*PlantLang v0.30.0 — Runtime Library. Native SPLIT/JOIN. REAP expression sources. Block-Depth Contract Law. Large-string stress tests. 560+ tests all green.*
+*PlantLang v0.31.0 — Five-Mission Architecture. Boundary Handshake Matrix. MissionDispatcher. ScopedArena. SMART routing. 75 new tests. 635+ total tests. All green.*

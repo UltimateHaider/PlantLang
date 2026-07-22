@@ -790,7 +790,149 @@ All functions receive and return `int64_t` (TX pointers as `int64_t` via ptrtoin
 
 ---
 
-## 13. Test Suite Architecture
+---
+
+## 13. Five-Mission Execution Architecture (v0.31.0)
+
+### 13.1 Overview
+
+The Five-Mission Architecture introduces per-action execution modes that alter memory behavior, optimization paths, and isolation levels. Each `ACTION` can be annotated with a mission mode via the `WITH MISSION <MODE>` syntax:
+
+```plantlang
+1\ ACTION compute() WITH MISSION FAST,
+2\   ...body...
+1\ /ACTION.
+```
+
+If omitted, the mode defaults to `BALANCED`. Mission declarations are restricted to Depth 0 (top-level ACTION blocks).
+
+### 13.2 The Five Mission Modes
+
+| Mode | Tagline | Behavior |
+|---|---|---|
+| **BALANCED** | Default — safe and general-purpose | Full type checking, arena-based memory, standard execution |
+| **FAST** | Performance-first | Skips safety checks, optimized LLVM codegen path, no boundary validation overhead |
+| **SAFE** | Maximum isolation | Sandboxed memory arena (ScopedArena), cannot invoke FAST, SMART, or PERSISTENT callees |
+| **SMART** | Adaptive routing | Routes execution based on input size: scalar inline (N < 1000) or parallel vector (N ≥ 1000) |
+| **PERSISTENT** | Long-lived objects | Allows creating persistent objects that outlive their creating scope; cannot be invoked from SAFE |
+
+### 13.3 The 5x5 Boundary Handshake Matrix
+
+A function executing under a `FromMode` must validate call permission when invoking a function under a `ToMode`:
+
+| From \\ To | BALANCED | FAST | SAFE | SMART | PERSISTENT |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| **BALANCED** | ALLOW | ALLOW | ALLOW | ALLOW | ALLOW |
+| **FAST** | ALLOW | ALLOW | **DENY** | ALLOW | ALLOW |
+| **SAFE** | ALLOW | **DENY** | ALLOW | **DENY** | **DENY** |
+| **SMART** | ALLOW | ALLOW | ALLOW | ALLOW | ALLOW |
+| **PERSISTENT** | ALLOW | ALLOW | **DENY** | ALLOW | ALLOW |
+
+**The four forbidden paths and their rationale:**
+
+1. **SAFE → FAST** — `"SAFE is isolated and cannot invoke unguarded FAST code."` — SAFE mode provides maximum isolation; FAST code skips safety checks, which would violate SAFE's contract.
+2. **SAFE → PERSISTENT** — `"SAFE cannot create persistent objects that outlive the isolated scope."` — Persistent objects would escape the isolated arena, breaking SAFE's memory containment guarantee.
+3. **FAST → SAFE** — `"FAST cannot invoke SAFE due to conflicting performance/safety requirements."` — FAST mode explicitly trades safety for performance; calling SAFE code would reintroduce the safety overhead that FAST was chosen to avoid.
+4. **SAFE → SMART** — `"SAFE cannot invoke SMART as it may dynamically route to FAST."` — SMART may route execution to the FAST path for large inputs (N ≥ 1000), which SAFE is not permitted to invoke.
+
+### 13.4 Implementation Architecture
+
+#### 13.4.1 Core Modules
+
+| Module | File | Purpose |
+|---|---|---|
+| Error Hierarchy | `core/errors.js` | `BoundaryViolationError` with `fromMode`, `toMode`, `scopeId`, `lineContext` |
+| Matrix Module | `core/matrix.js` | 5x5 `PERMISSION_MATRIX`, `validateBoundary()`, `formatMatrix()` |
+| Mission Dispatcher | `core/dispatcher.js` | `MissionStack`, `ScopedArena`, `MissionDispatcher`, SMART router |
+| Parser Extension | `core/parser.js` | `WITH MISSION <MODE>` parsing in `parseActionDeclaration`, `MissionBlockNode` |
+| AST Node | `core/ast.js` | `MissionBlockNode` with `mode`, `scopeId`, `action` |
+| Typechecker | `core/typechecker.js` | Static boundary validation in `_checkReap` via `validateBoundary()` |
+
+#### 13.4.2 MissionStack
+
+The `MissionStack` maintains the active execution context during call trees:
+
+```
+Initial state:          [BALANCED]
+Call FAST action:       [BALANCED, FAST]      (push)
+Return from FAST:       [BALANCED]             (pop)
+```
+
+```javascript
+stack.push('FAST');       // enter mode
+stack.current();           // → 'FAST'
+stack.pop();              // exit mode
+```
+
+Guarantees the root `BALANCED` entry can never be popped, ensuring there is always a valid default mode.
+
+#### 13.4.3 ScopedArena
+
+`ScopedArena` provides temporally-scoped memory allocation tied to a `scopeId`, mirroring PlantLang's Rooted Depth System semantics:
+
+```
+ScopedArena constructor(scopeId=99, capacity=65536)
+  ├── alloc(16)   → returns offset 0, bump to 16
+  ├── alloc(32)   → returns offset 16, bump to 48
+  ├── write(ptr, data)  → stores bytes at offset
+  ├── read(ptr, len)    → retrieves bytes
+  ├── reset()    → bumps offset back to 0 (no GC)
+  ├── used       → current offset
+  └── remaining  → capacity - offset
+```
+
+Arenas are isolated by `scopeId` — resetting one does not affect others, enabling SAFE mode's memory containment guarantee.
+
+#### 13.4.4 Adaptive SMART Router
+
+The SMART router selects execution strategy based on input size:
+
+```
+routeSMART(actionFn, data):
+  if Array.isArray(data) AND data.length >= 1000:
+    return executeParallelVector(actionFn, data)   // chunked element-by-element
+  else:
+    return executeScalarInline(actionFn, data)      // single call with full data
+```
+
+#### 13.4.5 MissionDispatcher
+
+The `MissionDispatcher` orchestrates cross-mode calls with three steps:
+
+1. **Validate boundary** via `validateBoundary(fromMode, toMode)` — throws `BoundaryViolationError` on DENY
+2. **Push callee mode** onto `MissionStack`
+3. **Execute** — uses SMART routing for `SMART` target mode; direct call otherwise
+4. **Pop callee mode** in `finally` block (guaranteed cleanup)
+
+### 13.5 Dual Enforcement Points
+
+Boundary validation is enforced at two levels:
+
+1. **Static Check** (`core/typechecker.js`): During `_checkReap`, before registering a REAP call, verifies the caller's current mission mode against the callee's registered mode. Produces `BOUNDARY_VIOLATION` diagnostic errors.
+
+2. **Dynamic Check** (`core/dispatcher.js`): At runtime, `MissionDispatcher.dispatch()` calls `validateBoundary()` before executing the function, catching violations that cannot be statically determined (e.g., dynamic dispatch or indirect calls).
+
+### 13.6 Parser Grammar
+
+```
+ACTION name(params) WITH MISSION mode [,|{|->]
+```
+
+- `WITH MISSION <mode>` is optional; defaults to `BALANCED`
+- If `MISSION` appears without `WITH`, a clear syntax error guides the user
+- Only valid at Depth 0 (top-level ACTION declarations)
+- Produces a `MissionBlockNode` wrapping the `ActionDeclarationNode`
+
+### 13.7 Test Coverage
+
+| Test File | Tests | Coverage |
+|---|---|---|
+| `tests/matrix.test.js` | 28 | All 25 matrix transitions (21 ALLOW, 4 DENY) + unknown mode errors + context propagation |
+| `tests/dispatcher.test.js` | 47 | MissionStack, ScopedArena alloc/write/read/reset, MissionDispatcher boundary enforcement, SMART threshold (N=999 vs N=1000), multi-hop chains (BALANCED→FAST→SAFE fails, BALANCED→PERSISTENT→FAST succeeds), memory isolation |
+
+---
+
+## 14. Test Suite Architecture
 
 ### Test Files
 - `tests/test_llvm_codegen.js` — 50 parity tests: each fixture runs via interpreter AND compiled via `llc` + `gcc`, asserts identical stdout
@@ -812,7 +954,9 @@ All functions receive and return `int64_t` (TX pointers as `int64_t` via ptrtoin
 - `tests/test_phase18_lists.js` — 15 tests for native LIST operations (COUNT, FIRST, LAST, SUM)
 - `tests/test_phase21_runtime.js` — 20 tests for C runtime FFI: math, sort, string split/join (FFI and native via REAP), 70KB large-string stress test
 - `tests/test_depth_contract.js` — 13 tests for Block-Depth Contract Law Enforcement (valid: ACTION/SPECIES at depth 0, REAP/GIVE/CYCLE inside ACTION; invalid: REAP/CYCLE/GIVE at depth 0, nested ACTION, depth prefix mismatch)
-- **Total: 20 test files, ~560+ tests, all green**
+- `tests/matrix.test.js` — 28 tests for the 5x5 Boundary Handshake Matrix (all 25 transitions + error paths + context propagation)
+- `tests/dispatcher.test.js` — 47 tests for MissionStack, ScopedArena, MissionDispatcher, SMART routing, multi-hop call chains, memory isolation
+- **Total: 22 test files, ~635+ tests, all green**
 
 ### Test Methodology
 Each test:

@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.30.0
+# 🌿 PlantLang — Chloroplast v0.31.0
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -838,7 +838,7 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.30.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production:
+Chloroplast v0.31.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production:
 
 ```
 Source (.plnt)
@@ -890,6 +890,104 @@ Each arena is 64KB (65536 bytes). The bump pointer (`@arena_offsets[N]`) tracks 
 | Extension | Description |
 |-----------|-------------|
 | `.plnt` | PlantLang source file |
+
+---
+
+## Choosing the Right Mission Mode
+
+Since v0.31.0, every `ACTION` can declare an execution **mission** using the `WITH MISSION <MODE>` syntax. The mission mode controls memory behavior, optimization paths, and cross-mode call permissions via the **Boundary Handshake Matrix**.
+
+> **Syntax**: `ACTION name(params) WITH MISSION <MODE>,`  
+> **Default**: If omitted, the mode is `BALANCED`.  
+> **Restriction**: Only valid at Depth 0 (top-level ACTION declarations).
+
+### The Five Modes at a Glance
+
+| Mode | When to Use | Key Restriction |
+|---|---|---|
+| **BALANCED** | Default general-purpose — safe, typed, predictable | None — can call any mode |
+| **FAST** | Performance-critical loops, numeric kernels, hot paths | Cannot invoke SAFE callers |
+| **SAFE** | Untrusted input, sandboxed execution, audit boundaries | Cannot invoke FAST, SMART, or PERSISTENT |
+| **SMART** | Data-dependent algorithms that adapt to input size | None — can call any mode |
+| **PERSISTENT** | Long-lived caches, config stores, persistent state | Cannot invoke SAFE callers |
+
+### Code Examples
+
+**BALANCED (default — no annotation needed):**
+
+```
+1\ ACTION add(a(NUM), b(NUM)),
+2\   GIVE a + b.
+1\ /ACTION.
+```
+
+**FAST — explicit performance mode:**
+
+```
+1\ ACTION fast_sum(values([NUM])) WITH MISSION FAST,
+2\   CREATE total(NUM) TO 0.
+2\   CYCLE i FROM 0 TO COUNT(values) - 1,
+3\     INCREASE total BY values[i].
+2\   .
+2\   GIVE total.
+1\ /ACTION.
+```
+
+**SAFE — sandboxed, isolated execution:**
+
+```
+1\ ACTION sanitize(input(TX)) WITH MISSION SAFE,
+2\   REAP cleaned FROM strings:TRIM, input.
+2\   GIVE cleaned.
+1\ /ACTION.
+```
+
+SAFE cannot call FAST (would compromise isolation), PERSISTENT (would create objects that escape the sandbox), or SMART (may dynamically route to FAST).
+
+**SMART — adapts execution to data size:**
+
+```
+1\ ACTION process_data(items([NUM])) WITH MISSION SMART,
+2\   SHOW COUNT(items).
+1\ /ACTION.
+```
+
+For N < 1000 items, the function runs in scalar inline mode. For N ≥ 1000, it switches to parallel vector mode (chunked element-by-element processing).
+
+**PERSISTENT — long-lived objects:**
+
+```
+1\ ACTION create_cache() WITH MISSION PERSISTENT,
+2\   CREATE cache(MAP[TX,NUM]).
+2\   LINK "version" WITH 1 IN cache.
+2\   GIVE cache.
+1\ /ACTION.
+```
+
+### The Boundary Handshake Matrix
+
+When your action calls another action with a different mission mode, the Boundary Handshake Matrix checks if the call is permitted:
+
+```
+BALANCED → any mode:               ✅ Always allowed
+FAST → SAFE:                       ❌ Denied
+SAFE → FAST, SMART, PERSISTENT:    ❌ Denied
+```
+
+Violations produce a clear `BoundaryViolationError` explaining why:
+
+```
+═══ ⚔ BoundaryViolationError ═══
+  SAFE -> FAST: SAFE is isolated and cannot invoke unguarded FAST code.
+```
+
+### Performance Implications
+
+- **BALANCED**: Full type checking, arena-based memory, standard execution — best for most code.
+- **FAST**: Skips safety checks, optimized codegen — use for hot inner loops and numeric kernels.
+- **SAFE**: ScopedArena sandbox with memory isolation — slight overhead for the isolation guarantee.
+- **SMART**: Dynamic routing between scalar and vector paths — ideal for data-processing functions.
+- **PERSISTENT**: Allows objects to outlive their creating scope — use for caches and long-lived state.
 
 ---
 

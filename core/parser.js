@@ -81,6 +81,7 @@ class Parser {
     this.pos = 0;
     this.structNames = new Set(); // known struct names for literal disambiguation
     this.currentDepth = 0;         // semantic block depth for Depth Contract Law
+    this._missionScopeIdCounter = 0;
   }
 
   peek(offset = 0) {
@@ -154,6 +155,21 @@ class Parser {
         `[DepthContractError] Cannot declare '${nodeType}' at Depth ${this.currentDepth}. Expected depth range: [${minDepth}..${maxStr}] at Line ${token.line}, Col ${token.column}.`,
         token.line, token.column);
     }
+  }
+
+  _nextMissionScopeId() {
+    return ++this._missionScopeIdCounter;
+  }
+
+  /**
+   * Wrap an ActionDeclarationNode in a MissionBlockNode if WITH MISSION was
+   * explicitly specified (missionScopeId !== null). Otherwise return the
+   * action as-is (default BALANCED mode).
+   */
+  _maybeWrapMissionBlock(actionNode, missionMode, missionScopeId, coords) {
+    if (missionScopeId === null) return actionNode;
+    const { MissionBlockNode } = require('./ast');
+    return new MissionBlockNode({ mode: missionMode, scopeId: missionScopeId, action: actionNode }, coords);
   }
 
   // ── Top level ────────────────────────────────────────────────
@@ -606,6 +622,36 @@ class Parser {
     const params = this.parseParamList();
     this.consume(TOKEN.PUNCT, ')', '")" after the parameter list');
 
+    // ── WITH MISSION <MODE> (5-Mission Architecture) ───────────────
+    let missionMode = 'BALANCED';
+    let missionScopeId = null;
+    if (this.match(TOKEN.KEYWORD, 'WITH') &&
+        this.peek(1).type === TOKEN.KEYWORD && this.peek(1).value === 'MISSION') {
+      this.advance(); // WITH
+      this.advance(); // MISSION
+      const modeTok = this.current();
+      const VALID_MODES = new Set(['BALANCED', 'FAST', 'SAFE', 'SMART', 'PERSISTENT']);
+      if (modeTok.type !== TOKEN.KEYWORD || !VALID_MODES.has(modeTok.value)) {
+        storm('SYNTAX_STORM',
+          `Expected mission mode (BALANCED, FAST, SAFE, SMART, PERSISTENT) after WITH MISSION, found "${modeTok.value}"`,
+          modeTok.line, modeTok.column);
+      }
+      const rawMode = this.advance().value;
+      missionMode = rawMode.toUpperCase();
+      // Depth 0 invariant: mission scopes only valid at top-level ACTION
+      if (this.currentDepth !== 0) {
+        storm('SYNTAX_STORM',
+          `Mission declarations are restricted to Depth 0 top-level ACTION blocks.`,
+          nameTok.line, nameTok.column);
+      }
+      missionScopeId = this._nextMissionScopeId();
+    } else if (this.match(TOKEN.KEYWORD, 'MISSION')) {
+      // "WITH" is omitted but "MISSION" appears — ambiguous, reject with guidance
+      storm('SYNTAX_STORM',
+        `Use "WITH MISSION <MODE>" syntax after the parameter list, e.g. "ACTION ${name}() WITH MISSION FAST."`,
+        this.current().line, this.current().column);
+    }
+
     // Check for { } body syntax (new style: ACTION name(params) { body })
     if (this.match(TOKEN.PUNCT, '{')) {
       this.advance(); // consume {
@@ -632,7 +678,8 @@ class Parser {
           }
         }
         if (this.match(TOKEN.PUNCT, '.')) this.advance();
-        return new ActionDeclarationNode({ name, params, bodyStatements, isExternal: false, receiver }, coords);
+        const braceAction = new ActionDeclarationNode({ name, params, bodyStatements, isExternal: false, receiver }, coords);
+        return this._maybeWrapMissionBlock(braceAction, missionMode, missionScopeId, coords);
       } finally {
         this.currentDepth--;
       }
@@ -646,7 +693,8 @@ class Parser {
       this.advance(); // ->
       this.advance(); // external
       if (this.match(TOKEN.PUNCT, '.')) this.advance();
-      return new ActionDeclarationNode({ name, params, isExternal: true, receiver }, coords);
+      const extAction = new ActionDeclarationNode({ name, params, isExternal: true, receiver }, coords);
+      return this._maybeWrapMissionBlock(extAction, missionMode, missionScopeId, coords);
     }
 
     this.consume(TOKEN.PUNCT, ',', '"," to open the ACTION body');
@@ -669,7 +717,8 @@ class Parser {
     this.consume(TOKEN.KEYWORD, 'ACTION', '"ACTION" in the "/ACTION." closer');
     if (this.match(TOKEN.PUNCT, '.')) this.advance();
 
-    return new ActionDeclarationNode({ name, params, bodyStatements, isExternal: false, receiver }, coords);
+    const commaAction = new ActionDeclarationNode({ name, params, bodyStatements, isExternal: false, receiver }, coords);
+    return this._maybeWrapMissionBlock(commaAction, missionMode, missionScopeId, coords);
   }
 
   // ── SPECIES name [FROM|PARENT base] { ... } or , ... /SPECIES. ──

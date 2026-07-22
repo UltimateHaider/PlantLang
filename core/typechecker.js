@@ -111,8 +111,8 @@ class TypeScope {
   }
 
   // Actions / functions
-  setFn(name, { params, returnType }) {
-    this._fns.set(name, { params, returnType: returnType || T.UNKNOWN });
+  setFn(name, { params, returnType, _missionMode }) {
+    this._fns.set(name, { params, returnType: returnType || T.UNKNOWN, _missionMode: _missionMode || null });
   }
 
   getFn(name) {
@@ -252,6 +252,7 @@ class TypeChecker {
     this.source = source || '';
     this.diags  = [];
     this.rootScope = new TypeScope();
+    this._currentMissionMode = 'BALANCED';
     this._preloadBuiltins();
   }
 
@@ -293,6 +294,13 @@ class TypeChecker {
             node.line, node.column);
         }
         this._walkDepth(node.bodyStatements || [], 1);
+      } else if (node.type === 'MissionBlock') {
+        if (depth !== 0) {
+          this.error('DEPTH_CONTRACT',
+            `[DepthContractError] Mission declarations are restricted to Depth 0 top-level ACTION blocks.`,
+            node.line, node.column);
+        }
+        if (node.action) this._walkDepth([node.action], depth);
       } else if (node.type === 'SpeciesDeclaration') {
         if (depth > 0) {
           this.error('DEPTH_CONTRACT',
@@ -301,7 +309,7 @@ class TypeChecker {
         }
         if (node.actions) {
           for (const action of node.actions) {
-            if (action.type === 'ActionDeclaration') {
+            if (action && (action.type === 'ActionDeclaration' || action.type === 'MissionBlock')) {
               this._walkDepth([action], depth);
             }
           }
@@ -346,6 +354,12 @@ class TypeChecker {
       if (!node) continue;
       if (node.type === 'ActionDeclaration') {
         this._registerAction(node, scope);
+      } else if (node.type === 'MissionBlock') {
+        if (node.action) {
+          // Register the action with its mission mode
+          node.action._missionMode = node.mode;
+          this._registerAction(node.action, scope);
+        }
       } else if (node.type === 'SpeciesDeclaration') {
         this._registerSpecies(node, scope);
       } else if (node.type === 'RootStatement') {
@@ -378,7 +392,9 @@ class TypeChecker {
     }
     // Infer return type from body GiveStatements
     const returnType = this._inferActionReturn(node.body || node.bodyStatements || [], params, scope);
-    scope.setFn(node.name, { params, returnType });
+    const fnInfo = { params, returnType };
+    if (node._missionMode) fnInfo._missionMode = node._missionMode;
+    scope.setFn(node.name, fnInfo);
   }
 
   _inferActionReturn(body, params, parentScope) {
@@ -463,6 +479,9 @@ class TypeChecker {
       case 'MethodCallStatement': this._checkMethodCallStatement(node, scope); break;
       // Pass-through (no type errors possible)
       case 'ImportStatement':
+      case 'MissionBlock':
+        this._checkMissionBlock(node, scope);
+        break;
       case 'MissionStatement':
       case 'PlantStatement':
       case 'RootStatement':
@@ -750,6 +769,20 @@ class TypeChecker {
       const fnName = node.source.name;
       const fn = scope.getFn(fnName);
 
+      // Static boundary check: if the action has a mission mode, validate
+      if (fn && fn._missionMode && fn._missionMode !== 'BALANCED') {
+        const { validateBoundary } = require('./matrix');
+        try {
+          validateBoundary(this._currentMissionMode, fn._missionMode);
+        } catch (e) {
+          if (e.name === 'BoundaryViolationError') {
+            this.error('BOUNDARY_VIOLATION', e.message, node.line, node.column);
+          } else {
+            throw e;
+          }
+        }
+      }
+
       if (!fn) {
         this.error('UNDEFINED_ACTION',
           `REAP: action "${fnName}" is not defined`,
@@ -935,6 +968,11 @@ class TypeChecker {
   _checkActionBody(node, scope) {
     // FFI external actions have no body — skip checking
     if (node.isExternal) return;
+    // Save and update mission mode for boundary validation
+    const savedMode = this._currentMissionMode;
+    if (node._missionMode) {
+      this._currentMissionMode = node._missionMode;
+    }
     const fnScope = scope.child();
     // Inject receiver (self) into scope for methods
     if (node.receiver) {
@@ -948,6 +986,8 @@ class TypeChecker {
     // Pass 1 on nested actions
     this._pass1(node.body || node.bodyStatements || [], fnScope);
     this._checkBlock(node.body || node.bodyStatements || [], fnScope);
+    // Restore previous mission mode
+    this._currentMissionMode = savedMode;
   }
 
   _checkSpeciesBody(node, scope) {
@@ -962,6 +1002,17 @@ class TypeChecker {
     for (const m of members) {
       if (!m) continue;
       if (m.type === 'ActionDeclaration') this._checkActionBody(m, classScope);
+    }
+  }
+
+  _checkMissionBlock(node, scope) {
+    // A MissionBlock wraps an ActionDeclaration — propagate mission mode and check
+    if (node.action) {
+      node.action._missionMode = node.mode;
+      this._checkActionBody(node.action, scope);
+      if (!scope.getFn(node.action.name)) {
+        this._registerAction(node.action, scope);
+      }
     }
   }
 
