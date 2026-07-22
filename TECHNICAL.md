@@ -1171,3 +1171,164 @@ Each test:
 5. Compares against the interpreter's output — must match exactly
 
 Phase 7 and Phase 8 tests use a custom `check(label, condition)` harness that tests specific parser, resolver, and runtime behaviors without requiring LLVM compilation.
+
+## 18. Cluster Architecture & Distributed Memory (v0.35.0)
+
+The v0.35.0 cluster architecture provides production-grade distributed runtime capabilities: decentralized node discovery, circuit-breaker-backed request routing, and consistent-hash-based distributed data storage.
+
+### 18.1 NodeRegistry — Heartbeat-based Node Lifecycle
+
+**File:** `src/cluster/discovery/node_registry.js`
+
+The `NodeRegistry` implements a topology manager with three health states:
+
+| State | Meaning | Entry Condition |
+|---|---|---|
+| `HEALTHY` | Node responding normally | Initial registration or heartbeat received |
+| `DEGRADED` | Node missed ≥ ceil(threshold/2) heartbeats | Missed beat threshold halfway |
+| `OFFLINE` | Node missed ≥ threshold heartbeats | Missed beat threshold reached |
+
+**Architecture:**
+```
+NodeRegistry (extends EventEmitter)
+├── Map<nodeId, NodeState>
+│   ├── id, state, firstSeen, lastHeartbeat, missedBeats
+│   └── cpuUtil, heapUsage, activeWorkers (telemetry)
+├── setInterval(_checkHeartbeats, heartbeatInterval)
+│   └── each tick: increment missedBeats if (now - lastHeartbeat) ≥ interval
+│       → DEGRADED at ceil(threshold/2)
+│       → OFFLINE at threshold
+├── configure(key, value) — MISSION CONFIG overrides
+│   ├── HEARTBEAT_INTERVAL (100-10000ms)
+│   └── HEARTBEAT_THRESHOLD (2-10)
+└── Events: node:registered, node:healthy, node:degraded, node:offline
+```
+
+**MISSION CONFIG integration:**
+```javascript
+this._heartbeatInterval = options.heartbeatInterval
+    || parseInt(process.env.HEARTBEAT_INTERVAL, 10) || 1000;
+this._failureThreshold = options.heartbeatThreshold
+    || parseInt(process.env.HEARTBEAT_THRESHOLD, 10) || 3;
+```
+
+### 18.2 ClusterRouter & CircuitBreaker — Weighted Least-Connections Routing
+
+**File:** `src/cluster/router/cluster_router.js`
+
+The `ClusterRouter` implements weighted least-connections load balancing with per-node circuit breakers:
+
+```
+dispatch(action, payload)
+├── _selectTarget()
+│   └── alive nodes → sort by activeConnections ASC, cpuUtil ASC → lowest wins
+├── execute on target via _executeOnNode()
+│   └── on success: cb.recordSuccess()
+│   └── on failure: cb.recordFailure() → _selectBackup() failover
+│       └── no backup available: throw original error
+│       └── backup fails too: throw aggregated error
+└── mTLSJwtGuard.verifyRequest() integration on each dispatch
+```
+
+**CircuitBreaker** (per-node, not shared):
+```
+┌─────────┐  errorRate ≥ threshold  ┌────────┐  cooldown expired  ┌──────────┐
+│ CLOSED  │ ──────────────────────→ │  OPEN  │ ─────────────────→ │ HALF-OPEN │
+│ (normal)│                         │ (reject)│                  │ (probing)│
+└─────────┘                         └────────┘                  └──────────┘
+      ↑                                │                              │
+      └────────────────────────────────┘──────────────────────────────┘
+         recordSuccess() on success      recordFailure() on probe fail
+```
+
+**Error rate computation (sliding window):**
+```javascript
+get errorRate() {
+    const total = this._successes + this._failures;
+    return total === 0 ? 0 : this._failures / total;
+}
+// Breaker trips when: total ≥ 10 AND errorRate ≥ threshold
+```
+
+**MISSION CONFIG:**
+- `CIRCUIT_BREAKER_THRESHOLD` → `this._errorThreshold`
+- `CIRCUIT_BREAKER_COOLDOWN` → `this._cooldownMs`
+
+### 18.3 DistributedHeap & ConsistentHashRing — SHA-256 Ring Storage
+
+**File:** `src/cluster/memory/distributed_heap.js`
+
+The `DistributedHeap` wraps a `ConsistentHashRing` for deterministic key-to-node mapping:
+
+```
+┌─────────────────────────────────────────────────┐
+│ DistributedHeap                                  │
+│ ├── ConsistentHashRing                           │
+│ │   ├── SHA-256(key) → BigInt (hash space)       │
+│ │   ├── virtual nodes (default 128 per node)     │
+│ │   ├── sorted entry ring (binary search lookup) │
+│ │   └── configure("CONSISTENT_HASH_VNODES", N)   │
+│ ├── Map<key, { value, owner, leaseExpiry }>      │
+│ ├── Map<actorId, owner>  (stateful actors)       │
+│ ├── get(key), put(key, val), delete(key)         │
+│ ├── registerActor(id), setActorState(id, state, caller) │
+│ ├── computeDataKeyMigration(existingKeys)        │
+│ ├── computeMigrationStats(newNodeId)             │
+│ ├── startGC(intervalMs) — lazy + periodic GC     │
+│ └── removeNode(nodeId) — re-owns entries via ring│
+└─────────────────────────────────────────────────┘
+```
+
+**Consistent hash ring implementation:**
+```javascript
+_hashKey(key) {
+    const h = crypto.createHash('sha256').update(key).digest();
+    // First 8 bytes → BigInt
+    let val = 0n;
+    for (let i = 0; i < 8; i++) val = (val << 8n) + BigInt(h[i]);
+    return val;
+}
+```
+
+**Virtual node distribution:** Each physical node is placed on the ring `vnodes` times. `getNode(key)` finds the nearest clockwise virtual node, then returns the owning physical node. With 128 virtual nodes per physical node, 1000 keys distribute with a ratio ≥ 0.98 between 2 nodes.
+
+**Lease-based GC:**
+```javascript
+put(key, value) {
+    const owner = this._ring.getNode(key);
+    const entry = { value, owner, leaseExpiry: Date.now() + this._leaseDuration };
+    this._store.set(key, entry);
+}
+// get() checks leaseExpiry; expired keys return null + are deleted
+// startGC() runs periodic sweeps via setInterval
+```
+
+**Actor ownership & proxy detection:** `registerActor(id)` assigns an owner via `_ring.getNode(id)`. `setActorState(id, state, callerId)` checks ownership:
+```javascript
+if (callerId !== owner) {
+    return { proxied: true, owner };
+}
+return { proxied: false };
+```
+
+**Node removal:** `removeNode(nodeId)` removes the node from the ring and re-owns all stored entries by re-querying `_ring.getNode(storeKey)`, ensuring zero data loss.
+
+### 18.4 Integration Points
+
+| Component | Integration |
+|---|---|
+| ClusterRouter ← NodeRegistry | `_selectTarget()` queries `reg.getAliveNodes()` |
+| ClusterRouter ← CircuitBreaker | Per-node breaker via `getCircuitBreaker(nodeId)` |
+| ClusterRouter ← mTLSJwtGuard | Optional JWT verification before `_executeOnNode()` |
+| DistributedHeap ← ConsistentHashRing | `_ring.getNode(key)` for all data placement |
+| MISSION CONFIG | `configure()` on NodeRegistry, CircuitBreaker, ConsistentHashRing |
+
+### 18.5 Test Coverage
+
+- `tests/v0.35.0_cluster.test.js` — 88 tests:
+  - NodeRegistry: register/unregister, heartbeat, telemetry, DEGRADED/OFFLINE state machine, MISSION CONFIG
+  - CircuitBreaker: CLOSED/OPEN/HALF-OPEN transitions, error rate, cooldown, reset, MISSION CONFIG
+  - ClusterRouter: least-connections selection, CPU-weighted ties, dispatch, failover, aggregated errors, benchmark
+  - ConsistentHashRing: add/remove node, distribution ratio (≥0.98), stability, migration, vnode config
+  - DistributedHeap: put/get/delete, actors (owner, proxied), lease expiry GC, removeNode re-own, migration stats, benchmarks
+  - Total: 88 tests, all green

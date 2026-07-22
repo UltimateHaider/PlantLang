@@ -1,5 +1,32 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.35.0 — 2026
+
+### New Features
+- **Cluster Architecture & Distributed Memory** — three cluster modules implementing decentralized node discovery, weighted-least-connections routing with circuit-breaker failover, and consistent-hash-ring-based distributed storage:
+  - `NodeRegistry` — heartbeat-based node lifecycle with three health states (HEALTHY/DEGRADED/OFFLINE); per-node telemetry (CPU, heap, active workers); background timer at `HEARTBEAT_INTERVAL` increments `missedBeats`; node marked OFFLINE at `HEARTBEAT_THRESHOLD`; EventEmitter for topology events (node:registered/healthy/degraded/offline); MISSION CONFIG overrides for interval and threshold
+  - `ClusterRouter` & `CircuitBreaker` — weighted least-connections node selection (lowest active count, CPU tiebreak); per-node circuit breaker with 3 states (CLOSED, OPEN, HALF-OPEN); sliding-window error rate (≥10 total, errorRate ≥ threshold); cooldown-based HALF-OPEN probe with success→CLOSED / failure→OPEN transitions; transparent backup failover on primary failure; aggregated error on dual failure; mTLSJwtGuard integration for dispatch authentication; MISSION CONFIG for threshold and cooldown
+  - `DistributedHeap` & `ConsistentHashRing` — SHA-256 → BigInt hash space; configurable virtual nodes (default 128 per physical node); balanced key distribution (≥0.98 ratio for 2 nodes); PERSISTENT key/value store with lease-based expiry and background GC; stateful actor ownership with proxy detection for non-owner writes; `computeDataKeyMigration()` and `computeMigrationStats()` for zero-downtime rebalancing; `removeNode()` re-owns entries via ring lookup; MISSION CONFIG for virtual node count
+
+### Test Suite
+- New `tests/v0.35.0_cluster.test.js` — 88 tests covering NodeRegistry (register/unregister/heartbeat/telemetry/DEGRADED/OFFLINE/MISSION CONFIG), CircuitBreaker (CLOSED→OPEN→HALF-OPEN transitions/cooldown/reset/MISSION CONFIG), ClusterRouter (least-connections/CPU tiebreak/dispatch/failover/aggregated errors/benchmark), ConsistentHashRing (add/remove/distribution ratio/migration/vnode config), DistributedHeap (put/get/delete/actors/lease expiry/removeNode re-own/migration stats/benchmarks), integration scenarios
+- Total test count grows from ~856+ → **~944+** across **25 test suites**
+- All 25 test suites at 100% pass rate
+
+### Documentation
+- All `.md` files bumped to v0.35.0
+- Language Tour.md — new "Cluster Architecture & Distributed Memory (v0.35.0)" section with all 3 cluster modules; Architecture diagram updated
+- TECHNICAL.md — new Section 18 for Cluster Architecture design, MISSION CONFIG integration, ring implementation details
+- CHANGELOG.md — new v0.35.0 entry describing cluster modules and test suite
+
+### Source Layout
+- New `src/cluster/` directory tree:
+  - `src/cluster/discovery/node_registry.js`
+  - `src/cluster/router/cluster_router.js`
+  - `src/cluster/memory/distributed_heap.js`
+
+---
+
 ## v0.34.0 — 2026
 
 ### New Features

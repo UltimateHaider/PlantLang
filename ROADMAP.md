@@ -1,4 +1,4 @@
-# PlantLang Roadmap: v0.33.0+ (Completed & Future)
+# PlantLang Roadmap: v0.35.0+ (Completed & Future)
 
 ## What v0.30.0 Delivered
 
@@ -73,9 +73,9 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 
 ---
 
-## 🛡️ Version v0.34.0: Security Layer & Zero-Trust Model
+## ✅ Version v0.34.0: Security Layer & Zero-Trust Model
 
-**Priority:** High
+**Status:** ✅ Completed
 
 ### Scope & Engineering Implementation
 
@@ -91,9 +91,9 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 
 ---
 
-## 🟠 Version v0.35.0: Clustering & Extended Network Memory
+## ✅ Version v0.35.0: Clustering & Extended Network Memory
 
-**Priority:** Medium
+**Status:** ✅ Completed
 
 ### Scope & Engineering Implementation
 
@@ -153,8 +153,8 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 | **M6** | Runtime test suite (70 tests all green) | ✅ Done | 1 week |
 | **M7** | Parallel Compilation & Telemetry (ParallelCodegenEngine, RemoteCompilerNode, NonBlockingTelemetry, RuntimeDispatcher) | ✅ Done | 2 weeks |
 | **M8** | Parallel test suite (60 tests all green) | ✅ Done | 1 week |
-| **M9** | Security Layer & Zero-Trust Model (mTLS, seccomp, JWT) | High | 3 weeks |
-| **M10** | Clustering & Extended Network Memory (Cluster Router, PERSISTENT expansion) | Medium | 3 weeks |
+| **M9** | Security Layer & Zero-Trust Model (mTLS, seccomp, JWT) | ✅ Done | 3 weeks |
+| **M10** | Clustering & Extended Network Memory (Cluster Router, PERSISTENT expansion) | ✅ Done | 3 weeks |
 | **M11** | Geo-Routing & SHARE CONFIG Governance (broadcast, CRDT, affinity) | Medium | 3 weeks |
 | **M12** | Distributed Cycles & REPLICA Strategy (partitioned loops, hybrid reap) | Medium | 3 weeks |
 
@@ -162,7 +162,7 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 
 ## 🎯 Success Criteria
 
-- **No Regressions**: All 25+ test suites (765+ tests) continue to pass
+- **No Regressions**: All 25+ test suites (~944+ tests) continue to pass
 - **Zero-Trust**: Untrusted SAFE actions blocked from syscalls via seccomp/WASM sandbox
 - **Mutual Auth**: All inter-node RPCs require mTLS handshake + signed JWT
 - **Cluster Transparency**: PERSISTENT heap accessible cluster-wide with ACID semantics
@@ -181,16 +181,18 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 | **v0.31.0** | **Five-Mission Architecture, Boundary Handshake Matrix, MissionDispatcher, SMART routing** | **Q1 2027** |
 | v0.32.0 | Local Runtime & Isolation Layer (BumpAllocator, ARCHeap, ProcessPool, SafeChannel, MissionContext) | ✅ Q2 2027 |
 | v0.33.0 | Parallel Compilation & Telemetry (ParallelCodegenEngine, RemoteCompilerNode, NonBlockingTelemetry, RuntimeDispatcher) | ✅ Q3 2027 |
-| 🛡️ **v0.34.0** | **Security Layer & Zero-Trust Model** — mTLS, JWT auth, seccomp/WASM sandbox, non-blocking telemetry logs | **Q4 2027** |
-| 🟠 **v0.35.0** | **Clustering & Extended Network Memory** — Cluster Router, PERSISTENT heap cluster-wide, Stateful Actors | **Q1 2028** |
+| ✅ **v0.34.0** | **Security Layer & Zero-Trust Model** — mTLS, JWT auth, seccomp/WASM sandbox, non-blocking telemetry logs | ✅ Q4 2027 |
+| ✅ **v0.35.0** | **Clustering & Extended Network Memory** — Cluster Router, PERSISTENT heap cluster-wide, Stateful Actors | ✅ Q1 2028 |
 | 🔴 **v0.36.0** | **Geo-Routing & SHARE CONFIG Governance** — Immutable Versioned Broadcast, Raft/CRDT consensus, affinity grouping, SMART adaptive routing | **Q2 2028** |
 | ⚪ **v0.37.0+** | **Distributed Cycles & REPLICA Strategy** — Round-Robin/Least-Connections stateless, Primary-Backup stateful, CYCLE WITH MISSION CLUSTER, LOCAL_REAP / REMOTE_REAP | **Q3 2028+** |
 
 ---
 
-*PlantLang v0.33.0: Parallel Compilation & Telemetry. ParallelCodegenEngine, RemoteCompilerNode, NonBlockingTelemetry, RuntimeDispatcher. 60 new tests. 765+ total tests. All green.*
+*PlantLang v0.35.0: Cluster Architecture & Distributed Memory. NodeRegistry, ClusterRouter/CircuitBreaker, DistributedHeap/ConsistentHashRing. 88 new tests. 944+ total tests. All green.*
 
-*PlantLang v0.32.0: Local Runtime & Isolation Layer. BumpAllocator, GlobalARCHeap, WarmProcessPool, SafeChannel, MissionContext. 70 new tests. 705+ total tests. All green.*
+*PlantLang v0.34.0: Zero-Trust Security & Audit Architecture. NonBlockingAuditLogger, mTLSJwtGuard, CapabilityGuard. 91 new tests. 856+ total tests. All green.*
+
+*PlantLang v0.33.0: Parallel Compilation & Telemetry. ParallelCodegenEngine, RemoteCompilerNode, NonBlockingTelemetry, RuntimeDispatcher. 60 new tests. 765+ total tests. All green.*
 
 *PlantLang v0.31.0: Five-Mission Architecture with Boundary Handshake Matrix, MissionDispatcher, ScopedArena, SMART routing. 75 new tests. 635+ total tests. All green.*
 

@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.34.0
+# 🌿 PlantLang — Chloroplast v0.35.0
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -838,7 +838,7 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.34.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, lock-free telemetry, and a zero-trust security layer:
+Chloroplast v0.35.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, lock-free telemetry, zero-trust security, and a cluster layer for distributed runtime:
 
 ```
 Source (.plnt)
@@ -905,6 +905,23 @@ Source (.plnt)
     │   └── Certificate expiry auto-detection and renewal hooks
     │
     ├── security/sandbox/capability_guard.js  — CapabilityGuard (v0.34.0)
+    │
+    ├── cluster/discovery/node_registry.js  — NodeRegistry (v0.35.0)
+    │   ├── Heartbeat monitor: HEALTHY/DEGRADED/OFFLINE lifecycle
+    │   ├── Telemetry: cpuUtil, heapUsage, activeWorkers
+    │   └── MISSION CONFIG: HEARTBEAT_INTERVAL, HEARTBEAT_THRESHOLD
+    │
+    ├── cluster/router/cluster_router.js  — ClusterRouter & CircuitBreaker (v0.35.0)
+    │   ├── Weighted least-connections node selection
+    │   ├── Per-node circuit breaker (CLOSED/OPEN/HALF-OPEN)
+    │   ├── Transparent backup failover on circuit open
+    │   └── mTLSJwtGuard integration for dispatch auth
+    │
+    ├── cluster/memory/distributed_heap.js  — DistributedHeap & ConsistentHashRing (v0.35.0)
+    │   ├── SHA-256 → BigInt consistent hash space
+    │   ├── Virtual nodes (128 default) for balanced distribution
+    │   ├── PERSISTENT store with lease-based expiry
+    │   └── Stateful actor ownership with proxy detection
     │   ├── Zero-trust default: SAFE mode has zero permissions
     │   ├── Granular capability matrix per mission mode
     │   ├── Syscall filtering: blocks execve/ptrace/fork/clone/kill in SAFE
@@ -1269,6 +1286,136 @@ Granular permissions are granted via the `MissionContext`:
 - Unauthorized syscalls (`execve`, `ptrace`, `fork`, `clone`, `kill`) in SAFE mode immediately terminate the worker
 - All denials emit a `CRITICAL` audit log entry
 - Violation hooks allow custom alerting (SIEM, pager, etc.)
+
+---
+
+## Cluster Architecture & Distributed Memory (v0.35.0)
+
+Starting with v0.35.0, PlantLang ships with a **production Cluster Architecture** — decentralized node discovery with heartbeat-based health monitoring, weighted-least-connections cluster routing with circuit-breaker failover, and a distributed hash-ring heap for stateful actors and PERSISTENT data.
+
+Configuration uses `MISSION CONFIG` for all cluster parameters:
+
+```
+MISSION CONFIG HEARTBEAT_INTERVAL = 500.
+MISSION CONFIG HEARTBEAT_THRESHOLD = 5.
+MISSION CONFIG CIRCUIT_BREAKER_THRESHOLD = 0.15.
+MISSION CONFIG CIRCUIT_BREAKER_COOLDOWN = 30000.
+MISSION CONFIG CONSISTENT_HASH_VNODES = 64.
+```
+
+### 1. `NodeRegistry` — Heartbeat-based Node Discovery
+
+The `NodeRegistry` maintains a real-time view of cluster topology. Each node has a lifecycle state — `HEALTHY`, `DEGRADED`, or `OFFLINE` — and carries telemetry (CPU, heap, active workers) updated on each heartbeat:
+
+```
+1\ CREATE reg FROM cluster:createRegistry.
+1\ REAP id FROM reg:register, "node-A".
+# → HEALTHY node registered
+
+1\ REAP _ FROM reg:heartbeat, "node-A", { cpuUtil: 0.3, heapUsage: 0.5 }.
+
+1\ REAP count FROM reg:aliveCount.
+1\ SHOW count.        # → 1
+
+1\ REAP _ FROM reg:configure, "HEARTBEAT_INTERVAL", 2000.
+1\ REAP _ FROM reg:configure, "HEARTBEAT_THRESHOLD", 5.
+```
+
+**Heartbeat monitoring:** A background timer checks each node every `HEARTBEAT_INTERVAL` ms. If `missedBeats` reaches `ceil(threshold / 2)`, the node enters `DEGRADED`. At `threshold`, it becomes `OFFLINE`. A single heartbeat restores it to `HEALTHY`:
+
+```
+1\ REAP _ FROM reg:start.           # begin background monitor
+
+# If node-A misses 3 heartbeats with threshold=5:
+# → DEGRADED at 3 missed beats
+# → OFFLINE at 5 missed beats
+
+# Recovery:
+1\ REAP _ FROM reg:heartbeat, "node-A".
+# → node-A is HEALTHY again
+```
+
+**Topology events:** The registry emits events on state transitions — `node:registered`, `node:healthy`, `node:degraded`, `node:offline` — enabling reactive failover and alerting.
+
+### 2. `ClusterRouter` & `CircuitBreaker` — Weighted Load Balancing with Failover
+
+The `ClusterRouter` selects the optimal target node for each dispatch using **weighted least-connections** — it chooses the alive node with the lowest active connection count, breaking ties by CPU utilization:
+
+```
+1\ REAP router FROM cluster:createRouter, reg.
+
+1\ REAP result FROM router:dispatch, "task.action", payload.
+# → Result from lowest-connection node
+# → On circuit-open, transparently fails over to backup
+```
+
+Each node gets a per-node `CircuitBreaker` with three states:
+
+| State | Behavior | Transition |
+|---|---|---|
+| `CLOSED` | Requests allowed normally | → OPEN when error rate ≥ threshold |
+| `OPEN` | All requests rejected (fast-fail) | → HALF-OPEN after `cooldown` ms |
+| `HALF-OPEN` | One probe request allowed | → CLOSED on success, → OPEN on failure |
+
+**Circuit breaker configuration via MISSION CONFIG:**
+
+```
+MISSION CONFIG CIRCUIT_BREAKER_THRESHOLD = 0.10.
+MISSION CONFIG CIRCUIT_BREAKER_COOLDOWN = 15000.
+```
+
+When the primary node's circuit is OPEN, the router selects a backup node. If both fail, the error is aggregated and a `router:circuit_open` security alert is emitted:
+
+```
+# → SECURITY_ALERT: Node peer disconnected. Executing failover.
+# → Cluster dispatch failed on primary and backup: <error>
+```
+
+**mTLSJwtGuard integration:** If configured, each dispatch authenticates the target node via JWT before execution. Failed verifications produce a `router:auth_failure` event and reject the dispatch.
+
+### 3. `DistributedHeap` & `ConsistentHashRing` — PERSISTENT Stateful Actor Storage
+
+The `DistributedHeap` wraps a `ConsistentHashRing` using **SHA-256** hashing mapped to BigInt for key distribution — with configurable virtual nodes (default 128 per physical node) for balanced ownership:
+
+```
+1\ REAP heap FROM cluster:createHeap, { localNodeId: "server-1" }.
+
+1\ REAP _ FROM heap:addNode, "server-1".
+1\ REAP _ FROM heap:addNode, "server-2".
+
+1\ REAP _ FROM heap:put, "config-key", { timeout: 30, retries: 3 }.
+1\ REAP val FROM heap:get, "config-key".
+```
+
+**Lease-based expiration:** Keys have a configurable lease duration (default 5000ms). Expired keys are lazily evicted on `get()` and actively collected by a background GC timer:
+
+```
+MISSION CONFIG LEASE_DURATION = 30000.
+```
+
+**Stateful actors:** The heap supports actor-style state management where each actor is owned by exactly one ring node. Mutations from non-owners are transparently proxied:
+
+```
+1\ REAP owner FROM heap:registerActor, "session-1".
+1\ SHOW owner.     # → "server-2" (deterministic via hash ring)
+
+1\ REAP _ FROM heap:setActorState, "session-1", { count: 42 }, owner.
+# → { proxied: false }
+
+1\ REAP _ FROM heap:setActorState, "session-1", { count: 99 }, "server-1".
+# If server-1 is not the owner:
+# → { proxied: true, owner: "server-2" }
+```
+
+**Node addition & migration:** When a new node joins, `computeMigrationStats(newNodeId)` reports how many keys would move. `computeDataKeyMigration(existingKeys)` returns the exact set of keys whose owner changed — enabling zero-downtime rebalancing:
+
+```
+1\ REAP stats FROM heap:computeMigrationStats, "server-3".
+1\ SHOW stats:totalKeys.      # → 1000
+1\ SHOW stats:ratio.          # → 0.25 (25% of keys migrate)
+```
+
+**Consistent hash distribution:** With default 128 virtual nodes per physical node, 1000 keys distributed across 2 nodes achieve a near-even split (typical ratio ≥ 0.98).
 
 ---
 
