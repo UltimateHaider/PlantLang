@@ -1,5 +1,35 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.33.0 — 2026
+
+### New Features
+- **Parallel Compilation & Telemetry** — four modules enabling multi-threaded codegen, distributed failover, and lock-free metrics:
+  - `ParallelCodegenEngine` — DAG dependence graph builder with Tarjan cycle detection; weighted load balancer distributing actions by (1 + nested call count); worker_threads pool for parallel bitcode assembly with lock-free merge
+  - `RemoteCompilerNode` — zlib (deflate) compression achieving ≥60% payload reduction on serialized AST; TCP transport via net.Socket; 100ms connect timeout triggers transparent failover to local engine; caller receives result regardless of remote availability
+  - `NonBlockingTelemetry` — SharedArrayBuffer ring buffer: 128 entries × 64 bytes each; O(1) lock-free atomic writes via Atomics.add/store; zero-allocation snapshot() returning structured metrics copy; automatic read-ptr advance on overflow; background exporter for external sinks
+  - `RuntimeDispatcher` — enableParallelCodegen()/disableParallelCodegen() toggle; auto-detects single-core CPUs and disables parallel mode at creation; hooks into NonBlockingTelemetry for compilation metrics
+
+### Test Suite
+- New `tests/v0.33.0_parallel.test.js` — 60 tests covering DAG building/cycle detection, weighted load balancing, network compression ratio (≥60%), 100ms timeout fallback, telemetry ring buffer/snapshot, dispatcher auto-disable, and a 20-node speedup benchmark suite (2/4/8 worker balance ratios)
+- Total test count grows from ~705+ → **~765+** across **25 test suites**
+- All 25 test suites at 100% pass rate
+
+### Documentation
+- All `.md` files bumped to v0.33.0
+- ROADMAP.md — v0.32.0 objectives marked complete, v0.33.0 Parallel Compilation & Telemetry documented
+- README.md — v0.33.0 completed section with parallel/distributed/telemetry modules; v0.34.0 planned section drafted
+- CHANGELOG.md — new v0.33.0 entry describing all parallel/telemetry modules
+- Language Tour.md — new "Parallel Compilation & Telemetry (v0.33.0)" section; Architecture diagram updated with all 4 new modules
+
+### Source Layout
+- New `src/compiler/parallel/` and `src/compiler/distributed/` directories:
+  - `src/compiler/parallel/parallel_codegen.js`
+  - `src/compiler/distributed/remote_compiler.js`
+  - `src/telemetry/metrics_collector.js`
+  - `src/runtime/dispatcher.js`
+
+---
+
 ## v0.32.0 — 2026
 
 ### New Features

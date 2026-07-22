@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.32.0
+# 🌿 PlantLang — Chloroplast v0.33.0
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -838,7 +838,7 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.32.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production:
+Chloroplast v0.33.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, and lock-free telemetry:
 
 ```
 Source (.plnt)
@@ -867,6 +867,30 @@ Source (.plnt)
     │       ├── SPECIES struct types: %species.Name with parent-field prefixing
     │       ├── SPECIES method dispatch: static call with bitcast for inheritance
     │       └── FFI declare IR — external function declarations for runtime_bridge
+    │
+    ├── compiler/parallel/parallel_codegen.js  — ParallelCodegenEngine (v0.33.0)
+    │   ├── DAG builder: dependence graph for statement-level parallelism
+    │   ├── Cycle detection: Tarjan's algorithm rejects cyclic graphs
+    │   ├── Weighted load balancer: round-robin bucket assignment per action weight
+    │   └── Worker thread pool: `worker_threads` pool, lock-free bitcode assembly
+    │
+    ├── compiler/distributed/remote_compiler.js  — RemoteCompilerNode (v0.33.0)
+    │   ├── zlib (deflate) compression: ≥60% payload reduction
+    │   ├── TCP transport: net.Socket connection to remote compiler nodes
+    │   ├── 100ms timeout: auto-fallback to local engine on timeout/refusal
+    │   └── Transparent failover: caller receives result from local engine
+    │
+    ├── telemetry/metrics_collector.js  — NonBlockingTelemetry (v0.33.0)
+    │   ├── SharedArrayBuffer ring buffer: 128-entry × 64B, lock-free atomic writes
+    │   ├── `snapshot()`: zero-allocation structured copy, overflow tracking
+    │   ├── `record(name, value)`: O(1) atomic write with overflow detection
+    │   └── Background exporter: periodic stream export for external sinks
+    │
+    ├── runtime/dispatcher.js  — RuntimeDispatcher (v0.33.0)
+    │   ├── `enableParallelCodegen()`: enable DAG-split parallel codegen
+    │   ├── `disableParallelCodegen()`: revert to sequential compilation
+    │   ├── Auto-disable: single-core CPUs skip parallel mode at creation
+    │   └── Telemetry bindings: hooks into NonBlockingTelemetry metrics
 ```
 
 ### Memory Architecture
@@ -1051,7 +1075,92 @@ The `SafeChannel` provides an adaptive IPC layer between main thread and worker 
 
 ---
 
-## File Extensions
+## Parallel Compilation & Telemetry (v0.33.0)
+
+Starting with v0.33.0, PlantLang ships with a **parallel compilation engine**, **distributed failover**, **lock-free telemetry**, and a **runtime dispatcher** — enabling multi-threaded codegen, remote compiler node fallback, and non-blocking metrics collection.
+
+### 1. `ParallelCodegenEngine` — DAG-based Parallel Compilation
+
+The `ParallelCodegenEngine` splits the AST into a dependence DAG, detects cycles, and distributes independent nodes across a `worker_threads` pool:
+
+```
+                     AST
+                      │
+              DAG Builder (Tarjan)
+                      │
+              Weighted Load Balancer
+                 ┌────┼────┐
+             Worker_0 │ Worker_1
+                 bitcode assembly
+                      │
+              Lock-free merge → IR
+```
+
+**Cycle detection** rejects programs with circular dependencies:
+
+```
+1\ ACTION a(), 2\ REAP b FROM b. 1\ /ACTION.
+1\ ACTION b(), 2\ GIVE 1 + a(). 1\ /ACTION.
+# → ERROR: Cyclic dependency detected: a → b → a
+```
+
+**Load balancing** assigns each action a weight (1 + nested call count) and distributes across buckets for near-optimal CPU utilization.
+
+### 2. `RemoteCompilerNode` — Transparent Distributed Failover
+
+The `RemoteCompilerNode` ships compilation payloads to a remote TCP compiler node. If the remote node is unreachable within **100ms**, it falls back transparently to the local engine:
+
+```
+MISSION CONFIG REMOTE_NODE="tcp://192.0.2.1:9473".
+
+1\ ACTION remote_kernel(data([NUM])) WITH MISSION FAST,
+2\   REAP result FROM remote:compile, data.
+2\   GIVE result.
+1\ /ACTION.
+
+# If 192.0.2.1:9473 is unreachable:
+# → [WARN] Remote compiler unreachable after 100ms. Using local engine.
+```
+
+**Payload compression** uses zlib (deflate) to achieve ≥60% size reduction on the serialized AST before TCP transport.
+
+### 3. `NonBlockingTelemetry` — Lock-free Metrics Ring Buffer
+
+The `NonBlockingTelemetry` collector uses a **SharedArrayBuffer** ring buffer (128 entries × 64 bytes each) with atomic operations — zero GC pressure, zero contention:
+
+```
+1\ MISSION CONFIG TELEMETRY_ENABLED = TRUE.
+
+1\ ACTION monitored_kernel() WITH MISSION FAST,
+2\   REAP snap FROM telemetry:snapshot.
+2\   SHOW snap.metrics[0].name.
+1\ /ACTION.
+```
+
+Features:
+- **`record(name, value)`**: O(1) lock-free atomic write to the ring buffer
+- **`snapshot()`**: Zero-allocation structured copy of the current buffer state
+- **Overflow detection**: Automatically advances read pointer when buffer is full
+- **Background exporter**: Optional periodic export to external sinks (file, network)
+
+### 4. `RuntimeDispatcher` — Parallel Toggle & Auto-Disable
+
+The `RuntimeDispatcher` wraps the parallel engine and telemetry into a single switch:
+
+```
+1\ REAP dsp FROM dispatcher:create.
+1\ REAP _ FROM dsp:enableParallelCodegen.
+# → [DISPATCH] Parallel codegen enabled via API.
+
+1\ ACTION heavy_task(), 2\ REAP result FROM crunch, data. 1\ /ACTION.
+
+1\ REAP _ FROM dsp:disableParallelCodegen.
+# → [DISPATCH] Parallel codegen disabled via API.
+```
+
+**Single-core auto-disable:** On machines with only 1 logical CPU, `enableParallelCodegen()` is a no-op — the dispatcher detects `os.cpus().length === 1` and skips parallel mode entirely.
+
+---
 
 | Extension | Description |
 |-----------|-------------|

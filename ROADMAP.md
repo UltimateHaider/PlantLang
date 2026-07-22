@@ -1,4 +1,4 @@
-# PlantLang Roadmap: v0.32.0 (Local Runtime & Isolation Layer)
+# PlantLang Roadmap: v0.33.0+ (Completed & Future)
 
 ## What v0.30.0 Delivered
 
@@ -22,7 +22,17 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 
 ---
 
-## ✅ v0.32.0 Progress So Far
+## ✅ v0.33.0 Progress So Far
+
+### ✅ Completed: Parallel Compilation & Telemetry
+
+| Sub-goal | Approach |
+|---|---|
+| **ParallelCodegenEngine (FAST mission)** | DAG dependence graph builder with Tarjan cycle detection; weighted load balancer distributing actions by (1 + nested call count); round-robin bucket assignment per action weight; worker_threads pool for parallel bitcode assembly with lock-free merge |
+| **RemoteCompilerNode (distributed)** | zlib (deflate) compression achieves ≥60% payload reduction on serialized AST; TCP transport via net.Socket; 100ms connect timeout triggers transparent failover to local engine; caller receives result regardless of remote availability |
+| **NonBlockingTelemetry** | SharedArrayBuffer ring buffer: 128 entries × 64 bytes each; O(1) lock-free atomic writes via Atomics.add/store; zero-allocation snapshot() returning structured metrics copy; automatic read-ptr advance on overflow (no silent data loss); background exporter for external sinks |
+| **RuntimeDispatcher** | enableParallelCodegen()/disableParallelCodegen() toggle; auto-detects single-core CPUs (os.cpus().length === 1) and disables parallel mode at creation; hooks into NonBlockingTelemetry for compilation metrics |
+| **60 new tests** | `tests/v0.33.0_parallel.test.js` — DAG/cycle detection, weighted balance, network compression ratio, 100ms timeout fallback, telemetry ring buffer/snapshot, dispatcher auto-disable, 20-node benchmark suite (2/4/8 worker balance ratios) |
 
 ### ✅ Completed: Local Runtime & Isolation Layer
 
@@ -63,6 +73,74 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 
 ---
 
+## 🛡️ Version v0.34.0: Security Layer & Zero-Trust Model
+
+**Priority:** High
+
+### Scope & Engineering Implementation
+
+#### Non-blocking Telemetry Logs
+- Event ingestion via non-blocking ring buffer
+- Log processing and storage via an asynchronous background thread (Async Writer) without impacting FAST performance
+
+#### Mutual Network Security
+- Implementation of dual-authentication mTLS and node request authentication using signed tokens (JWT)
+
+#### Least Privilege Enforcement
+- Restricting SAFE functions from accessing external resources using Seccomp or WASM Sandbox
+
+---
+
+## 🟠 Version v0.35.0: Clustering & Extended Network Memory
+
+**Priority:** Medium
+
+### Scope & Engineering Implementation
+
+#### Cluster Router
+- Routing function calls across the network based on available node capacity
+
+#### PERSISTENT Pattern Expansion
+- Making the Global Heap accessible cluster-wide to manage long-lived objects and Stateful Actors
+
+---
+
+## 🔴 Version v0.36.0: Geo-Routing & SHARE CONFIG Governance
+
+**Priority:** Medium
+
+### Scope & Engineering Implementation
+
+#### Shared State Governance (SHARE CONFIG)
+- Adopting Immutable Versioned Broadcast for read-only data (SHARED_READ) with O(1) complexity, avoiding consensus overhead
+- Activating consensus protocols (such as Raft or CRDTs) only when dynamic state is present
+
+#### Affinity Grouping
+- Analyzing the Call Graph to colocate high-communication functions on the same machine
+
+#### SMART Adaptive Routing
+- Selecting the direct execution site (local vs. remote vs. GPU) based on data size and real-time performance metrics
+
+---
+
+## ⚪ Version v0.37.0+: Distributed Cycles & REPLICA Strategy
+
+**Priority:** Medium
+
+### Scope & Engineering Implementation
+
+#### REPLICA Strategy
+- Applying Round-Robin / Least-Connections for Stateless Actions
+- Applying Primary-Backup Replication pattern for stateful functions (Stateful PERSISTENT Actors) to guarantee data consistency
+
+#### Distributed Loops (CYCLE WITH MISSION CLUSTER)
+- Partitioning massive iterative loops into chunks and distributing them in parallel across the cluster
+
+#### Hybrid Execution
+- Providing explicit control mechanisms over result aggregation location (LOCAL_REAP / REMOTE_REAP)
+
+---
+
 ## 🛠️ Engineering Milestones
 
 | Milestone | Task | Priority | Est. Effort |
@@ -73,18 +151,23 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 | **M4** | Full test suite (75 tests all green) | ✅ Done | 1 week |
 | **M5** | Local Runtime & Isolation Layer (BumpAllocator, ARCHeap, ProcessPool, SafeChannel, MissionContext) | ✅ Done | 3 weeks |
 | **M6** | Runtime test suite (70 tests all green) | ✅ Done | 1 week |
-| **M7** | IMPORT re-export / selective symbols | Medium | 1 week |
-| **M8** | SPECIES/CHOICE integration parity tests | High | 1 week |
+| **M7** | Parallel Compilation & Telemetry (ParallelCodegenEngine, RemoteCompilerNode, NonBlockingTelemetry, RuntimeDispatcher) | ✅ Done | 2 weeks |
+| **M8** | Parallel test suite (60 tests all green) | ✅ Done | 1 week |
+| **M9** | Security Layer & Zero-Trust Model (mTLS, seccomp, JWT) | High | 3 weeks |
+| **M10** | Clustering & Extended Network Memory (Cluster Router, PERSISTENT expansion) | Medium | 3 weeks |
+| **M11** | Geo-Routing & SHARE CONFIG Governance (broadcast, CRDT, affinity) | Medium | 3 weeks |
+| **M12** | Distributed Cycles & REPLICA Strategy (partitioned loops, hybrid reap) | Medium | 3 weeks |
 
 ---
 
 ## 🎯 Success Criteria
 
-- **No Regressions**: All 24 test suites (705+ tests) continue to pass
-- **Runtime Parity**: Five runtime modules work correctly across all mission modes
-- **Escalation Reliability**: FAST OOM, pool starvation, and heartbeat timeout all trigger correct fallback behavior
-- **No Memory Leaks**: Valgrind-clean on all runtime module stress tests
-- **Test Count**: Test suite grows to **705+** covering all new constructs
+- **No Regressions**: All 25+ test suites (765+ tests) continue to pass
+- **Zero-Trust**: Untrusted SAFE actions blocked from syscalls via seccomp/WASM sandbox
+- **Mutual Auth**: All inter-node RPCs require mTLS handshake + signed JWT
+- **Cluster Transparency**: PERSISTENT heap accessible cluster-wide with ACID semantics
+- **Geo-Aware Routing**: Call-graph affinity colocation reduces cross-node latency
+- **Distributed Loop Speedup**: CYCLE WITH MISSION CLUSTER achieves linear speedup on N nodes
 - **100% Pass Rate**: Every test suite at 100%
 
 ---
@@ -96,11 +179,16 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 | **v0.29.0** | **SPECIES vtable dispatch, CHOICE/MATCH native, MAP get()** | **Q3 2026** |
 | **v0.30.0** | **Runtime library, Block-Depth Contract Law, compiler hardening** | **Q4 2026** |
 | **v0.31.0** | **Five-Mission Architecture, Boundary Handshake Matrix, MissionDispatcher, SMART routing** | **Q1 2027** |
-| v0.32.0 | Local Runtime & Isolation Layer (BumpAllocator, ARCHeap, ProcessPool, SafeChannel, MissionContext) | Q2 2027 |
-| v0.33.0 | PULSE/WHENEVER reactive, VERIFY/SUITE native, TAP file I/O, HARVEST networking | Q3 2027 |
-| v0.34.0 | Flow pipeline, SPECIES/CHOICE integration tests, advanced compiler optimizations | Q4 2027 |
+| v0.32.0 | Local Runtime & Isolation Layer (BumpAllocator, ARCHeap, ProcessPool, SafeChannel, MissionContext) | ✅ Q2 2027 |
+| v0.33.0 | Parallel Compilation & Telemetry (ParallelCodegenEngine, RemoteCompilerNode, NonBlockingTelemetry, RuntimeDispatcher) | ✅ Q3 2027 |
+| 🛡️ **v0.34.0** | **Security Layer & Zero-Trust Model** — mTLS, JWT auth, seccomp/WASM sandbox, non-blocking telemetry logs | **Q4 2027** |
+| 🟠 **v0.35.0** | **Clustering & Extended Network Memory** — Cluster Router, PERSISTENT heap cluster-wide, Stateful Actors | **Q1 2028** |
+| 🔴 **v0.36.0** | **Geo-Routing & SHARE CONFIG Governance** — Immutable Versioned Broadcast, Raft/CRDT consensus, affinity grouping, SMART adaptive routing | **Q2 2028** |
+| ⚪ **v0.37.0+** | **Distributed Cycles & REPLICA Strategy** — Round-Robin/Least-Connections stateless, Primary-Backup stateful, CYCLE WITH MISSION CLUSTER, LOCAL_REAP / REMOTE_REAP | **Q3 2028+** |
 
 ---
+
+*PlantLang v0.33.0: Parallel Compilation & Telemetry. ParallelCodegenEngine, RemoteCompilerNode, NonBlockingTelemetry, RuntimeDispatcher. 60 new tests. 765+ total tests. All green.*
 
 *PlantLang v0.32.0: Local Runtime & Isolation Layer. BumpAllocator, GlobalARCHeap, WarmProcessPool, SafeChannel, MissionContext. 70 new tests. 705+ total tests. All green.*
 
