@@ -1054,7 +1054,86 @@ class RuntimeDispatcher {
 
 ---
 
-## 16. Test Suite Architecture
+## 16. Zero-Trust Security & Audit Architecture (v0.34.0)
+
+### 17.1 Overview
+
+v0.34.0 adds three security modules implementing non-blocking audit logging, mutual TLS with JWT authentication, and capability-based sandboxing:
+
+| Module | File | Purpose |
+|---|---|---|
+| NonBlockingAuditLogger | `src/security/audit/audit_logger.js` | SAB ring buffer, SHA256 hash chain, async Worker flush, verifyIntegrity() |
+| mTLSJwtGuard | `src/security/network/mtls_jwt_guard.js` | TLS 1.3 mTLS cert loading, RS256/Ed25519 JWT verification, anti-replay |
+| CapabilityGuard | `src/security/sandbox/capability_guard.js` | Zero-trust defaults, granular capability matrix, syscall filtering |
+
+### 17.2 NonBlockingAuditLogger
+
+**Ring buffer layout:** SharedArrayBuffer with 4 Int32 header slots (writeIndex, readIndex, overflowCount, committedIndex) followed by N entries of 256 bytes each.
+
+Entry layout (256 bytes):
+```
+bytes 0-7:    timestamp (ms, BigInt LE)
+byte 8:       eventType (ASCII char code)
+bytes 9-191:  data (183 bytes, UTF-8 null-padded)
+bytes 192-223: prevHash (SHA256 of previous entry, 32 bytes)
+bytes 224-255: hash (SHA256 of this entry, 32 bytes)
+```
+
+**Hash chain:** `hash_n = SHA256(timestamp_n + eventType_n + data_n + hash_{n-1})`. The first entry uses `hash_{0} = 32 zero bytes` as the previous hash. `verifyIntegrity()` walks the chain from the current read cursor, verifying each entry's stored hash against a recomputation and checking `prevHash` linkage.
+
+**Overflow detection:** When `writeBefore - readIndex >= entryCount`, the read index is advanced atomically and an overflow counter is incremented. A synchronous fallback flush is triggered.
+
+**Async worker:** A background `Worker` thread receives flush batches via `postMessage`. Batch size is 50 entries; a `shutdown` message triggers final flush.
+
+### 17.3 mTLSJwtGuard
+
+**Certificate loading:** Reads PEM files from `process.env.MTLS_CERT`, `process.env.MTLS_KEY`, `process.env.MTLS_CA` or explicit file paths. Provides `getTLSOptions()` returning a `tls.createServer`/`tls.connect`-compatible options object with `minVersion: 'TLSv1.3'`.
+
+**JWT verification pipeline:**
+1. Decode header (algorithm detection: RS256 or Ed25519)
+2. Decode payload (expiry check, jti extraction)
+3. Verify signature using `crypto.createVerify('RSA-SHA256')` for RS256 or `crypto.verify(null, ...)` for Ed25519
+4. Check jti against in-memory Set for replay detection
+
+**Error differentiation:**
+
+| Condition | Error Code | Log Level |
+|---|---|---|
+| Expired `exp` claim | `EXPIRED` | WARN |
+| Signature mismatch | `FORGERY` | SECURITY_ALERT |
+| jti reuse | `REPLAY` | SECURITY_ALERT |
+| mTLS peer cert null/invalid | `MTLS_FAILURE` | FATAL |
+
+### 17.4 CapabilityGuard
+
+**Default capability matrix:**
+
+| Mode | Permissions |
+|---|---|
+| SAFE | (none) |
+| BALANCED | FILE_READ, NET_CONNECT |
+| FAST | FILE_READ, FILE_WRITE, NET_CONNECT |
+| SMART | FILE_READ, FILE_WRITE, NET_CONNECT |
+| PERSISTENT | FILE_READ, FILE_WRITE, NET_CONNECT, NET_LISTEN |
+
+**API:**
+- `grantPermission(mode, capability)` — add capability to a mode
+- `revokePermission(mode, capability)` — remove capability
+- `hasPermission(mode, capability)` — check without throwing
+- `checkPermission(mode, capability, resource?)` — throws `CapabilityViolationError` on denial
+- `enforceSandbox(mode, action, resource?)` — syscall-level filter for SAFE mode; blocks `execve`, `ptrace`, `fork`, `clone`, `kill`
+- `onViolation(callback)` — register hook for CRITICAL audit events
+- `resetToDefaults()` — restore initial permission sets
+
+### 17.5 Test Coverage
+
+| Test File | Tests | Coverage |
+|---|---|---|
+| `tests/v0.34.0_security.test.js` | 91 | Audit logger: record/snapshot/integrity/overflow/fast-path benchmark/hash chain verification/prev hash chaining; mTLS JWT: RS256 valid/expired/forged/replay/Ed25519/malformed/cert expiry/peer verification; Capability: SAFE zero-default/grant/revoke/syscall blocking/violation hooks/reset/per-mode defaults/duplicate idempotence; Integration: violation detail capture/benchmark throughput |
+
+---
+
+## 17. Test Suite Architecture
 
 ### Test Files
 - `tests/test_llvm_codegen.js` — 50 parity tests: each fixture runs via interpreter AND compiled via `llc` + `gcc`, asserts identical stdout
@@ -1080,7 +1159,8 @@ class RuntimeDispatcher {
 - `tests/dispatcher.test.js` — 47 tests for MissionStack, ScopedArena, MissionDispatcher, SMART routing, multi-hop call chains, memory isolation
 - `tests/runtime.test.js` — 70 tests for Local Runtime & Isolation Layer (BumpAllocator alignment/overflow/escalation, ARCHeap retain/release/cycle detection/GC.cycle, SafeChannel all 4 mechanisms, MissionContext diagnostics/metrics/tracing, ProcessPool heartbeat simulation)
 - `tests/v0.33.0_parallel.test.js` — 60 tests for Parallel Compilation & Telemetry (DAG/cycle detection, weighted load balancing, network compression ≥60%, 100ms timeout fallback, telemetry ring buffer/snapshot, dispatcher auto-disable, 20-node speedup benchmark suite)
-- **Total: 25 test files, ~765+ tests, all green**
+- `tests/v0.34.0_security.test.js` — 91 tests for Zero-Trust Security & Audit (audit logger hash chain/integrity/overflow, mTLS JWT valid/expired/forged/replay/Ed25519, capability sandboxing SAFE zero-default/grant/revoke/syscall blocking/violation hooks, benchmark suite)
+- **Total: 26 test files, ~856+ tests, all green**
 
 ### Test Methodology
 Each test:

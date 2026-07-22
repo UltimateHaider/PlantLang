@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.33.0
+# 🌿 PlantLang — Chloroplast v0.34.0
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -838,7 +838,7 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.33.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, and lock-free telemetry:
+Chloroplast v0.34.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, lock-free telemetry, and a zero-trust security layer:
 
 ```
 Source (.plnt)
@@ -891,6 +891,24 @@ Source (.plnt)
     │   ├── `disableParallelCodegen()`: revert to sequential compilation
     │   ├── Auto-disable: single-core CPUs skip parallel mode at creation
     │   └── Telemetry bindings: hooks into NonBlockingTelemetry metrics
+    │
+    ├── security/audit/audit_logger.js  — NonBlockingAuditLogger (v0.34.0)
+    │   ├── SharedArrayBuffer ring buffer: 10K entries default, configurable
+    │   ├── SHA256 tamper-evident hash chain per entry
+    │   ├── `verifyIntegrity()`: detects memory tampering
+    │   └── Async Worker flush: background disk/SIEM writer
+    │
+    ├── security/network/mtls_jwt_guard.js  — mTLSJwtGuard (v0.34.0)
+    │   ├── TLS 1.3 mTLS certificate loading from env or file paths
+    │   ├── RS256 / Ed25519 JWT verification with key caching
+    │   ├── Anti-replay protection via jti tracking table
+    │   └── Certificate expiry auto-detection and renewal hooks
+    │
+    ├── security/sandbox/capability_guard.js  — CapabilityGuard (v0.34.0)
+    │   ├── Zero-trust default: SAFE mode has zero permissions
+    │   ├── Granular capability matrix per mission mode
+    │   ├── Syscall filtering: blocks execve/ptrace/fork/clone/kill in SAFE
+    │   └── Violation enforcement: SIGSYS termination + CRITICAL audit log
 ```
 
 ### Memory Architecture
@@ -1162,11 +1180,99 @@ The `RuntimeDispatcher` wraps the parallel engine and telemetry into a single sw
 
 ---
 
-| Extension | Description |
-|-----------|-------------|
-| `.plnt` | PlantLang source file |
+## Zero-Trust Security & Audit Architecture (v0.34.0)
+
+Starting with v0.34.0, PlantLang ships with a **production-ready Zero-Trust Security & Audit Architecture** — non-blocking audit logging with tamper-evident hash chains, mutual TLS with JWT authentication, and granular capability-based sandboxing for SAFE-mode isolation.
+
+### 1. `NonBlockingAuditLogger` — Tamper-Evident Audit Ring Buffer
+
+The `NonBlockingAuditLogger` provides lock-free, O(1) event logging using a SharedArrayBuffer ring buffer with a cryptographic hash chain:
+
+```
+Hash₀ = SHA256("genesis")
+Hashₙ = SHA256(EventDataₙ + Hashₙ₋₁)
+```
+
+**Configuration:** `MISSION CONFIG AUDIT_RING_SIZE = 10000` or `process.env.AUDIT_RING_SIZE`.
+
+```
+1\ MISSION CONFIG AUDIT_RING_SIZE = 5000.
+
+1\ ACTION secure_action() WITH MISSION SAFE,
+2\   REAP snap FROM audit:snapshot.
+2\   SHOW snap.metrics[0].data.
+1\ /ACTION.
+```
+
+**Key features:**
+- **Atomic ring buffer** — lock-free `record()` via `Atomics.add`, zero GC pressure
+- **Tamper-evident hash chain** — each entry stores `SHA256(data + prevHash)`; `verifyIntegrity()` detects any memory tampering
+- **Async Worker flush** — offloads disk/SIEM writes to a background thread, keeping FAST path overhead < 0.1ms
+- **Overflow handling** — when buffer is full, oldest entry is dropped and a `WARN` is emitted
+
+### 2. `mTLSJwtGuard` — Mutual TLS & JWT Authentication
+
+The `mTLSJwtGuard` provides dual-authentication mTLS 1.3 with signed JWT tokens:
+
+**Configuration via environment variables:**
+```bash
+export MTLS_CERT=/etc/plantlang/cert.pem
+export MTLS_KEY=/etc/plantlang/key.pem
+export MTLS_CA=/etc/plantlang/ca.pem
+```
+
+```
+1\ MISSION CONFIG REMOTE_AUTH = JWT_RS256.
+
+1\ ACTION call_remote() WITH MISSION FAST,
+2\   REAP result FROM remote:execute, payload.
+2\   GIVE result.
+1\ /ACTION.
+```
+
+**Enforcement matrix:**
+
+| Trigger Scenario | Action | Log Output |
+|---|---|---|
+| JWT forgery attempt | Reject immediately | `SECURITY_ALERT: JWT signature verification failed!` |
+| Replay attack (jti reused) | Reject request | `SECURITY_ALERT: Replay attack detected for JWT ID` |
+| Expired JWT token | Reject, request re-auth | `WARN: Expired JWT token presented.` |
+| mTLS handshake failure | Abort TCP connection | `FATAL: mTLS handshake failed. Peer unverified.` |
+
+Supports RS256 and Ed25519 signing algorithms.
+
+### 3. `CapabilityGuard` — Zero-Trust SAFE Sandbox
+
+The `CapabilityGuard` enforces least-privilege access for every mission mode. **By default, SAFE has zero permissions:**
+
+| Mode | Default Permissions |
+|---|---|
+| **SAFE** | None (zero trust) |
+| **BALANCED** | `FILE_READ`, `NET_CONNECT` |
+| **FAST** | `FILE_READ`, `FILE_WRITE`, `NET_CONNECT` |
+| **SMART** | `FILE_READ`, `FILE_WRITE`, `NET_CONNECT` |
+| **PERSISTENT** | `FILE_READ`, `FILE_WRITE`, `NET_CONNECT`, `NET_LISTEN` |
+
+Granular permissions are granted via the `MissionContext`:
+
+```
+1\ ACTION read_config() WITH MISSION SAFE,
+2\   # Requires explicit FILE_READ grant
+2\   REAP data FROM file:read, "/etc/plantlang/config".
+2\   GIVE data.
+1\ /ACTION.
+
+# Grant: MISSION CONFIG SAFE_PERMISSIONS = FILE_READ, NET_CONNECT.
+```
+
+**Violation enforcement:**
+- Unauthorized syscalls (`execve`, `ptrace`, `fork`, `clone`, `kill`) in SAFE mode immediately terminate the worker
+- All denials emit a `CRITICAL` audit log entry
+- Violation hooks allow custom alerting (SIEM, pager, etc.)
 
 ---
+
+## File Extensions
 
 ## Choosing the Right Mission Mode
 

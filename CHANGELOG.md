@@ -1,5 +1,31 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.34.0 — 2026
+
+### New Features
+- **Zero-Trust Security & Audit Architecture** — three security modules implementing non-blocking audit logging, mutual TLS with JWT authentication, and capability-based sandboxing:
+  - `NonBlockingAuditLogger` — SharedArrayBuffer ring buffer (default 10K entries, configurable via `AUDIT_RING_SIZE`); O(1) lock-free atomic writes; SHA256 tamper-evident hash chain with `verifyIntegrity()` chain validation; async Worker Thread background flush; synchronous emergency flush on overflow
+  - `mTLSJwtGuard` — TLS 1.3 certificate loading from `MTLS_CERT`/`MTLS_KEY`/`MTLS_CA` env vars or .pem file paths; RS256 and Ed25519 JWT signature verification with localized key caching; anti-replay protection via jti tracking table; certificate expiry auto-detection with renewal hooks; explicit error differentiation (EXPIRED, FORGERY, REPLAY, MTLS_FAILURE)
+  - `CapabilityGuard` — zero-trust default: SAFE mode starts with zero permissions; granular capability matrix per mission mode (FILE_READ, FILE_WRITE, NET_CONNECT, NET_LISTEN, PROCESS_SPAWN, etc.); syscall filtering blocking execve/ptrace/fork/clone/kill in SAFE mode; violation enforcement with SIGSYS termination and CRITICAL audit log; `onViolation()` hook for custom alerting
+
+### Test Suite
+- New `tests/v0.34.0_security.test.js` — 91 tests covering audit logger integrity (hash chain, overflow, fast path overhead < 100µs), hash chain verification (prev hash chaining, zero genesis), mTLS & JWT verification (RS256 valid/expired/forged/replay/Ed25519), capability sandboxing (SAFE zero-default/grant/revoke/syscall blocking/integration hooks), benchmark suite (1000 record throughput, snapshot cycles, verifyIntegrity performance, 10K bulk write)
+- Total test count grows from ~765+ → **~856+** across **26 test suites** (24 existing + runtime + parallel + security)
+- All 26 test suites at 100% pass rate
+
+### Documentation
+- All `.md` files bumped to v0.34.0
+- Language Tour.md — header → v0.34.0, new "Zero-Trust Security & Audit Architecture (v0.34.0)" section with all 3 modules, Architecture diagram updated with security modules
+- CHANGELOG.md — new v0.34.0 entry describing all security modules
+
+### Source Layout
+- New `src/security/` directory tree:
+  - `src/security/audit/audit_logger.js` + `src/security/audit/audit_worker.js`
+  - `src/security/network/mtls_jwt_guard.js`
+  - `src/security/sandbox/capability_guard.js`
+
+---
+
 ## v0.33.0 — 2026
 
 ### New Features
