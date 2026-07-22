@@ -1,4 +1,4 @@
-# PlantLang Roadmap: v0.31.0 (Five-Mission Architecture)
+# PlantLang Roadmap: v0.32.0 (Local Runtime & Isolation Layer)
 
 ## What v0.30.0 Delivered
 
@@ -22,7 +22,19 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 
 ---
 
-## ✅ v0.31.0 Progress So Far
+## ✅ v0.32.0 Progress So Far
+
+### ✅ Completed: Local Runtime & Isolation Layer
+
+| Sub-goal | Approach |
+|---|---|
+| **BumpAllocator (FAST mission)** | O(1) bump allocator with strict 8-byte alignment, default 8MB (hard cap 64MB), O(1) reset at scope exit; automatic BALANCED escalation on overflow with diagnostic |
+| **GlobalARCHeap (PERSISTENT mission)** | Atomic reference-counted heap with O(1) retain/release, automatic cycle detection every 1000 allocations (~0.1ms overhead), `GC.cycle()` for idle-frame manual triggering, `onFinalize` callbacks |
+| **WarmProcessPool (SAFE mission)** | Pre-warmed isolated worker pool (default 4, ceiling min(CPU×2,16)), Ping/Pong heartbeats every 5000ms with 10ms timeout, zombie kill+respawn, queue starvation protection with 50ms timeout and BALANCED fallback |
+| **SafeChannel (adaptive IPC)** | Automatic transfer strategy: Structured Clone (≤1MB), Transferable ArrayBuffer zero-copy (>1MB), SharedArrayBuffer for read-only state, ReadableStream/WritableStream for streaming; emits [TRACE] logs per mechanism |
+| **MissionContext (telemetry)** | Unified `diagnostic()`/`trace()`/`getMetrics()` interface; supports `--debug` flag for verbose tracing; JSON metrics include memory usage, fragmentation, pool status, GC cycles |
+| **Escalation & Safety Matrix** | 5 rules: FAST OOM → BALANCED, pool starvation → BALANCED, heartbeat timeout → kill+respawn, 1000 allocs → cycle detection, large payload → transferable mode |
+| **70 new tests** | `tests/runtime.test.js` — BumpAllocator alignment/overflow/escalation, ARCHeap retain/release/cycles/GC.cycle(), SafeChannel all 4 mechanisms, MissionContext diagnostics/metrics/tracing, ProcessPool heartbeat simulation |
 
 ### ✅ Completed: Five-Mission Execution Architecture
 
@@ -59,19 +71,21 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 | **M2** | Mission-aware codegen (mode globals, guard emission, depth overflow) | ✅ Done | 1 week |
 | **M3** | Parser + typechecker integration (MissionBlockNode, symbol pass, permission validation) | ✅ Done | 1 week |
 | **M4** | Full test suite (75 tests all green) | ✅ Done | 1 week |
-| **M5** | IMPORT re-export / selective symbols | Medium | 1 week |
-| **M6** | Integration test suite for SPECIES/CHOICE/MATCH parity | High | 1 week |
+| **M5** | Local Runtime & Isolation Layer (BumpAllocator, ARCHeap, ProcessPool, SafeChannel, MissionContext) | ✅ Done | 3 weeks |
+| **M6** | Runtime test suite (70 tests all green) | ✅ Done | 1 week |
+| **M7** | IMPORT re-export / selective symbols | Medium | 1 week |
+| **M8** | SPECIES/CHOICE integration parity tests | High | 1 week |
 
 ---
 
 ## 🎯 Success Criteria
 
-- **No Regressions**: All 23 test suites (635+ tests) continue to pass
-- **Five-Mission Parity**: All five mission modes (BALANCED/FAST/SAFE/SMART/PERSISTENT) execute correctly in interpreter and LLVM-compiled binary
-- **Boundary Enforcement**: Cross-mode ACTION calls are permitted or rejected according to the Boundary Handshake Matrix
-- **No Memory Leaks**: Valgrind-clean on all mission mode stress tests
-- **Test Count**: Test suite grows to **635+** covering all new constructs
-- **100% Pass Rate**: All pre-existing failures fixed — every test suite at 100%
+- **No Regressions**: All 24 test suites (705+ tests) continue to pass
+- **Runtime Parity**: Five runtime modules work correctly across all mission modes
+- **Escalation Reliability**: FAST OOM, pool starvation, and heartbeat timeout all trigger correct fallback behavior
+- **No Memory Leaks**: Valgrind-clean on all runtime module stress tests
+- **Test Count**: Test suite grows to **705+** covering all new constructs
+- **100% Pass Rate**: Every test suite at 100%
 
 ---
 
@@ -81,11 +95,14 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 |---|---|---|
 | **v0.29.0** | **SPECIES vtable dispatch, CHOICE/MATCH native, MAP get()** | **Q3 2026** |
 | **v0.30.0** | **Runtime library, Block-Depth Contract Law, compiler hardening** | **Q4 2026** |
-| v0.31.0 | Five-Mission Architecture (BALANCED/FAST/SAFE/SMART/PERSISTENT), Boundary Handshake Matrix, MissionDispatcher, SMART routing | Q1 2027 |
-| v0.32.0 | PULSE/WHENEVER reactive, VERIFY/SUITE native, TAP file I/O | Q2 2027 |
-| v0.33.0 | HARVEST networking, Flow pipeline, SPECIES/CHOICE integration tests | Q3 2027 |
+| **v0.31.0** | **Five-Mission Architecture, Boundary Handshake Matrix, MissionDispatcher, SMART routing** | **Q1 2027** |
+| v0.32.0 | Local Runtime & Isolation Layer (BumpAllocator, ARCHeap, ProcessPool, SafeChannel, MissionContext) | Q2 2027 |
+| v0.33.0 | PULSE/WHENEVER reactive, VERIFY/SUITE native, TAP file I/O, HARVEST networking | Q3 2027 |
+| v0.34.0 | Flow pipeline, SPECIES/CHOICE integration tests, advanced compiler optimizations | Q4 2027 |
 
 ---
+
+*PlantLang v0.32.0: Local Runtime & Isolation Layer. BumpAllocator, GlobalARCHeap, WarmProcessPool, SafeChannel, MissionContext. 70 new tests. 705+ total tests. All green.*
 
 *PlantLang v0.31.0: Five-Mission Architecture with Boundary Handshake Matrix, MissionDispatcher, ScopedArena, SMART routing. 75 new tests. 635+ total tests. All green.*
 

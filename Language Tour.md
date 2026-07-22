@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.31.0
+# 🌿 PlantLang — Chloroplast v0.32.0
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -838,7 +838,7 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.31.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production:
+Chloroplast v0.32.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production:
 
 ```
 Source (.plnt)
@@ -885,6 +885,172 @@ Each arena is 64KB (65536 bytes). The bump pointer (`@arena_offsets[N]`) tracks 
 
 ---
 
+## Local Runtime & Isolation Layer (v0.32.0)
+
+Starting with v0.32.0, PlantLang ships with a dedicated **Local Runtime & Isolation Layer** — a suite of five runtime modules that implement mission-specific memory management, process isolation, adaptive IPC, and telemetry.
+
+### 1. `BumpAllocator` — FAST Mission Arena Allocator
+
+The `BumpAllocator` provides O(1) linear bump allocation for `FAST` mission mode. It enforces **strict 8-byte alignment** and resets in O(1) time at scope exit — no `free()` or `compact()` needed.
+
+**Default capacity:** 8 MB (configurable, hard cap at 64 MB).
+
+**Automatic escalation:** When the arena runs out of space, execution escalates to `BALANCED` mode transparently:
+
+```
+MISSION: FAST.
+MISSION CONFIG FAST_HEAP_SIZE = 16MB.
+
+1\ ACTION fast_kernel(data([NUM])) WITH MISSION FAST,
+2\   CREATE buf(NUM) TO 0.
+2\   CYCLE i FROM 0 TO COUNT(data) - 1,
+3\     INCREASE buf BY data[i].
+2\   .
+2\   GIVE buf.
+1\ /ACTION.
+```
+
+If `fast_kernel` exhausts the 16 MB FAST heap during execution, the runtime emits:
+
+```
+WARN: Fast heap capacity exceeded. Escalated to BALANCED.
+```
+
+The program continues correctly — no crash, no data loss.
+
+### 2. `GlobalARCHeap` — PERSISTENT Reference-Counted Heap
+
+The `GlobalARCHeap` provides atomic reference counting for long-lived objects in `PERSISTENT` mission mode. It includes automatic **cycle detection** every 1000 allocations with ≈0.1ms overhead.
+
+**Idle frame utilization with `GC.cycle()`:**
+
+```
+1\ ACTION game_loop() WITH MISSION PERSISTENT,
+2\   CREATE cache(MAP[TX,SHAPE]).
+2\   SEASON TRUE,
+3\     # ... game logic ...
+3\     REAP _ FROM GC.cycle.     # Manual GC during idle frame time
+3\   .
+1\ /ACTION.
+```
+
+`GC.cycle()` triggers a cycle detection pass that cleans up circular references:
+
+```
+INFO: Scheduled GC cycle executed. Circular references cleared.
+```
+
+**Finalization callbacks** allow cleanup when an object's reference count drops to zero:
+
+```
+1\ ACTION create_resource() WITH MISSION PERSISTENT,
+2\   CREATE handle(TX) TO "db-connection".
+2\   REAP id FROM arc:register, handle.
+2\   GIVE id.
+1\ /ACTION.
+
+# When handle is released, its onFinalize callback closes the DB connection.
+```
+
+### 3. `WarmProcessPool` — SAFE Process Isolation
+
+The `WarmProcessPool` maintains a pool of **pre-warmed, physically isolated child processes** for `SAFE` mission mode. Each worker is a separate OS process with its own memory space.
+
+**Default pool size:** 4 workers (configurable, ceiling of `min(OS.cpus() × 2, 16)`).
+
+**Heartbeat & zombie recovery:** The pool sends Ping/Pong heartbeats every 5000ms. If a worker fails to respond within 10ms, the runtime:
+
+1. Kills the zombie PID
+2. Logs the error
+3. Spawns a replacement
+
+```
+[SYS-POOL] [ERROR]: Worker_03 heartbeat timed out (15023ms > 10ms). Process killed and respawned.
+```
+
+**Queue starvation protection:** Tasks queued longer than 50ms trigger pool expansion (up to the ceiling) or a `BALANCED` fallback:
+
+```
+WARN: Process pool starvation and timeout. Fallback to BALANCED.
+```
+
+### 4. `SafeChannel` — Adaptive IPC Pipeline
+
+The `SafeChannel` provides an adaptive IPC layer between main thread and worker processes, automatically selecting the optimal transfer mechanism per payload:
+
+| Payload Size | Mechanism | Behavior |
+|---|---|---|
+| ≤ 1 MB | `Structured Clone` | Deep copy via `structuredClone()` |
+| > 1 MB | `Transferable Objects` | Zero-copy `ArrayBuffer` transfer, O(1) |
+| Read-only state | `SharedArrayBuffer` | Lock-free shared memory for lookups and tensors |
+| Continuous streams | `ReadableStream` / `WritableStream` | Streaming mode for large files and network packets |
+
+```
+# SafeChannel auto-selects the best mechanism:
+# Small payload → structured clone
+# Large array  → transferable (zero-copy)
+
+1\ ACTION process_large(data([NUM])) WITH MISSION SAFE,
+2\   REAP result FROM analyze, data.
+2\   GIVE result.
+1\ /ACTION.
+
+# [TRACE] SafeChannel transferable mode activated for 2MB payload.
+```
+
+### 5. `MissionContext` — Unified Telemetry & Diagnostics
+
+`MissionContext` wraps the active allocator, IPC channel, and process pool into a single telemetry interface:
+
+| Method | Purpose | Debug-only? |
+|---|---|---|
+| `context.diagnostic(msg)` | Runtime escalation/warning logs | No |
+| `context.trace(msg)` | Verbose execution trace | Yes (`--debug` flag) |
+| `context.getMetrics()` | JSON metrics snapshot | No |
+
+**Metrics output includes:**
+
+```json
+{
+  "uptimeMs": 12345,
+  "allocator": {
+    "heapUsed": 262144,
+    "heapCapacity": 8388608,
+    "heapRemaining": 8126464,
+    "fragmentationPct": "96.88",
+    "escalated": false
+  },
+  "arcHeap": {
+    "liveObjects": 42,
+    "gcCycles": 3,
+    "totalAllocations": 3102
+  },
+  "processPool": {
+    "active": 2,
+    "idle": 2,
+    "dead": 0,
+    "ceiling": 8,
+    "queueLength": 0
+  },
+  "diagnosticsCount": 1,
+  "tracesCount": 0
+}
+```
+
+---
+
+### Escalation & Safety Matrix
+
+| Trigger Condition | Automatic Action | Diagnostic Log |
+|---|---|---|
+| `BumpAllocator` out of memory | Fallback to `BALANCED` | `WARN: Fast heap capacity exceeded` |
+| Worker pool starvation (> 50ms) | Fallback to `BALANCED` | `WARN: Process pool starvation` |
+| Worker heartbeat timeout (> 10ms) | Kill PID + Respawn | `ERROR: Worker heartbeat timed out` |
+| 1000 allocations reached | Run cycle detection | `INFO: Scheduled GC cycle executed` |
+| Payload > 1 MB detected | Enable `Transferable` zero-copy | `TRACE: SafeChannel transferable mode` |
+
+---
+
 ## File Extensions
 
 | Extension | Description |
@@ -895,7 +1061,7 @@ Each arena is 64KB (65536 bytes). The bump pointer (`@arena_offsets[N]`) tracks 
 
 ## Choosing the Right Mission Mode
 
-Since v0.31.0, every `ACTION` can declare an execution **mission** using the `WITH MISSION <MODE>` syntax. The mission mode controls memory behavior, optimization paths, and cross-mode call permissions via the **Boundary Handshake Matrix**.
+Since v0.32.0, every `ACTION` can declare an execution **mission** using the `WITH MISSION <MODE>` syntax. The mission mode controls memory behavior, optimization paths, and cross-mode call permissions via the **Boundary Handshake Matrix**.
 
 > **Syntax**: `ACTION name(params) WITH MISSION <MODE>,`  
 > **Default**: If omitted, the mode is `BALANCED`.  

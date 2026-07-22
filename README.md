@@ -1,4 +1,4 @@
-# PlantLang Language Specification & Ecosystem v0.31.0
+# PlantLang Language Specification & Ecosystem v0.32.0
 
 **PlantLang** is a human-centric, prose-based programming language engineered for both high-level readability and native-level execution performance. It transforms "prose-like" syntax into highly optimized machine code via the LLVM compiler infrastructure.
 
@@ -62,7 +62,7 @@ Arenas are automatically reclaimed:
 
 ---
 
-## 3. Engineering Architecture (The v0.31.0 Stack)
+## 3. Engineering Architecture (The v0.32.0 Stack)
 The ecosystem is built on a modular, industrial-grade pipeline:
 
 1.  **Core Interpreter (Chloroplast Engine):**
@@ -170,8 +170,8 @@ PlantLang employs a state-of-the-art compilation chain:
 ---
 
 ## 6. QA & Quality Assurance
-The **v0.31.0** release is verified by an automated regression suite:
-* **~635+ Total Tests** across twenty-three test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7—21, depth contract, matrix, dispatcher).
+The **v0.32.0** release is verified by an automated regression suite:
+* **~705+ Total Tests** across twenty-four test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7—21, depth contract, matrix, dispatcher, runtime).
 * **LLVM Backend**: 50 smoke tests covering CREATE/SHOW, arithmetic, strings, comparisons, IF/CYCLE/SEASON, ACTION/REAP/GIVE (recursion, SCL params, TX returns), WEATHER/SHELTER exception handling, TX fat-pointer operations, and MAP hash tables (LINK, has(), growth, overwrite).
 * **Native LIST Ops**: 15 tests covering COUNT, FIRST, LAST, SUM on empty/populated arrays, type-checker validation.
 * **MAP Types**: 17 tests covering empty map create, map literals, LINK/put semantics, has/get, overwrite, growth (10 entries), SHOW display, type-checker validation.
@@ -240,7 +240,17 @@ The **v0.31.0** release is verified by an automated regression suite:
   - RESPONSE emission + errVar binding fixed in parser migration tests
   - LLVM codegen ACTION test updated to reflect full support
 
-### 🔜 In Progress / Planned (v0.32.0)
+### ✅ Completed (v0.32.0)
+- **Local Runtime & Isolation Layer** — five runtime modules:
+  - `BumpAllocator` (FAST) — O(1) linear bump allocator with 8-byte alignment, 8MB default, automatic BALANCED escalation
+  - `GlobalARCHeap` (PERSISTENT) — atomic reference counting, auto cycle detection every 1000 allocs, `GC.cycle()` manual trigger
+  - `WarmProcessPool` (SAFE) — 4 pre-warmed isolated workers, Ping/Pong heartbeat, zombie kill+respawn, 50ms queue timeout
+  - `SafeChannel` — adaptive IPC: Structured Clone (≤1MB), Transferable (>1MB), SharedArrayBuffer, streaming
+  - `MissionContext` — unified telemetry with `diagnostic()`, `trace()`, `getMetrics()` JSON output
+  - **Escalation & Safety Matrix** — 5 automatic fallback rules with diagnostic logging
+  - 70 new tests in `tests/runtime.test.js` — all green
+
+### 🔜 In Progress / Planned (v0.33.0)
 - `PULSE` / `WHENEVER` reactive programming
 - `VERIFY` / `SUITE` native compilation
 - `TAP` file I/O in LLVM backend
@@ -249,4 +259,4 @@ The **v0.31.0** release is verified by an automated regression suite:
 
 ---
 
-*PlantLang v0.31.0 — Five-Mission Architecture. Boundary Handshake Matrix. MissionDispatcher. ScopedArena. SMART routing. 75 new tests. 635+ total tests. All green.*
+*PlantLang v0.32.0 — Local Runtime & Isolation Layer. BumpAllocator, GlobalARCHeap, WarmProcessPool, SafeChannel, MissionContext. 70 new tests. 705+ total tests. All green.*

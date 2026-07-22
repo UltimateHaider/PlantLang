@@ -792,7 +792,7 @@ All functions receive and return `int64_t` (TX pointers as `int64_t` via ptrtoin
 
 ---
 
-## 13. Five-Mission Execution Architecture (v0.31.0)
+## 13. Five-Mission Execution Architecture (v0.32.0)
 
 ### 13.1 Overview
 

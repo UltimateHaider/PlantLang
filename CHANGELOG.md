@@ -1,5 +1,39 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.32.0 — 2026
+
+### New Features
+- **Local Runtime & Isolation Layer** — five runtime modules implementing mission-specific memory management, process isolation, adaptive IPC, and telemetry:
+  - `BumpAllocator` (FAST mission) — O(1) linear bump allocator with strict 8-byte alignment, default 8MB capacity (hard cap 64MB), configurable via `MISSION CONFIG FAST_HEAP_SIZE = N`. O(1) reset at scope exit. Automatic BALANCED escalation with diagnostic on overflow.
+  - `GlobalARCHeap` (PERSISTENT mission) — atomic reference counting with O(1) retain/release. Automatic cycle detection via weak reference registry every 1000 allocations (~0.1ms overhead). `GC.cycle()` interface for manual triggering during idle frames. `onFinalize` callbacks invoked when refcount reaches 0.
+  - `WarmProcessPool` (SAFE mission) — 4 pre-warmed idle worker processes (configurable, ceiling `min(OS.cpus() × 2, 16)`). Ping/Pong heartbeat every 5000ms with 10ms timeout → zombie kill + respawn. Queue starvation protection: 50ms timeout → pool expansion or BALANCED fallback.
+  - `SafeChannel` — adaptive IPC pipeline: Structured Clone for ≤1MB, Transferable ArrayBuffer zero-copy for >1MB, SharedArrayBuffer for read-only state, ReadableStream/WritableStream for continuous streaming. Emits [TRACE] logs identifying active mechanism.
+  - `MissionContext` — wraps active allocator, IPC channel, and pool into unified telemetry. `diagnostic(msg)` for escalation/warnings (always on). `trace(msg)` for verbose logging (only with `--debug`). `getMetrics()` returns JSON with memory, fragmentation, pool status, and GC cycle counts.
+- **Escalation & Safety Matrix** — 5 automatic rules: FAST OOM → BALANCED fallback, pool starvation → BALANCED fallback, heartbeat timeout → kill PID + respawn, 1000 allocations → cycle detection, large payload → transferable mode.
+
+### Test Suite
+- New `tests/runtime.test.js` — 70 tests covering BumpAllocator alignment/overflow/escalation, ARCHeap retain/release/cycle detection/GC.cycle(), SafeChannel all 4 transfer mechanisms, MissionContext diagnostics/metrics/tracing, ProcessPool creation/heartbeat simulation
+- Total test count grows from ~635+ → **~705+** across **24 test suites**
+- All 24 test suites at 100% pass rate
+
+### Documentation
+- All `.md` files bumped to v0.32.0
+- ROADMAP.md — v0.31.0 objectives marked complete, v0.32.0 Local Runtime & Isolation Layer documented
+- README.md — Local Runtime & Isolation Layer section; v0.33.0 planned section drafted
+- CHANGELOG.md — new v0.32.0 entry describing all runtime modules
+- Language Tour.md — new "Local Runtime & Isolation Layer (v0.32.0)" section with idiomatic code examples
+
+### Source Layout
+- New `src/runtime/` directory tree:
+  - `src/runtime/allocators/bump_allocator.js`
+  - `src/runtime/allocators/arc_heap.js`
+  - `src/runtime/isolation/process_pool.js`
+  - `src/runtime/isolation/worker_bootstrap.js`
+  - `src/runtime/isolation/safe_channel.js`
+  - `src/runtime/context/mission_context.js`
+
+---
+
 ## v0.31.0 — 2026
 
 ### New Features
