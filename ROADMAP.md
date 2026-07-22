@@ -59,6 +59,7 @@ The previous roadmap targeted SPECIES vtable dispatch, CHOICE/MATCH codegen, and
 | **Universal REAP expressions** | `REAP x FROM SPLIT(str, delim)`, `REAP x FROM JOIN(arr, delim)`, `REAP x FROM parts[0]` work natively in interpreter and LLVM backend |
 | **Large-string stress test** | C helper `plnt_stress_test_split_join` creates 70KB string, splits/joins/verifies roundtrip |
 | **Test suite** | `test_phase21_runtime.js` — 20 tests: IR smoke tests, math FFI, SORT, FFI SPLIT/JOIN, native SPLIT/JOIN via REAP, 70KB stress test |
+| **Block-Depth Contract Law Enforcement** | Parser: `enforceDepthContract()` with `this.currentDepth` tracking; Typechecker: `validateDepthInvariants(ast)` second pass; Enforces ACTION/SPECIES at Depth 0, REAP/GIVE/CYCLE at Depth ≥ 1; 13 tests in `test_depth_contract.js` |
 
 ### 🚀 v0.30.0 Remaining Objectives
 
@@ -75,7 +76,7 @@ The previous roadmap targeted SPECIES vtable dispatch, CHOICE/MATCH codegen, and
 
 | Sub-goal | Approach |
 |---|---|
-| **Contract Law: cross-depth access** | Enable `checkDepthAccess()` for SET/INCREASE/DECREASE/SHOW |
+| **Contract Law: cross-depth access** | Enable `checkDepthAccess()` for SET/INCREASE/DECREASE/SHOW (Block-Depth Contract completed; cross-depth access is next) |
 | **Contract Law: contracting syntax** | Implement `\N var -> M = expr` for explicit depth promotion |
 | **IMPORT re-export / symbols** | Selective symbol import from modules |
 | **Error coverage** | `srem` (modulo) zero-divisor check for WEATHER blocks |
@@ -98,7 +99,7 @@ The previous roadmap targeted SPECIES vtable dispatch, CHOICE/MATCH codegen, and
 | Milestone | Task | Priority | Est. Effort |
 | :--- | :--- | :--- | :--- |
 | **M1** | Runtime library C implementation (sort, strings, math) | High | 3 weeks |
-| **M2** | Contract Law cross-depth access enforcement | Medium | 1 week |
+| **M2** | Block-Depth Contract Law Enforcement (ACTION/SPECIES depth 0, REAP/GIVE/CYCLE depth ≥ 1) | ✅ Done | 1 week |
 | **M3** | IMPORT re-export / selective symbols | Medium | 1 week |
 | **M4** | Integration test suite for SPECIES/CHOICE/MATCH parity | High | 1 week |
 | **M5** | Benchmark suite: interpreter vs compiled | Medium | 1 week |
@@ -107,11 +108,12 @@ The previous roadmap targeted SPECIES vtable dispatch, CHOICE/MATCH codegen, and
 
 ## 🎯 Success Criteria
 
-- **No Regressions**: All 19 test suites (549+ tests) continue to pass
+- **No Regressions**: All 20 test suites (560+ tests) continue to pass
 - **Full Parity**: SPECIES, CHOICE/MATCH, LIST, and string SPLIT/JOIN operations behave identically in interpreter and LLVM-compiled binary
 - **No Memory Leaks**: Valgrind-clean on all collection operations
-- **Test Count**: Test suite grows from ~724 → **550+** covering all new constructs
+- **Test Count**: Test suite grows from ~724 → **~560+** covering all new constructs
 - **Performance**: Compiled SPLIT/JOIN within 2× of equivalent C
+- **Depth Contract**: Block-Depth Contract Law enforced at parse and type-check time — ACTION/SPECIES at Depth 0 only, REAP/GIVE/CYCLE at Depth ≥ 1 only
 
 ---
 

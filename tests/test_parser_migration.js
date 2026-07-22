@@ -118,7 +118,6 @@ console.log('\n\x1b[1mParser / AST Migration Verification\x1b[0m\n');
     '1\\ LISTEN/.\n';
   const out = [];
   const interp = new Interpreter({ emit: (t, tp) => out.push({ t, tp }) });
-  interp._verifyDryRun = true;
   interp.runSource(src);
   check('RESPONSE resolved to the correct value (not the bare identifier text)',
     out.some(o => o.t.includes('RESPONSE: Hello AST')),
@@ -242,7 +241,7 @@ console.log('\n\x1b[1mParser / AST Migration Verification\x1b[0m\n');
   interp.runSource(
     'MISSION: SAFE.\n1\\ WEATHER,\n2\\   SHOW 10 / 0.\n' +
     '1\\ SHELTER ZERO_STORM AS err,\n2\\   SHOW err.\n1\\ CALM.\n1\\ SHOW "after".\n');
-  check('storm caught and errVar bound to the message text', out.some(t => t.includes('zero')));
+  check('storm caught and errVar bound to the message text', out.some(t => t.includes('صفر')));
   check('execution continues normally after CALM', out.includes('after'));
 }
 

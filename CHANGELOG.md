@@ -3,6 +3,13 @@
 ## v0.30.0 — 2026 (in development)
 
 ### New Features
+- **Block-Depth Contract Law Enforcement** — semantic depth validation ensuring well-structured code scope:
+  - Parser: `enforceDepthContract(nodeType, minDepth, maxDepth, token)` method with `this.currentDepth` tracking
+  - Scope entry/exit: `currentDepth` increments on ACTION body and CYCLE block entry, decrements on exit (via `try/finally`)
+  - Typechecker: `validateDepthInvariants(ast)` second-pass AST walker verifying depth invariants
+  - Enforces: ACTION/SPECIES restricted to Depth 0; REAP/GIVE/CYCLE restricted to Depth ≥ 1
+  - DepthContractError: clear `SYNTAX_STORM` with `[DepthContractError]` prefix, expected range, and caret location
+  - 13 new tests covering valid/invalid depth scenarios
 - **Universal REAP Expression Support** — `REAP x FROM SPLIT(str, delim)`, `REAP x FROM JOIN(arr, delim)`, `REAP x FROM parts[0]` now work natively in both interpreter and LLVM backend:
   - Parser: `parseReapStatement` detects expression sources (`(` or `[` after FROM) and delegates to `parseExpressionSpan` for full AST construction
   - Typechecker: `_checkReap` handles `EXPR` source kind by calling `_inferExprNode` to derive return type
@@ -26,10 +33,13 @@
 
 ### Test Suite
 - New `tests/test_phase21_runtime.js` — 20 tests: IR smoke tests, math FFI, SORT, SPLIT/JOIN (FFI), native SPLIT/JOIN via REAP (expression sources), 70KB large-string stress test
-- All **19 test suites, 549+ tests** — all green
+- New `tests/test_depth_contract.js` — 13 tests covering valid (ACTION at depth 0, REAP/CYCLE/GIVE inside ACTION) and invalid (REAP/CYCLE/GIVE at depth 0, nested ACTION, top-level REAP with depth syntax) depth scenarios
+- All **20 test suites, ~560+ tests** — all green
 
 ### Documentation
 - ROADMAP.md bumped to v0.30.0 — completed items marked, remaining objectives listed
+- TECHNICAL.md — new section: Block-Depth Contract Law Enforcement (scope tracking, enforceDepthContract, validateDepthInvariants)
+- README.md — Quick Reference updated with depth contract notes; Architecture diagram updated
 
 ---
 

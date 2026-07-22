@@ -95,24 +95,30 @@ console.log(LLC_BIN ? `  (using ${LLC_BIN})\n` : '  (llc not found — execution
 testIR('IR: declares sqrt as double(double)', `
 MISSION: SAFE.
 1\\ ACTION sqrt(x(SCL)) -> external.
+0\\ ACTION run(),
 1\\ CREATE x(SCL) TO 0.
 1\\ REAP x FROM sqrt, x.
+/ACTION.
 `, 'declare double @sqrt(double)');
 
 testIR('IR: declares plnt_string_len as i64(%fat_ptr)', `
 MISSION: SAFE.
 1\\ ACTION plnt_string_len(s(TX)) -> external.
+0\\ ACTION run(),
 1\\ CREATE s(TX) TO "".
 1\\ CREATE n(NUM) TO 0.
 1\\ REAP n FROM plnt_string_len, s.
+/ACTION.
 `, 'declare i64 @plnt_string_len(%fat_ptr)');
 
 testIR('IR: uses NATIVE ACTION syntax', `
 MISSION: SAFE.
 1\\ NATIVE ACTION sqrt(x(SCL)) -> external.
+0\\ ACTION run(),
 1\\ CREATE x(SCL) TO 9.
 1\\ CREATE r(SCL) TO 0.
 1\\ REAP r FROM sqrt, x.
+/ACTION.
 `, 'declare double @sqrt(double)');
 
 // ── Execution tests (require llc + runtime library) ──────────────────

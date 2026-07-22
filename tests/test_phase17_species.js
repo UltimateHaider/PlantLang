@@ -100,8 +100,8 @@ test('REAP FROM obj:method works', () => {
 }
 CREATE g TO BLOOM Greeter.
 SET g:msg TO "Hello".
-REAP result FROM g:greet.
-SHOW result.
+1\\ REAP result FROM g:greet.
+1\\ SHOW result.
 `
   );
   const out = showText(interp);
@@ -177,10 +177,10 @@ test('SET SELF:field in species action body', () => {
   }
 }
 CREATE c TO BLOOM Counter.
-REAP _ FROM c:increment.
-REAP _ FROM c:increment.
-REAP result FROM c:getCount.
-SHOW result.
+1\\ REAP _ FROM c:increment.
+1\\ REAP _ FROM c:increment.
+1\\ REAP result FROM c:getCount.
+1\\ SHOW result.
 `
   );
   const out = showText(interp);
@@ -201,8 +201,8 @@ SPECIES Dog FROM Animal {
 }
 CREATE d TO BLOOM Dog.
 SET d:name TO "Rex".
-REAP result FROM d:speak.
-SHOW result.
+1\\ REAP result FROM d:speak.
+1\\ SHOW result.
 `
   );
   const out = showText(interp);

@@ -80,6 +80,7 @@ class Parser {
     this.tokens = tokens;
     this.pos = 0;
     this.structNames = new Set(); // known struct names for literal disambiguation
+    this.currentDepth = 0;         // semantic block depth for Depth Contract Law
   }
 
   peek(offset = 0) {
@@ -139,6 +140,20 @@ class Parser {
       startTokens.push(this.advance());
     }
     return startTokens;
+  }
+
+  /**
+   * Block-Depth Contract Law enforcement.  Checks that the current
+   * semantic depth (this.currentDepth) is within [minDepth, maxDepth].
+   * Throws a SYNTAX_STORM with a [DepthContractError] message otherwise.
+   */
+  enforceDepthContract(nodeType, minDepth, maxDepth = Infinity, token) {
+    if (this.currentDepth < minDepth || this.currentDepth > maxDepth) {
+      const maxStr = maxDepth === Infinity ? '∞' : maxDepth;
+      storm('SYNTAX_STORM',
+        `[DepthContractError] Cannot declare '${nodeType}' at Depth ${this.currentDepth}. Expected depth range: [${minDepth}..${maxStr}] at Line ${token.line}, Col ${token.column}.`,
+        token.line, token.column);
+    }
   }
 
   // ── Top level ────────────────────────────────────────────────
@@ -594,28 +609,33 @@ class Parser {
     // Check for { } body syntax (new style: ACTION name(params) { body })
     if (this.match(TOKEN.PUNCT, '{')) {
       this.advance(); // consume {
-      const bodyStatements = [];
-      let braceDepth = 1;
-      while (!this.isAtEnd() && braceDepth > 0) {
-        if (this.match(TOKEN.PUNCT, '{')) { braceDepth++; this.advance(); continue; }
-        if (this.match(TOKEN.PUNCT, '}')) {
-          braceDepth--;
-          if (braceDepth === 0) { this.advance(); break; }
-          this.advance();
-          continue;
+      this.currentDepth++;
+      try {
+        const bodyStatements = [];
+        let braceDepth = 1;
+        while (!this.isAtEnd() && braceDepth > 0) {
+          if (this.match(TOKEN.PUNCT, '{')) { braceDepth++; this.advance(); continue; }
+          if (this.match(TOKEN.PUNCT, '}')) {
+            braceDepth--;
+            if (braceDepth === 0) { this.advance(); break; }
+            this.advance();
+            continue;
+          }
+          // Collect statements up to '.' or '}' or '{'
+          const stmt = this.parseStatement();
+          if (stmt) bodyStatements.push(stmt);
+          // Skip stray closers and depth markers
+          if (this.match(TOKEN.DEPTH)) this.advance();
+          while (!this.isAtEnd() && (this.match(TOKEN.PUNCT, '.') || this.match(TOKEN.KEYWORD, 'ORIF') || this.match(TOKEN.KEYWORD, 'ELSE') || this.match(TOKEN.KEYWORD, 'SHELTER') || this.match(TOKEN.KEYWORD, 'CALM'))) {
+            if (this.match(TOKEN.PUNCT, '.')) { this.advance(); break; }
+            this.advance();
+          }
         }
-        // Collect statements up to '.' or '}' or '{'
-        const stmt = this.parseStatement();
-        if (stmt) bodyStatements.push(stmt);
-        // Skip stray closers and depth markers
-        if (this.match(TOKEN.DEPTH)) this.advance();
-        while (!this.isAtEnd() && (this.match(TOKEN.PUNCT, '.') || this.match(TOKEN.KEYWORD, 'ORIF') || this.match(TOKEN.KEYWORD, 'ELSE') || this.match(TOKEN.KEYWORD, 'SHELTER') || this.match(TOKEN.KEYWORD, 'CALM'))) {
-          if (this.match(TOKEN.PUNCT, '.')) { this.advance(); break; }
-          this.advance();
-        }
+        if (this.match(TOKEN.PUNCT, '.')) this.advance();
+        return new ActionDeclarationNode({ name, params, bodyStatements, isExternal: false, receiver }, coords);
+      } finally {
+        this.currentDepth--;
       }
-      if (this.match(TOKEN.PUNCT, '.')) this.advance();
-      return new ActionDeclarationNode({ name, params, bodyStatements, isExternal: false, receiver }, coords);
     }
 
     // FFI external declaration: -> external.
@@ -636,7 +656,13 @@ class Parser {
     const isActionCloser = (ft, st) =>
       ft.type === TOKEN.PUNCT && ft.value === '/' &&
       st && st.type === TOKEN.KEYWORD && st.value === 'ACTION';
-    const bodyStatements = this.collectNestedBody(headerDepth, isActionCloser);
+    let bodyStatements;
+    this.currentDepth++;
+    try {
+      bodyStatements = this.collectNestedBody(headerDepth, isActionCloser);
+    } finally {
+      this.currentDepth--;
+    }
 
     if (this.match(TOKEN.DEPTH)) this.advance();
     this.consume(TOKEN.PUNCT, '/', '"/" in the "/ACTION." closer');
@@ -1660,7 +1686,13 @@ class Parser {
         if (this.match(TOKEN.PUNCT, '.')) this.advance();
       }
     }
-    const body = this._collectBodyUntil(coords.depth, []);
+    let body;
+    this.currentDepth++;
+    try {
+      body = this._collectBodyUntil(coords.depth, []);
+    } finally {
+      this.currentDepth--;
+    }
     return new CycleStatementNode({ iterVar, sourceExpr, fromExpr, toExpr, stepExpr, bodyStatements: body }, coords);
   }
 

@@ -76,7 +76,7 @@ IMPORT "std/io".
 ACTION test_print(),
   REAP _ FROM print, "Hello from std/io!".
 /ACTION.
-REAP _ FROM test_print.
+1\\ REAP _ FROM test_print.
 `;
   interp.runSource(src);
   const printed = interp.output.some(o => String(o.text).includes('Hello from std/io!'));
@@ -92,7 +92,7 @@ ACTION test_println(),
   REAP _ FROM println, "line1".
   REAP _ FROM println, "line2".
 /ACTION.
-REAP _ FROM test_println.
+1\\ REAP _ FROM test_println.
 `;
   interp.runSource(src);
   const hasLine1 = interp.output.some(o => String(o.text).includes('line1'));
@@ -112,7 +112,7 @@ ACTION test_concat(),
   REAP result FROM concat, a, b.
   SHOW result.
 /ACTION.
-REAP _ FROM test_concat.
+1\\ REAP _ FROM test_concat.
 `;
   interp.runSource(src);
   const printed = interp.output.some(o => String(o.text).includes('Hello, World!'));
@@ -129,7 +129,7 @@ ACTION test_substring(),
   REAP result FROM substring, t, 0, 5.
   SHOW result.
 /ACTION.
-REAP _ FROM test_substring.
+1\\ REAP _ FROM test_substring.
 `;
   interp.runSource(src);
   const printed = interp.output.some(o => String(o.text).includes('Hello'));
@@ -146,7 +146,7 @@ ACTION test_substring2(),
   REAP result FROM substring, t, 6, 11.
   SHOW result.
 /ACTION.
-REAP _ FROM test_substring2.
+1\\ REAP _ FROM test_substring2.
 `;
   interp.runSource(src);
   const printed = interp.output.some(o => String(o.text).includes('World'));
@@ -165,7 +165,7 @@ ACTION test_combined(),
   REAP combined FROM concat, a, b.
   REAP _ FROM print, combined.
 /ACTION.
-REAP _ FROM test_combined.
+1\\ REAP _ FROM test_combined.
 `;
   interp.runSource(src);
   const printed = interp.output.some(o => String(o.text).includes('ABCDEF'));
@@ -197,7 +197,7 @@ ACTION greet(name(TX)),
   REAP _ FROM print, "Hello, ".
   REAP _ FROM println, name.
 /ACTION.
-REAP _ FROM greet, "World".
+1\\ REAP _ FROM greet, "World".
 `);
     const interp = new Interpreter({ output: [] });
     interp.runFile(path.join(testDir, 'test_prelude.plnt'));
@@ -227,7 +227,7 @@ ACTION test_concat2(),
   REAP result FROM concat, "foo", "bar".
   SHOW result.
 /ACTION.
-REAP _ FROM test_concat2.
+1\\ REAP _ FROM test_concat2.
 `;
   interp.runSource(src);
   const printed = interp.output.some(o => String(o.text).includes('foobar'));
@@ -243,7 +243,7 @@ ACTION test_sub3(),
   REAP result FROM substring, "hello", 0, 100.
   SHOW result.
 /ACTION.
-REAP _ FROM test_sub3.
+1\\ REAP _ FROM test_sub3.
 `;
   interp.runSource(src);
   const printed = interp.output.some(o => String(o.text).includes('hello'));

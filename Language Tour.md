@@ -63,6 +63,45 @@ Each depth level owns a **dedicated 64KB arena slab** (`Arena_N`). Variables at 
 | Iteration Breath | End of each `CYCLE`/`SEASON` tick | Loop-depth arena + deeper |
 | Error Unwinding | `WEATHER` throw → `SHELTER` catch | Arenas between error depth and handler |
 
+### Block-Depth Contract Law
+
+PlantLang enforces a **Block-Depth Contract** at both parse time and type-check time to keep code well-structured:
+
+| Statement | Allowed Depth | Rule |
+|---|---|---|
+| `ACTION` / `SPECIES` | **Depth 0 only** | Functions and classes must be declared at the top level |
+| `REAP` | **Depth ≥ 1** | Function calls must happen inside an ACTION body or CYCLE block |
+| `GIVE` | **Depth ≥ 1** | Returns must happen inside an ACTION body |
+| `CYCLE` | **Depth ≥ 1** | Loops must happen inside an ACTION body |
+
+**Valid:**
+```
+1\ ACTION greet(name(TX)),              # ACTION at depth 0 ✓
+2\   REAP msg FROM format, name.        # REAP at depth 1 ✓
+2\   GIVE msg.                          # GIVE at depth 1 ✓
+1\ /ACTION.
+```
+
+**Invalid (rejected at parse time):**
+```
+1\ REAP x FROM f, 5.                    # ✗ REAP at depth 0 — expected depth ≥ 1
+1\ CYCLE i FROM 1 TO 10,               # ✗ CYCLE at depth 0 — expected depth ≥ 1
+2\   SHOW i.
+1\.
+```
+
+Violations produce a clear `[DepthContractError]` with the expected depth range and a caret pointing to the offending statement:
+
+```
+═══ ⚔ SYNTAX_STORM ═══
+  [DepthContractError] REAP is not allowed at depth 0.
+  Expected depth 1.
+    at line 1, column 3
+    |
+  1 | REAP x FROM f, 5.
+    | ^^^
+```
+
 ### Variables & Types
 
 | Type | Keyword | Example |

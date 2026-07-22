@@ -163,6 +163,134 @@ Enforced in `genCreate` before any allocation.
        or declare a local copy at this depth.
 ```
 
+### 3.3 Block-Depth Contract Law Enforcement
+
+The Block-Depth Contract extends Contract Law with structural scope validation — enforcing that certain statement types only appear at specific depth levels, independent of variable access.
+
+#### 3.3.1 Depth Tracking (Parser)
+
+The parser maintains `this.currentDepth` throughout the parse:
+
+```javascript
+// core/parser.js — constructor
+this.currentDepth = 0;
+```
+
+Depth increments on scope entry and decrements on scope exit:
+
+- **ACTION declaration**: When entering the body (both `,` comma-body and `{` brace-body forms), `this.currentDepth += 1`. On exit (`/ACTION.` or `}`), `this.currentDepth -= 1`.
+- **CYCLE block**: When entering the body, `this.currentDepth += 1`. On exit, `this.currentDepth -= 1`. Wrapped in `try/finally` to guarantee decrement even on parse errors.
+
+```javascript
+// Comma-body ACTION entry:
+this.currentDepth += 1;
+const body = this.parseStatementList('ACTION', closers);
+this.currentDepth -= 1;
+
+// CYCLE entry (try/finally for guaranteed cleanup):
+this.currentDepth += 1;
+try {
+  node.bodyStatements = this.parseStatementList('CYCLE', closers);
+} finally {
+  this.currentDepth -= 1;
+}
+```
+
+#### 3.3.2 enforceDepthContract Method
+
+```javascript
+enforceDepthContract(nodeType, minDepth, maxDepth, token) {
+  const depth = this.currentDepth;
+  if (depth < minDepth || depth > maxDepth) {
+    throw new SyntaxStorm(
+      `[DepthContractError] ${nodeType} is not allowed at depth ${depth}. ` +
+      `Expected depth ${minDepth}${maxDepth !== undefined ? ` to ${maxDepth}` : ''}.`,
+      token.line, token.column
+    );
+  }
+}
+```
+
+Called at parse time for restricted statement types:
+
+| Statement | Call |
+|---|---|
+| `ACTION` declaration | `enforceDepthContract('ACTION', 0, 0, token)` — only allowed at Depth 0 |
+| `SPECIES` declaration | `enforceDepthContract('SPECIES', 0, 0, token)` — only allowed at Depth 0 |
+| `REAP` statement | `enforceDepthContract('REAP', 1, undefined, token)` — only allowed at Depth ≥ 1 |
+| `GIVE` statement | `enforceDepthContract('GIVE', 1, undefined, token)` — only allowed at Depth ≥ 1 |
+| `CYCLE` statement | `enforceDepthContract('CYCLE', 1, undefined, token)` — only allowed at Depth ≥ 1 |
+
+#### 3.3.3 Second-Pass Validation (Typechecker)
+
+The typechecker's `validateDepthInvariants(ast)` provides a redundant second pass that catches depth violations that may escape the parser (e.g., in dynamically constructed or imported ASTs):
+
+```javascript
+validateDepthInvariants(node, currentDepth = 0) {
+  const type = node.type;
+  if (type === 'ActionDeclaration' || type === 'SpeciesDeclaration') {
+    if (currentDepth !== 0) {
+      this.diagnostics.push({ message: `...`, line: node.line, column: node.column });
+    }
+    // Walk body at currentDepth + 1
+    if (node.bodyStatements) this._walkDepth(node.bodyStatements, currentDepth + 1);
+  } else if (type === 'ReapStatement' || type === 'GiveStatement' || type === 'CycleStatement') {
+    if (currentDepth < 1) {
+      this.diagnostics.push({ message: `...`, line: node.line, column: node.column });
+    }
+    // Walk body at same or incremented depth
+    ...
+  } else { /* walk children at same depth */ }
+}
+```
+
+Called as pass 2 in `check()`:
+
+```javascript
+check(programNode) {
+  // Pass 1: existing type checking
+  this._checkProgram(programNode);
+  // Pass 2: depth invariants
+  this.validateDepthInvariants(programNode);
+  return this.diagnostics;
+}
+```
+
+#### 3.3.4 Error Format
+
+DepthContractError produces a `SYNTAX_STORM` with the `[DepthContractError]` prefix, a human-readable message explaining the allowed depth range, and a caret pointing to the violating token:
+
+```
+═══ ⚔ SYNTAX_STORM ═══
+  [DepthContractError] REAP is not allowed at depth 0.
+  Expected depth 1.
+    at line 1, column 3
+    |
+  1 | REAP x FROM f, 5.
+    | ^^^
+```
+
+#### 3.3.5 Test Coverage
+
+`tests/test_depth_contract.js` contains 13 tests:
+
+**Valid (8 tests):**
+- ACTION at depth 0 with comma body
+- ACTION at depth 0 with brace body
+- REAP inside ACTION body (depth 1)
+- CYCLE inside ACTION body (depth 1)
+- GIVE inside ACTION body (depth 1)
+- SPECIES at depth 0
+- REAP at depth 2 (nested CYCLE inside ACTION)
+- GIVE at depth 2
+
+**Invalid (5 tests):**
+- REAP at depth 0 (top level)
+- CYCLE at depth 0 (top level)
+- GIVE at depth 0 (top level)
+- ACTION inside ACTION (nested depth 1)
+- REAP with `\1` depth prefix at top level (parse-time depth vs currentDepth mismatch)
+
 ---
 
 ## 4. Species Vtable Dispatch System
@@ -683,7 +811,8 @@ All functions receive and return `int64_t` (TX pointers as `int64_t` via ptrtoin
 - `tests/test_phase17_species.js` — 10 tests for SPECIES/BLOOM OOP
 - `tests/test_phase18_lists.js` — 15 tests for native LIST operations (COUNT, FIRST, LAST, SUM)
 - `tests/test_phase21_runtime.js` — 20 tests for C runtime FFI: math, sort, string split/join (FFI and native via REAP), 70KB large-string stress test
-- **Total: 19 test files, ~550+ tests, all green**
+- `tests/test_depth_contract.js` — 13 tests for Block-Depth Contract Law Enforcement (valid: ACTION/SPECIES at depth 0, REAP/GIVE/CYCLE inside ACTION; invalid: REAP/CYCLE/GIVE at depth 0, nested ACTION, depth prefix mismatch)
+- **Total: 20 test files, ~560+ tests, all green**
 
 ### Test Methodology
 Each test:

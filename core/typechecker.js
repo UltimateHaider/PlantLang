@@ -278,11 +278,64 @@ class TypeChecker {
     this.diags.push(new Diagnostic('info', code, message, line, column));
   }
 
+  // ── Depth Contract validation (second pass over AST) ──────────────────────
+  validateDepthInvariants(programNode) {
+    this._walkDepth(programNode.statements, 0);
+  }
+
+  _walkDepth(stmts, depth) {
+    for (const node of (stmts || [])) {
+      if (!node) continue;
+      if (node.type === 'ActionDeclaration') {
+        if (depth > 0) {
+          this.error('DEPTH_CONTRACT',
+            `[DepthContractError] Cannot declare ACTION at Depth ${depth}. Expected depth range: [0..0]`,
+            node.line, node.column);
+        }
+        this._walkDepth(node.bodyStatements || [], 1);
+      } else if (node.type === 'SpeciesDeclaration') {
+        if (depth > 0) {
+          this.error('DEPTH_CONTRACT',
+            `[DepthContractError] Cannot declare SPECIES at Depth ${depth}. Expected depth range: [0..0]`,
+            node.line, node.column);
+        }
+        if (node.actions) {
+          for (const action of node.actions) {
+            if (action.type === 'ActionDeclaration') {
+              this._walkDepth([action], depth);
+            }
+          }
+        }
+        if (node.bodyStatements) {
+          this._walkDepth(node.bodyStatements, depth);
+        }
+      } else if (node.type === 'CycleStatement') {
+        if (depth < 1) {
+          this.error('DEPTH_CONTRACT',
+            `[DepthContractError] Cannot declare CYCLE at Depth ${depth}. Expected depth range: [1..∞]`,
+            node.line, node.column);
+        }
+        this._walkDepth(node.bodyStatements || [], depth + 1);
+      } else if (node.type === 'ReapStatement' || node.type === 'GiveStatement') {
+        if (depth < 1) {
+          const name = node.type.replace('Statement', '').toUpperCase();
+          this.error('DEPTH_CONTRACT',
+            `[DepthContractError] Cannot declare ${name} at Depth ${depth}. Expected depth range: [1..∞]`,
+            node.line, node.column);
+        }
+      } else if (node.bodyStatements) {
+        this._walkDepth(node.bodyStatements, depth);
+      }
+    }
+  }
+
   // ── Entry point ────────────────────────────────────────────────────────────
   check(programNode) {
     // Pass 1: register top-level declarations (ACTIONs, SPECIES, ROOT, PLANT)
     this._pass1(programNode.statements, this.rootScope);
-    // Pass 2: check all statements
+    // Pass 2: depth contract invariants
+    this.validateDepthInvariants(programNode);
+    // Pass 3: check all statements
     this._checkBlock(programNode.statements, this.rootScope);
     return this.diags;
   }

@@ -113,7 +113,7 @@ The ecosystem is built on a modular, industrial-grade pipeline:
 ## 4. Compilation Pipeline
 PlantLang employs a state-of-the-art compilation chain:
 1. **Lexing & Parsing**: AST construction with depth-aware tokenization.
-2. **Type Checking**: Semantic validation including Contract Law (depth ≤ destination).
+2. **Type Checking**: Semantic validation including Contract Law (depth ≤ destination) and Block-Depth Contract Law (validateDepthInvariants — ACTION/SPECIES at Depth 0, REAP/GIVE/CYCLE at Depth ≥ 1).
 3. **LLVM IR Generation**: Conversion to LLVM SSA-based IR:
    - Arena allocation (`arenaAlloc`) for all variable storage.
    - Depth tracking with automatic arena reset on scope boundaries.
@@ -141,6 +141,7 @@ PlantLang employs a state-of-the-art compilation chain:
 | **While** | `SEASON condition,` ... | Condition-based loop. |
 | **Branch** | `IF cond,` ... `ORIF cond2,` ... `ELSE,` ... | Multi-branch conditional. |
 | **Depth** | `\N` before statement | Declare scope level for arena allocation. |
+| **Depth Contract** | Automatic enforcement | ACTION/SPECIES restricted to Depth 0; REAP/GIVE/CYCLE restricted to Depth ≥ 1. |
 | **Struct (SHAPE)** | `SHAPE Point { x(NUM), y(NUM) }.` | User-defined aggregate type (classic syntax). |
 | **Struct (STRUCT)** | `STRUCT Person { name: TX, age: NUM }.` | Alt. struct syntax with `field: TYPE`. |
 | **Struct Literal** | `CREATE p(Person) TO { name: "A", age: 30 }.` | Anonymous struct literal in CREATE context. |
@@ -170,7 +171,7 @@ PlantLang employs a state-of-the-art compilation chain:
 
 ## 6. QA & Quality Assurance
 The **v0.30.0** release is verified by an automated regression suite:
-* **~550+ Total Tests** across nineteen test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7—21).
+* **~560+ Total Tests** across twenty test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7—21, depth contract).
 * **LLVM Backend**: 50 smoke tests covering CREATE/SHOW, arithmetic, strings, comparisons, IF/CYCLE/SEASON, ACTION/REAP/GIVE (recursion, SCL params, TX returns), WEATHER/SHELTER exception handling, TX fat-pointer operations, and MAP hash tables (LINK, has(), growth, overwrite).
 * **Native LIST Ops**: 15 tests covering COUNT, FIRST, LAST, SUM on empty/populated arrays, type-checker validation.
 * **MAP Types**: 17 tests covering empty map create, map literals, LINK/put semantics, has/get, overwrite, growth (10 entries), SHOW display, type-checker validation.
@@ -219,6 +220,11 @@ The **v0.30.0** release is verified by an automated regression suite:
 - String `SPLIT(str, delim)` / `JOIN(arr, delim)` — native syntax with REAP expression support
 - Universal REAP expression sources — `REAP x FROM SPLIT(...)`, `REAP x FROM JOIN(...)`, `REAP x FROM expr[index]`
 - 70KB large-string stress test for split/join roundtrip
+- **Block-Depth Contract Law Enforcement** — semantic depth validation:
+  - Parser: `enforceDepthContract(nodeType, minDepth, maxDepth, token)` with `this.currentDepth` tracking (increment on ACTION/CYCLE entry, decrement on exit via try/finally)
+  - Typechecker: `validateDepthInvariants(ast)` second-pass AST walker verifying depth invariants
+  - ACTION/SPECIES restricted to Depth 0; REAP/GIVE/CYCLE restricted to Depth ≥ 1; nested ACTION rejected
+  - 13 new tests in `test_depth_contract.js`
 
 ### 🔜 In Progress / Planned (v0.31.0)
 - `SPECIES` advanced LLVM codegen (vtable dispatch, dynamic dispatch)
@@ -230,4 +236,4 @@ The **v0.30.0** release is verified by an automated regression suite:
 
 ---
 
-*PlantLang v0.30.0 — Runtime Library. Native SPLIT/JOIN. REAP expression sources. Large-string stress tests. 550+ tests all green.*
+*PlantLang v0.30.0 — Runtime Library. Native SPLIT/JOIN. REAP expression sources. Block-Depth Contract Law. Large-string stress tests. 560+ tests all green.*

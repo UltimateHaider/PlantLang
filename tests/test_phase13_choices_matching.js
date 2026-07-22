@@ -183,7 +183,7 @@ ACTION test(),
     None -> { SHOW 0 }
   }.
 /ACTION.
-REAP _ FROM test.
+1\\ REAP _ FROM test.
 `);
   const printed = interp.output.some(o => String(o.text).includes('42'));
   check('MATCH inside ACTION prints 42', printed);
@@ -200,7 +200,7 @@ ACTION test(),
     None -> { SHOW -1 }
   }.
 /ACTION.
-REAP _ FROM test.
+1\\ REAP _ FROM test.
 `);
   const printed = interp.output.some(o => String(o.text).includes('-1'));
   check('MATCH None inside ACTION prints -1', printed);
@@ -236,8 +236,8 @@ ACTION getValue(),
     None -> { GIVE 0 }
   }.
 /ACTION.
-REAP result FROM getValue.
-SHOW result.
+1\\ REAP result FROM getValue.
+1\\ SHOW result.
 `);
   const printed = interp.output.some(o => String(o.text).includes('77'));
   check('MATCH with GIVE returns payload', printed);

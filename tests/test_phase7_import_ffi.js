@@ -146,10 +146,10 @@ ACTION add(a(NUM), b(NUM)),
 /ACTION.
 `);
     fs.writeFileSync(path.join(testDir, 'use_adder.plnt'), `IMPORT "adder".
-CREATE x(NUM) TO 10.
-CREATE y(NUM) TO 20.
-REAP result FROM add, x, y.
-SHOW result.
+1\\ CREATE x(NUM) TO 10.
+1\\ CREATE y(NUM) TO 20.
+1\\ REAP result FROM add, x, y.
+1\\ SHOW result.
 `);
     const interp = new Interpreter();
     interp.runFile(path.join(testDir, 'use_adder.plnt'));
@@ -229,10 +229,10 @@ ACTION use_add(a(NUM), b(NUM)),
     return args[0] + args[1];
   });
   const src = `ACTION my_ffi_fn(a(NUM), b(NUM)) -> external.
-CREATE x(NUM) TO 3.
-CREATE y(NUM) TO 4.
-REAP result FROM my_ffi_fn, x, y.
-SHOW result.
+1\\ CREATE x(NUM) TO 3.
+1\\ CREATE y(NUM) TO 4.
+1\\ REAP result FROM my_ffi_fn, x, y.
+1\\ SHOW result.
 `;
   interp.runSource(src);
   check('interpreter calls FFI stub', interp.output.some(o => String(o.text).includes('7')));
