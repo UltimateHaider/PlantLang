@@ -1,4 +1,4 @@
-# PlantLang Language Specification & Ecosystem v0.37.0
+# PlantLang Language Specification & Ecosystem v0.38.0
 
 **PlantLang** is a human-centric, prose-based programming language engineered for both high-level readability and native-level execution performance. It transforms "prose-like" syntax into highly optimized machine code via the LLVM compiler infrastructure.
 
@@ -62,7 +62,7 @@ Arenas are automatically reclaimed:
 
 ---
 
-## 3. Engineering Architecture (The v0.37.0 Stack)
+## 3. Engineering Architecture (The v0.38.0 Stack)
 The ecosystem is built on a modular, industrial-grade pipeline:
 
 1.  **Core Interpreter (Chloroplast Engine):**
@@ -170,8 +170,9 @@ PlantLang employs a state-of-the-art compilation chain:
 ---
 
 ## 6. QA & Quality Assurance
-The **v0.37.0** release is verified by an automated regression suite:
-* **~1158+ Total Tests** across twenty-seven test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7—21, depth contract, matrix, dispatcher, runtime, parallel, security, cluster, geo-routing).
+The **v0.38.0** release is verified by an automated regression suite:
+* **~1212+ Total Tests** across twenty-eight test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7—21, depth contract, matrix, dispatcher, runtime, parallel, security, cluster, geo-routing, distributed cycles, language ergonomics).
+* **Language Ergonomics (v0.38.0)**: 54 tests covering AST Zero-Fallback invariant, CYCLE...IN (empty/null/index/iteration), BREAK/CONTINUE signals, multi-field SORT (chained comparator/ASC/DESC/null-to-end), nested struct formatting (formatShowValue with deep field access), BLOOM AS (TABLE/GRAPH/CHART rendering, restricted environment detection), memory allocators (ArenaAllocator FAST bump + ARCHeap PERSISTENT cascading refcount), and integration scenarios.
 * **LLVM Backend**: 50 smoke tests covering CREATE/SHOW, arithmetic, strings, comparisons, IF/CYCLE/SEASON, ACTION/REAP/GIVE (recursion, SCL params, TX returns), WEATHER/SHELTER exception handling, TX fat-pointer operations, and MAP hash tables (LINK, has(), growth, overwrite).
 * **Native LIST Ops**: 15 tests covering COUNT, FIRST, LAST, SUM on empty/populated arrays, type-checker validation.
 * **MAP Types**: 17 tests covering empty map create, map literals, LINK/put semantics, has/get, overwrite, growth (10 entries), SHOW display, type-checker validation.
@@ -286,11 +287,19 @@ The **v0.37.0** release is verified by an automated regression suite:
   - `ReapAggregator` — LOCAL_REAP in-memory reduce/merge/flush, REMOTE_REAP stream to MEMORY_BUFFER or URI targets (s3://, stream://)
   - 89 new tests in `tests/v0.37.0_distributed_cycles.test.js` — all green
 
-### 🔜 In Progress / Planned (v0.38.0+)
-- Geo-Aware Cycle Placement (call-graph affinity + distributed cycles)
-- Dynamic Replica Rebalancing (auto-migrate primary on topology change)
-- Remote Reap Stream Compaction (parquet/avro encoding)
+### ✅ Completed (v0.38.0)
+- **Language Ergonomics & AST Zero-Fallback** — six language enhancements:
+  - **AST Zero-Fallback**: Removed `RawStatementNode` entirely — every parsed node is a typed AST class. EndBlock, BranchElse, BlockDelimiter structural markers. Unrecognized constructs skip gracefully.
+  - **CYCLE...IN with Index Variable**: `CYCLE item [, idx] IN list, body 1\.` — per-iteration scope isolation, BREAK/CONTINUE propagation.
+  - **BREAK / CONTINUE**: `BREAK.` and `CONTINUE.` for structured loop control with signal-based flow interruption.
+  - **Multi-field SORT**: `SORT list BY field1 ASC, field2 DESC, ...` — chained comparator with null-to-end semantics, locale-aware string comparison.
+  - **BLOOM AS Visual Governance**: `BLOOM data AS TABLE|GRAPH|CHART.` with restricted-environment detection and target-specific renderers.
+  - **Nested Struct Formatting**: `SHOW` on deeply nested struct instances renders an indented JSON-like tree via `formatShowValue`.
+  - **Memory Allocators**: `ArenaAllocator` (FAST bump) and `ARCHeap` (PERSISTENT cascading refcount) for local runtime allocator patterns.
+  - 54 new tests in `tests/v0.38.0_ergonomics.test.js` — all green
+
+### 🔜 In Progress / Planned (v0.39.0+)
 
 ---
 
-*PlantLang v0.37.0 — Distributed Cycles & Replica Governance. ReplicaManager, DistributedCycleEngine, ReapAggregator. 89 new tests. 1158+ total tests. All green.*
+*PlantLang v0.38.0 — Language Ergonomics & AST Zero-Fallback. CYCLE...IN with index, BREAK/CONTINUE, multi-field SORT, BLOOM AS TABLE/GRAPH/CHART, nested struct formatting, memory allocators. 54 new tests. 1212+ total tests. All green.*

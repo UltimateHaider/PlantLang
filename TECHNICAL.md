@@ -1796,3 +1796,163 @@ registerHandler(uri, handlerFn) {
   - MISSION CONFIG: all 7 directives validated with range enforcement and rejection of invalid values
   - Integration: end-to-end scenarios across all three modules
   - Total: 89 tests, all green
+
+## 21. Language Ergonomics & AST Zero-Fallback (v0.38.0)
+
+The v0.38.0 Language Ergonomics release removes the last untyped fallback from the parser, adds structured loop control, extends SORT to multi-field, and introduces visual governance for BLOOM output.
+
+### 21.1 AST Zero-Fallback
+
+Previously, the parser wrapped unrecognized statement constructs in a `RawStatementNode` — a catch-all that deferred all semantics to the interpreter's raw-text regex pipeline. v0.38.0 eliminates this entirely:
+
+- **`RawStatementNode`** class removed from `core/ast.js` and all imports/refs in `core/parser.js`, `core/codegen.js`, `core/llvm_codegen.js`
+- **Structural marker nodes** added: `EndBlockNode` (`.`, `/IF.`, `/CYCLE.`), `BranchElseNode` (`ELSE`), `BlockDelimiterNode` (`,` body opener)
+- **`assertNoRawStatements()`** invariant: called after every `parse()` — walks the entire AST recursively and throws if any `RawStatement` is found
+- **Fallback behavior**: unrecognized constructs now skip to the next statement boundary (`.`) without producing any node, rather than being wrapped
+
+```javascript
+// Parser fallback (no more RawStatement):
+while (!this.isAtEnd()) {
+  const nxt = this.advance();
+  if (nxt.type === TOKEN.PUNCT && nxt.value === '.') break;
+}
+return null;
+```
+
+### 21.2 CYCLE...IN with Index Variable
+
+The `parseCycleStatement` method was rewritten to handle three syntax forms:
+
+| Form | Example |
+|------|---------|
+| Simple IN | `CYCLE x IN items, body 1\.` |
+| Index var | `CYCLE x, idx IN items, body 1\.` |
+| From/To | `CYCLE i FROM 1 TO 10, body 1\.` |
+
+The index-var form uses lookahead to disambiguate the `,` after the iteration variable:
+
+```javascript
+// peek-based lookahead (not match, since match doesn't advance):
+if (this.current().type === TOKEN.PUNCT && this.current().value === ',' &&
+    this.peek(1) && this.peek(1).type === TOKEN.IDENT &&
+    this.peek(2) && this.peek(2).type === TOKEN.KEYWORD && this.peek(2).value === 'IN') {
+  // index variable form
+  this.advance(); // consume comma
+  indexVar = this.current().value;
+  this.advance(); // consume idx variable name
+  this.consume(TOKEN.KEYWORD, 'IN', '"IN" after index variable');
+}
+```
+
+Runtime (`cycle_evaluator.js`):
+- Per-iteration scope isolation: a fresh sub-scope is created for each iteration
+- Index variable bound at depth 0 as `NUM`, starting at 0, incremented each iteration
+- Empty/null/undefined lists produce zero iterations (no error)
+- BREAK signal caught by try/catch around the iteration loop — iterator stops immediately
+- CONTINUE signal caught and suppressed, proceeding to next iteration
+
+### 21.3 BREAK / CONTINUE
+
+Implemented as typed AST nodes with signal-based flow control:
+
+- `BreakStatementNode` / `ContinueStatementNode` — parsed by keyword dispatch in `parseStatement`
+- `BreakSignalException` / `ContinueSignalException` — custom error classes extending `Error`
+- Interceptor wraps `_evalBody` with try/catch that re-throws BREAK to the cycle evaluator but stops CONTINUE from propagating further:
+
+```
+CycleInStatement → _evalBody (try) → BREAK thrown → caught by cycle → exit loop
+                                   → CONTINUE thrown → caught by cycle → continue loop
+```
+
+### 21.4 Multi-field SORT
+
+```
+SORT list BY name ASC, age DESC, score .
+```
+
+Parsing (`parseSortStatement`):
+- `BY` keyword triggers field-collection mode
+- Each field spec: `field_name [ASC|DESC]`, comma-separated
+- Terminated by `.`
+- Simple `SORT list.` and `SORT list ASC|DESC.` produce empty `fields` array
+
+Sort engine (`sort_evaluator.js`):
+- `_makeChainedComparator(fields)` — iterates fields sequentially; if field N compares equal, proceeds to field N+1
+- Null-to-end: regardless of ASC/DESC, `null` values sort after all non-null values
+- String comparison uses `localeCompare` for locale-aware ordering
+- Numeric comparison uses subtraction (handles SCL/NUM)
+
+### 21.5 BLOOM AS Visual Governance
+
+```
+BLOOM data AS TABLE.
+BLOOM data AS GRAPH.
+BLOOM data AS CHART.
+```
+
+Renderers (`bloom_evaluator.js`):
+- **TABLE**: column-aligned key-value pairs with header line
+- **GRAPH**: horizontal bar chart using unicode block characters
+- **CHART**: line chart (placeholder — emits data points)
+
+`isRestrictedEnvironment()` checks:
+- `process.env.CODEPLANT_RESTRICTED` is set → restricted
+- `process.stdout.isTTY` is false → restricted (piped output)
+- Restricted environments return a single-line summary instead of the visual render
+
+### 21.6 Nested Struct Formatting
+
+`formatShowValue()` in `show_formatter.js` produces indented tree output:
+
+```
+<Point>
+  x (NUM): 10
+  y (NUM): 20
+```
+
+Recursive descent: if a value has a `__shape` or `__structType` property, it's rendered as a struct with type-prefixed keys. Arrays and plain objects are flattened with their type prefix. Circular references are detected and rendered as `[Circular]`.
+
+### 21.7 Memory Allocators
+
+Two allocators in `src/memory/allocator.js`:
+
+**ArenaAllocator** (FAST bump allocator):
+- Linear allocation from a pre-allocated buffer
+- O(1) alloc and O(1) reset
+- Child arenas cascade: when a parent arena is reset, all child arenas are also reset
+- Capacity/used/remaining tracking
+
+**ARCHeap** (PERSISTENT cascading reference counting):
+- `retain(key)` increments refcount, `release(key)` decrements
+- When refcount reaches 0, the object's `onFree` callback is invoked
+- Cascading: releasing a parent with `children` triggers release of all children
+- Useful for PERSISTENT-mission long-lived objects that need deterministic cleanup
+
+### 21.8 File Layout
+
+| File | Purpose |
+|------|---------|
+| `core/ast.js` | EndBlockNode, BranchElseNode, BlockDelimiterNode, CycleInStatementNode, BreakStatementNode, ContinueStatementNode, SortStatementV2Node, BloomAsStatementNode |
+| `core/parser.js` | Rewritten parseCycleStatement/parseSortStatement/parseBloomAsStatement, assertNoRawStatements, fallback skip |
+| `core/interpreter.js` | Dispatch cases for new nodes, _evalBody try/catch, formatShowValue integration |
+| `core/codegen.js` | EndBlock/BranchElse/BlockDelimiter no-op cases |
+| `core/llvm_codegen.js` | Same no-op cases for LLVM backend |
+| `src/interpreter/cycle_evaluator.js` | evaluateCycleInStatement with per-iteration scope, BREAK/CONTINUE signals |
+| `src/interpreter/sort_evaluator.js` | evaluateSortStatement, _makeChainedComparator, _makeSimpleComparator |
+| `src/interpreter/bloom_evaluator.js` | evaluateBloomAsStatement, TABLE/GRAPH/CHART renderers, isRestrictedEnvironment |
+| `src/interpreter/show_formatter.js` | formatShowValue, recursive struct descent, circular protection |
+| `src/memory/allocator.js` | ArenaAllocator, ARCHeap |
+| `tests/v0.38.0_ergonomics.test.js` | 54 tests across all v0.38.0 features |
+
+### 21.9 Test Coverage
+
+- `tests/v0.38.0_ergonomics.test.js` — 54 tests:
+  - AST Zero-Fallback: EndBlock/BranchElse/BlockDelimiter node types, assertNoRawStatements, clean parse
+  - CYCLE...IN: empty/null/undefined lists, index variable (3 iterations), element iteration (3 items)
+  - BREAK/CONTINUE: signal exception construction, AST node types
+  - Multi-field SORT: chained comparator (name+age), ASC/DESC, null-to-end, locale sort, simple ASC/DESC
+  - Nested struct format: all primitive types, struct type prefix, field values, nested Person containing Point, deep access
+  - BLOOM AS: node type, target type TABLE, isRestrictedEnvironment detection
+  - Memory allocators: ArenaAllocator alloc/used/remaining/reset/child cascade; ARCHeap retain/release/live count/cascade parent-child
+  - Integration: CYCLE with index SHOW, full program run, zero RawStatement
+  - Total: 54 tests, all green

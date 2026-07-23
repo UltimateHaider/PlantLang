@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.37.0
+# 🌿 PlantLang — Chloroplast v0.38.0
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -269,6 +269,42 @@ Features:
 1\.
 ```
 
+**CYCLE...IN with Index Variable (v0.38.0):**
+
+```
+1\ CREATE items(LIST) TO 10, 20, 30.
+1\ CYCLE val, idx IN items,
+2\   SHOW idx.
+1\.
+# → 0
+# → 1
+# → 2
+```
+
+The index variable (`idx` above) is auto-bound as `NUM` at depth 0, starting at 0 each iteration. It is reset per iteration.
+
+**BREAK and CONTINUE (v0.38.0):**
+
+```
+1\ CYCLE x IN items,
+2\   IF x = 5,
+3\     BREAK.
+2\   .
+2\   SHOW x.
+1\.
+# Items before 5 are shown, loop exits at 5.
+
+1\ CYCLE x IN items,
+2\   IF x = 5,
+3\     CONTINUE.
+2\   .
+2\   SHOW x.
+1\.
+# Items before and after 5 are shown, 5 is skipped.
+```
+
+`BREAK.` exits the innermost CYCLE immediately. `CONTINUE.` skips to the next iteration. Both produce a `SYNTAX_STORM` if used outside a CYCLE body.
+
 ### FOR...IN (iteration)
 
 Iterate over LIST values, MAP keys, or TX character spans:
@@ -370,6 +406,52 @@ All four operations are compiled to native LLVM IR — no external calls. COUNT,
 
 # Or directly into a MAP: {Alice:92, Bob:87, Carol:78}
 1\ BRAID names WITH grades AS score_map MAP.
+```
+
+### Multi-field SORT (v0.38.0)
+
+Sort a list of structs by multiple fields with per-field direction:
+
+```
+1\ CREATE users(LIST) TO { "name": "Alice", "age": 30 }, { "name": "Bob", "age": 25 }, { "name": "Alice", "age": 20 }.
+1\ SORT users BY name ASC, age DESC.
+# → Alice,30 → Alice,20 → Bob,25
+```
+
+- Fields are compared sequentially — if field N compares equal, field N+1 breaks the tie
+- `ASC` (default) or `DESC` per field
+- Nulls sort to end regardless of direction
+- Simple `SORT list.` and `SORT list ASC|DESC.` syntax continues to work
+
+### BLOOM AS Visual Governance (v0.38.0)
+
+Render data in visual formats:
+
+```
+1\ BLOOM users AS TABLE.
+1\ BLOOM stats AS GRAPH.
+1\ BLOOM series AS CHART.
+```
+
+- **TABLE**: column-aligned key-value pairs
+- **GRAPH**: horizontal unicode bar chart
+- **CHART**: line chart (data points)
+
+Rendering is automatically blocked in restricted environments (piped output, `CODEPLANT_RESTRICTED` env var).
+
+### Nested Struct SHOW (v0.38.0)
+
+`SHOW` on deeply nested struct instances renders an indented tree view:
+
+```
+1\ CREATE inner(Inner) TO Inner{ 99, "secret" }.
+1\ CREATE outer(Outer) TO Outer{ "top", inner }.
+1\ SHOW outer.
+# → <Outer>
+# →   label (TX): top
+# →   child (Inner): <Inner>
+# →     id (NUM): 99
+# →     role (TX): secret
 ```
 
 ### Actions (functions)
@@ -838,7 +920,7 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.37.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, lock-free telemetry, zero-trust security, a cluster layer, and a geo-routing governance engine for distributed state and adaptive execution:
+Chloroplast v0.38.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, lock-free telemetry, zero-trust security, a cluster layer, and a geo-routing governance engine for distributed state and adaptive execution:
 
 ```
 Source (.plnt)
@@ -955,6 +1037,29 @@ Source (.plnt)
     │   ├── LOCAL_REAP: in-memory collect, reduce, merge, flush
     │   ├── REMOTE_REAP: stream to MEMORY_BUFFER or URI target
     │   └── MISSION CONFIG: REMOTE_REAP_TARGET
+    │
+    ├── interpreter/cycle_evaluator.js  — CycleInStatement (v0.38.0)
+    │   ├── CYCLE item [, idx] IN list: per-iteration scope isolation
+    │   ├── Index variable auto-binding as NUM at depth 0
+    │   ├── BREAK signal: caught by try/catch, exits loop
+    │   └── CONTINUE signal: caught and suppressed, next iteration
+    │
+    ├── interpreter/sort_evaluator.js  — Multi-field SORT (v0.38.0)
+    │   ├── _makeChainedComparator: sequential field comparison
+    │   ├── Null-to-end semantics regardless of ASC/DESC
+    │   └── localeCompare for string fields
+    │
+    ├── interpreter/bloom_evaluator.js  — BLOOM AS (v0.38.0)
+    │   ├── TABLE, GRAPH, CHART target-specific renderers
+    │   └── isRestrictedEnvironment: CODEPLANT_RESTRICTED, non-TTY
+    │
+    ├── interpreter/show_formatter.js  — Nested Struct SHOW (v0.38.0)
+    │   ├── formatShowValue: indented JSON-like tree for nested structs
+    │   └── Circular reference detection via visited Set
+    │
+    ├── memory/allocator.js  — ArenaAllocator & ARCHeap (v0.38.0)
+    │   ├── ArenaAllocator (FAST): bump allocator, child arena cascading reset
+    │   └── ARCHeap (PERSISTENT): cascading reference counting
     │   ├── Zero-trust default: SAFE mode has zero permissions
     │   ├── Granular capability matrix per mission mode
     │   ├── Syscall filtering: blocks execve/ptrace/fork/clone/kill in SAFE

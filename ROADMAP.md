@@ -1,4 +1,4 @@
-# PlantLang Roadmap: v0.37.0+ (Completed & Future)
+# PlantLang Roadmap: v0.38.0+ (Completed & Future)
 
 ## What v0.30.0 Delivered
 
@@ -158,6 +158,57 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 
 ---
 
+## ✅ Version v0.38.0: Language Ergonomics & AST Zero-Fallback
+
+**Status:** ✅ Completed
+
+### Scope & Engineering Implementation
+
+#### AST Zero-Fallback
+- Removed `RawStatementNode` class entirely from `core/ast.js`, `core/parser.js`, `core/codegen.js`, `core/llvm_codegen.js`
+- Added structural marker nodes: `EndBlockNode`, `BranchElseNode`, `BlockDelimiterNode`
+- Added `assertNoRawStatements()` invariant helper — called after every `parse()`
+- Unrecognized constructs skip gracefully without producing any fallback wrapping node
+
+#### CYCLE...IN with Index Variable
+- Grammar: `CYCLE item [, idx] IN list, body 1\.`
+- Lookahead-based `,` disambiguation (index-var comma vs body-delimiter comma)
+- Per-iteration scope isolation with index variable auto-binding as `NUM` at depth 0
+- BREAK/CONTINUE signal propagation through `_evalBody` wrapper
+- Empty/null/undefined list safety
+
+#### BREAK / CONTINUE
+- `BREAK.` exits the innermost CYCLE immediately (signal caught by cycle evaluator)
+- `CONTINUE.` skips to the next iteration
+- Both are syntax errors (SYNTAX_STORM) outside a CYCLE body
+
+#### Multi-field SORT
+- Grammar: `SORT list BY field1 ASC, field2 DESC, ...`
+- `parseSortStatement`: `BY`-triggered field collection with per-field direction parsing
+- `_makeChainedComparator`: sequential field comparison, null-to-end regardless of direction
+- `localeCompare` for string fields
+- Simple `SORT list.` syntax remains unchanged (empty fields → `_makeSimpleComparator`)
+
+#### BLOOM AS Visual Governance
+- Grammar: `BLOOM data_expr AS TABLE|GRAPH|CHART.`
+- Target-specific text renderers in `bloom_evaluator.js`
+- `isRestrictedEnvironment()`: blocks rendering when `CODEPLANT_RESTRICTED` env var set or non-TTY
+
+#### Nested Struct Formatting
+- `formatShowValue()` produces indented JSON-like tree for nested struct instances
+- Circular reference protection via `visited` Set
+- Type-prefixed key display: `NUM`, `TX`, `LIST`, `MAP`, struct name
+
+#### Memory Allocators
+- `ArenaAllocator` (FAST): bump allocator with child arena cascading reset
+- `ARCHeap` (PERSISTENT): cascading reference counting with parent-child retention chains
+
+#### Test Coverage
+- `tests/v0.38.0_ergonomics.test.js` — 54 tests across all 6 feature areas
+- All 28 test suites at 100% pass rate (~1212+ total tests)
+
+---
+
 ## 🛠️ Engineering Milestones
 
 | Milestone | Task | Priority | Est. Effort |
@@ -180,7 +231,12 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 
 ## 🎯 Success Criteria
 
-- **No Regressions**: All 27 test suites (~1158+ tests) continue to pass
+- **No Regressions**: All 28 test suites (~1212+ tests) continue to pass
+- **AST Zero-Fallback**: No `RawStatementNode` produced by any parse — every node in every parsed AST is a typed class
+- **Structured Loop Control**: BREAK exits innermost CYCLE, CONTINUE skips to next iteration, both are syntax errors outside loops
+- **Multi-field Sort Correctness**: Chained comparator sorts by first field, then second, etc.; nulls sort to end regardless of ASC/DESC
+- **Restricted Rendering**: BLOOM AS blocked in non-TTY / CODEPLANT_RESTRICTED environments
+- **Memory Lifecycle**: ArenaAllocator child arenas cascade-reset with parent; ARCHeap cascading release frees child objects before parents
 - **Consensus Convergence**: Raft single-leader commit + CRDT LWW merge converge identically on all peers
 - **Affinity Co-location**: Call-graph clustering assigns high-communication functions to same node, eliminating cross-network IPC
 - **Zero-Trust**: Untrusted SAFE actions blocked from syscalls via seccomp/WASM sandbox
@@ -205,9 +261,12 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 | ✅ **v0.35.0** | **Clustering & Extended Network Memory** — Cluster Router, PERSISTENT heap cluster-wide, Stateful Actors | ✅ Q1 2028 |
 | ✅ **v0.36.0** | **Geo-Routing & SHARE CONFIG Governance** — ShareGovernance, CallGraphAnalyzer, SmartExecutionRouter | ✅ Q2 2028 |
 | ✅ **v0.37.0** | **Distributed Cycles & REPLICA Strategy** — Round-Robin/Least-Connections stateless, Primary-Backup stateful, CYCLE WITH MISSION CLUSTER, LOCAL_REAP / REMOTE_REAP | ✅ Q3 2028 |
-| ⚪ **v0.38.0+** | **Geo-Aware Cycles & Dynamic Replica Rebalancing** — affinity-aware placement, auto-migration | **Q4 2028+** |
+| ✅ **v0.38.0** | **Language Ergonomics & AST Zero-Fallback** — CYCLE...IN with index, BREAK/CONTINUE, multi-field SORT, BLOOM AS, nested struct formatting, memory allocators | ✅ Q4 2028 |
+| ⚪ **v0.39.0+** | **Geo-Aware Cycles & Dynamic Replica Rebalancing** — affinity-aware placement, auto-migration | **Q1 2029+** |
 
 ---
+
+*PlantLang v0.38.0: Language Ergonomics & AST Zero-Fallback. CYCLE...IN with index, BREAK/CONTINUE, multi-field SORT, BLOOM AS TABLE/GRAPH/CHART, nested struct formatting, memory allocators (ArenaAllocator / ARCHeap). 54 new tests. 1212+ total tests. All green.*
 
 *PlantLang v0.37.0: Distributed Cycles & REPLICA Strategy. REPLICA (Round-Robin/Least-Connections stateless, Primary-Backup stateful), CYCLE WITH MISSION CLUSTER (adaptive chunking, work-stealing), Hybrid Execution (LOCAL_REAP/REMOTE_REAP). 89 new tests. 1158+ total tests. All green.*
 

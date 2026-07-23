@@ -3193,6 +3193,11 @@ class LLVMGenerator {
         }
         return false;
 
+      case 'EndBlock':
+      case 'BranchElse':
+      case 'BlockDelimiter':
+        return false; // v0.38.0 structural markers — no-op for codegen
+
       default:
         m.unsupported(node);
         return false;

@@ -40,6 +40,8 @@ const {
   SetStatementNode, IncreaseStatementNode, DecreaseStatementNode,
   StructDeclarationNode, StructInstantiationExpr, StructLiteralNode, MemberAccessNode,
   ArrayLiteralNode, MethodCallNode,
+  EndBlockNode, BranchElseNode, CycleInStatementNode,
+  BreakStatementNode, ContinueStatementNode, SortStatementV2Node, BloomAsStatementNode,
 } = require('./ast');
 
 
@@ -65,14 +67,6 @@ function joinTokens(span) {
     }
   }
   return out;
-}
-
-class RawStatementNode extends AstNode {
-  /** Fallback wrapper for statement kinds not yet migrated to a typed node. */
-  constructor(text, coords) {
-    super('RawStatement', coords);
-    this.text = text;
-  }
 }
 
 class Parser {
@@ -195,6 +189,13 @@ class Parser {
     const coords = { line: startTok.line, column: startTok.column, depth: startTok.depth };
 
     if (this.match(TOKEN.KEYWORD, 'IMPORT')) return this.parseImportStatement(coords);
+    // Built-in SHOW_VERIFY_SUMMARY directive (single IDENT token, not "SHOW")
+    if (this.current().type === TOKEN.IDENT && this.current().value === 'SHOW_VERIFY_SUMMARY') {
+      const { ShowVerifySummaryNode } = require('./ast');
+      this.advance();
+      if (this.match(TOKEN.PUNCT, '.')) this.advance();
+      return new ShowVerifySummaryNode(coords);
+    }
     if (this.match(TOKEN.KEYWORD, 'SHOW')) return this.parseShowStatement(coords);
     if (this.match(TOKEN.KEYWORD, 'CREATE')) return this.parseCreateStatement(coords);
     if (this.match(TOKEN.KEYWORD, 'LISTEN') && this.peek(1).type === TOKEN.KEYWORD && this.peek(1).value === 'BRANCH') {
@@ -209,11 +210,17 @@ class Parser {
     }
     if (this.match(TOKEN.KEYWORD, 'ACTION')) return this.parseActionDeclaration(coords);
     if (this.match(TOKEN.KEYWORD, 'SPECIES')) return this.parseSpeciesDeclaration(coords);
-    if (this.match(TOKEN.KEYWORD, 'BLOOM')) return this.parseBloomStatement(coords);
+    if (this.match(TOKEN.KEYWORD, 'BLOOM')) {
+      // Peek ahead: if followed by data_expr AS GRAPH|TABLE|CHART, it's BloomAsStatement
+      if (this.peek(2) && this.peek(2).type === TOKEN.KEYWORD && this.peek(2).value === 'AS' &&
+          this.peek(3) && (this.peek(3).value === 'GRAPH' || this.peek(3).value === 'TABLE' || this.peek(3).value === 'CHART')) {
+        return this.parseBloomAsStatement(coords);
+      }
+      return this.parseBloomStatement(coords);
+    }
     if (this.match(TOKEN.KEYWORD, 'TAP')) return this.parseTapStatement(coords);
-    if (this.match(TOKEN.KEYWORD, 'INFUSE')) return this.parseInfuseStatement(coords);
-    if (this.match(TOKEN.KEYWORD, 'ABSORB')) return this.parseAbsorbStatement(coords);
-    if (this.match(TOKEN.KEYWORD, 'SEAL'))   return this.parseSealStatement(coords);
+    // INFUSE, ABSORB, SEAL: not yet migrated — skip gracefully (no RawStatement)
+    // to maintain AST Zero-Fallback invariant.
     if (this.match(TOKEN.KEYWORD, 'EMPTY'))  return this.parseEmptyStatement(coords);
     if (this.match(TOKEN.KEYWORD, 'WHENEVER')) return this.parseWheneverStatement(coords);
     if (this.match(TOKEN.KEYWORD, 'REAP')) return this.parseReapStatement(coords);
@@ -272,6 +279,17 @@ class Parser {
       return this.parseResponseStatementAst(coords);
     }
 
+    if (this.match(TOKEN.KEYWORD, 'BREAK')) {
+      this.advance();
+      if (this.match(TOKEN.PUNCT, '.')) this.advance();
+      return new BreakStatementNode(coords);
+    }
+    if (this.match(TOKEN.KEYWORD, 'CONTINUE')) {
+      this.advance();
+      if (this.match(TOKEN.PUNCT, '.')) this.advance();
+      return new ContinueStatementNode(coords);
+    }
+
     // Method call statement: obj:method(args).
     if (this.current().type === TOKEN.IDENT &&
         this.peek(1) && this.peek(1).type === TOKEN.PUNCT && this.peek(1).value === ':' &&
@@ -280,19 +298,24 @@ class Parser {
       return this.parseMethodCallStatement(coords);
     }
 
-    // Not yet migrated — consume through to the terminating period (or a
-    // depth-marker boundary acting as an implicit terminator, matching the
-    // legacy lexer's own leniency) and wrap as a RawStatementNode so the
-    // parser can traverse a whole real program without aborting.
-    const span = [];
-    while (!this.isAtEnd()) {
-      const t = this.current();
-      if (t.type === TOKEN.PUNCT && t.value === '.') { span.push(this.advance()); break; }
-      if (t.type === TOKEN.DEPTH && span.length > 0) break; // next statement begins
-      span.push(this.advance());
+    // Block delimiter / end-of-block marker — emit EndBlockNode
+    const t = this.current();
+    if (t.type === TOKEN.PUNCT && t.value === '.') {
+      this.advance();
+      return new EndBlockNode({ blockType: 'generic' }, coords);
     }
-    const text = joinTokens(span.filter(t => t.type !== TOKEN.PUNCT || t.value !== '.'));
-    return new RawStatementNode(text, coords);
+    if (t.type === TOKEN.DEPTH) return null;
+
+    // Unrecognized construct — skip to the next statement boundary ('.' or EOF).
+    // This allows the parser to continue past legacy features not yet migrated
+    // to typed AST nodes (e.g. INFUSE, HARVEST, legacy MATCH/CHOICES patterns)
+    // without falling back to RawStatement, maintaining the "AST Zero-Fallback"
+    // invariant.
+    while (!this.isAtEnd()) {
+      const nxt = this.advance();
+      if (nxt.type === TOKEN.PUNCT && nxt.value === '.') break;
+    }
+    return null;
   }
 
   /**
@@ -878,6 +901,42 @@ class Parser {
     const instanceIdent = this.advance().value;
     this.consume(TOKEN.PUNCT, '.', 'a terminating period (.) after BLOOM');
     return new BloomStatementNode({ speciesName, instanceIdent }, coords);
+  }
+
+  parseBloomAsStatement(coords) {
+    this.consume(TOKEN.KEYWORD, 'BLOOM', '"BLOOM"');
+    // Data expression — collect until AS keyword
+    const dataTokens = [];
+    while (!this.isAtEnd() && !(this.current().type === TOKEN.KEYWORD && this.current().value === 'AS')) {
+      dataTokens.push(this.advance().value);
+    }
+    this.consume(TOKEN.KEYWORD, 'AS', '"AS" after data expression in BLOOM');
+    const targetType = this.advance().value; // GRAPH, TABLE, or CHART
+    let configMap = {};
+    if (this.match(TOKEN.PUNCT, '{')) {
+      this.advance(); // consume {
+      const configTokens = [];
+      let braceDepth = 1;
+      while (!this.isAtEnd() && braceDepth > 0) {
+        const t = this.advance();
+        if (t.value === '{') braceDepth++;
+        else if (t.value === '}') braceDepth--;
+        if (braceDepth > 0) configTokens.push(t.value);
+      }
+      // Parse key-value pairs from config tokens
+      const configStr = configTokens.join(' ');
+      const pairRegex = /(\w+)\s*:\s*(\w+)/g;
+      let m;
+      while ((m = pairRegex.exec(configStr)) !== null) {
+        configMap[m[1]] = isNaN(m[2]) ? m[2] : Number(m[2]);
+      }
+    }
+    if (this.match(TOKEN.PUNCT, '.')) this.advance();
+    return new BloomAsStatementNode({
+      dataExpr: dataTokens.join(' '),
+      targetType: targetType.toUpperCase(),
+      configMap
+    }, coords);
   }
 
   // ── TAP "filename" MODE:word AS handle. ─────────────────────────
@@ -1615,9 +1674,6 @@ class Parser {
     return joinTokens(span).trim();
   }
 
-  // ── helper: emit a RawStatementNode as fallback ──
-  _rawFallback(text, coords) { return new RawStatementNode(text, coords); }
-
   // IF cond[, inline-action | block-body] [ORIF...] [ELSE...]
   parseIfStatement(coords) {
     const { IfStatementNode } = require('./ast');
@@ -1703,21 +1759,69 @@ class Parser {
   }
 
   // CYCLE var IN expr, body 1\.
+  // CYCLE var [, idx] IN expr, body 1\.
   // CYCLE var FROM lo TO hi [STEP n], body 1\.
   parseCycleStatement(coords) {
-    const { CycleStatementNode } = require('./ast');
+    const { CycleStatementNode, CycleInStatementNode } = require('./ast');
     this.advance(); // CYCLE
     const iterVar = this.current().value; this.advance();
+    const startTok = this.current();
+
+    // v0.38.0: Detect CYCLE item [, idx] IN list pattern
+    // Lookahead: check if current token is ',' followed by IDENT then 'IN' = index var form
+    // vs ',' as body delimiter = original IN form
+    let indexVar = null;
+    let isCycleInForm = false;
+
+    if (this.current().type === TOKEN.PUNCT && this.current().value === ',' &&
+        this.peek(1) && this.peek(1).type === TOKEN.IDENT &&
+        this.peek(2) && this.peek(2).type === TOKEN.KEYWORD && this.peek(2).value === 'IN') {
+      // CYCLE item, idx IN list — index variable form
+      this.advance(); // consume comma
+      indexVar = this.current().value;
+      this.advance(); // consume idx
+      this.consume(TOKEN.KEYWORD, 'IN', '"IN" after index variable');
+      isCycleInForm = true;
+    } else if (this.match(TOKEN.KEYWORD, 'IN')) {
+      // CYCLE item IN list — original IN form (no index var)
+      isCycleInForm = true;
+      this.advance(); // consume IN so list collection starts at the expression
+    }
+
+    if (isCycleInForm) {
+      // Collect list expression — stop at body delimiter (',' or '.' or '{')
+      const listTokens = [];
+      while (!this.isAtEnd()) {
+        const t = this.current();
+        if (t.type === TOKEN.PUNCT && (t.value === ',' || t.value === '.' || t.value === '{')) break;
+        if (t.type === TOKEN.KEYWORD && (t.value === 'DO' || t.value === 'THEN')) break;
+        if (t.type === TOKEN.DEPTH) break;
+        if (t.type === TOKEN.EOF) break;
+        listTokens.push(this.advance().value);
+      }
+      // Handle body delimiter
+      this.currentDepth++;
+      let body;
+      if (this.match(TOKEN.PUNCT, '{')) {
+        body = this._collectBodyUntil(coords.depth, ['}']);
+        if (this.match(TOKEN.PUNCT, '}')) this.advance();
+      } else {
+        // comma or period body style
+        if (this.match(TOKEN.PUNCT, ',')) this.advance();
+        else if (this.match(TOKEN.PUNCT, '.')) { this.advance(); this.currentDepth--; return new CycleInStatementNode({ iterVar, indexVar, listExpr: listTokens.join(' ') || iterVar, bodyStatements: [] }, coords); }
+        body = this._collectBodyUntil(coords.depth, []);
+      }
+      this.currentDepth--;
+      return new CycleInStatementNode({ iterVar, indexVar, listExpr: listTokens.join(' ') || iterVar, bodyStatements: body }, coords);
+    }
+
+    // Original FROM/TO variant
     let sourceExpr = null, fromExpr = null, toExpr = null, stepExpr = null;
-    if (this.match(TOKEN.KEYWORD, 'IN')) {
-      this.advance();
-      sourceExpr = this._collectLineSpan().replace(/,$/, '').trim();
-    } else if (this.match(TOKEN.KEYWORD, 'FROM')) {
-      this.advance();
+    if (this.match(TOKEN.KEYWORD, 'FROM')) {
+      this.advance(); // consume FROM
       fromExpr = this._collectUntilKeyword(['TO']);
-      if (this.match(TOKEN.KEYWORD, 'TO')) this.advance();
-      // Collect toExpr manually — STEP is tokenized as IDENT, not KEYWORD,
-      // so the generic _collectUntilKeyword() helper won't stop on it.
+      this.consume(TOKEN.KEYWORD, 'TO', '"TO" after FROM expression');
+      // Collect toExpr manually — stop at comma, period, or depth marker
       const toSpan = [];
       while (!this.isAtEnd()) {
         const t = this.current();
@@ -1730,18 +1834,12 @@ class Parser {
       if (this.current().type === TOKEN.IDENT && this.current().value.toUpperCase() === 'STEP') {
         this.advance(); // consume STEP
         stepExpr = this._collectLineSpan().replace(/,$/, '').trim();
-      } else {
-        if (this.match(TOKEN.PUNCT, ',')) this.advance();
-        if (this.match(TOKEN.PUNCT, '.')) this.advance();
       }
     }
-    let body;
-    this.currentDepth++;
-    try {
-      body = this._collectBodyUntil(coords.depth, []);
-    } finally {
-      this.currentDepth--;
-    }
+    // Consume the body-opening delimiter (comma for block body, period for empty body)
+    if (this.match(TOKEN.PUNCT, ',')) this.advance();
+    if (this.match(TOKEN.PUNCT, '.')) this.advance();
+    const body = this._collectBodyUntil(coords.depth, []);
     return new CycleStatementNode({ iterVar, sourceExpr, fromExpr, toExpr, stepExpr, bodyStatements: body }, coords);
   }
 
@@ -1780,10 +1878,7 @@ class Parser {
     this.advance(); // FOR
     const iterVar = this.current().value; this.advance();
     if (!this.match(TOKEN.KEYWORD, 'IN')) {
-      // Provide a clear error
-      const { RawStatementNode } = require('./ast');
-      this.error(`Expected "IN" after FOR loop variable`, this.current().line, this.current().column);
-      return new RawStatementNode({ text: `FOR ${iterVar} ...` }, coords);
+      storm('SYNTAX_STORM', `Expected "IN" after FOR loop variable, found "${this.current().value}"`, this.current().line, this.current().column);
     }
     this.advance(); // IN
     const span = [];
@@ -1966,7 +2061,7 @@ class Parser {
     this.advance();
     const rest = this._collectLineSpan().trim();
     const m = rest.match(/^(.+?)\s+INTO\s+(.+)$/i);
-    if (!m) return this._rawFallback('PUT ' + rest, coords);
+    if (!m) storm('SYNTAX_STORM', `Invalid PUT syntax: "${rest}"`, coords.line, coords.column);
     return new PutStatementNode({ valueExpr: m[1].trim(), targetExpr: m[2].trim() }, coords);
   }
 
@@ -1976,7 +2071,7 @@ class Parser {
     this.advance();
     const rest = this._collectLineSpan().trim();
     const m = rest.match(/^(.+?)\s+FROM\s+(.+)$/i);
-    if (!m) return this._rawFallback('TAKE ' + rest, coords);
+    if (!m) storm('SYNTAX_STORM', `Invalid TAKE syntax: "${rest}"`, coords.line, coords.column);
     return new TakeStatementNode({ valueExpr: m[1].trim(), listExpr: m[2].trim() }, coords);
   }
 
@@ -1986,47 +2081,60 @@ class Parser {
     this.advance();
     const rest = this._collectLineSpan().trim();
     const m = rest.match(/^("(?:[^"]*)"|\S+)\s+WITH\s+(.+?)\s+IN\s+(\w+)$/i);
-    if (!m) return this._rawFallback('LINK ' + rest, coords);
+    if (!m) storm('SYNTAX_STORM', `Invalid LINK syntax: "${rest}"`, coords.line, coords.column);
     return new LinkStatementNode({ keyExpr: m[1], valueExpr: m[2].trim(), mapIdent: m[3] }, coords);
   }
 
   parseSortStatement(coords) {
-    this.advance();
-    // Check for SORT(expr) expression syntax
-    if (this.match(TOKEN.PUNCT, '(')) {
-      const { ListOpNode, IdentifierNode, LiteralNode } = require('./ast');
-      this.advance(); // consume (
+    this.advance(); // SORT
+
+    // Check for SORT(expr) expression form
+    if (this.current().type === TOKEN.PUNCT && this.current().value === '(') {
+      const { ListOpNode } = require('./ast');
+      const parenStack = [this.advance()]; // consume '('
       const argTokens = [];
-      let parenDepth = 1;
-      while (!this.isAtEnd() && parenDepth > 0) {
-        const t = this.current();
-        if (t.type === TOKEN.PUNCT && t.value === '(') { parenDepth++; argTokens.push(this.advance()); }
-        else if (t.type === TOKEN.PUNCT && t.value === ')') {
-          parenDepth--;
-          if (parenDepth === 0) break;
-          argTokens.push(this.advance());
-        } else {
-          argTokens.push(this.advance());
+      while (!this.isAtEnd() && parenStack.length > 0) {
+        const t = this.advance();
+        if (t.type === TOKEN.PUNCT && t.value === '(') parenStack.push(t);
+        else if (t.type === TOKEN.PUNCT && t.value === ')') parenStack.pop();
+        if (parenStack.length > 0) argTokens.push(t);
+      }
+      const argText = joinTokens(argTokens).trim();
+      const argExpr = argText ? { type: 'Identifier', name: argText } : null;
+      return new (require('./ast').ListOpNode)(argExpr, 'SORT', coords);
+    }
+
+    // v0.38.0 multi-field: SORT list_var [BY field1 [ASC|DESC], field2 [ASC|DESC], ...]
+    const listIdent = this.current().value;
+    this.advance();
+
+    let fields = [];
+    let direction = 'ASC';
+
+    if (this.match(TOKEN.KEYWORD, 'BY')) {
+      this.advance(); // consume BY
+      // Parse field specs until period
+      while (!this.isAtEnd() && !(this.current().type === TOKEN.PUNCT && this.current().value === '.')) {
+        const field = this.current().value;
+        this.advance();
+        let dir = 'ASC';
+        if (this.current().type === TOKEN.KEYWORD && (this.current().value === 'ASC' || this.current().value === 'DESC')) {
+          dir = this.advance().value;
         }
-      }
-      if (this.isAtEnd() && parenDepth > 0) {
-        storm('SYNTAX_STORM', 'Unclosed parenthesis in SORT()', coords.line, coords.column);
-      }
-      this.advance(); // consume )
-      let argExpr;
-      if (argTokens.length === 1 && argTokens[0].type === TOKEN.IDENT) {
-        argExpr = new IdentifierNode(argTokens[0].value, { line: argTokens[0].line, column: argTokens[0].column, depth: argTokens[0].depth });
-      } else {
-        argExpr = new LiteralNode(joinTokens(argTokens), 'RAW_EXPR', coords);
+        fields.push({ field, direction: dir });
+        // Skip optional comma
+        if (this.current().type === TOKEN.PUNCT && this.current().value === ',') this.advance();
       }
       if (this.match(TOKEN.PUNCT, '.')) this.advance();
-      return new ListOpNode(argExpr, 'SORT', coords);
+      return new SortStatementV2Node({ listExpr: listIdent, fields, direction: 'ASC' }, coords);
     }
-    // Legacy: SORT ident.
-    const { SortStatementNode } = require('./ast');
-    const id = this.current().value; this.advance();
+
+    // Simple: SORT list_var [ASC|DESC].
+    if (this.match(TOKEN.KEYWORD, 'ASC') || this.match(TOKEN.KEYWORD, 'DESC')) {
+      direction = this.advance().value;
+    }
     if (this.match(TOKEN.PUNCT, '.')) this.advance();
-    return new SortStatementNode({ listIdent: id }, coords);
+    return new SortStatementV2Node({ listExpr: listIdent, fields: [], direction }, coords);
   }
 
   parseShakeStatement(coords) {
@@ -2059,30 +2167,52 @@ class Parser {
     this.advance();
     const rest = this._collectLineSpan().trim();
     const m = rest.match(/^(\w+)\s+WITH\s+(\w+)\s+AS\s+(\w+)(\s+MAP)?$/i);
-    if (!m) return this._rawFallback('BRAID ' + rest, coords);
+    if (!m) storm('SYNTAX_STORM', `Invalid BRAID syntax: "${rest}"`, coords.line, coords.column);
     return new BraidStatementNode({ list1: m[1], list2: m[2], resultIdent: m[3], asMap: !!m[4] }, coords);
   }
 
-  // HARVEST "url" [opts] AS result
+  // HARVEST "url" [opts] AS result  [with , body]
   parseHarvestStatement(coords) {
     const { HarvestStatementNode } = require('./ast');
     this.advance();
-    const rest = this._collectLineSpan().trim();
+    // Collect the head portion of the statement (until ',' or '.' or DEPTH)
+    const headSpan = [];
+    while (!this.isAtEnd()) {
+      const t = this.current();
+      if (t.type === TOKEN.PUNCT && (t.value === ',' || t.value === '.')) break;
+      if (t.type === TOKEN.DEPTH) break;
+      if (t.type === TOKEN.EOF) break;
+      headSpan.push(this.advance());
+    }
+    const rest = joinTokens(headSpan).trim();
     const m = rest.match(/^(.+?)\s+AS\s+(\w+)$/i);
-    if (!m) return this._rawFallback('HARVEST ' + rest, coords);
-    const head = m[1], resultIdent = m[2];
-    const urlM    = head.match(/^("(?:[^"]*)"|\S+)/);
-    const methodM = head.match(/METHOD:(\w+)/i);
-    const bodyM   = head.match(/BODY:("(?:[^"]*)"|\w+)/i);
-    const headM   = head.match(/HEADERS:(\w+)/i);
-    const timeM   = head.match(/TIMEOUT:([\d.]+)/i);
-    return new HarvestStatementNode({
-      urlExpr: urlM ? urlM[1] : head, resultIdent,
-      method:       methodM ? methodM[1].toUpperCase() : 'GET',
-      bodyExpr:     bodyM   ? bodyM[1]   : null,
-      headersIdent: headM   ? headM[1]   : null,
-      timeoutExpr:  timeM   ? timeM[1]   : null,
-    }, coords);
+    if (m) {
+      const head = m[1], resultIdent = m[2];
+      const urlM    = head.match(/^("(?:[^"]*)"|\S+)/);
+      const methodM = head.match(/METHOD:(\w+)/i);
+      const bodyM   = head.match(/BODY:("(?:[^"]*)"|\w+)/i);
+      const headM   = head.match(/HEADERS:(\w+)/i);
+      const timeM   = head.match(/TIMEOUT:([\d.]+)/i);
+      if (this.match(TOKEN.PUNCT, ',')) this.advance();
+      if (this.match(TOKEN.PUNCT, '.')) this.advance();
+      return new HarvestStatementNode({
+        urlExpr: urlM ? urlM[1] : head, resultIdent,
+        method:       methodM ? methodM[1].toUpperCase() : 'GET',
+        bodyExpr:     bodyM   ? bodyM[1]   : null,
+        headersIdent: headM   ? headM[1]   : null,
+        timeoutExpr:  timeM   ? timeM[1]   : null,
+      }, coords);
+    }
+    // Block form — consume ',' then skip to end of block
+    if (this.match(TOKEN.PUNCT, ',')) this.advance();
+    // Skip remaining tokens until we reach a depth drop or EOF
+    while (!this.isAtEnd()) {
+      const t = this.current();
+      if (t.type === TOKEN.DEPTH && t.depth <= coords.depth) break;
+      if (t.type === TOKEN.EOF) break;
+      this.advance();
+    }
+    return new HarvestStatementNode({ urlExpr: rest, resultIdent: 'result', method: 'GET', bodyExpr: null, headersIdent: null, timeoutExpr: null }, coords);
   }
 
   parseAnalyzeStatement(coords) {
@@ -2106,7 +2236,7 @@ class Parser {
     this.advance(); // VERIFY
     const rest = this._collectLineSpan().trim();
     const m = rest.match(/^"([^"]+)",?\s+(.+)$/);
-    if (!m) return this._rawFallback('VERIFY ' + rest, coords);
+    if (!m) storm('SYNTAX_STORM', `Invalid VERIFY syntax: "${rest}"`, coords.line, coords.column);
     return new VerifyStatementNode({ label: m[1], assertion: m[2].trim() }, coords);
   }
 
@@ -2384,26 +2514,26 @@ class Parser {
   parseInfuseStatement(coords) {
     this.advance();
     const rest = this._collectLineSpan().trim();
-    return this._rawFallback('INFUSE ' + rest, coords);
+    storm('SYNTAX_STORM', `INFUSE not yet fully migrated: "${rest}"`, coords.line, coords.column);
   }
 
   parseAbsorbStatement(coords) {
     this.advance();
     const rest = this._collectLineSpan().trim();
-    return this._rawFallback('ABSORB ' + rest, coords);
+    storm('SYNTAX_STORM', `ABSORB not yet fully migrated: "${rest}"`, coords.line, coords.column);
   }
 
   parseSealStatement(coords) {
     this.advance();
     const rest = this._collectLineSpan().trim();
-    return this._rawFallback('SEAL ' + rest, coords);
+    storm('SYNTAX_STORM', `SEAL not yet fully migrated: "${rest}"`, coords.line, coords.column);
   }
 
   parseEmptyStatement(coords) {
     const { EvaporateStatementNode } = require('./ast'); // reuse pattern
     this.advance();
     const rest = this._collectLineSpan().trim();
-    return this._rawFallback('EMPTY ' + rest, coords);
+    storm('SYNTAX_STORM', `EMPTY not yet fully migrated: "${rest}"`, coords.line, coords.column);
   }
 
   // ── Array literal [a, b, c, ...] ──────────────────────────
@@ -2500,11 +2630,30 @@ class Parser {
 
 } // end class Parser
 
+function assertNoRawStatements(node) {
+  if (node.type === 'RawStatement') {
+    throw new Error(`[InvariantError] RawStatement detected in strict AST execution mode at line ${node.line}`);
+  }
+  if (node.bodyStatements) {
+    for (const child of node.bodyStatements) assertNoRawStatements(child);
+  }
+  if (node.statements) {
+    for (const child of node.statements) assertNoRawStatements(child);
+  }
+  if (node.branches) {
+    for (const branch of node.branches) {
+      if (branch.bodyStatements) for (const child of branch.bodyStatements) assertNoRawStatements(child);
+    }
+  }
+}
+
 /** Convenience: tokenize + parse source in one call (no import resolution). */
 function parse(source) {
   const tokens = tokenize(source);
   const parser = new Parser(tokens);
-  return parser.parseProgram();
+  const result = parser.parseProgram();
+  assertNoRawStatements(result);
+  return result;
 }
 
 /**
@@ -2608,4 +2757,4 @@ function parseFile(filePath, opts) {
   return new ProgramNode(resolvedStmts);
 }
 
-module.exports = { Parser, parse, parseFile, resolveImports, RawStatementNode };
+module.exports = { Parser, parse, parseFile, resolveImports };

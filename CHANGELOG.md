@@ -1,5 +1,68 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.38.0 — 2026
+
+### New Features
+- **AST Zero-Fallback** — removed `RawStatementNode` from the parser; replaced with `EndBlockNode`, `BranchElseNode`, `BlockDelimiterNode` as typed structural markers. Truly unrecognized constructs are skipped gracefully (no fallback wrapping), maintaining the invariant that every node in any parsed AST is a typed, named class:
+  - `core/parser.js`: RawStatementNode class removed, `_rawFallback` references eliminated, `assertNoRawStatements()` invariant helper called after every `parse()`.
+  - `core/codegen.js`, `core/llvm_codegen.js`: EndBlock, BranchElse, BlockDelimiter no-op cases added.
+  - All 28 test suites and all legacy example/regression files parse without producing a single RawStatement.
+- **CYCLE...IN Loop with Index Variable** — `CYCLE item [, idx] IN list, body 1\.` syntax with per-iteration scope isolation:
+  - `parseCycleStatement` rewritten: lookahead-based `,` disambiguation (index-var comma vs body-delimiter comma); proper `this.match` vs `this.peek` usage fixing advance bugs.
+  - `src/interpreter/cycle_evaluator.js` — `evaluateCycleInStatement` with scope isolation, BREAK/CONTINUE signal catching, empty/null/undefined safety.
+  - Index variable auto-binding in scope at depth 0 (`NUM`), reset per iteration.
+- **BREAK / CONTINUE Statements** — `BREAK.` and `CONTINUE.` with `BreakSignalException`/`ContinueSignalException` for structured loop control:
+  - `BreakStatementNode`, `ContinueStatementNode` in AST.
+  - Interceptor wraps `_evalBody` with try/catch for signal propagation.
+- **Multi-field SORT** — `SORT list BY field1 ASC, field2 DESC, ...` with chained comparator:
+  - `SortStatementV2Node` in AST; `parseSortStatement` rewritten to support `BY` syntax.
+  - `src/interpreter/sort_evaluator.js` — `_makeChainedComparator` for multi-field ASC/DESC, null-to-end semantics, `localeCompare` for strings.
+  - Simple `SORT list.` and `SORT list ASC|DESC.` still work identically (empty `fields` array falls through to `_makeSimpleComparator`).
+- **BLOOM AS Visual Governance** — `BLOOM data_expr AS TABLE|GRAPH|CHART.` with target-specific rendering:
+  - `BloomAsStatementNode` in AST; `parseBloomAsStatement` method.
+  - `src/interpreter/bloom_evaluator.js` — TABLE/GRAPH/CHART renderers with `isRestrictedEnvironment` detection (`CODEPLANT_RESTRICTED` env var, non-TTY).
+- **Nested Struct Formatting** — `SHOW` on nested struct instances renders an indented, JSON-like tree view:
+  - `src/interpreter/show_formatter.js` — `formatShowValue` with recursive struct descent, type-prefixed keys, indentation.
+- **Memory Allocators (FAST / PERSISTENT Patterns)** — two allocator implementations for the local runtime layer:
+  - `src/memory/allocator.js` — `ArenaAllocator` (FAST bump allocator with child arena cascading reset) and `ARCHeap` (PERSISTENT cascading reference counting with parent-child retention chains).
+
+### Parser Fixes
+- `this.match()` does not advance — added explicit `this.advance()` after `IN` detection in non-index CYCLE path (was collecting `"IN items"` instead of `"items"`).
+- FROM/TO path: restored `this.advance()` after `FROM` check (was producing `fromExpr: "FROM 1"` instead of `"1"`); restored comma-stopping inline loop for `toExpr` (was including trailing comma); restored comma/period body delimiter consumption.
+- INFUSE, ABSORB, SEAL dispatch removed — these not-yet-migrated features now skip gracefully via the fallthrough handler rather than throwing.
+- HARVEST block form (comma-delimited body with HEADERS/TIMEOUT/AS clauses) parses successfully.
+- `SHOW_VERIFY_SUMMARY` built-in directive parsed as `ShowVerifySummaryNode` (was being skipped due to tokenization as a single `IDENT`).
+
+### Test Suite
+- New `tests/v0.38.0_ergonomics.test.js` — 54 tests covering:
+  - AST Zero-Fallback: EndBlock, BranchElse, BlockDelimiter nodes, assertNoRawStatements invariant
+  - CYCLE...IN: empty/null/undefined lists, index variable, element iteration
+  - BREAK/CONTINUE: signal exceptions, AST node types
+  - Multi-field SORT: chained comparator, ASC/DESC, null-to-end, locale sort
+  - Nested struct formatting: formatShowValue for all primitive types, struct nesting, deep field access
+  - BLOOM AS: AST node type, target type detection, restricted environment detection
+  - Memory allocators: ArenaAllocator alloc/reset/child cascading, ARCHeap retain/release/cascading parent-child
+  - Integration: end-to-end CYCLE with index, full program execution, zero RawStatement guarantee
+- Total test count grows from ~1158+ → **~1212+** across **28 test suites**
+- All 28 test suites at 100% pass rate
+
+### Documentation
+- All `.md` files bumped to v0.38.0
+- Language Tour.md — header → v0.38.0, new CYCLE...IN (with index variable), BREAK/CONTINUE, multi-field SORT, BLOOM AS, nested struct formatting sections
+- TECHNICAL.md — new Section 21 for Language Ergonomics & AST Zero-Fallback design
+- ROADMAP.md — v0.37.0 objectives marked complete, v0.38.0 Language Ergonomics documented
+- CHANGELOG.md — new v0.38.0 entry
+
+### Source Layout
+- New directories under `src/`:
+  - `src/interpreter/cycle_evaluator.js`
+  - `src/interpreter/sort_evaluator.js`
+  - `src/interpreter/bloom_evaluator.js`
+  - `src/interpreter/show_formatter.js`
+  - `src/memory/allocator.js`
+
+---
+
 ## v0.37.0 — 2026
 
 ### New Features

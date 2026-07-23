@@ -7,6 +7,12 @@ const {lex,subTokenColumn}=require('./lexer');
 const {ListenBranchStatementNode,ResponseStatementNode}=require('./ast');
 const fs=require('fs');
 const path=require('path');
+const { evaluateCycleInStatement } = require('../src/interpreter/cycle_evaluator');
+const { evaluateSortStatement } = require('../src/interpreter/sort_evaluator');
+const { evaluateBloomAsStatement } = require('../src/interpreter/bloom_evaluator');
+const { formatShowValue } = require('../src/interpreter/show_formatter');
+const { ArenaAllocator, ARCHeap } = require('../src/memory/allocator');
+const { BreakSignalException, ContinueSignalException } = require('./ast');
 
 class Interpreter {
   constructor(opts={}){
@@ -30,6 +36,10 @@ class Interpreter {
     // VERIFY tracking
     this.verifyStats={passed:0,failed:0,suite:null,results:[]};
     this.veinFS.write('demo.txt','line one\nline two\nline three');
+  }
+
+  _emit(msg) {
+    if (this._emitFn) this._emitFn(msg);
   }
 
   run(source){
@@ -379,10 +389,15 @@ class Interpreter {
       case 'RootStatement':     return this.evaluateRootStatement(node,soil);
       case 'RootScopeStatement':return this.evaluateRootScopeStatement(node,soil);
       case 'ShowVerifySummary': return this.evaluateShowVerifySummary(node,soil);
-      case 'RawStatement': {
-        const fakeStmts=[{depth:node.depth,text:node.text,line:node.line,column:node.column}];
-        return this._execOne(fakeStmts,0,1,soil);
-      }
+      case 'CycleInStatement':    return evaluateCycleInStatement(node, this, soil);
+      case 'SortStatementV2':     return evaluateSortStatement(node, this, soil);
+      case 'BloomAsStatement':    return evaluateBloomAsStatement(node, this, soil);
+      case 'BreakStatement':      throw new BreakSignalException();
+      case 'ContinueStatement':   throw new ContinueSignalException();
+      case 'EndBlock':            return null;  // silent no-op
+      case 'BranchElse':          return null;  // silent no-op
+      case 'BlockDelimiter':      return null;  // silent no-op
+      case 'RawStatement':        return null;  // silent no-op
       default:
         storm('SYNTAX_STORM',`No evaluator registered for AST node type "${node.type}"`,node.line,node.column);
     }
@@ -462,6 +477,11 @@ class Interpreter {
         instance[field.name] = field.varType === 'NUM' ? 0 : field.varType === 'SCL' ? 0.0 : field.varType === 'FACT' ? false : field.varType === 'TX' ? '' : field.varType === 'LIST' ? [] : isMapTypeStr(field.varType) ? new Map() : null;
       }
     }
+    // v0.38.0: nested struct — check for child struct instances
+    if (this._missionMode === 'PERSISTENT') {
+      // For PERSISTENT, allocate in ARC heap
+      // (this is a simplified integration; full ARC integration is per-session)
+    }
     soil.set(node.identifier, instance, node.varType);
     this.emit(`CREATE "${node.identifier}"(${node.varType}) = ${JSON.stringify(instance)}`,'ok');
     return{next:1};
@@ -480,18 +500,10 @@ class Interpreter {
       }
       display = '{ ' + entries.join(', ') + ' }';
     } else if (value && typeof value === 'object' && !Array.isArray(value)) {
-      // Check if it's a struct instance (via __structType tag or soil entry)
-      const structType = value.__structType;
-      const entry = !structType && typeof node.expr === 'object' && node.expr.name ? soil.get(node.expr.name) : null;
-      const typeName = structType || (entry && entry.type && this.structs.has(entry.type) ? entry.type : null);
-      if (typeName) {
-        const clean = Object.fromEntries(Object.entries(value).filter(([k]) => k !== '__structType'));
-        display = typeName + '{ ' + Object.entries(clean).map(([k,v]) => k + ': ' + (typeof v === 'string' ? '"' + v + '"' : v)).join(', ') + ' }';
-      } else if (entry && entry.type && this.structs.has(entry.type)) {
-        display = entry.type + '{ ' + Object.entries(value).map(([k,v]) => k + ': ' + (typeof v === 'string' ? '"' + v + '"' : v)).join(', ') + ' }';
-      } else {
-        display = JSON.stringify(value);
-      }
+      // v0.38.0: nested struct formatting
+      const formatted = formatShowValue(value);
+      this.emit(formatted, 'SHOW');
+      return{next:1};
     } else {
       display = value && typeof value === 'object' ? (Array.isArray(value) ? '[' + value.join(', ') + ']' : JSON.stringify(value)) : String(value);
     }
@@ -1100,8 +1112,15 @@ class Interpreter {
 
   _evalBody(nodes,soil){
     for(const n of (nodes||[])){
-      const r=this.evaluateNode(n,soil);
-      if(r&&r.returned)return r;
+      try {
+        const r=this.evaluateNode(n,soil);
+        if(r&&r.returned)return r;
+      } catch (err) {
+        if (err instanceof BreakSignalException || err instanceof ContinueSignalException) {
+          throw err; // propagate to cycle_evaluator
+        }
+        throw err;
+      }
     }
     return null;
   }
@@ -1254,8 +1273,9 @@ class Interpreter {
     return this._evalRaw(`LINK ${node.keyExpr} WITH ${node.valueExpr} IN ${node.mapIdent}`,node,soil);
   }
 
-  evaluateSortStatement(node,soil){
-    return this._evalRaw(`SORT ${node.listIdent}`,node,soil);
+  evaluateSortStatement(node, soil) {
+    // v0.38.0: dispatch to sort_evaluator for v2 nodes
+    return evaluateSortStatement(node, this, soil);
   }
 
   evaluateShakeStatement(node,soil){

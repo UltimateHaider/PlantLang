@@ -213,6 +213,9 @@ class CodeGenerator {
       case 'CycleStatement':      return this._genCycle(node);
       case 'SeasonStatement':     return this._genSeason(node);
       case 'LockStatement':       return; // no runtime effect needed in native code
+      case 'EndBlock':
+      case 'BranchElse':
+      case 'BlockDelimiter':      return; // v0.38.0 structural markers — no-op for codegen
       case 'RawStatement':
         if (node.text && node.text.trim()) {
           // Empty/closer raw statements are fine to skip silently;

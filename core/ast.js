@@ -789,6 +789,73 @@ class BloomExpressionNode extends AstNode {
   }
 }
 
+// ── v0.38.0: Block Delimiter Nodes ──
+class EndBlockNode extends AstNode {
+  constructor({ blockType }, coords) {
+    super('EndBlock', coords);
+    this.blockType = blockType; // e.g. 'IF', 'CYCLE', 'ACTION', 'SPECIES', 'SEASON'
+  }
+}
+
+class BranchElseNode extends AstNode {
+  constructor({ bodyStatements }, coords) {
+    super('BranchElse', coords);
+    this.bodyStatements = bodyStatements || [];
+  }
+}
+
+class BlockDelimiterNode extends AstNode {
+  constructor({ delimiter, bodyStatements }, coords) {
+    super('BlockDelimiter', coords);
+    this.delimiter = delimiter; // e.g. '.', '}', '/IF.', etc.
+    this.bodyStatements = bodyStatements || [];
+  }
+}
+
+// ── v0.38.0: CycleInStatement (CYCLE x [, idx] IN list { ... }) ──
+class CycleInStatementNode extends AstNode {
+  constructor({ iterVar, indexVar, listExpr, bodyStatements }, coords) {
+    super('CycleInStatement', coords);
+    this.iterVar = iterVar;
+    this.indexVar = indexVar || null;
+    this.listExpr = listExpr;
+    this.bodyStatements = bodyStatements || [];
+  }
+}
+
+// ── v0.38.0: BreakStatement / ContinueStatement ──
+class BreakStatementNode extends AstNode {
+  constructor(coords) {
+    super('BreakStatement', coords);
+  }
+}
+
+class ContinueStatementNode extends AstNode {
+  constructor(coords) {
+    super('ContinueStatement', coords);
+  }
+}
+
+// ── v0.38.0: Multi-field SortStatement ──
+class SortStatementV2Node extends AstNode {
+  constructor({ listExpr, fields, direction }, coords) {
+    super('SortStatementV2', coords);
+    this.listExpr = listExpr;              // the list variable name or expression
+    this.fields = fields || [];            // [{ field: "name", direction: "ASC"|"DESC" }]
+    this.direction = direction || 'ASC';   // fallback simple direction
+  }
+}
+
+// ── v0.38.0: BloomAsStatement (BLOOM data AS GRAPH|TABLE|CHART { config }) ──
+class BloomAsStatementNode extends AstNode {
+  constructor({ dataExpr, targetType, configMap }, coords) {
+    super('BloomAsStatement', coords);
+    this.dataExpr = dataExpr;
+    this.targetType = targetType; // 'GRAPH', 'TABLE', 'CHART'
+    this.configMap = configMap || {};
+  }
+}
+
 // Re-export everything
 const _orig = module.exports;
 Object.assign(module.exports, {
@@ -831,4 +898,23 @@ Object.assign(module.exports, {
   MethodCallStatementNode,
   SelfExpressionNode,
   BloomExpressionNode,
+  EndBlockNode,
+  BranchElseNode,
+  BlockDelimiterNode,
+  CycleInStatementNode,
+  BreakStatementNode,
+  ContinueStatementNode,
+  SortStatementV2Node,
+  BloomAsStatementNode,
 });
+
+// ── v0.38.0: BREAK/CONTINUE control flow signals ──
+class BreakSignalException extends Error {
+  constructor() { super('BREAK signal'); this.name = 'BreakSignalException'; }
+}
+class ContinueSignalException extends Error {
+  constructor() { super('CONTINUE signal'); this.name = 'ContinueSignalException'; }
+}
+// Also export these
+module.exports.BreakSignalException = BreakSignalException;
+module.exports.ContinueSignalException = ContinueSignalException;
