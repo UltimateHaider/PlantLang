@@ -1,4 +1,4 @@
-# PlantLang Language Specification & Ecosystem v0.35.0
+# PlantLang Language Specification & Ecosystem v0.36.0
 
 **PlantLang** is a human-centric, prose-based programming language engineered for both high-level readability and native-level execution performance. It transforms "prose-like" syntax into highly optimized machine code via the LLVM compiler infrastructure.
 
@@ -62,7 +62,7 @@ Arenas are automatically reclaimed:
 
 ---
 
-## 3. Engineering Architecture (The v0.35.0 Stack)
+## 3. Engineering Architecture (The v0.36.0 Stack)
 The ecosystem is built on a modular, industrial-grade pipeline:
 
 1.  **Core Interpreter (Chloroplast Engine):**
@@ -170,8 +170,8 @@ PlantLang employs a state-of-the-art compilation chain:
 ---
 
 ## 6. QA & Quality Assurance
-The **v0.35.0** release is verified by an automated regression suite:
-* **~944+ Total Tests** across twenty-five test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7—21, depth contract, matrix, dispatcher, runtime, parallel, security, cluster).
+The **v0.36.0** release is verified by an automated regression suite:
+* **~1069+ Total Tests** across twenty-six test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7—21, depth contract, matrix, dispatcher, runtime, parallel, security, cluster, geo-routing).
 * **LLVM Backend**: 50 smoke tests covering CREATE/SHOW, arithmetic, strings, comparisons, IF/CYCLE/SEASON, ACTION/REAP/GIVE (recursion, SCL params, TX returns), WEATHER/SHELTER exception handling, TX fat-pointer operations, and MAP hash tables (LINK, has(), growth, overwrite).
 * **Native LIST Ops**: 15 tests covering COUNT, FIRST, LAST, SUM on empty/populated arrays, type-checker validation.
 * **MAP Types**: 17 tests covering empty map create, map literals, LINK/put semantics, has/get, overwrite, growth (10 entries), SHOW display, type-checker validation.
@@ -272,13 +272,19 @@ The **v0.35.0** release is verified by an automated regression suite:
   - `DistributedHeap` & `ConsistentHashRing` — SHA-256 hash ring, PERSISTENT store with lease-based GC, stateful actors
   - 88 new tests in `tests/v0.35.0_cluster.test.js` — all green
 
-### 🔜 In Progress / Planned (v0.36.0)
-- `PULSE` / `WHENEVER` reactive programming
-- `VERIFY` / `SUITE` native compilation
-- `TAP` file I/O in LLVM backend
-- `HARVEST` networking in LLVM backend
-- Expanded standard library (math, lists, maps modules)
+### ✅ Completed (v0.36.0)
+- **Geographic Routing & State Governance** — three geo-routing modules:
+  - `ShareGovernance` — SHARED_READ O(1) versioned snapshots, TCP Gossip invalidation, SHARED_WRITE RAFT linearizable consensus / CRDT LWW convergence
+  - `CallGraphAnalyzer` — bounded depth (default 3) call-graph clustering, Louvain-inspired affinity groups, static placement
+  - `SmartExecutionRouter` — adaptive LOCAL_CPU / REMOTE_NODE / GPU_ACCELERATED triage, <0.05ms routing overhead
+  - 125 new tests in `tests/v0.36.0_geo_routing.test.js` — all green
+
+### 🔜 In Progress / Planned (v0.37.0+)
+- Distributed Cycles (`CYCLE WITH MISSION CLUSTER`)
+- REPLICA Strategy (Round-Robin / Primary-Backup)
+- Hybrid Execution (`LOCAL_REAP` / `REMOTE_REAP`)
+- Geo-Aware Routing with call-graph affinity colocation
 
 ---
 
-*PlantLang v0.35.0 — Cluster Architecture & Distributed Memory. NodeRegistry, ClusterRouter/CircuitBreaker, DistributedHeap/ConsistentHashRing. 88 new tests. 944+ total tests. All green.*
+*PlantLang v0.36.0 — Geographic Routing & State Governance. ShareGovernance (SHARED_READ/SHARED_WRITE RAFT+CRDT), CallGraphAnalyzer, SmartExecutionRouter. 125 new tests. 1069+ total tests. All green.*

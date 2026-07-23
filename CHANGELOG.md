@@ -1,5 +1,32 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.36.0 — 2026
+
+### New Features
+- **Geographic Routing & State Governance Engine** — three geo-routing modules implementing shared state governance with dual-path consensus, bounded static call-graph affinity analysis, and adaptive SMART execution routing:
+  - `ShareGovernance` — SHARED_READ: O(1) versioned snapshot reads with zero lock contention; TCP Gossip invalidation propagation across peer nodes within `GOSSIP_PROPAGATION_MS`; SHARED_WRITE RAFT: single-leader linearizable consensus with log replication and majority commit; SHARED_WRITE CRDT: LWW register with lamport clock and nodeId tiebreak for conflict-free convergence; `parseDirective()` for `SHARE CONFIG <KEY> READ_ONLY|MUTABLE [CONSENSUS=RAFT|CRDT]` syntax; MISSION CONFIG for `GOSSIP_PROPAGATION_MS` and `CONSENSUS_ENGINE`
+  - `CallGraphAnalyzer` — adjacency matrix built from function invocation frequencies; bounded depth traversal at `CALL_GRAPH_MAX_DEPTH` (default 3, range 1–10) guaranteeing O(V·E₍bₒᵤₙdₑd₎) pass times; Louvain-inspired community detection forming Affinity Groups; `computePlacement()` for static affinity group → node assignment; `buildFromAST()` factory for compiler integration; MISSION CONFIG for `CALL_GRAPH_MAX_DEPTH`
+  - `SmartExecutionRouter` — adaptive triage router: LOCAL_CPU (default, normal workloads), REMOTE_NODE (local CPU > 70% + remote latency < `SMART_ROUTE_MAX_LATENCY_MS`), GPU_ACCELERATED (vector/matrix ops + payload ≥ `SMART_ROUTE_GPU_MIN_BYTES` + registered GPU pipeline); payload size estimation; matrix/vector operation keyword detection; latency caching with 5s TTL; routing overhead < 0.05ms per invocation; MISSION CONFIG for `SMART_ROUTE_GPU_MIN_BYTES` and `SMART_ROUTE_MAX_LATENCY_MS`
+
+### Test Suite
+- New `tests/v0.36.0_geo_routing.test.js` — 125 tests covering ShareGovernance SHARED_READ (declare/read/100K-read benchmark/directive parsing), Gossip invalidation propagation (peer send + receive within latency window), SHARED_WRITE RAFT (write/commit/replication convergence), SHARED_WRITE CRDT (LWW write/bidirectional convergence/sequential convergence), CallGraphAnalyzer (edge weights/bounded depth/affinity groups/placement/stats), SmartExecutionRouter (GPU registration/payload estimation/vector detection/triage transitions/1000-call benchmark), MISSION CONFIG (all 5 directives with range enforcement), integration scenarios
+- Total test count grows from ~944+ → **~1069+** across **26 test suites**
+- All 26 test suites at 100% pass rate
+
+### Documentation
+- All `.md` files bumped to v0.36.0
+- Language Tour.md — header → v0.36.0, new "Geographic Routing & State Governance (v0.36.0)" section with SHARE CONFIG syntax, SHARED_READ/SHARED_WRITE semantics, affinity analysis, and SMART routing; Architecture diagram updated with all 3 new modules
+- TECHNICAL.md — new Section 19 for Geographic Routing & State Governance Engine design, TCP Gossip invalidation, bounded call-graph partitioning, SMART routing triage matrix, and code snippets
+- CHANGELOG.md — new v0.36.0 entry describing geo-routing modules and test suite
+
+### Source Layout
+- New directories under `src/cluster/`:
+  - `src/cluster/config/share_governance.js`
+  - `src/cluster/affinity/call_graph_analyzer.js`
+  - `src/cluster/router/smart_execution_router.js`
+
+---
+
 ## v0.35.0 — 2026
 
 ### New Features

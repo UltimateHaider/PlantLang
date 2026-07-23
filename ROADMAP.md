@@ -1,4 +1,4 @@
-# PlantLang Roadmap: v0.35.0+ (Completed & Future)
+# PlantLang Roadmap: v0.36.0+ (Completed & Future)
 
 ## What v0.30.0 Delivered
 
@@ -105,21 +105,30 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 
 ---
 
-## 🔴 Version v0.36.0: Geo-Routing & SHARE CONFIG Governance
+## ✅ Version v0.36.0: Geo-Routing & SHARE CONFIG Governance
 
-**Priority:** Medium
+**Status:** ✅ Completed
 
 ### Scope & Engineering Implementation
 
 #### Shared State Governance (SHARE CONFIG)
-- Adopting Immutable Versioned Broadcast for read-only data (SHARED_READ) with O(1) complexity, avoiding consensus overhead
-- Activating consensus protocols (such as Raft or CRDTs) only when dynamic state is present
+- `ShareGovernance`: SHARED_READ O(1) versioned snapshot reads with zero lock contention; TCP Gossip invalidation broadcast via NodeRegistry peer integration
+- SHARED_WRITE RAFT: single-leader linearizable consensus, log replication, majority commit
+- SHARED_WRITE CRDT: LWW register with lamport clock and nodeId tiebreak for conflict-free convergence
+- Directive parsing: `SHARE CONFIG <KEY> READ_ONLY|MUTABLE [CONSENSUS=RAFT|CRDT]`
+- MISSION CONFIG: `GOSSIP_PROPAGATION_MS`, `CONSENSUS_ENGINE`
 
 #### Affinity Grouping
-- Analyzing the Call Graph to colocate high-communication functions on the same machine
+- `CallGraphAnalyzer`: bounded depth adjacency matrix (CALL_GRAPH_MAX_DEPTH=3, range 1-10)
+- Louvain-inspired community detection forming Affinity Groups
+- Static `computePlacement()` assigning groups to cluster nodes
+- Guaranteed O(V·E₍bₒᵤₙdₑd₎) compiler pass times
 
 #### SMART Adaptive Routing
-- Selecting the direct execution site (local vs. remote vs. GPU) based on data size and real-time performance metrics
+- `SmartExecutionRouter`: LOCAL_CPU / REMOTE_NODE / GPU_ACCELERATED triage with < 0.05ms overhead
+- Payload estimation, matrix/vector keyword detection, latency caching
+- MISSION CONFIG: `SMART_ROUTE_GPU_MIN_BYTES`, `SMART_ROUTE_MAX_LATENCY_MS`
+- 125 new tests — all green
 
 ---
 
@@ -155,14 +164,16 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 | **M8** | Parallel test suite (60 tests all green) | ✅ Done | 1 week |
 | **M9** | Security Layer & Zero-Trust Model (mTLS, seccomp, JWT) | ✅ Done | 3 weeks |
 | **M10** | Clustering & Extended Network Memory (Cluster Router, PERSISTENT expansion) | ✅ Done | 3 weeks |
-| **M11** | Geo-Routing & SHARE CONFIG Governance (broadcast, CRDT, affinity) | Medium | 3 weeks |
+| **M11** | Geo-Routing & SHARE CONFIG Governance (ShareGovernance, CallGraphAnalyzer, SmartExecutionRouter) | ✅ Done | 3 weeks |
 | **M12** | Distributed Cycles & REPLICA Strategy (partitioned loops, hybrid reap) | Medium | 3 weeks |
 
 ---
 
 ## 🎯 Success Criteria
 
-- **No Regressions**: All 25+ test suites (~944+ tests) continue to pass
+- **No Regressions**: All 26 test suites (~1069+ tests) continue to pass
+- **Consensus Convergence**: Raft single-leader commit + CRDT LWW merge converge identically on all peers
+- **Affinity Co-location**: Call-graph clustering assigns high-communication functions to same node, eliminating cross-network IPC
 - **Zero-Trust**: Untrusted SAFE actions blocked from syscalls via seccomp/WASM sandbox
 - **Mutual Auth**: All inter-node RPCs require mTLS handshake + signed JWT
 - **Cluster Transparency**: PERSISTENT heap accessible cluster-wide with ACID semantics
@@ -183,10 +194,12 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 | v0.33.0 | Parallel Compilation & Telemetry (ParallelCodegenEngine, RemoteCompilerNode, NonBlockingTelemetry, RuntimeDispatcher) | ✅ Q3 2027 |
 | ✅ **v0.34.0** | **Security Layer & Zero-Trust Model** — mTLS, JWT auth, seccomp/WASM sandbox, non-blocking telemetry logs | ✅ Q4 2027 |
 | ✅ **v0.35.0** | **Clustering & Extended Network Memory** — Cluster Router, PERSISTENT heap cluster-wide, Stateful Actors | ✅ Q1 2028 |
-| 🔴 **v0.36.0** | **Geo-Routing & SHARE CONFIG Governance** — Immutable Versioned Broadcast, Raft/CRDT consensus, affinity grouping, SMART adaptive routing | **Q2 2028** |
+| ✅ **v0.36.0** | **Geo-Routing & SHARE CONFIG Governance** — ShareGovernance, CallGraphAnalyzer, SmartExecutionRouter | ✅ Q2 2028 |
 | ⚪ **v0.37.0+** | **Distributed Cycles & REPLICA Strategy** — Round-Robin/Least-Connections stateless, Primary-Backup stateful, CYCLE WITH MISSION CLUSTER, LOCAL_REAP / REMOTE_REAP | **Q3 2028+** |
 
 ---
+
+*PlantLang v0.36.0: Geographic Routing & State Governance. ShareGovernance (SHARED_READ/SHARED_WRITE RAFT+CRDT), CallGraphAnalyzer, SmartExecutionRouter. 125 new tests. 1069+ total tests. All green.*
 
 *PlantLang v0.35.0: Cluster Architecture & Distributed Memory. NodeRegistry, ClusterRouter/CircuitBreaker, DistributedHeap/ConsistentHashRing. 88 new tests. 944+ total tests. All green.*
 

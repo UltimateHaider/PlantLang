@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.35.0
+# 🌿 PlantLang — Chloroplast v0.36.0
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -838,7 +838,7 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.35.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, lock-free telemetry, zero-trust security, and a cluster layer for distributed runtime:
+Chloroplast v0.36.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, lock-free telemetry, zero-trust security, a cluster layer, and a geo-routing governance engine for distributed state and adaptive execution:
 
 ```
 Source (.plnt)
@@ -922,6 +922,22 @@ Source (.plnt)
     │   ├── Virtual nodes (128 default) for balanced distribution
     │   ├── PERSISTENT store with lease-based expiry
     │   └── Stateful actor ownership with proxy detection
+    │
+    ├── cluster/config/share_governance.js  — ShareGovernance (v0.36.0)
+    │   ├── SHARED_READ: O(1) versioned snapshots, TCP Gossip invalidation
+    │   ├── SHARED_WRITE RAFT: single-leader linearizable consensus
+    │   ├── SHARED_WRITE CRDT: state-based LWW register convergence
+    │   └── MISSION CONFIG: GOSSIP_PROPAGATION_MS, CONSENSUS_ENGINE
+    │
+    ├── cluster/affinity/call_graph_analyzer.js  — CallGraphAnalyzer (v0.36.0)
+    │   ├── Bounded depth CALL_GRAPH_MAX_DEPTH (default 3)
+    │   ├── Louvain-inspired community detection for affinity groups
+    │   └── Static placement: co-located functions → same cluster node
+    │
+    ├── cluster/router/smart_execution_router.js  — SmartExecutionRouter (v0.36.0)
+    │   ├── LOCAL_CPU / REMOTE_NODE / GPU_ACCELERATED triage
+    │   ├── < 0.05ms routing overhead per invocation
+    │   └── MISSION CONFIG: SMART_ROUTE_GPU_MIN_BYTES, SMART_ROUTE_MAX_LATENCY_MS
     │   ├── Zero-trust default: SAFE mode has zero permissions
     │   ├── Granular capability matrix per mission mode
     │   ├── Syscall filtering: blocks execve/ptrace/fork/clone/kill in SAFE
@@ -1416,6 +1432,137 @@ MISSION CONFIG LEASE_DURATION = 30000.
 ```
 
 **Consistent hash distribution:** With default 128 virtual nodes per physical node, 1000 keys distributed across 2 nodes achieve a near-even split (typical ratio ≥ 0.98).
+
+---
+
+## Geographic Routing & State Governance (v0.36.0)
+
+Starting with v0.36.0, PlantLang ships with a **Geographic Routing & State Governance Engine** — SHARE CONFIG for shared state with dual-path consensus (RAFT / CRDT), TCP Gossip invalidation for immutable versioned snapshots, bounded call-graph affinity analysis for co-located function placement, and adaptive SMART execution routing across LOCAL_CPU, REMOTE_NODE, and GPU_ACCELERATED targets.
+
+Configuration uses `MISSION CONFIG` for all geo-routing and governance parameters:
+
+```
+MISSION CONFIG GOSSIP_PROPAGATION_MS = 50.
+MISSION CONFIG CONSENSUS_ENGINE = RAFT.
+MISSION CONFIG CALL_GRAPH_MAX_DEPTH = 3.
+MISSION CONFIG SMART_ROUTE_GPU_MIN_BYTES = 1048576.
+MISSION CONFIG SMART_ROUTE_MAX_LATENCY_MS = 15.
+```
+
+### 1. `ShareGovernance` — SHARED_READ / SHARED_WRITE State Engine
+
+The `ShareGovernance` module manages global configuration state with two access paths:
+
+**SHARED_READ (Immutable Versioned Snapshot):** High-frequency read variables are distributed via versioned snapshot broadcasts. Read operations execute locally in **O(1)** with zero lock contention:
+
+```
+1\ REAP sg FROM governance:create.
+
+# Declare a read-only config key
+1\ REAP _ FROM sg:declareReadOnly, "max_connections", 5000.
+
+# O(1) local read — zero lock contention
+1\ REAP config FROM sg:read, "max_connections".
+1\ SHOW config:value.    # → 5000
+1\ SHOW config:version.  # → 1
+
+# Invalidation triggers TCP Gossip across the cluster
+1\ REAP _ FROM sg:invalidate, "max_connections", 10000.
+1\ REAP config FROM sg:read, "max_connections".
+1\ SHOW config:value.    # → 10000
+```
+
+**TCP Gossip invalidation:** When a `SHARED_READ` value is updated, the change propagates to peer nodes within `GOSSIP_PROPAGATION_MS`:
+
+```
+1\ REAP _ FROM sg:addPeer, "worker-1".
+1\ REAP _ FROM sg:addPeer, "worker-2".
+1\ REAP _ FROM sg:declareReadOnly, "threshold", 0.9.
+1\ REAP _ FROM sg:invalidate, "threshold", 0.95.
+# → gossip propagates threshold=0.95 to all peers within 50ms
+```
+
+**SHARED_WRITE (Dynamic Consensus Engine):** Mutable state routes through a pluggable consensus engine:
+
+```
+# RAFT — single-leader linearizable consensus
+1\ REAP _ FROM sg:declareMutable, "cluster_config", "RAFT".
+1\ REAP _ FROM sg:write, "cluster_config", { replicas: 3 }.
+# → RAFT: replicates to followers, commits on majority
+
+# CRDT — conflict-free convergent state
+1\ REAP _ FROM sg:declareMutable, "counter", "CRDT".
+1\ REAP _ FROM sg:write, "counter", { count: 42 }.
+# → CRDT: LWW register with lamport clock, merges automatically
+```
+
+**Directive syntax:** `SHARE CONFIG <KEY> READ_ONLY|MUTABLE [CONSENSUS=RAFT|CRDT]`
+
+```
+1\ SHARE CONFIG db_host READ_ONLY.
+1\ SHARE CONFIG leader MUTABLE CONSENSUS=RAFT.
+1\ SHARE CONFIG distributed_counter MUTABLE CONSENSUS=CRDT.
+```
+
+### 2. `CallGraphAnalyzer` — Bounded Static Affinity Analysis
+
+The `CallGraphAnalyzer` inspects function call graphs during AST pre-compilation to co-locate high-density inter-dependent functions onto the same cluster node — eliminating cross-network IPC latency:
+
+```
+1\ REAP cga FROM affinity:create, { maxDepth: 3 }.
+
+1\ REAP _ FROM cga:addFunction, "api_handler", ["auth", "validate", "process"].
+1\ REAP _ FROM cga:addFunction, "auth", ["db_lookup"].
+1\ REAP _ FROM cga:addFunction, "process", ["transform", "enrich"].
+
+# Bounded analysis — maximum depth 3
+1\ REAP depth FROM cga:getDepth, "api_handler".
+1\ SHOW depth.  # → 3
+
+# Compute affinity groups — Louvain-inspired community detection
+1\ REAP groups FROM cga:computeAffinityGroups.
+1\ SHOW COUNT(groups).    # → 1 (all functions co-located)
+
+# Static placement — assign each affinity group to a target node
+1\ REAP placement FROM cga:computePlacement, ["node-1", "node-2"].
+# → api_handler, auth, validate, process → node-1
+# → db_lookup, transform, enrich → node-2
+```
+
+**Bounded depth guarantee:** The analyzer enforces `CALL_GRAPH_MAX_DEPTH` (default 3, configurable 1–10) during pre-compilation to guarantee O(V·E₍bₒᵤₙdₑd₎) pass times without compiler slowdown.
+
+### 3. `SmartExecutionRouter` — Adaptive Triage (CPU / Remote / GPU)
+
+The `SmartExecutionRouter` dynamically selects the optimal compute target at invocation time with **< 0.05ms routing overhead**:
+
+| Condition | Target | Description |
+|---|---|---|
+| Default | `LOCAL_CPU` | Normal workloads, or remote latency ≥ `SMART_ROUTE_MAX_LATENCY_MS` |
+| Local CPU > 70% + latency < threshold | `REMOTE_NODE` | Offload to lowest-latency alive remote node |
+| Vector op + payload ≥ `SMART_ROUTE_GPU_MIN_BYTES` | `GPU_ACCELERATED` | Matrix/vector/tensor operations on registered GPU pipeline |
+
+```
+1\ REAP router FROM smart:createRouter, { gpuMinBytes: 1048576, maxLatencyMs: 15 }.
+1\ REAP _ FROM router:registerGpuPipeline, "cuda-0".
+
+# Small workload → LOCAL_CPU
+1\ REAP decision FROM router:selectTarget, "simple_add", { x: 1, y: 2 }.
+1\ SHOW decision:target.  # → LOCAL_CPU
+
+# High CPU load + remote available → REMOTE_NODE
+1\ REAP _ FROM router:updateLocalCpuLoad, 0.85.
+1\ REAP _ FROM router:setLatency, "worker-1", 10.
+1\ REAP decision FROM router:selectTarget, "process_data", items.
+1\ SHOW decision:target.  # → REMOTE_NODE
+
+# Large matrix operation → GPU_ACCELERATED
+1\ REAP decision FROM router:selectTarget, "matrix_multiply", largeArray.
+1\ SHOW decision:target.  # → GPU_ACCELERATED
+```
+
+**MISSION CONFIG integration:**
+- `SMART_ROUTE_GPU_MIN_BYTES` — minimum payload (default 1MB) to trigger GPU path
+- `SMART_ROUTE_MAX_LATENCY_MS` — maximum acceptable remote latency (default 15ms)
 
 ---
 

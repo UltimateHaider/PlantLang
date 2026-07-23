@@ -1332,3 +1332,177 @@ return { proxied: false };
   - ConsistentHashRing: add/remove node, distribution ratio (≥0.98), stability, migration, vnode config
   - DistributedHeap: put/get/delete, actors (owner, proxied), lease expiry GC, removeNode re-own, migration stats, benchmarks
   - Total: 88 tests, all green
+
+## 19. Geographic Routing & State Governance Engine (v0.36.0)
+
+The v0.36.0 geo-routing engine provides shared state governance with dual-path consensus, bounded static call-graph affinity analysis, and adaptive SMART execution routing across local CPU, remote nodes, and GPU pipelines.
+
+### 19.1 ShareGovernance — SHARED_READ / SHARED_WRITE State Engine
+
+**File:** `src/cluster/config/share_governance.js`
+
+```
+ShareGovernance (extends EventEmitter)
+├── SHARED_READ (Read Store)
+│   ├── declareReadOnly(key, value) — versioned snapshot
+│   ├── read(key) — O(1) local lookup, zero contention { value, version, source }
+│   ├── invalidate(key, newValue) — bumps version, enqueues TCP Gossip
+│   └── receiveGossip(data) — applies remote invalidation if version > local
+├── SHARED_WRITE (Write Store)
+│   ├── declareMutable(key, consensusMode) — RAFT or CRDT
+│   ├── write(key, value) — consensus-dependent write path
+│   ├── readWrite(key) — { value, consensus, committed }
+│   ├── RAFT path:
+│   │   ├── Append entry to log, replicate to followers
+│   │   ├── Commit on majority (≥ floor((peers+1)/2))
+│   │   └── Emit write:committed / write:replication_failure
+│   ├── CRDT path:
+│   │   ├── LWW Register with lamport clock + nodeId tiebreak
+│   │   ├── Local writes always succeed (same-nodeId override)
+│   │   └── crdtMerge(key, delta) — remote delta merge
+│   └── RAFT _replicateToFollower() — pluggable transport
+├── TCP Gossip Layer
+│   ├── _gossipQueue — batched outbound invalidation/delta messages
+│   ├── _flushGossip() — periodic send to peers via gossip:send event
+│   ├── receiveGossip(data) — process read-only, raft_commit, crdt_delta
+│   └── _startGossipFlush() — setInterval at GOSSIP_PROPAGATION_MS
+├── Directive Parsing
+│   └── parseDirective("SHARE CONFIG <KEY> READ_ONLY|MUTABLE [CONSENSUS=RAFT|CRDT]")
+└── MISSION CONFIG
+    ├── GOSSIP_PROPAGATION_MS (10-1000, default 50)
+    └── CONSENSUS_ENGINE (RAFT|CRDT, default RAFT)
+```
+
+**O(1) local read guarantee:**
+```javascript
+read(key) {
+    const entry = this._readStore.get(key);
+    if (!entry) return null;
+    return { value: entry.value, version: entry.version, source: 'local' };
+}
+```
+No locks, no consensus involvement, no network calls — pure Map lookup.
+
+**TCP Gossip invalidation propagation:**
+```javascript
+_flushGossip() {
+    const batch = this._gossipQueue.splice(0, 50);
+    for (const peerId of this._peers) {
+        this.emit('gossip:send', { target: peerId, batch, origin: this._nodeId });
+    }
+}
+receiveGossip(data) {
+    for (const msg of data.batch) {
+        if ((msg.type === 'read_only') && (!existing || msg.version > existing.version)) {
+            this._readStore.set(msg.key, { value: msg.value, version: msg.version, ... });
+        }
+    }
+}
+```
+
+### 19.2 CallGraphAnalyzer — Bounded Static Affinity Analysis
+
+**File:** `src/cluster/affinity/call_graph_analyzer.js`
+
+```
+CallGraphAnalyzer
+├── addFunction(name, calls[]) — build adjacency matrix
+├── setEdgeWeight(caller, callee, weight) — weighted graph
+├── getDepth(name, visited, depth) — bounded depth traversal
+│   └── hard cap at CALL_GRAPH_MAX_DEPTH (default 3, range 1-10)
+├── computeAffinityGroups()
+│   └── Louvain-inspired community detection:
+│       └── for each unassigned node:
+│           └── BFS to neighbors within depth limit
+│           └── modularity gain ≈ (internalWeight / totalWeight) - (depth / maxDepth) × 0.1
+│           └── gain ≥ 0.1 → add to group
+├── computePlacement(nodeIds[]) — static affinity group → node mapping
+├── getGroupForFunction(name) — lookup runtime
+├── buildFromAST(astFunctions) — factory from parsed AST
+└── MISSION CONFIG: CALL_GRAPH_MAX_DEPTH (1-10, default 3)
+```
+
+**Bounded depth guarantee:** `getDepth()` stops recursion at `this._maxDepth`:
+```javascript
+getDepth(name, visited = new Set(), depth = 0) {
+    if (depth > this._maxDepth) return this._maxDepth;
+    if (visited.has(name)) return depth;
+    // ... traverse up to maxDepth
+}
+```
+
+**Louvain-inspired clustering:**
+```javascript
+_louvainCommunityDetect(startNode, adjacency, assigned) {
+    for each node in BFS from startNode:
+        internalWeight = Σ weighted edges to already-grouped nodes
+        totalWeight = Σ all weighted edges
+        modularityGain = (internalWeight / totalWeight) - (depth / maxDepth) × 0.1
+        if gain ≥ 0.1 → add to current affinity group
+    return group
+}
+```
+
+### 19.3 SmartExecutionRouter — Adaptive Triage Router
+
+**File:** `src/cluster/router/smart_execution_router.js`
+
+```
+SmartExecutionRouter (extends EventEmitter)
+├── selectTarget(action, payload) → { target, reason, ... }
+│   ├── LOCAL_CPU: default — no offload conditions met
+│   ├── REMOTE_NODE: localCpuLoad > 0.7 AND remote latency < maxLatencyMs
+│   └── GPU_ACCELERATED: isMatrixOrVectorOp() AND payloadSize ≥ gpuMinBytes AND GPU pipeline registered
+├── route(action, payload) → async dispatch to selected target
+├── Decision Metrics:
+│   ├── estimatePayloadSize(payload) — NUM=8B, TX=length, Array=N×element
+│   ├── isMatrixOrVectorOp(action) — keyword match (mat, vec, tensor, fft, ...)
+│   ├── measureLatency(nodeId) — cached multi-tap measurement (5s TTL)
+│   └── updateLocalCpuLoad(load) — from telemetry
+├── GPU Pipeline Management
+│   ├── registerGpuPipeline(id), unregisterGpuPipeline(id)
+│   └── hasGpuPipeline()
+└── MISSION CONFIG
+    ├── SMART_ROUTE_GPU_MIN_BYTES (65536 - 1073741824, default 1048576)
+    └── SMART_ROUTE_MAX_LATENCY_MS (1-100, default 15)
+```
+
+**Routing triage decision tree:**
+```javascript
+selectTarget(action, payload) {
+    payloadSize = estimatePayloadSize(payload)
+    isVectorOp = isMatrixOrVectorOp(action)
+    if (isVectorOp && payloadSize ≥ gpuMinBytes && hasGpuPipeline())
+        return GPU_ACCELERATED
+    if (alive nodes exist && localCpuLoad > 0.7)
+        candidates = nodes with latency < maxLatencyMs
+        if (candidates.length > 0) return REMOTE_NODE (lowest latency)
+    return LOCAL_CPU
+}
+```
+
+**Overhead guarantee:** `selectTarget()` measures `Date.now()` diff and emits `router:overhead_warning` if > 0.05ms. Benchmark: 1000 calls in < 50ms average.
+
+### 19.4 Integration Points
+
+| Component | Integration |
+|---|---|
+| ShareGovernance ← NodeRegistry | `_peers` from `reg.getAliveNodes()` + `node:registered`/`node:offline` events |
+| ShareGovernance → TCP Gossip | `gossip:send` events consumed by transport layer |
+| CallGraphAnalyzer → ShareGovernance | Affinity placement can feed `SHARE CONFIG` directives |
+| SmartExecutionRouter ← NodeRegistry | `_selectTarget()` queries `reg.getAliveNodes()` for REMOTE_NODE candidates |
+| SmartExecutionRouter → GPU | `registerGpuPipeline()` / event-based pipeline management |
+| MISSION CONFIG | `configure()` on ShareGovernance, CallGraphAnalyzer, SmartExecutionRouter |
+
+### 19.5 Test Coverage
+
+- `tests/v0.36.0_geo_routing.test.js` — 125 tests:
+  - ShareGovernance SHARED_READ: declare, O(1) read, invalidate, version bump, benchmark (100K reads < 100ms), directive parsing
+  - ShareGovernance Gossip: peer propagation, invalidation broadcast, within GOSSIP_PROPAGATION_MS timing
+  - ShareGovernance SHARED_WRITE RAFT: declareMutable, write with/without followers, commit index, sequential convergence
+  - ShareGovernance SHARED_WRITE CRDT: LWW write, bidirectional convergence, sequential convergence
+  - CallGraphAnalyzer: addFunction, edge weights, getDepth bounded at maxDepth, affinity group detection, computePlacement, buildFromAST
+  - SmartExecutionRouter: GPU pipeline registration, payload estimation, matrix/vector detection, triage transitions (LOCAL/REMOTE/GPU), latency measurement, benchmark (1000 calls < 50ms)
+  - MISSION CONFIG: all 5 directives validated (range enforcement, roundtrip)
+  - Integration: end-to-end scenarios combining governance + affinity + routing
+  - Total: 125 tests, all green
