@@ -1956,3 +1956,179 @@ Two allocators in `src/memory/allocator.js`:
   - Memory allocators: ArenaAllocator alloc/used/remaining/reset/child cascade; ARCHeap retain/release/live count/cascade parent-child
   - Integration: CYCLE with index SHOW, full program run, zero RawStatement
   - Total: 54 tests, all green
+
+---
+
+## 22. Phase 1 LLVM IR Compiler — Primitives & Early SHOW (v0.39.1)
+
+The v0.39.1 release introduces the first phase of a new modular LLVM IR compiler pipeline, built alongside the existing `core/llvm_codegen.js` backend. This pipeline translates primitive PlantLang AST nodes directly into valid, executable LLVM IR, verified by a differential test harness that compares compiled binary output against the existing AST interpreter.
+
+### 22.1 Architecture
+
+```
+Source (.plnt)
+   ↓  core/tokenizer.js / core/parser.js   — existing parsing pipeline
+   ↓  core/ast.js                            — typed AST nodes (LiteralNode, IdentifierNode, CreateStatementNode, SetStatementNode, ShowStatementNode, ProgramNode)
+   ↓
+src/codegen/llvm/llvm_emitter.js             — AST visitor → LLVM IR text
+   ↓  .ll file
+   ↓  llc -O2                                — LLVM static compiler
+   ↓  .s file
+   ↓  gcc + plant_runtime.o                  — link with C runtime
+   ↓  native binary
+```
+
+### 22.2 C Runtime Library
+
+**File:** `runtime/c/plant_runtime.{h,c}`
+
+Five C‑ABI functions exposed to LLVM IR via `declare` headers:
+
+| Function | LLVM Signature | Behaviour |
+|---|---|---|
+| `plnt_print_int` | `declare void @plnt_print_int(i64)` | Prints `%lld\n` |
+| `plnt_print_decimal` | `declare void @plnt_print_decimal(double)` | Prints `%.10g\n` |
+| `plnt_print_bool` | `declare void @plnt_print_bool(i1)` | Prints `true`/`false` |
+| `plnt_print_text` | `declare void @plnt_print_text(i8*)` | Prints `%s\n` |
+| `plnt_pow_i64` | `declare i64 @plnt_pow_i64(i64, i64)` | Integer exponentiation (loop) |
+
+### 22.3 LLVM Codegen Infrastructure
+
+Three modules under `src/codegen/llvm/`:
+
+**`llvm_context.js`**
+- `nextReg()` — returns `%1`, `%2`, ... (1-indexed, resets per function)
+- `getOrCreateStringConstant(str)` — deduplicates string literals, emits `@.str.N` globals
+- `addDeclare(ret, name, params)` — deduplicates `declare` headers
+- `emitPrologue()` — target triple, datalayout, declares, string constants
+
+**`llvm_type_mapper.js`**
+- `toLLVMType(plantType)` — maps PlantLang types to LLVM IR types:
+
+  | PlantLang | LLVM IR |
+  |---|---|
+  | NUM / INT | `i64` |
+  | SCL / DECIMAL | `double` |
+  | FACT / BOOL | `i1` |
+  | TX / TEXT | `i8*` |
+
+- `getPrintFunction(llvmType)` — returns the matching `declare`/`call` signature
+- `llvmTypeOf(value, literalType)` — infers LLVM type from LiteralNode payload
+- Mixed-type helpers: `isIntegerType`, `isFloatType`, implicit promotion rules
+
+**`llvm_symbol_table.js`**
+- `declare(name, plantType)` — stores variable mapping, returns `%name` alloca register
+- `lookup(name)` — returns `{ type, llvmType, alloca }`
+- `emitAllocas()` — emits all `%name = alloca <type>` at function entry (required by LLVM SSA)
+
+### 22.4 AST Emitter
+
+**File:** `src/codegen/llvm/llvm_emitter.js`
+
+Two-pass emitter:
+1. **Collect phase** — scans `ProgramNode.statements` for `CreateStatementNode` entries and registers them in the symbol table
+2. **Emit phase** — visits each statement, appending LLVM IR instructions to `_bodyBuffer`, then wraps in `define i32 @main() { ... }`
+
+#### Statement handling
+
+| AST Node | Action |
+|---|---|
+| `ProgramNode` | Iterates `.statements`; wraps body in `define i32 @main()` |
+| `CreateStatementNode` | `%x = alloca i64` (collected), `store i64 %val, i64* %x` |
+| `SetStatementNode` (string valueExpr) | Evaluates raw expression, `store` to existing alloca |
+| `ShowStatementNode` | Evaluates expression, `call void @plnt_print_*(type %val)` |
+
+#### Expression node handling
+
+| Node type | LLVM IR emission |
+|---|---|
+| `LiteralNode('NUMBER')` | `%N = add i64 <val>, 0` or `%N = fadd double <hex>, 0.0` |
+| `LiteralNode('FACT')` | `%N = add i1 0, true\|false` |
+| `LiteralNode('STRING')` | `@.str.N` global + `getelementptr` to `i8*` |
+| `LiteralNode('RAW_EXPR')` | Delegates to expression parser (see 22.5) |
+| `IdentifierNode(name)` | `%N = load <type>, <type>* %name` |
+
+### 22.5 RAW_EXPR Expression Parser
+
+The parser does not decompose compound expressions into sub-AST nodes; they are stored as `LiteralNode(text, 'RAW_EXPR')`. The emitter contains a recursive-descent expression parser that tokenizes the text and generates LLVM IR directly.
+
+#### Tokenizer
+
+Recognises:
+- **Numbers**: integer (`42`) and decimal (`3.14`) literals
+- **Strings**: double-quoted `"..."` with backslash escaping
+- **Keywords**: `TRUE`, `FALSE`, `AND`, `OR`, `NOT`
+- **Comparison keywords**: `IS`, `IS NOT`, `GREATER THAN`, `LESS THAN`, `GREATER THAN OR EQUAL`, `LESS THAN OR EQUAL`
+- **Operators**: `+`, `-`, `*`, `/`, `%`, `**` (power)
+- **Grouping**: `(`, `)`
+- **Identifiers**: `[a-zA-Z_][a-zA-Z0-9_]*`
+
+#### Precedence (lowest → highest)
+
+| Level | Operators | Associativity |
+|---|---|---|
+| 1 | `OR` | Left |
+| 2 | `AND` | Left |
+| 3 | `NOT` (unary) | Right |
+| 4 | Comparisons (`IS`, `IS NOT`, `GT`, `LT`, `GTE`, `LTE`) | Left |
+| 5 | `+`, `-` | Left |
+| 6 | `*`, `/`, `%` | Left |
+| 7 | Unary `-` | Right |
+| 8 | `**` (power) | Right |
+
+#### Type promotion
+
+When arithmetic mixes `i64` and `double`:
+- `i64` is promoted to `double` via `sitofp`
+- Comparison results always produce `i1`
+- Logical operators (`AND`, `OR`, `NOT`) convert operands to `i1` via `icmp ne` if needed
+- Final stores via `_maybeConvert` insert `fptosi`, `zext`, or `icmp ne` bridges
+
+### 22.6 Differential Test Harness
+
+**File:** `tests/llvm/01_primitives.test.js`
+
+For each test case:
+1. Parse PlantLang source with `core/parser.js`
+2. Run through `Interpreter.runSource()` to capture expected output
+3. Run through `LLVMEmitter.generate()` to produce `.ll`
+4. Compile with `llc -O2` → `gcc` linked against `plant_runtime.o`
+5. Execute the binary, compare stdout
+
+Where the interpreter falls back to the legacy regex path for compound RAW_EXPR expressions (comparisons, logicals), the test uses raw expected values instead of differential comparison.
+
+39 tests across 7 categories:
+- Literal SHOW (integer, decimal, boolean, string)
+- Variable CREATE + SHOW (NUM, SCL, FACT, TX)
+- SET reassignment
+- Arithmetic expressions (precedence, parentheses, mixed-type)
+- Comparison operators (IS, IS NOT, GT, LT, GTE, LTE)
+- Logical operators (AND, OR, NOT)
+- Multi-SHOW sequences
+
+### 22.7 Source Layout
+
+```
+runtime/
+  c/
+    plant_runtime.h       — C‑ABI print helpers header
+    plant_runtime.c       — Implementation (plnt_print_int/decimal/bool/text, plnt_pow_i64)
+
+src/
+  codegen/
+    llvm/
+      llvm_context.js     — Register counter, string pool, declare accumulator
+      llvm_type_mapper.js — PlantLang→LLVM type mapping, print-function registry
+      llvm_symbol_table.js— Variable scope and alloca management
+      llvm_emitter.js     — AST visitor + recursive-descent expression parser
+
+tests/
+  llvm/
+    01_primitives.test.js — 39 differential/raw tests
+```
+
+### 22.8 External Dependencies
+
+- `clang` / `llc` (LLVM ≥ 14) — compiles `.ll` → `.s`
+- `gcc` — links `.s` + `plant_runtime.o` + `-lm` → native binary
+- `llvm-as` — validates generated IR (optional, used in CI)

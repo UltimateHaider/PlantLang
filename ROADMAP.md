@@ -1,4 +1,16 @@
-# PlantLang Roadmap: v0.38.0+ (Completed & Future)
+# PlantLang Roadmap: v0.39.1+ (Completed & Future)
+
+## What v0.39.1 Delivered
+
+### ✅ Completed: Phase 1 LLVM IR Compiler — Primitives & Early SHOW
+
+| Sub-goal | Approach |
+|---|---|
+| C Runtime (print helpers) | `runtime/c/plant_runtime.{h,c}` — `plnt_print_int(i64)`, `plnt_print_decimal(double)`, `plnt_print_bool(i1)`, `plnt_print_text(i8*)`, `plnt_pow_i64(i64, i64)`. Compiled to `.o` and linked with `gcc`. |
+| LLVM Codegen Infrastructure | `llvm_context.js` (register counter `%1`-based, string pool, declare accumulator, x86-64 triple), `llvm_type_mapper.js` (NUM→i64, SCL→double, FACT→i1, TX→i8*), `llvm_symbol_table.js` (variable tracker → alloca). |
+| AST Emitter | `llvm_emitter.js` — dispatches on `ProgramNode`, `LiteralNode` (NUMBER/STRING/FACT/RAW_EXPR), `IdentifierNode`, `CreateStatementNode`, `SetStatementNode`, `ShowStatementNode`. Includes recursive-descent expression parser for RAW_EXPR with full precedence (arithmetic, comparison, logical, parentheses, mixed-type promotion). |
+| Differential Test Harness | `tests/llvm/01_primitives.test.js` — 39 tests: parses PlantLang → generates `.ll` → `llc -O2` → links `plant_runtime.o` → runs binary → compares output against AST interpreter. Validated by `llvm-as`. |
+| Test Count | ~1212+ → **~1251+** across **29 test suites**. All green. |
 
 ## What v0.30.0 Delivered
 
@@ -158,6 +170,20 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 
 ---
 
+## ✅ Version v0.39.1: Phase 1 LLVM IR Compiler — Primitives & Early SHOW
+
+### Completed — Primitives & Early SHOW
+
+| Component | File(s) | Status |
+|---|---|---|
+| C Runtime (print helpers) | `runtime/c/plant_runtime.{h,c}` — `plnt_print_int`, `plnt_print_decimal`, `plnt_print_bool`, `plnt_print_text`, `plnt_pow_i64` | ✅ |
+| LLVM Codegen Infrastructure | `src/codegen/llvm/llvm_context.js`, `llvm_type_mapper.js`, `llvm_symbol_table.js` | ✅ |
+| AST → LLVM IR Emitter | `src/codegen/llvm/llvm_emitter.js` — recursive-descent expression parser, full precedence | ✅ |
+| Differential Test Suite | `tests/llvm/01_primitives.test.js` — 39 tests, all green | ✅ |
+| External Validation | `llvm-as`, `llc -O2`, `gcc + plant_runtime.o` | ✅ |
+
+This release establishes the foundation for a second compilation pipeline: PlantLang source → AST → LLVM IR → native binary, verified by a differential test harness that compares compiled output against the existing AST interpreter. The emitter handles all primitive types (integers, decimals, booleans, strings), variable declaration and mutation, and a full expression sub-language with arithmetic, comparison, and logical operations.
+
 ## ✅ Version v0.38.0: Language Ergonomics & AST Zero-Fallback
 
 **Status:** ✅ Completed
@@ -205,7 +231,7 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 
 #### Test Coverage
 - `tests/v0.38.0_ergonomics.test.js` — 54 tests across all 6 feature areas
-- All 28 test suites at 100% pass rate (~1212+ total tests)
+- All 29 test suites at 100% pass rate (~1251+ total tests)
 
 ---
 
@@ -231,7 +257,7 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 
 ## 🎯 Success Criteria
 
-- **No Regressions**: All 28 test suites (~1212+ tests) continue to pass
+- **No Regressions**: All 29 test suites (~1251+ tests) continue to pass
 - **AST Zero-Fallback**: No `RawStatementNode` produced by any parse — every node in every parsed AST is a typed class
 - **Structured Loop Control**: BREAK exits innermost CYCLE, CONTINUE skips to next iteration, both are syntax errors outside loops
 - **Multi-field Sort Correctness**: Chained comparator sorts by first field, then second, etc.; nulls sort to end regardless of ASC/DESC
@@ -262,9 +288,12 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 | ✅ **v0.36.0** | **Geo-Routing & SHARE CONFIG Governance** — ShareGovernance, CallGraphAnalyzer, SmartExecutionRouter | ✅ Q2 2028 |
 | ✅ **v0.37.0** | **Distributed Cycles & REPLICA Strategy** — Round-Robin/Least-Connections stateless, Primary-Backup stateful, CYCLE WITH MISSION CLUSTER, LOCAL_REAP / REMOTE_REAP | ✅ Q3 2028 |
 | ✅ **v0.38.0** | **Language Ergonomics & AST Zero-Fallback** — CYCLE...IN with index, BREAK/CONTINUE, multi-field SORT, BLOOM AS, nested struct formatting, memory allocators | ✅ Q4 2028 |
-| ⚪ **v0.39.0+** | **Geo-Aware Cycles & Dynamic Replica Rebalancing** — affinity-aware placement, auto-migration | **Q1 2029+** |
+| ✅ **v0.39.1** | **Phase 1 LLVM IR Compiler — Primitives & Early SHOW** — C runtime helpers, LLVM codegen infrastructure, expression parser, differential test harness (39 tests) | ✅ Q1 2029 |
+| ⚪ **v0.40.0+** | **Geo-Aware Cycles & Dynamic Replica Rebalancing** — affinity-aware placement, auto-migration | **Q2 2029+** |
 
 ---
+
+*PlantLang v0.39.1: Phase 1 LLVM IR Compiler — Primitives & Early SHOW. C runtime helpers (plant_runtime), LLVM codegen infrastructure (context, type mapper, symbol table, emitter with full expression parser), differential test harness. 39 new tests. 1251+ total tests. All green.*
 
 *PlantLang v0.38.0: Language Ergonomics & AST Zero-Fallback. CYCLE...IN with index, BREAK/CONTINUE, multi-field SORT, BLOOM AS TABLE/GRAPH/CHART, nested struct formatting, memory allocators (ArenaAllocator / ARCHeap). 54 new tests. 1212+ total tests. All green.*
 

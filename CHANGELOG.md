@@ -1,5 +1,29 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.39.1 — 2026
+
+### New: Phase 1 LLVM IR Compiler — Primitives & Early SHOW
+- **New directories**: `runtime/c/`, `src/codegen/llvm/`, `tests/llvm/`
+- **C Runtime Library** (`runtime/c/plant_runtime.{h,c}`):
+  - `plnt_print_int(i64)` — prints signed 64-bit integers
+  - `plnt_print_decimal(double)` — prints double-precision floats
+  - `plnt_print_bool(i1)` — prints `true`/`false`
+  - `plnt_print_text(i8*)` — prints null-terminated strings
+  - `plnt_pow_i64(i64, i64)` — integer power helper
+- **LLVM Codegen Infrastructure** (`src/codegen/llvm/`):
+  - `llvm_context.js` — register counter (`%1`-based), string constant pool with dedup, `declare` header accumulator, x86-64 target triple/datalayout
+  - `llvm_type_mapper.js` — PlantLang→LLVM type mapping (NUM→i64, SCL→double, FACT→i1, TX→i8*), print-function registry, mixed-type promotion helpers
+  - `llvm_symbol_table.js` — variable declaration tracker, `alloca` emission at function entry
+  - `llvm_emitter.js` — AST visitor + recursive-descent expression parser:
+    - Handles `ProgramNode`, `LiteralNode` (NUMBER/STRING/FACT/RAW_EXPR), `IdentifierNode`, `CreateStatementNode`, `SetStatementNode`, `ShowStatementNode`
+    - Full precedence expression parser for RAW_EXPR: arithmetic (`+ - * / % **`), comparison (IS, IS NOT, GT, LT, GTE, LTE), logical (AND, OR, NOT), parentheses, mixed-type promotion (i64↔double)
+- **Differential Test Harness** (`tests/llvm/01_primitives.test.js`):
+  - 39 tests: parses PlantLang source → generates `.ll` → `llc -O2` → links `plant_runtime.o` → runs binary → captures stdout → compares against AST interpreter output
+  - Covers: integer/decimal/boolean/string literals, CREATE+SHOW, SET, arithmetic precedence, comparisons, logical operators, mixed-type expressions, multi-SHOW sequences
+  - Generated IR validated by `llvm-as` and `llc -O2`
+- Total test count grows from ~1212+ → **~1251+** across **29 test suites**
+- All 39 new tests + all 75 existing tests at 100% pass rate
+
 ## v0.38.0 — 2026
 
 ### New Features
