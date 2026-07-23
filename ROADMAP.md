@@ -1,4 +1,4 @@
-# PlantLang Roadmap: v0.36.0+ (Completed & Future)
+# PlantLang Roadmap: v0.37.0+ (Completed & Future)
 
 ## What v0.30.0 Delivered
 
@@ -132,21 +132,29 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 
 ---
 
-## ⚪ Version v0.37.0+: Distributed Cycles & REPLICA Strategy
+## ✅ Version v0.37.0: Distributed Cycles & REPLICA Strategy
 
-**Priority:** Medium
+**Status:** ✅ Completed
 
 ### Scope & Engineering Implementation
 
 #### REPLICA Strategy
-- Applying Round-Robin / Least-Connections for Stateless Actions
-- Applying Primary-Backup Replication pattern for stateful functions (Stateful PERSISTENT Actors) to guarantee data consistency
+- Stateless routing: LEAST_CONNECTIONS (default) and ROUND_ROBIN strategies via ReplicaManager
+- Stateful Primary-Backup: assignment, delta replication log with ACK modes (ONE/QUORUM default/ALL)
+- Primary failover: NodeRegistry node:offline event intercept, highest-priority backup auto-promotion
+- MISSION CONFIG: REPLICA_STRATEGY, PRIMARY_BACKUP_ACK
 
-#### Distributed Loops (CYCLE WITH MISSION CLUSTER)
-- Partitioning massive iterative loops into chunks and distributing them in parallel across the cluster
+#### Distributed CYCLE (CYCLE WITH MISSION CLUSTER)
+- Adaptive chunking: `max(CYCLE_MIN_CHUNK_SIZE, ceil(N / (activeWorkers × CYCLE_CORE_FACTOR)))`
+- `scatter()` distributes chunks across workers, work-stealing (`_trySteal()`) on chunk completion
+- Straggler detection: `checkTimeouts()` re-queues chunks exceeding `WORKER_TIMEOUT_MS` (1000–60000ms)
+- MISSION CONFIG: CYCLE_CORE_FACTOR, CYCLE_MIN_CHUNK_SIZE, WORKER_TIMEOUT_MS
 
-#### Hybrid Execution
-- Providing explicit control mechanisms over result aggregation location (LOCAL_REAP / REMOTE_REAP)
+#### Hybrid Execution (LOCAL_REAP / REMOTE_REAP)
+- LOCAL_REAP: in-memory deterministic reduce, merge (keyed dedup), and flush
+- REMOTE_REAP: stream to MEMORY_BUFFER or URI-based target with registered handlers
+- MISSION CONFIG: REMOTE_REAP_TARGET
+- 89 new tests — all green
 
 ---
 
@@ -165,13 +173,14 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 | **M9** | Security Layer & Zero-Trust Model (mTLS, seccomp, JWT) | ✅ Done | 3 weeks |
 | **M10** | Clustering & Extended Network Memory (Cluster Router, PERSISTENT expansion) | ✅ Done | 3 weeks |
 | **M11** | Geo-Routing & SHARE CONFIG Governance (ShareGovernance, CallGraphAnalyzer, SmartExecutionRouter) | ✅ Done | 3 weeks |
-| **M12** | Distributed Cycles & REPLICA Strategy (partitioned loops, hybrid reap) | Medium | 3 weeks |
+| **M12** | Distributed Cycles & REPLICA Strategy (partitioned loops, hybrid reap) | ✅ Done | 3 weeks |
+| **M13** | Geo-Aware Cycles & Dynamic Replica Rebalancing (affinity-aware placement, auto-migration) | Low | 2 weeks |
 
 ---
 
 ## 🎯 Success Criteria
 
-- **No Regressions**: All 26 test suites (~1069+ tests) continue to pass
+- **No Regressions**: All 27 test suites (~1158+ tests) continue to pass
 - **Consensus Convergence**: Raft single-leader commit + CRDT LWW merge converge identically on all peers
 - **Affinity Co-location**: Call-graph clustering assigns high-communication functions to same node, eliminating cross-network IPC
 - **Zero-Trust**: Untrusted SAFE actions blocked from syscalls via seccomp/WASM sandbox
@@ -195,9 +204,12 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 | ✅ **v0.34.0** | **Security Layer & Zero-Trust Model** — mTLS, JWT auth, seccomp/WASM sandbox, non-blocking telemetry logs | ✅ Q4 2027 |
 | ✅ **v0.35.0** | **Clustering & Extended Network Memory** — Cluster Router, PERSISTENT heap cluster-wide, Stateful Actors | ✅ Q1 2028 |
 | ✅ **v0.36.0** | **Geo-Routing & SHARE CONFIG Governance** — ShareGovernance, CallGraphAnalyzer, SmartExecutionRouter | ✅ Q2 2028 |
-| ⚪ **v0.37.0+** | **Distributed Cycles & REPLICA Strategy** — Round-Robin/Least-Connections stateless, Primary-Backup stateful, CYCLE WITH MISSION CLUSTER, LOCAL_REAP / REMOTE_REAP | **Q3 2028+** |
+| ✅ **v0.37.0** | **Distributed Cycles & REPLICA Strategy** — Round-Robin/Least-Connections stateless, Primary-Backup stateful, CYCLE WITH MISSION CLUSTER, LOCAL_REAP / REMOTE_REAP | ✅ Q3 2028 |
+| ⚪ **v0.38.0+** | **Geo-Aware Cycles & Dynamic Replica Rebalancing** — affinity-aware placement, auto-migration | **Q4 2028+** |
 
 ---
+
+*PlantLang v0.37.0: Distributed Cycles & REPLICA Strategy. REPLICA (Round-Robin/Least-Connections stateless, Primary-Backup stateful), CYCLE WITH MISSION CLUSTER (adaptive chunking, work-stealing), Hybrid Execution (LOCAL_REAP/REMOTE_REAP). 89 new tests. 1158+ total tests. All green.*
 
 *PlantLang v0.36.0: Geographic Routing & State Governance. ShareGovernance (SHARED_READ/SHARED_WRITE RAFT+CRDT), CallGraphAnalyzer, SmartExecutionRouter. 125 new tests. 1069+ total tests. All green.*
 

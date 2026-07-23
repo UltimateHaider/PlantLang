@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.36.0
+# 🌿 PlantLang — Chloroplast v0.37.0
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -838,7 +838,7 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.36.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, lock-free telemetry, zero-trust security, a cluster layer, and a geo-routing governance engine for distributed state and adaptive execution:
+Chloroplast v0.37.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, lock-free telemetry, zero-trust security, a cluster layer, and a geo-routing governance engine for distributed state and adaptive execution:
 
 ```
 Source (.plnt)
@@ -938,6 +938,23 @@ Source (.plnt)
     │   ├── LOCAL_CPU / REMOTE_NODE / GPU_ACCELERATED triage
     │   ├── < 0.05ms routing overhead per invocation
     │   └── MISSION CONFIG: SMART_ROUTE_GPU_MIN_BYTES, SMART_ROUTE_MAX_LATENCY_MS
+    │
+    ├── cluster/replica/replica_manager.js  — ReplicaManager (v0.37.0)
+    │   ├── Stateless routing: LEAST_CONNECTIONS, ROUND_ROBIN
+    │   ├── Stateful Primary-Backup: assignment, delta replication log
+    │   ├── ACK modes: ONE, QUORUM, ALL
+    │   └── Failover: NodeRegistry event intercept, backup promotion
+    │
+    ├── cluster/cycles/distributed_cycle_engine.js  — DistributedCycleEngine (v0.37.0)
+    │   ├── Adaptive chunking: max(minChunkSize, ceil(N/(workers×coreFactor)))
+    │   ├── scatter/completeChunk/work-stealing (_trySteal)
+    │   ├── Straggler detection: checkTimeouts, WORKER_TIMEOUT_MS
+    │   └── MISSION CONFIG: CYCLE_CORE_FACTOR, CYCLE_MIN_CHUNK_SIZE, WORKER_TIMEOUT_MS
+    │
+    ├── cluster/reap/reap_aggregator.js  — ReapAggregator (v0.37.0)
+    │   ├── LOCAL_REAP: in-memory collect, reduce, merge, flush
+    │   ├── REMOTE_REAP: stream to MEMORY_BUFFER or URI target
+    │   └── MISSION CONFIG: REMOTE_REAP_TARGET
     │   ├── Zero-trust default: SAFE mode has zero permissions
     │   ├── Granular capability matrix per mission mode
     │   ├── Syscall filtering: blocks execve/ptrace/fork/clone/kill in SAFE
@@ -1563,6 +1580,164 @@ The `SmartExecutionRouter` dynamically selects the optimal compute target at inv
 **MISSION CONFIG integration:**
 - `SMART_ROUTE_GPU_MIN_BYTES` — minimum payload (default 1MB) to trigger GPU path
 - `SMART_ROUTE_MAX_LATENCY_MS` — maximum acceptable remote latency (default 15ms)
+
+---
+
+## Distributed Cycles & Replica Governance (v0.37.0)
+
+Starting with v0.37.0, PlantLang ships with a **Distributed Cycles & Replica Governance Engine** — partitioned loop distribution across cluster workers, stateless/stateful replication strategies, and dual-mode result aggregation for distributed execution.
+
+Configuration uses `MISSION CONFIG` for all distributed cycle and replica parameters:
+
+```
+MISSION CONFIG REPLICA_STRATEGY = LEAST_CONNECTIONS.
+MISSION CONFIG PRIMARY_BACKUP_ACK = QUORUM.
+MISSION CONFIG CYCLE_CORE_FACTOR = 2.0.
+MISSION CONFIG CYCLE_MIN_CHUNK_SIZE = 100.
+MISSION CONFIG WORKER_TIMEOUT_MS = 5000.
+MISSION CONFIG REMOTE_REAP_TARGET = MEMORY_BUFFER.
+```
+
+### 1. `ReplicaManager` — Stateless Routing & Stateful Primary-Backup
+
+The `ReplicaManager` provides two replication strategies configurable via `MISSION CONFIG REPLICA_STRATEGY`:
+
+**Stateless Routing** — distributes requests across available nodes:
+
+| Strategy | Behavior |
+|---|---|
+| `LEAST_CONNECTIONS` (default) | Selects node with fewest active connections — even distribution over many calls |
+| `ROUND_ROBIN` | Cycles through nodes in order — deterministic, predictable |
+
+```
+1\ REAP rm FROM replica:create, { strategy: "ROUND_ROBIN" }.
+1\ REAP target FROM rm:selectStatelessTarget.
+1\ SHOW target.   # → "node-A"
+
+1\ REAP target FROM rm:selectStatelessTarget.
+1\ SHOW target.   # → "node-B"
+```
+
+**Stateful Primary-Backup** — assigns a primary and N backups for stateful actors:
+
+```
+1\ REAP result FROM rm:assignPrimary, "session-1".
+1\ SHOW result:primary.   # → "node-A"
+1\ SHOW COUNT(result:backups).   # → 2
+```
+
+**Delta replication log:** Each mutation is recorded as a versioned log entry:
+
+```
+1\ REAP log FROM rm:replicate, "session-1", { type: "UPDATE", field: "score", value: 42 }.
+1\ SHOW log:version.   # → 1
+1\ SHOW log:mode.      # → QUORUM
+```
+
+**ACK modes:** `ONE` (single backup ACK), `QUORUM` (majority, default), `ALL` (every backup):
+
+```
+MISSION CONFIG PRIMARY_BACKUP_ACK = ALL.
+```
+
+**Primary failover:** When the primary fails (detected via NodeRegistry `node:offline`), the highest-priority backup is automatically promoted:
+
+```
+1\ REAP _ FROM reg:markOffline, "node-A".
+# → ReplicaManager receives node:offline event
+1\ REAP newPrimary FROM rm:getPrimary, "session-1".
+1\ SHOW newPrimary.   # → "node-B" (promoted from backup)
+1\ REAP log FROM rm:readLedger, "session-1".
+# → Ledger preserved after failover
+```
+
+### 2. `DistributedCycleEngine` — Adaptive Chunked Loop Execution
+
+The `DistributedCycleEngine` partitions large iteration spaces into chunks and distributes them across cluster workers for parallel execution.
+
+**Chunk size formula:**
+```
+chunkSize = max(CYCLE_MIN_CHUNK_SIZE, ceil(N / (activeWorkers × CYCLE_CORE_FACTOR)))
+```
+
+```
+1\ REAP dce FROM cycles:create, { coreFactor: 2, minChunkSize: 100 }.
+1\ REAP scatter FROM dce:scatter, 50000.
+1\ SHOW scatter:totalChunks.   # → 4 (with 2 workers, coreFactor=2)
+1\ SHOW scatter:chunkSize.     # → 12500
+```
+
+**Work-stealing:** When a worker completes a chunk, the engine automatically steals pending chunks from the queue and assigns them to idle workers:
+
+```
+1\ REAP _ FROM dce:completeChunk, "worker-1", 0, result.
+# → _trySteal() assigns next pending chunk to worker-1
+```
+
+**Timeout recovery:** Straggler workers are detected via `checkTimeouts()` at `WORKER_TIMEOUT_MS` — timed-out chunks are re-queued and reassigned:
+
+```
+MISSION CONFIG WORKER_TIMEOUT_MS = 10000.
+
+1\ REAP timedOut FROM dce:checkTimeouts.
+1\ SHOW COUNT(timedOut).   # → chunks re-queued and available for reassignment
+```
+
+**Completion detection:**
+
+```
+1\ REAP done FROM dce:isComplete.
+1\ SHOW done.   # → true (all chunks completed)
+```
+
+### 3. `ReapAggregator` — LOCAL_REAP / REMOTE_REAP Result Aggregation
+
+The `ReapAggregator` provides dual-mode result collection for distributed cycle outputs:
+
+**LOCAL_REAP** — in-memory deterministic collection with reduce, merge, and flush:
+
+```
+1\ REAP ra FROM reap:create, { mode: "LOCAL_REAP" }.
+
+# Collect results
+1\ REAP _ FROM ra:collect, [1, 2, 3].
+1\ REAP _ FROM ra:collect, [4, 5, 6].
+
+# Reduce by summing
+1\ REAP total FROM ra:reduce, (a, b) => a + b, 0.
+1\ SHOW total.   # → 21
+
+# Merge by key (deduplication)
+1\ REAP merged FROM ra:merge, (r) => r[0], (a, b) => a.concat(b).
+1\ SHOW COUNT(merged).   # → 2
+
+# Flush results
+1\ REAP flushed FROM ra:flush.
+1\ SHOW flushed.   # → 2 (results cleared)
+```
+
+**REMOTE_REAP** — streams results to a remote target:
+
+```
+1\ REAP ra FROM reap:create, { mode: "REMOTE_REAP", remoteTarget: "MEMORY_BUFFER" }.
+
+# Register a URI handler for custom targets
+1\ REAP _ FROM ra:registerHandler, "s3://my-bucket", s3Handler.
+
+# Collect streams to target
+1\ REAP _ FROM ra:collect, [10, 20, 30].
+1\ REAP _ FROM ra:collect, [40, 50, 60].
+1\ REAP state FROM ra:getState.
+1\ SHOW state:resultCount.   # → 2
+```
+
+**MISSION CONFIG integration:**
+- `REPLICA_STRATEGY` — `LEAST_CONNECTIONS` (default) or `ROUND_ROBIN`
+- `PRIMARY_BACKUP_ACK` — `ONE`, `QUORUM` (default), or `ALL`
+- `CYCLE_CORE_FACTOR` — `1.0` to `10.0` (default `2.0`)
+- `CYCLE_MIN_CHUNK_SIZE` — `10` to `100000` (default `100`)
+- `WORKER_TIMEOUT_MS` — `1000` to `60000` (default `5000`)
+- `REMOTE_REAP_TARGET` — `MEMORY_BUFFER` (default) or a URI with `scheme://`
 
 ---
 

@@ -1,4 +1,4 @@
-# PlantLang Language Specification & Ecosystem v0.36.0
+# PlantLang Language Specification & Ecosystem v0.37.0
 
 **PlantLang** is a human-centric, prose-based programming language engineered for both high-level readability and native-level execution performance. It transforms "prose-like" syntax into highly optimized machine code via the LLVM compiler infrastructure.
 
@@ -62,7 +62,7 @@ Arenas are automatically reclaimed:
 
 ---
 
-## 3. Engineering Architecture (The v0.36.0 Stack)
+## 3. Engineering Architecture (The v0.37.0 Stack)
 The ecosystem is built on a modular, industrial-grade pipeline:
 
 1.  **Core Interpreter (Chloroplast Engine):**
@@ -170,8 +170,8 @@ PlantLang employs a state-of-the-art compilation chain:
 ---
 
 ## 6. QA & Quality Assurance
-The **v0.36.0** release is verified by an automated regression suite:
-* **~1069+ Total Tests** across twenty-six test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7—21, depth contract, matrix, dispatcher, runtime, parallel, security, cluster, geo-routing).
+The **v0.37.0** release is verified by an automated regression suite:
+* **~1158+ Total Tests** across twenty-seven test suites (LLVM backend, C codegen, parser migration, diagnostics, tokenizer, Phase 7—21, depth contract, matrix, dispatcher, runtime, parallel, security, cluster, geo-routing).
 * **LLVM Backend**: 50 smoke tests covering CREATE/SHOW, arithmetic, strings, comparisons, IF/CYCLE/SEASON, ACTION/REAP/GIVE (recursion, SCL params, TX returns), WEATHER/SHELTER exception handling, TX fat-pointer operations, and MAP hash tables (LINK, has(), growth, overwrite).
 * **Native LIST Ops**: 15 tests covering COUNT, FIRST, LAST, SUM on empty/populated arrays, type-checker validation.
 * **MAP Types**: 17 tests covering empty map create, map literals, LINK/put semantics, has/get, overwrite, growth (10 entries), SHOW display, type-checker validation.
@@ -279,12 +279,18 @@ The **v0.36.0** release is verified by an automated regression suite:
   - `SmartExecutionRouter` — adaptive LOCAL_CPU / REMOTE_NODE / GPU_ACCELERATED triage, <0.05ms routing overhead
   - 125 new tests in `tests/v0.36.0_geo_routing.test.js` — all green
 
-### 🔜 In Progress / Planned (v0.37.0+)
-- Distributed Cycles (`CYCLE WITH MISSION CLUSTER`)
-- REPLICA Strategy (Round-Robin / Primary-Backup)
-- Hybrid Execution (`LOCAL_REAP` / `REMOTE_REAP`)
-- Geo-Aware Routing with call-graph affinity colocation
+### ✅ Completed (v0.37.0)
+- **Distributed Cycles & Replica Governance** — three distributed cluster modules:
+  - `ReplicaManager` — stateless LEAST_CONNECTIONS / ROUND_ROBIN routing, stateful Primary-Backup replication with ONE/QUORUM/ALL ACK modes, NodeRegistry failover with backup promotion
+  - `DistributedCycleEngine` — adaptive chunk size computation, scatter/completeChunk/work-stealing, timeout recovery with WORKER_TIMEOUT_MS
+  - `ReapAggregator` — LOCAL_REAP in-memory reduce/merge/flush, REMOTE_REAP stream to MEMORY_BUFFER or URI targets (s3://, stream://)
+  - 89 new tests in `tests/v0.37.0_distributed_cycles.test.js` — all green
+
+### 🔜 In Progress / Planned (v0.38.0+)
+- Geo-Aware Cycle Placement (call-graph affinity + distributed cycles)
+- Dynamic Replica Rebalancing (auto-migrate primary on topology change)
+- Remote Reap Stream Compaction (parquet/avro encoding)
 
 ---
 
-*PlantLang v0.36.0 — Geographic Routing & State Governance. ShareGovernance (SHARED_READ/SHARED_WRITE RAFT+CRDT), CallGraphAnalyzer, SmartExecutionRouter. 125 new tests. 1069+ total tests. All green.*
+*PlantLang v0.37.0 — Distributed Cycles & Replica Governance. ReplicaManager, DistributedCycleEngine, ReapAggregator. 89 new tests. 1158+ total tests. All green.*

@@ -1,5 +1,32 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.37.0 — 2026
+
+### New Features
+- **Distributed Cycles & Replica Governance Engine** — three cluster modules implementing partitioned loop distribution, stateless/stateful replication, and dual-mode reap aggregation:
+  - `ReplicaManager` — stateless routing: LEAST_CONNECTIONS (default) and ROUND_ROBIN strategies; stateful Primary-Backup: assignment, delta replication log, ACK modes (ONE/QUORUM default/ALL); NodeRegistry-integrated failover with automatic highest-priority backup promotion; MISSION CONFIG for `REPLICA_STRATEGY` and `PRIMARY_BACKUP_ACK`
+  - `DistributedCycleEngine` — adaptive chunk size computation via `max(minChunkSize, ceil(N / (activeWorkers × CYCLE_CORE_FACTOR)))`; `scatter()` to split iterations into chunks and assign to workers; `completeChunk()` with automatic work-stealing (`_trySteal()`) from idle workers; `checkTimeouts()` for straggler detection and re-queue with `WORKER_TIMEOUT_MS` (default 5000ms, range 1000–60000); `isComplete()` for cycle completion detection; MISSION CONFIG for `CYCLE_CORE_FACTOR`, `CYCLE_MIN_CHUNK_SIZE`, `WORKER_TIMEOUT_MS`
+  - `ReapAggregator` — LOCAL_REAP: in-memory deterministic reduce/merge/flush with keyed deduplication; REMOTE_REAP: stream to MEMORY_BUFFER or URI-based target (`s3://`, `stream://`, etc.) via registered handlers; MISSION CONFIG for `REMOTE_REAP_TARGET`
+
+### Test Suite
+- New `tests/v0.37.0_distributed_cycles.test.js` — 89 tests covering ReplicaManager stateless routing (round-robin, least-connections, 100-call distribution), stateful Primary-Backup (assignment, replication log, ONE/QUORUM/ALL ACK modes), primary failover with backup promotion, DistributedCycleEngine chunking (formula, min chunk, scatter count), work-stealing, timeout recovery, ReapAggregator LOCAL_REAP (collect/reduce/merge/flush), REMOTE_REAP (memory buffer, URI targets), MISSION CONFIG validation (all 7 directives with range enforcement), and integration scenarios
+- Total test count grows from ~1069+ → **~1158+** across **27 test suites**
+- All 27 test suites at 100% pass rate
+
+### Documentation
+- All `.md` files bumped to v0.37.0
+- Language Tour.md — header → v0.37.0, new "Distributed Cycles & Replica Governance (v0.37.0)" section with ReplicaManager, DistributedCycleEngine, ReapAggregator syntax and examples; Architecture diagram updated with all 3 new modules
+- TECHNICAL.md — new Section 20 for Distributed Cycles & Replica Governance design, chunking formula, work-stealing protocol, ACK modes, LOCAL_REAP/REMOTE_REAP pipeline, and code snippets
+- CHANGELOG.md — new v0.37.0 entry describing distributed cycles and test suite
+
+### Source Layout
+- New directories under `src/cluster/`:
+  - `src/cluster/replica/replica_manager.js`
+  - `src/cluster/cycles/distributed_cycle_engine.js`
+  - `src/cluster/reap/reap_aggregator.js`
+
+---
+
 ## v0.36.0 — 2026
 
 ### New Features

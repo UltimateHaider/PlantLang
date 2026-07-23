@@ -1506,3 +1506,293 @@ selectTarget(action, payload) {
   - MISSION CONFIG: all 5 directives validated (range enforcement, roundtrip)
   - Integration: end-to-end scenarios combining governance + affinity + routing
   - Total: 125 tests, all green
+
+## 20. Distributed Cycles & Replica Governance Engine (v0.37.0)
+
+The v0.37.0 distributed cycles engine provides partitioned loop distribution across cluster workers, stateless/stateful replication strategies via ReplicaManager, and dual-mode result aggregation via ReapAggregator.
+
+### 20.1 ReplicaManager — Stateless Routing & Stateful Primary-Backup
+
+**File:** `src/cluster/replica/replica_manager.js`
+
+```
+ReplicaManager (extends EventEmitter)
+├── Stateless Routing
+│   ├── ROUND_ROBIN: sequential target rotation
+│   │   └── selectStatelessTarget() → next node in round-robin order
+│   └── LEAST_CONNECTIONS: node with fewest active connections
+│       └── selectStatelessTarget() → lowest-connection alive node
+├── Stateful Primary-Backup
+│   ├── assignPrimary(actorId) → { primary, backups }
+│   ├── getPrimary(actorId) → nodeId | null
+│   ├── getBackups(actorId) → nodeId[]
+│   ├── replicate(actorId, mutation) → versioned replication log
+│   │   └── log format: { version, mutations[], primary, mode, timestamp }
+│   ├── readLedger(actorId) → ledger state
+│   └── ACK modes:
+│       ├── ONE: success after 1 backup ACK
+│       ├── QUORUM (default): success after floor(n/2)+1 ACKs
+│       └── ALL: success after all backups ACK
+├── NodeRegistry Integration
+│   ├── _onNodeOffline(nodeId) — intercept node:offline event
+│   └── _failover(actorId, deadNode) — promote highest-priority backup
+└── MISSION CONFIG
+    ├── REPLICA_STRATEGY ("LEAST_CONNECTIONS"|"ROUND_ROBIN")
+    └── PRIMARY_BACKUP_ACK ("ONE"|"QUORUM"|"ALL")
+```
+
+**Stateless routing algorithm (LEAST_CONNECTIONS):**
+```javascript
+selectStatelessTarget() {
+    const nodes = this._registry?.getAliveNodes() || [];
+    if (nodes.length === 0) return null;
+    if (this._strategy === 'ROUND_ROBIN') {
+        const idx = this._roundRobinIndex++ % nodes.length;
+        return nodes[idx].id;
+    }
+    // LEAST_CONNECTIONS: sort by activeConnections ASC
+    const sorted = [...nodes].sort((a, b) => a.activeConnections - b.activeConnections);
+    return sorted[0].id;
+}
+```
+
+**Primary assignment algorithm:**
+```javascript
+assignPrimary(actorId) {
+    const nodes = this._registry?.getAliveNodes() || [];
+    if (nodes.length === 0) return null;
+    const primaryIdx = this._hashIndex(actorId, nodes.length);
+    const primary = nodes[primaryIdx].id;
+    const backups = nodes.filter(n => n.id !== primary).map(n => n.id);
+    this._primaries.set(actorId, primary);
+    this._backups.set(actorId, backups);
+    this._ledgers.set(actorId, { version: 0, mutations: [], primary, backups });
+    return { primary, backups };
+}
+```
+
+**Primary failover protocol:**
+```javascript
+_onNodeOffline(nodeId) {
+    for (const [actorId, primary] of this._primaries) {
+        if (primary === nodeId) this._failover(actorId, nodeId);
+    }
+}
+_failover(actorId, deadNode) {
+    const backups = this._backups.get(actorId) || [];
+    const alive = backups.filter(id => id !== deadNode);
+    if (alive.length === 0) return false;
+    const newPrimary = alive[0];  // highest priority = first in backup list
+    this._primaries.set(actorId, newPrimary);
+    this._backups.set(actorId, alive.slice(1));
+    const ledger = this._ledgers.get(actorId);
+    if (ledger) { ledger.primary = newPrimary; ledger.backups = alive.slice(1); }
+    this.emit('replica:promoted', { actorId, newPrimary, oldPrimary: deadNode });
+    return true;
+}
+```
+
+### 20.2 DistributedCycleEngine — Adaptive Chunked Loop Execution
+
+**File:** `src/cluster/cycles/distributed_cycle_engine.js`
+
+```
+DistributedCycleEngine (extends EventEmitter)
+├── computeChunkSize(N) → chunkSize
+│   └── max(CYCLE_MIN_CHUNK_SIZE, ceil(N / (activeWorkers × CYCLE_CORE_FACTOR)))
+├── scatter(totalIterations) → { totalChunks, chunkSize, pending }
+│   └── creates chunk array, assigns initial chunks to workers
+├── completeChunk(workerId, chunkId, result) → boolean
+│   └── marks chunk complete, triggers work-stealing
+├── _trySteal(workerId) → { chunkId, offset, size } | null
+│   └── pops from _pendingChunks, assigns to worker
+├── checkTimeouts() → timedOut chunks
+│   └── re-queues chunks exceeding WORKER_TIMEOUT_MS
+├── isComplete() → boolean (all chunks completed)
+├── getPendingChunkCount() → number
+├── getCompletedChunkCount() → number
+├── stats() → { pending, active, completed, workers, chunkSize }
+└── MISSION CONFIG
+    ├── CYCLE_CORE_FACTOR (1.0-10.0, default 2.0)
+    ├── CYCLE_MIN_CHUNK_SIZE (10-100000, default 100)
+    └── WORKER_TIMEOUT_MS (1000-60000, default 5000)
+```
+
+**Adaptive chunk size computation:**
+```javascript
+computeChunkSize(totalIterations) {
+    const workers = this._getWorkers().length || 1;
+    const formula = Math.ceil(totalIterations / (workers * this._coreFactor));
+    return Math.max(this._minChunkSize, formula);
+}
+```
+
+**Scatter distribution:**
+```javascript
+scatter(totalIterations) {
+    const chunkSize = this.computeChunkSize(totalIterations);
+    const workers = this._getWorkers();
+    this._pendingChunks = [];
+    this._chunkResults = new Map();
+    this._workerChunks = new Map();
+    let remaining = totalIterations;
+    let offset = 0;
+    this._totalChunksCreated = 0;
+    while (remaining > 0) {
+        const size = Math.min(chunkSize, remaining);
+        const chunkId = this._chunkIdCounter++;
+        this._pendingChunks.push({ chunkId, offset, size, totalIterations });
+        offset += size;
+        remaining -= size;
+        this._totalChunksCreated++;
+    }
+    if (workers.length > 0) this._assignInitialChunks(workers);
+    return { totalChunks: this._totalChunksCreated, chunkSize, pending: this._pendingChunks.length };
+}
+```
+
+**Work-stealing protocol:**
+```javascript
+completeChunk(workerId, chunkId, result) {
+    const workerChunks = this._workerChunks.get(workerId);
+    if (!workerChunks?.has(chunkId)) return false;
+    workerChunks.delete(chunkId);
+    this._chunkResults.set(chunkId, result);
+    this._completedChunks++;
+    this._trySteal(workerId);
+    return true;
+}
+_trySteal(workerId) {
+    if (this._pendingChunks.length === 0) return null;
+    const chunk = this._pendingChunks.shift();
+    if (!this._workerChunks.has(workerId)) this._workerChunks.set(workerId, new Set());
+    this._workerChunks.get(workerId).add(chunk.chunkId);
+    this.emit('cycle:stolen', { workerId, chunkId: chunk.chunkId });
+    return chunk;
+}
+```
+
+**Timeout recovery:**
+```javascript
+checkTimeouts() {
+    const now = Date.now();
+    const timedOut = [];
+    for (const [workerId, chunks] of this._workerChunks) {
+        for (const chunkId of chunks) {
+            const chunk = this._activeChunks?.get(chunkId);
+            if (chunk && (now - chunk.assignedAt) > this._workerTimeoutMs) {
+                chunks.delete(chunkId);
+                this._pendingChunks.push(chunk);
+                timedOut.push(chunk);
+            }
+        }
+    }
+    return timedOut;
+}
+```
+
+### 20.3 ReapAggregator — LOCAL_REAP / REMOTE_REAP Result Aggregation
+
+**File:** `src/cluster/reap/reap_aggregator.js`
+
+```
+ReapAggregator (extends EventEmitter)
+├── LOCAL_REAP
+│   ├── collect(data) — accumulate results in-memory array
+│   ├── reduce(fn, initial) — fold over collected results
+│   ├── merge(keyFn, mergeFn) — keyed deduplication/merge
+│   ├── flush() — return and clear all results
+│   ├── getResultCount() — number of collected items
+│   └── getState() → { mode, resultCount, results, ... }
+├── REMOTE_REAP
+│   ├── collect(data) — stream to remote target
+│   ├── registerHandler(uri, handlerFn) — register URI-based target
+│   ├── getState() → { mode, resultCount, remoteTarget, ... }
+│   └── _dispatchToTarget(data) — route to MEMORY_BUFFER or registered handler
+└── MISSION CONFIG: REMOTE_REAP_TARGET
+    ├── "MEMORY_BUFFER" (default) — in-memory accumulation
+    └── URI pattern "scheme://..." — dispatched to registered handler
+```
+
+**LOCAL_REAP collect, reduce, merge, flush:**
+```javascript
+collect(data) {
+    this._results.push(data);
+    this.emit('reap:collected', { mode: this._mode, dataLength: data.length });
+}
+reduce(fn, initial) {
+    if (this._results.length === 0) return initial;
+    let acc = initial;
+    for (const item of this._results) acc = fn(acc, item);
+    return acc;
+}
+merge(keyFn, mergeFn) {
+    const map = new Map();
+    for (const item of this._results) {
+        const key = keyFn(item);
+        if (map.has(key)) map.set(key, mergeFn(map.get(key), item));
+        else map.set(key, item);
+    }
+    return Array.from(map.values());
+}
+flush() {
+    const count = this._results.length;
+    this._results = [];
+    return count;
+}
+```
+
+**REMOTE_REAP streaming dispatch:**
+```javascript
+collect(data) {
+    if (this._remoteTarget === 'MEMORY_BUFFER') {
+        this._results.push(data);
+    } else {
+        this._dispatchToTarget(data);
+    }
+    this._resultCount++;
+}
+_dispatchToTarget(data) {
+    const handler = this._handlers.get(this._remoteTarget);
+    if (handler) handler(data);
+    else this.emit('reap:no_handler', { target: this._remoteTarget });
+}
+registerHandler(uri, handlerFn) {
+    this._handlers.set(uri, handlerFn);
+    this.emit('reap:handler_registered', { uri });
+}
+```
+
+### 20.4 MISSION CONFIG Integration
+
+| Directive | Values | Default | Valid Range |
+|---|---|---|---|
+| `REPLICA_STRATEGY` | `LEAST_CONNECTIONS`, `ROUND_ROBIN` | `LEAST_CONNECTIONS` | — |
+| `PRIMARY_BACKUP_ACK` | `ONE`, `QUORUM`, `ALL` | `QUORUM` | — |
+| `CYCLE_CORE_FACTOR` | Float | `2.0` | `1.0` – `10.0` |
+| `CYCLE_MIN_CHUNK_SIZE` | Integer | `100` | `10` – `100000` |
+| `WORKER_TIMEOUT_MS` | Integer | `5000` | `1000` – `60000` |
+| `REMOTE_REAP_TARGET` | `MEMORY_BUFFER` or URI | `MEMORY_BUFFER` | — |
+
+### 20.5 Integration Points
+
+| Component | Integration |
+|---|---|
+| ReplicaManager ← NodeRegistry | `selectStatelessTarget()` queries `reg.getAliveNodes()`; `_onNodeOffline` event handler for failover |
+| DistributedCycleEngine ← NodeRegistry | `_getWorkers()` queries `reg.getAliveNodes()` for active worker count and chunk assignment |
+| ReapAggregator → ReplicaManager | LOCAL_REAP results can be replicated via ReplicaManager for stateful actors |
+| MISSION CONFIG | `configure()` on ReplicaManager, DistributedCycleEngine, ReapAggregator |
+
+### 20.6 Test Coverage
+
+- `tests/v0.37.0_distributed_cycles.test.js` — 89 tests:
+  - ReplicaManager stateless routing: round-robin rotation, least-connections selection, 100-call distribution, empty registry edge cases
+  - ReplicaManager stateful Primary-Backup: primary assignment, backup selection, replication log creation, ACK modes (ONE/QUORUM/ALL), failover promotion, ledger preservation
+  - DistributedCycleEngine chunking: formula correctness, min chunk override, scatter count, initial worker assignment
+  - DistributedCycleEngine work-stealing: pending chunk reduction, completed chunk tracking, progressive completion
+  - DistributedCycleEngine timeout: re-queue of timed-out chunks, stats reporting
+  - ReapAggregator LOCAL_REAP: collect, reduce (sum, object fields), merge (keyed dedup, value combination), flush, result count
+  - ReapAggregator REMOTE_REAP: MEMORY_BUFFER accumulation, URI-based dispatch, handler registration
+  - MISSION CONFIG: all 7 directives validated with range enforcement and rejection of invalid values
+  - Integration: end-to-end scenarios across all three modules
+  - Total: 89 tests, all green
