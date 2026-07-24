@@ -3,10 +3,15 @@
 class LLVMContext {
     constructor() {
         this.regCounter = 1;
+        this.labelCounter = 1;
+        this.allocaCounter = 1;
         this.stringPool = new Map();
         this.stringIndex = 0;
         this.declarations = new Set();
         this.emitDeclarations = [];
+        this.entryAllocas = [];
+        this.loopStack = [];
+        this.isTerminated = false;
     }
 
     nextReg() {
@@ -15,6 +20,47 @@ class LLVMContext {
 
     peekReg() {
         return `%${this.regCounter}`;
+    }
+
+    nextLabel(prefix) {
+        return `${prefix}.${this.labelCounter++}`;
+    }
+
+    nextAllocaName(base) {
+        const id = this.allocaCounter++;
+        return `%${base}_${id}`;
+    }
+
+    addEntryAlloca(alloca, llvmType) {
+        this.entryAllocas.push({ alloca, llvmType });
+    }
+
+    emitAllocas() {
+        if (this.entryAllocas.length === 0) return '';
+        return this.entryAllocas
+            .map(e => `  ${e.alloca} = alloca ${e.llvmType}`)
+            .join('\n');
+    }
+
+    pushLoop(condLabel, endLabel) {
+        this.loopStack.push({ condLabel, endLabel });
+    }
+
+    popLoop() {
+        this.loopStack.pop();
+    }
+
+    getCurrentLoop() {
+        if (this.loopStack.length === 0) return null;
+        return this.loopStack[this.loopStack.length - 1];
+    }
+
+    markTerminated() {
+        this.isTerminated = true;
+    }
+
+    resetTerminated() {
+        this.isTerminated = false;
     }
 
     getOrCreateStringConstant(str) {
@@ -61,6 +107,9 @@ class LLVMContext {
 
     resetRegs() {
         this.regCounter = 1;
+        this.labelCounter = 1;
+        this.allocaCounter = 1;
+        this.isTerminated = false;
     }
 }
 

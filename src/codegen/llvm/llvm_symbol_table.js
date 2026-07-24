@@ -3,38 +3,46 @@
 const { toLLVMType } = require('./llvm_type_mapper');
 
 class LLVMSymbolTable {
-    constructor() {
+    constructor(parent = null, context = null) {
+        this.parent = parent;
+        this.context = context;
         this.variables = new Map();
-        this.allocas = [];
     }
 
     declare(name, plantType) {
         if (this.variables.has(name)) {
-            throw new Error(`Variable '${name}' already declared`);
+            throw new Error(`Variable '${name}' already declared in this scope`);
         }
         const llvmType = toLLVMType(plantType);
-        const alloca = `%${name}`;
-        this.variables.set(name, { type: plantType, llvmType, alloca });
-        this.allocas.push({ name, alloca, llvmType });
+        const alloca = this.context ? this.context.nextAllocaName(name) : `%${name}`;
+        const entry = { type: plantType, llvmType, alloca };
+        this.variables.set(name, entry);
+        if (this.context) {
+            this.context.addEntryAlloca(alloca, llvmType);
+        }
         return alloca;
     }
 
     lookup(name) {
         const entry = this.variables.get(name);
-        if (!entry) {
-            throw new Error(`Undefined variable '${name}'`);
-        }
-        return entry;
+        if (entry) return entry;
+        if (this.parent) return this.parent.lookup(name);
+        throw new Error(`Undefined variable '${name}'`);
     }
 
     has(name) {
-        return this.variables.has(name);
+        if (this.variables.has(name)) return true;
+        if (this.parent) return this.parent.has(name);
+        return false;
     }
 
-    emitAllocas() {
-        return this.allocas
-            .map(e => `  ${e.alloca} = alloca ${e.llvmType}`)
-            .join('\n');
+    pushScope() {
+        const child = new LLVMSymbolTable(this, this.context);
+        return child;
+    }
+
+    popScope() {
+        return this.parent;
     }
 }
 

@@ -1,6 +1,6 @@
 # Changelog — PlantLang / Chloroplast
 
-## v0.39.1 — 2026
+## v0.39.2 — 2026
 
 ### New: Phase 1 LLVM IR Compiler — Primitives & Early SHOW
 - **New directories**: `runtime/c/`, `src/codegen/llvm/`, `tests/llvm/`

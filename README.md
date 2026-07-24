@@ -1,4 +1,4 @@
-# PlantLang Language Specification & Ecosystem v0.39.1
+# PlantLang Language Specification & Ecosystem v0.39.2
 
 **PlantLang** is a human-centric, prose-based programming language engineered for both high-level readability and native-level execution performance. It transforms "prose-like" syntax into highly optimized machine code via the LLVM compiler infrastructure.
 
@@ -62,7 +62,7 @@ Arenas are automatically reclaimed:
 
 ---
 
-## 3. Engineering Architecture (The v0.39.1 Stack)
+## 3. Engineering Architecture (The v0.39.2 Stack)
 The ecosystem is built on a modular, industrial-grade pipeline:
 
 1.  **Core Interpreter (Chloroplast Engine):**
@@ -170,9 +170,9 @@ PlantLang employs a state-of-the-art compilation chain:
 ---
 
 ## 6. QA & Quality Assurance
-The **v0.39.1** release is verified by an automated regression suite:
+The **v0.39.2** release is verified by an automated regression suite:
 * **~1251+ Total Tests** across twenty-nine test suites (LLVM backend, C codegen, Phase 1 LLVM primitives, parser migration, diagnostics, tokenizer, Phase 7—21, depth contract, matrix, dispatcher, runtime, parallel, security, cluster, geo-routing, distributed cycles, language ergonomics).
-* **LLVM IR Compiler Phase 1 (v0.39.1)**: 39 tests covering integer/decimal/boolean/string literal SHOW, CREATE+SHOW variable pipeline, SET reassignment, arithmetic precedence (+ − * / % **), comparison operators (IS, IS NOT, GREATER THAN, LESS THAN, GTE, LTE), logical operators (AND, OR, NOT), mixed-type promotion, parenthesized sub-expressions, and multi-SHOW sequences — verified via differential test harness.
+* **LLVM IR Compiler Phase 1 (v0.39.2)**: 39 tests covering integer/decimal/boolean/string literal SHOW, CREATE+SHOW variable pipeline, SET reassignment, arithmetic precedence (+ − * / % **), comparison operators (IS, IS NOT, GREATER THAN, LESS THAN, GTE, LTE), logical operators (AND, OR, NOT), mixed-type promotion, parenthesized sub-expressions, and multi-SHOW sequences — verified via differential test harness.
 * **Language Ergonomics (v0.38.0)**: 54 tests covering AST Zero-Fallback invariant, CYCLE...IN (empty/null/index/iteration), BREAK/CONTINUE signals, multi-field SORT (chained comparator/ASC/DESC/null-to-end), nested struct formatting (formatShowValue with deep field access), BLOOM AS (TABLE/GRAPH/CHART rendering, restricted environment detection), memory allocators (ArenaAllocator FAST bump + ARCHeap PERSISTENT cascading refcount), and integration scenarios.
 * **LLVM Backend**: 50 smoke tests covering CREATE/SHOW, arithmetic, strings, comparisons, IF/CYCLE/SEASON, ACTION/REAP/GIVE (recursion, SCL params, TX returns), WEATHER/SHELTER exception handling, TX fat-pointer operations, and MAP hash tables (LINK, has(), growth, overwrite).
 * **Native LIST Ops**: 15 tests covering COUNT, FIRST, LAST, SUM on empty/populated arrays, type-checker validation.
@@ -288,7 +288,7 @@ The **v0.39.1** release is verified by an automated regression suite:
   - `ReapAggregator` — LOCAL_REAP in-memory reduce/merge/flush, REMOTE_REAP stream to MEMORY_BUFFER or URI targets (s3://, stream://)
   - 89 new tests in `tests/v0.37.0_distributed_cycles.test.js` — all green
 
-### ✅ Completed (v0.39.1)
+### ✅ Completed (v0.39.2)
 - **Phase 1 LLVM IR Compiler — Primitives & Early SHOW**:
   - **C Runtime Library**: `plnt_print_int/decimal/bool/text` and `plnt_pow_i64` in `runtime/c/plant_runtime.{h,c}`
   - **Codegen Infrastructure**: `llvm_context.js`, `llvm_type_mapper.js`, `llvm_symbol_table.js` — register counter, type mapping (NUM→i64, SCL→double, FACT→i1, TX→i8*), variable symbol table with alloca emission
@@ -311,6 +311,6 @@ The **v0.39.1** release is verified by an automated regression suite:
 
 ---
 
-*PlantLang v0.39.1 — Phase 1 LLVM IR Compiler. C runtime helpers, full expression parser, differential test harness (39 tests). 1212+ → 1251+ total tests across 29 suites. All green.*
+*PlantLang v0.39.2 — Phase 1 LLVM IR Compiler. C runtime helpers, full expression parser, differential test harness (39 tests). 1212+ → 1251+ total tests across 29 suites. All green.*
 
 *PlantLang v0.38.0 — Language Ergonomics & AST Zero-Fallback. CYCLE...IN with index, BREAK/CONTINUE, multi-field SORT, BLOOM AS TABLE/GRAPH/CHART, nested struct formatting, memory allocators. 54 new tests. 1212+ total tests. All green.*

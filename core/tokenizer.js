@@ -27,6 +27,7 @@ const KEYWORDS = new Set([
   'NUM','SCL','TX','FACT','LIST','INSTANCE','VEIN','SHAPE','STRUCT','CHOICE','NATIVE',
   'SPLIT','JOIN',
   'BALANCED','FAST','SAFE','SMART','PERSISTENT',
+  'BREAK','CONTINUE',
 ]);
 
 const TOKEN = {

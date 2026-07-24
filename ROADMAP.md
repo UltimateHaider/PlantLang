@@ -1,6 +1,6 @@
-# PlantLang Roadmap: v0.39.1+ (Completed & Future)
+# PlantLang Roadmap: v0.39.2+ (Completed & Future)
 
-## What v0.39.1 Delivered
+## What v0.39.2 Delivered
 
 ### ✅ Completed: Phase 1 LLVM IR Compiler — Primitives & Early SHOW
 
@@ -170,7 +170,7 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 
 ---
 
-## ✅ Version v0.39.1: Phase 1 LLVM IR Compiler — Primitives & Early SHOW
+## ✅ Version v0.39.2: Phase 1 LLVM IR Compiler — Primitives & Early SHOW
 
 ### Completed — Primitives & Early SHOW
 
@@ -288,12 +288,12 @@ This release establishes the foundation for a second compilation pipeline: Plant
 | ✅ **v0.36.0** | **Geo-Routing & SHARE CONFIG Governance** — ShareGovernance, CallGraphAnalyzer, SmartExecutionRouter | ✅ Q2 2028 |
 | ✅ **v0.37.0** | **Distributed Cycles & REPLICA Strategy** — Round-Robin/Least-Connections stateless, Primary-Backup stateful, CYCLE WITH MISSION CLUSTER, LOCAL_REAP / REMOTE_REAP | ✅ Q3 2028 |
 | ✅ **v0.38.0** | **Language Ergonomics & AST Zero-Fallback** — CYCLE...IN with index, BREAK/CONTINUE, multi-field SORT, BLOOM AS, nested struct formatting, memory allocators | ✅ Q4 2028 |
-| ✅ **v0.39.1** | **Phase 1 LLVM IR Compiler — Primitives & Early SHOW** — C runtime helpers, LLVM codegen infrastructure, expression parser, differential test harness (39 tests) | ✅ Q1 2029 |
+| ✅ **v0.39.2** | **Phase 1 LLVM IR Compiler — Primitives & Early SHOW** — C runtime helpers, LLVM codegen infrastructure, expression parser, differential test harness (39 tests) | ✅ Q1 2029 |
 | ⚪ **v0.40.0+** | **Geo-Aware Cycles & Dynamic Replica Rebalancing** — affinity-aware placement, auto-migration | **Q2 2029+** |
 
 ---
 
-*PlantLang v0.39.1: Phase 1 LLVM IR Compiler — Primitives & Early SHOW. C runtime helpers (plant_runtime), LLVM codegen infrastructure (context, type mapper, symbol table, emitter with full expression parser), differential test harness. 39 new tests. 1251+ total tests. All green.*
+*PlantLang v0.39.2: Phase 1 LLVM IR Compiler — Primitives & Early SHOW. C runtime helpers (plant_runtime), LLVM codegen infrastructure (context, type mapper, symbol table, emitter with full expression parser), differential test harness. 39 new tests. 1251+ total tests. All green.*
 
 *PlantLang v0.38.0: Language Ergonomics & AST Zero-Fallback. CYCLE...IN with index, BREAK/CONTINUE, multi-field SORT, BLOOM AS TABLE/GRAPH/CHART, nested struct formatting, memory allocators (ArenaAllocator / ARCHeap). 54 new tests. 1212+ total tests. All green.*
 
