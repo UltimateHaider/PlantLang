@@ -1,6 +1,6 @@
 # ═══════════════════════════════════════════════════════════
-# PlantLang — مجموعة الاختبارات الكاملة
-# تشغيل: chloroplast run tests/all.plnt
+# PlantLang — Complete Test Suite
+# Run: chloroplast run tests/all.plnt
 # ═══════════════════════════════════════════════════════════
 
 MISSION: SAFE.
@@ -11,19 +11,19 @@ PLANT lists.
 1\ CREATE passed(NUM) TO 0.
 1\ CREATE failed(NUM) TO 0.
 
-# ── دالة التحقق ───────────────────────────────────────────
+# ── Assert Function ───────────────────────────────────────────
 1\ ACTION assert(label(TX), actual(TX), expected(TX)),
 2\   IF actual IS expected,
 3\     INCREASE passed BY 1.
 3\     SHOW "  ✓ " + label.
 3\     GIVE TRUE.
 2\   INCREASE failed BY 1.
-2\   SHOW "  ✕ " + label + " — الفعلي: " + actual + " | المتوقع: " + expected.
+2\   SHOW "  ✕ " + label + " — Actual: " + actual + " | Expected: " + expected.
 2\   GIVE FALSE.
 1\ /ACTION.
 
-# ═══ 1. أنواع البيانات ════════════════════════════════════
-1\ SHOW "── أنواع البيانات ──".
+# ═══ 1. Data Types ════════════════════════════════════
+1\ SHOW "── Data Types ──".
 
 1\ CREATE n(NUM)  TO 42.
 1\ CREATE s(SCL)  TO 3.14.
@@ -31,14 +31,14 @@ PLANT lists.
 1\ CREATE f(FACT) TO TRUE.
 1\ CREATE lst(LIST) TO 1, 2, 3.
 
-1\ REAP _ FROM assert, "NUM صحيح",  n,   42.
-1\ REAP _ FROM assert, "SCL صحيح",  s,   3.14.
-1\ REAP _ FROM assert, "TX صحيح",   t,   "hello".
-1\ REAP _ FROM assert, "FACT صحيح", f,   TRUE.
+1\ REAP _ FROM assert, "NUM correct",  n,   42.
+1\ REAP _ FROM assert, "SCL correct",  s,   3.14.
+1\ REAP _ FROM assert, "TX correct",   t,   "hello".
+1\ REAP _ FROM assert, "FACT correct", f,   TRUE.
 1\ REAP _ FROM assert, "COUNT LIST", COUNT lst, 3.
 
-# ═══ 2. العمليات الحسابية ════════════════════════════════
-1\ SHOW "── العمليات الحسابية ──".
+# ═══ 2. Arithmetic Operations ════════════════════════════════
+1\ SHOW "── Arithmetic Operations ──".
 
 1\ CREATE r_add(NUM) TO 10 + 5.
 1\ CREATE r_sub(NUM) TO 10 - 3.
@@ -48,29 +48,29 @@ PLANT lists.
 1\ CREATE r_pow(NUM) TO 2 ** 8.
 1\ CREATE r_fld(NUM) TO 7 // 2.
 
-1\ REAP _ FROM assert, "جمع",          r_add, 15.
-1\ REAP _ FROM assert, "طرح",          r_sub, 7.
-1\ REAP _ FROM assert, "ضرب",          r_mul, 28.
-1\ REAP _ FROM assert, "قسمة",         r_div, 2.5.
-1\ REAP _ FROM assert, "باقي القسمة",  r_mod, 1.
-1\ REAP _ FROM assert, "أس",           r_pow, 256.
-1\ REAP _ FROM assert, "قسمة صحيحة",  r_fld, 3.
+1\ REAP _ FROM assert, "Add",          r_add, 15.
+1\ REAP _ FROM assert, "Subtract",          r_sub, 7.
+1\ REAP _ FROM assert, "Multiply",          r_mul, 28.
+1\ REAP _ FROM assert, "Divide",         r_div, 2.5.
+1\ REAP _ FROM assert, "باقي الDivide",  r_mod, 1.
+1\ REAP _ FROM assert, "Power",           r_pow, 256.
+1\ REAP _ FROM assert, "Divide صحيحة",  r_fld, 3.
 
-# ═══ 3. القوائم ══════════════════════════════════════════
-1\ SHOW "── القوائم ──".
+# ═══ 3. Lists ══════════════════════════════════════════
+1\ SHOW "── Lists ──".
 
 1\ CREATE fruits(LIST) TO apple, banana, mango.
 1\ PUT kiwi INTO fruits.
 1\ TAKE apple FROM fruits.
 1\ SORT fruits.
 
-1\ REAP _ FROM assert, "PUT عمل",    COUNT fruits, 3.
-1\ REAP _ FROM assert, "TAKE عمل",   FIRST fruits, "banana".
-1\ REAP _ FROM assert, "SORT عمل",   FIRST fruits, "banana".
-1\ REAP _ FROM assert, "LAST بعد SORT", LAST fruits, "mango".
+1\ REAP _ FROM assert, "PUT works",    COUNT fruits, 3.
+1\ REAP _ FROM assert, "TAKE works",   FIRST fruits, "banana".
+1\ REAP _ FROM assert, "SORT works",   FIRST fruits, "banana".
+1\ REAP _ FROM assert, "LAST after SORT", LAST fruits, "mango".
 
-# ═══ 4. الأفعال ══════════════════════════════════════════
-1\ SHOW "── الأفعال ──".
+# ═══ 4. Verbs ══════════════════════════════════════════
+1\ SHOW "── Verbs ──".
 
 1\ ACTION multiply(a(NUM), b(NUM)),
 2\   GIVE a * b.
@@ -91,13 +91,13 @@ PLANT lists.
 1\ REAP r3 FROM is_palindrome, "level".
 1\ REAP r4 FROM is_palindrome, "hello".
 
-1\ REAP _ FROM assert, "ضرب 6*7",       r1, 42.
+1\ REAP _ FROM assert, "Multiply 6*7",       r1, 42.
 1\ REAP _ FROM assert, "2^10",           r2, 1024.
 1\ REAP _ FROM assert, "palindrome yes", r3, TRUE.
 1\ REAP _ FROM assert, "palindrome no",  r4, FALSE.
 
-# ═══ 5. العودية (Recursion) ══════════════════════════════
-1\ SHOW "── العودية ──".
+# ═══ 5. Recursion ══════════════════════════════
+1\ SHOW "── Recursion ──".
 
 1\ ACTION fib(n(NUM)),
 2\   IF n IS 0, GIVE 0.
@@ -111,9 +111,9 @@ PLANT lists.
 1\ REAP f5 FROM fib, 5.
 1\ REAP f10 FROM fib, 10.
 
-1\ REAP _ FROM assert, "فيبوناتشي(0)",  f0,  0.
-1\ REAP _ FROM assert, "فيبوناتشي(5)",  f5,  5.
-1\ REAP _ FROM assert, "فيبوناتشي(10)", f10, 55.
+1\ REAP _ FROM assert, "Fibonacci(0)",  f0,  0.
+1\ REAP _ FROM assert, "Fibonacci(5)",  f5,  5.
+1\ REAP _ FROM assert, "Fibonacci(10)", f10, 55.
 
 # ═══ 6. MATCH / YIELD ════════════════════════════════════
 1\ SHOW "── MATCH/YIELD ──".
@@ -137,8 +137,8 @@ PLANT lists.
 1\ REAP _ FROM assert, "MATCH C", g3, "C".
 1\ REAP _ FROM assert, "MATCH F", g4, "F".
 
-# ═══ 7. مكتبة math ═══════════════════════════════════════
-1\ SHOW "── مكتبة math ──".
+# ═══ 7. math library ═══════════════════════════════════════
+1\ SHOW "── math library ──".
 
 1\ REAP sq   FROM math:SQRT,  144.
 1\ REAP ab   FROM math:ABS,   -7.
@@ -152,8 +152,8 @@ PLANT lists.
 1\ REAP _ FROM assert, "FLOOR(3.9)",fl, 3.
 1\ REAP _ FROM assert, "POW(2,10)", pw, 1024.
 
-# ═══ 8. مكتبة strings ════════════════════════════════════
-1\ SHOW "── مكتبة strings ──".
+# ═══ 8. strings library ════════════════════════════════════
+1\ SHOW "── strings library ──".
 
 1\ CREATE word(TX) TO "PlantLang".
 
@@ -169,8 +169,8 @@ PLANT lists.
 1\ REAP _ FROM assert, "REVERSE", rev, "gnaLtnalP".
 1\ REAP _ FROM assert, "REPEAT",  rep, "ababab".
 
-# ═══ 9. مكتبة lists ══════════════════════════════════════
-1\ SHOW "── مكتبة lists ──".
+# ═══ 9. lists library ══════════════════════════════════════
+1\ SHOW "── lists library ──".
 
 1\ CREATE data(LIST) TO 3, 1, 4, 1, 5, 9, 2, 6.
 
@@ -220,26 +220,26 @@ PLANT lists.
 1\ REAP _ FROM assert, "reset ثم tick", tr, 1.
 
 # ═══ 11. WEATHER / SHELTER ═══════════════════════════════
-1\ SHOW "── العواصف ──".
+1\ SHOW "── Storms ──".
 
-1\ CREATE storm_caught(TX) TO "لا".
+1\ CREATE storm_caught(TX) TO "no".
 
 1\ WEATHER,
 2\   SHOW ghost_for_test.
 1\ SHELTER MISSING_STORM,
-2\   SET storm_caught TO "نعم".
+2\   SET storm_caught TO "yes".
 1\ CALM.
 
-1\ REAP _ FROM assert, "MISSING_STORM محلوقة", storm_caught, "نعم".
+1\ REAP _ FROM assert, "MISSING_STORM caught", storm_caught, "yes".
 
-1\ CREATE zero_caught(TX) TO "لا".
+1\ CREATE zero_caught(TX) TO "no".
 1\ WEATHER,
 2\   CREATE bad(NUM) TO 5 / 0.
 1\ SHELTER ZERO_STORM,
-2\   SET zero_caught TO "نعم".
+2\   SET zero_caught TO "yes".
 1\ CALM.
 
-1\ REAP _ FROM assert, "ZERO_STORM محلوقة", zero_caught, "نعم".
+1\ REAP _ FROM assert, "ZERO_STORM caught", zero_caught, "yes".
 
 # ═══ 12. CYCLE / SEASON ══════════════════════════════════
 1\ SHOW "── CYCLE/SEASON ──".
@@ -251,7 +251,7 @@ PLANT lists.
 2\   INCREASE cycle_sum BY item.
 1\.
 
-1\ REAP _ FROM assert, "CYCLE مجموع", cycle_sum, 100.
+1\ REAP _ FROM assert, "CYCLE sum", cycle_sum, 100.
 
 1\ CREATE season_n(NUM) TO 1.
 1\ CREATE season_sum(NUM) TO 0.
@@ -261,7 +261,7 @@ PLANT lists.
 2\   INCREASE season_n BY 1.
 1\.
 
-1\ REAP _ FROM assert, "SEASON مجموع 1-5", season_sum, 15.
+1\ REAP _ FROM assert, "SEASON sum 1-5", season_sum, 15.
 
 # ═══ ANALYZE / TYPEOF / NOW / WAIT / ROOT_SCOPE ════════════
 1\ SHOW "── ANALYZE / NOW / ROOT_SCOPE ──".
@@ -288,20 +288,20 @@ ROOT_SCOPE RSCFG,
   LINK "theme" WITH "dark" IN RSCFG.
   LINK "ver" WITH "1.0" IN RSCFG.
 ROOT_SCOPE/.
-1\ REAP _ FROM assert, "ROOT_SCOPE قراءة", RSCFG:"theme", "dark".
+1\ REAP _ FROM assert, "ROOT_SCOPE read", RSCFG:"theme", "dark".
 
 1\ WEATHER,
 2\   SET RSCFG:"theme" TO "light".
 1\ SHELTER LOCK_STORM,
-2\   REAP _ FROM assert, "ROOT_SCOPE محمية", "locked", "locked".
+2\   REAP _ FROM assert, "ROOT_SCOPE protected", "locked", "locked".
 1\ CALM.
 
 # ═══ ملخص النتائج ════════════════════════════════════════
 1\ SHOW "".
 1\ SHOW "═══════════════════════════════".
-1\ SHOW "نتائج الاختبارات:".
-1\ SHOW "  ✓ نجح: " + passed.
-1\ SHOW "  ✕ فشل: " + failed.
+1\ SHOW "Test Results:".
+1\ SHOW "  ✓ Passed: " + passed.
+1\ SHOW "  ✕ Failed: " + failed.
 1\ CREATE total(NUM) TO passed + failed.
-1\ SHOW "  المجموع: " + total.
-1\ IF failed IS 0, SHOW "🌿 جميع الاختبارات نجحت!".
+1\ SHOW "  Total: " + total.
+1\ IF failed IS 0, SHOW "🌿 All tests passed!".

@@ -1,4 +1,4 @@
-# PlantLang — مثال 03: العواصف
+# PlantLang — Example 03: Storms
 MISSION: SAFE.
 
 1\ WEATHER,
@@ -6,34 +6,34 @@ MISSION: SAFE.
 2\   CREATE b(NUM) TO 0.
 2\   CREATE c(NUM) TO a / b.
 1\ SHELTER ZERO_STORM,
-2\   SHOW "ZERO_STORM: لا يمكن القسمة على صفر".
+2\   SHOW "ZERO_STORM: no يمكن الDivide على صفر".
 1\ CALM.
 
 1\ WEATHER,
 2\   SHOW ghost_variable.
 1\ SHELTER MISSING_STORM,
-2\   SHOW "MISSING_STORM: المتغير غير موجود".
+2\   SHOW "MISSING_STORM: Variable not found".
 1\ CALM.
 
 1\ WEATHER,
 2\   CREATE lst(LIST) TO 1, 2, 3.
 2\   INCREASE lst BY 5.
 1\ SHELTER TYPE_STORM,
-2\   SHOW "TYPE_STORM: عملية خاطئة على LIST".
+2\   SHOW "TYPE_STORM: Invalid operation on LIST".
 1\ CALM.
 
 1\ WEATHER,
 2\   CREATE colors(LIST) TO red, green.
 2\   TAKE yellow FROM colors.
 1\ SHELTER LOST_STORM,
-2\   SHOW "LOST_STORM: العنصر غير موجود".
+2\   SHOW "LOST_STORM: Element not found".
 1\ CALM.
 
 ROOT MAX_SIZE TO 100.
 1\ WEATHER,
 2\   SET MAX_SIZE TO 200.
 1\ SHELTER LOCK_STORM,
-2\   SHOW "LOCK_STORM: ROOT محمية".
+2\   SHOW "LOCK_STORM: ROOT protected".
 1\ CALM.
 
 1\ WEATHER,

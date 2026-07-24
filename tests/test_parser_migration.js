@@ -174,7 +174,7 @@ console.log('\n\x1b[1mParser / AST Migration Verification\x1b[0m\n');
   let r1 = '', r2 = '';
   try { r1 = execSync(`node ${path.join(root, 'chloroplast.js')} run ${path.join(root, 'tests/all.plnt')} 2>&1`, { encoding: 'utf8' }); } catch (e) { r1 = e.stdout || ''; }
   try { r2 = execSync(`node ${path.join(root, 'chloroplast.js')} verify ${path.join(root, 'tests/suite.plnt')} 2>&1`, { encoding: 'utf8' }); } catch (e) { r2 = e.stdout || ''; }
-  check('legacy tests/all.plnt still 56/56 via the original engine', r1.includes('✕ فشل: 0'));
+  check('legacy tests/all.plnt still 56/56 via the original engine', r1.includes('✕ Failed: 0'));
   check('legacy tests/suite.plnt still passing via the original engine', r2.includes('0 failed'));
 }
 

@@ -27,6 +27,17 @@ class LLVMEmitter {
         this.ctx.addDeclare('void', 'plant_array_set', ['i64*', 'i64', 'i64']);
         this.ctx.addDeclare('void', 'plant_free', ['i8*']);
 
+        /* ── v0.42.0: Map / Iterator / Domain ── */
+        this.ctx.addDeclare('i8*', 'plant_map_create', ['i64']);
+        this.ctx.addDeclare('void', 'plant_map_set', ['i8*', 'i8*', 'i8*']);
+        this.ctx.addDeclare('i8*', 'plant_map_get', ['i8*', 'i8*']);
+        this.ctx.addDeclare('i8*', 'plant_map_keys', ['i8*', 'i64*']);
+        this.ctx.addDeclare('void', 'plant_map_free', ['i8*']);
+        this.ctx.addDeclare('void', 'plant_sys_action', ['i8*', 'i8*']);
+        this.ctx.addDeclare('void', 'plant_env_set_weather', ['i8*']);
+        this.ctx.addDeclare('i8*', 'plant_env_get_weather', []);
+        this.ctx.addDeclare('void', 'plant_entity_set_species', ['i8*', 'i8*']);
+
         this.ctx.resetRegs();
         this._bodyBuffer = [];
         this.symbols = new LLVMSymbolTable(null, this.ctx);
@@ -141,6 +152,10 @@ ${body}
             case 'VerifyStatement':   /* no-op in compiled output */ break;
             case 'HarvestStatement':  this._emitHarvestStatement(stmt); break;
             case 'ListenBranchStatement': this._emitListenBranchStatement(stmt); break;
+            case 'LinkStatement':     this._emitLinkStatement(stmt); break;
+            case 'ForInStatement':    this._emitForInStatement(stmt); break;
+            case 'WeatherStatement':  this._emitWeatherStatement(stmt); break;
+            case 'SpeciesDeclaration': this._emitSpeciesDeclaration(stmt); break;
         }
     }
 
@@ -455,6 +470,7 @@ ${body}
             case 'Literal':      return this._emitLiteral(node);
             case 'Identifier':   return this._emitIdentifier(node);
             case 'ArrayLiteral': return this._emitArrayLiteral(node);
+            case 'MapLiteral':   return this._emitMapLiteral(node);
             case 'IndexAccess':  return this._emitIndexAccess(node);
             default:             return null;
         }
@@ -882,7 +898,6 @@ ${body}
         }
         return val;
     }
-}
 
     // ═══════════════════════════════════════════════════════════════════
     //  HARVEST — v0.41.0 outbound HTTP request
@@ -977,6 +992,184 @@ ${body}
 
         this._emitLabel(doneLabel);
         this._emitLine(`  call void @plant_net_close(i64 ${listenFd})`);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  LINK — v0.42.0 map key-value insertion
+    // ═══════════════════════════════════════════════════════════════════
+    _emitLinkStatement(stmt) {
+        const mapInfo = this.symbols.lookup(stmt.mapIdent);
+        if (!mapInfo) { this._emitLine(`  ; LINK — unknown map "${stmt.mapIdent}"`); return; }
+        const mapReg = this.ctx.nextReg();
+        this._emitLine(`  ${mapReg} = load i8*, i8** ${mapInfo.alloca}`);
+
+        const keyVal = this._emitExpressionNode(stmt.keyExpr);
+        if (!keyVal) { this._emitLine('  ; LINK KEY — unsupported'); return; }
+        const keyStr = this._maybeConvert(keyVal, 'i8*');
+
+        const valExpr = this._emitExpressionNode(stmt.valueExpr);
+        if (!valExpr) { this._emitLine('  ; LINK VALUE — unsupported'); return; }
+        const valStr = this._maybeConvert(valExpr, 'i8*');
+
+        this._emitLine(`  call void @plant_map_set(i8* ${mapReg}, i8* ${keyStr.reg}, i8* ${valStr.reg})`);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  FOR...IN — v0.42.0 iteration over maps / arrays
+    // ═══════════════════════════════════════════════════════════════════
+    _emitForInStatement(stmt) {
+        const sourceVal = this._emitExpressionNode(stmt.sourceExpr);
+        if (!sourceVal) { this._emitLine('  ; FOR...IN source — unsupported'); return; }
+
+        const loopLabel = this.ctx.nextLabel('forin.loop');
+        const bodyLabel = this.ctx.nextLabel('forin.body');
+        const endLabel  = this.ctx.nextLabel('forin.end');
+
+        if (!this.symbols.has(stmt.iterVar)) {
+            this.symbols.declare(stmt.iterVar, 'NUM');
+        }
+        const iterInfo = this.symbols.lookup(stmt.iterVar);
+
+        /* Allocate index variable and initialize to 0 */
+        const idxName = this.ctx.nextAllocaName('forin_idx');
+        this.ctx.addEntryAlloca(idxName, 'i64');
+        this._emitLine(`  store i64 0, i64* ${idxName}`);
+
+        /* Get capacity */
+        let capReg;
+        if (sourceVal.llvmType === 'i64*') {
+            capReg = this.ctx.nextReg();
+            this._emitLine(`  ${capReg} = load i64, i64* ${sourceVal.reg}`);
+        } else if (sourceVal.llvmType === 'i8*') {
+            /* For map, we use a fixed iteration limit */
+            capReg = { reg: '100', llvmType: 'i64' };
+            this._emitLine(`  ; FOR...IN over MAP — using cap 100`);
+        } else {
+            this._emitLine('  ; FOR...IN — unsupported container type');
+            return;
+        }
+        const capI64 = this._maybeConvert(capReg, 'i64');
+
+        this._emitBr(loopLabel);
+        this._emitLabel(loopLabel);
+        const idxReg = this.ctx.nextReg();
+        this._emitLine(`  ${idxReg} = load i64, i64* ${idxName}`);
+        const condReg = this.ctx.nextReg();
+        this._emitLine(`  ${condReg} = icmp slt i64 ${idxReg}, ${capI64.reg}`);
+        this._emitCondBr(condReg, bodyLabel, endLabel);
+
+        this._emitLabel(bodyLabel);
+        /* Load element and store into iterVar */
+        if (sourceVal.llvmType === 'i64*') {
+            const elemReg = this.ctx.nextReg();
+            this._emitLine(`  ${elemReg} = call i64 @plant_array_get(i64* ${sourceVal.reg}, i64 ${idxReg})`);
+            this._emitLine(`  store i64 ${elemReg}, i64* ${iterInfo.alloca}`);
+        } else if (sourceVal.llvmType === 'i8*') {
+            const elemReg = this.ctx.nextReg();
+            this._emitLine(`  ${elemReg} = call i8* @plant_map_get(i8* ${sourceVal.reg}, i8* null)`);
+            this._emitLine(`  store i8* ${elemReg}, i8** ${iterInfo.alloca}`);
+        }
+
+        this.ctx.pushLoop(loopLabel, endLabel);
+        this.symbols = this.symbols.pushScope();
+        this._emitBody(stmt.bodyStatements);
+        this._emitHeapCleanup();
+        this.symbols = this.symbols.popScope();
+        this.ctx.popLoop();
+
+        if (!this.ctx.isTerminated) {
+            const nextReg = this.ctx.nextReg();
+            this._emitLine(`  ${nextReg} = add i64 ${idxReg}, 1`);
+            this._emitLine(`  store i64 ${nextReg}, i64* ${idxName}`);
+            this._emitBr(loopLabel);
+        }
+
+        this._emitLabel(endLabel);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  WEATHER — v0.42.0 error-handling / environment set
+    // ═══════════════════════════════════════════════════════════════════
+    _emitWeatherStatement(stmt) {
+        const bodyLabel = this.ctx.nextLabel('weather.body');
+        const endLabel  = this.ctx.nextLabel('weather.end');
+
+        /* Set weather type if condition expr is provided */
+        if (stmt.conditionExpr) {
+            const condVal = this._emitExpressionNode(stmt.conditionExpr);
+            if (condVal) {
+                const condStr = this._maybeConvert(condVal, 'i8*');
+                this._emitLine(`  call void @plant_env_set_weather(i8* ${condStr.reg})`);
+            }
+        }
+
+        this._emitBr(bodyLabel);
+        this._emitLabel(bodyLabel);
+        this.symbols = this.symbols.pushScope();
+        this._emitBody(stmt.bodyStatements);
+        this._emitHeapCleanup();
+        this.symbols = this.symbols.popScope();
+        this._emitBr(endLabel);
+        this._emitLabel(endLabel);
+
+        /* Process shelter clauses */
+        if (stmt.shelterClauses) {
+            for (const shelter of stmt.shelterClauses) {
+                const shelterLabel = this.ctx.nextLabel('weather.shelter');
+                this._emitLabel(shelterLabel);
+                this.symbols = this.symbols.pushScope();
+                this._emitBody(shelter.bodyStatements);
+                this._emitHeapCleanup();
+                this.symbols = this.symbols.popScope();
+                this._emitBr(endLabel);
+            }
+        }
+
+        /* Calm clause */
+        if (stmt.calmClause && stmt.calmClause.bodyStatements) {
+            const calmLabel = this.ctx.nextLabel('weather.calm');
+            this._emitLabel(calmLabel);
+            this.symbols = this.symbols.pushScope();
+            this._emitBody(stmt.calmClause.bodyStatements);
+            this._emitHeapCleanup();
+            this.symbols = this.symbols.popScope();
+            this._emitBr(endLabel);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  SPECIES — v0.42.0 entity species declaration
+    // ═══════════════════════════════════════════════════════════════════
+    _emitSpeciesDeclaration(stmt) {
+        const nameStr = this._emitStringConstant(stmt.name);
+        this._emitLine(`  call void @plant_entity_set_species(i8* null, i8* ${nameStr.reg})`);
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  MapLiteral — v0.42.0 inline MAP construction
+    // ═══════════════════════════════════════════════════════════════════
+    _emitMapLiteral(node) {
+        const initCap = node.entries ? node.entries.length : 0;
+        const capReg = this.ctx.nextReg();
+        const capVal = Math.max(initCap, 8);
+        this._emitLine(`  ${capReg} = add i64 ${capVal}, 0`);
+        const mapReg = this.ctx.nextReg();
+        this._emitLine(`  ${mapReg} = call i8* @plant_map_create(i64 ${capReg})`);
+
+        if (node.entries) {
+            for (const entry of node.entries) {
+                const keyVal = this._emitExpressionNode(entry.key);
+                if (!keyVal) continue;
+                const keyStr = this._maybeConvert(keyVal, 'i8*');
+
+                const valExpr = this._emitExpressionNode(entry.value);
+                if (!valExpr) continue;
+                const valStr = this._maybeConvert(valExpr, 'i8*');
+
+                this._emitLine(`  call void @plant_map_set(i8* ${mapReg}, i8* ${keyStr.reg}, i8* ${valStr.reg})`);
+            }
+        }
+        return { reg: mapReg, llvmType: 'i8*', isHeap: true };
     }
 }
 

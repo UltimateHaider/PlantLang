@@ -1,4 +1,47 @@
-# PlantLang Roadmap: v0.41.0+ (Completed & Future)
+# PlantLang Roadmap: v0.42.0+ (Completed & Future)
+
+## ✅ Version v0.42.0: C Backend Parity & Legacy Realignment
+
+**Status:** ✅ Completed
+
+### Scope & Engineering Implementation
+
+#### PlantMap — Open-Addressing Hash Map
+- `PlantMap` typedef with `PlantMapEntry` (key/value/occupied), dynamic capacity, 75% load factor
+- `plant_map_create(initial_capacity)` — allocates map with power-of-2 rounding
+- `plant_map_set(map, key, value)` — djb2 hash with open-addressing linear probing, automatic growth at 2x
+- `plant_map_get(map, key)` — constant-time key lookup
+- `plant_map_keys(map, &count)` — returns array of all keys
+- `plant_map_free(map)` — frees all keys and entries
+
+#### PlantIterator — Unified Traversal Protocol
+- `PlantIterator` with support for MAP (kind=0) and ARRAY (kind=1)
+- `plant_iterator_init(it, container, kind)` — snapshots keys/values for map, or array data pointer
+- `plant_iterator_has_next(it)` — bounds check against size
+- `plant_iterator_next(it)` — returns current entry and advances
+- `plant_iterator_free(it)` — cleans up cached key/value arrays
+
+#### Domain Primitives
+- `plant_sys_action(name, payload)` — action execution logging
+- `plant_env_set_weather(type)` / `plant_env_get_weather()` — thread-local weather state for WEATHER block simulation
+- `plant_entity_set_species(entity, name)` — species assignment logging
+
+#### LLVM Codegen
+- `MapLiteral` → `@plant_map_create` + inline `@plant_map_set` for each entry
+- `LinkStatement` → `@plant_map_set(map, key, value)`
+- `ForInStatement` → indexed loop with `@plant_array_get` (arrays) or `@plant_map_get` (maps)
+- `WeatherStatement` → `@plant_env_set_weather` with shelter/calm clause IR labels
+- `SpeciesDeclaration` → `@plant_entity_set_species`
+
+#### Type Mapper
+- MAP and DICT types registered as `i8*` (pointer to PlantMap)
+- No false-positive CodeWords violations for MAP, FOR...IN, WEATHER, SPECIES, LINK nodes
+
+#### Test Coverage
+- `tests/v0.42.0_c_backend_parity.test.js` — 31 tests across all module areas
+- All 30+ test suites at 100% pass rate
+
+---
 
 ## ✅ Version v0.41.0: Integrated Testing, Native Networking & CodeWords Governance
 
@@ -156,7 +199,7 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 | Test | Failure | Fix |
 |---|---|---|
 | `test_diagnostics.js` (44→45) | Column assertion expected `21:4`, actual `21:9` (error points at "subtotl", not "SHOW") | Changed expected column to `9` |
-| `test_parser_migration.js` (107→109) | RESPONSE emission skipped in LISTEN BRANCH test (server started but no request arrived); errVar bound English `"division by zero"`, test expected Arabic `"صفر"` | Added `_verifyDryRun` flag; changed expectation to `"division by zero"` |
+| `test_parser_migration.js` (107→109) | RESPONSE emission skipped in LISTEN BRANCH test (server started but no request arrived); errVar bound English `"division by zero"`, test expected Arabic `"zero"` | Added `_verifyDryRun` flag; changed expectation to `"division by zero"` |
 | `test_llvm_codegen.js` (26→27) | ACTION/REAP is now fully supported by LLVM codegen — old rejection test was outdated | Updated to verify ACTION compiles without errors |
 
 ---
@@ -367,10 +410,13 @@ This release establishes the foundation for a second compilation pipeline: Plant
 | ✅ **v0.39.5** | **Phase 1 LLVM IR Compiler — Primitives & Early SHOW** — C runtime helpers, LLVM codegen infrastructure, expression parser, differential test harness (39 tests) | ✅ Q1 2029 |
 | ✅ **v0.40.0** | **Geo-Aware Cycles & Dynamic Replica Rebalancing** — GeoTopologyManager, StreamCompactor, geo-affine placement, replica rebalancing on node churn | ✅ Q2 2029 |
 | ✅ **v0.41.0** | **Integrated Testing, Native Networking & CodeWords Governance** — CodeWordsChecker, TestRunner, POSIX socket helpers, plantc test subcommand | ✅ Q3 2029 |
+| ✅ **v0.42.0** | **C Backend Parity & Legacy Realignment** — PlantMap, PlantIterator, domain primitives, LLVM codegen for MAP/FOR...IN/WEATHER/SPECIES | ✅ Q4 2029 |
 
 ---
 
-*PlantLang v0.41.0: Integrated Testing, Native Networking & CodeWords Governance. CodeWordsChecker (directive parser, AST security pass), TestRunner (SUITE/VERIFY, nested suites, exit code 1 on failure), POSIX socket C helpers (plant_net_harvest, plant_net_listen_open), LLVM codegen (HarvestStatement, ListenBranchStatement), plantc test subcommand. 69 new tests. 900+ total tests across 30+ suites. All green.*
+*PlantLang v0.42.0: C Backend Parity & Legacy Realignment. PlantMap (hash map), PlantIterator (traversal protocol), domain primitives (plant_sys_action, plant_env_set_weather, plant_entity_set_species), LLVM codegen (MAP, FOR...IN, WEATHER, SPECIES). 31 new tests. All green.*
+
+*PlantLang v0.41.0: Integrated Testing, Native Networking & CodeWords Governance. CodeWordsChecker (directive parser, AST security pass), TestRunner (SUITE/VERIFY, nested suites, exit code 1 on failure), POSIX socket C helpers (plant_net_harvest, plant_net_listen_open), LLVM codegen (HarvestStatement, ListenBranchStatement), plantc test subcommand. 69 new tests. All green.*
 
 *PlantLang v0.40.0: Geo-Aware Cycles, Dynamic Replica Rebalancing & Stream Compaction. GeoTopologyManager (RTT latency matrix, getOptimalNodes), StreamCompactor (binary compression, 60-85% reduction), geo-aware DistributedCycleEngine (executeCycleBlock), ReplicaManager rebalancing (handleNodeJoin/handleNodeLeave, partition rebalance, replica heal). 34 new tests. All green.*
 

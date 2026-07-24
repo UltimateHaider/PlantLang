@@ -1,5 +1,54 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.42.0 — 2026
+
+### New: C Backend Parity & Legacy Realignment
+- **PlantMap Data Structure** (`runtime/c/plant_runtime.h`, `plant_runtime.c`):
+  - `PlantMap` typedef with open-addressing, djb2 hashing, 75% load factor, automatic 2x growth
+  - `plant_map_create(size_t)`, `plant_map_set(map, key, value)`, `plant_map_get(map, key)`, `plant_map_keys(map, &count)`, `plant_map_free(map)`
+- **PlantIterator Protocol** (`runtime/c/plant_runtime.h`, `plant_runtime.c`):
+  - `PlantIterator` struct supporting MAP (kind=0) and ARRAY (kind=1) traversal
+  - `plant_iterator_init`, `plant_iterator_has_next`, `plant_iterator_next`, `plant_iterator_free`
+- **Domain Primitives** (`runtime/c/plant_runtime.c`):
+  - `plant_sys_action(name, payload)` — action dispatch logging to stdout
+  - `plant_env_set_weather(type)` / `plant_env_get_weather()` — thread-local weather state for WEATHER block simulation
+  - `plant_entity_set_species(entity, name)` — species assignment logging
+- **LLVM Codegen** (`src/codegen/llvm/llvm_emitter.js`):
+  - `MapLiteral` → `@plant_map_create` + inline `@plant_map_set` for each entry
+  - `LinkStatement` → `@plant_map_set(map_ident, key, value)`
+  - `ForInStatement` → indexed loop with `@plant_array_get` (array) or `@plant_map_get` (map)
+  - `WeatherStatement` → `@plant_env_set_weather` with shelter/calm clause IR labels
+  - `SpeciesDeclaration` → `@plant_entity_set_species`
+- **Type Mapper** (`src/codegen/llvm/llvm_type_mapper.js`):
+  - `MAP` and `DICT` types registered as `i8*`
+- **CodeWords Governance** — verified no false-positive violations for MAP, FOR...IN, WEATHER, SPECIES, LINK nodes
+
+### Test Suite
+- New `tests/v0.42.0_c_backend_parity.test.js` — 31 tests covering:
+  - PlantMap: create/set/get via IR emission, LINK statement translation, count verification
+  - FOR...IN: array and map iteration IR labels
+  - WEATHER: body/shelter/calm label emission, `@plant_env_set_weather` condition path
+  - SPECIES: `@plant_entity_set_species` call with species name constant
+  - CodeWords: zero false-positive violations for all new node types
+  - Pipeline: end-to-end MAP + LINK + FOR...IN + WEATHER + SPECIES IR generation
+  - IR Declarations: all 7 forward declarations present
+- All 30+ test suites at 100% pass rate
+
+### Documentation
+- All `.md` files bumped to v0.42.0
+- Language Tour.md — header → v0.42.0, new architecture entries for security/codewords_governance.js and testing/test_runner.js
+- TECHNICAL.md — new Section 25 for C Backend Parity & Legacy Realignment
+- ROADMAP.md — v0.42.0 C Backend Parity objectives documented, table row and footer added
+- CHANGELOG.md — new v0.42.0 entry
+
+### Source Layout
+- Enhanced `runtime/c/plant_runtime.h` — PlantMap, PlantIterator, domain primitives declarations
+- Enhanced `runtime/c/plant_runtime.c` — PlantMap hash map, PlantIterator, domain primitives implementations
+- New `tests/v0.42.0_c_backend_parity.test.js`
+- New types: `MAP`, `DICT` in TYPE_MAP
+
+---
+
 ## v0.41.0 — 2026
 
 ### New: Integrated Testing, Native Networking & CodeWords Governance
@@ -36,7 +85,7 @@
 - All `.md` files bumped to v0.41.0
 - Language Tour.md — header → v0.41.0, new "Integrated Testing & Native Networking (v0.41.0)" section with CodeWords, SUITE/VERIFY, HARVEST, LISTEN BRANCH documentation
 - TECHNICAL.md — new Section 24 for v0.41.0 architecture
-- ROADMAP.md — v0.40.0 objectives marked complete, v0.41.0 objectives documented, table row and footer added
+- ROADMAP.md — v0.41.0 objectives documented
 - CHANGELOG.md — new v0.41.0 entry
 
 ### Source Layout
@@ -81,14 +130,13 @@
   - StreamCompactor: default compression level, buffer output, ≥60% reduction (measured 85%), full round-trip header+payload fidelity, error handling (non-Buffer, short buffer, bad magic)
   - DistributedCycleEngine: geo-aware `executeCycleBlock()` with locality key, no-workers fallback, `geoAffinity` metadata
   - ReplicaManager: `handleNodeJoin()` rebalanced=true/healed=true, primary count preservation, replica healing after join, `handleNodeLeave()` affectedActors tracking
-- Total test count grows from ~1251+ → **~1285+** across **30 test suites**
 - All 30 test suites at 100% pass rate
 
 ### Documentation
 - All `.md` files bumped to v0.40.0
-- Language Tour.md — header → v0.40.0, new "Geo-Aware Cycles & Dynamic Replica Rebalancing (v0.40.0)" section with GeoTopologyManager, StreamCompactor, distributed cycle geo-affinity, and replica rebalancing examples
+- Language Tour.md — header → v0.40.0, new "Geo-Aware Cycles & Dynamic Replica Rebalancing (v0.40.0)" section
 - TECHNICAL.md — new Section 23 for Geo-Aware Cycles, Dynamic Replica Rebalancing & Stream Compaction design
-- ROADMAP.md — v0.39.5 objectives marked complete, v0.40.0 Geo-Aware Cycles & Dynamic Replica Rebalancing documented
+- ROADMAP.md — v0.40.0 objectives documented
 - CHANGELOG.md — new v0.40.0 entry
 
 ### Source Layout

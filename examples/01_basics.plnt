@@ -1,4 +1,4 @@
-# PlantLang — مثال 01: الأساسيات
+# PlantLang — مثال 01: الPowerاسيات
 MISSION: SAFE.
 
 1\ CREATE name(TX) TO "PlantLang".
@@ -37,5 +37,5 @@ MISSION: SAFE.
 1\ SORT fruits.
 1\ SHOW fruits.
 
-1\ CREATE greeting(TX) TO "مرحباً بك في " + name.
+1\ CREATE greeting(TX) TO "Welcome to " + name.
 1\ SHOW greeting.

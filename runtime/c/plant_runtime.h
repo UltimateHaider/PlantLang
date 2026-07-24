@@ -25,4 +25,48 @@ char* plant_net_read(int64_t fd);
 int64_t plant_net_write(int64_t fd, const char* data);
 void plant_net_close(int64_t fd);
 
+/* ── v0.42.0: Map Data Structure ── */
+
+typedef struct PlantMapEntry {
+    char* key;
+    void* value;
+    int   occupied;  /* 1 = active slot, 0 = empty/tombstone */
+} PlantMapEntry;
+
+typedef struct PlantMap {
+    PlantMapEntry* entries;
+    size_t capacity;
+    size_t count;
+    size_t threshold;  /* load-factor ceiling */
+} PlantMap;
+
+PlantMap* plant_map_create(size_t initial_capacity);
+void      plant_map_set(PlantMap* map, const char* key, void* value);
+void*     plant_map_get(PlantMap* map, const char* key);
+char**    plant_map_keys(PlantMap* map, size_t* out_count);
+void      plant_map_free(PlantMap* map);
+
+/* ── v0.42.0: Iterator Protocol ── */
+
+typedef struct PlantIterator {
+    void*     container;   /* pointer to PlantMap or int64_t* array */
+    int       kind;        /* 0 = MAP, 1 = ARRAY */
+    size_t    index;       /* current position */
+    size_t    size;        /* total count */
+    char**    keys;        /* for MAP: cached key array */
+    void**    values;      /* for MAP: cached value array */
+    int64_t*  array_data;  /* for ARRAY: pointer to elements (skip header) */
+} PlantIterator;
+
+void      plant_iterator_init(PlantIterator* it, void* container, int kind);
+int       plant_iterator_has_next(PlantIterator* it);
+void*     plant_iterator_next(PlantIterator* it);
+void      plant_iterator_free(PlantIterator* it);
+
+/* ── v0.42.0: Domain Primitives ── */
+void        plant_sys_action(const char* action_name, void* payload);
+void        plant_env_set_weather(const char* weather_type);
+const char* plant_env_get_weather(void);
+void        plant_entity_set_species(void* entity, const char* species_name);
+
 #endif

@@ -1,4 +1,4 @@
-# PlantLang — مثال 02: الأفعال والكائنات
+# PlantLang — Example 02: Actions and Objects
 PLANT math.
 
 1\ ACTION add(a(NUM), b(NUM)),
@@ -12,7 +12,7 @@ PLANT math.
 1\ /ACTION.
 
 1\ ACTION greet(name(TX)),
-2\   GIVE "مرحباً " + name + "!".
+2\   GIVE "Hello " + name + "!".
 1\ /ACTION.
 
 1\ REAP r1 FROM add, 15, 27.
@@ -28,19 +28,19 @@ PLANT math.
 1\ SHOW rnd.
 
 1\ SPECIES BankAccount,
-2\   VAR owner(TX) TO "مجهول".
+2\   VAR owner(TX) TO "Unknown".
 2\   VAR balance(SCL) TO 0.
 2\   ACTION deposit(amount(SCL)),
 3\     INCREASE SELF:balance BY amount.
 3\     GIVE SELF:balance.
 2\   /ACTION.
 2\   ACTION withdraw(amount(SCL)),
-3\     IF SELF:balance LESS THAN amount, GIVE "رصيد غير كافٍ".
+3\     IF SELF:balance LESS THAN amount, GIVE "Insufficient balance".
 3\     DECREASE SELF:balance BY amount.
 3\     GIVE SELF:balance.
 2\   /ACTION.
 2\   ACTION info(),
-3\     GIVE SELF:owner + " — رصيد: " + SELF:balance.
+3\     GIVE SELF:owner + " — Balance: " + SELF:balance.
 2\   /ACTION.
 1\ /SPECIES.
 
@@ -60,7 +60,7 @@ PLANT math.
 2\   ACTION add_interest(),
 3\     REAP interest FROM math:ROUND, SELF:balance * SELF:interest_rate, 2.
 3\     INCREASE SELF:balance BY interest.
-3\     GIVE "فائدة: " + interest.
+3\     GIVE "Interest: " + interest.
 2\   /ACTION.
 1\ /SPECIES.
 

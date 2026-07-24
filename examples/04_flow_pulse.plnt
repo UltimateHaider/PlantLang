@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════
-# PlantLang — مثال 04: العروق والنبض والتسلسل
+# PlantLang — Example 04: Veins, Pulse, and Sequence
 # ═══════════════════════════════════════════════════════════
 
 MISSION: SAFE.
@@ -8,9 +8,9 @@ PLANT lists.
 
 # ── TAP / INFUSE / ABSORB / SEAL ──────────────────────────
 1\ TAP "log.txt" MODE:MARK AS logfile.
-1\ INFUSE logfile WITH "بدأ التشغيل".
-1\ INFUSE logfile WITH "جارٍ المعالجة...".
-1\ INFUSE logfile WITH "اكتمل".
+1\ INFUSE logfile WITH "Started".
+1\ INFUSE logfile WITH "Processing...".
+1\ INFUSE logfile WITH "Completed".
 1\ SEAL logfile.
 
 1\ TAP "log.txt" MODE:SIGHT AS reader.
@@ -29,10 +29,10 @@ PLANT lists.
 
 1\ WHENEVER temperature CHANGES,
 2\   MATCH temperature,
-3\     IS BETWEEN 0  20 YIELD SHOW "🌡 بارد: " + temperature.
-3\     IS BETWEEN 21 35 YIELD SHOW "🌡 معتدل: " + temperature.
-3\     IS BETWEEN 36 50 YIELD SHOW "🔥 حار: " + temperature.
-3\     ELSE              YIELD SHOW "⚠ خطير: " + temperature.
+3\     IS BETWEEN 0  20 YIELD SHOW "🌡 Cold: " + temperature.
+3\     IS BETWEEN 21 35 YIELD SHOW "🌡 Moderate: " + temperature.
+3\     IS BETWEEN 36 50 YIELD SHOW "🔥 Hot: " + temperature.
+3\     ELSE              YIELD SHOW "⚠ Dangerous: " + temperature.
 2\   \\.
 1\\.
 
@@ -41,7 +41,7 @@ PLANT lists.
 1\ SET temperature TO 42.
 1\ SET temperature TO 65.
 
-# ── FLOW — التسلسل الذكي ──────────────────────────────────
+# ── FLOW — Smart Sequencing ──────────────────────────────────
 1\ ACTION clean(text(TX)),
 2\   REAP t FROM strings:TRIM, text.
 2\   GIVE t.
@@ -56,7 +56,7 @@ PLANT lists.
 2\   GIVE ">> " + text.
 1\ /ACTION.
 
-1\ REAP result FROM "  مرحباً بالعالم  ",
+1\ REAP result FROM "  Hello بالعالم  ",
      FLOW clean,
      FLOW to_upper,
      FLOW add_prefix.

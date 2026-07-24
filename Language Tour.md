@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.41.0
+# 🌿 PlantLang — Chloroplast v0.42.0
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -920,7 +920,7 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.41.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, lock-free telemetry, zero-trust security, a cluster layer, a geo-routing governance engine, distributed cycles, geo-aware topology, stream compaction, dynamic replica rebalancing, and an integrated testing framework with native networking:
+Chloroplast v0.42.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, lock-free telemetry, zero-trust security, a cluster layer, a geo-routing governance engine, distributed cycles, geo-aware topology, stream compaction, dynamic replica rebalancing, and an integrated testing framework with native networking:
 
 ```
 Source (.plnt)
@@ -1070,12 +1070,12 @@ Source (.plnt)
     │   ├── Syscall filtering: blocks execve/ptrace/fork/clone/kill in SAFE
     │   └── Violation enforcement: SIGSYS termination + CRITICAL audit log
     │
-    ├── security/codewords_governance.js   — CodeWordsChecker (v0.41.0)
+    ├── security/codewords_governance.js   — CodeWordsChecker (v0.42.0)
     │   ├── #ALLOW_NETWORK / #ALLOW_HARVEST / #ALLOW_LISTEN directives
     │   ├── Static AST security pass rejecting HARVEST/LISTEN BRANCH without permission
     │   └── #ALLOW_NETWORK implies both HARVEST and LISTEN
     │
-    ├── testing/test_runner.js              — TestRunner (v0.41.0)
+    ├── testing/test_runner.js              — TestRunner (v0.42.0)
     │   ├── SUITE/VERIFY block discovery and execution
     │   ├── Truthy/falsy assertion evaluation
     │   ├── Nested suite support with aggregated counts

@@ -10,6 +10,8 @@ const TYPE_MAP = {
     TX: 'i8*',
     TEXT: 'i8*',
     LIST: 'i64*',
+    MAP: 'i8*',
+    DICT: 'i8*',
 };
 
 const PRINT_FUNCTIONS = {

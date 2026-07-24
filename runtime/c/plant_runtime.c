@@ -6,6 +6,17 @@
 #include <unistd.h>
 #include <arpa/inet.h>
 
+/* ── v0.42.0: djb2 hash for string keys ── */
+static size_t _plant_hash_str(const char* str) {
+    size_t hash = 5381;
+    int c;
+    while ((c = *str++)) hash = ((hash << 5) + hash) + (size_t)(unsigned char)c;
+    return hash;
+}
+
+/* Thread-local weather simulation */
+static __thread char _plant_weather_buf[256] = {0};
+
 void plnt_print_int(int64_t val) {
     printf("%lld\n", (long long)val);
 }
@@ -180,4 +191,189 @@ int64_t plant_net_write(int64_t fd, const char* data) {
 
 void plant_net_close(int64_t fd) {
     close((int)fd);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.42.0 — Map Data Structure
+   ═══════════════════════════════════════════════════════════════ */
+
+PlantMap* plant_map_create(size_t initial_capacity) {
+    if (initial_capacity < 8) initial_capacity = 8;
+    PlantMap* map = (PlantMap*)plant_alloc(sizeof(PlantMap));
+    map->capacity = initial_capacity;
+    map->count = 0;
+    map->threshold = initial_capacity * 3 / 4;  /* 75% load factor */
+    map->entries = (PlantMapEntry*)plant_alloc(initial_capacity * sizeof(PlantMapEntry));
+    memset(map->entries, 0, initial_capacity * sizeof(PlantMapEntry));
+    return map;
+}
+
+static void _plant_map_grow(PlantMap* map) {
+    size_t old_cap = map->capacity;
+    PlantMapEntry* old_entries = map->entries;
+    size_t new_cap = old_cap * 2;
+    map->capacity = new_cap;
+    map->threshold = new_cap * 3 / 4;
+    map->count = 0;
+    map->entries = (PlantMapEntry*)plant_alloc(new_cap * sizeof(PlantMapEntry));
+    memset(map->entries, 0, new_cap * sizeof(PlantMapEntry));
+    for (size_t i = 0; i < old_cap; i++) {
+        if (old_entries[i].occupied) {
+            plant_map_set(map, old_entries[i].key, old_entries[i].value);
+            plant_free(old_entries[i].key);
+        }
+    }
+    plant_free(old_entries);
+}
+
+void plant_map_set(PlantMap* map, const char* key, void* value) {
+    if (!map || !key) return;
+    if (map->count >= map->threshold) _plant_map_grow(map);
+    size_t idx = _plant_hash_str(key) & (map->capacity - 1);
+    for (size_t i = 0; i < map->capacity; i++) {
+        size_t probe = (idx + i) & (map->capacity - 1);
+        if (!map->entries[probe].occupied) {
+            map->entries[probe].key = plant_str_concat(key, "");
+            map->entries[probe].value = value;
+            map->entries[probe].occupied = 1;
+            map->count++;
+            return;
+        }
+        if (strcmp(map->entries[probe].key, key) == 0) {
+            map->entries[probe].value = value;
+            return;
+        }
+    }
+}
+
+void* plant_map_get(PlantMap* map, const char* key) {
+    if (!map || !key || map->count == 0) return NULL;
+    size_t idx = _plant_hash_str(key) & (map->capacity - 1);
+    for (size_t i = 0; i < map->capacity; i++) {
+        size_t probe = (idx + i) & (map->capacity - 1);
+        if (!map->entries[probe].occupied) return NULL;
+        if (strcmp(map->entries[probe].key, key) == 0) return map->entries[probe].value;
+    }
+    return NULL;
+}
+
+char** plant_map_keys(PlantMap* map, size_t* out_count) {
+    if (!map || !out_count) return NULL;
+    *out_count = map->count;
+    if (map->count == 0) return NULL;
+    char** keys = (char**)plant_alloc(map->count * sizeof(char*));
+    size_t j = 0;
+    for (size_t i = 0; i < map->capacity && j < map->count; i++) {
+        if (map->entries[i].occupied) {
+            keys[j++] = map->entries[i].key;
+        }
+    }
+    return keys;
+}
+
+void plant_map_free(PlantMap* map) {
+    if (!map) return;
+    for (size_t i = 0; i < map->capacity; i++) {
+        if (map->entries[i].occupied) plant_free(map->entries[i].key);
+    }
+    plant_free(map->entries);
+    plant_free(map);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.42.0 — Iterator Protocol
+   ═══════════════════════════════════════════════════════════════ */
+
+void plant_iterator_init(PlantIterator* it, void* container, int kind) {
+    if (!it) return;
+    it->container = container;
+    it->kind = kind;
+    it->index = 0;
+    it->keys = NULL;
+    it->values = NULL;
+    it->array_data = NULL;
+    if (kind == 0 && container) {
+        PlantMap* map = (PlantMap*)container;
+        size_t count = 0;
+        it->keys = plant_map_keys(map, &count);
+        it->size = count;
+        /* Build values array */
+        if (count > 0) {
+            it->values = (void**)plant_alloc(count * sizeof(void*));
+            size_t j = 0;
+            for (size_t i = 0; i < map->capacity && j < count; i++) {
+                if (map->entries[i].occupied) {
+                    it->values[j++] = map->entries[i].value;
+                }
+            }
+        }
+    } else if (kind == 1 && container) {
+        int64_t* arr = (int64_t*)container;
+        it->size = (size_t)arr[0];
+        it->array_data = arr + 1;  /* skip header */
+    }
+}
+
+int plant_iterator_has_next(PlantIterator* it) {
+    if (!it) return 0;
+    return it->index < it->size ? 1 : 0;
+}
+
+void* plant_iterator_next(PlantIterator* it) {
+    if (!it || !plant_iterator_has_next(it)) return NULL;
+    void* result = NULL;
+    if (it->kind == 0) {
+        PlantMapEntry entry;
+        entry.key = it->keys ? it->keys[it->index] : NULL;
+        entry.value = it->values ? it->values[it->index] : NULL;
+        /* Return a pointer to a static copy for simplicity */
+        static PlantMapEntry ret;
+        ret.key = entry.key;
+        ret.value = entry.value;
+        ret.occupied = 1;
+        result = (void*)&ret;
+    } else if (it->kind == 1 && it->array_data) {
+        result = (void*)(intptr_t)it->array_data[it->index];
+    }
+    it->index++;
+    return result;
+}
+
+void plant_iterator_free(PlantIterator* it) {
+    if (!it) return;
+    if (it->keys)  plant_free(it->keys);
+    if (it->values) plant_free(it->values);
+    it->container = NULL;
+    it->keys = NULL;
+    it->values = NULL;
+    it->array_data = NULL;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.42.0 — Domain Primitives
+   ═══════════════════════════════════════════════════════════════ */
+
+void plant_sys_action(const char* action_name, void* payload) {
+    (void)payload;
+    fprintf(stdout, "[ACTION] %s executed\n", action_name ? action_name : "unknown");
+    fflush(stdout);
+}
+
+void plant_env_set_weather(const char* weather_type) {
+    if (weather_type) {
+        strncpy(_plant_weather_buf, weather_type, sizeof(_plant_weather_buf) - 1);
+        _plant_weather_buf[sizeof(_plant_weather_buf) - 1] = '\0';
+    }
+    fprintf(stdout, "[WEATHER] set to %s\n", weather_type ? weather_type : "clear");
+    fflush(stdout);
+}
+
+const char* plant_env_get_weather(void) {
+    return _plant_weather_buf[0] ? _plant_weather_buf : "clear";
+}
+
+void plant_entity_set_species(void* entity, const char* species_name) {
+    (void)entity;
+    fprintf(stdout, "[SPECIES] entity set to %s\n", species_name ? species_name : "unknown");
+    fflush(stdout);
 }
