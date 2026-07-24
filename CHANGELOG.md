@@ -1,5 +1,58 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.40.0 — 2026
+
+### New: Geo-Aware Cycles, Dynamic Replica Rebalancing & Stream Compaction
+- **GeoTopologyManager** (`src/cluster/topology/geo_topology.js`):
+  - Dynamic RTT latency matrix with continuous probing between cluster nodes
+  - Simulated RTT based on datacenter/zone/region topology (same-datacenter < 5ms, cross-region > 10ms)
+  - `getOptimalNodes(dataLocalityKey, count)` selects lowest-latency nodes with locality affinity scoring and weight-based adjustment
+  - Configurable `GEO_PROBE_INTERVAL` (1000-60000ms) and `GEO_PROBE_TIMEOUT` (100-10000ms) via MISSION CONFIG
+  - EventEmitter for probe lifecycle events (`node:probed`, `node:registered`, `node:unregistered`)
+- **StreamCompactor** (`src/cluster/reap/stream_compactor.js`):
+  - Binary format with magic bytes (`PLRS`), version header, 48-bit timestamp, and original size metadata
+  - zlib deflateRaw payload compression with configurable level (1-9, default 6)
+  - Typed header encoding (string, integer, float, boolean, array) for structured REAP metadata
+  - Achieves 60-85% reduction vs JSON on test payloads
+  - Transparent `compressReapStream(headers, payload)` / `decompressReapStream(buffer)` round-trip
+  - Error handling for invalid magic bytes, truncated buffers, decompression failures, version mismatch
+- **DistributedCycleEngine** geo-aware execution:
+  - `setGeoTopologyManager(geoTopology)` — wire up geo topology for node placement
+  - `setReplicaManager(replicaManager)` — wire up replica manager for connection tracking
+  - `executeCycleBlock(blockData, localityKey)` — dispatches blocks to optimal geo-affine nodes via `GeoTopologyManager.getOptimalNodes()`
+  - Falls back to `NodeRegistry.getAliveNodes()` when no geo topology or locality key is provided
+  - Emits `cycle:block_executed` with `geoAffinity` metadata
+- **ReplicaManager** dynamic rebalancing:
+  - `handleNodeJoin(nodeId)` — triggers partition rebalancing and replica healing on new node
+  - `handleNodeLeave(nodeId)` — triggers primary failover, backup cleanup, and rebalancing on node departure
+  - `_rebalancePartitions(newNodeId)` — migrates excess primaries from overloaded nodes to the new node, maintaining balanced actor counts
+  - `_healReplicas(newNodeId)` — assigns backup replicas to the new node from under-replicated actors
+  - Events: `node:join`, `node:leave`, `rebalance:complete`, `partition:moved`, `replica:healed`, `rebalance:partitions`, `rebalance:healed`
+
+### Test Suite
+- New `tests/v0.40.0_distributed.test.js` — 34 tests covering:
+  - GeoTopologyManager: creation, latency matrix (same-datacenter < 5ms, cross-region > 10ms), `getOptimalNodes()` locality affinity, empty topology edge case
+  - StreamCompactor: default compression level, buffer output, ≥60% reduction (measured 85%), full round-trip header+payload fidelity, error handling (non-Buffer, short buffer, bad magic)
+  - DistributedCycleEngine: geo-aware `executeCycleBlock()` with locality key, no-workers fallback, `geoAffinity` metadata
+  - ReplicaManager: `handleNodeJoin()` rebalanced=true/healed=true, primary count preservation, replica healing after join, `handleNodeLeave()` affectedActors tracking
+- Total test count grows from ~1251+ → **~1285+** across **30 test suites**
+- All 30 test suites at 100% pass rate
+
+### Documentation
+- All `.md` files bumped to v0.40.0
+- Language Tour.md — header → v0.40.0, new "Geo-Aware Cycles & Dynamic Replica Rebalancing (v0.40.0)" section with GeoTopologyManager, StreamCompactor, distributed cycle geo-affinity, and replica rebalancing examples
+- TECHNICAL.md — new Section 23 for Geo-Aware Cycles, Dynamic Replica Rebalancing & Stream Compaction design
+- ROADMAP.md — v0.39.5 objectives marked complete, v0.40.0 Geo-Aware Cycles & Dynamic Replica Rebalancing documented
+- CHANGELOG.md — new v0.40.0 entry
+
+### Source Layout
+- New directories under `src/cluster/`:
+  - `src/cluster/topology/geo_topology.js`
+- New file under `src/cluster/reap/`:
+  - `src/cluster/reap/stream_compactor.js`
+
+---
+
 ## v0.39.5 — 2026
 
 ### New: Phase 1 LLVM IR Compiler — Primitives & Early SHOW

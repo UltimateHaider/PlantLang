@@ -28,9 +28,50 @@ class DistributedCycleEngine extends EventEmitter {
     }
   }
 
+  setGeoTopologyManager(geoTopologyManager) {
+    this._geoTopology = geoTopologyManager;
+  }
+
+  setReplicaManager(replicaManager) {
+    this._replicaManager = replicaManager;
+  }
+
   _getWorkers() {
     if (!this._nodeRegistry) return [];
     return this._nodeRegistry.getAliveNodes();
+  }
+
+  executeCycleBlock(blockData, localityKey) {
+    let targetNodes;
+    if (this._geoTopology && localityKey) {
+      targetNodes = this._geoTopology.getOptimalNodes(localityKey, 1);
+      if (targetNodes.length === 0) {
+        targetNodes = this._getWorkers();
+      }
+    } else {
+      targetNodes = this._getWorkers();
+    }
+    if (targetNodes.length === 0) {
+      this.emit('cycle:no_workers', { blockSize: typeof blockData === 'string' ? blockData.length : JSON.stringify(blockData).length });
+      return { executed: false, reason: 'no workers available' };
+    }
+    const target = targetNodes[0];
+    const workerId = target.id || target.nodeId || target;
+    const chunk = {
+      chunkId: this._chunkIdCounter++,
+      offset: 0,
+      size: typeof blockData === 'string' ? blockData.length : JSON.stringify(blockData).length,
+      totalIterations: 1,
+      data: blockData,
+      geoAffinity: localityKey || null,
+    };
+    if (!this._workerChunks.has(workerId)) this._workerChunks.set(workerId, []);
+    this._workerChunks.get(workerId).push({ ...chunk, assignedAt: Date.now() });
+    this.emit('cycle:block_executed', { workerId, chunkId: chunk.chunkId, geoAffinity: chunk.geoAffinity });
+    if (this._replicaManager) {
+      this._replicaManager._incrementActive(workerId);
+    }
+    return { executed: true, workerId, chunkId: chunk.chunkId, geoAffinity: chunk.geoAffinity };
   }
 
   computeChunkSize(totalIterations) {

@@ -1,4 +1,4 @@
-# PlantLang Language Specification & Ecosystem v0.39.5
+# PlantLang Language Specification & Ecosystem v0.40.0
 
 **PlantLang** is a human-centric, prose-based programming language engineered for both high-level readability and native-level execution performance. It transforms "prose-like" syntax into highly optimized machine code via the LLVM compiler infrastructure.
 
@@ -62,7 +62,7 @@ Arenas are automatically reclaimed:
 
 ---
 
-## 3. Engineering Architecture (The v0.39.5 Stack)
+## 3. Engineering Architecture (The v0.40.0 Stack)
 The ecosystem is built on a modular, industrial-grade pipeline:
 
 1.  **Core Interpreter (Chloroplast Engine):**
@@ -170,8 +170,9 @@ PlantLang employs a state-of-the-art compilation chain:
 ---
 
 ## 6. QA & Quality Assurance
-The **v0.39.5** release is verified by an automated regression suite:
-* **~1251+ Total Tests** across twenty-nine test suites (LLVM backend, C codegen, Phase 1 LLVM primitives, parser migration, diagnostics, tokenizer, Phase 7—21, depth contract, matrix, dispatcher, runtime, parallel, security, cluster, geo-routing, distributed cycles, language ergonomics).
+The **v0.40.0** release is verified by an automated regression suite:
+* **~1285+ Total Tests** across thirty test suites (LLVM backend, C codegen, Phase 1 LLVM primitives, parser migration, diagnostics, tokenizer, Phase 7—21, depth contract, matrix, dispatcher, runtime, parallel, security, cluster, geo-routing, distributed cycles, language ergonomics, distributed advanced).
+* **Distributed Advanced (v0.40.0)**: 34 tests covering GeoTopologyManager RTT latency matrix and optimal node selection (locality affinity, cross-region latency > 10ms), StreamCompactor binary compression round-trip (85% reduction), geo-aware DistributedCycleEngine block execution with locality key, and ReplicaManager dynamic rebalancing on node join/leave with partition migration and replica healing.
 * **LLVM IR Compiler Phase 1 (v0.39.5)**: 39 tests covering integer/decimal/boolean/string literal SHOW, CREATE+SHOW variable pipeline, SET reassignment, arithmetic precedence (+ − * / % **), comparison operators (IS, IS NOT, GREATER THAN, LESS THAN, GTE, LTE), logical operators (AND, OR, NOT), mixed-type promotion, parenthesized sub-expressions, and multi-SHOW sequences — verified via differential test harness.
 * **Language Ergonomics (v0.38.0)**: 54 tests covering AST Zero-Fallback invariant, CYCLE...IN (empty/null/index/iteration), BREAK/CONTINUE signals, multi-field SORT (chained comparator/ASC/DESC/null-to-end), nested struct formatting (formatShowValue with deep field access), BLOOM AS (TABLE/GRAPH/CHART rendering, restricted environment detection), memory allocators (ArenaAllocator FAST bump + ARCHeap PERSISTENT cascading refcount), and integration scenarios.
 * **LLVM Backend**: 50 smoke tests covering CREATE/SHOW, arithmetic, strings, comparisons, IF/CYCLE/SEASON, ACTION/REAP/GIVE (recursion, SCL params, TX returns), WEATHER/SHELTER exception handling, TX fat-pointer operations, and MAP hash tables (LINK, has(), growth, overwrite).
@@ -307,9 +308,17 @@ The **v0.39.5** release is verified by an automated regression suite:
   - **Memory Allocators**: `ArenaAllocator` (FAST bump) and `ARCHeap` (PERSISTENT cascading refcount) for local runtime allocator patterns.
   - 54 new tests in `tests/v0.38.0_ergonomics.test.js` — all green
 
-### 🔜 In Progress / Planned (v0.40.0+)
+### ✅ Completed (v0.40.0)
+- **Geo-Aware Cycles, Dynamic Replica Rebalancing & Stream Compaction**:
+  - **GeoTopologyManager** — Dynamic RTT latency matrix with continuous probing; `getOptimalNodes(dataLocalityKey, count)` for geo-affine node selection; configurable probe interval/timeout
+  - **StreamCompactor** — Binary REAP stream format with zlib deflateRaw compression; typed header encoding; achieves 60-85% reduction vs JSON; full round-trip compress/decompress
+  - **DistributedCycleEngine geo-awareness** — `setGeoTopologyManager()` integration; `executeCycleBlock(blockData, localityKey)` dispatches to optimal geo nodes; falls back to NodeRegistry when geo data unavailable
+  - **ReplicaManager dynamic rebalancing** — `handleNodeJoin()` with partition rebalancing and replica healing; `handleNodeLeave()` with primary failover and backup cleanup; events for all rebalance lifecycle phases
+  - 34 new tests in `tests/v0.40.0_distributed.test.js` — all green
 
 ---
+
+*PlantLang v0.40.0 — Geo-Aware Cycles, Dynamic Replica Rebalancing & Stream Compaction. GeoTopologyManager, StreamCompactor, geo-affine cycle execution, replica rebalancing on node churn. 34 new tests. 1285+ total tests across 30 suites. All green.*
 
 *PlantLang v0.39.5 — Phase 1 LLVM IR Compiler. C runtime helpers, full expression parser, differential test harness (39 tests). 1212+ → 1251+ total tests across 29 suites. All green.*
 

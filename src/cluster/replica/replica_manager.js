@@ -122,6 +122,80 @@ class ReplicaManager extends EventEmitter {
     return { success: true, version: entry.version, ackCount, totalBackups, ackMode: this._ackMode };
   }
 
+  handleNodeJoin(nodeId) {
+    this.emit('node:join', { nodeId });
+    this._rebalancePartitions(nodeId);
+    this._healReplicas(nodeId);
+    this.emit('rebalance:complete', { nodeId, action: 'join' });
+    return { rebalanced: true, healed: true };
+  }
+
+  handleNodeLeave(nodeId) {
+    this.emit('node:leave', { nodeId });
+    const affected = this.handleNodeFailure(nodeId);
+    for (const [actorId] of this._replicaLedger) {
+      const entry = this._replicaLedger.get(actorId);
+      if (!entry) continue;
+      const removedFromBackups = entry.backups.filter(b => b === nodeId).length > 0;
+      entry.backups = entry.backups.filter(b => b !== nodeId);
+    }
+    this.emit('rebalance:complete', { nodeId, action: 'leave', affectedActors: affected.length });
+    return { affectedActors: affected.length };
+  }
+
+  _rebalancePartitions(newNodeId) {
+    const alive = this.getAliveNodes().filter(n => n.id !== newNodeId);
+    if (alive.length === 0) return;
+    const actorsPerNode = Math.ceil(this._primaries.size / (alive.length + 1));
+    const currentLoads = new Map();
+    for (const [, primaryId] of this._primaries) {
+      currentLoads.set(primaryId, (currentLoads.get(primaryId) || 0) + 1);
+    }
+    const overloaded = [];
+    for (const [nodeId, load] of currentLoads) {
+      if (load > actorsPerNode) overloaded.push({ nodeId, excess: load - actorsPerNode });
+    }
+    let moved = 0;
+    for (const { nodeId: src, excess } of overloaded) {
+      const actorIds = [];
+      for (const [actorId, primaryId] of this._primaries) {
+        if (primaryId === src) actorIds.push(actorId);
+      }
+      const toMove = actorIds.slice(0, excess);
+      for (const actorId of toMove) {
+        this._primaries.set(actorId, newNodeId);
+        const entry = this._replicaLedger.get(actorId);
+        if (entry) {
+          entry.primary = newNodeId;
+          entry.backups = entry.backups.filter(b => b !== newNodeId);
+          if (!entry.backups.includes(src)) entry.backups.push(src);
+        }
+        this.emit('partition:moved', { actorId, from: src, to: newNodeId });
+        moved++;
+      }
+    }
+    this.emit('rebalance:partitions', { newNodeId, actorsMoved: moved });
+    return moved;
+  }
+
+  _healReplicas(newNodeId) {
+    let healed = 0;
+    for (const [actorId, entry] of this._replicaLedger) {
+      const alive = this.getAliveNodes();
+      const usedNodes = new Set([entry.primary, ...entry.backups]);
+      const candidateBackups = alive.filter(n => !usedNodes.has(n.id) && n.id !== entry.primary);
+      if (candidateBackups.length === 0) continue;
+      const target = candidateBackups.find(n => n.id === newNodeId) || candidateBackups[0];
+      if (target && !entry.backups.includes(target.id) && target.id !== entry.primary) {
+        entry.backups.push(target.id);
+        this.emit('replica:healed', { actorId, newNodeId: target.id });
+        healed++;
+      }
+    }
+    this.emit('rebalance:healed', { newNodeId, replicasHealed: healed });
+    return healed;
+  }
+
   _syncToBackup(backupId, actorId, logEntry) {
     this.emit('backup:sync', { backupId, actorId, version: logEntry.version });
     return true;

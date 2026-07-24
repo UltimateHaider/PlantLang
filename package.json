@@ -8,7 +8,7 @@
   },
   "scripts": {
     "start":  "node chloroplast.js repl",
-    "test":   "node tests/llvm/01_primitives.test.js && node tests/llvm/02_control_flow.test.js && node tests/llvm/03_functions_runtime.test.js && node tests/llvm/04_memory_lifecycle.test.js && node tests/parity/full_parity_suite.test.js",
+    "test":   "node tests/llvm/01_primitives.test.js && node tests/llvm/02_control_flow.test.js && node tests/llvm/03_functions_runtime.test.js && node tests/llvm/04_memory_lifecycle.test.js && node tests/parity/full_parity_suite.test.js && node tests/v0.40.0_distributed.test.js",
     "test:llvm": "node tests/llvm/01_primitives.test.js && node tests/llvm/02_control_flow.test.js && node tests/llvm/03_functions_runtime.test.js && node tests/llvm/04_memory_lifecycle.test.js",
     "test:parity": "node tests/parity/full_parity_suite.test.js"
   },

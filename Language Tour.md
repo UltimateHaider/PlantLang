@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.39.5
+# 🌿 PlantLang — Chloroplast v0.40.0
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -920,7 +920,7 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.39.5 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, lock-free telemetry, zero-trust security, a cluster layer, a geo-routing governance engine, and a new modular LLVM IR compiler pipeline for primitives:
+Chloroplast v0.40.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, lock-free telemetry, zero-trust security, a cluster layer, a geo-routing governance engine, distributed cycles, geo-aware topology, stream compaction, and dynamic replica rebalancing:
 
 ```
 Source (.plnt)
@@ -1069,6 +1069,17 @@ Source (.plnt)
     │   ├── Granular capability matrix per mission mode
     │   ├── Syscall filtering: blocks execve/ptrace/fork/clone/kill in SAFE
     │   └── Violation enforcement: SIGSYS termination + CRITICAL audit log
+    │
+    ├── cluster/topology/geo_topology.js  — GeoTopologyManager (v0.40.0)
+    │   ├── Dynamic RTT latency matrix with continuous probing
+    │   ├── getOptimalNodes(dataLocalityKey, count): lowest-latency node selection
+    │   └── MISSION CONFIG: GEO_PROBE_INTERVAL, GEO_PROBE_TIMEOUT
+    │
+    ├── cluster/reap/stream_compactor.js  — StreamCompactor (v0.40.0)
+    │   ├── Binary REAP stream format: magic bytes, version, 48-bit timestamp
+    │   ├── zlib deflateRaw compression (60-85% reduction)
+    │   ├── Typed header encoding (string, integer, float, boolean, array)
+    │   └── MISSION CONFIG: STREAM_COMPRESSION, STREAM_CHUNK_SIZE
 ```
 
 ### Memory Architecture
@@ -1848,6 +1859,115 @@ The `ReapAggregator` provides dual-mode result collection for distributed cycle 
 - `CYCLE_MIN_CHUNK_SIZE` — `10` to `100000` (default `100`)
 - `WORKER_TIMEOUT_MS` — `1000` to `60000` (default `5000`)
 - `REMOTE_REAP_TARGET` — `MEMORY_BUFFER` (default) or a URI with `scheme://`
+
+---
+
+## Geo-Aware Cycles & Dynamic Replica Rebalancing (v0.40.0)
+
+Starting with v0.40.0, PlantLang ships with **Geo-Aware Cycle Execution**, **Stream Compaction** for REMOTE_REAP payloads, and **Dynamic Replica Rebalancing** on node churn.
+
+### 1. `GeoTopologyManager` — Dynamic Latency-Aware Node Selection
+
+The `GeoTopologyManager` maintains a real-time RTT latency matrix between cluster nodes via continuous probing. Each node carries optional topology metadata (region, zone, datacenter) that seeds initial latency estimates:
+
+```
+1\ REAP geo FROM topology:create, { probeInterval: 5000 }.
+1\ REAP _ FROM geo:registerNode, "node-us-1", { region: "us", zone: "us-east", datacenter: "us-east-1a", localityKey: "us-east" }.
+1\ REAP _ FROM geo:registerNode, "node-eu-1", { region: "eu", zone: "eu-west", datacenter: "eu-west-1a", localityKey: "eu-west" }.
+
+# Probe all nodes — establishes RTT matrix
+1\ REAP _ FROM geo:probeAll.
+
+# Query latency between two nodes
+1\ REAP lat FROM geo:getLatency, "node-us-1", "node-eu-1".
+1\ SHOW lat.   # → > 50ms (cross-region)
+
+# Select optimal nodes for a data locality key
+1\ REAP nodes FROM geo:getOptimalNodes, "us-east", 2.
+1\ SHOW COUNT(nodes).   # → 2 (both us-east nodes)
+```
+
+**MISSION CONFIG:**
+- `GEO_PROBE_INTERVAL` — probe interval in ms (1000-60000, default 5000)
+- `GEO_PROBE_TIMEOUT` — probe timeout in ms (100-10000, default 1000)
+
+### 2. `StreamCompactor` — Binary REAP Payload Compression
+
+The `StreamCompactor` provides binary serialization for `REMOTE_REAP` streams with zlib deflateRaw compression, achieving 60-85% payload reduction vs plaintext JSON:
+
+```
+1\ REAP sc FROM stream:create, { compressionLevel: 6 }.
+
+# Compress a REAP stream with typed headers
+1\ CREATE payload(TX) TO '{"data": "large payload...", "count": 1000}'.
+1\ REAP compressed FROM sc:compress, { type: "CYCLE_RESULT", source: "node-us-1", version: 1 }, payload.
+1\ SHOW TYPE compressed.   # → Buffer (binary)
+
+# Decompress at the remote end
+1\ REAP result FROM sc:decompress, compressed.
+1\ SHOW result:headers:type.    # → CYCLE_RESULT
+1\ SHOW result:headers:source.  # → node-us-1
+1\ SHOW result:payload.         # → original JSON string
+1\ SHOW result:timestamp.       # → Unix timestamp (NUM)
+```
+
+**Binary format:**
+- 4 bytes: magic bytes `PLRS` (PlantLang REAP Stream)
+- 1 byte: format version
+- 6 bytes: 48-bit Unix timestamp
+- 4 bytes: original (uncompressed) payload size
+- 4 bytes: header length (JSON-encoded)
+- N bytes: zlib deflateRaw compressed payload
+- M bytes: JSON-encoded typed headers
+
+**MISSION CONFIG:**
+- `STREAM_COMPRESSION` — zlib level 1-9 (default 6)
+- `STREAM_CHUNK_SIZE` — max chunk size in bytes (1024-262144, default 65536)
+
+### 3. Geo-Aware `DistributedCycleEngine` Execution
+
+The `DistributedCycleEngine` now integrates with `GeoTopologyManager` for geo-affine block placement — cycles with a locality affinity are dispatched to the lowest-latency nodes:
+
+```
+1\ REAP dce FROM cycles:create, { nodeRegistry: reg }.
+1\ REAP _ FROM dce:setGeoTopologyManager, geo.
+
+# Execute a block with geo affinity — dispatched to optimal us-east node
+1\ REAP result FROM dce:executeCycleBlock, blockData, "us-east".
+1\ SHOW result:executed.      # → true
+1\ SHOW result:geoAffinity.   # → us-east
+1\ SHOW result:workerId.      # → node-us-1
+```
+
+If no `GeoTopologyManager` is configured or no locality key is provided, execution falls back to the `NodeRegistry` worker list.
+
+### 4. Dynamic Replica Rebalancing on Node Churn
+
+The `ReplicaManager` now responds to `NODE_JOIN` and `NODE_LEAVE` gossip events by automatically rebalancing partitions and healing replicas:
+
+```
+1\ REAP rm FROM replica:create, { nodeRegistry: reg }.
+1\ REAP _ FROM rm:assignPrimary, "actor-1".
+1\ REAP _ FROM rm:assignPrimary, "actor-2".
+1\ REAP _ FROM rm:assignPrimary, "actor-3".
+
+# A new node joins — partitions rebalance, replicas heal
+1\ REAP result FROM rm:handleNodeJoin, "node-D".
+1\ SHOW result:rebalanced.   # → true
+# Some primaries from overloaded nodes migrate to node-D
+# Under-replicated actors get node-D as a backup replica
+
+# A node departs — primaries failover, backup entries cleaned
+1\ REAP result FROM rm:handleNodeLeave, "node-A".
+1\ SHOW result:affectedActors.   # → number of actors that lost their primary
+```
+
+**Rebalancing algorithm:**
+1. On join: compute ideal actors-per-node, identify overloaded nodes, migrate excess primaries to the new node
+2. On join: scan all replica ledgers for under-replicated actors, assign the new node as a backup
+3. On leave: trigger primary failover for affected actors, clean backup references, emit events
+
+All rebalancing operations emit EventEmitter events (`node:join`, `node:leave`, `rebalance:complete`, `partition:moved`, `replica:healed`) for monitoring and observability.
 
 ---
 
