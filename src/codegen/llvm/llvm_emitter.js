@@ -8,6 +8,8 @@ class LLVMEmitter {
     constructor() {
         this.ctx = new LLVMContext();
         this.symbols = new LLVMSymbolTable(null, this.ctx);
+        this._funcTable = new Map();
+        this._funcDefs = [];
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -19,27 +21,58 @@ class LLVMEmitter {
         this.ctx.addDeclare('void', 'plnt_print_bool', ['i1']);
         this.ctx.addDeclare('void', 'plnt_print_text', ['i8*']);
 
+        this.ctx.addDeclare('i8*', 'plant_str_concat', ['i8*', 'i8*']);
+        this.ctx.addDeclare('i64*', 'plant_array_create', ['i64']);
+        this.ctx.addDeclare('i64', 'plant_array_get', ['i64*', 'i64']);
+        this.ctx.addDeclare('void', 'plant_array_set', ['i64*', 'i64', 'i64']);
+        this.ctx.addDeclare('void', 'plant_free', ['i8*']);
+
         this.ctx.resetRegs();
         this._bodyBuffer = [];
         this.symbols = new LLVMSymbolTable(null, this.ctx);
+        this._funcTable = new Map();
+        this._funcDefs = [];
 
-        this._emitBody(programNode.statements);
+        const funcDecls = programNode.statements.filter(s => s.type === 'ActionDeclaration');
+        const mainStmts = programNode.statements.filter(s => s.type !== 'ActionDeclaration');
+
+        for (const decl of funcDecls) {
+            this._registerFunction(decl);
+        }
+
+        this._emitBody(mainStmts);
 
         if (!this.ctx.isTerminated) {
             this._emitLine('  ret i32 0');
+        }
+
+        for (const decl of funcDecls) {
+            const fib = this._emitFunctionDefinition(decl);
+            if (fib) this._funcDefs.push(fib);
         }
 
         const prologue = this.ctx.emitPrologue();
         const allocas = this.ctx.emitAllocas();
         const body = this._bodyBuffer.join('\n');
 
-        return `${prologue}
+        let result = `${prologue}
 
 define i32 @main() {
 ${allocas}
 ${body}
 }
 `;
+        for (const fd of this._funcDefs) {
+            result += '\n' + fd;
+        }
+
+        return result;
+    }
+
+    _registerFunction(decl) {
+        if (decl.isExternal) return;
+        const paramTypes = decl.params.map(p => toLLVMType(p.type || 'NUM'));
+        this._funcTable.set(decl.name, { retType: 'i64', paramTypes });
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -66,6 +99,22 @@ ${body}
         this.ctx.markTerminated();
     }
 
+    _emitHeapCleanup() {
+        for (const name of this.symbols.heapVars) {
+            const info = this.symbols.variables.get(name);
+            if (!info) continue;
+            const tmp = this.ctx.nextReg();
+            this._emitLine(`  ${tmp} = load ${info.llvmType}, ${info.llvmType}* ${info.alloca}`);
+            if (info.llvmType === 'i64*') {
+                const bc = this.ctx.nextReg();
+                this._emitLine(`  ${bc} = bitcast i64* ${tmp} to i8*`);
+                this._emitLine(`  call void @plant_free(i8* ${bc})`);
+            } else {
+                this._emitLine(`  call void @plant_free(i8* ${tmp})`);
+            }
+        }
+    }
+
     // ═══════════════════════════════════════════════════════════════════
     //  Statement emission
     // ═══════════════════════════════════════════════════════════════════
@@ -86,6 +135,8 @@ ${body}
             case 'CycleStatement':    this._emitCycleStatement(stmt); break;
             case 'BreakStatement':    this._emitBreakStatement(); break;
             case 'ContinueStatement': this._emitContinueStatement(); break;
+            case 'GiveStatement':     this._emitGiveStatement(stmt); break;
+            case 'ReapStatement':     this._emitReapStatement(stmt); break;
         }
     }
 
@@ -98,6 +149,9 @@ ${body}
         if (!val) { this._emitLine(`  ; CREATE ${stmt.identifier} — unsupported`); return; }
         const converted = this._maybeConvert(val, info.llvmType);
         this._emitLine(`  store ${converted.llvmType} ${converted.reg}, ${info.llvmType}* ${info.alloca}`);
+        if (val.isHeap) {
+            this.symbols.registerHeapVar(stmt.identifier);
+        }
     }
 
     // ── SET ─────────────────────────────────────────────────────────
@@ -106,8 +160,22 @@ ${body}
         if (!stmt.valueExpr) return;
         const val = this._emitExpressionNode(stmt.valueExpr);
         if (!val) { this._emitLine(`  ; SET ${stmt.identifier} — unsupported`); return; }
+        if (val.isHeap && this.symbols.hasHeapVar(stmt.identifier)) {
+            const tmp = this.ctx.nextReg();
+            this._emitLine(`  ${tmp} = load ${info.llvmType}, ${info.llvmType}* ${info.alloca}`);
+            if (info.llvmType === 'i64*') {
+                const bc = this.ctx.nextReg();
+                this._emitLine(`  ${bc} = bitcast i64* ${tmp} to i8*`);
+                this._emitLine(`  call void @plant_free(i8* ${bc})`);
+            } else {
+                this._emitLine(`  call void @plant_free(i8* ${tmp})`);
+            }
+        }
         const converted = this._maybeConvert(val, info.llvmType);
         this._emitLine(`  store ${converted.llvmType} ${converted.reg}, ${info.llvmType}* ${info.alloca}`);
+        if (val.isHeap) {
+            this.symbols.registerHeapVar(stmt.identifier);
+        }
     }
 
     // ── SHOW ────────────────────────────────────────────────────────
@@ -140,7 +208,6 @@ ${body}
             const branch = branches[i];
             const hasCond = branch.cond !== null && branch.cond !== undefined && branch.cond !== '';
 
-            // First branch stays in the implicit entry block (no label needed)
             if (i > 0) this._emitLabel(entryLabels[i]);
 
             if (hasCond) {
@@ -155,6 +222,7 @@ ${body}
 
             this.symbols = this.symbols.pushScope();
             this._emitBody(branch.bodyStatements);
+            this._emitHeapCleanup();
             this.symbols = this.symbols.popScope();
 
             if (!this.ctx.isTerminated) {
@@ -205,6 +273,7 @@ ${body}
         this.ctx.pushLoop(incLabel, endLabel);
         this.symbols = this.symbols.pushScope();
         this._emitBody(stmt.bodyStatements);
+        this._emitHeapCleanup();
         this.symbols = this.symbols.popScope();
         this.ctx.popLoop();
 
@@ -247,15 +316,143 @@ ${body}
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    //  GIVE — return from function
+    // ═══════════════════════════════════════════════════════════════════
+    _emitGiveStatement(stmt) {
+        this._emitFunctionScopeCleanup();
+        if (!stmt.valueExpr) {
+            this._emitLine('  ret i64 0');
+            this.ctx.markTerminated();
+            return;
+        }
+        const val = this._emitExpressionNode(stmt.valueExpr);
+        if (!val) { this._emitLine('  ret i64 0'); this.ctx.markTerminated(); return; }
+        const conv = this._maybeConvert(val, 'i64');
+        this._emitLine(`  ret i64 ${conv.reg}`);
+        this.ctx.markTerminated();
+    }
+
+    _emitFunctionScopeCleanup() {
+        const heapVars = this.symbols.collectHeapVars();
+        for (const info of heapVars) {
+            const tmp = this.ctx.nextReg();
+            this._emitLine(`  ${tmp} = load ${info.llvmType}, ${info.llvmType}* ${info.alloca}`);
+            if (info.llvmType === 'i64*') {
+                const bc = this.ctx.nextReg();
+                this._emitLine(`  ${bc} = bitcast i64* ${tmp} to i8*`);
+                this._emitLine(`  call void @plant_free(i8* ${bc})`);
+            } else {
+                this._emitLine(`  call void @plant_free(i8* ${tmp})`);
+            }
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  REAP — call a function (ACTION)
+    // ═══════════════════════════════════════════════════════════════════
+    _emitReapStatement(stmt) {
+        if (stmt.source.kind !== 'ACTION') {
+            this._emitLine(`  ; REAP — only ACTION calls supported`);
+            return;
+        }
+        const funcInfo = this._funcTable.get(stmt.source.name);
+        if (!funcInfo) {
+            this._emitLine(`  ; REAP — unknown function "${stmt.source.name}"`);
+            return;
+        }
+        const expectedCount = funcInfo.paramTypes.length;
+        if (stmt.args.length !== expectedCount) {
+            this._emitLine(`  ; REAP — "${stmt.source.name}" expects ${expectedCount} args, got ${stmt.args.length}`);
+            return;
+        }
+
+        const argRegs = [];
+        for (let i = 0; i < stmt.args.length; i++) {
+            const argVal = this._emitExpressionNode(stmt.args[i]);
+            if (!argVal) { this._emitLine(`  ; REAP arg ${i} — unsupported`); return; }
+            const conv = this._maybeConvert(argVal, funcInfo.paramTypes[i]);
+            argRegs.push(conv.reg);
+        }
+
+        const argList = argRegs.map((reg, i) => `${funcInfo.paramTypes[i]} ${reg}`).join(', ');
+        const callReg = this.ctx.nextReg();
+        this._emitLine(`  ${callReg} = call i64 @${stmt.source.name}(${argList})`);
+
+        if (stmt.variable !== '_') {
+            if (!this.symbols.has(stmt.variable)) {
+                this.symbols.declare(stmt.variable, 'NUM');
+            }
+            const info = this.symbols.lookup(stmt.variable);
+            this._emitLine(`  store i64 ${callReg}, i64* ${info.alloca}`);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  Function definition (ACTION)
+    // ═══════════════════════════════════════════════════════════════════
+    _emitFunctionDefinition(decl) {
+        if (decl.isExternal) return null;
+
+        const savedState = this.ctx.saveState();
+        const savedBuffer = this._bodyBuffer;
+        const savedSymbols = this.symbols;
+
+        this.ctx.resetFunctionState();
+        this._bodyBuffer = [];
+        this.symbols = new LLVMSymbolTable(null, this.ctx);
+
+        const paramTypes = decl.params.map(p => toLLVMType(p.type || 'NUM'));
+        const paramNames = decl.params.map(p => `%${p.name}`);
+        const sigParams = paramNames.map((n, i) => `${paramTypes[i]} ${n}`).join(', ');
+        this._emitLine(`define i64 @${decl.name}(${sigParams}) {`);
+
+        for (let i = 0; i < decl.params.length; i++) {
+            const param = decl.params[i];
+            this.symbols.declare(param.name, param.type || 'NUM');
+            const info = this.symbols.lookup(param.name);
+            this._emitLine(`  store ${paramTypes[i]} ${paramNames[i]}, ${info.llvmType}* ${info.alloca}`);
+        }
+
+        this._emitBody(decl.bodyStatements);
+
+        if (!this.ctx.isTerminated) {
+            this._emitFunctionScopeCleanup();
+            this._emitLine('  ret i64 0');
+        }
+
+        this._bodyBuffer.push('}');
+
+        const funcEntryAllocas = this.ctx.emitAllocas();
+        const funcBody = this._bodyBuffer.join('\n');
+
+        let funcIR;
+        if (funcEntryAllocas) {
+            const lines = funcBody.split('\n');
+            lines.splice(1, 0, funcEntryAllocas);
+            funcIR = lines.join('\n');
+        } else {
+            funcIR = funcBody;
+        }
+
+        this._bodyBuffer = savedBuffer;
+        this.symbols = savedSymbols;
+        this.ctx.restoreState(savedState);
+
+        return funcIR;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     //  Expression nodes
     // ═══════════════════════════════════════════════════════════════════
     _emitExpressionNode(node) {
         if (!node) return null;
         if (typeof node === 'string') return this._emitRawExpr(node);
         switch (node.type) {
-            case 'Literal':   return this._emitLiteral(node);
-            case 'Identifier': return this._emitIdentifier(node);
-            default:           return null;
+            case 'Literal':      return this._emitLiteral(node);
+            case 'Identifier':   return this._emitIdentifier(node);
+            case 'ArrayLiteral': return this._emitArrayLiteral(node);
+            case 'IndexAccess':  return this._emitIndexAccess(node);
+            default:             return null;
         }
     }
 
@@ -297,6 +494,47 @@ ${body}
         const reg = this.ctx.nextReg();
         this._emitLine(`  ${reg} = load ${info.llvmType}, ${info.llvmType}* ${info.alloca}`);
         return { reg, llvmType: info.llvmType };
+    }
+
+    // ── Array literal ──────────────────────────────────────────────
+    _emitArrayLiteral(node) {
+        const capacity = node.elements.length;
+        const capReg = this.ctx.nextReg();
+        this._emitLine(`  ${capReg} = add i64 ${capacity}, 0`);
+        const arrReg = this.ctx.nextReg();
+        this._emitLine(`  ${arrReg} = call i64* @plant_array_create(i64 ${capReg})`);
+        for (let i = 0; i < node.elements.length; i++) {
+            const elem = this._emitExpressionNode(node.elements[i]);
+            if (!elem) continue;
+            const conv = this._maybeConvert(elem, 'i64');
+            const idxReg = this.ctx.nextReg();
+            this._emitLine(`  ${idxReg} = add i64 ${i}, 0`);
+            this._emitLine(`  call void @plant_array_set(i64* ${arrReg}, i64 ${idxReg}, i64 ${conv.reg})`);
+        }
+        return { reg: arrReg, llvmType: 'i64*', isHeap: true };
+    }
+
+    // ── Index access (read) ────────────────────────────────────────
+    _emitIndexAccess(node) {
+        const target = this._emitExpressionNode(node.target);
+        if (!target) return null;
+        const idx = this._emitExpressionNode(node.index);
+        if (!idx) return null;
+        const convIdx = this._maybeConvert(idx, 'i64');
+        const reg = this.ctx.nextReg();
+        if (target.llvmType === 'i64*') {
+            this._emitLine(`  ${reg} = call i64 @plant_array_get(i64* ${target.reg}, i64 ${convIdx.reg})`);
+        } else if (target.llvmType === 'i8*') {
+            const charReg = this.ctx.nextReg();
+            this._emitLine(`  ${charReg} = getelementptr i8, i8* ${target.reg}, i64 ${convIdx.reg}`);
+            this._emitLine(`  ${reg} = load i8, i8* ${charReg}`);
+            const zextReg = this.ctx.nextReg();
+            this._emitLine(`  ${zextReg} = zext i8 ${reg} to i64`);
+            return { reg: zextReg, llvmType: 'i64' };
+        } else {
+            return null;
+        }
+        return { reg, llvmType: 'i64' };
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -541,6 +779,11 @@ ${body}
     //  LLVM IR operation emission
     // ═══════════════════════════════════════════════════════════════════
     _emitArithOp(left, right, op) {
+        if (op === 'PLUS' && left.llvmType === 'i8*' && right.llvmType === 'i8*') {
+            const reg = this.ctx.nextReg();
+            this._emitLine(`  ${reg} = call i8* @plant_str_concat(i8* ${left.reg}, i8* ${right.reg})`);
+            return { reg, llvmType: 'i8*', isHeap: true };
+        }
         const p = this._promoteTypes(left, right);
         const l = p.left, r = p.right;
         const t = l.llvmType;

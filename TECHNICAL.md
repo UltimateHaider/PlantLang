@@ -1959,9 +1959,9 @@ Two allocators in `src/memory/allocator.js`:
 
 ---
 
-## 22. Phase 1 LLVM IR Compiler — Primitives & Early SHOW (v0.39.2)
+## 22. Phase 1 LLVM IR Compiler — Primitives & Early SHOW (v0.39.5)
 
-The v0.39.2 release introduces the first phase of a new modular LLVM IR compiler pipeline, built alongside the existing `core/llvm_codegen.js` backend. This pipeline translates primitive PlantLang AST nodes directly into valid, executable LLVM IR, verified by a differential test harness that compares compiled binary output against the existing AST interpreter.
+The v0.39.5 release introduces the first phase of a new modular LLVM IR compiler pipeline, built alongside the existing `core/llvm_codegen.js` backend. This pipeline translates primitive PlantLang AST nodes directly into valid, executable LLVM IR, verified by a differential test harness that compares compiled binary output against the existing AST interpreter.
 
 ### 22.1 Architecture
 

@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.39.2
+# 🌿 PlantLang — Chloroplast v0.39.5
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -920,7 +920,7 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.39.2 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, lock-free telemetry, zero-trust security, a cluster layer, a geo-routing governance engine, and a new modular LLVM IR compiler pipeline for primitives:
+Chloroplast v0.39.5 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, lock-free telemetry, zero-trust security, a cluster layer, a geo-routing governance engine, and a new modular LLVM IR compiler pipeline for primitives:
 
 ```
 Source (.plnt)
@@ -1038,10 +1038,10 @@ Source (.plnt)
     │   ├── REMOTE_REAP: stream to MEMORY_BUFFER or URI target
     │   └── MISSION CONFIG: REMOTE_REAP_TARGET
     │
-    ├── codegen/llvm/llvm_context.js      — Reg counter, string pool, declare headers (v0.39.2)
-    ├── codegen/llvm/llvm_type_mapper.js  — NUM→i64, SCL→double, FACT→i1, TX→i8* (v0.39.2)
-    ├── codegen/llvm/llvm_symbol_table.js — Variable scope → alloca emission (v0.39.2)
-    ├── codegen/llvm/llvm_emitter.js      — AST→LLVM IR visitor + expression parser (v0.39.2)
+    ├── codegen/llvm/llvm_context.js      — Reg counter, string pool, declare headers (v0.39.5)
+    ├── codegen/llvm/llvm_type_mapper.js  — NUM→i64, SCL→double, FACT→i1, TX→i8* (v0.39.5)
+    ├── codegen/llvm/llvm_symbol_table.js — Variable scope → alloca emission (v0.39.5)
+    ├── codegen/llvm/llvm_emitter.js      — AST→LLVM IR visitor + expression parser (v0.39.5)
     │
     ├── interpreter/cycle_evaluator.js  — CycleInStatement (v0.38.0)
     │   ├── CYCLE item [, idx] IN list: per-iteration scope isolation

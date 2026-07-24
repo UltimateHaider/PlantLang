@@ -7,6 +7,7 @@ class LLVMSymbolTable {
         this.parent = parent;
         this.context = context;
         this.variables = new Map();
+        this.heapVars = new Set();
     }
 
     declare(name, plantType) {
@@ -21,6 +22,20 @@ class LLVMSymbolTable {
             this.context.addEntryAlloca(alloca, llvmType);
         }
         return alloca;
+    }
+
+    registerHeapVar(name) {
+        if (this.variables.has(name)) {
+            this.heapVars.add(name);
+            return;
+        }
+        if (this.parent) this.parent.registerHeapVar(name);
+    }
+
+    hasHeapVar(name) {
+        if (this.heapVars.has(name)) return true;
+        if (this.parent) return this.parent.hasHeapVar(name);
+        return false;
     }
 
     lookup(name) {
@@ -43,6 +58,16 @@ class LLVMSymbolTable {
 
     popScope() {
         return this.parent;
+    }
+
+    collectHeapVars() {
+        const result = [];
+        if (this.parent) result.push(...this.parent.collectHeapVars());
+        for (const name of this.heapVars) {
+            const entry = this.variables.get(name);
+            if (entry) result.push(entry);
+        }
+        return result;
     }
 }
 

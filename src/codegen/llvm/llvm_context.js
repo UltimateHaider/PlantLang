@@ -63,6 +63,35 @@ class LLVMContext {
         this.isTerminated = false;
     }
 
+    saveState() {
+        return {
+            regCounter: this.regCounter,
+            labelCounter: this.labelCounter,
+            allocaCounter: this.allocaCounter,
+            entryAllocas: this.entryAllocas,
+            loopStack: this.loopStack,
+            isTerminated: this.isTerminated,
+        };
+    }
+
+    restoreState(state) {
+        this.regCounter = state.regCounter;
+        this.labelCounter = state.labelCounter;
+        this.allocaCounter = state.allocaCounter;
+        this.entryAllocas = state.entryAllocas;
+        this.loopStack = state.loopStack;
+        this.isTerminated = state.isTerminated;
+    }
+
+    resetFunctionState() {
+        this.regCounter = 1;
+        this.labelCounter = 1;
+        this.allocaCounter = 1;
+        this.entryAllocas = [];
+        this.loopStack = [];
+        this.isTerminated = false;
+    }
+
     getOrCreateStringConstant(str) {
         if (this.stringPool.has(str)) return this.stringPool.get(str);
         const idx = this.stringIndex++;

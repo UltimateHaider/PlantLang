@@ -1,15 +1,18 @@
 {
   "name": "plantlang",
-  "version": "0.22.0",
-  "description": "🌿 PlantLang — Chloroplast Interpreter v0.22 | A programming language designed to read like natural prose",
+  "version": "1.0.0-phase5",
+  "description": "PlantLang Compiler — Phase 5 (Native Compiler & Parity)",
   "main": "core/interpreter.js",
-  "bin": { "chloroplast": "./chloroplast.js" },
+  "bin": {
+    "plantc": "./bin/plantc"
+  },
   "scripts": {
     "start":  "node chloroplast.js repl",
-    "test":   "node chloroplast.js run tests/all.plnt && node chloroplast.js verify tests/suite.plnt",
-    "verify": "node chloroplast.js verify tests/suite.plnt"
+    "test":   "node tests/llvm/01_primitives.test.js && node tests/llvm/02_control_flow.test.js && node tests/llvm/03_functions_runtime.test.js && node tests/llvm/04_memory_lifecycle.test.js && node tests/parity/full_parity_suite.test.js",
+    "test:llvm": "node tests/llvm/01_primitives.test.js && node tests/llvm/02_control_flow.test.js && node tests/llvm/03_functions_runtime.test.js && node tests/llvm/04_memory_lifecycle.test.js",
+    "test:parity": "node tests/parity/full_parity_suite.test.js"
   },
-  "keywords": ["plantlang", "programming-language", "arabic", "chloroplast", "interpreter"],
+  "keywords": ["plantlang", "programming-language", "compiler", "llvm", "chloroplast"],
   "engines": { "node": ">=18.0.0" },
   "license": "MIT"
 }

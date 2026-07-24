@@ -9,6 +9,7 @@ const TYPE_MAP = {
     BOOL: 'i1',
     TX: 'i8*',
     TEXT: 'i8*',
+    LIST: 'i64*',
 };
 
 const PRINT_FUNCTIONS = {
