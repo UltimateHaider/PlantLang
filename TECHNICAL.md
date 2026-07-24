@@ -1161,7 +1161,8 @@ bytes 224-255: hash (SHA256 of this entry, 32 bytes)
 - `tests/v0.33.0_parallel.test.js` — 60 tests for Parallel Compilation & Telemetry (DAG/cycle detection, weighted load balancing, network compression ≥60%, 100ms timeout fallback, telemetry ring buffer/snapshot, dispatcher auto-disable, 20-node speedup benchmark suite)
 - `tests/v0.34.0_security.test.js` — 91 tests for Zero-Trust Security & Audit (audit logger hash chain/integrity/overflow, mTLS JWT valid/expired/forged/replay/Ed25519, capability sandboxing SAFE zero-default/grant/revoke/syscall blocking/violation hooks, benchmark suite)
 - `tests/v0.40.0_distributed.test.js` — 34 tests for Geo-Aware Cycles, Dynamic Replica Rebalancing & Stream Compaction (GeoTopologyManager latency matrix/optimal nodes, StreamCompactor binary compress/decompress round-trip, DistributedCycleEngine geo-aware executeCycleBlock, ReplicaManager handleNodeJoin/handleNodeLeave rebalancing)
-- **Total: 30 test files, ~1285+ tests, all green**
+- `tests/v0.41.0_native_net_governance.test.js` — 69 tests for Integrated Testing, Native Networking & CodeWords Governance (CodeWordsChecker directive parsing/permission/AST security, TestRunner SUITE/VERIFY/nested/runAll, CodeWords+TestRunner integration in plantc test pipeline)
+- **Total: 30+ test files, ~900+ tests, all green**
 
 ### Test Methodology
 Each test:
@@ -2355,3 +2356,87 @@ _rebalancePartitions(newNodeId) {
   - DistributedCycleEngine geo-awareness: `executeCycleBlock()` with locality key, `geoAffinity` metadata, no-workers fallback reason
   - ReplicaManager rebalancing: `handleNodeJoin()` returns rebalanced=true and healed=true, primary count preserved after join, replicas healed after join, `handleNodeLeave()` returns affectedActors count
   - Total: 34 tests, all green
+
+## 24. Integrated Testing, Native Networking & CodeWords Governance (v0.41.0)
+
+The v0.41.0 release adds an integrated testing framework (`SUITE`/`VERIFY`), native network primitives (`HARVEST`/`LISTEN BRANCH`), and CodeWords safety governance for capability-based access control.
+
+### 24.1 CodeWordsGovernance — Static AST Security Pass
+
+**File:** `src/security/codewords_governance.js`
+
+The `CodeWordsChecker` enforces capability-based access control:
+
+```
+Directive           Implies                        Description
+────────────────────────────────────────────────────────────────────
+#ALLOW_NETWORK      #ALLOW_HARVEST, #ALLOW_LISTEN  Broad network permission
+#ALLOW_HARVEST      —                               Permit outbound HTTP
+#ALLOW_LISTEN       —                               Permit TCP socket listener
+```
+
+**Key API:**
+- `CodeWordsChecker.parseDirectives(source)` — extracts `#ALLOW_*` lines from source
+- `CodeWordsChecker.hasDirective(name)` — returns true if directive is declared or implied
+- `CodeWordsChecker.checkNode(node, sourcePath)` — validates a single AST node; returns false + records `SecurityViolationError` on violation
+- `CodeWordsChecker.checkAST(programNode, sourcePath)` — walks entire AST collecting violations
+
+**Capability inheritance:** `#ALLOW_NETWORK` is a broad permission that grants both `HARVEST` and `LISTEN BRANCH`. `#ALLOW_HARVEST` and `#ALLOW_LISTEN` are granular — each grants only the named operation.
+
+### 24.2 TestRunner — SUITE/VERIFY Execution Engine
+
+**File:** `src/testing/test_runner.js`
+
+The `TestRunner` discovers `SUITE` blocks and evaluates `VERIFY` assertions:
+
+- `runSuite(suiteNode, context)` — executes a single SUITE, returning `{name, passed, failed, assertions, elapsed}`
+- `runAll(suites, context)` — executes multiple SUITE blocks, returning aggregated `{passed, failed, total, suites}`
+- `printSummary()` — renders a pass/fail summary to stderr
+- `getExitCode()` — returns `0` if all passed, `1` if any failed
+
+**Assertion evaluation:**
+- Boolean `true` passes, `false` fails
+- Non-zero number passes, zero fails
+- Non-empty string passes, `"false"` and `"FALSE"` and `"0"` fail
+- Context variable lookup evaluated as truthy
+
+### 24.3 plantc test Subcommand
+
+The `plantc test <file.plant>` subcommand:
+1. Reads the source file
+2. (Optional) Runs `CodeWordsChecker.checkAST()` — rejects with violations on unprotected network statements
+3. Parses the AST and collects all top-level `SuiteStatement` nodes
+4. Executes them via `TestRunner.runAll()`
+5. Prints summary and exits with code `0` (all pass) or `1` (any fail)
+
+Flags: `--code-words-enforce` (default), `--skip-code-words`.
+
+### 24.4 POSIX Socket Runtime (C)
+
+**Files:** `runtime/c/plant_runtime.c`, `runtime/c/plant_runtime.h`
+
+| Function | Signature | Description |
+|---|---|---|
+| `plant_net_harvest` | `char*(url, method, body, headers, timeout)` | HTTP GET via POSIX sockets; parses host/path from URL, connects to port 80, sends request, reads response, returns body |
+| `plant_net_listen_open` | `int64_t(port)` | Creates TCP socket, binds to port, starts listening; returns fd or -1 |
+| `plant_net_accept` | `int64_t(fd)` | Blocks on accept; returns client fd |
+| `plant_net_read` | `char*(fd)` | Reads up to 4KB from fd; returns string |
+| `plant_net_write` | `int64_t(fd, data)` | Writes data to fd; returns bytes sent |
+| `plant_net_close` | `void(fd)` | Closes fd |
+
+### 24.5 LLVM Codegen — New AST Visitors
+
+**File:** `src/codegen/llvm/llvm_emitter.js`
+
+- `SuiteStatement` / `VerifyStatement` — no-ops in compiled binary (used only by TestRunner)
+- `HarvestStatement` — emits `call i8* @plant_net_harvest(i8* url, i8* method, i8* body, i8* headers, i64 timeout)` and stores result
+- `ListenBranchStatement` — emits listen loop: `@plant_net_listen_open` → `@plant_net_accept` → `@plant_net_read` → handler body → `@plant_net_write` → `@plant_net_close` → back to accept
+
+### 24.6 Test Coverage
+
+- `tests/v0.41.0_native_net_governance.test.js` — 69 tests:
+  - CodeWords: directive parsing (4 tests), permission checks including implied grants (8 tests), AST security pass with violations (6 tests), SecurityViolationError construction (1 test)
+  - TestRunner: basic SUITE/VERIFY with boolean/string/number assertions (4 tests), nested SUITE aggregation (1 test), runAll summary and exit code (2 tests)
+  - CodeWords + TestRunner integration (1 test)
+  - Valid directives enumeration (1 test)
+  - Total: 69 tests, all green

@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.40.0
+# 🌿 PlantLang — Chloroplast v0.41.0
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -920,7 +920,7 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.40.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, lock-free telemetry, zero-trust security, a cluster layer, a geo-routing governance engine, distributed cycles, geo-aware topology, stream compaction, and dynamic replica rebalancing:
+Chloroplast v0.41.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, lock-free telemetry, zero-trust security, a cluster layer, a geo-routing governance engine, distributed cycles, geo-aware topology, stream compaction, dynamic replica rebalancing, and an integrated testing framework with native networking:
 
 ```
 Source (.plnt)
@@ -1069,6 +1069,17 @@ Source (.plnt)
     │   ├── Granular capability matrix per mission mode
     │   ├── Syscall filtering: blocks execve/ptrace/fork/clone/kill in SAFE
     │   └── Violation enforcement: SIGSYS termination + CRITICAL audit log
+    │
+    ├── security/codewords_governance.js   — CodeWordsChecker (v0.41.0)
+    │   ├── #ALLOW_NETWORK / #ALLOW_HARVEST / #ALLOW_LISTEN directives
+    │   ├── Static AST security pass rejecting HARVEST/LISTEN BRANCH without permission
+    │   └── #ALLOW_NETWORK implies both HARVEST and LISTEN
+    │
+    ├── testing/test_runner.js              — TestRunner (v0.41.0)
+    │   ├── SUITE/VERIFY block discovery and execution
+    │   ├── Truthy/falsy assertion evaluation
+    │   ├── Nested suite support with aggregated counts
+    │   └── plantc test subcommand integration
     │
     ├── cluster/topology/geo_topology.js  — GeoTopologyManager (v0.40.0)
     │   ├── Dynamic RTT latency matrix with continuous probing
@@ -1861,6 +1872,67 @@ The `ReapAggregator` provides dual-mode result collection for distributed cycle 
 - `REMOTE_REAP_TARGET` — `MEMORY_BUFFER` (default) or a URI with `scheme://`
 
 ---
+
+## Integrated Testing & Native Networking (v0.41.0)
+
+Starting with v0.41.0, PlantLang ships with an **Integrated Testing Framework** (`SUITE`/`VERIFY`), **Native Network Primitives** (`HARVEST`/`LISTEN BRANCH`), and **CodeWords Safety Governance** (`#ALLOW_NETWORK`, `#ALLOW_HARVEST`, `#ALLOW_LISTEN`).
+
+### 1. CodeWords Safety Governance
+
+The `CodeWordsChecker` enforces capability-based access control at the AST level. Network-related statements (`HARVEST`, `LISTEN BRANCH`) are rejected unless the source file declares the appropriate directive:
+
+```
+#ALLOW_NETWORK
+SUITE "Network Tests",
+  VERIFY "harvest works", TRUE
+SUITE/.
+```
+
+**Directive reference:**
+
+| Directive | Implies | Description |
+|:---|:---|:---|
+| `#ALLOW_NETWORK` | `#ALLOW_HARVEST`, `#ALLOW_LISTEN` | Broad network permission |
+| `#ALLOW_HARVEST` | — | Permit outbound HTTP requests |
+| `#ALLOW_LISTEN` | — | Permit TCP socket listeners |
+
+### 2. `SUITE` / `VERIFY` — Test Runner
+
+The `plantc test <file.plant>` subcommand discovers all `SUITE` blocks and executes their `VERIFY` assertions:
+
+```
+SUITE "Arithmetic",
+  VERIFY "2 + 2 = 4", 2 + 2 IS 4
+  VERIFY "zero is falsy", 0
+SUITE/.
+
+SUITE "String",
+  VERIFY "hello is truthy", "hello"
+SUITE/.
+```
+
+Each `VERIFY` evaluates its assertion expression; truthy passes, falsy fails. Nested `SUITE` blocks are supported and their counts aggregate upward.
+
+### 3. `HARVEST` — Outbound HTTP Requests
+
+```
+#ALLOW_HARVEST
+CREATE result(TX).
+HARVEST "http://example.com/data" METHOD:"GET" AS result.
+SHOW result.
+```
+
+`HARVEST` sends an HTTP GET (or custom METHOD) to the target URL and stores the response body in the result variable. At compile time, it emits a call to the C runtime's `plant_net_harvest()` POSIX socket helper.
+
+### 4. `LISTEN BRANCH` — TCP Socket Server
+
+```
+#ALLOW_LISTEN
+LISTEN 8080 AS req,
+  SHOW req.
+```
+
+`LISTEN BRANCH` opens a TCP listener on the given port. For each incoming connection, it reads the request data into the bound identifier, executes the handler body, and sends a response. The listener loops until shutdown.
 
 ## Geo-Aware Cycles & Dynamic Replica Rebalancing (v0.40.0)
 

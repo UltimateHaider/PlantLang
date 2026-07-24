@@ -3,6 +3,9 @@
 const path = require('path');
 const fs = require('fs');
 const { CompilerPipeline } = require('../driver/pipeline');
+const { CodeWordsChecker } = require('../security/codewords_governance');
+const { TestRunner } = require('../testing/test_runner');
+const { parse } = require('../../core/parser');
 
 const VERSION = '1.0.0-phase5';
 
@@ -10,7 +13,8 @@ function printUsage() {
     console.error(`PlantLang Compiler (plantc) v${VERSION}
 
 Usage:
-  plantc [options] <input.plant>
+  plantc [options] <input.plant>                      Compile a program
+  plantc test [options] <input.plant>                  Run SUITE/VERIFY tests
 
 Options:
   -o, --output <file>     Output binary path (default: <input basename>)
@@ -21,16 +25,24 @@ Options:
   -h, --help              Show this help message
   -v, --version           Show version
 
+Test options:
+  --code-words-enforce    Enforce CodeWords governance (default: true)
+  --skip-code-words       Skip CodeWords governance checks
+
 Examples:
   plantc program.plant
+  plantc test tests/suite.plant
   plantc -O0 --run program.plant
-  plantc -o myapp --emit-llvm program.plant
 `);
 }
 
 function parseArgs(argv) {
-    const args = { optLevel: 'O2' };
+    const args = { optLevel: 'O2', enforceCodeWords: true };
     let i = 2;
+    if (i < argv.length && argv[i] === 'test') {
+        args.mode = 'test';
+        i++;
+    }
     while (i < argv.length) {
         const arg = argv[i];
         if (arg === '-h' || arg === '--help') { args.help = true; i++; continue; }
@@ -38,6 +50,8 @@ function parseArgs(argv) {
         if (arg === '--emit-llvm') { args.emitLlvm = true; i++; continue; }
         if (arg === '--run') { args.run = true; i++; continue; }
         if (arg === '--verbose') { args.verbose = true; i++; continue; }
+        if (arg === '--code-words-enforce') { args.enforceCodeWords = true; i++; continue; }
+        if (arg === '--skip-code-words') { args.enforceCodeWords = false; i++; continue; }
         if (arg === '-O0' || arg === '-O1' || arg === '-O2' || arg === '-O3') {
             args.optLevel = arg.slice(1);
             i++; continue;
@@ -77,6 +91,11 @@ function run() {
         process.exit(1);
     }
 
+    if (args.mode === 'test') {
+        runTests(args);
+        return;
+    }
+
     const pipeline = new CompilerPipeline({
         inputFile: args.inputFile,
         outputFile: args.outputFile,
@@ -99,6 +118,45 @@ function run() {
         console.error(`error: ${e.message}`);
         process.exit(1);
     }
+}
+
+function runTests(args) {
+    const source = fs.readFileSync(args.inputFile, 'utf8');
+
+    if (args.enforceCodeWords) {
+        const dirs = CodeWordsChecker.parseDirectives(source);
+        const checker = new CodeWordsChecker(dirs);
+        const program = parse(source);
+        const violations = checker.checkAST(program, args.inputFile);
+        if (violations.length > 0) {
+            for (const v of violations) {
+                console.error(`[CodeWords] ${v.message}`);
+            }
+            console.error(`error: ${violations.length} CodeWords violation(s) found`);
+            process.exit(1);
+        }
+        if (args.verbose) {
+            console.error(`[CodeWords] ${checker.getDirectives().length} directive(s) active: ${checker.getDirectives().join(', ')}`);
+        }
+    }
+
+    const program = parse(source);
+    const suites = [];
+    for (const stmt of program.statements) {
+        if (stmt.type === 'SuiteStatement') {
+            suites.push(stmt);
+        }
+    }
+
+    if (suites.length === 0) {
+        console.error('error: no SUITE blocks found in input');
+        process.exit(1);
+    }
+
+    const runner = new TestRunner({ verbose: args.verbose });
+    const summary = runner.runAll(suites, {});
+    runner.printSummary();
+    process.exit(runner.getExitCode());
 }
 
 if (require.main === module) {

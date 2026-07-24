@@ -1,4 +1,42 @@
-# PlantLang Roadmap: v0.40.0+ (Completed & Future)
+# PlantLang Roadmap: v0.41.0+ (Completed & Future)
+
+## ✅ Version v0.41.0: Integrated Testing, Native Networking & CodeWords Governance
+
+**Status:** ✅ Completed
+
+### Scope & Engineering Implementation
+
+#### CodeWords Governance (Security Layer)
+- Directive parser: `#ALLOW_NETWORK`, `#ALLOW_HARVEST`, `#ALLOW_LISTEN`
+- Capability inheritance: `#ALLOW_NETWORK` implies both `#ALLOW_HARVEST` and `#ALLOW_LISTEN`
+- Static AST security pass — rejects `HarvestStatement`/`ListenBranchStatement` without corresponding directive
+- `SecurityViolationError` with source location and required directive name
+
+#### TestRunner (Testing Framework)
+- `SUITE` / `VERIFY` block discovery and execution
+- Truthy/falsy assertion evaluation
+- Nested SUITE support with aggregated pass/fail counts
+- Summary printer with non-zero exit code on failure
+
+#### plantc test Subcommand
+- `plantc test <file.plant>` — parses source, runs CodeWords check, executes all SUITE blocks
+- `--code-words-enforce` / `--skip-code-words` flags for governance control
+- Pass/fail summary printed to stderr, exit code 1 on any failure
+
+#### POSIX Socket Runtime (C)
+- `plant_net_harvest(url)` — HTTP GET via `getaddrinfo` / `connect` / `send` / `recv`
+- `plant_net_listen_open(port)` — TCP listener via `socket` / `bind` / `listen`
+- `plant_net_accept(fd)` / `plant_net_read(fd)` / `plant_net_write(fd, data)` / `plant_net_close(fd)`
+
+#### LLVM Codegen
+- AST visitors for `SuiteStatement` (no-op), `VerifyStatement` (no-op), `HarvestStatement` (`@plant_net_harvest`), `ListenBranchStatement` (listen/accept/read/write loop IR)
+- Forward declarations for all 6 C runtime socket helpers
+
+#### Test Coverage
+- `tests/v0.41.0_native_net_governance.test.js` — 69 tests across all 5 module areas
+- All 30+ test suites at 100% pass rate
+
+---
 
 ## ✅ Version v0.40.0: Geo-Aware Cycles, Dynamic Replica Rebalancing & Stream Compaction
 
@@ -328,10 +366,13 @@ This release establishes the foundation for a second compilation pipeline: Plant
 | ✅ **v0.38.0** | **Language Ergonomics & AST Zero-Fallback** — CYCLE...IN with index, BREAK/CONTINUE, multi-field SORT, BLOOM AS, nested struct formatting, memory allocators | ✅ Q4 2028 |
 | ✅ **v0.39.5** | **Phase 1 LLVM IR Compiler — Primitives & Early SHOW** — C runtime helpers, LLVM codegen infrastructure, expression parser, differential test harness (39 tests) | ✅ Q1 2029 |
 | ✅ **v0.40.0** | **Geo-Aware Cycles & Dynamic Replica Rebalancing** — GeoTopologyManager, StreamCompactor, geo-affine placement, replica rebalancing on node churn | ✅ Q2 2029 |
+| ✅ **v0.41.0** | **Integrated Testing, Native Networking & CodeWords Governance** — CodeWordsChecker, TestRunner, POSIX socket helpers, plantc test subcommand | ✅ Q3 2029 |
 
 ---
 
-*PlantLang v0.40.0: Geo-Aware Cycles, Dynamic Replica Rebalancing & Stream Compaction. GeoTopologyManager (RTT latency matrix, getOptimalNodes), StreamCompactor (binary compression, 60-85% reduction), geo-aware DistributedCycleEngine (executeCycleBlock), ReplicaManager rebalancing (handleNodeJoin/handleNodeLeave, partition rebalance, replica heal). 34 new tests. 1285+ total tests. All green.*
+*PlantLang v0.41.0: Integrated Testing, Native Networking & CodeWords Governance. CodeWordsChecker (directive parser, AST security pass), TestRunner (SUITE/VERIFY, nested suites, exit code 1 on failure), POSIX socket C helpers (plant_net_harvest, plant_net_listen_open), LLVM codegen (HarvestStatement, ListenBranchStatement), plantc test subcommand. 69 new tests. 900+ total tests across 30+ suites. All green.*
+
+*PlantLang v0.40.0: Geo-Aware Cycles, Dynamic Replica Rebalancing & Stream Compaction. GeoTopologyManager (RTT latency matrix, getOptimalNodes), StreamCompactor (binary compression, 60-85% reduction), geo-aware DistributedCycleEngine (executeCycleBlock), ReplicaManager rebalancing (handleNodeJoin/handleNodeLeave, partition rebalance, replica heal). 34 new tests. All green.*
 
 *PlantLang v0.39.5: Phase 1 LLVM IR Compiler — Primitives & Early SHOW. C runtime helpers (plant_runtime), LLVM codegen infrastructure (context, type mapper, symbol table, emitter with full expression parser), differential test harness. 39 new tests. 1251+ total tests. All green.*
 

@@ -137,6 +137,10 @@ ${body}
             case 'ContinueStatement': this._emitContinueStatement(); break;
             case 'GiveStatement':     this._emitGiveStatement(stmt); break;
             case 'ReapStatement':     this._emitReapStatement(stmt); break;
+            case 'SuiteStatement':    /* no-op in compiled output */ break;
+            case 'VerifyStatement':   /* no-op in compiled output */ break;
+            case 'HarvestStatement':  this._emitHarvestStatement(stmt); break;
+            case 'ListenBranchStatement': this._emitListenBranchStatement(stmt); break;
         }
     }
 
@@ -877,6 +881,102 @@ ${body}
             return { reg, llvmType: 'i1' };
         }
         return val;
+    }
+}
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  HARVEST — v0.41.0 outbound HTTP request
+    // ═══════════════════════════════════════════════════════════════════
+    _emitHarvestStatement(stmt) {
+        this.ctx.addDeclare('i8*', 'plant_net_harvest', ['i8*', 'i8*', 'i8*', 'i8*', 'i64']);
+
+        const urlVal = this._emitExpressionNode(stmt.urlExpr);
+        if (!urlVal) { this._emitLine('  ; HARVEST URL — unsupported'); return; }
+        const urlStr = this._maybeConvert(urlVal, 'i8*');
+
+        const methodStr = stmt.method
+            ? this._emitStringConstant(stmt.method)
+            : this._emitStringConstant('GET');
+
+        let bodyStr = { reg: 'null', llvmType: 'i8*' };
+        if (stmt.bodyExpr) {
+            const bv = this._emitExpressionNode(stmt.bodyExpr);
+            if (bv) bodyStr = this._maybeConvert(bv, 'i8*');
+        }
+
+        let headersStr = { reg: 'null', llvmType: 'i8*' };
+        if (stmt.headersIdent) {
+            const hv = this._emitIdentifier({ type: 'Identifier', name: stmt.headersIdent });
+            if (hv) headersStr = this._maybeConvert(hv, 'i8*');
+        }
+
+        const timeoutVal = stmt.timeoutExpr
+            ? this._maybeConvert(this._emitExpressionNode(stmt.timeoutExpr), 'i64')
+            : { reg: '5', llvmType: 'i64' };
+
+        const callReg = this.ctx.nextReg();
+        this._emitLine(`  ${callReg} = call i8* @plant_net_harvest(i8* ${urlStr.reg}, i8* ${methodStr.reg}, i8* ${bodyStr.reg}, i8* ${headersStr.reg}, i64 ${timeoutVal.reg})`);
+
+        if (stmt.resultIdent) {
+            if (!this.symbols.has(stmt.resultIdent)) {
+                this.symbols.declare(stmt.resultIdent, 'TX');
+            }
+            const info = this.symbols.lookup(stmt.resultIdent);
+            this._emitLine(`  store i8* ${callReg}, i8** ${info.alloca}`);
+            this.symbols.registerHeapVar(stmt.resultIdent);
+        }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    //  LISTEN BRANCH — v0.41.0 TCP server listener
+    // ═══════════════════════════════════════════════════════════════════
+    _emitListenBranchStatement(stmt) {
+        this.ctx.addDeclare('i64', 'plant_net_listen_open', ['i64']);
+        this.ctx.addDeclare('i64', 'plant_net_accept', ['i64']);
+        this.ctx.addDeclare('i8*', 'plant_net_read', ['i64']);
+        this.ctx.addDeclare('i64', 'plant_net_write', ['i64', 'i8*']);
+        this.ctx.addDeclare('void', 'plant_net_close', ['i64']);
+
+        const portVal = this._emitExpressionNode(stmt.portExpr);
+        if (!portVal) { this._emitLine('  ; LISTEN — port unsupported'); return; }
+        const portI64 = this._maybeConvert(portVal, 'i64');
+
+        const listenFd = this.ctx.nextReg();
+        this._emitLine(`  ${listenFd} = call i64 @plant_net_listen_open(i64 ${portI64.reg})`);
+
+        const loopLabel = this.ctx.nextLabel('listen.loop');
+        const acceptLabel = this.ctx.nextLabel('listen.accept');
+        const doneLabel = this.ctx.nextLabel('listen.done');
+
+        this._emitLabel(loopLabel);
+        const clientFd = this.ctx.nextReg();
+        this._emitLine(`  ${clientFd} = call i64 @plant_net_accept(i64 ${listenFd})`);
+        const cmpReg = this.ctx.nextReg();
+        this._emitLine(`  ${cmpReg} = icmp slt i64 ${clientFd}, 0`);
+        this._emitCondBr(cmpReg, doneLabel, acceptLabel);
+
+        this._emitLabel(acceptLabel);
+        if (stmt.requestIdent) {
+            if (!this.symbols.has(stmt.requestIdent)) {
+                this.symbols.declare(stmt.requestIdent, 'TX');
+            }
+            const reqInfo = this.symbols.lookup(stmt.requestIdent);
+            const reqData = this.ctx.nextReg();
+            this._emitLine(`  ${reqData} = call i8* @plant_net_read(i64 ${clientFd})`);
+            this._emitLine(`  store i8* ${reqData}, i8** ${reqInfo.alloca}`);
+            this.symbols.registerHeapVar(stmt.requestIdent);
+        }
+
+        this.symbols = this.symbols.pushScope();
+        this._emitBody(stmt.bodyStatements);
+        this._emitHeapCleanup();
+        this.symbols = this.symbols.popScope();
+
+        this._emitLine(`  call void @plant_net_close(i64 ${clientFd})`);
+        this._emitBr(loopLabel);
+
+        this._emitLabel(doneLabel);
+        this._emitLine(`  call void @plant_net_close(i64 ${listenFd})`);
     }
 }
 

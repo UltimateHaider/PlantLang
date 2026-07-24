@@ -1,5 +1,51 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.41.0 — 2026
+
+### New: Integrated Testing, Native Networking & CodeWords Governance
+- **CodeWordsGovernance** (`src/security/codewords_governance.js`):
+  - Directive parser: `#ALLOW_NETWORK`, `#ALLOW_HARVEST`, `#ALLOW_LISTEN`
+  - Capability inheritance: `#ALLOW_NETWORK` implies both `#ALLOW_HARVEST` and `#ALLOW_LISTEN`
+  - Static AST security pass — `checkNode()` / `checkAST()` reject `HarvestStatement` / `ListenBranchStatement` without corresponding directive
+  - `SecurityViolationError` with source location, node type, and required directive
+- **TestRunner** (`src/testing/test_runner.js`):
+  - `SUITE` / `VERIFY` block discovery and execution
+  - Truthy/falsy assertion evaluation (boolean, string, number, context lookup)
+  - Nested SUITE support with aggregated pass/fail counts
+  - `runAll(suites)`, `getSummary()`, `printSummary()`, `getExitCode()`
+- **plantc test** subcommand (`src/cli/plantc.js`):
+  - `plantc test <file.plant>` — parses, runs CodeWords check, executes all SUITE blocks
+  - `--code-words-enforce` / `--skip-code-words` flags
+  - Pass/fail summary on stderr, exit code 1 on any failure
+- **POSIX Socket Runtime** (`runtime/c/plant_runtime.c`, `plant_runtime.h`):
+  - `plant_net_harvest(url)` — HTTP GET via POSIX sockets
+  - `plant_net_listen_open(port)` — TCP listener
+  - `plant_net_accept(fd)`, `plant_net_read(fd)`, `plant_net_write(fd, data)`, `plant_net_close(fd)`
+- **LLVM Codegen** (`src/codegen/llvm/llvm_emitter.js`):
+  - AST visitors for `SuiteStatement` (no-op), `VerifyStatement` (no-op), `HarvestStatement` (`@plant_net_harvest`), `ListenBranchStatement` (listen/accept/read/write loop IR)
+  - Forward declarations for all 6 socket helpers
+
+### Test Suite
+- New `tests/v0.41.0_native_net_governance.test.js` — 69 tests covering:
+  - CodeWords: directive parsing, permission checks (direct + implied via #ALLOW_NETWORK), AST violations, SecurityViolationError construction
+  - TestRunner: suite name, pass/fail counts, truthy/falsy assertions (boolean, string, number), nested SUITE aggregation, runAll summary, exit code
+  - CodeWords + TestRunner integration within plantc test pipeline
+- All 30+ test suites at 100% pass rate
+
+### Documentation
+- All `.md` files bumped to v0.41.0
+- Language Tour.md — header → v0.41.0, new "Integrated Testing & Native Networking (v0.41.0)" section with CodeWords, SUITE/VERIFY, HARVEST, LISTEN BRANCH documentation
+- TECHNICAL.md — new Section 24 for v0.41.0 architecture
+- ROADMAP.md — v0.40.0 objectives marked complete, v0.41.0 objectives documented, table row and footer added
+- CHANGELOG.md — new v0.41.0 entry
+
+### Source Layout
+- New `src/security/codewords_governance.js`
+- New `src/testing/test_runner.js`
+- New `tests/v0.41.0_native_net_governance.test.js`
+
+---
+
 ## v0.40.0 — 2026
 
 ### New: Geo-Aware Cycles, Dynamic Replica Rebalancing & Stream Compaction

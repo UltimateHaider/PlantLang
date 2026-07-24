@@ -1,4 +1,4 @@
-# PlantLang Language Specification & Ecosystem v0.40.0
+# PlantLang Language Specification & Ecosystem v0.41.0
 
 **PlantLang** is a human-centric, prose-based programming language engineered for both high-level readability and native-level execution performance. It transforms "prose-like" syntax into highly optimized machine code via the LLVM compiler infrastructure.
 
@@ -62,7 +62,7 @@ Arenas are automatically reclaimed:
 
 ---
 
-## 3. Engineering Architecture (The v0.40.0 Stack)
+## 3. Engineering Architecture (The v0.41.0 Stack)
 The ecosystem is built on a modular, industrial-grade pipeline:
 
 1.  **Core Interpreter (Chloroplast Engine):**
@@ -170,8 +170,9 @@ PlantLang employs a state-of-the-art compilation chain:
 ---
 
 ## 6. QA & Quality Assurance
-The **v0.40.0** release is verified by an automated regression suite:
-* **~1285+ Total Tests** across thirty test suites (LLVM backend, C codegen, Phase 1 LLVM primitives, parser migration, diagnostics, tokenizer, Phase 7—21, depth contract, matrix, dispatcher, runtime, parallel, security, cluster, geo-routing, distributed cycles, language ergonomics, distributed advanced).
+The **v0.41.0** release is verified by an automated regression suite:
+* **~900+ Total Tests** across 30+ test suites (LLVM backend, C codegen, Phase 1 LLVM primitives, parser migration, diagnostics, tokenizer, Phase 7—21, depth contract, matrix, dispatcher, runtime, parallel, security, cluster, geo-routing, distributed cycles, language ergonomics, distributed advanced, native net & governance).
+* **Native Networking & CodeWords Governance (v0.41.0)**: 69 tests covering CodeWords directive parsing, permission checks (implied grants via #ALLOW_NETWORK), AST security violations, TestRunner execution with nested suites and summary, and end-to-end plantc test subcommand.
 * **Distributed Advanced (v0.40.0)**: 34 tests covering GeoTopologyManager RTT latency matrix and optimal node selection (locality affinity, cross-region latency > 10ms), StreamCompactor binary compression round-trip (85% reduction), geo-aware DistributedCycleEngine block execution with locality key, and ReplicaManager dynamic rebalancing on node join/leave with partition migration and replica healing.
 * **LLVM IR Compiler Phase 1 (v0.39.5)**: 39 tests covering integer/decimal/boolean/string literal SHOW, CREATE+SHOW variable pipeline, SET reassignment, arithmetic precedence (+ − * / % **), comparison operators (IS, IS NOT, GREATER THAN, LESS THAN, GTE, LTE), logical operators (AND, OR, NOT), mixed-type promotion, parenthesized sub-expressions, and multi-SHOW sequences — verified via differential test harness.
 * **Language Ergonomics (v0.38.0)**: 54 tests covering AST Zero-Fallback invariant, CYCLE...IN (empty/null/index/iteration), BREAK/CONTINUE signals, multi-field SORT (chained comparator/ASC/DESC/null-to-end), nested struct formatting (formatShowValue with deep field access), BLOOM AS (TABLE/GRAPH/CHART rendering, restricted environment detection), memory allocators (ArenaAllocator FAST bump + ARCHeap PERSISTENT cascading refcount), and integration scenarios.
@@ -308,6 +309,15 @@ The **v0.40.0** release is verified by an automated regression suite:
   - **Memory Allocators**: `ArenaAllocator` (FAST bump) and `ARCHeap` (PERSISTENT cascading refcount) for local runtime allocator patterns.
   - 54 new tests in `tests/v0.38.0_ergonomics.test.js` — all green
 
+### ✅ Completed (v0.41.0)
+- **Integrated Testing Framework & Native Networking**:
+  - **CodeWordsGovernance** (`src/security/codewords_governance.js`) — Static AST pass rejecting HARVEST/LISTEN BRANCH without `#ALLOW_NETWORK` / `#ALLOW_LISTEN` directives; directive parser and capability inheritance (`#ALLOW_NETWORK` implies both HARVEST and LISTEN)
+  - **TestRunner** (`src/testing/test_runner.js`) — Discover `SUITE`/`VERIFY` blocks, evaluate assertions (truthy/falsy), support nested suites, aggregate summary with non-zero exit on failure
+  - **plantc test** subcommand — Routes to TestRunner with optional CodeWords enforcement; `plantc test <file.plant>` runs all SUITE blocks and prints pass/fail summary
+  - **POSIX Socket Runtime** — `plant_net_harvest(url)` HTTP GET client and `plant_net_listen_open(port)` TCP listener server in C runtime with accept/read/write/close wrappers
+  - **LLVM Codegen** — AST visitors for SuiteStatement, VerifyStatement (no-ops in binary), HarvestStatement (`@plant_net_harvest`), ListenBranchStatement (listen/accept/read/write IR loop)
+  - 69 new tests in `tests/v0.41.0_native_net_governance.test.js` — all green
+
 ### ✅ Completed (v0.40.0)
 - **Geo-Aware Cycles, Dynamic Replica Rebalancing & Stream Compaction**:
   - **GeoTopologyManager** — Dynamic RTT latency matrix with continuous probing; `getOptimalNodes(dataLocalityKey, count)` for geo-affine node selection; configurable probe interval/timeout
@@ -318,7 +328,9 @@ The **v0.40.0** release is verified by an automated regression suite:
 
 ---
 
-*PlantLang v0.40.0 — Geo-Aware Cycles, Dynamic Replica Rebalancing & Stream Compaction. GeoTopologyManager, StreamCompactor, geo-affine cycle execution, replica rebalancing on node churn. 34 new tests. 1285+ total tests across 30 suites. All green.*
+*PlantLang v0.41.0 — Integrated Testing, Native Networking & CodeWords Governance. CodeWordsChecker, TestRunner, POSIX socket helpers, plantc test subcommand. 69 new tests. 900+ total tests. All green.*
+
+*PlantLang v0.40.0 — Geo-Aware Cycles, Dynamic Replica Rebalancing & Stream Compaction. GeoTopologyManager, StreamCompactor, geo-affine cycle execution, replica rebalancing on node churn. 34 new tests. All green.*
 
 *PlantLang v0.39.5 — Phase 1 LLVM IR Compiler. C runtime helpers, full expression parser, differential test harness (39 tests). 1212+ → 1251+ total tests across 29 suites. All green.*
 
