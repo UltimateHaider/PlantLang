@@ -1164,7 +1164,8 @@ bytes 224-255: hash (SHA256 of this entry, 32 bytes)
 - `tests/v0.41.0_native_net_governance.test.js` — 69 tests for Integrated Testing, Native Networking & CodeWords Governance (CodeWordsChecker directive parsing/permission/AST security, TestRunner SUITE/VERIFY/nested/runAll, CodeWords+TestRunner integration in plantc test pipeline)
 - `tests/v0.42.0_c_backend_parity.test.js` — 31 tests for C Backend Parity & Legacy Realignment (PlantMap create/set/get IR, LINK/ForInStatement/WeatherStatement/SpeciesDeclaration codegen, CodeWords zero false-positives, pipeline integration)
 - `tests/v0.43.0_file_io_types_const.test.js` — 81 tests for Native File I/O, Constant Folding & Type Infrastructure (file read/write/exists/delete, string split/trim/index_of, AST constant folding, ENUM/TYPE/CONST declarations, CodeWords file I/O directives)
-- **Total: 30+ test files, ~1000+ tests, all green**
+- `tests/v0.44.0_pattern_matching_sugar.test.js` — 75 tests for Algebraic Safety Types, Exhaustive MATCH, String Interpolation, Ranges, Slicing & Destructuring (Option/Result instantiation, ExhaustivenessChecker, string interpolation, range/slice, destructuring, BinaryOp/UnaryOp, tokenizer keywords, C runtime declarations, CodeWords governance)
+- **Total: 30+ test files, ~1100+ tests, all green**
 
 ### Test Methodology
 Each test:
@@ -2731,3 +2732,196 @@ Token keywords `CONST`, `ENUM`, `TYPE` are registered in the tokenizer's KEYWORD
   - Tokenizer keywords: CONST (1), ENUM (1), TYPE (1)
   - Nested: `(2*3)+4` (1)
   - Total: 81 tests, all green
+
+## 27. Algebraic Safety Types, Exhaustive MATCH, String Interpolation, Ranges, Slicing & Destructuring (v0.44.0)
+
+The v0.44.0 release adds algebraic safety types, an exhaustiveness checker for MATCH, string interpolation, range/slicing operators, and destructuring.
+
+### 27.1 Algebraic Safety Types — Option & Result
+
+**Files:** `core/ast.js`, `core/interpreter.js`, `runtime/c/plant_runtime.h`
+
+Built-in CHOICE types registered at interpreter construction:
+```js
+this.choices.set('Option', [{ name: 'Some', type: 'ANY' }, { name: 'None', type: null }]);
+this.choices.set('Result', [{ name: 'Ok', type: 'ANY' }, { name: 'Err', type: 'ANY' }]);
+```
+
+**Option Variants:**
+- `Option.Some(value)` — wraps a value in the Some variant
+- `Option.None` — represents absence (no payload)
+
+**Result Variants:**
+- `Result.Ok(value)` — wraps a success value
+- `Result.Err(error)` — wraps an error value
+
+**C Runtime (`plant_runtime.h`):**
+```c
+typedef struct PlantTagged {
+    int       tag;         /* 0=Some/Ok, 1=None, 2=Err */
+    void*     payload;     /* heap-allocated value */
+    int       kind;        /* 0=Option, 1=Result */
+} PlantTagged;
+
+PlantTagged* plant_option_some(void* value);
+PlantTagged* plant_option_none(void);
+PlantTagged* plant_result_ok(void* value);
+PlantTagged* plant_result_err(void* value);
+int          plant_is_some(PlantTagged* t);
+int          plant_is_none(PlantTagged* t);
+void*        plant_unwrap(PlantTagged* t);
+int          plant_is_ok(PlantTagged* t);
+int          plant_is_err(PlantTagged* t);
+void*        plant_unwrap_err(PlantTagged* t);
+```
+
+### 27.2 Exhaustiveness Checker
+
+**File:** `src/compiler/exhaustiveness_checker.js`
+
+A static AST pass that walks the entire program tree, identifies all `MatchStatement` and `MatchExpr` nodes, and verifies that every variant of the matched CHOICE/ENUM type is covered:
+
+1. Resolves the subject expression to a CHOICE type name (via `Identifier` → `interpreter.choices`)
+2. Collects all handled variant names from the match clauses
+3. If a wildcard `_` is present, all variants are considered covered
+4. Otherwise, checks each declared variant against the handled set
+5. Emits `CompileError: Non-exhaustive MATCH statement. Missing case: <VariantName>` for each uncovered variant
+
+**Example:**
+```plantlang
+MATCH opt {
+  Some(v) -> { SHOW v }
+  _ -> { SHOW "none" }
+}
+```
+The `Some` + `_` wildcard makes this exhaustive.
+
+```plantlang
+MATCH res {
+  Ok(v) -> { SHOW v }
+}
+```
+This emits: `CompileError: Non-exhaustive MATCH statement. Missing case: Err`
+
+### 27.3 String Interpolation
+
+**Files:** `core/tokenizer.js`, `core/parser.js`, `core/interpreter.js`
+
+**Tokenizer:** Modified string scanning to detect `{...}` sequences inside `"..."` strings. When a `{` is encountered (not escaped as `\{`), the preceding text is emitted as a text segment, the expression inside `{...}` is collected as an expression segment, and scanning resumes for the remainder of the string. Escaped braces `\{` and `\}` produce literal brace characters.
+
+**AST:** `InterpolatedStringNode` stores an array of `segments`, each either `{ type: 'text', value: string }` or `{ type: 'expr', node: AstNode }`.
+
+**Evaluation:** At interpret time, text segments are concatenated with evaluated expression segments (converted to strings) to produce the final string.
+
+### 27.4 Range Operator
+
+**Files:** `core/parser.js`, `runtime/c/plant_runtime.{c,h}`
+
+**Syntax:** `start..end` produces an array `[start, start+1, ..., end-1]`.
+
+**AST:** `RangeExpressionNode` with `{ start: AstNode, end: AstNode }`.
+
+**C Runtime:**
+```c
+int64_t* plant_range(int64_t start, int64_t end);
+```
+Allocates an array with `plant_array_create(len)` and fills elements via `plant_array_set`.
+
+### 27.5 Slicing
+
+**Files:** `core/parser.js`, `runtime/c/plant_runtime.{c,h}`
+
+**Syntax:** `expr[start:end]`, `expr[:end]`, `expr[start:]`.
+
+**AST:** `SliceExpressionNode` with `{ target, start, end }` where `start` or `end` may be `null` (defaulting to 0 or length).
+
+**C Runtime:**
+```c
+int64_t* plant_array_slice(int64_t* arr, int64_t start, int64_t end);
+char*    plant_string_slice(const char* str, int64_t start, int64_t end);
+```
+
+**Parser:** Parsed inside `_parseBinaryExpression()` when encountering `[` after an expression. The presence of `:` inside the brackets triggers slice parsing; otherwise, standard index access is used.
+
+### 27.6 Destructuring
+
+**Files:** `core/parser.js`, `core/interpreter.js`
+
+**Object Destructuring:**
+```plantlang
+LET { x, y } = point.
+```
+Lowered to: `LET x = point.x. LET y = point.y.`
+
+**Array Destructuring:**
+```plantlang
+LET [ head, tail ] = list.
+```
+Lowered to: `LET head = list[0]. LET tail = list[1].`
+
+**Simple LET:**
+```plantlang
+LET x = 42.
+```
+Alias for `CREATE x TO 42.`
+
+**AST:** `DestructDeclarationNode` with `{ pattern: string[], sourceExpr: AstNode, patternType: 'object'|'array' }`.
+
+**Evaluation:** The source expression is evaluated, then each pattern identifier is extracted from the source value (by field name for objects, by index for arrays) and set in the current soil scope.
+
+### 27.7 Structured Expression Nodes — BinaryOp & UnaryOp
+
+**Files:** `core/ast.js`, `core/parser.js`, `core/interpreter.js`
+
+**BinaryOpNode:**
+```js
+class BinaryOpNode extends AstNode {
+  constructor({ left, operator, right }, coords) {
+    super('BinaryOp', coords);
+    this.left = left;
+    this.operator = operator; // '+', '-', '*', '/', '%', '**', 'IS', 'IS_NOT', 'GREATER_THAN', 'LESS_THAN', 'GTE', 'LTE', 'AND', 'OR'
+    this.right = right;
+  }
+}
+```
+
+**UnaryOpNode:**
+```js
+class UnaryOpNode extends AstNode {
+  constructor({ operator, operand }, coords) {
+    super('UnaryOp', coords);
+    this.operator = operator; // 'NOT', '-'
+    this.operand = operand;
+  }
+}
+```
+
+**Parser:** `_parseExpression()` → `_parseBinaryExpression()` → `_parsePrimary()` handles operator precedence and builds structured AST nodes.
+
+**Interpreter:** Direct evaluation in `evaluateExpressionNode` via switch on `node.operator`.
+
+### 27.8 CodeWords Governance
+
+New node types registered in `NETWORK_NODES`:
+```
+OptionConstruct, ResultConstruct, SliceExpression, RangeExpression,
+DestructDeclaration, InterpolatedString, MatchExpr
+```
+
+All pass through without requiring directives (they are not sensitive network operations).
+
+### 27.9 Test Coverage
+
+- `tests/v0.44.0_pattern_matching_sugar.test.js` — 83 tests:
+  - Option/Result instantiation: `Option.Some(42)` choiceType/tag/payload (1), `Option.None` (1), `Result.Ok("success")` (1), `Result.Err("not found")` (1), member access (1)
+  - ExhaustivenessChecker: Option Some+None complete (1), Option missing None error (1), Option wildcard complete (1), Result Ok+Err complete (1), Result missing Err error (1)
+  - String interpolation: text-only (1), variable interpolation `"Hello {name}"` (1), multiple interpolations (1)
+  - Range expressions: 0..5 produces `[0,1,2,3,4]` (1), 3..3 empty (1), 1..1 empty (1)
+  - Slicing: string slice [1:4] → "ell" (1), array slice [1:3] → [20,30] (1), start omitted `:3` (1), end omitted `3:` (1)
+  - Destructuring: object `{x,y}` assigns 10/20 (1), array `[head,tail]` assigns 100/200 (1)
+  - BinaryOp/UnaryOp: `10+5=15` (1), `10 IS 10=true` (1), `NOT true=false` (1), string concat (1)
+  - Tokenizer keywords: LET, OPTION, RESULT, SOME, NONE, OK, ERR, IS_SOME, IS_NONE, IS_OK, IS_ERR, UNWRAP, UNWRAP_ERR (11)
+  - C runtime: PlantTagged typedef (1), 11 function declarations (11), 7 implementations (7)
+  - CodeWords: OptionConstruct (1), ResultConstruct (1), SliceExpression (1), RangeExpression (1), DestructDeclaration (1), InterpolatedString (1), MatchExpr (1)
+  - CHOICE exhaustiveness: complete (1), incomplete detected (1)
+  - Total: 75 tests, all green

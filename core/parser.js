@@ -45,6 +45,9 @@ const {
   ConstDeclarationNode,
   EnumDeclarationNode,
   TypeAliasDeclarationNode,
+  BinaryOpNode, UnaryOpNode, InterpolatedStringNode,
+  RangeExpressionNode, SliceExpressionNode,
+  DestructDeclarationNode, OptionConstructNode, ResultConstructNode, MatchExprNode,
 } = require('./ast');
 
 
@@ -201,6 +204,7 @@ class Parser {
     }
     if (this.match(TOKEN.KEYWORD, 'SHOW')) return this.parseShowStatement(coords);
     if (this.match(TOKEN.KEYWORD, 'CREATE')) return this.parseCreateStatement(coords);
+    if (this.match(TOKEN.KEYWORD, 'LET')) return this.parseDestructDeclaration(coords);
     if (this.match(TOKEN.KEYWORD, 'LISTEN') && this.peek(1).type === TOKEN.KEYWORD && this.peek(1).value === 'BRANCH') {
       return this.parseListenBranchStatement(coords);
     }
@@ -579,9 +583,9 @@ class Parser {
 
     let errVar = null;
     if (this.match(TOKEN.KEYWORD, 'AS')) {
-      this.advance();
+      this.advance(); // consume AS
       const identTok = this.current();
-      if (identTok.type !== TOKEN.IDENT) {
+      if (identTok.type !== TOKEN.IDENT && identTok.type !== TOKEN.KEYWORD) {
         storm('SYNTAX_STORM',
           `Expected an identifier after "AS", found "${identTok.value}"`,
           identTok.line, identTok.column);
@@ -1419,6 +1423,54 @@ class Parser {
   }
 
   /**
+   * LET destructuring declaration (v0.44.0).
+   * Handles:
+   *   LET { x, y } = expr.  → DestructDeclarationNode (patternType='object')
+   *   LET [ head, tail ] = expr. → DestructDeclarationNode (patternType='array')
+   *   LET x = expr.         → CreateStatementNode (simple LET as alias for CREATE)
+   */
+  parseDestructDeclaration(coords) {
+    // Check for { ... } destructuring
+    if (this.match(TOKEN.PUNCT, '{')) {
+      const pattern = [];
+      while (!this.match(TOKEN.PUNCT, '}')) {
+        const id = this.advance();
+        if (id.type !== TOKEN.IDENT && id.type !== TOKEN.KEYWORD)
+          throw new Error(`Expected identifier in destructuring pattern at ${id.line}:${id.column}`);
+        pattern.push(id.value);
+        this.match(TOKEN.PUNCT, ','); // optional comma
+      }
+      this.consume(TOKEN.PUNCT, '=', '"=" after destructuring pattern');
+      const sourceExpr = this._parseExpression();
+      this.consume(TOKEN.PUNCT, '.', '"." after destructuring declaration');
+      return new DestructDeclarationNode({ pattern, sourceExpr, patternType: 'object' }, coords);
+    }
+    // Check for [ ... ] array destructuring
+    if (this.match(TOKEN.PUNCT, '[')) {
+      const pattern = [];
+      while (!this.match(TOKEN.PUNCT, ']')) {
+        const id = this.advance();
+        if (id.type !== TOKEN.IDENT && id.type !== TOKEN.KEYWORD)
+          throw new Error(`Expected identifier in destructuring pattern at ${id.line}:${id.column}`);
+        pattern.push(id.value);
+        this.match(TOKEN.PUNCT, ',');
+      }
+      this.consume(TOKEN.PUNCT, '=', '"=" after destructuring pattern');
+      const sourceExpr = this._parseExpression();
+      this.consume(TOKEN.PUNCT, '.', '"." after destructuring declaration');
+      return new DestructDeclarationNode({ pattern, sourceExpr, patternType: 'array' }, coords);
+    }
+    // Simple LET x = expr (alias for CREATE)
+    const ident = this.advance();
+    if (ident.type !== TOKEN.IDENT && ident.type !== TOKEN.KEYWORD)
+      throw new Error(`Expected identifier after LET at ${ident.line}:${ident.column}`);
+    this.consume(TOKEN.PUNCT, '=', '"=" after LET identifier');
+    const valueExpr = this._parseExpression();
+    this.consume(TOKEN.PUNCT, '.', '"." after LET declaration');
+    return new CreateStatementNode({ identifier: ident.value, varType: null, valueExpr }, coords);
+  }
+
+  /**
    * Parse a single expression token span up to (but not including) the
    * terminating period, returning a Literal/Identifier node for the
    * simple single-token case, or a RawStatementNode-style string for
@@ -1608,6 +1660,156 @@ class Parser {
     const coords = { line: tokensInSpan[0].line, column: tokensInSpan[0].column, depth: tokensInSpan[0].depth };
     const text = joinTokens(tokensInSpan);
     return new LiteralNode(text, 'RAW_EXPR', coords);
+  }
+
+  // ── v0.44.0: Structured expression parsing ──────────────────────
+  _parseExpression() {
+    return this._parseBinaryExpression();
+  }
+
+  _parsePrimary() {
+    const t = this.current();
+
+    if (t.type === TOKEN.STRING) {
+      this.advance();
+      if (Array.isArray(t.value)) {
+        const segments = t.value.map(seg => {
+          if (seg.type === 'text') return seg;
+          const subTokens = tokenize(seg.value);
+          const subParser = new Parser(subTokens);
+          const exprNode = subParser._parseExpression();
+          return { type: 'expr', node: exprNode };
+        });
+        return new InterpolatedStringNode({ segments }, { line: t.line, column: t.column, depth: t.depth });
+      }
+      return new LiteralNode(t.value, 'STRING', { line: t.line, column: t.column, depth: t.depth });
+    }
+
+    if (t.type === TOKEN.NUMBER) {
+      this.advance();
+      return new LiteralNode(t.value, 'NUMBER', { line: t.line, column: t.column, depth: t.depth });
+    }
+
+    if (t.type === TOKEN.IDENT || t.type === TOKEN.KEYWORD) {
+      const name = t.value;
+      this.advance();
+
+      if ((name === 'OPTION' || name === 'Option') && this.match(TOKEN.PUNCT, '.')) {
+        const variant = this.advance().value;
+        let value = null;
+        if (variant === 'SOME' || variant === 'Some') {
+          this.consume(TOKEN.PUNCT, '(', '"(" after Option.Some');
+          value = this._parseExpression();
+          this.consume(TOKEN.PUNCT, ')', '")" after Option.Some value');
+        }
+        return new OptionConstructNode({ variant, value }, { line: t.line, column: t.column, depth: t.depth });
+      }
+
+      if ((name === 'RESULT' || name === 'Result') && this.match(TOKEN.PUNCT, '.')) {
+        const variant = this.advance().value;
+        this.consume(TOKEN.PUNCT, '(', '"(" after Result.' + variant);
+        const value = this._parseExpression();
+        this.consume(TOKEN.PUNCT, ')', '")" after Result.' + variant + ' value');
+        return new ResultConstructNode({ variant, value }, { line: t.line, column: t.column, depth: t.depth });
+      }
+
+      if (name === 'MATCH' || name === 'Match') {
+        return this._parseMatchExpression({ line: t.line, column: t.column, depth: t.depth });
+      }
+
+      return new IdentifierNode(name, { line: t.line, column: t.column, depth: t.depth });
+    }
+
+    if (this.match(TOKEN.PUNCT, '(')) {
+      const expr = this._parseExpression();
+      this.consume(TOKEN.PUNCT, ')', '")" after expression');
+      return expr;
+    }
+
+    throw new Error(`Unexpected token ${t.type} "${t.value}" at ${t.line}:${t.column}`);
+  }
+
+  _parseBinaryExpression() {
+    let left = this._parsePrimary();
+
+    while (true) {
+      const t = this.current();
+
+      if (this.match(TOKEN.PUNCT, '..')) {
+        const right = this._parsePrimary();
+        left = new RangeExpressionNode({ start: left, end: right }, { line: left.line, column: left.column, depth: left.depth || 0 });
+        continue;
+      }
+
+      const binOps = {
+        '+': '+', '-': '-', '*': '*', '/': '/', '%': '%',
+        '**': '**',
+      };
+
+      if (t.type === TOKEN.PUNCT && binOps[t.value]) {
+        this.advance();
+        const right = this._parsePrimary();
+        left = new BinaryOpNode({ left, operator: binOps[t.value], right }, { line: left.line, column: left.column, depth: left.depth || 0 });
+        continue;
+      }
+
+      const keywordOps = ['IS', 'IS_NOT', 'AND', 'OR', 'GREATER', 'LESS'];
+      if (t.type === TOKEN.KEYWORD && keywordOps.includes(t.value)) {
+        const op = t.value;
+        this.advance();
+        let fullOp = op;
+        if ((op === 'GREATER' || op === 'LESS') && this.match(TOKEN.KEYWORD, 'THAN')) {
+          fullOp = op + '_THAN';
+        }
+        const right = this._parsePrimary();
+        left = new BinaryOpNode({ left, operator: fullOp, right }, { line: left.line, column: left.column, depth: left.depth || 0 });
+        continue;
+      }
+
+      if (this.match(TOKEN.PUNCT, '[')) {
+        const startExpr = this._parseExpression();
+        if (this.match(TOKEN.PUNCT, ':')) {
+          const endExpr = this.isAtEnd() || (this.current().type === TOKEN.PUNCT && this.current().value === ']') ? null : this._parseExpression();
+          this.consume(TOKEN.PUNCT, ']', '"]" after slice');
+          left = new SliceExpressionNode({ target: left, start: startExpr, end: endExpr }, { line: left.line, column: left.column, depth: left.depth || 0 });
+        } else {
+          this.consume(TOKEN.PUNCT, ']', '"]" after index');
+          left = new IndexAccessNode(left, startExpr, { line: left.line, column: left.column, depth: left.depth || 0 });
+        }
+        continue;
+      }
+
+      break;
+    }
+
+    return left;
+  }
+
+  _parseMatchExpression(coords) {
+    const subjectExpr = this._parseExpression();
+    this.consume(TOKEN.PUNCT, '{', '"{" to open MATCH expression body');
+    const clauses = [];
+    while (!this.isAtEnd() && !this.match(TOKEN.PUNCT, '}')) {
+      const variantName = this.advance().value;
+      let binding = null;
+      if (this.match(TOKEN.PUNCT, '(')) {
+        binding = this.advance().value;
+        this.consume(TOKEN.PUNCT, ')', '")" after MATCH binding');
+      }
+      if (this.current().type === TOKEN.PUNCT && this.current().value === '-') {
+        this.advance();
+        if (this.current().type === TOKEN.PUNCT && this.current().value === '>') this.advance();
+      } else if (this.match(TOKEN.PUNCT, '->')) {
+      }
+      this.consume(TOKEN.PUNCT, '{', '"{" to open MATCH clause body');
+      const bodyStatements = [];
+      while (!this.isAtEnd() && !this.match(TOKEN.PUNCT, '}')) {
+        const stmt = this._parseStatement();
+        if (stmt) bodyStatements.push(stmt);
+      }
+      clauses.push({ variantName, binding, bodyStatements });
+    }
+    return new MatchExprNode({ subjectExpr, clauses }, coords);
   }
 
   // ── helper: skip to end of logical line (past the next period) ──

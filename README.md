@@ -1,4 +1,4 @@
-# PlantLang Language Specification & Ecosystem v0.43.0
+# PlantLang Language Specification & Ecosystem v0.44.0
 
 **PlantLang** is a human-centric, prose-based programming language engineered for both high-level readability and native-level execution performance. It transforms "prose-like" syntax into highly optimized machine code via the LLVM compiler infrastructure.
 
@@ -62,7 +62,7 @@ Arenas are automatically reclaimed:
 
 ---
 
-## 3. Engineering Architecture (The v0.43.0 Stack)
+## 3. Engineering Architecture (The v0.44.0 Stack)
 The ecosystem is built on a modular, industrial-grade pipeline:
 
 1.  **Core Interpreter (Chloroplast Engine):**
@@ -170,7 +170,7 @@ PlantLang employs a state-of-the-art compilation chain:
 ---
 
 ## 6. QA & Quality Assurance
-The **v0.43.0** release is verified by an automated regression suite:
+The **v0.44.0** release is verified by an automated regression suite:
 * **~1000+ Total Tests** across 30+ test suites (LLVM backend, C codegen, Phase 1 LLVM primitives, parser migration, diagnostics, tokenizer, Phase 7—21, depth contract, matrix, dispatcher, runtime, parallel, security, cluster, geo-routing, distributed cycles, language ergonomics, distributed advanced, native net & governance).
 * **Native File I/O, Constant Folding & Type Infrastructure (v0.43.0)**: 81 tests covering file I/O (read/write/exists/delete), string manipulation (split/trim/index_of), AST constant folding (arithmetic/string/logical/comparison), CONST declarations, ENUM declarations, TYPE aliases, CodeWords file I/O directives, and tokenizer keyword recognition.
 * **Distributed Advanced (v0.40.0)**: 34 tests covering GeoTopologyManager RTT latency matrix and optimal node selection (locality affinity, cross-region latency > 10ms), StreamCompactor binary compression round-trip (85% reduction), geo-aware DistributedCycleEngine block execution with locality key, and ReplicaManager dynamic rebalancing on node join/leave with partition migration and replica healing.
@@ -309,6 +309,23 @@ The **v0.43.0** release is verified by an automated regression suite:
   - **Memory Allocators**: `ArenaAllocator` (FAST bump) and `ARCHeap` (PERSISTENT cascading refcount) for local runtime allocator patterns.
   - 54 new tests in `tests/v0.38.0_ergonomics.test.js` — all green
 
+### ✅ Completed (v0.44.0)
+- **Algebraic Safety Types** (`Option<T>`, `Result<T, E>`):
+  - Built-in `Option` CHOICE with `Some(value)` and `None` variants; pre-registered in interpreter at construction
+  - Built-in `Result` CHOICE with `Ok(value)` and `Err(error)` variants
+  - `PlantTagged` C struct with dual-engine parity; `plant_option_some/none`, `plant_result_ok/err`, `plant_is_some/none/ok/err`, `plant_unwrap`, `plant_unwrap_err`
+- **Exhaustiveness Checker** (`src/compiler/exhaustiveness_checker.js`):
+  - Static pass verifying all MATCH branches cover every CHOICE variant
+  - Detects missing `Some`/`None`, `Ok`/`Err`, or any user-defined CHOICE variant
+  - Emits `CompileError: Non-exhaustive MATCH statement. Missing case: <Variant>`
+- **String Interpolation**: `"text {expr}"` with `\{`/`\}` escaping; tokenizer recognizes `{...}` inside strings; `InterpolatedStringNode` with evaluated expression segments
+- **Range Operator**: `a..b` syntax producing `[a, b)` integer arrays; `RangeExpressionNode` + C `plant_range()`
+- **Slicing**: `arr[start:end]` on strings and arrays; optional start (default 0) or end (default len); `SliceExpressionNode` + C `plant_array_slice()`/`plant_string_slice()`
+- **Destructuring**: `LET { x, y } = point.` (object), `LET [ h, t ] = list.` (array), `LET x = expr.` (simple alias); `DestructDeclarationNode` with interpreter evaluation
+- **Structured Expressions**: `BinaryOpNode`/`UnaryOpNode` with interpreter evaluation; `MatchExprNode` for MATCH-as-expression; `_parseExpression()`/`_parsePrimary()`/`_parseBinaryExpression()` in parser
+- **CodeWords Governance**: 7 new node types registered in `NETWORK_NODES`
+- 75 new tests in `tests/v0.44.0_pattern_matching_sugar.test.js` — all green
+
 ### ✅ Completed (v0.43.0)
 - **Native File I/O & String Manipulation** (`runtime/c/plant_runtime.{c,h}`):
   - `plant_file_read(filepath)` — full file read into heap buffer, NULL on failure
@@ -358,6 +375,8 @@ The **v0.43.0** release is verified by an automated regression suite:
   - 34 new tests in `tests/v0.40.0_distributed.test.js` — all green
 
 ---
+
+*PlantLang v0.44.0 — Algebraic Safety Types, Exhaustive MATCH, String Interpolation, Ranges, Slicing & Destructuring. Option/Result built-in types (Some/None, Ok/Err), ExhaustivenessChecker static pass, string interpolation with expression segments, range operator (a..b → [a..b)), slicing on arrays/strings, object/array destructuring (LET {x,y} / LET [h,t]), BinaryOp/UnaryOp structured nodes, MatchExpr value-yielding MATCH. 75 new tests. All green.*
 
 *PlantLang v0.43.0 — Native File I/O, Constant Folding & Type Infrastructure. File I/O primitives (plant_file_read/write/exists/delete), string manipulation (split/trim/index_of), ASTConstantFolder pass (arithmetic/string/logical folding), ENUM/TYPE/CONST declarations, CodeWords file I/O directives. 81 new tests. All green.*
 

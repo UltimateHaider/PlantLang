@@ -1,5 +1,60 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.44.0 — 2026
+
+### New: Algebraic Safety Types, Exhaustive MATCH, String Interpolation, Ranges, Slicing & Destructuring
+- **Algebraic Safety Types** (`core/ast.js`, `core/interpreter.js`, `runtime/c/plant_runtime.{c,h}`):
+  - Built-in `Option<T>` type with `Option.Some(value)` and `Option.None` constructors
+  - Built-in `Result<T, E>` type with `Result.Ok(value)` and `Result.Err(error)` constructors
+  - `PlantTagged` C struct with tag/kind/payload fields for dual-engine parity
+  - C helpers: `plant_option_some/none`, `plant_result_ok/err`, `plant_is_some/none/ok/err`, `plant_unwrap`, `plant_unwrap_err`
+- **Exhaustiveness Checker** (`src/compiler/exhaustiveness_checker.js`):
+  - Static AST pass that verifies all `MatchStatement`/`MatchExpr` patterns cover every CHOICE variant
+  - Checks Option (Some + None), Result (Ok + Err), and any user-defined CHOICE
+  - Accepts wildcard `_` as catch-all
+  - Emits `CompileError: Non-exhaustive MATCH statement. Missing case: <VariantName>` on incomplete coverage
+- **String Interpolation** (`core/tokenizer.js`, `core/parser.js`, `core/interpreter.js`):
+  - Tokenizer recognizes `{expr}` inside double-quoted strings with `\{`/`\}` escape support
+  - `InterpolatedStringNode` with text/expression segment array
+  - Expression segments are recursively parsed and evaluated
+  - Lowered at interpret time into concatenated values
+- **Range Operator `a..b`** (`core/parser.js`, `runtime/c/plant_runtime.{c,h}`):
+  - `RangeExpressionNode` in AST with start/end sub-expressions
+  - Evaluates to `[start, start+1, ..., end-1]` integer array
+  - C runtime: `plant_range(start, end)` with `plant_array_create`/`plant_array_set`
+- **Slicing Syntax `expr[start:end]`** (`core/parser.js`, `runtime/c/plant_runtime.{c,h}`):
+  - `SliceExpressionNode` in AST with target, optional start, optional end
+  - `arr[1:4]` — explicit bounds; `arr[:3]` — 0:3; `arr[2:]` — 2:len
+  - Works on both TX strings and NUM arrays
+  - C runtime: `plant_array_slice(arr, start, end)`, `plant_string_slice(str, start, end)`
+- **Destructuring Assignment** (`core/parser.js`, `core/interpreter.js`):
+  - `LET { x, y } = point.` — object/struct destructuring, lowers to per-field variable declarations
+  - `LET [ head, tail ] = list.` — array/list destructuring, lowers to per-index variable declarations
+  - `LET x = expr.` — simple `LET` alias for `CREATE`
+  - `DestructDeclarationNode` with pattern type, pattern identifiers, and source expression
+- **Structured Expression Parsing** (`core/parser.js`):
+  - `_parseExpression()` / `_parsePrimary()` / `_parseBinaryExpression()` methods
+  - `BinaryOpNode` and `UnaryOpNode` in AS`T with full evaluation in interpreter
+  - `MatchExprNode` — MATCH used as expression yielding a value
+- **New AST Node Classes** (`core/ast.js`): `BinaryOpNode`, `UnaryOpNode`, `InterpolatedStringNode`, `RangeExpressionNode`, `SliceExpressionNode`, `DestructDeclarationNode`, `OptionConstructNode`, `ResultConstructNode`, `MatchExprNode`
+- **CodeWords Security Integration**: All new node types registered in `NETWORK_NODES` set
+- **Tokenizer Keywords**: `LET`, `OPTION`, `RESULT`, `SOME`, `NONE`, `OK`, `ERR`, `IS_SOME`, `IS_NONE`, `IS_OK`, `IS_ERR`, `UNWRAP`, `UNWRAP_ERR`; `..` compound range operator token
+- **Test Suite**: `tests/v0.44.0_pattern_matching_sugar.test.js` — 75 tests covering:
+  - Option/Result instantiation (5 tests)
+  - ExhaustivenessChecker (5 tests: complete, incomplete, wildcard for Option/Result)
+  - String interpolation (3 tests: text-only, variable, multiple)
+  - Range expressions (3 tests: 0..5, 3..3, 1..1)
+  - Slicing (4 tests: string slice, array slice, start omitted, end omitted)
+  - Destructuring (2 tests: object, array)
+  - BinaryOp/UnaryOp evaluation (4 tests: add, equality, NOT, string concat)
+  - Tokenizer keywords (11 keyword registrations)
+  - C runtime declarations (15 header + 7 source checks)
+  - CodeWords Governance (7 NETWORK_NODES registrations)
+  - ENUM (Choice) exhaustiveness (2 tests)
+- **Zero Regressions** — all testable suites at 100% pass rate
+
+---
+
 ## v0.43.0 — 2026
 
 ### New: Native File I/O, Compile-Time Constant Folding & Type Infrastructure

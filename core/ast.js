@@ -884,6 +884,86 @@ class TypeAliasDeclarationNode extends AstNode {
   }
 }
 
+// ── v0.44.0: Binary/Unary operators ──
+class BinaryOpNode extends AstNode {
+  constructor({ left, operator, right }, coords) {
+    super('BinaryOp', coords);
+    this.left = left;
+    this.operator = operator; // '+', '-', '*', '/', '%', '**', 'IS', 'IS_NOT', 'GREATER_THAN', 'LESS_THAN', 'GTE', 'LTE', 'AND', 'OR'
+    this.right = right;
+  }
+}
+
+class UnaryOpNode extends AstNode {
+  constructor({ operator, operand }, coords) {
+    super('UnaryOp', coords);
+    this.operator = operator; // 'NOT', '-'
+    this.operand = operand;
+  }
+}
+
+// ── v0.44.0: InterpolatedString ──
+class InterpolatedStringNode extends AstNode {
+  constructor({ segments }, coords) {
+    super('InterpolatedString', coords);
+    this.segments = segments || []; // array of { type: 'text', value: string } or { type: 'expr', node: AstNode }
+  }
+}
+
+// ── v0.44.0: Range/Slice expressions ──
+class RangeExpressionNode extends AstNode {
+  constructor({ start, end }, coords) {
+    super('RangeExpression', coords);
+    this.start = start;  // AstNode for start expr
+    this.end = end;      // AstNode for end expr
+  }
+}
+
+class SliceExpressionNode extends AstNode {
+  constructor({ target, start, end }, coords) {
+    super('SliceExpression', coords);
+    this.target = target;  // AstNode for the array/string being sliced
+    this.start = start;    // AstNode or null if omitted (:end)
+    this.end = end;        // AstNode or null if omitted (start:)
+  }
+}
+
+// ── v0.44.0: DestructDeclaration ──
+class DestructDeclarationNode extends AstNode {
+  constructor({ pattern, sourceExpr, patternType }, coords) {
+    super('DestructDeclaration', coords);
+    this.pattern = pattern;      // array of string identifiers
+    this.sourceExpr = sourceExpr; // AstNode for the source expression
+    this.patternType = patternType; // 'object' for {x,y}, 'array' for [h,t]
+  }
+}
+
+// ── v0.44.0: Option/Result constructors ──
+class OptionConstructNode extends AstNode {
+  constructor({ variant, value }, coords) {
+    super('OptionConstruct', coords);
+    this.variant = variant; // 'Some' or 'None'
+    this.value = value;     // AstNode or null for None
+  }
+}
+
+class ResultConstructNode extends AstNode {
+  constructor({ variant, value }, coords) {
+    super('ResultConstruct', coords);
+    this.variant = variant; // 'Ok' or 'Err'
+    this.value = value;     // AstNode
+  }
+}
+
+// ── v0.44.0: MatchExpr (expression form) ──
+class MatchExprNode extends AstNode {
+  constructor({ subjectExpr, clauses }, coords) {
+    super('MatchExpr', coords);
+    this.subjectExpr = subjectExpr;
+    this.clauses = clauses || []; // [{variantName, binding, bodyStatements}]
+  }
+}
+
 // Re-export everything
 const _orig = module.exports;
 Object.assign(module.exports, {
@@ -937,6 +1017,15 @@ Object.assign(module.exports, {
   ConstDeclarationNode,
   EnumDeclarationNode,
   TypeAliasDeclarationNode,
+  BinaryOpNode,
+  UnaryOpNode,
+  InterpolatedStringNode,
+  RangeExpressionNode,
+  SliceExpressionNode,
+  DestructDeclarationNode,
+  OptionConstructNode,
+  ResultConstructNode,
+  MatchExprNode,
 });
 
 // ── v0.38.0: BREAK/CONTINUE control flow signals ──

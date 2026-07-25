@@ -10,7 +10,7 @@ const ALLOWED_DIRECTIVES = {
 };
 
 const DEFAULT_DIRECTIVES = new Set();
-const NETWORK_NODES = new Set(['HarvestStatement', 'ListenBranchStatement', 'FileReadStatement', 'FileWriteStatement', 'FileDeleteStatement']);
+const NETWORK_NODES = new Set(['HarvestStatement', 'ListenBranchStatement', 'FileReadStatement', 'FileWriteStatement', 'FileDeleteStatement', 'OptionConstruct', 'ResultConstruct', 'SliceExpression', 'RangeExpression', 'DestructDeclaration', 'InterpolatedString', 'MatchExpr']);
 
 class SecurityViolationError extends Error {
   constructor(nodeType, requiredDirective, details) {

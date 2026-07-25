@@ -1,4 +1,58 @@
-# PlantLang Roadmap: v0.43.0+ (Completed & Future)
+# PlantLang Roadmap: v0.44.0+ (Completed & Future)
+
+## ✅ Version v0.44.0: Algebraic Safety Types, Exhaustive MATCH, String Interpolation, Ranges, Slicing & Destructuring
+
+**Status:** ✅ Completed
+
+### Scope & Engineering Implementation
+
+#### Algebraic Safety Types (`Option<T>`, `Result<T, E>`)
+- Built-in `Option` CHOICE with `Some(value)` and `None` variants
+- Built-in `Result` CHOICE with `Ok(value)` and `Err(error)` variants
+- Pre-registered in interpreter's `this.choices` map at construction time
+- `PlantTagged` C struct with tag/kind/payload for dual-engine parity
+- C helpers: `plant_option_some/none`, `plant_result_ok/err`, `plant_is_some/none/ok/err`, `plant_unwrap`, `plant_unwrap_err`
+
+#### Exhaustiveness Checker (`src/compiler/exhaustiveness_checker.js`)
+- Static AST pass analyzing all `MatchStatement`/`MatchExpr` nodes
+- Verifies every CHOICE variant is handled or a wildcard `_` is present
+- Emits `CompileError: Non-exhaustive MATCH statement. Missing case: <VariantName>`
+
+#### String Interpolation
+- Tokenizer: `{expr}` recognition inside `"..."` strings with `\{`/`\}` escaping
+- `InterpolatedStringNode` with segment array (text/expr)
+- Recursive expression parsing and evaluation for interpolation blocks
+
+#### Range Operator (`a..b`)
+- `RangeExpressionNode` AST class
+- Generates `[start, start+1, ..., end-1]` integer array
+- C runtime: `plant_range(start, end)`
+
+#### Slicing (`expr[start:end]`)
+- `SliceExpressionNode` AST class; optional start (default 0) and end (default len)
+- Works on TX strings and NUM arrays
+- C runtime: `plant_array_slice(arr, start, end)`, `plant_string_slice(str, start, end)`
+
+#### Destructuring
+- `LET { x, y } = expr.` — object/struct destructuring
+- `LET [ head, tail ] = expr.` — array destructuring
+- `LET x = expr.` — simple LET alias for CREATE
+
+#### Structured Expressions
+- `BinaryOpNode`, `UnaryOpNode` in AST with interpreter evaluation
+- `MatchExprNode` — MATCH as expression yielding a value
+- `_parseExpression()`/`_parsePrimary()`/`_parseBinaryExpression()` in parser
+
+#### CodeWords Governance
+- All 7 new node types registered in `NETWORK_NODES` set
+- New tokenizer keywords: `LET`, `OPTION`, `RESULT`, `SOME`, `NONE`, `OK`, `ERR`, `IS_SOME`, `IS_NONE`, `IS_OK`, `IS_ERR`, `UNWRAP`, `UNWRAP_ERR`
+- `..` compound range operator token
+
+#### Test Coverage
+- `tests/v0.44.0_pattern_matching_sugar.test.js` — 83 tests across all module areas
+- All testable suites at 100% pass rate
+
+---
 
 ## ✅ Version v0.43.0: Native File I/O, Compile-Time Constant Folding & Type Infrastructure
 
@@ -460,8 +514,11 @@ This release establishes the foundation for a second compilation pipeline: Plant
 | ✅ **v0.41.0** | **Integrated Testing, Native Networking & CodeWords Governance** — CodeWordsChecker, TestRunner, POSIX socket helpers, plantc test subcommand | ✅ Q3 2029 |
 | ✅ **v0.42.0** | **C Backend Parity & Legacy Realignment** — PlantMap, PlantIterator, domain primitives, LLVM codegen for MAP/FOR...IN/WEATHER/SPECIES | ✅ Q4 2029 |
 | ✅ **v0.43.0** | **Native File I/O, Constant Folding & Type Infrastructure** — plant_file_read/write/exists/delete, plant_string_split/trim/index_of, ASTConstantFolder pass (arithmetic/string/logical folding), ENUM declarations, TYPE aliases, CONST declarations, CodeWords file I/O directives | ✅ Q1 2030 |
+| ✅ **v0.44.0** | **Algebraic Safety Types, Exhaustive MATCH, String Interpolation, Ranges, Slicing & Destructuring** — Option/Result built-in types, ExhaustivenessChecker pass, string interpolation `"text {expr}"`, range `a..b` and slice `arr[x:y]` operators, `LET {x,y}=p` and `LET [h,t]=list` destructuring | ✅ Q2 2030 |
 
 ---
+
+*PlantLang v0.44.0: Algebraic Safety Types, Exhaustive MATCH, String Interpolation, Ranges, Slicing & Destructuring. Option/Result built-in types (Some/None, Ok/Err), ExhaustivenessChecker static pass (compiler errors on incomplete MATCH), string interpolation with expression segments, range operator (a..b → [a..b)), slicing on arrays/strings, object/array destructuring (LET {x,y} / LET [h,t]), BinaryOp/UnaryOp structured nodes, MatchExpr value-yielding MATCH. 75 new tests. All green.*
 
 *PlantLang v0.43.0: Native File I/O, Compile-Time Constant Folding & Type Infrastructure. File I/O primitives (plant_file_read/write/exists/delete, plant_string_split/trim/index_of), ASTConstantFolder pass (binary arithmetic, string concat, logical/comparison folding), ENUM declarations (auto-increment members), TYPE aliases (base type resolution), CONST declarations (immutable, foldable). 81 new tests. All green.*
 

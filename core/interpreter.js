@@ -24,6 +24,9 @@ class Interpreter {
     this.planted=new Map();
     this.structs=new Map(); // SHAPE definitions: name -> [{ name, varType }]
     this.choices=new Map(); // CHOICE definitions: name -> [{ name, type }]
+    // v0.44.0: Built-in Option and Result algebraic types
+    this.choices.set('Option', [{ name: 'Some', type: 'ANY' }, { name: 'None', type: null }]);
+    this.choices.set('Result', [{ name: 'Ok', type: 'ANY' }, { name: 'Err', type: 'ANY' }]);
     this.typeMethods=new Map(); // type name -> Map(methodName -> fnInfo)
     this.watchers=new Map();
     this.rootDir=opts.rootDir||process.cwd();
@@ -307,6 +310,80 @@ class Interpreter {
       if(!selfEntry)storm('SEED_STORM','SELF not available',node.line,node.column);
       return selfEntry.value;
     }
+    // v0.44.0: Interpolated strings
+    if(node.type==='InterpolatedString'){
+      let result='';
+      for(const seg of node.segments){
+        if(seg.type==='text') result+=seg.value;
+        else if(seg.node){
+          const val=this.evaluateExpressionNode(seg.node,soil);
+          result+=String(val);
+        }
+      }
+      return result;
+    }
+    // v0.44.0: Option constructors
+    if(node.type==='OptionConstruct'){
+      const val=node.value?this.evaluateExpressionNode(node.value,soil):null;
+      return{__choiceType:'Option',tag:node.variant,payload:val};
+    }
+    // v0.44.0: Result constructors
+    if(node.type==='ResultConstruct'){
+      const val=this.evaluateExpressionNode(node.value,soil);
+      return{__choiceType:'Result',tag:node.variant,payload:val};
+    }
+    // v0.44.0: Range expressions
+    if(node.type==='RangeExpression'){
+      const start=this.evaluateExpressionNode(node.start,soil);
+      const end=this.evaluateExpressionNode(node.end,soil);
+      const arr=[];
+      for(let i=start;i<end;i++) arr.push(i);
+      return arr;
+    }
+    // v0.44.0: Slice expressions
+    if(node.type==='SliceExpression'){
+      const target=this.evaluateExpressionNode(node.target,soil);
+      const start=node.start!==null?this.evaluateExpressionNode(node.start,soil):0;
+      const end=node.end!==null?this.evaluateExpressionNode(node.end,soil):target.length;
+      if(typeof target==='string') return target.slice(start,end);
+      if(Array.isArray(target)) return target.slice(start,end);
+      storm('TYPE_STORM','Slice requires string or array',node.line,node.column);
+    }
+    // v0.44.0: BinaryOp
+    if(node.type==='BinaryOp'){
+      const left=this.evaluateExpressionNode(node.left,soil);
+      const right=this.evaluateExpressionNode(node.right,soil);
+      switch(node.operator){
+        case'+':return left+right;
+        case'-':return left-right;
+        case'*':return left*right;
+        case'/':return(left/right)|0;
+        case'%':return left%right;
+        case'**':return Math.pow(left,right);
+        case'IS':return left===right;
+        case'IS_NOT':return left!==right;
+        case'GREATER_THAN':return left>right;
+        case'LESS_THAN':return left<right;
+        case'GTE':return left>=right;
+        case'LTE':return left<=right;
+        case'AND':return left&&right;
+        case'OR':return left||right;
+        default:storm('TYPE_STORM',`Unknown operator: ${node.operator}`,node.line,node.column);
+      }
+    }
+    // v0.44.0: UnaryOp
+    if(node.type==='UnaryOp'){
+      const operand=this.evaluateExpressionNode(node.operand,soil);
+      switch(node.operator){
+        case'NOT':return!operand;
+        case'-':return-operand;
+        default:storm('TYPE_STORM',`Unknown unary operator: ${node.operator}`,node.line,node.column);
+      }
+    }
+    // v0.44.0: MatchExpr (MATCH as expression)
+    if(node.type==='MatchExpr'){
+      return this._evaluateMatchExpr(node,soil);
+    }
     // Fallback: a raw string slipped through (shouldn't normally happen
     // once parseExpressionSpan always wraps in a Literal/Identifier).
     if(typeof node==='string')return evalExpr(node,soil);
@@ -404,6 +481,8 @@ class Interpreter {
         return this.evaluateEnumDeclaration(node, soil);
       case 'TypeAliasDeclaration':
         return this.evaluateTypeAliasDeclaration(node, soil);
+      case 'DestructDeclaration':
+        return this.evaluateDestructDeclaration(node, soil);
       default:
         storm('SYNTAX_STORM',`No evaluator registered for AST node type "${node.type}"`,node.line,node.column);
     }
@@ -1238,6 +1317,47 @@ class Interpreter {
           if(r&&r.returned)return r;
         }
         return null;
+      }
+    }
+    storm('SEED_STORM',`MATCH: no clause handles variant "${subject.tag}"`,node.line,node.column);
+  }
+
+  evaluateDestructDeclaration(node,soil){
+    const sourceVal=this.evaluateExpressionNode(node.sourceExpr,soil);
+    if(node.patternType==='object'){
+      for(const field of node.pattern){
+        const val=sourceVal[field];
+        if(val===undefined)storm('MISSING_STORM',`Field "${field}" not found in source`,node.line,node.column);
+        soil.set(field,val);
+      }
+    }else if(node.patternType==='array'){
+      for(let i=0;i<node.pattern.length;i++){
+        const field=node.pattern[i];
+        const val=sourceVal[i];
+        if(val===undefined)storm('MISSING_STORM',`Index ${i} not found in source array`,node.line,node.column);
+        soil.set(field,val);
+      }
+    }
+  }
+
+  _evaluateMatchExpr(node,soil){
+    const subject=this.evaluateExpressionNode(node.subjectExpr,soil);
+    if(typeof subject!=='object'||subject===null||!subject.__choiceType)
+      storm('TYPE_STORM','MATCH expression requires a CHOICE/Option/Result value',node.line,node.column);
+    for(const clause of node.clauses){
+      if(clause.variantName===subject.tag){
+        let clauseSoil=soil;
+        if(clause.binding&&subject.payload!==undefined){
+          clauseSoil=soil.child();
+          clauseSoil.set(clause.binding,subject.payload);
+        }
+        let result=null;
+        for(const stmt of clause.bodyStatements){
+          const r=this.evaluateNode(stmt,clauseSoil);
+          if(r&&r.returned)return r.value;
+          if(stmt.type==='GiveStatement')return this.evaluateExpressionNode(stmt.valueExpr,clauseSoil);
+        }
+        return result;
       }
     }
     storm('SEED_STORM',`MATCH: no clause handles variant "${subject.tag}"`,node.line,node.column);

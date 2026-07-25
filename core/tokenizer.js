@@ -29,6 +29,7 @@ const KEYWORDS = new Set([
   'BALANCED','FAST','SAFE','SMART','PERSISTENT',
   'BREAK','CONTINUE',
   'CONST','ENUM','TYPE',
+  'LET','OPTION','RESULT',
 ]);
 
 const TOKEN = {
@@ -39,6 +40,7 @@ const TOKEN = {
   FACT: 'FACT',
   DEPTH: 'DEPTH',        // the "N\" depth marker itself
   PUNCT: 'PUNCT',        // . , : ( ) /
+  INTERP: 'INTERP',      // interpolation expression inside string
   EOF: 'EOF',
 };
 
@@ -126,16 +128,50 @@ function tokenize(source) {
 
     const startLine = line, startCol = col;
 
-    // String literal
+    // String literal (with interpolation support)
     if (c === '"') {
       advance();
       let value = '';
+      let hasInterp = false;
+      const interpSegments = [];
       while (i < n && peekChar() !== '"') {
         if (peekChar() === '\n') { advance(); value += '\n'; continue; }
+        // Escaped brace \{ or \} -> literal brace
+        if (peekChar() === '\\' && (peekChar(1) === '{' || peekChar(1) === '}')) {
+          advance(); // skip backslash
+          value += advance(); // add the brace
+          continue;
+        }
+        // Interpolation start {
+        if (peekChar() === '{') {
+          if (value.length > 0) {
+            interpSegments.push({ type: 'text', value: value });
+          }
+          value = '';
+          advance(); // consume {
+          let exprText = '';
+          let braceDepth = 1;
+          while (i < n && braceDepth > 0) {
+            if (peekChar() === '{') braceDepth++;
+            if (peekChar() === '}') braceDepth--;
+            if (braceDepth > 0) exprText += advance();
+            else advance(); // consume closing }
+          }
+          interpSegments.push({ type: 'interp', value: exprText.trim() });
+          hasInterp = true;
+          continue;
+        }
         value += advance();
       }
       if (peekChar() === '"') advance(); // closing quote
-      tokens.push(new Token(TOKEN.STRING, value, startLine, startCol, currentDepth));
+      if (value.length > 0) {
+        interpSegments.push({ type: 'text', value: value });
+      }
+      if (hasInterp) {
+        tokens.push(new Token(TOKEN.STRING, interpSegments, startLine, startCol, currentDepth));
+      } else {
+        tokens.push(new Token(TOKEN.STRING, value, startLine, startCol, currentDepth));
+      }
       continue;
     }
 
@@ -177,6 +213,13 @@ function tokenize(source) {
       } else {
         tokens.push(new Token(TOKEN.IDENT, word, startLine, startCol, currentDepth));
       }
+      continue;
+    }
+
+    // Range operator: ..
+    if (c === '.' && peekChar(1) === '.') {
+      advance(); advance();
+      tokens.push(new Token(TOKEN.PUNCT, '..', startLine, startCol, currentDepth));
       continue;
     }
 

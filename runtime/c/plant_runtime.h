@@ -75,6 +75,31 @@ typedef struct PlantArray {
     char**   items;
 } PlantArray;
 
+/* ── v0.44.0: Option/Result Tagged Union Helpers ── */
+typedef struct PlantTagged {
+    int       tag;         /* 0=Some/Ok, 1=None, 2=Err */
+    void*     payload;     /* heap-allocated value */
+    int       kind;        /* 0=Option, 1=Result */
+} PlantTagged;
+
+PlantTagged* plant_option_some(void* value);
+PlantTagged* plant_option_none(void);
+PlantTagged* plant_result_ok(void* value);
+PlantTagged* plant_result_err(void* value);
+int          plant_is_some(PlantTagged* t);
+int          plant_is_none(PlantTagged* t);
+void*        plant_unwrap(PlantTagged* t);
+int          plant_is_ok(PlantTagged* t);
+int          plant_is_err(PlantTagged* t);
+void*        plant_unwrap_err(PlantTagged* t);
+
+/* ── v0.44.0: Array/String Slice Primitives ── */
+int64_t*     plant_array_slice(int64_t* arr, int64_t start, int64_t end);
+char*        plant_string_slice(const char* str, int64_t start, int64_t end);
+
+/* ── v0.44.0: Range Generation ── */
+int64_t*     plant_range(int64_t start, int64_t end);
+
 /* ── v0.43.0: File I/O Primitives ── */
 char*       plant_file_read(const char* filepath);
 int         plant_file_write(const char* filepath, const char* content);

@@ -478,3 +478,104 @@ int64_t plant_string_index_of(const char* str, const char* substr) {
     if (!p) return -1;
     return (int64_t)(p - str);
 }
+
+/* ── v0.44.0: Option/Result Tagged Union Helpers ── */
+
+PlantTagged* plant_option_some(void* value) {
+    PlantTagged* t = (PlantTagged*)plant_alloc(sizeof(PlantTagged));
+    t->tag = 0; t->kind = 0; t->payload = value;
+    return t;
+}
+
+PlantTagged* plant_option_none(void) {
+    PlantTagged* t = (PlantTagged*)plant_alloc(sizeof(PlantTagged));
+    t->tag = 1; t->kind = 0; t->payload = NULL;
+    return t;
+}
+
+PlantTagged* plant_result_ok(void* value) {
+    PlantTagged* t = (PlantTagged*)plant_alloc(sizeof(PlantTagged));
+    t->tag = 0; t->kind = 1; t->payload = value;
+    return t;
+}
+
+PlantTagged* plant_result_err(void* value) {
+    PlantTagged* t = (PlantTagged*)plant_alloc(sizeof(PlantTagged));
+    t->tag = 2; t->kind = 1; t->payload = value;
+    return t;
+}
+
+int plant_is_some(PlantTagged* t) {
+    if (!t || t->kind != 0) return 0;
+    return t->tag == 0;
+}
+
+int plant_is_none(PlantTagged* t) {
+    if (!t || t->kind != 0) return 0;
+    return t->tag == 1;
+}
+
+void* plant_unwrap(PlantTagged* t) {
+    if (!t) return NULL;
+    if ((t->kind == 0 && t->tag == 1) || (t->kind == 1 && t->tag == 2)) {
+        fprintf(stderr, "plant_unwrap: called on None/Err\n");
+        return NULL;
+    }
+    return t->payload;
+}
+
+int plant_is_ok(PlantTagged* t) {
+    if (!t || t->kind != 1) return 0;
+    return t->tag == 0;
+}
+
+int plant_is_err(PlantTagged* t) {
+    if (!t || t->kind != 1) return 0;
+    return t->tag == 2;
+}
+
+void* plant_unwrap_err(PlantTagged* t) {
+    if (!t || t->kind != 1 || t->tag != 2) return NULL;
+    return t->payload;
+}
+
+/* ── v0.44.0: Array/String Slice Primitives ── */
+
+int64_t* plant_array_slice(int64_t* arr, int64_t start, int64_t end) {
+    if (!arr || start < 0 || end <= start) return plant_array_create(0);
+    int64_t cap = arr[0];  /* capacity stored at index 0 */
+    if (start > cap) start = cap;
+    if (end > cap) end = cap;
+    int64_t len = end - start;
+    if (len < 0) len = 0;
+    int64_t* result = plant_array_create(len);
+    for (int64_t i = 0; i < len; i++) {
+        plant_array_set(result, i + 1, plant_array_get(arr, start + i));
+    }
+    return result;
+}
+
+char* plant_string_slice(const char* str, int64_t start, int64_t end) {
+    if (!str) return plant_str_concat("", "");
+    size_t len = strlen(str);
+    if (start < 0) start = 0;
+    if (end > (int64_t)len) end = (int64_t)len;
+    if (start >= end) return plant_str_concat("", "");
+    size_t slice_len = (size_t)(end - start);
+    char* result = (char*)plant_alloc(slice_len + 1);
+    memcpy(result, str + start, slice_len);
+    result[slice_len] = '\0';
+    return result;
+}
+
+/* ── v0.44.0: Range Generation ── */
+
+int64_t* plant_range(int64_t start, int64_t end) {
+    if (end <= start) return plant_array_create(0);
+    int64_t len = end - start;
+    int64_t* arr = plant_array_create(len);
+    for (int64_t i = 0; i < len; i++) {
+        plant_array_set(arr, i + 1, start + i);
+    }
+    return arr;
+}
