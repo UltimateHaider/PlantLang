@@ -1163,7 +1163,8 @@ bytes 224-255: hash (SHA256 of this entry, 32 bytes)
 - `tests/v0.40.0_distributed.test.js` — 34 tests for Geo-Aware Cycles, Dynamic Replica Rebalancing & Stream Compaction (GeoTopologyManager latency matrix/optimal nodes, StreamCompactor binary compress/decompress round-trip, DistributedCycleEngine geo-aware executeCycleBlock, ReplicaManager handleNodeJoin/handleNodeLeave rebalancing)
 - `tests/v0.41.0_native_net_governance.test.js` — 69 tests for Integrated Testing, Native Networking & CodeWords Governance (CodeWordsChecker directive parsing/permission/AST security, TestRunner SUITE/VERIFY/nested/runAll, CodeWords+TestRunner integration in plantc test pipeline)
 - `tests/v0.42.0_c_backend_parity.test.js` — 31 tests for C Backend Parity & Legacy Realignment (PlantMap create/set/get IR, LINK/ForInStatement/WeatherStatement/SpeciesDeclaration codegen, CodeWords zero false-positives, pipeline integration)
-- **Total: 30+ test files, ~950+ tests, all green**
+- `tests/v0.43.0_file_io_types_const.test.js` — 81 tests for Native File I/O, Constant Folding & Type Infrastructure (file read/write/exists/delete, string split/trim/index_of, AST constant folding, ENUM/TYPE/CONST declarations, CodeWords file I/O directives)
+- **Total: 30+ test files, ~1000+ tests, all green**
 
 ### Test Methodology
 Each test:
@@ -2588,3 +2589,145 @@ The `NETWORK_NODES` set contains only `HarvestStatement` and `ListenBranchStatem
   - Pipeline integration: MAP+LINK+FOR...IN (1), WEATHER+nested MAP (1), SPECIES+MAP+LINK (1)
   - IR declaration correctness: all 7 forward declarations (1)
   - Total: 31 tests, all green
+
+## 26. Native File I/O, Constant Folding & Type Infrastructure (v0.43.0)
+
+The v0.43.0 release adds native File I/O primitives, compile-time constant folding, and type infrastructure (ENUM, TYPE, CONST) to PlantLang.
+
+### 26.1 File I/O Primitives
+
+**Files:** `runtime/c/plant_runtime.h`, `runtime/c/plant_runtime.c`
+
+```c
+char*   plant_file_read(const char* filepath);
+bool    plant_file_write(const char* filepath, const char* content);
+bool    plant_file_exists(const char* filepath);
+bool    plant_file_delete(const char* filepath);
+```
+
+| Function | Signature | Description |
+|---|---|---|
+| `plant_file_read` | `char*(const char* filepath)` | Opens file with `fopen("rb")`, reads entire content into heap-allocated buffer via `fread`, returns NULL on failure |
+| `plant_file_write` | `bool(const char* filepath, const char* content)` | Opens file with `fopen("wb")`, writes content via `fwrite`, returns true on success |
+| `plant_file_exists` | `bool(const char* filepath)` | POSIX `stat()` check, returns true if file exists and is a regular file |
+| `plant_file_delete` | `bool(const char* filepath)` | POSIX `remove()`, returns true on success |
+
+### 26.2 String Manipulation Primitives
+
+```c
+typedef struct PlantArray {
+    char** data;
+    size_t count;
+    size_t capacity;
+} PlantArray;
+
+PlantArray  plant_string_split(const char* str, const char* delimiter);
+char*       plant_string_trim(const char* str);
+int64_t     plant_string_index_of(const char* str, const char* substr);
+```
+
+| Function | Signature | Description |
+|---|---|---|
+| `plant_string_split` | `PlantArray(const char* str, const char* delimiter)` | Uses `strstr` to find delimiters; returns PlantArray of heap-allocated string copies |
+| `plant_string_trim` | `char*(const char* str)` | Strips leading/trailing whitespace (space, tab, newline, CR), returns new allocation |
+| `plant_string_index_of` | `int64_t(const char* str, const char* substr)` | 0-based index via `strstr`, returns -1 if not found |
+
+### 26.3 AST Constant Folder
+
+**File:** `src/compiler/ast_constant_folder.js`
+
+A pre-IR-emission transformation pass that replaces statically computable expressions with their `LiteralNode` equivalents:
+
+**Binary Arithmetic Folding:** `10 + 5` → `15`, `3 * 4` → `12`, `2 ** 10` → `1024`, `10 / 3` → `3` (integer)
+
+**String Concatenation Folding:** `"A" + "B"` → `"AB"`
+
+**Comparison Folding:** `10 IS 10` → `true`, `10 GREATER THAN 5` → `true`, `5 LESS THAN 3` → `false`
+
+**Logical Folding:** `true AND false` → `false`, `true OR false` → `true`
+
+**Unary Folding:** `NOT true` → `false`, `-5` → `-5`
+
+**CONST Resolution:** References to `Identifier` nodes that match a known CONST are replaced with the CONST's literal value.
+
+**Nested Expression Folding:** `(2 * 3) + 4` → `10`, `(10 + 5) * 2` → `30`
+
+The folder works by:
+1. `_collectConsts(root)` — walks the AST once to collect all `ConstDeclarationNode` entries into a `Map<string, number|string|boolean>`
+2. `_foldNode(node, constMap)` — bottom-up recursive folding; returns the folded node (or original if no fold possible)
+3. `_foldExpr(expr, constMap)` — evaluates a binary/unary expression when both operands are `LiteralNode`; returns a new `LiteralNode` with the result
+
+### 26.4 ENUM Declarations
+
+**File:** `core/ast.js`, `core/parser.js`, `core/interpreter.js`
+
+```plantlang
+ENUM Color { RED, GREEN, BLUE }
+```
+
+- `EnumDeclarationNode` stores `{ name: string, members: [{ name, value }] }`
+- Values auto-increment starting from 0
+- Members accessed via `Color.RED`, `Color.GREEN`, etc.
+- At parse time, an `EnumName` entry with sub-entries for each member is added to the interpreter's root soil
+- Value enumeration stored in `_enums` map for potential compile-time reflection
+
+### 26.5 TYPE Aliases
+
+```plantlang
+TYPE MyNum = NUM.
+TYPE MyText = TX.
+```
+
+- `TypeAliasDeclarationNode` stores `{ alias: string, target: string }`
+- Target is resolved at registration time against known types
+- `_typeAliases` map in the interpreter stores alias → target mappings
+- Can be used in `CREATE` statements: `CREATE x(MyNum) TO 42.`
+
+### 26.6 CONST Declarations
+
+```plantlang
+CONST pi(NUM) TO 314.
+CONST greeting(TX) TO "Hello".
+```
+
+- `ConstDeclarationNode` stores `{ name, type, value }`
+- Creates locked (immutable) soil entries — SET operations on CONST names are rejected
+- CONST identifiers are collected by `ASTConstantFolder` and folded to literals at compile time
+- `isLocked` flag on soil entries enforces immutability at runtime
+
+### 26.7 CodeWords Governance — File I/O Directives
+
+**File:** `src/security/codewords_governance.js`
+
+New directives:
+
+| Directive | Grants Permission For |
+|---|---|
+| `#ALLOW_FILE_READ` | `FileReadStatement` nodes |
+| `#ALLOW_FILE_WRITE` | `FileWriteStatement` nodes |
+| `#ALLOW_FILE_DELETE` | `FileDeleteStatement` nodes |
+
+The `NETWORK_NODES` set is extended to include `FileReadStatement`, `FileWriteStatement`, `FileDeleteStatement`. The `_requiredDirective(node)` method maps:
+- `FileReadStatement` → `#ALLOW_FILE_READ`
+- `FileWriteStatement` → `#ALLOW_FILE_WRITE`
+- `FileDeleteStatement` → `#ALLOW_FILE_DELETE`
+
+Token keywords `CONST`, `ENUM`, `TYPE` are registered in the tokenizer's KEYWORDS set.
+
+### 26.8 Test Coverage
+
+- `tests/v0.43.0_file_io_types_const.test.js` — 81 tests:
+  - Arithmetic constant folding: `10+5` (1), `3*4` (1), `2**10` (1), `10/3` (1), `10%3` (1), `10-5` (1), `10+5*2` (1), `(10+5)*2` (1)
+  - String concatenation folding: `"A"+"B"` (1)
+  - ENUM declarations: node structure (1), 3-member auto-increment (1), 7-member weekday enum (1)
+  - TYPE aliases: node structure (1), alias in CREATE (2), unknown alias error (1), decimal alias (1)
+  - CONST declarations: node structure (1), soil value locked (1), type annotation (1), identifier folding (2), all types (1), re-assignment rejection (1)
+  - C runtime declarations: header function signatures (7), source implementations (7), PlantArray typedef (1), split array handling (1)
+  - JS file I/O parity: read (1), write (1), exists (1), delete (1), nested dir create (1), binary content round-trip (1), no-clobber content check (1)
+  - String manipulation: split (1), trim (1), index_of (1), empty segment split (1), multi-char delimiter (1), missing delimiter (1)
+  - CodeWords: FileReadStatement without directive rejected (1), with `#ALLOW_FILE_READ` accepted (1), FileWrite without directive rejected (1), FileDelete without directive rejected (1), FileRead with `#ALLOW_NETWORK` NOT implied (1)
+  - Comparison constant folding: `10 IS 10` (1), `10 GREATER THAN 5` (1), `5 LESS THAN 3` (1)
+  - Unary NOT: `NOT true` (1)
+  - Tokenizer keywords: CONST (1), ENUM (1), TYPE (1)
+  - Nested: `(2*3)+4` (1)
+  - Total: 81 tests, all green

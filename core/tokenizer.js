@@ -28,6 +28,7 @@ const KEYWORDS = new Set([
   'SPLIT','JOIN',
   'BALANCED','FAST','SAFE','SMART','PERSISTENT',
   'BREAK','CONTINUE',
+  'CONST','ENUM','TYPE',
 ]);
 
 const TOKEN = {

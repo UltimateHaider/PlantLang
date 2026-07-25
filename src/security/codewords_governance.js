@@ -4,10 +4,13 @@ const ALLOWED_DIRECTIVES = {
   '#ALLOW_NETWORK': { type: 'network', description: 'Permit HARVEST and LISTEN BRANCH' },
   '#ALLOW_HARVEST': { type: 'harvest', description: 'Permit HARVEST outbound requests' },
   '#ALLOW_LISTEN':  { type: 'listen', description: 'Permit LISTEN BRANCH socket server' },
+  '#ALLOW_FILE_READ': { type: 'file_read', description: 'Permit file read operations' },
+  '#ALLOW_FILE_WRITE': { type: 'file_write', description: 'Permit file write operations' },
+  '#ALLOW_FILE_DELETE': { type: 'file_delete', description: 'Permit file deletion operations' },
 };
 
 const DEFAULT_DIRECTIVES = new Set();
-const NETWORK_NODES = new Set(['HarvestStatement', 'ListenBranchStatement']);
+const NETWORK_NODES = new Set(['HarvestStatement', 'ListenBranchStatement', 'FileReadStatement', 'FileWriteStatement', 'FileDeleteStatement']);
 
 class SecurityViolationError extends Error {
   constructor(nodeType, requiredDirective, details) {
@@ -40,6 +43,9 @@ class CodeWordsChecker {
     if (this._directives.has(name)) return true;
     if (name === '#ALLOW_HARVEST' || name === '#ALLOW_LISTEN') {
       return this._directives.has('#ALLOW_NETWORK');
+    }
+    if (name === '#ALLOW_FILE_READ' || name === '#ALLOW_FILE_WRITE') {
+      return this._directives.has('#ALLOW_FILE_READ') || this._directives.has('#ALLOW_FILE_WRITE');
     }
     return false;
   }
@@ -81,6 +87,9 @@ class CodeWordsChecker {
   _requiredDirective(node) {
     if (node.type === 'HarvestStatement') return '#ALLOW_HARVEST';
     if (node.type === 'ListenBranchStatement') return '#ALLOW_LISTEN';
+    if (node.type === 'FileReadStatement') return '#ALLOW_FILE_READ';
+    if (node.type === 'FileWriteStatement') return '#ALLOW_FILE_WRITE';
+    if (node.type === 'FileDeleteStatement') return '#ALLOW_FILE_DELETE';
     return null;
   }
 

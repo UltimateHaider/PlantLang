@@ -49,17 +49,17 @@ ROOT MAX_MARK  TO 100.
 2\   /ACTION.
 1\ /SPECIES.
 
-# ── إنشاء الطnoب ──────────────────────────────────────────
+# ── Create Students ──────────────────────────────────────────
 1\ BLOOM Student AS s1.
-1\ SET s1:name TO "أحمد علي".
+1\ SET s1:name TO "Ahmed Ali".
 1\ SET s1:id   TO 1001.
 
 1\ BLOOM Student AS s2.
-1\ SET s2:name TO "فاطمة حسين".
+1\ SET s2:name TO "Fatima Hussein".
 1\ SET s2:id   TO 1002.
 
 1\ BLOOM Student AS s3.
-1\ SET s3:name TO "محمد كريم".
+1\ SET s3:name TO "Mohammed Karim".
 1\ SET s3:id   TO 1003.
 
 # ── Add Scores ─────────────────────────────────────────
@@ -108,7 +108,7 @@ ROOT MAX_MARK  TO 100.
 
 # ── Save Report to File ─────────────────────────────────────
 1\ TAP "results.txt" MODE:MARK AS outfile.
-1\ INFUSE outfile WITH "تقرير درجات 2025".
+1\ INFUSE outfile WITH "Grades Report 2025".
 1\ INFUSE outfile WITH r1.
 1\ INFUSE outfile WITH r2.
 1\ INFUSE outfile WITH r3.

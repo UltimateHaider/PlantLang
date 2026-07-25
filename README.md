@@ -1,4 +1,4 @@
-# PlantLang Language Specification & Ecosystem v0.42.0
+# PlantLang Language Specification & Ecosystem v0.43.0
 
 **PlantLang** is a human-centric, prose-based programming language engineered for both high-level readability and native-level execution performance. It transforms "prose-like" syntax into highly optimized machine code via the LLVM compiler infrastructure.
 
@@ -62,7 +62,7 @@ Arenas are automatically reclaimed:
 
 ---
 
-## 3. Engineering Architecture (The v0.42.0 Stack)
+## 3. Engineering Architecture (The v0.43.0 Stack)
 The ecosystem is built on a modular, industrial-grade pipeline:
 
 1.  **Core Interpreter (Chloroplast Engine):**
@@ -170,9 +170,9 @@ PlantLang employs a state-of-the-art compilation chain:
 ---
 
 ## 6. QA & Quality Assurance
-The **v0.42.0** release is verified by an automated regression suite:
-* **~900+ Total Tests** across 30+ test suites (LLVM backend, C codegen, Phase 1 LLVM primitives, parser migration, diagnostics, tokenizer, Phase 7—21, depth contract, matrix, dispatcher, runtime, parallel, security, cluster, geo-routing, distributed cycles, language ergonomics, distributed advanced, native net & governance).
-* **Native Networking & CodeWords Governance (v0.42.0)**: 69 tests covering CodeWords directive parsing, permission checks (implied grants via #ALLOW_NETWORK), AST security violations, TestRunner execution with nested suites and summary, and end-to-end plantc test subcommand.
+The **v0.43.0** release is verified by an automated regression suite:
+* **~1000+ Total Tests** across 30+ test suites (LLVM backend, C codegen, Phase 1 LLVM primitives, parser migration, diagnostics, tokenizer, Phase 7—21, depth contract, matrix, dispatcher, runtime, parallel, security, cluster, geo-routing, distributed cycles, language ergonomics, distributed advanced, native net & governance).
+* **Native File I/O, Constant Folding & Type Infrastructure (v0.43.0)**: 81 tests covering file I/O (read/write/exists/delete), string manipulation (split/trim/index_of), AST constant folding (arithmetic/string/logical/comparison), CONST declarations, ENUM declarations, TYPE aliases, CodeWords file I/O directives, and tokenizer keyword recognition.
 * **Distributed Advanced (v0.40.0)**: 34 tests covering GeoTopologyManager RTT latency matrix and optimal node selection (locality affinity, cross-region latency > 10ms), StreamCompactor binary compression round-trip (85% reduction), geo-aware DistributedCycleEngine block execution with locality key, and ReplicaManager dynamic rebalancing on node join/leave with partition migration and replica healing.
 * **LLVM IR Compiler Phase 1 (v0.39.5)**: 39 tests covering integer/decimal/boolean/string literal SHOW, CREATE+SHOW variable pipeline, SET reassignment, arithmetic precedence (+ − * / % **), comparison operators (IS, IS NOT, GREATER THAN, LESS THAN, GTE, LTE), logical operators (AND, OR, NOT), mixed-type promotion, parenthesized sub-expressions, and multi-SHOW sequences — verified via differential test harness.
 * **Language Ergonomics (v0.38.0)**: 54 tests covering AST Zero-Fallback invariant, CYCLE...IN (empty/null/index/iteration), BREAK/CONTINUE signals, multi-field SORT (chained comparator/ASC/DESC/null-to-end), nested struct formatting (formatShowValue with deep field access), BLOOM AS (TABLE/GRAPH/CHART rendering, restricted environment detection), memory allocators (ArenaAllocator FAST bump + ARCHeap PERSISTENT cascading refcount), and integration scenarios.
@@ -309,6 +309,27 @@ The **v0.42.0** release is verified by an automated regression suite:
   - **Memory Allocators**: `ArenaAllocator` (FAST bump) and `ARCHeap` (PERSISTENT cascading refcount) for local runtime allocator patterns.
   - 54 new tests in `tests/v0.38.0_ergonomics.test.js` — all green
 
+### ✅ Completed (v0.43.0)
+- **Native File I/O & String Manipulation** (`runtime/c/plant_runtime.{c,h}`):
+  - `plant_file_read(filepath)` — full file read into heap buffer, NULL on failure
+  - `plant_file_write(filepath, content)` — file create/overwrite, bool success
+  - `plant_file_exists(filepath)` — POSIX `stat()` existence check
+  - `plant_file_delete(filepath)` — POSIX `remove()` deletion
+  - `plant_string_split(str, delimiter)` — splits into dynamic string array (`PlantArray`)
+  - `plant_string_trim(str)` — strips leading/trailing whitespace
+  - `plant_string_index_of(str, substr)` — 0-based index or -1 if not found
+- **AST Constant Folder** (`src/compiler/ast_constant_folder.js`):
+  - Pre-IR-emission pass: folds static binary arithmetic (`10+5`→`15`, `3*4`→`12`, `2**10`→`1024`)
+  - String concatenation folding (`"A"+"B"`→`"AB"`)
+  - Logical/comparison folding (`10>5`→`true`, `true AND false`→`false`)
+  - Unary NOT folding and nested expression folding
+  - CONST identifier resolution to literal values
+- **ENUM Declarations**: `ENUM Name { MEMBER1, MEMBER2 }` with auto-incrementing values (0-based), scoped member access via `EnumName.Member`
+- **TYPE Aliases**: `TYPE AliasName = BaseType.` with alias-to-target resolution
+- **CONST Declarations**: `CONST name(TYPE) TO value.` — locked (immutable) soil entries, foldable by ASTConstantFolder
+- **CodeWords Governance**: `#ALLOW_FILE_READ`, `#ALLOW_FILE_WRITE`, `#ALLOW_FILE_DELETE` directives; FileRead/FileWrite/FileDelete nodes registered for security pass
+- 81 new tests in `tests/v0.43.0_file_io_types_const.test.js` — all green
+
 ### ✅ Completed (v0.42.0)
 - **C Backend Parity & Legacy Realignment**:
   - **PlantMap** (`runtime/c/plant_runtime.{c,h}`) — Open-addressing hash map with djb2 string hashing, 75% load factor threshold, automatic growth at 2x; plant_map_create/set/get/keys/free API
@@ -337,6 +358,8 @@ The **v0.42.0** release is verified by an automated regression suite:
   - 34 new tests in `tests/v0.40.0_distributed.test.js` — all green
 
 ---
+
+*PlantLang v0.43.0 — Native File I/O, Constant Folding & Type Infrastructure. File I/O primitives (plant_file_read/write/exists/delete), string manipulation (split/trim/index_of), ASTConstantFolder pass (arithmetic/string/logical folding), ENUM/TYPE/CONST declarations, CodeWords file I/O directives. 81 new tests. All green.*
 
 *PlantLang v0.42.0 — C Backend Parity & Legacy Realignment. PlantMap (hash map), PlantIterator (traversal protocol), domain primitives (plant_sys_action, plant_env_set_weather, plant_entity_set_species), LLVM codegen (MAP, FOR...IN, WEATHER, SPECIES). 31 new tests. All green.*
 

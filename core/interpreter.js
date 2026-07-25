@@ -398,6 +398,12 @@ class Interpreter {
       case 'BranchElse':          return null;  // silent no-op
       case 'BlockDelimiter':      return null;  // silent no-op
       case 'RawStatement':        return null;  // silent no-op
+      case 'ConstDeclaration':
+        return this.evaluateConstDeclaration(node, soil);
+      case 'EnumDeclaration':
+        return this.evaluateEnumDeclaration(node, soil);
+      case 'TypeAliasDeclaration':
+        return this.evaluateTypeAliasDeclaration(node, soil);
       default:
         storm('SYNTAX_STORM',`No evaluator registered for AST node type "${node.type}"`,node.line,node.column);
     }
@@ -1341,6 +1347,38 @@ class Interpreter {
 
   evaluateMissionStatement(node,soil){
     this.mission=node.mode;
+    return null;
+  }
+
+  // ── v0.43.0: CONST declaration ──
+  evaluateConstDeclaration(node, soil) {
+    let value;
+    if (node.valueExpr && typeof node.valueExpr === 'object' && node.valueExpr.type === 'Literal') {
+      value = node.valueExpr.value;
+    } else {
+      value = evalExpr(node.valueExpr, soil);
+    }
+    const type = node.varType || inferType(value);
+    soil.set(node.identifier, value, type, { locked: true });
+    return null;
+  }
+
+  // ── v0.43.0: ENUM declaration ──
+  evaluateEnumDeclaration(node, soil) {
+    const enumMap = {};
+    for (const m of node.members) {
+      enumMap[m.name] = m.value;
+      soil.set(node.name + '.' + m.name, m.value, 'NUM');
+    }
+    soil.set(node.name, enumMap, 'MAP');
+    return null;
+  }
+
+  // ── v0.43.0: TYPE alias declaration ──
+  evaluateTypeAliasDeclaration(node, soil) {
+    // Register alias in type map for later CREATE/TYPE checks
+    if (!this._typeAliases) this._typeAliases = new Map();
+    this._typeAliases.set(node.alias, node.targetType);
     return null;
   }
 

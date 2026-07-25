@@ -377,3 +377,104 @@ void plant_entity_set_species(void* entity, const char* species_name) {
     fprintf(stdout, "[SPECIES] entity set to %s\n", species_name ? species_name : "unknown");
     fflush(stdout);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.43.0 — File I/O Primitives
+   ═══════════════════════════════════════════════════════════════ */
+
+#include <sys/stat.h>
+
+char* plant_file_read(const char* filepath) {
+    if (!filepath) return NULL;
+    FILE* f = fopen(filepath, "rb");
+    if (!f) return NULL;
+    fseek(f, 0, SEEK_END);
+    long len = ftell(f);
+    if (len < 0) { fclose(f); return NULL; }
+    rewind(f);
+    char* buf = (char*)plant_alloc((size_t)len + 1);
+    size_t n = fread(buf, 1, (size_t)len, f);
+    fclose(f);
+    buf[n] = '\0';
+    return buf;
+}
+
+int plant_file_write(const char* filepath, const char* content) {
+    if (!filepath) return 0;
+    FILE* f = fopen(filepath, "wb");
+    if (!f) return 0;
+    if (content) fwrite(content, 1, strlen(content), f);
+    fclose(f);
+    return 1;
+}
+
+int plant_file_exists(const char* filepath) {
+    if (!filepath) return 0;
+    struct stat st;
+    return stat(filepath, &st) == 0 ? 1 : 0;
+}
+
+int plant_file_delete(const char* filepath) {
+    if (!filepath) return 0;
+    return remove(filepath) == 0 ? 1 : 0;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.43.0 — String Manipulation Primitives
+   ═══════════════════════════════════════════════════════════════ */
+
+PlantArray* plant_string_split(const char* str, const char* delimiter) {
+    PlantArray* arr = (PlantArray*)plant_alloc(sizeof(PlantArray));
+    arr->count = 0;
+    arr->items = NULL;
+    if (!str || !delimiter || delimiter[0] == '\0') return arr;
+    size_t delim_len = strlen(delimiter);
+    int64_t capacity = 8;
+    arr->items = (char**)plant_alloc((size_t)capacity * sizeof(char*));
+    const char* start = str;
+    const char* end;
+    while ((end = strstr(start, delimiter)) != NULL) {
+        size_t seg_len = (size_t)(end - start);
+        char* seg = (char*)plant_alloc(seg_len + 1);
+        memcpy(seg, start, seg_len);
+        seg[seg_len] = '\0';
+        if (arr->count >= capacity) {
+            capacity *= 2;
+            arr->items = (char**)realloc(arr->items, (size_t)capacity * sizeof(char*));
+        }
+        arr->items[arr->count++] = seg;
+        start = end + delim_len;
+    }
+    /* remainder */
+    size_t rem_len = strlen(start);
+    char* rem = (char*)plant_alloc(rem_len + 1);
+    memcpy(rem, start, rem_len);
+    rem[rem_len] = '\0';
+    if (arr->count >= capacity) {
+        capacity++;
+        arr->items = (char**)realloc(arr->items, (size_t)capacity * sizeof(char*));
+    }
+    arr->items[arr->count++] = rem;
+    return arr;
+}
+
+char* plant_string_trim(const char* str) {
+    if (!str) return plant_str_concat("", "");
+    const char* start = str;
+    while (*start && (unsigned char)*start <= ' ') start++;
+    if (*start == '\0') return plant_str_concat("", "");
+    const char* end = start + strlen(start) - 1;
+    while (end > start && (unsigned char)*end <= ' ') end--;
+    size_t len = (size_t)(end - start + 1);
+    char* result = (char*)plant_alloc(len + 1);
+    memcpy(result, start, len);
+    result[len] = '\0';
+    return result;
+}
+
+int64_t plant_string_index_of(const char* str, const char* substr) {
+    if (!str || !substr) return -1;
+    const char* p = strstr(str, substr);
+    if (!p) return -1;
+    return (int64_t)(p - str);
+}

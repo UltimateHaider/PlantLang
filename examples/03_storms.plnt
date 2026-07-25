@@ -6,7 +6,7 @@ MISSION: SAFE.
 2\   CREATE b(NUM) TO 0.
 2\   CREATE c(NUM) TO a / b.
 1\ SHELTER ZERO_STORM,
-2\   SHOW "ZERO_STORM: no يمكن الDivide على صفر".
+2\   SHOW "ZERO_STORM: Cannot divide by zero".
 1\ CALM.
 
 1\ WEATHER,

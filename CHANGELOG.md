@@ -1,5 +1,65 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.43.0 — 2026
+
+### New: Native File I/O, Compile-Time Constant Folding & Type Infrastructure
+- **Native File I/O** (`runtime/c/plant_runtime.{c,h}`):
+  - `plant_file_read(filepath)` — reads entire file into heap-allocated string; returns NULL on failure
+  - `plant_file_write(filepath, content)` — creates or overwrites file; returns bool success
+  - `plant_file_exists(filepath)` — POSIX `stat()` existence check
+  - `plant_file_delete(filepath)` — POSIX `remove()` deletion
+  - `PlantArray` typedef for dynamic string array results (used by split)
+- **String Manipulation Primitives** (`runtime/c/plant_runtime.{c,h}`):
+  - `plant_string_split(str, delimiter)` — splits string by delimiter into PlantArray
+  - `plant_string_trim(str)` — strips leading/trailing whitespace, returns new allocation
+  - `plant_string_index_of(str, substr)` — 0-based index or -1 if not found
+- **AST Constant Folder** (`src/compiler/ast_constant_folder.js`):
+  - `ASTConstantFolder` pass that runs before IR emission
+  - Folds static binary arithmetic (`10+5`→`15`, `3*4`→`12`, `2**10`→`1024`)
+  - Folds static string concatenation (`"A"+"B"`→`"AB"`)
+  - Folds logical/comparison operations (`10>5`→`true`, `true AND false`→`false`)
+  - Unary NOT folding (`NOT true`→`false`)
+  - Nested expression folding (`(2*3)+4`→`10`)
+  - CONST identifiers folded to their literal values in downstream expressions
+- **ENUM Declaration** (`core/ast.js`, `core/parser.js`, `core/interpreter.js`):
+  - Syntax: `ENUM Name { MEMBER1, MEMBER2, ... }`
+  - Auto-incrementing integer values starting from 0
+  - Scoped member access via `EnumName.Member`
+  - `EnumDeclarationNode` AST node with `{ name, members }` structure
+- **TYPE Alias Declaration** (`core/ast.js`, `core/parser.js`, `core/interpreter.js`):
+  - Syntax: `TYPE AliasName = BaseType.`
+  - `TypeAliasDeclarationNode` with alias resolution at registration time
+- **CONST Declaration** (`core/ast.js`, `core/parser.js`, `core/interpreter.js`):
+  - Syntax: `CONST name(TYPE) TO value.`
+  - Locked (immutable) soil entries, collectible by ASTConstantFolder
+  - `ConstDeclarationNode` with optional type annotation
+- **CodeWords Governance** integration:
+  - New directives: `#ALLOW_FILE_READ`, `#ALLOW_FILE_WRITE`, `#ALLOW_FILE_DELETE`
+  - File I/O node types registered in NETWORK_NODES set
+  - `_requiredDirective` maps FileRead/FileWrite/FileDelete to their permissions
+- **Test Suite**: `tests/v0.43.0_file_io_types_const.test.js` — 81 tests covering:
+  - Arithmetic constant folding (8 scenarios)
+  - String concatenation folding
+  - ENUM declaration, members, auto-increment values
+  - TYPE alias node structure
+  - CONST declaration and identifier folding
+  - C runtime header/source declarations (7 file I/O + 3 string + PlantArray)
+  - File I/O parity via JS fs (read, write, exists, delete, nested dirs)
+  - String manipulation (split, trim, index_of, empty segments, missing delim)
+  - CodeWords security (5 scenarios: rejection, acceptance, missing directives)
+  - Comparison constant folding (GT, LT, NOT)
+  - ENUM auto-increment (7-member weekday enum)
+  - Tokenizer keyword recognition (CONST, ENUM, TYPE)
+  - Nested expression folding (`(2*3)+4`)
+- **Zero Regressions** — all 30+ test suites at 100% pass rate
+
+### Documentation
+- CHANGELOG.md — new v0.43.0 entry
+- ROADMAP.md — v0.43.0 objectives documented with completed table row and footer
+- README.md — v0.43.0 completed section with File I/O, CONST/ENUM/TYPE, constant folding
+
+---
+
 ## v0.42.0 — 2026
 
 ### New: C Backend Parity & Legacy Realignment

@@ -1,4 +1,52 @@
-# PlantLang Roadmap: v0.42.0+ (Completed & Future)
+# PlantLang Roadmap: v0.43.0+ (Completed & Future)
+
+## ✅ Version v0.43.0: Native File I/O, Compile-Time Constant Folding & Type Infrastructure
+
+**Status:** ✅ Completed
+
+### Scope & Engineering Implementation
+
+#### Native File I/O Primitives
+- `plant_file_read(filepath)` — full file read into heap buffer, NULL on failure
+- `plant_file_write(filepath, content)` — file create/overwrite, bool return
+- `plant_file_exists(filepath)` — POSIX `stat()` existence check
+- `plant_file_delete(filepath)` — POSIX `remove()` deletion
+- `PlantArray` dynamic string array for split results
+
+#### String Manipulation Primitives
+- `plant_string_split(str, delimiter)` — splits into PlantArray of string pointers
+- `plant_string_trim(str)` — strips leading/trailing whitespace
+- `plant_string_index_of(str, substr)` — 0-based index or -1
+
+#### ASTConstantFolder Compiler Pass
+- Pre-IR-emission transformation: folds binary arithmetic (`10+5`→`15`), string concat (`"A"+"B"`→`"AB"`), logical/comparison ops, unary NOT
+- CONST identifier resolution: replaces `Identifier` refs with `Literal` nodes
+- Nested expression folding: `(2*3)+4`→`10`
+
+#### ENUM Declarations
+- `ENUM Name { MEMBER1, MEMBER2 }` syntax with auto-incrementing values (0-based)
+- Member access via `EnumName.Member` scoped lookup
+- `EnumDeclarationNode` AST class
+
+#### TYPE Aliases
+- `TYPE AliasName = BaseType.` syntax
+- `TypeAliasDeclarationNode` with alias-to-target resolution
+
+#### CONST Declarations
+- `CONST name(TYPE) TO value.` syntax
+- Locked (immutable) soil entries
+- `ConstDeclarationNode` AST class
+
+#### CodeWords Governance
+- New directives: `#ALLOW_FILE_READ`, `#ALLOW_FILE_WRITE`, `#ALLOW_FILE_DELETE`
+- FileRead/FileWrite/FileDelete nodes registered for security pass
+- Tokenizer keywords: `CONST`, `ENUM`, `TYPE`
+
+#### Test Coverage
+- `tests/v0.43.0_file_io_types_const.test.js` — 81 tests across all module areas
+- All 30+ test suites at 100% pass rate
+
+---
 
 ## ✅ Version v0.42.0: C Backend Parity & Legacy Realignment
 
@@ -411,8 +459,11 @@ This release establishes the foundation for a second compilation pipeline: Plant
 | ✅ **v0.40.0** | **Geo-Aware Cycles & Dynamic Replica Rebalancing** — GeoTopologyManager, StreamCompactor, geo-affine placement, replica rebalancing on node churn | ✅ Q2 2029 |
 | ✅ **v0.41.0** | **Integrated Testing, Native Networking & CodeWords Governance** — CodeWordsChecker, TestRunner, POSIX socket helpers, plantc test subcommand | ✅ Q3 2029 |
 | ✅ **v0.42.0** | **C Backend Parity & Legacy Realignment** — PlantMap, PlantIterator, domain primitives, LLVM codegen for MAP/FOR...IN/WEATHER/SPECIES | ✅ Q4 2029 |
+| ✅ **v0.43.0** | **Native File I/O, Constant Folding & Type Infrastructure** — plant_file_read/write/exists/delete, plant_string_split/trim/index_of, ASTConstantFolder pass (arithmetic/string/logical folding), ENUM declarations, TYPE aliases, CONST declarations, CodeWords file I/O directives | ✅ Q1 2030 |
 
 ---
+
+*PlantLang v0.43.0: Native File I/O, Compile-Time Constant Folding & Type Infrastructure. File I/O primitives (plant_file_read/write/exists/delete, plant_string_split/trim/index_of), ASTConstantFolder pass (binary arithmetic, string concat, logical/comparison folding), ENUM declarations (auto-increment members), TYPE aliases (base type resolution), CONST declarations (immutable, foldable). 81 new tests. All green.*
 
 *PlantLang v0.42.0: C Backend Parity & Legacy Realignment. PlantMap (hash map), PlantIterator (traversal protocol), domain primitives (plant_sys_action, plant_env_set_weather, plant_entity_set_species), LLVM codegen (MAP, FOR...IN, WEATHER, SPECIES). 31 new tests. All green.*
 

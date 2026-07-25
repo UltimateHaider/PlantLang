@@ -17,7 +17,7 @@ PLANT math.
 
 1\ REAP r1 FROM add, 15, 27.
 1\ REAP r2 FROM factorial, 6.
-1\ REAP r3 FROM greet, "حيدر".
+1\ REAP r3 FROM greet, "Haider".
 1\ SHOW r1.
 1\ SHOW r2.
 1\ SHOW r3.
@@ -45,7 +45,7 @@ PLANT math.
 1\ /SPECIES.
 
 1\ BLOOM BankAccount AS acc.
-1\ SET acc:owner TO "علي محمد".
+1\ SET acc:owner TO "Ali Mohamed".
 1\ REAP b1 FROM acc:deposit, 500.
 1\ REAP b2 FROM acc:deposit, 250.
 1\ REAP b3 FROM acc:withdraw, 100.
@@ -65,7 +65,7 @@ PLANT math.
 1\ /SPECIES.
 
 1\ BLOOM SavingsAccount AS savings.
-1\ SET savings:owner TO "فاطمة".
+1\ SET savings:owner TO "Fatima".
 1\ REAP _ FROM savings:deposit, 1000.
 1\ REAP msg FROM savings:add_interest.
 1\ SHOW msg.

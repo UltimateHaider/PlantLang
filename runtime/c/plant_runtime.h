@@ -69,4 +69,21 @@ void        plant_env_set_weather(const char* weather_type);
 const char* plant_env_get_weather(void);
 void        plant_entity_set_species(void* entity, const char* species_name);
 
+/* ── v0.43.0: PlantArray type (dynamic string array for split results) ── */
+typedef struct PlantArray {
+    int64_t  count;
+    char**   items;
+} PlantArray;
+
+/* ── v0.43.0: File I/O Primitives ── */
+char*       plant_file_read(const char* filepath);
+int         plant_file_write(const char* filepath, const char* content);
+int         plant_file_exists(const char* filepath);
+int         plant_file_delete(const char* filepath);
+
+/* ── v0.43.0: String Manipulation Primitives ── */
+PlantArray* plant_string_split(const char* str, const char* delimiter);
+char*       plant_string_trim(const char* str);
+int64_t     plant_string_index_of(const char* str, const char* substr);
+
 #endif

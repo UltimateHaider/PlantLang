@@ -41,7 +41,10 @@ const {
   StructDeclarationNode, StructInstantiationExpr, StructLiteralNode, MemberAccessNode,
   ArrayLiteralNode, MethodCallNode,
   EndBlockNode, BranchElseNode, CycleInStatementNode,
-  BreakStatementNode, ContinueStatementNode, SortStatementV2Node, BloomAsStatementNode,
+  BreakStatementNode, ContinueStatementNode, SortStatementV2Node,   BloomAsStatementNode,
+  ConstDeclarationNode,
+  EnumDeclarationNode,
+  TypeAliasDeclarationNode,
 } = require('./ast');
 
 
@@ -230,6 +233,9 @@ class Parser {
     if (this.match(TOKEN.KEYWORD, 'SHAPE'))  return this.parseStructDeclaration(coords);
     if (this.match(TOKEN.KEYWORD, 'STRUCT')) return this.parseStructDeclaration(coords);
     if (this.match(TOKEN.KEYWORD, 'CHOICE')) return this.parseVariantDeclaration(coords);
+    if (this.match(TOKEN.KEYWORD, 'CONST'))  return this.parseConstDeclaration(coords);
+    if (this.match(TOKEN.KEYWORD, 'ENUM'))   return this.parseEnumDeclaration(coords);
+    if (this.match(TOKEN.KEYWORD, 'TYPE'))   return this.parseTypeAliasDeclaration(coords);
 
     // New dispatches — remaining statement types
     if (this.match(TOKEN.KEYWORD, 'FOR'))    return this.parseForInStatement(coords);
@@ -2509,6 +2515,73 @@ class Parser {
 
     const { VariantDeclarationNode } = require('./ast');
     return new VariantDeclarationNode({ name, variants }, coords);
+  }
+
+  parseConstDeclaration(coords) {
+    this.consume(TOKEN.KEYWORD, 'CONST', '"CONST"');
+    const idTok = this.current();
+    if (idTok.type !== TOKEN.IDENT) storm('SYNTAX_STORM', `Expected identifier after CONST, found "${idTok.value}"`, idTok.line, idTok.column);
+    const identifier = this.advance().value;
+    let varType = null;
+    if (this.match(TOKEN.PUNCT, '(')) {
+      this.advance();
+      const typeTok = this.current();
+      if (typeTok.type === TOKEN.KEYWORD) varType = this.advance().value;
+      this.consume(TOKEN.PUNCT, ')', '")" after CONST type');
+    }
+    this.consume(TOKEN.KEYWORD, 'TO', '"TO" in CONST declaration');
+    const valueText = this._collectLineSpan().trim();
+    const valueTok = this.current();
+    let valueExpr;
+    const numVal = parseFloat(valueText);
+    if (!isNaN(numVal) && String(numVal) === valueText) {
+      valueExpr = new (require('./ast').LiteralNode)(numVal, 'NUMBER', { line: coords.line, column: coords.column, depth: coords.depth });
+    } else if (valueText === 'TRUE' || valueText === 'true') {
+      valueExpr = new (require('./ast').LiteralNode)(true, 'FACT', { line: coords.line, column: coords.column, depth: coords.depth });
+    } else if (valueText === 'FALSE' || valueText === 'false') {
+      valueExpr = new (require('./ast').LiteralNode)(false, 'FACT', { line: coords.line, column: coords.column, depth: coords.depth });
+    } else if (valueText.startsWith('"') && valueText.endsWith('"')) {
+      valueExpr = new (require('./ast').LiteralNode)(valueText.slice(1, -1), 'STRING', { line: coords.line, column: coords.column, depth: coords.depth });
+    } else {
+      valueExpr = valueText;
+    }
+    if (this.match(TOKEN.PUNCT, '.')) this.advance();
+    return new ConstDeclarationNode({ identifier, varType, valueExpr }, coords);
+  }
+
+  parseEnumDeclaration(coords) {
+    this.consume(TOKEN.KEYWORD, 'ENUM', '"ENUM"');
+    const nameTok = this.current();
+    if (nameTok.type !== TOKEN.IDENT) storm('SYNTAX_STORM', `Expected ENUM name, found "${nameTok.value}"`, nameTok.line, nameTok.column);
+    const name = this.advance().value;
+    this.consume(TOKEN.PUNCT, '{', '"{" to open ENUM body');
+    const members = [];
+    let autoValue = 0;
+    while (!this.isAtEnd() && !this.match(TOKEN.PUNCT, '}')) {
+      const mTok = this.current();
+      if (mTok.type !== TOKEN.IDENT && mTok.type !== TOKEN.KEYWORD) break;
+      const mName = this.advance().value;
+      members.push({ name: mName, value: autoValue++ });
+      if (this.match(TOKEN.PUNCT, ',')) this.advance();
+    }
+    this.consume(TOKEN.PUNCT, '}', '"}" to close ENUM body');
+    if (this.match(TOKEN.PUNCT, '.')) this.advance();
+    return new EnumDeclarationNode({ name, members }, coords);
+  }
+
+  parseTypeAliasDeclaration(coords) {
+    this.consume(TOKEN.KEYWORD, 'TYPE', '"TYPE"');
+    const aliasTok = this.current();
+    if (aliasTok.type !== TOKEN.IDENT) storm('SYNTAX_STORM', `Expected alias name after TYPE, found "${aliasTok.value}"`, aliasTok.line, aliasTok.column);
+    const alias = this.advance().value;
+    this.consume(TOKEN.PUNCT, '=', '"=" in TYPE alias declaration');
+    const typeTok = this.current();
+    if (typeTok.type !== TOKEN.KEYWORD && typeTok.type !== TOKEN.IDENT) {
+      storm('SYNTAX_STORM', `Expected type name after "=", found "${typeTok.value}"`, typeTok.line, typeTok.column);
+    }
+    const targetType = this.advance().value;
+    if (this.match(TOKEN.PUNCT, '.')) this.advance();
+    return new TypeAliasDeclarationNode({ alias, targetType }, coords);
   }
 
   parseInfuseStatement(coords) {

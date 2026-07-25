@@ -37,8 +37,8 @@ PLANT lists.
 1\ REAP _ FROM assert, "FACT correct", f,   TRUE.
 1\ REAP _ FROM assert, "COUNT LIST", COUNT lst, 3.
 
-# ═══ 2. Arithmetic Operations ════════════════════════════════
-1\ SHOW "── Arithmetic Operations ──".
+# ═══ 2. Arithmetic ════════════════════════════════
+1\ SHOW "── Arithmetic ──".
 
 1\ CREATE r_add(NUM) TO 10 + 5.
 1\ CREATE r_sub(NUM) TO 10 - 3.
@@ -52,9 +52,9 @@ PLANT lists.
 1\ REAP _ FROM assert, "Subtract",          r_sub, 7.
 1\ REAP _ FROM assert, "Multiply",          r_mul, 28.
 1\ REAP _ FROM assert, "Divide",         r_div, 2.5.
-1\ REAP _ FROM assert, "باقي الDivide",  r_mod, 1.
+1\ REAP _ FROM assert, "Modulo",  r_mod, 1.
 1\ REAP _ FROM assert, "Power",           r_pow, 256.
-1\ REAP _ FROM assert, "Divide صحيحة",  r_fld, 3.
+1\ REAP _ FROM assert, "Floor Div",  r_fld, 3.
 
 # ═══ 3. Lists ══════════════════════════════════════════
 1\ SHOW "── Lists ──".
@@ -217,7 +217,7 @@ PLANT lists.
 
 1\ REAP _ FROM c1:reset.
 1\ REAP tr FROM c1:tick.
-1\ REAP _ FROM assert, "reset ثم tick", tr, 1.
+1\ REAP _ FROM assert, "reset then tick", tr, 1.
 
 # ═══ 11. WEATHER / SHELTER ═══════════════════════════════
 1\ SHOW "── Storms ──".
@@ -282,7 +282,7 @@ PLANT lists.
 1\ REAP _ FROM assert, "NOW STAMP is NUM", stamp_type, "NUM".
 
 1\ WAIT 0.
-1\ REAP _ FROM assert, "WAIT 0 يكمل", "ok", "ok".
+1\ REAP _ FROM assert, "WAIT 0 completes", "ok", "ok".
 
 ROOT_SCOPE RSCFG,
   LINK "theme" WITH "dark" IN RSCFG.
@@ -296,7 +296,7 @@ ROOT_SCOPE/.
 2\   REAP _ FROM assert, "ROOT_SCOPE protected", "locked", "locked".
 1\ CALM.
 
-# ═══ ملخص النتائج ════════════════════════════════════════
+# ═══ Summary ════════════════════════════════════════
 1\ SHOW "".
 1\ SHOW "═══════════════════════════════".
 1\ SHOW "Test Results:".

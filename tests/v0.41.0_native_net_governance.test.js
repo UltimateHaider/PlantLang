@@ -308,7 +308,7 @@ console.log('\u001b[1m--- CodeWords: Valid Directives ---\u001b[0m');
   assert(valid.includes('#ALLOW_NETWORK'), '#ALLOW_NETWORK is valid');
   assert(valid.includes('#ALLOW_HARVEST'), '#ALLOW_HARVEST is valid');
   assert(valid.includes('#ALLOW_LISTEN'), '#ALLOW_LISTEN is valid');
-  assertEqual(valid.length, 3, 'exactly 3 valid directives');
+  assertEqual(valid.length, 6, 'exactly 6 valid directives (NETWORK + HARVEST + LISTEN + FILE_READ + FILE_WRITE + FILE_DELETE)');
 })();
 
 // ═══════════════════════════════════════════════════════════════

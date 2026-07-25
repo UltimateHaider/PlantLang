@@ -56,7 +56,7 @@ PLANT lists.
 2\   GIVE ">> " + text.
 1\ /ACTION.
 
-1\ REAP result FROM "  Hello بالعالم  ",
+1\ REAP result FROM "  Hello World  ",
      FLOW clean,
      FLOW to_upper,
      FLOW add_prefix.

@@ -856,6 +856,34 @@ class BloomAsStatementNode extends AstNode {
   }
 }
 
+// ── v0.43.0: ConstDeclaration ──
+class ConstDeclarationNode extends AstNode {
+  constructor({ identifier, varType, valueExpr }, coords) {
+    super('ConstDeclaration', coords);
+    this.identifier = identifier;
+    this.varType = varType;
+    this.valueExpr = valueExpr;
+  }
+}
+
+// ── v0.43.0: EnumDeclaration ──
+class EnumDeclarationNode extends AstNode {
+  constructor({ name, members }, coords) {
+    super('EnumDeclaration', coords);
+    this.name = name;
+    this.members = members || []; // [{ name, value: auto-increment int }]
+  }
+}
+
+// ── v0.43.0: TypeAliasDeclaration ──
+class TypeAliasDeclarationNode extends AstNode {
+  constructor({ alias, targetType }, coords) {
+    super('TypeAliasDeclaration', coords);
+    this.alias = alias;
+    this.targetType = targetType;
+  }
+}
+
 // Re-export everything
 const _orig = module.exports;
 Object.assign(module.exports, {
@@ -906,6 +934,9 @@ Object.assign(module.exports, {
   ContinueStatementNode,
   SortStatementV2Node,
   BloomAsStatementNode,
+  ConstDeclarationNode,
+  EnumDeclarationNode,
+  TypeAliasDeclarationNode,
 });
 
 // ── v0.38.0: BREAK/CONTINUE control flow signals ──
