@@ -1,0 +1,2 @@
+CREATE x(NUM) TO 42.
+SHOW x.

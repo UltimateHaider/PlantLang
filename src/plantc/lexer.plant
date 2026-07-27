@@ -1,0 +1,298 @@
+# ═══════════════════════════════════════════════════════════════
+#  src/plantc/lexer.plant — Lexical analyzer for the
+#  self-hosting PlantLang compiler.
+# ═══════════════════════════════════════════════════════════════
+
+# ── is_keyword(word) ──────────────────────────────────────
+ACTION is_keyword(wrd(TX)),
+  IF wrd IS "LET", GIVE TRUE. /IF.
+  IF wrd IS "CREATE", GIVE TRUE. /IF.
+  IF wrd IS "MATCH", GIVE TRUE. /IF.
+  IF wrd IS "IF", GIVE TRUE. /IF.
+  IF wrd IS "ELSE", GIVE TRUE. /IF.
+  IF wrd IS "LOOP", GIVE TRUE. /IF.
+  IF wrd IS "RETURN", GIVE TRUE. /IF.
+  IF wrd IS "TYPE", GIVE TRUE. /IF.
+  IF wrd IS "SHOW", GIVE TRUE. /IF.
+  IF wrd IS "ACTION", GIVE TRUE. /IF.
+  IF wrd IS "REAP", GIVE TRUE. /IF.
+  IF wrd IS "GIVE", GIVE TRUE. /IF.
+  IF wrd IS "SET", GIVE TRUE. /IF.
+  IF wrd IS "PUT", GIVE TRUE. /IF.
+  IF wrd IS "TAKE", GIVE TRUE. /IF.
+  IF wrd IS "FOR", GIVE TRUE. /IF.
+  IF wrd IS "CYCLE", GIVE TRUE. /IF.
+  IF wrd IS "SEASON", GIVE TRUE. /IF.
+  IF wrd IS "WEATHER", GIVE TRUE. /IF.
+  IF wrd IS "SHELTER", GIVE TRUE. /IF.
+  IF wrd IS "CALM", GIVE TRUE. /IF.
+  IF wrd IS "AND", GIVE TRUE. /IF.
+  IF wrd IS "OR", GIVE TRUE. /IF.
+  IF wrd IS "NOT", GIVE TRUE. /IF.
+  IF wrd IS "IS", GIVE TRUE. /IF.
+  IF wrd IS "TRUE", GIVE TRUE. /IF.
+  IF wrd IS "FALSE", GIVE TRUE. /IF.
+  IF wrd IS "TO", GIVE TRUE. /IF.
+  IF wrd IS "FROM", GIVE TRUE. /IF.
+  IF wrd IS "AS", GIVE TRUE. /IF.
+  IF wrd IS "IN", GIVE TRUE. /IF.
+  IF wrd IS "SPLIT", GIVE TRUE. /IF.
+  IF wrd IS "JOIN", GIVE TRUE. /IF.
+  IF wrd IS "ENUM", GIVE TRUE. /IF.
+  IF wrd IS "CONST", GIVE TRUE. /IF.
+  IF wrd IS "FUNCTION", GIVE TRUE. /IF.
+  IF wrd IS "IMPORT", GIVE TRUE. /IF.
+  IF wrd IS "OPTION", GIVE TRUE. /IF.
+  IF wrd IS "RESULT", GIVE TRUE. /IF.
+  IF wrd IS "GREATER", GIVE TRUE. /IF.
+  IF wrd IS "LESS", GIVE TRUE. /IF.
+  IF wrd IS "THAN", GIVE TRUE. /IF.
+  IF wrd IS "COUNT", GIVE TRUE. /IF.
+  IF wrd IS "FIRST", GIVE TRUE. /IF.
+  IF wrd IS "LAST", GIVE TRUE. /IF.
+  IF wrd IS "SUM", GIVE TRUE. /IF.
+  IF wrd IS "NULL", GIVE TRUE. /IF.
+  IF wrd IS "ISNT", GIVE TRUE. /IF.
+  IF wrd IS "TEST", GIVE TRUE. /IF.
+  IF wrd IS "BREAK", GIVE TRUE. /IF.
+  IF wrd IS "CONTINUE", GIVE TRUE. /IF.
+  IF wrd IS "INTO", GIVE TRUE. /IF.
+  GIVE FALSE.
+/ACTION.
+
+# ── keyword_to_type(word) ─────────────────────────────────
+ACTION keyword_to_type(wrd(TX)),
+  IF wrd IS "LET", GIVE "LET". /IF.
+  IF wrd IS "CREATE", GIVE "CREATE". /IF.
+  IF wrd IS "MATCH", GIVE "MATCH". /IF.
+  IF wrd IS "IF", GIVE "IF". /IF.
+  IF wrd IS "ELSE", GIVE "ELSE". /IF.
+  IF wrd IS "LOOP", GIVE "LOOP". /IF.
+  IF wrd IS "RETURN", GIVE "RETURN". /IF.
+  IF wrd IS "TYPE", GIVE "TYPE". /IF.
+  IF wrd IS "SHOW", GIVE "SHOW". /IF.
+  IF wrd IS "ACTION", GIVE "ACTION". /IF.
+  IF wrd IS "REAP", GIVE "REAP". /IF.
+  IF wrd IS "GIVE", GIVE "GIVE". /IF.
+  IF wrd IS "SET", GIVE "SET". /IF.
+  IF wrd IS "PUT", GIVE "PUT". /IF.
+  IF wrd IS "TAKE", GIVE "TAKE". /IF.
+  IF wrd IS "FOR", GIVE "FOR". /IF.
+  IF wrd IS "CYCLE", GIVE "CYCLE". /IF.
+  IF wrd IS "SEASON", GIVE "SEASON". /IF.
+  IF wrd IS "WEATHER", GIVE "WEATHER". /IF.
+  IF wrd IS "SHELTER", GIVE "SHELTER". /IF.
+  IF wrd IS "CALM", GIVE "CALM". /IF.
+  IF wrd IS "AND", GIVE "AND". /IF.
+  IF wrd IS "OR", GIVE "OR". /IF.
+  IF wrd IS "NOT", GIVE "NOT". /IF.
+  IF wrd IS "IS", GIVE "IS". /IF.
+  IF wrd IS "TRUE", GIVE "TRUE". /IF.
+  IF wrd IS "FALSE", GIVE "FALSE". /IF.
+  IF wrd IS "TO", GIVE "TO". /IF.
+  IF wrd IS "FROM", GIVE "FROM". /IF.
+  IF wrd IS "AS", GIVE "AS". /IF.
+  IF wrd IS "IN", GIVE "IN". /IF.
+  IF wrd IS "SPLIT", GIVE "SPLIT". /IF.
+  IF wrd IS "JOIN", GIVE "JOIN". /IF.
+  IF wrd IS "ENUM", GIVE "ENUM". /IF.
+  IF wrd IS "CONST", GIVE "CONST". /IF.
+  IF wrd IS "FUNCTION", GIVE "FUNCTION". /IF.
+  IF wrd IS "IMPORT", GIVE "IMPORT". /IF.
+  IF wrd IS "OPTION", GIVE "OPTION". /IF.
+  IF wrd IS "RESULT", GIVE "RESULT". /IF.
+  IF wrd IS "GREATER", GIVE "GREATER". /IF.
+  IF wrd IS "LESS", GIVE "LESS". /IF.
+  IF wrd IS "THAN", GIVE "THAN". /IF.
+  IF wrd IS "COUNT", GIVE "COUNT". /IF.
+  IF wrd IS "FIRST", GIVE "FIRST". /IF.
+  IF wrd IS "LAST", GIVE "LAST". /IF.
+  IF wrd IS "SUM", GIVE "SUM". /IF.
+  IF wrd IS "NULL", GIVE "NULL". /IF.
+  IF wrd IS "ISNT", GIVE "ISNT". /IF.
+  IF wrd IS "TEST", GIVE "TEST". /IF.
+  IF wrd IS "BREAK", GIVE "BREAK". /IF.
+  IF wrd IS "CONTINUE", GIVE "CONTINUE". /IF.
+  IF wrd IS "INTO", GIVE "INTO". /IF.
+  GIVE "IDENT".
+/ACTION.
+
+# ── char_type(ch) ─────────────────────────────────────────
+ACTION char_type(ch(TX)),
+  IF ch IS "+", GIVE "PLUS". /IF.
+  IF ch IS "-", GIVE "MINUS". /IF.
+  IF ch IS "*", GIVE "STAR". /IF.
+  IF ch IS "/", GIVE "SLASH". /IF.
+  IF ch IS "%", GIVE "PERCENT". /IF.
+  IF ch IS "=", GIVE "EQUAL". /IF.
+  IF ch IS ":", GIVE "COLON". /IF.
+  IF ch IS "<", GIVE "LESS". /IF.
+  IF ch IS ">", GIVE "GREATER". /IF.
+  IF ch IS "!", GIVE "BANG". /IF.
+  IF ch IS "?", GIVE "QUESTION". /IF.
+  IF ch IS "&", GIVE "AMPERSAND". /IF.
+  IF ch IS "|", GIVE "PIPE". /IF.
+  IF ch IS ";", GIVE "SEMI". /IF.
+  IF ch IS "(", GIVE "LPAREN". /IF.
+  IF ch IS ")", GIVE "RPAREN". /IF.
+  IF ch IS "{", GIVE "LBRACE". /IF.
+  IF ch IS "}", GIVE "RBRACE". /IF.
+  IF ch IS "[", GIVE "LBRACKET". /IF.
+  IF ch IS "]", GIVE "RBRACKET". /IF.
+  IF ch IS ",", GIVE "COMMA". /IF.
+  IF ch IS ".", GIVE "DOT". /IF.
+  IF ch IS "_", GIVE "WILDCARD". /IF.
+  IF ch IS "#", GIVE "HASH". /IF.
+  GIVE "".
+/ACTION.
+
+# ── is_alnum(ch) ──────────────────────────────────────────
+ACTION is_alnum(ch(TX)),
+  IF ch GREATER THAN OR EQUAL "a" AND ch LESS THAN OR EQUAL "z", GIVE TRUE. /IF.
+  IF ch GREATER THAN OR EQUAL "A" AND ch LESS THAN OR EQUAL "Z", GIVE TRUE. /IF.
+  IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", GIVE TRUE. /IF.
+  IF ch IS "_", GIVE TRUE. /IF.
+  GIVE FALSE.
+/ACTION.
+
+# ── is_alpha_start(ch) ────────────────────────────────────
+ACTION is_alpha_start(ch(TX)),
+  IF ch GREATER THAN OR EQUAL "a" AND ch LESS THAN OR EQUAL "z", GIVE TRUE. /IF.
+  IF ch GREATER THAN OR EQUAL "A" AND ch LESS THAN OR EQUAL "Z", GIVE TRUE. /IF.
+  IF ch IS "_", GIVE TRUE. /IF.
+  GIVE FALSE.
+/ACTION.
+
+# ── match_ident_or_keyword(src, i, n) ─────────────────────
+ACTION match_ident_or_keyword(src(TX), i(NUM), n(NUM)),
+  CREATE wd(TX) TO "".
+  CREATE ni(NUM) TO i.
+  SEASON ni < n,
+    REAP ok FROM is_alnum, src[ni].
+    IF NOT ok, BREAK. /IF.
+    SET wd TO wd + src[ni].
+    SET ni TO ni + 1.
+  /SEASON.
+  GIVE [wd, ni].
+/ACTION.
+
+# ── match_number(src, i, n) ───────────────────────────────
+ACTION match_number(src(TX), i(NUM), n(NUM)),
+  CREATE num(TX) TO "".
+  CREATE ni(NUM) TO i.
+  SEASON ni < n AND src[ni] GREATER THAN OR EQUAL "0" AND src[ni] LESS THAN OR EQUAL "9",
+    SET num TO num + src[ni].
+    SET ni TO ni + 1.
+  /SEASON.
+  GIVE [num, ni].
+/ACTION.
+
+# ── match_string(src, i, n) ───────────────────────────────
+ACTION match_string(src(TX), i(NUM), n(NUM)),
+  CREATE val(TX) TO "".
+  CREATE si(NUM) TO i.
+  CREATE done(FACT) TO FALSE.
+  IF si < n AND src[si] IS "\"", SET si TO si + 1. /IF.
+  SEASON NOT done AND si < n,
+    IF src[si] IS "\"", SET done TO TRUE. /IF.
+    IF src[si] IS "\"", CONTINUE. /IF.
+    IF src[si] IS "\\", SET si TO si + 1. /IF.
+    IF si < n, SET val TO val + src[si]. /IF.
+    IF si < n, SET si TO si + 1. /IF.
+  /SEASON.
+  IF si < n AND src[si] IS "\"", SET si TO si + 1. /IF.
+  GIVE [val, si].
+/ACTION.
+
+# ── skip_comment(src, i, n) ───────────────────────────────
+ACTION skip_comment(src(TX), i(NUM), n(NUM)),
+  SEASON i < n AND src[i] ISNT "\n",
+    SET i TO i + 1.
+  /SEASON.
+  GIVE i.
+/ACTION.
+
+# ── scan_tokens(source) ───────────────────────────────────
+ACTION scan_tokens(src(TX)),
+  CREATE tokens(LIST) TO [].
+  CREATE i(NUM) TO 0.
+  CREATE n(NUM) TO LEN(src).
+
+  SEASON i < n,
+    CREATE ch(TX) TO src[i].
+
+    # Whitespace
+    IF ch IS " " OR ch IS "\t" OR ch IS "\r", SET i TO i + 1. /IF.
+    IF ch IS " " OR ch IS "\t" OR ch IS "\r", CONTINUE. /IF.
+
+    # Newline
+    IF ch IS "\n", SET i TO i + 1. /IF.
+    IF ch IS "\n", CONTINUE. /IF.
+
+    # Comment
+    IF ch IS "#", REAP si FROM skip_comment, src, i + 1, n. /IF.
+    IF ch IS "#", SET i TO si. /IF.
+    IF ch IS "#", CONTINUE. /IF.
+
+    # String literal
+    IF ch IS "\"", REAP si FROM match_string, src, i, n. /IF.
+    IF ch IS "\"", PUT ["STRING", si[0]] INTO tokens. /IF.
+    IF ch IS "\"", SET i TO si[1]. /IF.
+    IF ch IS "\"", CONTINUE. /IF.
+
+    # Depth marker N\  — check before Number (split into inline IFs due
+    # to JS parser limitation — multi-stmt IF bodies not handled).
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND src[i + 1] IS "\\",
+      REAP si FROM match_number, src, i, n. /IF.
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND src[i + 1] IS "\\",
+      PUT ["DEPTH", si[0]] INTO tokens. /IF.
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND src[i + 1] IS "\\",
+      SET i TO si[1] + 1. /IF.
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND src[i + 1] IS "\\" AND i < n AND src[i] IS " ",
+      SET i TO i + 1. /IF.
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND src[i + 1] IS "\\",
+      CONTINUE. /IF.
+
+    # Number
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", REAP si FROM match_number, src, i, n. /IF.
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", PUT ["NUMBER", si[0]] INTO tokens. /IF.
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", SET i TO si[1]. /IF.
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", CONTINUE. /IF.
+
+    # Identifier
+    REAP ok FROM is_alpha_start, ch.
+    IF ok, REAP si FROM match_ident_or_keyword, src, i, n. /IF.
+    IF ok, REAP tok_ty FROM keyword_to_type, si[0]. /IF.
+    IF ok, PUT [tok_ty, si[0]] INTO tokens. /IF.
+    IF ok, SET i TO si[1]. /IF.
+    IF ok, CONTINUE. /IF.
+
+    # DOT_DOT
+    IF ch IS "." AND i + 1 < n AND src[i + 1] IS ".", PUT ["DOT_DOT", ".."] INTO tokens. /IF.
+    IF ch IS "." AND i + 1 < n AND src[i + 1] IS ".", SET i TO i + 2. /IF.
+    IF ch IS "." AND i + 1 < n AND src[i + 1] IS ".", CONTINUE. /IF.
+
+    # ARROW
+    IF ch IS "-" AND i + 1 < n AND src[i + 1] IS ">", PUT ["ARROW", "->"] INTO tokens. /IF.
+    IF ch IS "-" AND i + 1 < n AND src[i + 1] IS ">", SET i TO i + 2. /IF.
+    IF ch IS "-" AND i + 1 < n AND src[i + 1] IS ">", CONTINUE. /IF.
+
+    # STAR_STAR
+    IF ch IS "*" AND i + 1 < n AND src[i + 1] IS "*", PUT ["STAR_STAR", "**"] INTO tokens. /IF.
+    IF ch IS "*" AND i + 1 < n AND src[i + 1] IS "*", SET i TO i + 2. /IF.
+    IF ch IS "*" AND i + 1 < n AND src[i + 1] IS "*", CONTINUE. /IF.
+
+    # Single-char
+    REAP tok_ty FROM char_type, ch.
+    IF tok_ty ISNT "", PUT [tok_ty, ch] INTO tokens. /IF.
+    IF tok_ty ISNT "", SET i TO i + 1. /IF.
+    IF tok_ty ISNT "", CONTINUE. /IF.
+
+    # Unknown
+    PUT ["ERROR", ch] INTO tokens.
+    SET i TO i + 1.
+  /SEASON.
+
+  PUT ["EOF", ""] INTO tokens.
+  GIVE tokens.
+/ACTION.

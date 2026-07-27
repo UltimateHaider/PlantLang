@@ -1,4 +1,4 @@
-# PlantLang Language Specification & Ecosystem v0.44.0
+# PlantLang Language Specification & Ecosystem v0.45.0
 
 **PlantLang** is a human-centric, prose-based programming language engineered for both high-level readability and native-level execution performance. It transforms "prose-like" syntax into highly optimized machine code via the LLVM compiler infrastructure.
 
@@ -62,7 +62,7 @@ Arenas are automatically reclaimed:
 
 ---
 
-## 3. Engineering Architecture (The v0.44.0 Stack)
+## 3. Engineering Architecture (The v0.45.0 Stack)
 The ecosystem is built on a modular, industrial-grade pipeline:
 
 1.  **Core Interpreter (Chloroplast Engine):**
@@ -170,7 +170,7 @@ PlantLang employs a state-of-the-art compilation chain:
 ---
 
 ## 6. QA & Quality Assurance
-The **v0.44.0** release is verified by an automated regression suite:
+The **v0.45.0** release is verified by an automated regression suite:
 * **~1000+ Total Tests** across 30+ test suites (LLVM backend, C codegen, Phase 1 LLVM primitives, parser migration, diagnostics, tokenizer, Phase 7—21, depth contract, matrix, dispatcher, runtime, parallel, security, cluster, geo-routing, distributed cycles, language ergonomics, distributed advanced, native net & governance).
 * **Native File I/O, Constant Folding & Type Infrastructure (v0.43.0)**: 81 tests covering file I/O (read/write/exists/delete), string manipulation (split/trim/index_of), AST constant folding (arithmetic/string/logical/comparison), CONST declarations, ENUM declarations, TYPE aliases, CodeWords file I/O directives, and tokenizer keyword recognition.
 * **Distributed Advanced (v0.40.0)**: 34 tests covering GeoTopologyManager RTT latency matrix and optimal node selection (locality affinity, cross-region latency > 10ms), StreamCompactor binary compression round-trip (85% reduction), geo-aware DistributedCycleEngine block execution with locality key, and ReplicaManager dynamic rebalancing on node join/leave with partition migration and replica healing.
@@ -375,6 +375,8 @@ The **v0.44.0** release is verified by an automated regression suite:
   - 34 new tests in `tests/v0.40.0_distributed.test.js` — all green
 
 ---
+
+*PlantLang v0.45.0 — Self-Hosting Compiler Pipeline (Stage 0). Stage 0 compiler driver (main.plant) reads source → tokenizes → parses → generates C → writes output. `get_cli_arg` FFI stub via `interpreter.js:_registerStdStubs` linked to `process.argv` through `cliArgs` from `chloroplast.js`. Full pipeline runs as `node chloroplast.js src/plantc/main.plant myapp.plant`. All 34/34 npm tests pass with zero regressions.*
 
 *PlantLang v0.44.0 — Algebraic Safety Types, Exhaustive MATCH, String Interpolation, Ranges, Slicing & Destructuring. Option/Result built-in types (Some/None, Ok/Err), ExhaustivenessChecker static pass, string interpolation with expression segments, range operator (a..b → [a..b)), slicing on arrays/strings, object/array destructuring (LET {x,y} / LET [h,t]), BinaryOp/UnaryOp structured nodes, MatchExpr value-yielding MATCH. 75 new tests. All green.*
 

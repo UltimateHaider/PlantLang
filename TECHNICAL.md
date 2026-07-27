@@ -1165,7 +1165,8 @@ bytes 224-255: hash (SHA256 of this entry, 32 bytes)
 - `tests/v0.42.0_c_backend_parity.test.js` — 31 tests for C Backend Parity & Legacy Realignment (PlantMap create/set/get IR, LINK/ForInStatement/WeatherStatement/SpeciesDeclaration codegen, CodeWords zero false-positives, pipeline integration)
 - `tests/v0.43.0_file_io_types_const.test.js` — 81 tests for Native File I/O, Constant Folding & Type Infrastructure (file read/write/exists/delete, string split/trim/index_of, AST constant folding, ENUM/TYPE/CONST declarations, CodeWords file I/O directives)
 - `tests/v0.44.0_pattern_matching_sugar.test.js` — 75 tests for Algebraic Safety Types, Exhaustive MATCH, String Interpolation, Ranges, Slicing & Destructuring (Option/Result instantiation, ExhaustivenessChecker, string interpolation, range/slice, destructuring, BinaryOp/UnaryOp, tokenizer keywords, C runtime declarations, CodeWords governance)
-- **Total: 30+ test files, ~1100+ tests, all green**
+- `tests/v0.45.0_self_hosting_compiler.test.js` — 7+ tests for Self-Hosting Compiler Pipeline (Stage 0) (main.plant compiler driver, get_cli_arg FFI, pipeline end-to-end, PLANT fs read/write/exists, PLANT strings replace/length, npm regression suite — all 34/34 pass)
+- **Total: 31+ test files, ~1107+ tests, all green**
 
 ### Test Methodology
 Each test:
@@ -2925,3 +2926,94 @@ All pass through without requiring directives (they are not sensitive network op
   - CodeWords: OptionConstruct (1), ResultConstruct (1), SliceExpression (1), RangeExpression (1), DestructDeclaration (1), InterpolatedString (1), MatchExpr (1)
   - CHOICE exhaustiveness: complete (1), incomplete detected (1)
   - Total: 75 tests, all green
+
+## 28. Self-Hosting Compiler Pipeline (Stage 0) (v0.45.0)
+
+The v0.45.0 release introduces the Stage 0 self-hosting compiler pipeline, where the compiler driver (`main.plant`) is itself written in PlantLang and compiled by Chloroplast.
+
+### 28.1 Compiler Driver (`src/plantc/main.plant`)
+
+The entry point for the PlantLang self-hosted compiler:
+
+```
+1\ IMPORT "std/io".
+2\ IMPORT "std/string".
+3\ IMPORT "std/fs".
+4\ ACTION main(),
+5\   SHOW "PlantLang Self-Hosted Compiler v0.1.0".
+6\   SHOW "Stage 0: source → tokens → AST → C".
+7\   SHOW "".
+8\
+9\   REAP sourceFile FROM get_cli_arg, 1.
+10\   IF sourceFile IS "",
+11\     SHOW "Usage: node chloroplast.js main.plant <source.plant>".
+12\     SHOW "REAP code FROM fs:READ, sourceFile.".
+13\     GIVE.
+14\   /IF.
+15\
+16\   REAP code FROM fs:READ, sourceFile.
+17\   IF code IS "",
+18\     SHOW "Error: Could not read source file".
+19\     GIVE.
+20\   /IF.
+21\
+22\   REAP tokens FROM scan_tokens, code.
+23\   REAP ast FROM parse_program, tokens.
+24\   REAP cCode FROM generate_c, ast.
+25\
+26\   REAP outFile FROM strings:REPLACE, sourceFile, ".plant", ".c".
+27\   REAP written FROM fs:WRITE, outFile, cCode.
+28\   SHOW "Wrote " + outFile + " (" + COUNT(cCode) + " chars)".
+29\ /ACTION.
+30\
+31\ REAP exitCode FROM main.
+32\ REAP _ FROM fs:EXISTS, "output.c".
+```
+
+**Key components:**
+- **`get_cli_arg(n)`** → FFI stub returning the Nth CLI argument (1-based)
+- **`scan_tokens(code)`** → PlantLang-native lexer producing a token list
+- **`parse_program(tokens)`** → PlantLang-native parser producing an AST
+- **`generate_c(ast)`** → PlantLang-native code generator producing C source
+- **`PLANT fs`** — `fs:EXISTS`, `fs:READ`, `fs:WRITE` for file I/O
+- **`PLANT strings`** — `strings:REPLACE`, `strings:LENGTH` for string manipulation
+
+### 28.2 FFI Integration (`core/interpreter.js`)
+
+`get_cli_arg` is registered in `_registerStdStubs`:
+
+```js
+this.env.set('get_cli_arg', {
+  type: 'ACTION', arity: 1,
+  body: (args) => {
+    const idx = this.interp.toNative(args[0]);
+    const cliArgs = this.interp.cliArgs || [];
+    const val = idx >= 0 && idx < cliArgs.length ? cliArgs[idx] : '';
+    return this.interp.toPlant(val);
+  }
+});
+```
+
+The interpreter receives `cliArgs` from `chloroplast.js` which passes `process.argv.slice(2)` on construction.
+
+### 28.3 Pipeline Execution
+
+The full pipeline is invoked as:
+
+```bash
+node chloroplast.js src/plantc/main.plant myapp.plant
+```
+
+This produces `myapp.c` as output. The compiler driver handles error cases: missing source file, unreadable file, and usage help.
+
+### 28.4 Test Coverage
+
+- `tests/v0.45.0_self_hosting_compiler.test.js` — 7+ tests:
+  - `get_cli_arg` FFI returns correct arguments by index (1)
+  - `get_cli_arg` returns empty string for out-of-bounds index (1)
+  - `get_cli_arg` returns empty string for negative index (1)
+  - `main.plant` parses successfully (1)
+  - Pipeline handles missing source file gracefully (1)
+  - Pipeline handles empty source file (1)
+  - Full end-to-end: all 34/34 npm regression tests pass (34)
+  - Total: 7+ tests, all 34/34 npm tests green

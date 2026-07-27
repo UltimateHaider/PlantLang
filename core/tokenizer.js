@@ -94,7 +94,7 @@ function tokenize(source) {
   function tryConsumeDepthMarker() {
     const startCol = col;
     const m = source.slice(i).match(/^(\d+)\\/);
-    if (!m) return;
+    if (!m) { currentDepth = 0; return; }
     const depthDigits = m[1];
     const fullMatch = m[0]; // e.g. "2\"
     const depthLine = line, depthCol = col;
@@ -136,10 +136,10 @@ function tokenize(source) {
       const interpSegments = [];
       while (i < n && peekChar() !== '"') {
         if (peekChar() === '\n') { advance(); value += '\n'; continue; }
-        // Escaped brace \{ or \} -> literal brace
-        if (peekChar() === '\\' && (peekChar(1) === '{' || peekChar(1) === '}')) {
+        // Escaped characters: \\, \", \{, \}
+        if (peekChar() === '\\' && (peekChar(1) === '"' || peekChar(1) === '{' || peekChar(1) === '}' || peekChar(1) === '\\')) {
           advance(); // skip backslash
-          value += advance(); // add the brace
+          value += advance(); // add the escaped character
           continue;
         }
         // Interpolation start {

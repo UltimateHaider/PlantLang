@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.44.0
+# 🌿 PlantLang — Chloroplast v0.45.0
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -920,7 +920,7 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.44.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, lock-free telemetry, zero-trust security, a cluster layer, a geo-routing governance engine, distributed cycles, geo-aware topology, stream compaction, dynamic replica rebalancing, and an integrated testing framework with native networking:
+Chloroplast v0.45.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, lock-free telemetry, zero-trust security, a cluster layer, a geo-routing governance engine, distributed cycles, geo-aware topology, stream compaction, dynamic replica rebalancing, and an integrated testing framework with native networking:
 
 ```
 Source (.plnt)

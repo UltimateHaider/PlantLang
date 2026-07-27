@@ -1,5 +1,19 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.45.0 — 2026
+
+### New: Self-Hosting Compiler Pipeline (Stage 0)
+- **`src/plantc/main.plant`** — Stage 0 compiler driver written in PlantLang:
+  - Reads source file → tokenizes via `scan_tokens` → parses via `parse_program` → generates C via `generate_c` → writes output
+  - File I/O via `PLANT fs` (`fs:EXISTS`, `fs:READ`, `fs:WRITE`) and `PLANT strings` (`strings:REPLACE`, `strings:LENGTH`)
+  - Runs as: `node chloroplast.js src/plantc/main.plant myapp.plant`
+- **`get_cli_arg` FFI** (`core/interpreter.js`):
+  - Registered in `_registerStdStubs` as `get_cli_arg` returning Nth CLI argument
+  - Linked to `process.argv` via `cliArgs` parameter from `chloroplast.js`
+- **Pipeline Integration**:
+  - `chloroplast.js` passes `cliArgs` array to interpreter constructor
+  - All 34/34 npm tests pass with zero regressions
+
 ## v0.44.0 — 2026
 
 ### New: Algebraic Safety Types, Exhaustive MATCH, String Interpolation, Ranges, Slicing & Destructuring

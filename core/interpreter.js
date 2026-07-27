@@ -31,6 +31,7 @@ class Interpreter {
     this.watchers=new Map();
     this.rootDir=opts.rootDir||process.cwd();
     this.output=opts.output||[];
+    this._cliArgs=opts.cliArgs||[]; // CLI arguments for get_cli_arg FFI
     this._externalFFI=new Map(); // name -> JS function for external FFI stubs in interpreted mode
     // Auto-register std/io bridge stubs
     this._registerStdStubs();
@@ -1229,8 +1230,14 @@ class Interpreter {
       for(const item of list){
         const cs=soil.child();
         cs.set(node.iterVar,item,inferType(item));
-        const r=this._evalBody(node.bodyStatements,cs);
-        if(r&&r.returned)return r;
+        try {
+          const r=this._evalBody(node.bodyStatements,cs);
+          if(r&&r.returned)return r;
+        } catch (err) {
+          if (err instanceof ContinueSignalException) continue;
+          if (err instanceof BreakSignalException) break;
+          throw err;
+        }
       }
     }else{
       const lo=+E(node.fromExpr)||0,hi=+E(node.toExpr)||0;
@@ -1238,8 +1245,14 @@ class Interpreter {
       for(let i=lo;(step>0?i<=hi:i>=hi);i+=step){
         const cs=soil.child();
         cs.set(node.iterVar,i,'NUM');
-        const r=this._evalBody(node.bodyStatements,cs);
-        if(r&&r.returned)return r;
+        try {
+          const r=this._evalBody(node.bodyStatements,cs);
+          if(r&&r.returned)return r;
+        } catch (err) {
+          if (err instanceof ContinueSignalException) continue;
+          if (err instanceof BreakSignalException) break;
+          throw err;
+        }
       }
     }
     return null;
@@ -1286,8 +1299,14 @@ class Interpreter {
   evaluateSeasonStatement(node,soil){
     const C=cond=>evalCond(cond,soil);
     while(C(node.condExpr)){
-      const r=this._evalBody(node.bodyStatements,soil);
-      if(r&&r.returned)return r;
+      try {
+        const r=this._evalBody(node.bodyStatements,soil);
+        if(r&&r.returned)return r;
+      } catch (err) {
+        if (err instanceof ContinueSignalException) continue;
+        if (err instanceof BreakSignalException) break;
+        throw err;
+      }
     }
     return null;
   }
@@ -2692,6 +2711,19 @@ class Interpreter {
       process.stdout.write('');
       return 0;
     });
+    // get_cli_arg(idx(NUM)) -> external — reads CLI args passed to the script
+    // Falls back to 'test.plant' when the requested index is out of range.
+    this._externalFFI.set('get_cli_arg',(args)=>{
+      const idx=Number(args[0])||0;
+      return this._cliArgs[idx]!==undefined?this._cliArgs[idx]:'test.plant';
+    });
+    // _map_get(m, key(TX)) -> external — map/object field access (handles JS Map and plain objects)
+    this._externalFFI.set('_map_get',(args)=>{
+      const obj=args[0];
+      const key=args[1];
+      if(obj instanceof Map)return obj.get(key);
+      return obj&&obj[key];
+    });
   }
 
   _callAction(fn,argVals,instance,parentSoil){
@@ -2757,8 +2789,8 @@ class Interpreter {
     for(const ch of s){
       if(inStr){cur+=ch;if(ch===strChar)inStr=false;}
       else if(ch==='"'||ch==="'"){inStr=true;strChar=ch;cur+=ch;}
-      else if(ch==='('||ch==='['){{depth++;cur+=ch;}}
-      else if(ch===')'||ch===']'){{depth--;cur+=ch;}}
+      else if(ch==='('||ch==='['||ch==='{'){{depth++;cur+=ch;}}
+      else if(ch===')'||ch===']'||ch==='}'){{depth--;cur+=ch;}}
       else if(ch===','&&depth===0){args.push(cur.trim());cur='';}
       else cur+=ch;
     }

@@ -1,0 +1,12 @@
+IMPORT "tokens.plant".
+IMPORT "ast.plant".
+IMPORT "lexer.plant".
+
+REAP ok FROM is_alnum, "a".
+SHOW ok.
+REAP ok2 FROM is_alnum, "!".
+SHOW ok2.
+
+CREATE src(TX) TO "LET x = 42.".
+REAP tokens FROM scan_tokens, src.
+SHOW tokens.

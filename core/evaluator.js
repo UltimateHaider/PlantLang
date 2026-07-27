@@ -4,14 +4,18 @@ const {storm,inferType,coerce}=require('./runtime');
 function evalExpr(expr,soil){
   if(expr===undefined||expr===null)return null;
   expr=String(expr).trim();
-  if(/^"[^"]*"$/.test(expr)||/^'[^']*'$/.test(expr))return expr.slice(1,-1);
+  let m;
+  if(/^"[^"]*"$/.test(expr)||/^'[^']*'$/.test(expr)){
+    let s=expr.slice(1,-1);
+    s=s.replace(/\\(.)/g,(m,ch)=>{if(ch==='n')return'\n';if(ch==='t')return'\t';if(ch==='r')return'\r';if(ch==='"')return'"';if(ch==="'")return"'";if(ch==='\\')return'\\';return m;});
+    return s;
+  }
   if(expr==='TRUE'||expr==='true')return true;
   if(expr==='FALSE'||expr==='false')return false;
   if(/^FACT:TRUE$/i.test(expr))return true;
   if(/^FACT:FALSE$/i.test(expr))return false;
   if(expr==='NULL'||expr==='VOID')return null;
   if(!isNaN(Number(expr))&&expr!=='')return Number(expr);
-  let m;
   if(m=expr.match(/^PICK\s+\((.+?)\)\s+"([^"]*)"\s+"([^"]*)"$/i))return evalCond(m[1],soil)?m[2]:m[3];
   if(m=expr.match(/^PICK\s+\((.+?)\)\s+(\S+)\s+(\S+)$/i))return evalCond(m[1],soil)?coerce(m[2]):coerce(m[3]);
   if(m=expr.match(/^COUNT\s+(\w+)$/i)){const e=soil.get(m[1]);if(!e)return 0;return Array.isArray(e.value)?e.value.length:(e.value&&typeof e.value==='object'?Object.keys(e.value).length:1);}
@@ -26,7 +30,6 @@ function evalExpr(expr,soil){
   if(m=expr.match(/^SELF:(\w+)$/i)){
     const self=soil.get('__self');
     if(self&&self.value&&self.value[m[1]]!==undefined)return self.value[m[1]];
-    // fallback to scoped SELF:prop entry
     const scoped=soil.get('SELF:'+m[1]);
     return scoped?scoped.value:null;
   }
@@ -60,7 +63,6 @@ function evalExpr(expr,soil){
 function evalCompound(expr,soil){
   // Pre-resolve chained obj:"k1":"k2":"k3" quoted MAP access in compound expressions
   expr=expr.replace(/(\w+)(?::"[^"]*")+/g,(full)=>{
-    // parse out variable name and chain of keys
     const idM=full.match(/^(\w+)/);
     if(!idM)return full;
     const e=soil.get(idM[1]);
@@ -153,7 +155,7 @@ function evalCond(expr,soil){
   if(m=expr.match(/^TEST\s+(\w+)$/i)){const e=soil.get(m[1]);if(!e)return false;return e.value!==null&&e.value!==''&&e.value!==false&&e.value!==0;}
   if(m=expr.match(/^(.+?)\s+BETWEEN\s+\(([^,]+),\s*([^)]+)\)$/i)){const v=+evalExpr(m[1],soil);return v>=+evalExpr(m[2],soil)&&v<=+evalExpr(m[3],soil);}
   if(m=expr.match(/^(.+?)\s+IS\s+BETWEEN\s+(\S+)\s+(\S+)$/i)){const v=+evalExpr(m[1],soil);return v>=+evalExpr(m[2],soil)&&v<=+evalExpr(m[3],soil);}
-  if(m=expr.match(/^(.+?)\s+(GREATER THAN OR EQUAL|LESS THAN OR EQUAL|GREATER THAN|LESS THAN|IS NOT|IS|>=|<=|>|<|==|!=)\s+(.+)$/i))return cmpOp(evalExpr(m[1],soil),m[2].toUpperCase().trim(),evalExpr(m[3],soil));
+   if(m=expr.match(/^(.+?)\s+(GREATER THAN OR EQUAL|LESS THAN OR EQUAL|GREATER THAN|LESS THAN|ISNT|IS NOT|IS|>=|<=|>|<|==|!=)\s+(.+)$/i))return cmpOp(evalExpr(m[1],soil),m[2].toUpperCase().trim(),evalExpr(m[3],soil));
   return !!evalExpr(expr,soil);
 }
 
@@ -163,7 +165,7 @@ function cmpOp(lv,op,rv){
     case'LESS THAN OR EQUAL':case'<=':return lv<=rv;
     case'GREATER THAN':case'>':return lv>rv;
     case'LESS THAN':case'<':return lv<rv;
-    case'IS NOT':case'!=':return lv!=rv;
+    case'ISNT':case'IS NOT':case'!=':return lv!=rv;
     case'IS':case'==':return lv==rv;
     default:return false;
   }

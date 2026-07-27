@@ -29,7 +29,7 @@ function runFile(filePath,opts={}){
   const source=fs.readFileSync(filePath,'utf8');
   const mission=opts.mission||'SAFE';
   if(opts.verbose)console.log(`${C.gray}  mission: ${mission}  |  ${filePath}${C.reset}\n`);
-  const interp=new Interpreter({mission,rootDir:path.dirname(path.resolve(filePath)),emit:(text,type)=>printLine(text,type)});
+  const interp=new Interpreter({mission,rootDir:path.dirname(path.resolve(filePath)),emit:(text,type)=>printLine(text,type),cliArgs:opts.cliArgs||[]});
   const t0=Date.now();
   try{
     interp.runSource(source);
@@ -319,7 +319,7 @@ function main(){
   const mission=mi!==-1?args[mi+1].toUpperCase():'SAFE';
   const verbose=args.includes('--verbose')||args.includes('-v');
   switch(cmd){
-    case'run':{const file=args[1];if(!file){console.error(`${C.red}✕ specify a .plnt file${C.reset}`);process.exit(1);}runFile(file,{mission,verbose});break;}
+    case'run':{const file=args[1];if(!file){console.error(`${C.red}✕ specify a .plnt file${C.reset}`);process.exit(1);}const cliArgs=args.slice(2).filter(a=>!a.startsWith('--'));runFile(file,{mission,verbose,cliArgs});break;}
     case'verify':{const file=args[1];if(!file){console.error(`${C.red}✕ specify a .plnt file${C.reset}`);process.exit(1);}verifyFile(file,{mission});break;}
     case'repl':startREPL({mission});break;
     case'check':{const file=args[1];if(!file){console.error(`${C.red}✕ specify a .plnt file${C.reset}`);process.exit(1);}checkFile(file);break;}
@@ -336,7 +336,7 @@ function main(){
       break;
     }
     default:
-      if(cmd.endsWith('.plnt')||fs.existsSync(cmd))runFile(cmd,{mission,verbose});
+      if(cmd.endsWith('.plnt')||fs.existsSync(cmd)){const cliArgs=args.slice(1).filter(a=>!a.startsWith('--'));runFile(cmd,{mission,verbose,cliArgs});}
       else{console.error(`${C.red}✕ unknown command: ${cmd}${C.reset}`);process.exit(1);}
   }
 }

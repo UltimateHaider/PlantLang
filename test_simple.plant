@@ -1,0 +1,14 @@
+IMPORT "src/plantc/tokens.plant".
+IMPORT "src/plantc/lexer.plant".
+IMPORT "src/plantc/parser.plant".
+
+CREATE src(TX) TO "SHOW 42.".
+REAP toks FROM scan_tokens, src.
+SHOW toks.
+
+SHOW "test collect_value from pos 1".
+REAP vpair FROM collect_value, toks, 1.
+SHOW "vpair=".
+SHOW vpair.
+
+SHOW "DONE".

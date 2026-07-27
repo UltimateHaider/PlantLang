@@ -1,4 +1,33 @@
-# PlantLang Roadmap: v0.44.0+ (Completed & Future)
+# PlantLang Roadmap: v0.45.0+ (Completed & Future)
+
+## ✅ Version v0.45.0: Self-Hosting Compiler Pipeline (Stage 0)
+
+**Status:** ✅ Completed
+
+### Scope & Engineering Implementation
+
+#### Stage 0 Compiler Driver (`src/plantc/main.plant`)
+- Full compiler pipeline written in PlantLang: reads source → `scan_tokens` → `parse_program` → `generate_c` → writes output
+- Invoked as: `node chloroplast.js src/plantc/main.plant myapp.plant`
+- File I/O via `PLANT fs` (`fs:EXISTS`, `fs:READ`, `fs:WRITE`)
+- String manipulation via `PLANT strings` (`strings:REPLACE`, `strings:LENGTH`)
+- Error handling: missing source file, unreadable file, usage help
+
+#### `get_cli_arg` FFI
+- Registered in `core/interpreter.js:_registerStdStubs` as a standard stub
+- Returns Nth CLI argument (1-based); empty string for invalid index
+- Linked to `process.argv` via `cliArgs` parameter from `chloroplast.js`
+
+#### Pipeline Integration (`chloroplast.js`)
+- Interpreter constructor accepts `cliArgs` array parameter
+- Full end-to-end pipeline runs inside Chloroplast, compiling PlantLang source to C output
+- All 34/34 npm regression tests pass with no regressions
+
+#### Test Coverage
+- `tests/v0.45.0_self_hosting_compiler.test.js` — 7+ tests covering FFI and pipeline
+- 34/34 npm regression tests pass
+
+---
 
 ## ✅ Version v0.44.0: Algebraic Safety Types, Exhaustive MATCH, String Interpolation, Ranges, Slicing & Destructuring
 
@@ -515,8 +544,11 @@ This release establishes the foundation for a second compilation pipeline: Plant
 | ✅ **v0.42.0** | **C Backend Parity & Legacy Realignment** — PlantMap, PlantIterator, domain primitives, LLVM codegen for MAP/FOR...IN/WEATHER/SPECIES | ✅ Q4 2029 |
 | ✅ **v0.43.0** | **Native File I/O, Constant Folding & Type Infrastructure** — plant_file_read/write/exists/delete, plant_string_split/trim/index_of, ASTConstantFolder pass (arithmetic/string/logical folding), ENUM declarations, TYPE aliases, CONST declarations, CodeWords file I/O directives | ✅ Q1 2030 |
 | ✅ **v0.44.0** | **Algebraic Safety Types, Exhaustive MATCH, String Interpolation, Ranges, Slicing & Destructuring** — Option/Result built-in types, ExhaustivenessChecker pass, string interpolation `"text {expr}"`, range `a..b` and slice `arr[x:y]` operators, `LET {x,y}=p` and `LET [h,t]=list` destructuring | ✅ Q2 2030 |
+| ✅ **v0.45.0** | **Self-Hosting Compiler Pipeline (Stage 0)** — Stage 0 compiler driver in PlantLang (main.plant), `get_cli_arg` FFI via interpreter.js, PLANT fs/strings for file I/O, end-to-end pipeline: source→tokens→AST→C output | ✅ Q3 2030 |
 
 ---
+
+*PlantLang v0.45.0: Self-Hosting Compiler Pipeline (Stage 0). Stage 0 compiler driver (src/plantc/main.plant) reads source → tokenizes → parses → generates C → writes output. get_cli_arg FFI stub via interpreter.js:_registerStdStubs linked to process.argv through cliArgs from chloroplast.js. Full pipeline runs as node chloroplast.js src/plantc/main.plant myapp.plant. All 34/34 npm tests pass with zero regressions.*
 
 *PlantLang v0.44.0: Algebraic Safety Types, Exhaustive MATCH, String Interpolation, Ranges, Slicing & Destructuring. Option/Result built-in types (Some/None, Ok/Err), ExhaustivenessChecker static pass (compiler errors on incomplete MATCH), string interpolation with expression segments, range operator (a..b → [a..b)), slicing on arrays/strings, object/array destructuring (LET {x,y} / LET [h,t]), BinaryOp/UnaryOp structured nodes, MatchExpr value-yielding MATCH. 75 new tests. All green.*
 

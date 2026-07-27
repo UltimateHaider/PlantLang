@@ -1,0 +1,18 @@
+IMPORT "ast.plant".
+IMPORT "codegen_c.plant".
+
+CREATE test_ast(LIST) TO [
+  { "type": "create_stmt", "target": "x", "var_type": "NUM", "value": "42" },
+  { "type": "set_stmt", "target": "x", "value": "x + 1" }
+].
+
+REAP n0 FROM _map_get, test_ast, 0.
+SHOW n0.
+REAP t0 FROM _map_get, n0, "type".
+SHOW t0.
+REAP target0 FROM _map_get, n0, "target".
+SHOW target0.
+REAP vtype0 FROM _map_get, n0, "var_type".
+SHOW vtype0.
+REAP val0 FROM _map_get, n0, "value".
+SHOW val0.

@@ -1,0 +1,22 @@
+IMPORT "ast.plant".
+IMPORT "tokens.plant".
+IMPORT "codegen_c.plant".
+
+REAP r1 FROM translate_expr, "x IS 5".
+SHOW r1.
+REAP r2 FROM translate_expr, "a AND b AND c".
+SHOW r2.
+REAP r3 FROM translate_expr, "NOT x".
+SHOW r3.
+REAP r4 FROM translate_expr, "x GREATER THAN 10".
+SHOW r4.
+REAP r5 FROM translate_expr, "COUNT tokens".
+SHOW r5.
+REAP r6 FROM translate_expr, "i < COUNT bd".
+SHOW r6.
+REAP r7 FROM translate_expr, "LEN(name)".
+SHOW r7.
+REAP r8 FROM translate_expr, "TRUE".
+SHOW r8.
+REAP r9 FROM translate_expr, "a ISNT b".
+SHOW r9.

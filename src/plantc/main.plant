@@ -1,0 +1,52 @@
+IMPORT "tokens.plant".
+IMPORT "ast.plant".
+IMPORT "lexer.plant".
+IMPORT "parser.plant".
+IMPORT "codegen_c.plant".
+
+PLANT fs.
+PLANT strings.
+
+# ── get_cli_arg — FFI external stub ─────────────────────────
+# Linked to process.argv in the JS runtime.
+# Falls back to "test.plant" when no argument is provided.
+
+ACTION get_cli_arg(idx(NUM)) -> external.
+
+# ═══════════════════════════════════════════════════════════
+#  Compiler Pipeline — Stage 0 self-hosting driver
+# ═══════════════════════════════════════════════════════════
+
+# 1. Source file path (default: test.plant)
+REAP source_path FROM get_cli_arg, 0.
+SHOW "input: " + source_path.
+
+# 2. Validate
+REAP exists FROM fs:EXISTS, source_path.
+IF NOT exists,
+  SHOW "Error: file not found — " + source_path.
+  CALM.
+/IF.
+
+# 3. Read
+REAP source_text FROM fs:READ, source_path.
+
+# 4. Tokenize
+SHOW "tokenizing...".
+REAP tokens FROM scan_tokens, source_text.
+
+# 5. Parse
+SHOW "parsing...".
+REAP program_ast FROM parse_program, tokens.
+REAP body FROM _map_get, program_ast, "body".
+
+# 6. Code generate
+SHOW "generating C...".
+REAP c_code FROM generate_c, body.
+
+# 7. Write
+REAP out_path FROM strings:REPLACE, source_path, ".plant", ".c".
+REAP written FROM fs:WRITE, out_path, c_code.
+REAP c_len FROM strings:LENGTH, c_code.
+SHOW "output: " + c_len + " bytes to " + out_path.
+CALM.
