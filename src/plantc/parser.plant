@@ -248,6 +248,12 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM)),
   REAP p5 FROM _second, act_pair.
   CREATE args(LIST) TO [].
   SEASON TRUE,
+    REAP tok0 FROM peek, tokens, p5.
+    REAP lx0 FROM tok_lex, tok0.
+    IF lx0 IS ",",
+      REAP com0 FROM consume, tokens, p5.
+      REAP p5 FROM _second, com0.
+    /IF.
     REAP is_eof_flag FROM is_eof, tokens, p5.
     IF is_eof_flag,
       GIVE [{ "type": "reap_stmt", "target": var_name, "action": act_name, "args": args }, p5].

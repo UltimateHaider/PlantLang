@@ -130,6 +130,13 @@ PLANT strings.
 3\    REAP val FROM _map_get, node, "value".
 3\    REAP cval FROM translate_expr, val.
 3\    REAP isel FROM indent_str, indent.
+3\    REAP has_ops FROM strings:REPLACE, cval, " + ", "".
+3\    REAP has_ops FROM strings:REPLACE, has_ops, " == ", "".
+3\    REAP has_ops FROM strings:REPLACE, has_ops, " && ", "".
+3\    REAP has_ops FROM strings:REPLACE, has_ops, " || ", "".
+3\    IF has_ops IS cval,
+4\      SET cval TO "\"" + cval + "\"".
+3\    /IF.
 3\    GIVE isel + "  plant_print(" + cval + ");\n".
 2\  /IF.
 2\
@@ -385,12 +392,18 @@ PLANT strings.
 1\ACTION generate_c(ast(LIST)),
 2\  CREATE header(TX) TO "#include <plant_runtime.h>\n#include <string.h>\n\n".
 2\  CREATE body_code(TX) TO "".
+2\  CREATE has_main(NUM) TO 0.
 2\  CREATE i(NUM) TO 0.
 2\  SEASON i < COUNT ast,
 3\    REAP node_el FROM _map_get, ast, i.
+3\    REAP ntype FROM _map_get, node_el, "type".
+3\    IF ntype IS "action_decl", SET has_main TO 1. /IF.
 3\    REAP node_code FROM generate_node, node_el, 0.
 3\    SET body_code TO body_code + node_code.
 3\    SET i TO i + 1.
 2\  /SEASON.
+2\  IF has_main IS 0,
+3\    SET body_code TO "int main() {\n" + body_code + "  return 0;\n}\n".
+2\  /IF.
 2\  GIVE header + body_code.
 1\/ACTION.
