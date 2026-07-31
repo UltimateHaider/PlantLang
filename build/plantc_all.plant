@@ -1,0 +1,1756 @@
+# ═══════════════════════════════════════════════════════════════
+#  src/plantc/lexer.plant — Lexical analyzer for the
+#  self-hosting PlantLang compiler.
+# ═══════════════════════════════════════════════════════════════
+
+# ── is_keyword(word) ──────────────────────────────────────
+ACTION is_keyword(wrd(TX)),
+  IF wrd IS "LET", GIVE TRUE. /IF.
+  IF wrd IS "CREATE", GIVE TRUE. /IF.
+  IF wrd IS "MATCH", GIVE TRUE. /IF.
+  IF wrd IS "IF", GIVE TRUE. /IF.
+  IF wrd IS "ELSE", GIVE TRUE. /IF.
+  IF wrd IS "LOOP", GIVE TRUE. /IF.
+  IF wrd IS "RETURN", GIVE TRUE. /IF.
+  IF wrd IS "TYPE", GIVE TRUE. /IF.
+  IF wrd IS "SHOW", GIVE TRUE. /IF.
+  IF wrd IS "ACTION", GIVE TRUE. /IF.
+  IF wrd IS "REAP", GIVE TRUE. /IF.
+  IF wrd IS "GIVE", GIVE TRUE. /IF.
+  IF wrd IS "SET", GIVE TRUE. /IF.
+  IF wrd IS "PUT", GIVE TRUE. /IF.
+  IF wrd IS "TAKE", GIVE TRUE. /IF.
+  IF wrd IS "FOR", GIVE TRUE. /IF.
+  IF wrd IS "CYCLE", GIVE TRUE. /IF.
+  IF wrd IS "SEASON", GIVE TRUE. /IF.
+  IF wrd IS "WEATHER", GIVE TRUE. /IF.
+  IF wrd IS "SHELTER", GIVE TRUE. /IF.
+  IF wrd IS "CALM", GIVE TRUE. /IF.
+  IF wrd IS "AND", GIVE TRUE. /IF.
+  IF wrd IS "OR", GIVE TRUE. /IF.
+  IF wrd IS "NOT", GIVE TRUE. /IF.
+  IF wrd IS "IS", GIVE TRUE. /IF.
+  IF wrd IS "TRUE", GIVE TRUE. /IF.
+  IF wrd IS "FALSE", GIVE TRUE. /IF.
+  IF wrd IS "TO", GIVE TRUE. /IF.
+  IF wrd IS "FROM", GIVE TRUE. /IF.
+  IF wrd IS "AS", GIVE TRUE. /IF.
+  IF wrd IS "IN", GIVE TRUE. /IF.
+  IF wrd IS "SPLIT", GIVE TRUE. /IF.
+  IF wrd IS "JOIN", GIVE TRUE. /IF.
+  IF wrd IS "ENUM", GIVE TRUE. /IF.
+  IF wrd IS "CONST", GIVE TRUE. /IF.
+  IF wrd IS "FUNCTION", GIVE TRUE. /IF.
+  IF wrd IS "IMPORT", GIVE TRUE. /IF.
+  IF wrd IS "OPTION", GIVE TRUE. /IF.
+  IF wrd IS "RESULT", GIVE TRUE. /IF.
+  IF wrd IS "GREATER", GIVE TRUE. /IF.
+  IF wrd IS "LESS", GIVE TRUE. /IF.
+  IF wrd IS "THAN", GIVE TRUE. /IF.
+  IF wrd IS "COUNT", GIVE TRUE. /IF.
+  IF wrd IS "FIRST", GIVE TRUE. /IF.
+  IF wrd IS "LAST", GIVE TRUE. /IF.
+  IF wrd IS "SUM", GIVE TRUE. /IF.
+  IF wrd IS "NULL", GIVE TRUE. /IF.
+  IF wrd IS "ISNT", GIVE TRUE. /IF.
+  IF wrd IS "TEST", GIVE TRUE. /IF.
+  IF wrd IS "BREAK", GIVE TRUE. /IF.
+  IF wrd IS "CONTINUE", GIVE TRUE. /IF.
+  IF wrd IS "INTO", GIVE TRUE. /IF.
+  GIVE FALSE.
+/ACTION.
+
+# ── keyword_to_type(word) ─────────────────────────────────
+ACTION keyword_to_type(wrd(TX)),
+  IF wrd IS "LET", GIVE "LET". /IF.
+  IF wrd IS "CREATE", GIVE "CREATE". /IF.
+  IF wrd IS "MATCH", GIVE "MATCH". /IF.
+  IF wrd IS "IF", GIVE "IF". /IF.
+  IF wrd IS "ELSE", GIVE "ELSE". /IF.
+  IF wrd IS "LOOP", GIVE "LOOP". /IF.
+  IF wrd IS "RETURN", GIVE "RETURN". /IF.
+  IF wrd IS "TYPE", GIVE "TYPE". /IF.
+  IF wrd IS "SHOW", GIVE "SHOW". /IF.
+  IF wrd IS "ACTION", GIVE "ACTION". /IF.
+  IF wrd IS "REAP", GIVE "REAP". /IF.
+  IF wrd IS "GIVE", GIVE "GIVE". /IF.
+  IF wrd IS "SET", GIVE "SET". /IF.
+  IF wrd IS "PUT", GIVE "PUT". /IF.
+  IF wrd IS "TAKE", GIVE "TAKE". /IF.
+  IF wrd IS "FOR", GIVE "FOR". /IF.
+  IF wrd IS "CYCLE", GIVE "CYCLE". /IF.
+  IF wrd IS "SEASON", GIVE "SEASON". /IF.
+  IF wrd IS "WEATHER", GIVE "WEATHER". /IF.
+  IF wrd IS "SHELTER", GIVE "SHELTER". /IF.
+  IF wrd IS "CALM", GIVE "CALM". /IF.
+  IF wrd IS "AND", GIVE "AND". /IF.
+  IF wrd IS "OR", GIVE "OR". /IF.
+  IF wrd IS "NOT", GIVE "NOT". /IF.
+  IF wrd IS "IS", GIVE "IS". /IF.
+  IF wrd IS "TRUE", GIVE "TRUE". /IF.
+  IF wrd IS "FALSE", GIVE "FALSE". /IF.
+  IF wrd IS "TO", GIVE "TO". /IF.
+  IF wrd IS "FROM", GIVE "FROM". /IF.
+  IF wrd IS "AS", GIVE "AS". /IF.
+  IF wrd IS "IN", GIVE "IN". /IF.
+  IF wrd IS "SPLIT", GIVE "SPLIT". /IF.
+  IF wrd IS "JOIN", GIVE "JOIN". /IF.
+  IF wrd IS "ENUM", GIVE "ENUM". /IF.
+  IF wrd IS "CONST", GIVE "CONST". /IF.
+  IF wrd IS "FUNCTION", GIVE "FUNCTION". /IF.
+  IF wrd IS "IMPORT", GIVE "IMPORT". /IF.
+  IF wrd IS "OPTION", GIVE "OPTION". /IF.
+  IF wrd IS "RESULT", GIVE "RESULT". /IF.
+  IF wrd IS "GREATER", GIVE "GREATER". /IF.
+  IF wrd IS "LESS", GIVE "LESS". /IF.
+  IF wrd IS "THAN", GIVE "THAN". /IF.
+  IF wrd IS "COUNT", GIVE "COUNT". /IF.
+  IF wrd IS "FIRST", GIVE "FIRST". /IF.
+  IF wrd IS "LAST", GIVE "LAST". /IF.
+  IF wrd IS "SUM", GIVE "SUM". /IF.
+  IF wrd IS "NULL", GIVE "NULL". /IF.
+  IF wrd IS "ISNT", GIVE "ISNT". /IF.
+  IF wrd IS "TEST", GIVE "TEST". /IF.
+  IF wrd IS "BREAK", GIVE "BREAK". /IF.
+  IF wrd IS "CONTINUE", GIVE "CONTINUE". /IF.
+  IF wrd IS "INTO", GIVE "INTO". /IF.
+  GIVE "IDENT".
+/ACTION.
+
+# ── char_type(ch) ─────────────────────────────────────────
+ACTION char_type(ch(TX)),
+  IF ch IS "+", GIVE "PLUS". /IF.
+  IF ch IS "-", GIVE "MINUS". /IF.
+  IF ch IS "*", GIVE "STAR". /IF.
+  IF ch IS "/", GIVE "SLASH". /IF.
+  IF ch IS "%", GIVE "PERCENT". /IF.
+  IF ch IS "=", GIVE "EQUAL". /IF.
+  IF ch IS ":", GIVE "COLON". /IF.
+  IF ch IS "<", GIVE "LESS". /IF.
+  IF ch IS ">", GIVE "GREATER". /IF.
+  IF ch IS "!", GIVE "BANG". /IF.
+  IF ch IS "?", GIVE "QUESTION". /IF.
+  IF ch IS "&", GIVE "AMPERSAND". /IF.
+  IF ch IS "|", GIVE "PIPE". /IF.
+  IF ch IS ";", GIVE "SEMI". /IF.
+  IF ch IS "(", GIVE "LPAREN". /IF.
+  IF ch IS ")", GIVE "RPAREN". /IF.
+  IF ch IS "{", GIVE "LBRACE". /IF.
+  IF ch IS "}", GIVE "RBRACE". /IF.
+  IF ch IS "[", GIVE "LBRACKET". /IF.
+  IF ch IS "]", GIVE "RBRACKET". /IF.
+  IF ch IS ",", GIVE "COMMA". /IF.
+  IF ch IS ".", GIVE "DOT". /IF.
+  IF ch IS "_", GIVE "WILDCARD". /IF.
+  IF ch IS "#", GIVE "HASH". /IF.
+  GIVE "".
+/ACTION.
+
+# ── is_alnum(ch) ──────────────────────────────────────────
+ACTION is_alnum(ch(TX)),
+  IF ch GREATER THAN OR EQUAL "a" AND ch LESS THAN OR EQUAL "z", GIVE TRUE. /IF.
+  IF ch GREATER THAN OR EQUAL "A" AND ch LESS THAN OR EQUAL "Z", GIVE TRUE. /IF.
+  IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", GIVE TRUE. /IF.
+  IF ch IS "_", GIVE TRUE. /IF.
+  GIVE FALSE.
+/ACTION.
+
+# ── is_alpha_start(ch) ────────────────────────────────────
+ACTION is_alpha_start(ch(TX)),
+  IF ch GREATER THAN OR EQUAL "a" AND ch LESS THAN OR EQUAL "z", GIVE TRUE. /IF.
+  IF ch GREATER THAN OR EQUAL "A" AND ch LESS THAN OR EQUAL "Z", GIVE TRUE. /IF.
+  IF ch IS "_", GIVE TRUE. /IF.
+  GIVE FALSE.
+/ACTION.
+
+# ── match_ident_or_keyword(src, i, n) ─────────────────────
+ACTION match_ident_or_keyword(src(TX), i(NUM), n(NUM)),
+  CREATE wd(TX) TO "".
+  CREATE ni(NUM) TO i.
+  CREATE ch(TX) TO "".
+  SEASON ni < n,
+    REAP ok FROM is_alnum, char_at(src, ni).
+    IF NOT ok, BREAK. /IF.
+    REAP ch FROM char_at, src, ni.
+    SET wd TO wd + ch.
+    SET ni TO ni + 1.
+  /SEASON.
+  IF wd IS "null", SET wd TO "NULL". /IF.
+  GIVE plant_list_make(2, wd, ni).
+/ACTION.
+
+# ── match_number(src, i, n) ───────────────────────────────
+ACTION match_number(src(TX), i(NUM), n(NUM)),
+  CREATE num(TX) TO "".
+  CREATE ni(NUM) TO i.
+  CREATE ch(TX) TO "".
+  SEASON ni < n AND char_at(src, ni) GREATER THAN OR EQUAL "0" AND char_at(src, ni) LESS THAN OR EQUAL "9",
+    REAP ch FROM char_at, src, ni.
+    SET num TO num + ch.
+    SET ni TO ni + 1.
+  /SEASON.
+  GIVE plant_list_make(2, num, ni).
+/ACTION.
+
+# ── match_string(src, i, n) ───────────────────────────────
+ACTION match_string(src(TX), i(NUM), n(NUM)),
+  CREATE val(TX) TO "".
+  CREATE si(NUM) TO i.
+  CREATE done(FACT) TO FALSE.
+  CREATE ch(TX) TO "".
+  IF si < n AND char_at(src, si) IS "\"", SET si TO si + 1. /IF.
+  SEASON NOT done AND si < n,
+    REAP ch FROM char_at, src, si.
+    IF ch IS "\"", SET done TO TRUE. /IF.
+    IF ch IS "\"", CONTINUE. /IF.
+    IF ch IS "\\",
+      SET si TO si + 1.
+      IF si < n,
+        REAP ch FROM char_at, src, si.
+        IF ch IS "n", SET ch TO "\n". /IF.
+        IF ch IS "t", SET ch TO "\t". /IF.
+        IF ch IS "r", SET ch TO "\r". /IF.
+      /IF.
+    /IF.
+    IF si < n,
+      SET val TO val + ch.
+      SET si TO si + 1.
+    /IF.
+  /SEASON.
+  IF si < n AND char_at(src, si) IS "\"", SET si TO si + 1. /IF.
+  GIVE plant_list_make(2, val, si).
+/ACTION.
+
+# ── skip_comment(src, i, n) ───────────────────────────────
+ACTION skip_comment(src(TX), i(NUM), n(NUM)),
+  SEASON i < n AND char_at(src, i) ISNT "\n",
+    SET i TO i + 1.
+  /SEASON.
+  GIVE i.
+/ACTION.
+
+# ── scan_tokens(source) ───────────────────────────────────
+ACTION scan_tokens(src(TX)),
+  CREATE tokens(LIST) TO plant_list_make(0).
+  CREATE i(NUM) TO 0.
+  CREATE n(NUM) TO LEN(src).
+  CREATE ch(TX) TO "".
+
+  SEASON i < n,
+    REAP ch FROM char_at, src, i.
+
+    # Whitespace
+    IF ch IS " " OR ch IS "\t" OR ch IS "\r", SET i TO i + 1. /IF.
+    IF ch IS " " OR ch IS "\t" OR ch IS "\r", CONTINUE. /IF.
+
+    # Newline
+    IF ch IS "\n", SET i TO i + 1. /IF.
+    IF ch IS "\n", CONTINUE. /IF.
+
+    # Comment
+    IF ch IS "#", REAP si FROM skip_comment, src, i + 1, n. /IF.
+    IF ch IS "#", SET i TO si. /IF.
+    IF ch IS "#", CONTINUE. /IF.
+
+    # String literal
+    IF ch IS "\"", REAP si FROM match_string, src, i, n. /IF.
+    IF ch IS "\"", PUT plant_list_make(2, "STRING", si[0]) INTO tokens. /IF.
+    IF ch IS "\"", SET i TO si[1]. /IF.
+    IF ch IS "\"", CONTINUE. /IF.
+
+    # Depth marker N\  — check before Number
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND char_at(src, i + 1) IS "\\",
+      REAP si FROM match_number, src, i, n. /IF.
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND char_at(src, i + 1) IS "\\",
+      PUT plant_list_make(2, "DEPTH", si[0]) INTO tokens. /IF.
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND char_at(src, i + 1) IS "\\",
+      SET i TO si[1] + 1. /IF.
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND char_at(src, i + 1) IS "\\" AND i < n AND char_at(src, i) IS " ",
+      SET i TO i + 1. /IF.
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND char_at(src, i + 1) IS "\\",
+      CONTINUE. /IF.
+
+    # Number
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", REAP si FROM match_number, src, i, n. /IF.
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", PUT plant_list_make(2, "NUMBER", si[0]) INTO tokens. /IF.
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", SET i TO si[1]. /IF.
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", CONTINUE. /IF.
+
+    # Identifier
+    REAP ok FROM is_alpha_start, ch.
+    IF ok, REAP si FROM match_ident_or_keyword, src, i, n. /IF.
+    IF ok, REAP tok_ty FROM keyword_to_type, si[0]. /IF.
+    IF ok, PUT plant_list_make(2, tok_ty, si[0]) INTO tokens. /IF.
+    IF ok, SET i TO si[1]. /IF.
+    IF ok, CONTINUE. /IF.
+
+    # DOT_DOT
+    IF ch IS "." AND i + 1 < n AND char_at(src, i + 1) IS ".",
+      PUT plant_list_make(2, "DOT_DOT", "..") INTO tokens.
+      SET i TO i + 2.
+      CONTINUE.
+    /IF.
+
+    # ARROW
+    IF ch IS "-" AND i + 1 < n AND char_at(src, i + 1) IS ">",
+      PUT plant_list_make(2, "ARROW", "->") INTO tokens.
+      SET i TO i + 2.
+      CONTINUE.
+    /IF.
+
+    # Combined comparisons >= <= == !=
+    IF ch IS ">" AND i + 1 < n AND char_at(src, i + 1) IS "=",
+      PUT plant_list_make(2, "GREATER", ">=") INTO tokens.
+      SET i TO i + 2.
+      CONTINUE.
+    /IF.
+    IF ch IS "<" AND i + 1 < n AND char_at(src, i + 1) IS "=",
+      PUT plant_list_make(2, "LESS", "<=") INTO tokens.
+      SET i TO i + 2.
+      CONTINUE.
+    /IF.
+    IF ch IS "=" AND i + 1 < n AND char_at(src, i + 1) IS "=",
+      PUT plant_list_make(2, "EQUAL", "==") INTO tokens.
+      SET i TO i + 2.
+      CONTINUE.
+    /IF.
+    IF ch IS "!" AND i + 1 < n AND char_at(src, i + 1) IS "=",
+      PUT plant_list_make(2, "BANG", "!=") INTO tokens.
+      SET i TO i + 2.
+      CONTINUE.
+    /IF.
+
+    # STAR_STAR
+    IF ch IS "*" AND i + 1 < n AND char_at(src, i + 1) IS "*",
+      PUT plant_list_make(2, "STAR_STAR", "**") INTO tokens.
+      SET i TO i + 2.
+      CONTINUE.
+    /IF.
+
+    # Single-char
+    REAP tok_ty FROM char_type, ch.
+    IF tok_ty ISNT "", PUT plant_list_make(2, tok_ty, ch) INTO tokens. /IF.
+    IF tok_ty ISNT "", SET i TO i + 1. /IF.
+    IF tok_ty ISNT "", CONTINUE. /IF.
+
+    # Unknown
+    PUT plant_list_make(2, "ERROR", ch) INTO tokens.
+    SET i TO i + 1.
+  /SEASON.
+
+  PUT plant_list_make(2, "EOF", "") INTO tokens.
+  GIVE tokens.
+/ACTION.
+# ═══════════════════════════════════════════════════════════════
+#  src/plantc/parser.plant — Recursive descent parser
+#
+#  All action calls use REAP (no inline calls).
+#  SEASON is a while-loop, IF is a conditional.
+#  Use SEASON only for loops, IF for single branches.
+#  Block IFs (multi-line) for multiple body statements.
+# ═══════════════════════════════════════════════════════════════
+
+
+#── Utility actions ────────────────────────────────────────────
+
+ACTION tok_lex(tok(LIST)),
+  GIVE tok[1].
+/ACTION.
+
+ACTION tok_type(tok(LIST)),
+  GIVE tok[0].
+/ACTION.
+
+ACTION peek(tokens(LIST), pos(NUM)),
+  IF pos < COUNT tokens,
+    GIVE tokens[pos].
+  /IF.
+  GIVE plant_list_make(2, null, "").
+/ACTION.
+
+ACTION consume(tokens(LIST), pos(NUM)),
+  GIVE plant_list_make(2, tokens[pos], pos + 1).
+/ACTION.
+
+ACTION _first(pair(LIST)),
+  GIVE pair[0].
+/ACTION.
+
+ACTION _second(pair(LIST)),
+  GIVE pair[1].
+/ACTION.
+
+ACTION is_eof(tokens(LIST), pos(NUM)),
+  IF pos >= COUNT tokens,
+    GIVE TRUE.
+  /IF.
+  REAP tok FROM peek, tokens, pos.
+  REAP tp FROM tok_type, tok.
+  IF tp IS "EOF",
+    GIVE TRUE.
+  /IF.
+  GIVE FALSE.
+/ACTION.
+
+# collect_value: collects text until "." or EOF (consumes the dot)
+# escape_string — re-escape C-unsafe characters in string content for emission
+ACTION escape_string(s(TX)),
+  CREATE r(TX) TO "".
+  CREATE ei(NUM) TO 0.
+  CREATE en(NUM) TO LEN(s).
+  CREATE ec(TX) TO "".
+  SEASON ei < en,
+    REAP ec FROM char_at, s, ei.
+    IF ec IS "\\", SET r TO r + "\\" + "\\". /IF.
+    IF ec IS "\"", SET r TO r + "\\" + "\"". /IF.
+    IF ec IS "\n", SET r TO r + "\\" + "n". /IF.
+    IF ec IS "\t", SET r TO r + "\\" + "t". /IF.
+    IF ec IS "\r", SET r TO r + "\\" + "r". /IF.
+    IF ec ISNT "\\" AND ec ISNT "\"" AND ec ISNT "\n" AND ec ISNT "\t" AND ec ISNT "\r",
+      SET r TO r + ec.
+    /IF.
+    SET ei TO ei + 1.
+  /SEASON.
+  GIVE r.
+/ACTION.
+
+ACTION collect_value(tokens(LIST), start(NUM)),
+  CREATE text(TX) TO "".
+  CREATE p2(NUM) TO start.
+  CREATE depth(NUM) TO 0.
+  SEASON TRUE,
+    REAP is_eof_flag FROM is_eof, tokens, p2.
+    IF is_eof_flag,
+      GIVE plant_list_make(2, text, p2).
+    /IF.
+    REAP tok FROM peek, tokens, p2.
+    REAP lx FROM tok_lex, tok.
+    REAP tt FROM tok_type, tok.
+    IF tt IS "STRING",
+      REAP lx FROM escape_string, lx.
+      SET lx TO "\"" + lx + "\"".
+    /IF.
+    IF lx IS "." AND depth IS 0,
+      REAP cpair FROM consume, tokens, p2.
+      REAP p2 FROM _second, cpair.
+      GIVE plant_list_make(2, text, p2).
+    /IF.
+    IF lx IS "(",
+      SET depth TO depth + 1.
+    /IF.
+    IF lx IS ")",
+      SET depth TO depth - 1.
+    /IF.
+    IF text > "",
+      SET text TO text + " ".
+    /IF.
+    SET text TO text + lx.
+    REAP cpair FROM consume, tokens, p2.
+    REAP p2 FROM _second, cpair.
+  /SEASON.
+/ACTION.
+
+# collect_until: collects text until delimiter at depth=0 (does NOT consume delimiter)
+ACTION collect_until(tokens(LIST), start(NUM), delim(TX)),
+  CREATE text(TX) TO "".
+  CREATE p2(NUM) TO start.
+  CREATE depth(NUM) TO 0.
+  SEASON TRUE,
+    REAP is_eof_flag FROM is_eof, tokens, p2.
+    IF is_eof_flag,
+      GIVE plant_list_make(2, text, p2).
+    /IF.
+    REAP tok FROM peek, tokens, p2.
+    REAP lx FROM tok_lex, tok.
+    REAP tt FROM tok_type, tok.
+    IF tt IS "STRING",
+      REAP lx FROM escape_string, lx.
+      SET lx TO "\"" + lx + "\"".
+    /IF.
+    IF _cat("", lx) IS _cat("", delim) AND depth IS 0,
+      GIVE plant_list_make(2, text, p2).
+    /IF.
+    IF lx IS "(",
+      SET depth TO depth + 1.
+    /IF.
+    IF lx IS ")",
+      SET depth TO depth - 1.
+    /IF.
+    IF text > "",
+      SET text TO text + " ".
+    /IF.
+    SET text TO text + lx.
+    REAP cpair FROM consume, tokens, p2.
+    REAP p2 FROM _second, cpair.
+  /SEASON.
+/ACTION.
+
+#── Statement parsing ──────────────────────────────────────────
+
+ACTION parse_create_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP id_pair FROM consume, tokens, p2.
+  REAP id_name FROM tok_lex, id_pair[0].
+  REAP p3 FROM _second, id_pair.
+  REAP tok FROM peek, tokens, p3.
+  REAP lx FROM tok_lex, tok.
+  CREATE vtype(TX) TO "".
+  IF lx IS "(",
+    REAP lp FROM consume, tokens, p3.
+    REAP p4 FROM _second, lp.
+    REAP tp FROM consume, tokens, p4.
+    REAP tp_name FROM tok_lex, tp[0].
+    REAP p5 FROM _second, tp.
+    REAP rp FROM consume, tokens, p5.
+    REAP p6 FROM _second, rp.
+    SET vtype TO tp_name.
+    SET p3 TO p6.
+  /IF.
+  REAP tok2 FROM peek, tokens, p3.
+  REAP lx2 FROM tok_lex, tok2.
+  IF lx2 IS "=",
+    REAP eq_pair FROM consume, tokens, p3.
+    REAP p4 FROM _second, eq_pair.
+    REAP vpair FROM collect_value, tokens, p4.
+    CREATE expr TO vpair[0].
+    REAP p5 FROM _second, vpair.
+    GIVE plant_list_make(2, plant_list_make(8, "type", "create_stmt", "target", id_name, "var_type", vtype, "value", expr), p5).
+  /IF.
+  IF lx2 IS "TO",
+    REAP to_pair FROM consume, tokens, p3.
+    REAP p4 FROM _second, to_pair.
+    REAP vpair FROM collect_value, tokens, p4.
+    CREATE expr TO vpair[0].
+    REAP p5 FROM _second, vpair.
+    GIVE plant_list_make(2, plant_list_make(8, "type", "create_stmt", "target", id_name, "var_type", vtype, "value", expr), p5).
+  /IF.
+  REAP vpair FROM collect_value, tokens, p3.
+  CREATE expr TO vpair[0].
+  REAP p4 FROM _second, vpair.
+  GIVE plant_list_make(2, plant_list_make(8, "type", "create_stmt", "target", id_name, "var_type", vtype, "value", expr), p4).
+/ACTION.
+
+ACTION parse_show_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP vpair FROM collect_value, tokens, p2.
+  CREATE expr TO vpair[0].
+  REAP p3 FROM _second, vpair.
+  GIVE plant_list_make(2, plant_list_make(4, "type", "show_stmt", "value", expr), p3).
+/ACTION.
+
+ACTION parse_give_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP vpair FROM collect_value, tokens, p2.
+  CREATE expr TO vpair[0].
+  REAP p3 FROM _second, vpair.
+  GIVE plant_list_make(2, plant_list_make(4, "type", "give_stmt", "value", expr), p3).
+/ACTION.
+
+ACTION parse_set_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP id_pair FROM consume, tokens, p2.
+  REAP id_name FROM tok_lex, id_pair[0].
+  REAP p3 FROM _second, id_pair.
+  REAP eq FROM consume, tokens, p3.
+  REAP p4 FROM _second, eq.
+  REAP vpair FROM collect_value, tokens, p4.
+  CREATE expr TO vpair[0].
+  REAP p5 FROM _second, vpair.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "set_stmt", "target", id_name, "value", expr), p5).
+/ACTION.
+
+ACTION parse_let_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP id_pair FROM consume, tokens, p2.
+  REAP id_name FROM tok_lex, id_pair[0].
+  REAP p3 FROM _second, id_pair.
+  REAP tok FROM peek, tokens, p3.
+  REAP lx FROM tok_lex, tok.
+  CREATE vtype(TX) TO "".
+  IF lx IS "(",
+    REAP lp FROM consume, tokens, p3.
+    REAP p4 FROM _second, lp.
+    REAP tp FROM consume, tokens, p4.
+    REAP tp_name FROM tok_lex, tp[0].
+    REAP p5 FROM _second, tp.
+    REAP rp FROM consume, tokens, p5.
+    REAP p6 FROM _second, rp.
+    SET vtype TO tp_name.
+    SET p3 TO p6.
+  /IF.
+  REAP tok2 FROM peek, tokens, p3.
+  REAP lx2 FROM tok_lex, tok2.
+  IF lx2 IS "=",
+    REAP eq_pair FROM consume, tokens, p3.
+    REAP p4 FROM _second, eq_pair.
+    REAP vpair FROM collect_value, tokens, p4.
+    CREATE expr TO vpair[0].
+    REAP p5 FROM _second, vpair.
+    GIVE plant_list_make(2, plant_list_make(8, "type", "let_stmt", "target", id_name, "var_type", vtype, "value", expr), p5).
+  /IF.
+  IF lx2 IS "TO",
+    REAP to_pair FROM consume, tokens, p3.
+    REAP p4 FROM _second, to_pair.
+    REAP vpair FROM collect_value, tokens, p4.
+    CREATE expr TO vpair[0].
+    REAP p5 FROM _second, vpair.
+    GIVE plant_list_make(2, plant_list_make(8, "type", "let_stmt", "target", id_name, "var_type", vtype, "value", expr), p5).
+  /IF.
+  REAP vpair FROM collect_value, tokens, p3.
+  CREATE expr TO vpair[0].
+  REAP p4 FROM _second, vpair.
+  GIVE plant_list_make(2, plant_list_make(8, "type", "let_stmt", "target", id_name, "var_type", vtype, "value", expr), p4).
+/ACTION.
+
+ACTION parse_reap_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP var_pair FROM consume, tokens, p2.
+  REAP var_name FROM tok_lex, var_pair[0].
+  REAP p3 FROM _second, var_pair.
+  REAP from_pair FROM consume, tokens, p3.
+  REAP p4 FROM _second, from_pair.
+  REAP act_pair FROM consume, tokens, p4.
+  REAP act_name FROM tok_lex, act_pair[0].
+  REAP p5 FROM _second, act_pair.
+  # Check for module:function syntax (e.g., strings:REPLACE)
+  REAP next_tok FROM peek, tokens, p5.
+  REAP next_lx FROM tok_lex, next_tok.
+  REAP next_ty FROM tok_type, next_tok.
+  IF next_ty IS "COLON",
+    SET act_name TO act_name + ":".
+    REAP colon_pair FROM consume, tokens, p5.
+    REAP p5 FROM _second, colon_pair.
+    REAP func_pair FROM consume, tokens, p5.
+    REAP func_name FROM tok_lex, func_pair[0].
+    SET act_name TO act_name + func_name.
+    REAP p5 FROM _second, func_pair.
+  /IF.
+  CREATE args(LIST) TO plant_list_make(0).
+  SEASON TRUE,
+    REAP tok0 FROM peek, tokens, p5.
+    REAP lx0 FROM tok_lex, tok0.
+    REAP ty0 FROM tok_type, tok0.
+    IF lx0 IS "," AND ty0 ISNT "STRING",
+      REAP com0 FROM consume, tokens, p5.
+      REAP p5 FROM _second, com0.
+    /IF.
+    REAP is_eof_flag FROM is_eof, tokens, p5.
+    IF is_eof_flag,
+      GIVE plant_list_make(2, plant_list_make(8, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args), p5).
+    /IF.
+    REAP tok FROM peek, tokens, p5.
+    REAP lx FROM tok_lex, tok.
+    REAP ty FROM tok_type, tok.
+    IF lx IS "." AND ty ISNT "STRING",
+      REAP dot FROM consume, tokens, p5.
+      REAP p6 FROM _second, dot.
+      GIVE plant_list_make(2, plant_list_make(8, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args), p6).
+    /IF.
+    # collect one argument until , or . at depth 0 (do NOT consume delimiter)
+    CREATE arg_text(TX) TO "".
+    CREATE adepth(NUM) TO 0.
+    SEASON TRUE,
+      REAP atok FROM peek, tokens, p5.
+      REAP alx FROM tok_lex, atok.
+      REAP atype FROM tok_type, atok.
+      IF atype IS "STRING",
+        SET alx TO "\"" + alx + "\"".
+      /IF.
+      IF alx IS "," AND adepth IS 0, BREAK 0. /IF.
+      IF alx IS "." AND adepth IS 0, BREAK 0. /IF.
+      IF alx IS "(", SET adepth TO adepth + 1. /IF.
+      IF alx IS ")", SET adepth TO adepth - 1. /IF.
+      IF arg_text > "", SET arg_text TO arg_text + " ". /IF.
+      SET arg_text TO arg_text + alx.
+      REAP cp FROM consume, tokens, p5.
+      REAP p5 FROM _second, cp.
+    /SEASON.
+    PUT arg_text INTO args.
+    REAP tok2 FROM peek, tokens, p5.
+    REAP lx2 FROM tok_lex, tok2.
+    IF lx2 IS ",",
+      REAP com FROM consume, tokens, p5.
+      REAP p5 FROM _second, com.
+    /IF.
+    IF lx2 IS ".",
+      REAP dot FROM consume, tokens, p5.
+      REAP p6 FROM _second, dot.
+      GIVE plant_list_make(2, plant_list_make(8, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args), p6).
+    /IF.
+  /SEASON.
+/ACTION.
+
+ACTION parse_put_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP vpair FROM collect_until, tokens, p2, "INTO".
+  CREATE item TO vpair[0].
+  REAP p3 FROM _second, vpair.
+  REAP into_pair FROM consume, tokens, p3.
+  REAP p4 FROM _second, into_pair.
+  REAP tpair FROM collect_until, tokens, p4, ".".
+  CREATE target TO tpair[0].
+  REAP p5 FROM _second, tpair.
+  REAP dot_pair FROM consume, tokens, p5.
+  REAP p6 FROM _second, dot_pair.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "put_stmt", "item", item, "target", target), p6).
+/ACTION.
+
+ACTION parse_break_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  IF p2 < COUNT tokens,
+    REAP tok FROM peek, tokens, p2.
+    REAP lx FROM tok_lex, tok.
+    IF lx IS "0",
+      REAP drop FROM consume, tokens, p2.
+      REAP p2 FROM _second, drop.
+    /IF.
+  /IF.
+  REAP dot_pair FROM consume, tokens, p2.
+  REAP p3 FROM _second, dot_pair.
+  GIVE plant_list_make(2, plant_list_make(2, "type", "break_stmt"), p3).
+/ACTION.
+
+ACTION parse_continue_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP dot_pair FROM consume, tokens, p2.
+  REAP p3 FROM _second, dot_pair.
+  GIVE plant_list_make(2, plant_list_make(2, "type", "continue_stmt"), p3).
+/ACTION.
+
+ACTION parse_if_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP cpair FROM collect_until, tokens, p2, ",".
+  CREATE cond TO cpair[0].
+  REAP p3 FROM _second, cpair.
+  REAP com FROM consume, tokens, p3.
+  REAP p4 FROM _second, com.
+  CREATE body(LIST) TO plant_list_make(0).
+  SEASON TRUE,
+    REAP is_eof_flag FROM is_eof, tokens, p4.
+    IF is_eof_flag,
+      GIVE plant_list_make(2, plant_list_make(6, "type", "if_stmt", "cond", cond, "body", body), p4).
+    /IF.
+    REAP tok FROM peek, tokens, p4.
+    REAP lx FROM tok_lex, tok.
+    IF lx IS "/",
+      REAP slash FROM consume, tokens, p4.
+      REAP p5 FROM _second, slash.
+      REAP if_close FROM consume, tokens, p5.
+      REAP p6 FROM _second, if_close.
+      REAP dot FROM consume, tokens, p6.
+      REAP p7 FROM _second, dot.
+      GIVE plant_list_make(2, plant_list_make(6, "type", "if_stmt", "cond", cond, "body", body), p7).
+    /IF.
+    REAP stmt_pair FROM parse_statement, tokens, p4.
+    CREATE stmt TO stmt_pair[0].
+    REAP p4 FROM _second, stmt_pair.
+    IF stmt > "",
+      PUT stmt INTO body.
+    /IF.
+  /SEASON.
+/ACTION.
+
+ACTION parse_season_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP cpair FROM collect_until, tokens, p2, ",".
+  CREATE cond TO cpair[0].
+  REAP p3 FROM _second, cpair.
+  REAP com FROM consume, tokens, p3.
+  REAP p4 FROM _second, com.
+  CREATE body(LIST) TO plant_list_make(0).
+  SEASON TRUE,
+    REAP is_eof_flag FROM is_eof, tokens, p4.
+    IF is_eof_flag,
+      GIVE plant_list_make(2, plant_list_make(6, "type", "season_stmt", "cond", cond, "body", body), p4).
+    /IF.
+    REAP tok FROM peek, tokens, p4.
+    REAP lx FROM tok_lex, tok.
+    IF lx IS "/",
+      REAP slash FROM consume, tokens, p4.
+      REAP p5 FROM _second, slash.
+      REAP season_close FROM consume, tokens, p5.
+      REAP p6 FROM _second, season_close.
+      REAP dot FROM consume, tokens, p6.
+      REAP p7 FROM _second, dot.
+      GIVE plant_list_make(2, plant_list_make(6, "type", "season_stmt", "cond", cond, "body", body), p7).
+    /IF.
+    REAP stmt_pair FROM parse_statement, tokens, p4.
+    CREATE stmt TO stmt_pair[0].
+    REAP p4 FROM _second, stmt_pair.
+    IF stmt > "",
+      PUT stmt INTO body.
+    /IF.
+  /SEASON.
+/ACTION.
+
+ACTION parse_statement(tokens(LIST), pos(NUM)),
+  SEASON TRUE,
+    REAP tok FROM peek, tokens, pos.
+    REAP tp FROM tok_type, tok.
+    IF tp ISNT "DEPTH", BREAK 0. /IF.
+    REAP drop_pair FROM consume, tokens, pos.
+    REAP pos FROM _second, drop_pair.
+  /SEASON.
+  REAP tok FROM peek, tokens, pos.
+  REAP lx FROM tok_lex, tok.
+  IF lx IS "CREATE",
+    REAP r FROM parse_create_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "SHOW",
+    REAP r FROM parse_show_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "GIVE",
+    REAP r FROM parse_give_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "SET",
+    REAP r FROM parse_set_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "LET",
+    REAP r FROM parse_let_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "IF",
+    REAP r FROM parse_if_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "SEASON",
+    REAP r FROM parse_season_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "REAP",
+    REAP r FROM parse_reap_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "PUT",
+    REAP r FROM parse_put_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "BREAK",
+    REAP r FROM parse_break_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "CONTINUE",
+    REAP r FROM parse_continue_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  GIVE plant_list_make(2, null, pos + 1).
+/ACTION.
+
+#── Declaration parsing ────────────────────────────────────────
+
+ACTION parse_enum_decl(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP name_pair FROM consume, tokens, p2.
+  REAP name FROM tok_lex, name_pair[0].
+  REAP p3 FROM _second, name_pair.
+  REAP lbr FROM consume, tokens, p3.
+  REAP p4 FROM _second, lbr.
+  CREATE members(LIST) TO plant_list_make(0).
+  SEASON TRUE,
+    REAP is_eof_flag FROM is_eof, tokens, p4.
+    IF is_eof_flag,
+      GIVE plant_list_make(2, plant_list_make(6, "type", "enum_decl", "name", name, "members", members), p4).
+    /IF.
+    REAP tok FROM peek, tokens, p4.
+    REAP lx FROM tok_lex, tok.
+    IF lx IS "}",
+      REAP rbr FROM consume, tokens, p4.
+      REAP p5 FROM _second, rbr.
+      GIVE plant_list_make(2, plant_list_make(6, "type", "enum_decl", "name", name, "members", members), p5).
+    /IF.
+    REAP m_pair FROM consume, tokens, p4.
+    REAP mname FROM tok_lex, m_pair[0].
+    REAP p5 FROM _second, m_pair.
+    PUT mname INTO members.
+    REAP tok2 FROM peek, tokens, p5.
+    REAP lx2 FROM tok_lex, tok2.
+    IF lx2 IS ",",
+      REAP com FROM consume, tokens, p5.
+      REAP p5 FROM _second, com.
+    /IF.
+    SET p4 TO p5.
+  /SEASON.
+/ACTION.
+
+ACTION parse_action_decl(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP name_pair FROM consume, tokens, p2.
+  REAP aname FROM tok_lex, name_pair[0].
+  REAP p3 FROM _second, name_pair.
+  REAP lp FROM consume, tokens, p3.
+  REAP p4 FROM _second, lp.
+  CREATE params(LIST) TO plant_list_make(0).
+  SEASON TRUE,
+    REAP is_eof_flag FROM is_eof, tokens, p4.
+    IF is_eof_flag,
+      GIVE plant_list_make(2, plant_list_make(8, "type", "action_decl", "name", aname, "params", params, "body", plant_list_make(0)), p4).
+    /IF.
+    REAP tok FROM peek, tokens, p4.
+    REAP lx FROM tok_lex, tok.
+    IF lx IS ")",
+      REAP rp FROM consume, tokens, p4.
+      REAP p5 FROM _second, rp.
+      CREATE brk(NUM) TO 0.
+      BREAK 0.
+    /IF.
+    REAP pn_pair FROM consume, tokens, p4.
+    REAP pn FROM tok_lex, pn_pair[0].
+    REAP p5 FROM _second, pn_pair.
+    REAP tok2 FROM peek, tokens, p5.
+    REAP lx2 FROM tok_lex, tok2.
+    IF lx2 IS "(",
+      REAP lp2 FROM consume, tokens, p5.
+      REAP p6 FROM _second, lp2.
+      REAP pt_pair FROM consume, tokens, p6.
+      REAP pt FROM tok_lex, pt_pair[0].
+      REAP p7 FROM _second, pt_pair.
+      REAP rp2 FROM consume, tokens, p7.
+      REAP p8 FROM _second, rp2.
+      PUT plant_list_make(4, "name", pn, "type", pt) INTO params.
+      SET p5 TO p8.
+    /IF.
+    IF lx2 ISNT "(",
+      PUT plant_list_make(4, "name", pn, "type", "") INTO params.
+    /IF.
+    REAP tok3 FROM peek, tokens, p5.
+    REAP lx3 FROM tok_lex, tok3.
+    IF lx3 IS ",",
+      REAP com FROM consume, tokens, p5.
+      REAP p5 FROM _second, com.
+    /IF.
+    SET p4 TO p5.
+  /SEASON.
+  # skip optional -> Type (then check if , or .)
+  REAP arrow_tok FROM peek, tokens, p5.
+  REAP arrow_lx FROM tok_lex, arrow_tok.
+  IF arrow_lx IS "->",
+    REAP arrow_pair FROM consume, tokens, p5.
+    REAP p5 FROM _second, arrow_pair.
+    # skip bogus MINUS=- token (lexer bug: -> produces extra MINUS)
+    REAP skip_tok FROM peek, tokens, p5.
+    REAP skip_ty FROM tok_type, skip_tok.
+    IF skip_ty IS "MINUS",
+      REAP skip_pair FROM consume, tokens, p5.
+      REAP p5 FROM _second, skip_pair.
+    /IF.
+    REAP ret_pair FROM consume, tokens, p5.
+    REAP ret_lx FROM tok_lex, ret_pair[0].
+    REAP p5 FROM _second, ret_pair.
+    REAP after_tok FROM peek, tokens, p5.
+    REAP after_lx FROM tok_lex, after_tok.
+    IF after_lx IS ",",
+      REAP com_pair FROM consume, tokens, p5.
+      REAP p5 FROM _second, com_pair.
+    /IF.
+    IF after_lx IS ".",
+      REAP dot_pair FROM consume, tokens, p5.
+      REAP p5 FROM _second, dot_pair.
+      IF ret_lx IS "external",
+        GIVE plant_list_make(2, plant_list_make(6, "type", "external_decl", "name", aname, "params", params), p5).
+      /IF.
+      GIVE plant_list_make(2, plant_list_make(8, "type", "action_decl", "name", aname, "params", params, "body", plant_list_make(0)), p5).
+    /IF.
+  /IF.
+  CREATE body(LIST) TO plant_list_make(0).
+  SEASON TRUE,
+    REAP is_eof_flag FROM is_eof, tokens, p5.
+    IF is_eof_flag,
+      GIVE plant_list_make(2, plant_list_make(8, "type", "action_decl", "name", aname, "params", params, "body", body), p5).
+    /IF.
+    REAP tok4 FROM peek, tokens, p5.
+    REAP lx4 FROM tok_lex, tok4.
+    IF lx4 IS "/",
+      REAP slash FROM consume, tokens, p5.
+      REAP p6 FROM _second, slash.
+      REAP end FROM consume, tokens, p6.
+      REAP p7 FROM _second, end.
+      REAP dot FROM consume, tokens, p7.
+      REAP p8 FROM _second, dot.
+      GIVE plant_list_make(2, plant_list_make(8, "type", "action_decl", "name", aname, "params", params, "body", body), p8).
+    /IF.
+    REAP stmt_pair FROM parse_statement, tokens, p5.
+    CREATE stmt TO stmt_pair[0].
+    REAP p5 FROM _second, stmt_pair.
+    IF stmt > "",
+      PUT stmt INTO body.
+    /IF.
+  /SEASON.
+/ACTION.
+
+ACTION parse_declaration(tokens(LIST), pos(NUM)),
+  REAP tok FROM peek, tokens, pos.
+  REAP lx FROM tok_lex, tok.
+  IF lx IS "ENUM",
+    REAP r FROM parse_enum_decl, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "ACTION",
+    REAP r FROM parse_action_decl, tokens, pos.
+    GIVE r.
+  /IF.
+  REAP r FROM parse_statement, tokens, pos.
+  GIVE r.
+/ACTION.
+
+#── Top-level ──────────────────────────────────────────────────
+
+ACTION parse_program(tokens(LIST)),
+  CREATE pos(NUM) TO 0.
+  CREATE nodes(LIST) TO plant_list_make(0).
+  SEASON TRUE,
+    REAP is_eof_flag FROM is_eof, tokens, pos.
+    IF is_eof_flag,
+      GIVE plant_list_make(4, "type", "program", "body", nodes).
+    /IF.
+    REAP d_pair FROM parse_declaration, tokens, pos.
+    CREATE decl TO d_pair[0].
+    REAP pos2 FROM _second, d_pair.
+    IF pos2 <= pos,
+      GIVE plant_list_make(4, "type", "program", "body", nodes).
+    /IF.
+    SET pos TO pos2.
+    IF decl > "",
+      PUT decl INTO nodes.
+    /IF.
+  /SEASON.
+/ACTION.
+# ═══════════════════════════════════════════════════════════════
+#  src/plantc/codegen_c.plant — PlantLang → C99 Code Generator
+#
+#  Consumes AST maps produced by src/plantc/parser.plant and
+#  emits valid C99 source compatible with <plant_runtime.h>.
+#
+#  Node types handled:
+#    show_stmt, create_stmt, let_stmt, set_stmt, give_stmt,
+#    reap_stmt, put_stmt, break_stmt, continue_stmt,
+#    if_stmt, season_stmt, cycle_stmt, match_stmt,
+#    action_decl, enum_decl, program
+# ═══════════════════════════════════════════════════════════════
+
+
+# ──────────────────────────────────────────────────────────────
+#  _substr — extract substring [start, end) from str
+# ──────────────────────────────────────────────────────────────
+ACTION _substr(str(TX), start(NUM), end(NUM)),
+    GIVE substring(str, start, end).
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
+#  _handle_func — translate "KW varname" -> "CFN(varname)"
+# ──────────────────────────────────────────────────────────────
+ACTION _handle_func(expr(TX), kw(TX), cfn(TX)),
+    REAP parts FROM strings:SPLIT, expr, kw + " ".
+    IF COUNT parts IS 1, GIVE expr. /IF.
+    REAP p0 FROM plant_list_get, parts, 0.
+    CREATE res(TX) TO p0.
+    CREATE idx(NUM) TO 1.
+    SEASON idx < COUNT parts,
+        REAP cur FROM plant_list_get, parts, idx.
+        REAP pos FROM find_any, cur, " +)(".
+        IF pos IS -1, SET pos TO LEN(cur). /IF.
+        REAP vname FROM substring, cur, 0, pos.
+        REAP rest FROM substring, cur, pos, LEN(cur).
+        SET res TO res + cfn + "(" + vname + ")" + rest.
+        SET idx TO idx + 1.
+    /SEASON.
+    GIVE res.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
+#  _handle_func_paren — translate "LEN(expr)" -> "strlen(expr)"
+# ──────────────────────────────────────────────────────────────
+ACTION _handle_func_paren(expr(TX), kw(TX), cfn(TX)),
+    REAP parts FROM strings:SPLIT, expr, kw + " (".
+    IF COUNT parts IS 1,
+        REAP parts FROM strings:SPLIT, expr, kw + "(".
+    /IF.
+    IF COUNT parts IS 1, GIVE expr. /IF.
+    REAP p0 FROM plant_list_get, parts, 0.
+    CREATE res(TX) TO p0.
+    CREATE idx(NUM) TO 1.
+    SEASON idx < COUNT parts,
+        REAP p FROM plant_list_get, parts, idx.
+        SET res TO res + cfn + "(" + p.
+        SET idx TO idx + 1.
+    /SEASON.
+    GIVE res.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
+#  _handle_cat — convert + to _cat() for string concatenation
+#  Only converts when string literals (") are present in expr
+#  NOTE: does NOT handle quoted + inside string literals correctly
+#  so it should only be called on show_stmt values which rarely
+#  contain string literals with + as delimiter arguments
+# ──────────────────────────────────────────────────────────────
+ACTION _handle_cat(expr(TX)),
+    CREATE parts(LIST) TO plant_list_make(0).
+    CREATE depth(NUM) TO 0.
+    CREATE instr(NUM) TO 0.
+    CREATE i(NUM) TO 0.
+    CREATE ch(TX) TO "".
+    CREATE c0(TX) TO "".
+    CREATE c1(TX) TO "".
+    CREATE seg(TX) TO "".
+    CREATE start(NUM) TO 0.
+    CREATE res(TX) TO "".
+    CREATE pi(NUM) TO 0.
+    CREATE pel(TX) TO "".
+    CREATE has_str(NUM) TO 0.
+    CREATE has_digit(NUM) TO 0.
+    # scan for top-level " + " (outside parens and strings) and split there
+    SEASON i < LEN(expr),
+        REAP ch FROM char_at, expr, i.
+        IF ch IS "\"", SET instr TO 1 - instr. SET has_str TO 1. /IF.
+        IF instr IS 1 AND ch IS "\\", SET i TO i + 1. /IF.
+        IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", SET has_digit TO 1. /IF.
+        IF instr IS 0 AND ch IS "(", SET depth TO depth + 1. /IF.
+        IF instr IS 0 AND ch IS ")", SET depth TO depth - 1. /IF.
+        IF instr IS 0 AND ch IS "+" AND depth IS 0,
+            REAP c0 FROM char_at, expr, i - 1.
+            REAP c1 FROM char_at, expr, i + 1.
+            IF c0 IS " " AND c1 IS " ",
+                REAP seg FROM substring, expr, start, i - 1.
+                PUT seg INTO parts.
+                SET start TO i + 2.
+            /IF.
+        /IF.
+        SET i TO i + 1.
+    /SEASON.
+    IF (COUNT parts) IS 0, GIVE expr. /IF.
+    IF has_str IS 0 AND has_digit IS 1,
+        GIVE strings_REPLACE(expr, " + ", "+").
+    /IF.
+    REAP seg FROM substring, expr, start, LEN(expr).
+    PUT seg INTO parts.
+    CREATE nparts(LIST) TO plant_list_make(0).
+    CREATE ni(NUM) TO 0.
+    CREATE pel2(TX) TO "".
+    CREATE pel2b(TX) TO "".
+    CREATE pd(NUM) TO 0.
+    CREATE pj(NUM) TO 0.
+    CREATE pc(TX) TO "".
+    SEASON ni < COUNT parts,
+        REAP pel2 FROM plant_list_get, parts, ni.
+        REAP pel2b FROM strings:REPLACE, pel2, " ", "".
+        SET pd TO 1.
+        IF pel2b IS "", SET pd TO 0. /IF.
+        SET pj TO 0.
+        SEASON pj < LEN(pel2b),
+            REAP pc FROM char_at, pel2b, pj.
+            IF pc ISNT "0" AND pc ISNT "1" AND pc ISNT "2" AND pc ISNT "3" AND pc ISNT "4" AND pc ISNT "5" AND pc ISNT "6" AND pc ISNT "7" AND pc ISNT "8" AND pc ISNT "9",
+                SET pd TO 0.
+            /IF.
+            SET pj TO pj + 1.
+        /SEASON.
+        IF pd IS 1,
+            SET pel2 TO "_from_long(" + pel2 + ")".
+        /IF.
+        PUT pel2 INTO nparts.
+        SET ni TO ni + 1.
+    /SEASON.
+    SET res TO nparts[0].
+    SET pi TO 1.
+    SEASON pi < COUNT nparts,
+        REAP pel FROM plant_list_get, nparts, pi.
+        SET res TO "_cat(" + res + ", " + pel + ")".
+        SET pi TO pi + 1.
+    /SEASON.
+    GIVE res.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
+#  collect_implicit — REAP targets never declared (params,
+#  CREATE/LET) in an action body; auto-declare them as tx_t.
+# ──────────────────────────────────────────────────────────────
+ACTION collect_declared_walk(bd(LIST), declared(LIST)),
+  CREATE wi(NUM) TO 0.
+  CREATE nd(TX) TO "".
+  CREATE ty(TX) TO "".
+  SEASON wi < COUNT bd,
+    REAP nd FROM plant_list_get, bd, wi.
+    REAP ty FROM _map_get, nd, "type".
+    IF ty IS "create_stmt" OR ty IS "let_stmt",
+      REAP tgt FROM _map_get, nd, "target".
+      PUT tgt INTO declared.
+    /IF.
+    IF ty IS "if_stmt" OR ty IS "season_stmt",
+      REAP sub_bd FROM _map_get, nd, "body".
+      REAP sub_ret FROM collect_declared_walk, sub_bd, declared.
+    /IF.
+    SET wi TO wi + 1.
+  /SEASON.
+  GIVE "ok".
+/ACTION.
+
+ACTION collect_used_walk(bd(LIST), used(LIST), declared(LIST)),
+  CREATE wi(NUM) TO 0.
+  CREATE nd(TX) TO "".
+  CREATE ty(TX) TO "".
+  SEASON wi < COUNT bd,
+    REAP nd FROM plant_list_get, bd, wi.
+    REAP ty FROM _map_get, nd, "type".
+    IF ty IS "reap_stmt",
+      REAP tgt FROM _map_get, nd, "target".
+      CREATE found(NUM) TO 0.
+      CREATE fi(NUM) TO 0.
+      CREATE fe(TX) TO "".
+      SEASON fi < COUNT declared,
+        REAP fe FROM plant_list_get, declared, fi.
+        IF str_eq(fe, tgt) IS "1", SET found TO 1. /IF.
+        SET fi TO fi + 1.
+      /SEASON.
+      SET fi TO 0.
+      SEASON fi < COUNT used,
+        REAP fe FROM plant_list_get, used, fi.
+        IF str_eq(fe, tgt) IS "1", SET found TO 1. /IF.
+        SET fi TO fi + 1.
+      /SEASON.
+      IF NOT found,
+        PUT tgt INTO used.
+      /IF.
+    /IF.
+    IF ty IS "if_stmt" OR ty IS "season_stmt",
+      REAP sub_bd FROM _map_get, nd, "body".
+      REAP sub_ret FROM collect_used_walk, sub_bd, used, declared.
+    /IF.
+    SET wi TO wi + 1.
+  /SEASON.
+  GIVE "ok".
+/ACTION.
+
+ACTION collect_implicit(bd(LIST), params(LIST)),
+  CREATE used(LIST) TO plant_list_make(0).
+  CREATE declared(LIST) TO plant_list_make(0).
+  CREATE ci(NUM) TO 0.
+  CREATE pn(TX) TO "".
+  SEASON ci < COUNT params,
+    REAP pn FROM _map_get, params[ci], "name".
+    PUT pn INTO declared.
+    SET ci TO ci + 1.
+  /SEASON.
+  REAP sub_ret FROM collect_declared_walk, bd, declared.
+  REAP sub_ret FROM collect_used_walk, bd, used, declared.
+  GIVE used.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
+#  translate_expr — PlantLang → C expression translation
+# ──────────────────────────────────────────────────────────────
+ACTION translate_expr(expr(TX)),
+    CREATE e(TX) TO expr.
+    REAP e FROM strings:REPLACE, e, "GREATER THAN OR EQUAL", ">=".
+    REAP e FROM strings:REPLACE, e, "LESS THAN OR EQUAL", "<=".
+    REAP e FROM strings:REPLACE, e, "GREATER THAN", ">".
+    REAP e FROM strings:REPLACE, e, "LESS THAN", "<".
+    REAP e FROM strings:REPLACE, e, "ISNT", "!=".
+    REAP e FROM strings:REPLACE, e, "STAR_STAR", "**".
+    REAP e FROM strings:REPLACE, e, " AND ", " && ".
+    REAP e FROM strings:REPLACE, e, " OR ", " || ".
+    REAP e FROM strings:REPLACE, e, "NOT ", "!".
+    REAP e FROM strings:REPLACE, e, " IS ", " == ".
+    REAP e FROM _handle_func, e, "COUNT", "plant_array_length".
+    REAP e FROM _handle_func_paren, e, "LEN", "strlen".
+    REAP e FROM _handle_func, e, "TEST", "!".
+    REAP e FROM strings:REPLACE, e, "TRUE", "1".
+    REAP e FROM strings:REPLACE, e, "FALSE", "0".
+    REAP e FROM strings:REPLACE, e, "NULL", "NULL".
+    REAP e FROM strings:REPLACE, e, " : ", "_".
+    REAP e FROM handle_brackets, e.
+    GIVE e.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
+#  indent_str — generate indentation whitespace
+# ──────────────────────────────────────────────────────────────
+ACTION indent_str(level(NUM)),
+    CREATE res(TX) TO "".
+    CREATE i(NUM) TO 0.
+    SEASON i < level,
+        SET res TO res + "  ".
+        SET i TO i + 1.
+    /SEASON.
+    GIVE res.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
+#  generate_body — generate C code for a list of AST nodes
+# ──────────────────────────────────────────────────────────────
+ACTION generate_body(bd(LIST), indent(NUM)),
+    CREATE res(TX) TO "".
+    CREATE i(NUM) TO 0.
+    CREATE node_el(TX) TO "".
+    SEASON i < COUNT bd,
+        REAP node_el FROM plant_list_get, bd, i.
+        REAP node_code FROM generate_node, node_el, indent.
+        IF node_code > "",
+            SET res TO res + node_code.
+        /IF.
+        SET i TO i + 1.
+    /SEASON.
+    GIVE res.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
+#  generate_node — dispatch AST node by type
+# ──────────────────────────────────────────────────────────────
+ACTION generate_node(node, indent(NUM)),
+    REAP ntype FROM _map_get, node, "type".
+  
+    # ── show_stmt: SHOW expr. → plant_print(expr); ────────────
+    IF ntype IS "show_stmt",
+        REAP val FROM _map_get, node, "value".
+        REAP cval FROM translate_expr, val.
+        REAP cval FROM _handle_cat, cval.
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  plant_print(" + cval + ");\n".
+    /IF.
+  
+    # ── create_stmt: CREATE var(TYPE) TO val. → long/TX var = val; ─
+    IF ntype IS "create_stmt",
+        REAP target FROM _map_get, node, "target".
+        REAP vtype FROM _map_get, node, "var_type".
+        REAP val FROM _map_get, node, "value".
+        REAP cval FROM translate_expr, val.
+        REAP cval FROM _handle_cat, cval.
+        REAP isel FROM indent_str, indent.
+        IF vtype IS "NUM",
+            GIVE isel + "  long " + target + " = " + cval + ";\n".
+        /IF.
+        IF vtype IS "FACT",
+            GIVE isel + "  int " + target + " = " + cval + ";\n".
+        /IF.
+        IF vtype IS "LIST",
+            GIVE isel + "  PlantArray* " + target + " = " + cval + ";\n".
+        /IF.
+        IF vtype ISNT "NUM" AND vtype ISNT "FACT" AND vtype ISNT "LIST",
+            GIVE isel + "  tx_t " + target + " = " + cval + ";\n".
+        /IF.
+    /IF.
+  
+    # ── set_stmt: SET target TO val. → target = val; ──────────
+    IF ntype IS "set_stmt",
+        REAP target FROM _map_get, node, "target".
+        REAP val FROM _map_get, node, "value".
+        REAP cval FROM translate_expr, val.
+        REAP cval FROM _handle_cat, cval.
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  " + target + " = " + cval + ";\n".
+    /IF.
+  
+    # ── let_stmt: LET var AS TYPE IS val. → type var = val; ──
+    IF ntype IS "let_stmt",
+        REAP target FROM _map_get, node, "target".
+        REAP vtype FROM _map_get, node, "var_type".
+        REAP val FROM _map_get, node, "value".
+        REAP cval FROM translate_expr, val.
+        REAP isel FROM indent_str, indent.
+        IF vtype IS "NUM",
+            GIVE isel + "  long " + target + " = " + cval + ";\n".
+        /IF.
+        IF vtype ISNT "NUM",
+            GIVE isel + "  tx_t " + target + " = " + cval + ";\n".
+        /IF.
+    /IF.
+  
+    # ── give_stmt: GIVE val. → return val; ────────────────────
+    IF ntype IS "give_stmt",
+        REAP val FROM _map_get, node, "value".
+        REAP cval FROM translate_expr, val.
+        REAP cval FROM _handle_cat, cval.
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  return " + cval + ";\n".
+    /IF.
+  
+    # ── break_stmt → break; ───────────────────────────────────
+    IF ntype IS "break_stmt",
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  break;\n".
+    /IF.
+  
+    # ── continue_stmt → continue; ─────────────────────────────
+    IF ntype IS "continue_stmt",
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  continue;\n".
+    /IF.
+  
+    # ── put_stmt: PUT item INTO target. → plant_array_push(…) ─
+    IF ntype IS "put_stmt",
+        REAP item FROM _map_get, node, "item".
+        REAP target FROM _map_get, node, "target".
+        REAP citem FROM translate_expr, item.
+        REAP citem FROM _handle_cat, citem.
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  " + target + " = plant_list_push(" + target + ", " + citem + ");\n".
+    /IF.
+  
+    # ── reap_stmt: REAP var FROM action, args. → var = action(…); ─
+    IF ntype IS "reap_stmt",
+        REAP tgt FROM _map_get, node, "target".
+        REAP act FROM _map_get, node, "action".
+        REAP act FROM strings:REPLACE, act, ":", "_".
+        CREATE args(LIST) TO _map_get(node, "args").
+        CREATE argstr(TX) TO "".
+        CREATE ai(NUM) TO 0.
+        CREATE arg_el(TX) TO "".
+        SEASON ai < COUNT args,
+            REAP arg_el FROM plant_list_get, args, ai.
+            CREATE aexpr(TX) TO arg_el.
+            REAP arg0 FROM substring, arg_el, 0, 1.
+            IF arg0 ISNT "\"",
+                REAP aexpr FROM translate_expr, arg_el.
+                REAP aexpr FROM _handle_cat, aexpr.
+            /IF.
+            IF ai > 0, SET argstr TO argstr + ", ". /IF.
+            SET argstr TO argstr + aexpr.
+            SET ai TO ai + 1.
+        /SEASON.
+        REAP isel FROM indent_str, indent.
+        IF tgt IS "_",
+            GIVE isel + "  " + act + "(" + argstr + ");\n".
+        /IF.
+        IF tgt ISNT "_",
+            GIVE isel + "  " + tgt + " = " + act + "(" + argstr + ");\n".
+        /IF.
+    /IF.
+  
+    # ── if_stmt: IF cond, body /IF. ──────────────────────────
+    IF ntype IS "if_stmt",
+        REAP cond FROM _map_get, node, "cond".
+        REAP bd FROM _map_get, node, "body".
+        REAP ccond FROM translate_expr, cond.
+        REAP ccond FROM handle_strcmp, ccond.
+        REAP isel FROM indent_str, indent.
+        CREATE ccode(TX) TO isel + "  if (" + ccond + ") \{\n".
+        REAP bcode FROM generate_body, bd, indent + 2.
+        SET ccode TO ccode + bcode + isel + "  \}\n".
+        GIVE ccode.
+    /IF.
+  
+    # ── season_stmt: SEASON cond, body /SEASON. → while(cond) {…} ─
+    IF ntype IS "season_stmt",
+        REAP cond FROM _map_get, node, "cond".
+        REAP bd FROM _map_get, node, "body".
+        REAP ccond FROM translate_expr, cond.
+        REAP ccond FROM handle_strcmp, ccond.
+        REAP isel FROM indent_str, indent.
+        CREATE ccode(TX) TO isel + "  while (" + ccond + ") \{\n".
+        REAP bcode FROM generate_body, bd, indent + 2.
+        SET ccode TO ccode + bcode + isel + "  \}\n".
+        GIVE ccode.
+    /IF.
+  
+    # ── cycle_stmt: FROM/TO → for(iter=from; iter<=to; iter+=step) ─
+    IF ntype IS "cycle_stmt",
+        REAP ivar FROM _map_get, node, "iterVar".
+        REAP fromExpr FROM _map_get, node, "fromExpr".
+        REAP toExpr FROM _map_get, node, "toExpr".
+        REAP stepExpr FROM _map_get, node, "stepExpr".
+        REAP listExpr FROM _map_get, node, "listExpr".
+        REAP indexVar FROM _map_get, node, "indexVar".
+        REAP bd FROM _map_get, node, "body".
+        REAP isel FROM indent_str, indent.
+        CREATE ccode(TX) TO "".
+    
+        # FROM/TO form
+        IF fromExpr ISNT "",
+            REAP cfrom FROM translate_expr, fromExpr.
+            REAP cto FROM translate_expr, toExpr.
+            CREATE stepstr(TX) TO "1".
+            IF stepExpr > "" AND stepExpr ISNT "null",
+                REAP cstep FROM translate_expr, stepExpr.
+                SET stepstr TO cstep.
+            /IF.
+            SET ccode TO isel + "  for (long " + ivar + " = " + cfrom + "; " + ivar + " <= " + cto + "; " + ivar + " += " + stepstr + ") \{\n".
+            REAP bcode FROM generate_body, bd, indent + 2.
+            SET ccode TO ccode + bcode + isel + "  \}\n".
+            GIVE ccode.
+        /IF.
+    
+        # IN list form (CYCLE var IN list)
+        IF listExpr ISNT "",
+            CREATE idxvar(TX) TO "__cycle_i".
+            IF indexVar ISNT "" AND indexVar ISNT "null",
+                SET idxvar TO indexVar.
+            /IF.
+            REAP clist FROM translate_expr, listExpr.
+            SET ccode TO isel + "  \{\n".
+            SET ccode TO ccode + isel + "    long " + idxvar + " = 0;\n".
+            SET ccode TO ccode + isel + "    while (" + idxvar + " < plant_array_length(" + clist + ")) \{\n".
+            SET ccode TO ccode + isel + "      tx_t " + ivar + " = plant_array_get(" + clist + ", " + idxvar + ");\n".
+            REAP bcode FROM generate_body, bd, indent + 4.
+            SET ccode TO ccode + bcode + isel + "      " + idxvar + "++;\n".
+            SET ccode TO ccode + isel + "    }\n".
+            SET ccode TO ccode + isel + "  }\n".
+            GIVE ccode.
+        /IF.
+    
+        GIVE "".
+    /IF.
+  
+    # ── match_stmt: MATCH expr { Variant -> { stmts } } → switch ─
+    IF ntype IS "match_stmt",
+        REAP subj FROM _map_get, node, "subjectExpr".
+        CREATE clauses(LIST) TO _map_get(node, "clauses").
+        REAP csubj FROM translate_expr, subj.
+        REAP isel FROM indent_str, indent.
+        CREATE ccode(TX) TO isel + "  switch (" + csubj + ") \{\n".
+        CREATE ci(NUM) TO 0.
+        CREATE clause(TX) TO "".
+        SEASON ci < COUNT clauses,
+            REAP clause FROM plant_list_get, clauses, ci.
+            REAP vname FROM _map_get, clause, "variantName".
+            REAP binding FROM _map_get, clause, "binding".
+            REAP cbody FROM _map_get, clause, "bodyStatements".
+            SET ccode TO ccode + isel + "    case " + vname + ":\n".
+            IF binding > "" AND binding ISNT "null",
+                SET ccode TO ccode + isel + "      \{\n".
+                SET ccode TO ccode + isel + "        tx_t " + binding + " = " + csubj + ";\n".
+                REAP bcode FROM generate_body, cbody, indent + 4.
+                SET ccode TO ccode + bcode + isel + "      \}\n".
+            /IF.
+            IF binding IS "" OR binding IS "null",
+                REAP bcode FROM generate_body, cbody, indent + 4.
+                SET ccode TO ccode + bcode.
+            /IF.
+            SET ccode TO ccode + isel + "      break;\n".
+            SET ci TO ci + 1.
+        /SEASON.
+        SET ccode TO ccode + isel + "  \}\n".
+        GIVE ccode.
+    /IF.
+  
+    # ── external_decl: ACTION name(params) -> external. → no code (plant_compat.h) ─
+    IF ntype IS "external_decl",
+        GIVE "".
+    /IF.
+
+    # ── action_decl: ACTION name(params), body /ACTION. → void name(…) {…} ─
+    IF ntype IS "action_decl",
+        REAP aname FROM _map_get, node, "name".
+        CREATE params(LIST) TO _map_get(node, "params").
+        REAP bd FROM _map_get, node, "body".
+        CREATE paramstr(TX) TO "".
+        CREATE pi(NUM) TO 0.
+        CREATE param_el(TX) TO "".
+        SEASON pi < COUNT params,
+            REAP param_el FROM plant_list_get, params, pi.
+            REAP pname FROM _map_get, param_el, "name".
+            REAP ptype FROM _map_get, param_el, "type".
+            CREATE ctype(TX) TO "tx_t".
+            IF ptype IS "NUM", SET ctype TO "long". /IF.
+            IF ptype IS "FACT", SET ctype TO "int". /IF.
+            IF ptype IS "LIST", SET ctype TO "PlantArray*". /IF.
+            IF pi > 0, SET paramstr TO paramstr + ", ". /IF.
+            SET paramstr TO paramstr + ctype + " " + pname.
+            SET pi TO pi + 1.
+        /SEASON.
+        CREATE ccode(TX) TO "tx_t " + aname + "(" + paramstr + ") \{\n".
+        CREATE implicit(LIST) TO collect_implicit(bd, params).
+        CREATE dcode(TX) TO "".
+        CREATE di(NUM) TO 0.
+        CREATE dv(TX) TO "".
+        SEASON di < COUNT implicit,
+            REAP dv FROM plant_list_get, implicit, di.
+            SET dcode TO dcode + "  tx_t " + dv + " = \"\";\n".
+            SET di TO di + 1.
+        /SEASON.
+        REAP bcode FROM generate_body, bd, 1.
+        IF (COUNT bd) IS 0,
+            SET bcode TO "  return " + aname + ";\n".
+        /IF.
+        IF (COUNT bd) > 0,
+            CREATE bd_count(NUM) TO COUNT bd.
+            CREATE last_idx(NUM) TO bd_count - 1.
+            CREATE last_nd(TX) TO plant_list_get(bd, last_idx).
+            CREATE last_ty(TX) TO _map_get(last_nd, "type").
+            IF last_ty ISNT "give_stmt", SET bcode TO bcode + "  return " + aname + ";\n". /IF.
+        /IF.
+        SET ccode TO ccode + dcode + bcode + "\}\n".
+        GIVE ccode.
+    /IF.
+  
+    # ── enum_decl: ENUM name { MEMBER, … } → typedef enum { … } name; ─
+    IF ntype IS "enum_decl",
+        REAP ename FROM _map_get, node, "name".
+        CREATE members(LIST) TO _map_get(node, "members").
+        CREATE ccode(TX) TO "typedef enum \{\n  ".
+        CREATE mi(NUM) TO 0.
+        CREATE member_el(TX) TO "".
+        SEASON mi < COUNT members,
+            REAP member_el FROM plant_list_get, members, mi.
+            IF mi > 0, SET ccode TO ccode + ",\n  ". /IF.
+            SET ccode TO ccode + member_el.
+            SET mi TO mi + 1.
+        /SEASON.
+        SET ccode TO ccode + "\n\} " + ename + ";\n".
+        GIVE ccode.
+    /IF.
+    GIVE "".
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
+#  _map_get — safe MAP field access (external FFI)
+# ──────────────────────────────────────────────────────────────
+ACTION _map_get(m, key(TX)) -> external.
+ACTION plant_list_get(lst, idx(NUM)) -> external.
+ACTION char_at(s(TX), idx(NUM)) -> external.
+ACTION substring(s(TX), start(NUM), end(NUM)) -> external.
+ACTION find_any(s(TX), delims(TX)) -> external.
+ACTION handle_brackets(expr(TX)) -> external.
+ACTION handle_strcmp(expr(TX)) -> external.
+ACTION str_eq(a(TX), b(TX)) -> external.
+
+# ──────────────────────────────────────────────────────────────
+#  generate_c — main entry point
+# ──────────────────────────────────────────────────────────────
+ACTION generate_c(ast(LIST)),
+    CREATE header(TX) TO "#include <plant_compat.h>\n\n".
+    CREATE decl_code(TX) TO "".
+    CREATE stmt_code(TX) TO "".
+    CREATE has_decl(NUM) TO 0.
+    CREATE has_stmt(NUM) TO 0.
+    CREATE i(NUM) TO 0.
+    CREATE node_el(TX) TO "".
+    CREATE pro_code(TX) TO "".
+    CREATE pi(NUM) TO 0.
+    CREATE param_el(TX) TO "".
+    CREATE pname(TX) TO "".
+    CREATE ptype(TX) TO "".
+    CREATE ctype(TX) TO "".
+    CREATE aname(TX) TO "".
+    CREATE paramstr(TX) TO "".
+    # pass 1: forward declarations for every action_decl
+    SET i TO 0.
+    SEASON i < COUNT ast,
+        REAP node_el FROM plant_list_get, ast, i.
+        REAP ntype FROM _map_get, node_el, "type".
+        IF ntype IS "action_decl",
+            REAP aname FROM _map_get, node_el, "name".
+            CREATE params2(LIST) TO _map_get(node_el, "params").
+            SET paramstr TO "".
+            SET pi TO 0.
+            SEASON pi < COUNT params2,
+                REAP param_el FROM plant_list_get, params2, pi.
+                REAP pname FROM _map_get, param_el, "name".
+                REAP ptype FROM _map_get, param_el, "type".
+                SET ctype TO "tx_t".
+                IF ptype IS "NUM", SET ctype TO "long". /IF.
+                IF ptype IS "FACT", SET ctype TO "int". /IF.
+                IF ptype IS "LIST", SET ctype TO "PlantArray*". /IF.
+                IF pi > 0, SET paramstr TO paramstr + ", ". /IF.
+                SET paramstr TO paramstr + ctype + " " + pname.
+                SET pi TO pi + 1.
+            /SEASON.
+            SET pro_code TO pro_code + "tx_t " + aname + "(" + paramstr + ");\n".
+        /IF.
+        SET i TO i + 1.
+    /SEASON.
+    CREATE implicit(LIST) TO collect_implicit(ast, plant_list_make(0)).
+    CREATE dcode(TX) TO "".
+    CREATE di(NUM) TO 0.
+    CREATE dv(TX) TO "".
+    SEASON di < COUNT implicit,
+        REAP dv FROM plant_list_get, implicit, di.
+        SET dcode TO dcode + "  tx_t " + dv + " = \"\";\n".
+        SET di TO di + 1.
+    /SEASON.
+    SET i TO 0.
+    SEASON i < COUNT ast,
+        REAP node_el FROM plant_list_get, ast, i.
+        REAP ntype FROM _map_get, node_el, "type".
+        IF ntype IS "action_decl" OR ntype IS "enum_decl",
+            REAP nd_code FROM generate_node, node_el, 0.
+            SET decl_code TO decl_code + nd_code.
+            SET has_decl TO 1.
+        /IF.
+        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl",
+            REAP ns_code FROM generate_node, node_el, 0.
+            SET stmt_code TO stmt_code + ns_code.
+            SET has_stmt TO 1.
+        /IF.
+        SET i TO i + 1.
+    /SEASON.
+    IF has_stmt,
+        SET stmt_code TO "int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n" + dcode + stmt_code + "  return 0;\n}\n".
+    /IF.
+    GIVE header + pro_code + "\n" + decl_code + stmt_code.
+/ACTION.
+
+
+# ── get_cli_arg — FFI external stub ─────────────────────────
+# Linked to process.argv in the JS runtime.
+# Falls back to "test.plant" when no argument is provided.
+
+ACTION get_cli_arg(idx(NUM)) -> external.
+
+# ═══════════════════════════════════════════════════════════
+#  Compiler Pipeline — Stage 0 self-hosting driver
+# ═══════════════════════════════════════════════════════════
+
+# 1. Source file path (default: test.plant)
+REAP arg0 FROM get_cli_arg, 0.
+IF arg0 IS "-h" OR arg0 IS "--help",
+  SHOW "plantc — PlantLang self-hosted compiler".
+  SHOW "usage: plantc <source.plant> [out.c]".
+  SHOW "options:".
+  SHOW "  -h, --help     show this help and exit".
+  SHOW "  -v, --version  show version and exit".
+  GIVE 0.
+/IF.
+IF arg0 IS "-v" OR arg0 IS "--version",
+  SHOW "plantc 1.0.0-phase5 (self-hosted)".
+  GIVE 0.
+/IF.
+REAP source_path FROM get_cli_arg, 0.
+SHOW "input: " + source_path.
+
+# 2. Validate
+REAP exists FROM fs:EXISTS, source_path.
+IF exists ISNT "1",
+  SHOW "Error: file not found — " + source_path.
+  GIVE 1.
+/IF.
+
+# 3. Read
+REAP source_text FROM fs:READ, source_path.
+
+# 4. Tokenize
+SHOW "tokenizing...".
+REAP tokens FROM scan_tokens, source_text.
+
+# 5. Parse
+SHOW "parsing...".
+REAP program_ast FROM parse_program, tokens.
+REAP body FROM _map_get, program_ast, "body".
+
+# 6. Code generate
+SHOW "generating C...".
+REAP c_code FROM generate_c, body.
+
+# 7. Determine output path (use second CLI arg if provided)
+REAP out_path FROM get_cli_arg, 1.
+IF out_path IS "",
+  REAP out_path FROM strings:REPLACE, source_path, ".plant", ".c".
+/IF.
+REAP written FROM fs:WRITE, out_path, c_code.
+REAP c_len FROM strings:LENGTH, c_code.
+SHOW "output: " + c_len + " bytes to " + out_path.
+CALM.

@@ -18,14 +18,27 @@ ACTION get_cli_arg(idx(NUM)) -> external.
 # ═══════════════════════════════════════════════════════════
 
 # 1. Source file path (default: test.plant)
+REAP arg0 FROM get_cli_arg, 0.
+IF arg0 IS "-h" OR arg0 IS "--help",
+  SHOW "plantc — PlantLang self-hosted compiler".
+  SHOW "usage: plantc <source.plant> [out.c]".
+  SHOW "options:".
+  SHOW "  -h, --help     show this help and exit".
+  SHOW "  -v, --version  show version and exit".
+  GIVE 0.
+/IF.
+IF arg0 IS "-v" OR arg0 IS "--version",
+  SHOW "plantc 1.0.0-phase5 (self-hosted)".
+  GIVE 0.
+/IF.
 REAP source_path FROM get_cli_arg, 0.
 SHOW "input: " + source_path.
 
 # 2. Validate
 REAP exists FROM fs:EXISTS, source_path.
-IF NOT exists,
+IF exists ISNT "1",
   SHOW "Error: file not found — " + source_path.
-  CALM.
+  GIVE 1.
 /IF.
 
 # 3. Read

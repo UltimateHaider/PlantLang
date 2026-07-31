@@ -4,6 +4,30 @@
 
 ---
 
+## Quick Start — Native Self-Hosting Toolchain
+
+PlantLang ships a self-hosted C compiler (`src/plantc/*.plant` compiled to C) with a
+`make`-driven native toolchain. Requires `gcc` and `make` (clang-format/cppcheck optional):
+
+```sh
+make all        # full native build → bin/plantc (self-hosted, v1→v2→v3 chain)
+make self       # multi-generation self-hosting + byte-convergence check
+make test       # native integration suite (compile + run + compare)
+make install    # install to ~/.local (PREFIX=/path/to/prefix to override)
+```
+
+Compile a program:
+
+```sh
+./bin/plantc hello.plant out.c          # .plant → C
+gcc -w -O0 -I runtime/c out.c runtime/c/plant_runtime.c -o out
+./out
+```
+
+CLI: `./bin/plantc --help` / `--version`. See [docs/BUILD.md](docs/BUILD.md) for details.
+
+---
+
 ## 1. Philosophical Foundations (Prose Programming)
 PlantLang breaks away from symbolic, bracket-heavy syntax. It is designed to be read as a natural language, prioritizing clarity for both humans and AI models:
 * **Human-Readable:** Syntax flows like sentences.

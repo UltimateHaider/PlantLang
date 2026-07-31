@@ -1,5 +1,36 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.45.1 — 2026
+
+### New: Native Self-Hosting Toolchain (Makefile)
+- **Makefile rewrite** — native `make` toolchain with `.DEFAULT_GOAL`:
+  `all`, `self`, `test`, `test-js`, `fmt`, `lint`, `dist`, `install`, `help`, `clean`
+- **`make all`** — full native build from a clean tree: `dist/plantc` (v1 bootstrap) →
+  `build/plantc_v2` → `build/plantc_v3` → `bin/plantc`
+- **`make self`** — multi-generation self-hosting with a byte-convergence check
+  (`plantc_v3.c == plantc_v4.c == plantc_v5.c`); fixed point currently 69 659 bytes
+- **`make test`** — native integration suite (`tests/native/`): CLI checks plus
+  compile + gcc + run + output-diff cases (hello, join + `strings:LENGTH`,
+  number concatenation, string escapes, list ops, module calls) — 9/9 passing
+- **`make fmt` / `make lint`** — clang-format / cppcheck on generated C, skip
+  gracefully when the tools are missing
+- **`make dist`** — versioned tarball `release/plantlang-<VERSION>.tar.gz` with
+  `DISTCHECK` validation (unpack → `make all` → `make test` inside the tarball)
+- **`make install`** — installs `bin/plantc` + C runtime headers to `$PREFIX`
+  (default `~/.local`) and verifies `plantc --version`
+- **CLI** — `plantc --help` / `--version` in `src/plantc/main.plant`; missing
+  input file now exits nonzero (driver compares `fs:EXISTS` result with
+  `ISNT "1"` — `NOT` on a string flag is invalid under C semantics)
+- **Docs** — `PHASE3_COMPLETED.md`, `docs/BUILD.md`, README quick-start section
+
+### Fixed (self-hosting compiler)
+- `_handle_cat`: quote-toggle bug on `"\"" + x + "\""` patterns (escape-skip fix)
+- `_handle_cat`: pure-digit concat parts wrapped in `_from_long(...)`
+- `_handle_func_paren`: two-pass split for spaced `kw (` form (`LEN ( x )`)
+- `put_stmt` → `plant_list_push(target, item)`; `create_stmt` LIST → `PlantArray*`
+- `translate_expr`: ` : ` module separators → `_` (`strings:LENGTH(r)` in expressions)
+- Action trailing-return parity; `(COUNT x)` parenthesization fix
+
 ## v0.45.0 — 2026
 
 ### New: Self-Hosting Compiler Pipeline (Stage 0)
