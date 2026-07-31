@@ -44,8 +44,11 @@ REAP body FROM _map_get, program_ast, "body".
 SHOW "generating C...".
 REAP c_code FROM generate_c, body.
 
-# 7. Write
-REAP out_path FROM strings:REPLACE, source_path, ".plant", ".c".
+# 7. Determine output path (use second CLI arg if provided)
+REAP out_path FROM get_cli_arg, 1.
+IF out_path IS "",
+  REAP out_path FROM strings:REPLACE, source_path, ".plant", ".c".
+/IF.
 REAP written FROM fs:WRITE, out_path, c_code.
 REAP c_len FROM strings:LENGTH, c_code.
 SHOW "output: " + c_len + " bytes to " + out_path.

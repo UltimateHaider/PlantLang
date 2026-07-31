@@ -1,1 +1,3 @@
-SHOW "Hello_World!".
+PROGRAM hello COMPILE:
+  SHOW "Hello_World!"
+.

@@ -70,10 +70,20 @@ const char* plant_env_get_weather(void);
 void        plant_entity_set_species(void* entity, const char* species_name);
 
 /* ── v0.43.0: PlantArray type (dynamic string array for split results) ── */
+#define PLANT_ARRAY_MAGIC 0x504C4152 /* "PLAR" */
+
 typedef struct PlantArray {
+    uint64_t magic;  /* PLANT_ARRAY_MAGIC for reliable type detection */
     int64_t  count;
+    int64_t  capacity;
     char**   items;
 } PlantArray;
+
+PlantArray* plant_list_create(int64_t capacity);
+void*       plant_list_get(PlantArray* list, int64_t index);
+void        plant_list_set(PlantArray* list, int64_t index, void* value);
+PlantArray* plant_list_push(PlantArray* list, void* value);
+PlantArray* plant_list_make(int64_t count, ...);
 
 /* ── v0.44.0: Option/Result Tagged Union Helpers ── */
 typedef struct PlantTagged {

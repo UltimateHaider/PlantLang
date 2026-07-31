@@ -167,24 +167,28 @@ ACTION is_alpha_start(ch(TX)),
 ACTION match_ident_or_keyword(src(TX), i(NUM), n(NUM)),
   CREATE wd(TX) TO "".
   CREATE ni(NUM) TO i.
+  CREATE ch(TX) TO "".
   SEASON ni < n,
-    REAP ok FROM is_alnum, src[ni].
+    REAP ok FROM is_alnum, char_at(src, ni).
     IF NOT ok, BREAK. /IF.
-    SET wd TO wd + src[ni].
+    REAP ch FROM char_at, src, ni.
+    SET wd TO wd + ch.
     SET ni TO ni + 1.
   /SEASON.
-  GIVE [wd, ni].
+  GIVE plant_list_make(2, wd, ni).
 /ACTION.
 
 # ── match_number(src, i, n) ───────────────────────────────
 ACTION match_number(src(TX), i(NUM), n(NUM)),
   CREATE num(TX) TO "".
   CREATE ni(NUM) TO i.
-  SEASON ni < n AND src[ni] GREATER THAN OR EQUAL "0" AND src[ni] LESS THAN OR EQUAL "9",
-    SET num TO num + src[ni].
+  CREATE ch(TX) TO "".
+  SEASON ni < n AND char_at(src, ni) GREATER THAN OR EQUAL "0" AND char_at(src, ni) LESS THAN OR EQUAL "9",
+    REAP ch FROM char_at, src, ni.
+    SET num TO num + ch.
     SET ni TO ni + 1.
   /SEASON.
-  GIVE [num, ni].
+  GIVE plant_list_make(2, num, ni).
 /ACTION.
 
 # ── match_string(src, i, n) ───────────────────────────────
@@ -192,21 +196,26 @@ ACTION match_string(src(TX), i(NUM), n(NUM)),
   CREATE val(TX) TO "".
   CREATE si(NUM) TO i.
   CREATE done(FACT) TO FALSE.
-  IF si < n AND src[si] IS "\"", SET si TO si + 1. /IF.
+  CREATE ch(TX) TO "".
+  IF si < n AND char_at(src, si) IS "\"", SET si TO si + 1. /IF.
   SEASON NOT done AND si < n,
-    IF src[si] IS "\"", SET done TO TRUE. /IF.
-    IF src[si] IS "\"", CONTINUE. /IF.
-    IF src[si] IS "\\", SET si TO si + 1. /IF.
-    IF si < n, SET val TO val + src[si]. /IF.
+    REAP ch FROM char_at, src, si.
+    IF ch IS "\"", SET done TO TRUE. /IF.
+    IF ch IS "\"", CONTINUE. /IF.
+    IF ch IS "\\", SET si TO si + 1. /IF.
+    IF si < n,
+      REAP ch FROM char_at, src, si.
+      SET val TO val + ch.
+    /IF.
     IF si < n, SET si TO si + 1. /IF.
   /SEASON.
-  IF si < n AND src[si] IS "\"", SET si TO si + 1. /IF.
-  GIVE [val, si].
+  IF si < n AND char_at(src, si) IS "\"", SET si TO si + 1. /IF.
+  GIVE plant_list_make(2, val, si).
 /ACTION.
 
 # ── skip_comment(src, i, n) ───────────────────────────────
 ACTION skip_comment(src(TX), i(NUM), n(NUM)),
-  SEASON i < n AND src[i] ISNT "\n",
+  SEASON i < n AND char_at(src, i) ISNT "\n",
     SET i TO i + 1.
   /SEASON.
   GIVE i.
@@ -214,12 +223,13 @@ ACTION skip_comment(src(TX), i(NUM), n(NUM)),
 
 # ── scan_tokens(source) ───────────────────────────────────
 ACTION scan_tokens(src(TX)),
-  CREATE tokens(LIST) TO [].
+  CREATE tokens(LIST) TO plant_list_make(0).
   CREATE i(NUM) TO 0.
   CREATE n(NUM) TO LEN(src).
+  CREATE ch(TX) TO "".
 
   SEASON i < n,
-    CREATE ch(TX) TO src[i].
+    REAP ch FROM char_at, src, i.
 
     # Whitespace
     IF ch IS " " OR ch IS "\t" OR ch IS "\r", SET i TO i + 1. /IF.
@@ -236,26 +246,25 @@ ACTION scan_tokens(src(TX)),
 
     # String literal
     IF ch IS "\"", REAP si FROM match_string, src, i, n. /IF.
-    IF ch IS "\"", PUT ["STRING", si[0]] INTO tokens. /IF.
+    IF ch IS "\"", PUT plant_list_make(2, "STRING", si[0]) INTO tokens. /IF.
     IF ch IS "\"", SET i TO si[1]. /IF.
     IF ch IS "\"", CONTINUE. /IF.
 
-    # Depth marker N\  — check before Number (split into inline IFs due
-    # to JS parser limitation — multi-stmt IF bodies not handled).
-    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND src[i + 1] IS "\\",
+    # Depth marker N\  — check before Number
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND char_at(src, i + 1) IS "\\",
       REAP si FROM match_number, src, i, n. /IF.
-    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND src[i + 1] IS "\\",
-      PUT ["DEPTH", si[0]] INTO tokens. /IF.
-    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND src[i + 1] IS "\\",
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND char_at(src, i + 1) IS "\\",
+      PUT plant_list_make(2, "DEPTH", si[0]) INTO tokens. /IF.
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND char_at(src, i + 1) IS "\\",
       SET i TO si[1] + 1. /IF.
-    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND src[i + 1] IS "\\" AND i < n AND src[i] IS " ",
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND char_at(src, i + 1) IS "\\" AND i < n AND char_at(src, i) IS " ",
       SET i TO i + 1. /IF.
-    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND src[i + 1] IS "\\",
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND char_at(src, i + 1) IS "\\",
       CONTINUE. /IF.
 
     # Number
     IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", REAP si FROM match_number, src, i, n. /IF.
-    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", PUT ["NUMBER", si[0]] INTO tokens. /IF.
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", PUT plant_list_make(2, "NUMBER", si[0]) INTO tokens. /IF.
     IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", SET i TO si[1]. /IF.
     IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", CONTINUE. /IF.
 
@@ -263,36 +272,36 @@ ACTION scan_tokens(src(TX)),
     REAP ok FROM is_alpha_start, ch.
     IF ok, REAP si FROM match_ident_or_keyword, src, i, n. /IF.
     IF ok, REAP tok_ty FROM keyword_to_type, si[0]. /IF.
-    IF ok, PUT [tok_ty, si[0]] INTO tokens. /IF.
+    IF ok, PUT plant_list_make(2, tok_ty, si[0]) INTO tokens. /IF.
     IF ok, SET i TO si[1]. /IF.
     IF ok, CONTINUE. /IF.
 
     # DOT_DOT
-    IF ch IS "." AND i + 1 < n AND src[i + 1] IS ".", PUT ["DOT_DOT", ".."] INTO tokens. /IF.
-    IF ch IS "." AND i + 1 < n AND src[i + 1] IS ".", SET i TO i + 2. /IF.
-    IF ch IS "." AND i + 1 < n AND src[i + 1] IS ".", CONTINUE. /IF.
+    IF ch IS "." AND i + 1 < n AND char_at(src, i + 1) IS ".", PUT plant_list_make(2, "DOT_DOT", "..") INTO tokens. /IF.
+    IF ch IS "." AND i + 1 < n AND char_at(src, i + 1) IS ".", SET i TO i + 2. /IF.
+    IF ch IS "." AND i + 1 < n AND char_at(src, i + 1) IS ".", CONTINUE. /IF.
 
     # ARROW
-    IF ch IS "-" AND i + 1 < n AND src[i + 1] IS ">", PUT ["ARROW", "->"] INTO tokens. /IF.
-    IF ch IS "-" AND i + 1 < n AND src[i + 1] IS ">", SET i TO i + 2. /IF.
-    IF ch IS "-" AND i + 1 < n AND src[i + 1] IS ">", CONTINUE. /IF.
+    IF ch IS "-" AND i + 1 < n AND char_at(src, i + 1) IS ">", PUT plant_list_make(2, "ARROW", "->") INTO tokens. /IF.
+    IF ch IS "-" AND i + 1 < n AND char_at(src, i + 1) IS ">", SET i TO i + 2. /IF.
+    IF ch IS "-" AND i + 1 < n AND char_at(src, i + 1) IS ">", CONTINUE. /IF.
 
     # STAR_STAR
-    IF ch IS "*" AND i + 1 < n AND src[i + 1] IS "*", PUT ["STAR_STAR", "**"] INTO tokens. /IF.
-    IF ch IS "*" AND i + 1 < n AND src[i + 1] IS "*", SET i TO i + 2. /IF.
-    IF ch IS "*" AND i + 1 < n AND src[i + 1] IS "*", CONTINUE. /IF.
+    IF ch IS "*" AND i + 1 < n AND char_at(src, i + 1) IS "*", PUT plant_list_make(2, "STAR_STAR", "**") INTO tokens. /IF.
+    IF ch IS "*" AND i + 1 < n AND char_at(src, i + 1) IS "*", SET i TO i + 2. /IF.
+    IF ch IS "*" AND i + 1 < n AND char_at(src, i + 1) IS "*", CONTINUE. /IF.
 
     # Single-char
     REAP tok_ty FROM char_type, ch.
-    IF tok_ty ISNT "", PUT [tok_ty, ch] INTO tokens. /IF.
+    IF tok_ty ISNT "", PUT plant_list_make(2, tok_ty, ch) INTO tokens. /IF.
     IF tok_ty ISNT "", SET i TO i + 1. /IF.
     IF tok_ty ISNT "", CONTINUE. /IF.
 
     # Unknown
-    PUT ["ERROR", ch] INTO tokens.
+    PUT plant_list_make(2, "ERROR", ch) INTO tokens.
     SET i TO i + 1.
   /SEASON.
 
-  PUT ["EOF", ""] INTO tokens.
+  PUT plant_list_make(2, "EOF", "") INTO tokens.
   GIVE tokens.
 /ACTION.

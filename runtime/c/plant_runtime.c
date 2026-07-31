@@ -1,6 +1,7 @@
 #include "plant_runtime.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 #include <sys/socket.h>
 #include <netdb.h>
 #include <unistd.h>
@@ -426,10 +427,12 @@ int plant_file_delete(const char* filepath) {
 PlantArray* plant_string_split(const char* str, const char* delimiter) {
     PlantArray* arr = (PlantArray*)plant_alloc(sizeof(PlantArray));
     arr->count = 0;
+    arr->capacity = 0;
     arr->items = NULL;
     if (!str || !delimiter || delimiter[0] == '\0') return arr;
     size_t delim_len = strlen(delimiter);
     int64_t capacity = 8;
+    arr->capacity = capacity;
     arr->items = (char**)plant_alloc((size_t)capacity * sizeof(char*));
     const char* start = str;
     const char* end;
@@ -438,9 +441,9 @@ PlantArray* plant_string_split(const char* str, const char* delimiter) {
         char* seg = (char*)plant_alloc(seg_len + 1);
         memcpy(seg, start, seg_len);
         seg[seg_len] = '\0';
-        if (arr->count >= capacity) {
-            capacity *= 2;
-            arr->items = (char**)realloc(arr->items, (size_t)capacity * sizeof(char*));
+        if (arr->count >= arr->capacity) {
+            arr->capacity *= 2;
+            arr->items = (char**)realloc(arr->items, (size_t)arr->capacity * sizeof(char*));
         }
         arr->items[arr->count++] = seg;
         start = end + delim_len;
@@ -450,12 +453,65 @@ PlantArray* plant_string_split(const char* str, const char* delimiter) {
     char* rem = (char*)plant_alloc(rem_len + 1);
     memcpy(rem, start, rem_len);
     rem[rem_len] = '\0';
-    if (arr->count >= capacity) {
-        capacity++;
-        arr->items = (char**)realloc(arr->items, (size_t)capacity * sizeof(char*));
+    if (arr->count >= arr->capacity) {
+        arr->capacity++;
+        arr->items = (char**)realloc(arr->items, (size_t)arr->capacity * sizeof(char*));
     }
     arr->items[arr->count++] = rem;
     return arr;
+}
+
+/* ── v0.45.0: PlantArray* list operations for tx_t-valued dynamic arrays ── */
+
+PlantArray* plant_list_create(int64_t capacity) {
+    if (capacity < 0) capacity = 0;
+    PlantArray* list = (PlantArray*)plant_alloc(sizeof(PlantArray));
+    list->magic = PLANT_ARRAY_MAGIC;
+    list->count = 0;
+    list->capacity = capacity;
+    if (capacity > 0) {
+        list->items = (char**)plant_alloc((size_t)capacity * sizeof(char*));
+        for (int64_t i = 0; i < capacity; i++) list->items[i] = NULL;
+    } else {
+        list->items = NULL;
+    }
+    return list;
+}
+
+void* plant_list_get(PlantArray* list, int64_t index) {
+    if (!list) return "";
+    if (index < 0 || index >= list->count) return "";
+    char* v = list->items[index];
+    return v ? v : "";
+}
+
+void plant_list_set(PlantArray* list, int64_t index, void* value) {
+    if (!list || index < 0 || index >= list->capacity) return;
+    list->items[index] = value;
+    if (index >= list->count) list->count = index + 1;
+}
+
+PlantArray* plant_list_push(PlantArray* list, void* value) {
+    if (!list) return list;
+    if (list->count >= list->capacity) {
+        int64_t new_cap = list->capacity == 0 ? 8 : list->capacity * 2;
+        list->items = (char**)realloc(list->items, (size_t)new_cap * sizeof(char*));
+        list->capacity = new_cap;
+    }
+    list->items[list->count++] = value;
+    return list;
+}
+
+PlantArray* plant_list_make(int64_t count, ...) {
+    va_list ap;
+    va_start(ap, count);
+    PlantArray* list = plant_list_create(count);
+    for (int64_t i = 0; i < count; i++) {
+        void* v = va_arg(ap, void*);
+        plant_list_set(list, i, (char*)v);
+    }
+    va_end(ap);
+    return list;
 }
 
 char* plant_string_trim(const char* str) {

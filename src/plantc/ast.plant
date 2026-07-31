@@ -9,20 +9,20 @@
 # ── Factory: make_node(type, value, children) ──────────────
 # Creates a generic AST node.
 ACTION make_node(ty(TX), val(TX), kids(LIST)),
-  GIVE { type: ty, value: val, children: kids }.
+  GIVE plant_list_make(6, "type", ty, "value", val, "children", kids).
 /ACTION.
 
 # ── Factory: make_leaf(type, value) ────────────────────────
 ACTION make_leaf(ty(TX), val(TX)),
-  GIVE make_node(ty, val, []).
+  GIVE make_node(ty, val, plant_list_make(0)).
 /ACTION.
 
 # ── Factory: make_unary(type, op, operand) ─────────────────
 ACTION make_unary(ty(TX), op(TX), operand),
-  GIVE make_node(ty, op, [operand]).
+  GIVE make_node(ty, op, plant_list_make(1, operand)).
 /ACTION.
 
 # ── Factory: make_binary(type, op, left, right) ────────────
 ACTION make_binary(ty(TX), op(TX), left, right),
-  GIVE make_node(ty, op, [left, right]).
+  GIVE make_node(ty, op, plant_list_make(2, left, right)).
 /ACTION.

@@ -2724,6 +2724,38 @@ class Interpreter {
       if(obj instanceof Map)return obj.get(key);
       return obj&&obj[key];
     });
+    // plant_list_get(lst, idx(NUM)) -> external — list element access
+    this._externalFFI.set('plant_list_get',(args)=>{
+      const list=args[0];
+      const idx=Number(args[1])||0;
+      if(Array.isArray(list))return list[idx];
+      if(list instanceof Map)return list.get(String(idx));
+      return list&&list[idx];
+    });
+    // char_at(s(TX), idx(NUM)) -> external — get char at position
+    this._externalFFI.set('char_at',(args)=>{
+      const s=String(args[0]||'');
+      const idx=Number(args[1])||0;
+      return idx>=0&&idx<s.length?s[idx]:'';
+    });
+    // substring(s(TX), start(NUM), end(NUM)) -> external
+    this._externalFFI.set('substring',(args)=>{
+      const s=String(args[0]||'');
+      const start=Number(args[1])||0;
+      const end=Number(args[2])||s.length;
+      return s.substring(start,end);
+    });
+    // find_any(s(TX), delims(TX)) -> external — find first position of any delimiter char
+    this._externalFFI.set('find_any',(args)=>{
+      const s=String(args[0]||'');
+      const delims=String(args[1]||'');
+      for(let i=0;i<s.length;i++)if(delims.includes(s[i]))return i;
+      return -1;
+    });
+    // handle_brackets(expr(TX)) -> external — C bracket→plant_list_get transform
+    this._externalFFI.set('handle_brackets',(args)=>args[0]);
+    // handle_strcmp(expr(TX)) -> external — C string comparison transform
+    this._externalFFI.set('handle_strcmp',(args)=>args[0]);
   }
 
   _callAction(fn,argVals,instance,parentSoil){

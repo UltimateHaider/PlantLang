@@ -1,0 +1,6 @@
+[Wed Jul 29 07:33:54 PM +04 2026] 🔍 Starting Phase 2: Native Verification & Deep Checks...
+dist/plantc: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=36b45c46da833a5a0e70182eab92e7fdaaef16e7, for GNU/Linux 3.2.0, not stripped
+dist/plantc_native: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=0f3df3da4f065015b0d32a0f265b352435f692c7, for GNU/Linux 3.2.0, not stripped
+[Wed Jul 29 08:44:19 PM +04 2026] 🔍 Starting Phase 2: Native Verification & Deep Checks...
+dist/plantc: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=36b45c46da833a5a0e70182eab92e7fdaaef16e7, for GNU/Linux 3.2.0, not stripped
+dist/plantc_native: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, BuildID[sha1]=4d521d00efef3cbfa3a15fa3f6aedf0e9d757ca0, for GNU/Linux 3.2.0, not stripped
