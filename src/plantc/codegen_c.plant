@@ -46,7 +46,10 @@ ACTION _handle_func(expr(TX), kw(TX), cfn(TX)),
 #  _handle_func_paren — translate "LEN(expr)" -> "strlen(expr)"
 # ──────────────────────────────────────────────────────────────
 ACTION _handle_func_paren(expr(TX), kw(TX), cfn(TX)),
-    REAP parts FROM strings:SPLIT, expr, kw + "(".
+    REAP parts FROM strings:SPLIT, expr, kw + " (".
+    IF COUNT parts IS 1,
+        REAP parts FROM strings:SPLIT, expr, kw + "(".
+    /IF.
     IF COUNT parts IS 1, GIVE expr. /IF.
     REAP p0 FROM plant_list_get, parts, 0.
     CREATE res(TX) TO p0.
@@ -67,23 +70,154 @@ ACTION _handle_func_paren(expr(TX), kw(TX), cfn(TX)),
 #  contain string literals with + as delimiter arguments
 # ──────────────────────────────────────────────────────────────
 ACTION _handle_cat(expr(TX)),
-    REAP parts FROM strings:SPLIT, expr, " + ".
-    IF (COUNT parts) IS 1, GIVE expr. /IF.
+    CREATE parts(LIST) TO plant_list_make(0).
+    CREATE depth(NUM) TO 0.
+    CREATE instr(NUM) TO 0.
+    CREATE i(NUM) TO 0.
+    CREATE ch(TX) TO "".
+    CREATE c0(TX) TO "".
+    CREATE c1(TX) TO "".
+    CREATE seg(TX) TO "".
+    CREATE start(NUM) TO 0.
     CREATE res(TX) TO "".
-    CREATE i(NUM) TO 1.
-    SEASON i < COUNT parts,
-        SET res TO res + "_cat(".
+    CREATE pi(NUM) TO 0.
+    CREATE pel(TX) TO "".
+    CREATE has_str(NUM) TO 0.
+    CREATE has_digit(NUM) TO 0.
+    # scan for top-level " + " (outside parens and strings) and split there
+    SEASON i < LEN(expr),
+        REAP ch FROM char_at, expr, i.
+        IF ch IS "\"", SET instr TO 1 - instr. SET has_str TO 1. /IF.
+        IF instr IS 1 AND ch IS "\\", SET i TO i + 1. /IF.
+        IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", SET has_digit TO 1. /IF.
+        IF instr IS 0 AND ch IS "(", SET depth TO depth + 1. /IF.
+        IF instr IS 0 AND ch IS ")", SET depth TO depth - 1. /IF.
+        IF instr IS 0 AND ch IS "+" AND depth IS 0,
+            REAP c0 FROM char_at, expr, i - 1.
+            REAP c1 FROM char_at, expr, i + 1.
+            IF c0 IS " " AND c1 IS " ",
+                REAP seg FROM substring, expr, start, i - 1.
+                PUT seg INTO parts.
+                SET start TO i + 2.
+            /IF.
+        /IF.
         SET i TO i + 1.
     /SEASON.
-    REAP p0 FROM plant_list_get, parts, 0.
-    SET res TO res + p0.
-    SET i TO 1.
-    SEASON i < COUNT parts,
-        REAP pi FROM plant_list_get, parts, i.
-        SET res TO res + ", " + pi + ")".
-        SET i TO i + 1.
+    IF (COUNT parts) IS 0, GIVE expr. /IF.
+    IF has_str IS 0 AND has_digit IS 1,
+        GIVE strings_REPLACE(expr, " + ", "+").
+    /IF.
+    REAP seg FROM substring, expr, start, LEN(expr).
+    PUT seg INTO parts.
+    CREATE nparts(LIST) TO plant_list_make(0).
+    CREATE ni(NUM) TO 0.
+    CREATE pel2(TX) TO "".
+    CREATE pel2b(TX) TO "".
+    CREATE pd(NUM) TO 0.
+    CREATE pj(NUM) TO 0.
+    CREATE pc(TX) TO "".
+    SEASON ni < COUNT parts,
+        REAP pel2 FROM plant_list_get, parts, ni.
+        REAP pel2b FROM strings:REPLACE, pel2, " ", "".
+        SET pd TO 1.
+        IF pel2b IS "", SET pd TO 0. /IF.
+        SET pj TO 0.
+        SEASON pj < LEN(pel2b),
+            REAP pc FROM char_at, pel2b, pj.
+            IF pc ISNT "0" AND pc ISNT "1" AND pc ISNT "2" AND pc ISNT "3" AND pc ISNT "4" AND pc ISNT "5" AND pc ISNT "6" AND pc ISNT "7" AND pc ISNT "8" AND pc ISNT "9",
+                SET pd TO 0.
+            /IF.
+            SET pj TO pj + 1.
+        /SEASON.
+        IF pd IS 1,
+            SET pel2 TO "_from_long(" + pel2 + ")".
+        /IF.
+        PUT pel2 INTO nparts.
+        SET ni TO ni + 1.
+    /SEASON.
+    SET res TO nparts[0].
+    SET pi TO 1.
+    SEASON pi < COUNT nparts,
+        REAP pel FROM plant_list_get, nparts, pi.
+        SET res TO "_cat(" + res + ", " + pel + ")".
+        SET pi TO pi + 1.
     /SEASON.
     GIVE res.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
+#  collect_implicit — REAP targets never declared (params,
+#  CREATE/LET) in an action body; auto-declare them as tx_t.
+# ──────────────────────────────────────────────────────────────
+ACTION collect_declared_walk(bd(LIST), declared(LIST)),
+  CREATE wi(NUM) TO 0.
+  CREATE nd(TX) TO "".
+  CREATE ty(TX) TO "".
+  SEASON wi < COUNT bd,
+    REAP nd FROM plant_list_get, bd, wi.
+    REAP ty FROM _map_get, nd, "type".
+    IF ty IS "create_stmt" OR ty IS "let_stmt",
+      REAP tgt FROM _map_get, nd, "target".
+      PUT tgt INTO declared.
+    /IF.
+    IF ty IS "if_stmt" OR ty IS "season_stmt",
+      REAP sub_bd FROM _map_get, nd, "body".
+      REAP sub_ret FROM collect_declared_walk, sub_bd, declared.
+    /IF.
+    SET wi TO wi + 1.
+  /SEASON.
+  GIVE "ok".
+/ACTION.
+
+ACTION collect_used_walk(bd(LIST), used(LIST), declared(LIST)),
+  CREATE wi(NUM) TO 0.
+  CREATE nd(TX) TO "".
+  CREATE ty(TX) TO "".
+  SEASON wi < COUNT bd,
+    REAP nd FROM plant_list_get, bd, wi.
+    REAP ty FROM _map_get, nd, "type".
+    IF ty IS "reap_stmt",
+      REAP tgt FROM _map_get, nd, "target".
+      CREATE found(NUM) TO 0.
+      CREATE fi(NUM) TO 0.
+      CREATE fe(TX) TO "".
+      SEASON fi < COUNT declared,
+        REAP fe FROM plant_list_get, declared, fi.
+        IF str_eq(fe, tgt) IS "1", SET found TO 1. /IF.
+        SET fi TO fi + 1.
+      /SEASON.
+      SET fi TO 0.
+      SEASON fi < COUNT used,
+        REAP fe FROM plant_list_get, used, fi.
+        IF str_eq(fe, tgt) IS "1", SET found TO 1. /IF.
+        SET fi TO fi + 1.
+      /SEASON.
+      IF NOT found,
+        PUT tgt INTO used.
+      /IF.
+    /IF.
+    IF ty IS "if_stmt" OR ty IS "season_stmt",
+      REAP sub_bd FROM _map_get, nd, "body".
+      REAP sub_ret FROM collect_used_walk, sub_bd, used, declared.
+    /IF.
+    SET wi TO wi + 1.
+  /SEASON.
+  GIVE "ok".
+/ACTION.
+
+ACTION collect_implicit(bd(LIST), params(LIST)),
+  CREATE used(LIST) TO plant_list_make(0).
+  CREATE declared(LIST) TO plant_list_make(0).
+  CREATE ci(NUM) TO 0.
+  CREATE pn(TX) TO "".
+  SEASON ci < COUNT params,
+    REAP pn FROM _map_get, params[ci], "name".
+    PUT pn INTO declared.
+    SET ci TO ci + 1.
+  /SEASON.
+  REAP sub_ret FROM collect_declared_walk, bd, declared.
+  REAP sub_ret FROM collect_used_walk, bd, used, declared.
+  GIVE used.
 /ACTION.
 
 # ──────────────────────────────────────────────────────────────
@@ -107,6 +241,7 @@ ACTION translate_expr(expr(TX)),
     REAP e FROM strings:REPLACE, e, "TRUE", "1".
     REAP e FROM strings:REPLACE, e, "FALSE", "0".
     REAP e FROM strings:REPLACE, e, "NULL", "NULL".
+    REAP e FROM strings:REPLACE, e, " : ", "_".
     REAP e FROM handle_brackets, e.
     GIVE e.
 /ACTION.
@@ -171,7 +306,10 @@ ACTION generate_node(node, indent(NUM)),
         IF vtype IS "FACT",
             GIVE isel + "  int " + target + " = " + cval + ";\n".
         /IF.
-        IF vtype ISNT "NUM" AND vtype ISNT "FACT",
+        IF vtype IS "LIST",
+            GIVE isel + "  PlantArray* " + target + " = " + cval + ";\n".
+        /IF.
+        IF vtype ISNT "NUM" AND vtype ISNT "FACT" AND vtype ISNT "LIST",
             GIVE isel + "  tx_t " + target + " = " + cval + ";\n".
         /IF.
     /IF.
@@ -205,6 +343,7 @@ ACTION generate_node(node, indent(NUM)),
     IF ntype IS "give_stmt",
         REAP val FROM _map_get, node, "value".
         REAP cval FROM translate_expr, val.
+        REAP cval FROM _handle_cat, cval.
         REAP isel FROM indent_str, indent.
         GIVE isel + "  return " + cval + ";\n".
     /IF.
@@ -226,8 +365,9 @@ ACTION generate_node(node, indent(NUM)),
         REAP item FROM _map_get, node, "item".
         REAP target FROM _map_get, node, "target".
         REAP citem FROM translate_expr, item.
+        REAP citem FROM _handle_cat, citem.
         REAP isel FROM indent_str, indent.
-        GIVE isel + "  plant_array_push(" + target + ", " + citem + ");\n".
+        GIVE isel + "  " + target + " = plant_list_push(" + target + ", " + citem + ");\n".
     /IF.
   
     # ── reap_stmt: REAP var FROM action, args. → var = action(…); ─
@@ -241,8 +381,12 @@ ACTION generate_node(node, indent(NUM)),
         CREATE arg_el(TX) TO "".
         SEASON ai < COUNT args,
             REAP arg_el FROM plant_list_get, args, ai.
-            REAP aexpr FROM translate_expr, arg_el.
-            REAP aexpr FROM _handle_cat, aexpr.
+            CREATE aexpr(TX) TO arg_el.
+            REAP arg0 FROM substring, arg_el, 0, 1.
+            IF arg0 ISNT "\"",
+                REAP aexpr FROM translate_expr, arg_el.
+                REAP aexpr FROM _handle_cat, aexpr.
+            /IF.
             IF ai > 0, SET argstr TO argstr + ", ". /IF.
             SET argstr TO argstr + aexpr.
             SET ai TO ai + 1.
@@ -362,6 +506,11 @@ ACTION generate_node(node, indent(NUM)),
         GIVE ccode.
     /IF.
   
+    # ── external_decl: ACTION name(params) -> external. → no code (plant_compat.h) ─
+    IF ntype IS "external_decl",
+        GIVE "".
+    /IF.
+
     # ── action_decl: ACTION name(params), body /ACTION. → void name(…) {…} ─
     IF ntype IS "action_decl",
         REAP aname FROM _map_get, node, "name".
@@ -383,8 +532,27 @@ ACTION generate_node(node, indent(NUM)),
             SET pi TO pi + 1.
         /SEASON.
         CREATE ccode(TX) TO "tx_t " + aname + "(" + paramstr + ") \{\n".
+        CREATE implicit(LIST) TO collect_implicit(bd, params).
+        CREATE dcode(TX) TO "".
+        CREATE di(NUM) TO 0.
+        CREATE dv(TX) TO "".
+        SEASON di < COUNT implicit,
+            REAP dv FROM plant_list_get, implicit, di.
+            SET dcode TO dcode + "  tx_t " + dv + " = \"\";\n".
+            SET di TO di + 1.
+        /SEASON.
         REAP bcode FROM generate_body, bd, 1.
-        SET ccode TO ccode + bcode + "\}\n".
+        IF (COUNT bd) IS 0,
+            SET bcode TO "  return " + aname + ";\n".
+        /IF.
+        IF (COUNT bd) > 0,
+            CREATE bd_count(NUM) TO COUNT bd.
+            CREATE last_idx(NUM) TO bd_count - 1.
+            CREATE last_nd(TX) TO plant_list_get(bd, last_idx).
+            CREATE last_ty(TX) TO _map_get(last_nd, "type").
+            IF last_ty ISNT "give_stmt", SET bcode TO bcode + "  return " + aname + ";\n". /IF.
+        /IF.
+        SET ccode TO ccode + dcode + bcode + "\}\n".
         GIVE ccode.
     /IF.
   
@@ -417,6 +585,7 @@ ACTION substring(s(TX), start(NUM), end(NUM)) -> external.
 ACTION find_any(s(TX), delims(TX)) -> external.
 ACTION handle_brackets(expr(TX)) -> external.
 ACTION handle_strcmp(expr(TX)) -> external.
+ACTION str_eq(a(TX), b(TX)) -> external.
 
 # ──────────────────────────────────────────────────────────────
 #  generate_c — main entry point
@@ -429,6 +598,50 @@ ACTION generate_c(ast(LIST)),
     CREATE has_stmt(NUM) TO 0.
     CREATE i(NUM) TO 0.
     CREATE node_el(TX) TO "".
+    CREATE pro_code(TX) TO "".
+    CREATE pi(NUM) TO 0.
+    CREATE param_el(TX) TO "".
+    CREATE pname(TX) TO "".
+    CREATE ptype(TX) TO "".
+    CREATE ctype(TX) TO "".
+    CREATE aname(TX) TO "".
+    CREATE paramstr(TX) TO "".
+    # pass 1: forward declarations for every action_decl
+    SET i TO 0.
+    SEASON i < COUNT ast,
+        REAP node_el FROM plant_list_get, ast, i.
+        REAP ntype FROM _map_get, node_el, "type".
+        IF ntype IS "action_decl",
+            REAP aname FROM _map_get, node_el, "name".
+            CREATE params2(LIST) TO _map_get(node_el, "params").
+            SET paramstr TO "".
+            SET pi TO 0.
+            SEASON pi < COUNT params2,
+                REAP param_el FROM plant_list_get, params2, pi.
+                REAP pname FROM _map_get, param_el, "name".
+                REAP ptype FROM _map_get, param_el, "type".
+                SET ctype TO "tx_t".
+                IF ptype IS "NUM", SET ctype TO "long". /IF.
+                IF ptype IS "FACT", SET ctype TO "int". /IF.
+                IF ptype IS "LIST", SET ctype TO "PlantArray*". /IF.
+                IF pi > 0, SET paramstr TO paramstr + ", ". /IF.
+                SET paramstr TO paramstr + ctype + " " + pname.
+                SET pi TO pi + 1.
+            /SEASON.
+            SET pro_code TO pro_code + "tx_t " + aname + "(" + paramstr + ");\n".
+        /IF.
+        SET i TO i + 1.
+    /SEASON.
+    CREATE implicit(LIST) TO collect_implicit(ast, plant_list_make(0)).
+    CREATE dcode(TX) TO "".
+    CREATE di(NUM) TO 0.
+    CREATE dv(TX) TO "".
+    SEASON di < COUNT implicit,
+        REAP dv FROM plant_list_get, implicit, di.
+        SET dcode TO dcode + "  tx_t " + dv + " = \"\";\n".
+        SET di TO di + 1.
+    /SEASON.
+    SET i TO 0.
     SEASON i < COUNT ast,
         REAP node_el FROM plant_list_get, ast, i.
         REAP ntype FROM _map_get, node_el, "type".
@@ -445,7 +658,7 @@ ACTION generate_c(ast(LIST)),
         SET i TO i + 1.
     /SEASON.
     IF has_stmt,
-        SET stmt_code TO "int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n" + stmt_code + "  return 0;\n}\n".
+        SET stmt_code TO "int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n" + dcode + stmt_code + "  return 0;\n}\n".
     /IF.
-    GIVE header + decl_code + stmt_code.
+    GIVE header + pro_code + "\n" + decl_code + stmt_code.
 /ACTION.

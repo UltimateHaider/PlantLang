@@ -82,14 +82,16 @@ static tx_t handle_brackets(tx_t expr) {
   while (*p) {
     if (*p == '[' && p > _e) {
       const char *id = p - 1;
+      while (id >= _e && (*id == ' ' || *id == '\t')) id--;
       while (id >= _e && (*id == '_' || (*id >= 'a' && *id <= 'z') || (*id >= 'A' && *id <= 'Z') || (*id >= '0' && *id <= '9'))) id--;
       id++;
       if (id < p && ((*id >= 'a' && *id <= 'z') || (*id >= 'A' && *id <= 'Z') || *id == '_')) {
-        size_t pre = (size_t)(id - _e);
-        memcpy(out, _e, pre); out += pre;
-        memcpy(out, "plant_list_get(", 15); out += 15;
         size_t idl = (size_t)(p - id);
-        memcpy(out, id, idl); out += idl;
+        out -= idl;
+        memcpy(out, "plant_list_get(", 15); out += 15;
+        const char *idend = id;
+        while (idend < p && (*idend == '_' || (*idend >= 'a' && *idend <= 'z') || (*idend >= 'A' && *idend <= 'Z') || (*idend >= '0' && *idend <= '9'))) idend++;
+        memcpy(out, id, (size_t)(idend - id)); out += idend - id;
         memcpy(out, ", ", 2); out += 2;
         p++;
         int depth = 1;
@@ -111,14 +113,15 @@ static tx_t handle_brackets(tx_t expr) {
   free(buf);
   return result;
 }
-static tx_t handle_strcmp(tx_t expr) {
-  const char*_e=_S(expr);
+static tx_t str_eq(tx_t a, tx_t b) { const char*x=_S(a),*y=_S(b); return (x&&y&&strcmp(x,y)==0)?"1":"0"; }
+static tx_t handle_strcmp(tx_t expr) {  const char*_e=_S(expr);
   if (!_e || !*_e) return _e ? strdup(_e) : NULL;
   size_t len = strlen(_e);
   char *buf = malloc(len * 8 + 100);
   if (!buf) return strdup(_e);
   char *out = buf; *out = 0;
   size_t i = 0;
+  size_t last_out = 0, last_in = 0;
   while (i < len) {
     if (_e[i] == '"') {
       size_t j = i + 1;
@@ -140,8 +143,10 @@ static tx_t handle_strcmp(tx_t expr) {
       size_t left_start = 0;
       size_t ls = i; while (ls > 0) { ls--; if (_e[ls] == ')' && d == 0 && bd == 0) { d++; continue; } if (_e[ls] == '(') { d--; if (d < 0) { ls++; break; } continue; } if (_e[ls] == ']' && d == 0) { bd++; continue; } if (_e[ls] == '[' && d == 0) { bd--; if (bd < 0) { ls++; break; } continue; } if (d == 0 && bd == 0) { if ((ls+1 < len && _e[ls] == '&' && _e[ls+1] == '&') || (ls+1 < len && _e[ls] == '|' && _e[ls+1] == '|')) { ls += 2; break; } if (_e[ls] == ',') { ls++; break; } } }
       while (ls <= i && (_e[ls] == ' ' || _e[ls] == '\t')) { ls++; if (ls > i) break; }
+      size_t le = i;
+      while (le > ls && (_e[le-1] == ' ' || _e[le-1] == '\t')) le--;
       int has_lit = 0;
-      for (size_t k = ls; k < i; k++) if (_e[k] == '"') { has_lit = 1; break; }
+      for (size_t k = ls; k < le; k++) if (_e[k] == '"') { has_lit = 1; break; }
       size_t pos = i + op_len;
       while (pos < len && (_e[pos] == ' ' || _e[pos] == '\t')) pos++;
       int d2 = 0, bd2 = 0;
@@ -157,12 +162,15 @@ static tx_t handle_strcmp(tx_t expr) {
       while (rre > pos && (_e[rre-1] == ' ' || _e[rre-1] == '\t')) rre--;
       for (size_t k = pos; k < rre; k++) if (_e[k] == '"') { has_lit = 1; break; }
       if (has_lit) {
-        memcpy(out, _e + left_start, ls - left_start); out += ls - left_start;
+        out = buf + (last_out + (ls - last_in));
         out += sprintf(out, "strcmp(");
-        memcpy(out, _e + ls, i - ls); out += i - ls;
+        memcpy(out, _e + ls, le - ls); out += le - ls;
         *out++ = ',';
         memcpy(out, _e + pos, rre - pos); out += rre - pos;
         out += sprintf(out, "%s", sfx);
+        if (rs > rre) { memcpy(out, _e + rre, rs - rre); out += rs - rre; }
+        last_out = (size_t)(out - buf);
+        last_in = rs;
         i = rs;
         continue;
       }

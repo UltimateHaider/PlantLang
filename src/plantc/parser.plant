@@ -52,6 +52,27 @@ ACTION is_eof(tokens(LIST), pos(NUM)),
 /ACTION.
 
 # collect_value: collects text until "." or EOF (consumes the dot)
+# escape_string — re-escape C-unsafe characters in string content for emission
+ACTION escape_string(s(TX)),
+  CREATE r(TX) TO "".
+  CREATE ei(NUM) TO 0.
+  CREATE en(NUM) TO LEN(s).
+  CREATE ec(TX) TO "".
+  SEASON ei < en,
+    REAP ec FROM char_at, s, ei.
+    IF ec IS "\\", SET r TO r + "\\" + "\\". /IF.
+    IF ec IS "\"", SET r TO r + "\\" + "\"". /IF.
+    IF ec IS "\n", SET r TO r + "\\" + "n". /IF.
+    IF ec IS "\t", SET r TO r + "\\" + "t". /IF.
+    IF ec IS "\r", SET r TO r + "\\" + "r". /IF.
+    IF ec ISNT "\\" AND ec ISNT "\"" AND ec ISNT "\n" AND ec ISNT "\t" AND ec ISNT "\r",
+      SET r TO r + ec.
+    /IF.
+    SET ei TO ei + 1.
+  /SEASON.
+  GIVE r.
+/ACTION.
+
 ACTION collect_value(tokens(LIST), start(NUM)),
   CREATE text(TX) TO "".
   CREATE p2(NUM) TO start.
@@ -65,6 +86,7 @@ ACTION collect_value(tokens(LIST), start(NUM)),
     REAP lx FROM tok_lex, tok.
     REAP tt FROM tok_type, tok.
     IF tt IS "STRING",
+      REAP lx FROM escape_string, lx.
       SET lx TO "\"" + lx + "\"".
     /IF.
     IF lx IS "." AND depth IS 0,
@@ -101,6 +123,7 @@ ACTION collect_until(tokens(LIST), start(NUM), delim(TX)),
     REAP lx FROM tok_lex, tok.
     REAP tt FROM tok_type, tok.
     IF tt IS "STRING",
+      REAP lx FROM escape_string, lx.
       SET lx TO "\"" + lx + "\"".
     /IF.
     IF _cat("", lx) IS _cat("", delim) AND depth IS 0,
@@ -271,7 +294,8 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM)),
   SEASON TRUE,
     REAP tok0 FROM peek, tokens, p5.
     REAP lx0 FROM tok_lex, tok0.
-    IF lx0 IS ",",
+    REAP ty0 FROM tok_type, tok0.
+    IF lx0 IS "," AND ty0 ISNT "STRING",
       REAP com0 FROM consume, tokens, p5.
       REAP p5 FROM _second, com0.
     /IF.
@@ -281,7 +305,8 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM)),
     /IF.
     REAP tok FROM peek, tokens, p5.
     REAP lx FROM tok_lex, tok.
-    IF lx IS ".",
+    REAP ty FROM tok_type, tok.
+    IF lx IS "." AND ty ISNT "STRING",
       REAP dot FROM consume, tokens, p5.
       REAP p6 FROM _second, dot.
       GIVE plant_list_make(2, plant_list_make(8, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args), p6).
@@ -585,6 +610,7 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
       REAP p5 FROM _second, skip_pair.
     /IF.
     REAP ret_pair FROM consume, tokens, p5.
+    REAP ret_lx FROM tok_lex, ret_pair[0].
     REAP p5 FROM _second, ret_pair.
     REAP after_tok FROM peek, tokens, p5.
     REAP after_lx FROM tok_lex, after_tok.
@@ -595,6 +621,9 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
     IF after_lx IS ".",
       REAP dot_pair FROM consume, tokens, p5.
       REAP p5 FROM _second, dot_pair.
+      IF ret_lx IS "external",
+        GIVE plant_list_make(2, plant_list_make(6, "type", "external_decl", "name", aname, "params", params), p5).
+      /IF.
       GIVE plant_list_make(2, plant_list_make(8, "type", "action_decl", "name", aname, "params", params, "body", plant_list_make(0)), p5).
     /IF.
   /IF.
