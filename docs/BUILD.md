@@ -25,7 +25,7 @@ make install     # install to $PREFIX/bin (default ~/.local)
 make clean       # remove build artifacts (keeps dist/Chloroplast bootstrap)
 ```
 
-Variables: `VERSION` (default `0.47.4`), `PREFIX` (default `~/.local`),
+Variables: `VERSION` (default `0.48.1`), `PREFIX` (default `~/.local`),
 `CC` (default `gcc`).
 
 ## How the Bootstrap Works
@@ -89,7 +89,7 @@ Since v0.47.1 the core standard library ships in the native runtime
 
 `make test` — native integration suite in `tests/native/`:
 
-- CLI checks (`--help`, `--version` → `Chloroplast 0.47.4 (pure native)`,
+- CLI checks (`--help`, `--version` → `Chloroplast 0.48.1 (pure native)`,
   missing-file exit code)
 - compile + gcc + run + output-diff cases (hello, join/`strings:LENGTH`,
   number concatenation, string escapes, list ops, `strings:` module calls)

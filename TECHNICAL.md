@@ -3159,3 +3159,93 @@ only design-convention string allocations remain at exit.
 `mock_ffi.c`/`mock_ffi.h` is force-included (`-include`) and linked into every
 test binary; suite at 18/18 passing with the self-hosting fixed point at
 72 756 bytes.
+
+## 31. Generics Engine — Monomorphization & Name Mangling (v0.48.1)
+
+Generics are **zero-cost**: a generic action is a *template* that is expanded
+into plain C once per concrete instantiation during codegen. There is no
+runtime dispatch, no type table, and no virtual machinery — instantiated
+functions are ordinary C functions with unique mangled names, so generated
+code is identical in shape and speed to hand-written C.
+
+### 31.1 Syntax
+
+```plant
+ACTION process_list[T](item(T), list(LIST[T])) -> T,
+  REAP head FROM plant_list_get, list, 0.
+  GIVE head.
+/ACTION.
+
+REAP r FROM process_list[NUM], 5, xs.   # call-site type arguments
+```
+
+- Type-parameter lists `[T, U]` follow the action name (square brackets;
+  `[`/`]` already lex as `LBRACKET`/`RBRACKET`).
+- Parameter types may be generic names (`T`), containers (`LIST[T]`),
+  references (`REF T`, `REF LIST[T]`) or concrete types (`NUM`, `TX`…).
+  The parser collects the full type text until the closing `)` at
+  bracket/paren depth 0 (`collect_type_text`), replacing the old
+  single-token + `REF`-special-case reading.
+- Invocations attach concrete type arguments to the action name in REAP
+  statements; the same collector parses them (stopping at `]`).
+
+### 31.2 Monomorphization Pipeline
+
+`generate_c` runs three extra passes over the AST:
+
+1. **Pass 0 — template table**: every `action_decl` with a non-empty
+   `generics` field is registered as a template (name, generics, params,
+   body). Non-generic actions are untouched.
+2. **Pass 0b — instantiation discovery** (`collect_insts`): every body is
+   walked for REAP actions containing `[`. For each generic call, the type
+   arguments are substituted through the *current* type context
+   (`subst_reap_act`) and the fully concrete key (e.g. `process_list[NUM]`)
+   is added to the **instantiation cache** if absent; the template's own body
+   is then walked with the zipped substitution (`build_subst`) so nested
+   generic calls (`outer[T]` calling `inner[T]`) resolve transitively.
+   Generic template bodies are never scanned bare — only per-instantiation —
+   so phantom `plant_foo_T` instantiations cannot occur.
+3. **Pass 1/2/3 — emission**: each cached instantiation emits a forward
+   declaration (`inst_fwddecl`) and a full definition (`emit_inst`) whose
+   parameter types, `CREATE`/`LET` variable types and nested call names are
+   rewritten by `subst_type` (whole-token substitution on space/`()[]`
+   boundaries). Generic templates themselves emit nothing.
+
+The cache is a per-build list, rebuilt from scratch on every compiler run —
+there is no cross-build state to clear.
+
+### 31.3 Name Mangling
+
+`plant_<name>_<T1>_<T2>…` where the suffix is the concatenation of the
+concrete type arguments:
+
+| Source | Instantiation | Generated C |
+|---|---|---|
+| `ACTION compute[T](...)` | `compute[NUM]` | `tx_t plant_compute_NUM(...)` |
+| `ACTION compute[T](...)` | `compute[TX]` | `tx_t plant_compute_TX(...)` |
+| `ACTION firstof[T, U](...)` | `firstof[TX, TX]` | `tx_t plant_firstof_TX_TX(...)` |
+
+The `plant_` prefix is reserved for the runtime/compiler and the type suffix
+guarantees uniqueness per concrete argument tuple; the instantiation cache
+ensures each key is emitted exactly once (deduplicated forward declaration
+and definition), so repeated and nested calls compile to a single C function.
+
+### 31.4 Type Substitution
+
+`subst` is a flat key/value list (`[T, NUM, U, TX, …]`). `subst_type` splits
+type strings on space/`( ) [ ] ,` boundaries and replaces whole tokens that
+match a generic name — `LIST[T]` → `LIST[NUM]`, `REF T` → `REF NUM`. The C
+type mapping (`plant_ctype`) strips bracketed suffixes via `type_base`
+(`LIST[NUM]` → `PlantArray*`), so container types need no special handling.
+REF-ness is preserved through substitution, and REF call-site rewriting
+(`&var`) reuses the existing `sigs`/`is_ref_at` machinery with the template's
+base name.
+
+### 31.5 Verification
+
+`tests/generics/` (5 cases, wired into `make test`):
+`basic` (single param, three instantiations + cache reuse), `multi`
+(multi-type `[T, U]` + `LIST[U]` container params), `nested` (generic calls
+generic with substituted context), `listgen` (`LIST[T]` params), `refgen`
+(`REF T` params with `&var` emission). Native suite stays 18/18; the
+self-hosting chain converges with the engine active.

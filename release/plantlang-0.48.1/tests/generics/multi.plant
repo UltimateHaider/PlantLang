@@ -1,0 +1,25 @@
+# multi-type params [T, U] + LIST[U] container params
+ACTION max2[T](a(T), b(T)),
+  IF a > b,
+    GIVE a.
+  /IF.
+  GIVE b.
+/ACTION.
+
+ACTION firstof[T, U](a(T), lst(LIST[U])),
+  REAP f FROM plant_list_get, lst, 0.
+  GIVE a + ":" + f.
+/ACTION.
+
+ACTION main(),
+  REAP mx FROM max2[NUM], 9, 4.
+  REAP mxs FROM _from_long, mx.
+  SHOW "max=" + mxs.
+  REAP mn2 FROM max2[NUM], 3, 8.
+  REAP mn2s FROM _from_long, mn2.
+  SHOW "max2=" + mn2s.
+  CREATE xs(LIST) TO plant_list_make(2, "1", "2").
+  REAP fa FROM firstof[TX, TX], "a", xs.
+  SHOW "first=" + fa.
+  GIVE 0.
+/GIVE main.

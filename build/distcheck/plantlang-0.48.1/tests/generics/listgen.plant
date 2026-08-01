@@ -1,0 +1,18 @@
+# LIST[T] container parameter types
+ACTION dump[T](lst(LIST[T])),
+  CREATE out(TX) TO "".
+  CREATE i(NUM) TO 0.
+  SEASON i < COUNT lst,
+    REAP el FROM plant_list_get, lst, i.
+    SET out TO out + el.
+    SET i TO i + 1.
+  /SEASON.
+  GIVE out.
+/ACTION.
+
+ACTION main(),
+  CREATE xs(LIST) TO plant_list_make(2, "a", "b").
+  REAP d FROM dump[TX], xs.
+  SHOW "dump=" + d.
+  GIVE 0.
+/GIVE main.
