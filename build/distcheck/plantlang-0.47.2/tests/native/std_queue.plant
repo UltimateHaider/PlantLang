@@ -1,0 +1,63 @@
+ACTION main(),
+  REAP q FROM queue_create.
+  # ── FIFO order ─────────────────────────────────────────────
+  CREATE a(TX) TO "first".
+  CREATE b(TX) TO "second".
+  CREATE c(TX) TO "third".
+  REAP _ FROM queue_push, q, a.
+  REAP _ FROM queue_push, q, b.
+  REAP _ FROM queue_push, q, c.
+  CREATE sz1(NUM) TO 0.
+  REAP sz1 FROM queue_size, q.
+  CREATE sz1s(TX) TO "".
+  REAP sz1s FROM _from_long, sz1.
+  SHOW "size=" + sz1s.
+  REAP pk FROM queue_peek, q.
+  SHOW "peek=" + pk.
+  REAP p1 FROM queue_pop, q.
+  SHOW "pop1=" + p1.
+  REAP p2 FROM queue_pop, q.
+  SHOW "pop2=" + p2.
+  REAP pk2 FROM queue_peek, q.
+  SHOW "peek2=" + pk2.
+  REAP p3 FROM queue_pop, q.
+  SHOW "pop3=" + p3.
+  # ── empty pop/peek are safe, not crashes ──────────────────
+  REAP pe FROM queue_pop, q.
+  CREATE pe1(NUM) TO LEN(pe).
+  CREATE pe1s(TX) TO "".
+  REAP pe1s FROM _from_long, pe1.
+  SHOW "empty-pop-len=" + pe1s.
+  REAP pk3 FROM queue_peek, q.
+  CREATE pk3l(NUM) TO LEN(pk3).
+  CREATE pk3s(TX) TO "".
+  REAP pk3s FROM _from_long, pk3l.
+  SHOW "empty-peek-len=" + pk3s.
+  # ── stress: 3000 pushes then 3000 pops, FIFO integrity ────
+  CREATE qi(NUM) TO 1.
+  SEASON qi <= 3000,
+    REAP _ FROM queue_push, q, a.
+    SET qi TO qi + 1.
+  /SEASON.
+  CREATE sz2(NUM) TO 0.
+  REAP sz2 FROM queue_size, q.
+  CREATE sz2s(TX) TO "".
+  REAP sz2s FROM _from_long, sz2.
+  SHOW "stress-size=" + sz2s.
+  CREATE ok(NUM) TO 0.
+  CREATE qj(NUM) TO 1.
+  SEASON qj <= 3000,
+    REAP v FROM queue_pop, q.
+    IF v IS a, SET ok TO ok + 1. /IF.
+    SET qj TO qj + 1.
+  /SEASON.
+  CREATE oks(TX) TO "".
+  REAP oks FROM _from_long, ok.
+  SHOW "fifo-ok=" + oks.
+  CREATE sz3(NUM) TO 0.
+  REAP sz3 FROM queue_size, q.
+  CREATE sz3s(TX) TO "".
+  REAP sz3s FROM _from_long, sz3.
+  SHOW "after-drain=" + sz3s.
+  GIVE 0.
+/GIVE main.

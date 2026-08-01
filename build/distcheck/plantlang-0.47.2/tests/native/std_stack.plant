@@ -1,0 +1,63 @@
+ACTION main(),
+  REAP s FROM stack_create.
+  # ── LIFO order ─────────────────────────────────────────────
+  CREATE a(TX) TO "bottom".
+  CREATE b(TX) TO "middle".
+  CREATE c(TX) TO "top".
+  REAP _ FROM stack_push, s, a.
+  REAP _ FROM stack_push, s, b.
+  REAP _ FROM stack_push, s, c.
+  CREATE sz1(NUM) TO 0.
+  REAP sz1 FROM stack_size, s.
+  CREATE sz1s(TX) TO "".
+  REAP sz1s FROM _from_long, sz1.
+  SHOW "size=" + sz1s.
+  REAP pk FROM stack_peek, s.
+  SHOW "peek=" + pk.
+  REAP p1 FROM stack_pop, s.
+  SHOW "pop1=" + p1.
+  REAP pk2 FROM stack_peek, s.
+  SHOW "peek2=" + pk2.
+  REAP p2 FROM stack_pop, s.
+  SHOW "pop2=" + p2.
+  REAP p3 FROM stack_pop, s.
+  SHOW "pop3=" + p3.
+  # ── empty pop/peek are safe, not crashes ──────────────────
+  REAP pe FROM stack_pop, s.
+  CREATE pe1(NUM) TO LEN(pe).
+  CREATE pe1s(TX) TO "".
+  REAP pe1s FROM _from_long, pe1.
+  SHOW "empty-pop-len=" + pe1s.
+  REAP pk3 FROM stack_peek, s.
+  CREATE pk3l(NUM) TO LEN(pk3).
+  CREATE pk3s(TX) TO "".
+  REAP pk3s FROM _from_long, pk3l.
+  SHOW "empty-peek-len=" + pk3s.
+  # ── stress: 3000 pushes then 3000 pops, LIFO integrity ────
+  CREATE si(NUM) TO 1.
+  SEASON si <= 3000,
+    REAP _ FROM stack_push, s, a.
+    SET si TO si + 1.
+  /SEASON.
+  CREATE sz2(NUM) TO 0.
+  REAP sz2 FROM stack_size, s.
+  CREATE sz2s(TX) TO "".
+  REAP sz2s FROM _from_long, sz2.
+  SHOW "stress-size=" + sz2s.
+  CREATE ok(NUM) TO 0.
+  CREATE sj(NUM) TO 1.
+  SEASON sj <= 3000,
+    REAP v FROM stack_pop, s.
+    IF v IS a, SET ok TO ok + 1. /IF.
+    SET sj TO sj + 1.
+  /SEASON.
+  CREATE oks(TX) TO "".
+  REAP oks FROM _from_long, ok.
+  SHOW "lifo-ok=" + oks.
+  CREATE sz3(NUM) TO 0.
+  REAP sz3 FROM stack_size, s.
+  CREATE sz3s(TX) TO "".
+  REAP sz3s FROM _from_long, sz3.
+  SHOW "after-drain=" + sz3s.
+  GIVE 0.
+/GIVE main.

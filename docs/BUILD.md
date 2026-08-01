@@ -25,7 +25,7 @@ make install     # install to $PREFIX/bin (default ~/.local)
 make clean       # remove build artifacts (keeps dist/Chloroplast bootstrap)
 ```
 
-Variables: `VERSION` (default `0.47.1`), `PREFIX` (default `~/.local`),
+Variables: `VERSION` (default `0.47.2`), `PREFIX` (default `~/.local`),
 `CC` (default `gcc`).
 
 ## How the Bootstrap Works
@@ -79,12 +79,14 @@ Since v0.47.1 the core standard library ships in the native runtime
   `math_floor`, `math_ceil`, `math_round`, `math_min`, `math_max`,
   `math_random`
 - `std/time` — `time_now`, `time_format`, `time_parse`, `time_sleep`
+- Native data structures (v0.47.2) — `set_create/add/has/remove/size/to_list`,
+  `queue_create/push/pop/peek/size`, `stack_create/push/pop/peek/size`
 
 ## Tests
 
 `make test` — native integration suite in `tests/native/`:
 
-- CLI checks (`--help`, `--version` → `Chloroplast 0.47.1 (pure native)`,
+- CLI checks (`--help`, `--version` → `Chloroplast 0.47.2 (pure native)`,
   missing-file exit code)
 - compile + gcc + run + output-diff cases (hello, join/`strings:LENGTH`,
   number concatenation, string escapes, list ops, `strings:` module calls)

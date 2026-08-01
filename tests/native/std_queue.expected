@@ -1,0 +1,11 @@
+size=3
+peek=first
+pop1=first
+pop2=second
+peek2=third
+pop3=third
+empty-pop-len=0
+empty-peek-len=0
+stress-size=3000
+fifo-ok=3000
+after-drain=0

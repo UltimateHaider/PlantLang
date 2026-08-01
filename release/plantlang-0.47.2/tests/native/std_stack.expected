@@ -1,0 +1,11 @@
+size=3
+peek=top
+pop1=top
+peek2=middle
+pop2=middle
+pop3=bottom
+empty-pop-len=0
+empty-peek-len=0
+stress-size=3000
+lifo-ok=3000
+after-drain=0

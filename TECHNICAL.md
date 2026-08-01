@@ -3013,3 +3013,79 @@ missing source file (exit 1), unreadable file, and usage help.
   (`--help`, `--version`, missing-file exit code) plus compile + run +
   output-diff cases — 9/9 passing
 - Legacy JS test suites were removed in v0.46.4 (Pure Native purge)
+
+## 29. Native Data Structures (v0.47.2)
+
+Implemented in pure native C: structs + signatures in `plant_compat.h`,
+implementations in `plant_runtime.c` — no interpreter involvement.
+
+### 29.1 Set (`PlantSet`)
+
+Open-addressing hash table. Struct layout:
+
+```c
+typedef struct PlantSet {
+    uintptr_t* slots;    /* 0 = empty, (uintptr_t)-1 = tombstone */
+    size_t     cap;      /* power of two */
+    size_t     count;    /* live entries */
+    size_t     tombs;    /* tombstone count */
+} PlantSet;
+```
+
+- **Hashing**: splitmix64 over the raw value bits (`(uintptr_t)val`), so any
+  Chloroplast value works — NUM (long bits), TX (pointer), MAP/LIST
+  (PlantArray* pointer). Uniqueness is identity-based: equal bits = same
+  element. Value `0`/NULL is reserved as nil and not storable.
+- **Probing**: linear probing with `idx = (idx + 1) & (cap - 1)`; load factor
+  ceiling 0.7 triggers growth.
+- **Growth**: `_set_rehash` is performed **in place** — only the slots buffer
+  is replaced (realloc'd + reinserted), so the `PlantSet*` handle stays valid
+  for the caller. (The initial implementation reallocated the struct itself,
+  which produced a stale-handle crash under the 2000-insert stress test — a
+  regression caught by the test suite.)
+- **Deletion**: tombstones keep probe chains intact; removed slots are reused
+  on subsequent inserts (`tombs` decremented) and cleared by rehash.
+- API: `set_create`, `set_add` ("1"/"0"), `set_has` ("1"/"0"), `set_remove`
+  ("1"/"0"), `set_size` (long), `set_to_list` (→ `PlantArray*`).
+
+### 29.2 Queue (`PlantQueue`) — FIFO
+
+Ring buffer over `void*`:
+
+```c
+typedef struct PlantQueue {
+    void** buf;
+    size_t cap, head, count;
+} PlantQueue;
+```
+
+- `push` appends at `(head + count) % cap`; on full capacity the buffer is
+  grown 2× and elements are copied out in FIFO order (`head` reset to 0).
+- `pop`/`peek` read `buf[head]`; empty queue returns the empty string
+  (safe nil) — never a crash. `pop` advances `head`; `count` decrements.
+- Amortized O(1) push/pop; values are caller-owned (no freeing of items —
+  the structures manage only their own buffers).
+
+### 29.3 Stack (`PlantStack`) — LIFO
+
+Dynamic array:
+
+```c
+typedef struct PlantStack {
+    void** buf;
+    size_t cap, count;
+} PlantStack;
+```
+
+- `push` grows via `realloc` (2×) when full; `pop`/`peek` access
+  `buf[count - 1]`; empty stack returns the empty string.
+
+### 29.4 Memory Management
+
+All three structures use manual `malloc`/`calloc`/`realloc`/`free` in pure C.
+Per-operation allocation is bounded: set insert triggers rehash at 0.7 load;
+queue/stack buffers double monotonically. The values themselves are
+caller-owned (matching the existing `PlantArray` convention), so no ownership
+transfer or hidden free occurs — the 2000/3000-operation stress tests
+(`tests/native/std_set.plant`, `std_queue.plant`, `std_stack.plant`) exercise
+insert/lookup/delete/pop cycles to monitor memory stability.

@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.46.4
+# 🌿 PlantLang — Chloroplast v0.47.2
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -31,9 +31,94 @@ gcc -w -O0 -I runtime/c myfile.c runtime/c/plant_runtime.c -o myfile
 ```bash
 ./bin/Chloroplast file.plant out.c     # compile PlantLang to C
 ./bin/Chloroplast --help               # usage + options
-./bin/Chloroplast --version            # Chloroplast 0.46.4 (pure native)
+./bin/Chloroplast --version            # Chloroplast 0.47.2 (pure native)
 make test                              # native integration suite
 ```
+
+---
+
+## Standard Library (v0.47.x) — Practical Examples
+
+The core standard library ships natively in the runtime (`plant_runtime.c` /
+`plant_compat.h`) — no interpreter, no imports required. Calls go through
+`REAP x FROM fn, args.` or as plain expressions.
+
+### Data Structures: Set, Queue, Stack (v0.47.2)
+
+**Set** — unique unordered collection (identity-based uniqueness; value 0/NULL
+is reserved as nil):
+
+```plantlang
+REAP s FROM set_create.
+REAP r FROM set_add, s, 10.          # "1" added
+REAP r FROM set_add, s, 10.          # "0" duplicate
+REAP r FROM set_has, s, 10.          # "1" present
+REAP r FROM set_remove, s, 10.       # "1" removed
+CREATE n(NUM) TO set_size(s).        # unique element count
+REAP lst FROM set_to_list, s.        # → LIST for iteration/export
+```
+
+**Queue** — FIFO ring buffer:
+
+```plantlang
+REAP q FROM queue_create.
+REAP _ FROM queue_push, q, "first".
+REAP _ FROM queue_push, q, "second".
+REAP v FROM queue_pop, q.            # → "first"
+REAP v FROM queue_peek, q.           # → "second" (front, kept)
+CREATE n(NUM) TO queue_size(q).      # item count
+```
+
+**Stack** — LIFO dynamic array:
+
+```plantlang
+REAP st FROM stack_create.
+REAP _ FROM stack_push, st, "bottom".
+REAP _ FROM stack_push, st, "top".
+REAP v FROM stack_peek, st.          # → "top"
+REAP v FROM stack_pop, st.           # → "top"
+REAP v FROM stack_pop, st.           # → "bottom"
+```
+
+Empty `pop`/`peek` on a queue or stack return the empty string — never a crash.
+Stress workloads (thousands of inserts/lookups/deletes) are covered by the
+`std_set` / `std_queue` / `std_stack` native test suites.
+
+### std/json (v0.47.1)
+
+```plantlang
+REAP j FROM json_parse, "{\"name\": \"Alice\", \"age\": 30}".
+IF j IS NULL,                        # invalid JSON → safe nil, no crash
+  SHOW "bad json".
+/IF.
+REAP nm FROM json_get, j, "name".
+SHOW json_val(nm).                   # → Alice
+REAP out FROM json_stringify, j.
+SHOW out.                            # → {"name":"Alice","age":30}
+```
+
+### std/string, std/fs, std/math, std/time (v0.47.1)
+
+```plantlang
+REAP s FROM string_repeat, "ab", 3.          # → "ababab"
+REAP s FROM string_reverse, "abc".           # → "cba"
+REAP s FROM string_pad, "x", 5, ".".         # → "x...."
+
+REAP r FROM file_copy, "a.txt", "b.txt".     # "1" ok
+REAP m FROM file_stat, "b.txt".              # MAP: size/mtime/mode
+REAP sz FROM _map_get, m, "size".
+
+REAP s FROM math_sqrt, "16".                 # → "4"
+REAP s FROM math_pow, "2", "10".             # → "1024"
+
+REAP t FROM time_now.                        # epoch seconds
+REAP d FROM time_format, t, "%Y-%m-%d".      # → "2026-08-01"
+REAP ok FROM time_sleep, "0.05".             # fractional seconds
+```
+
+> Note: the self-hosted compiler subset currently uses `SEASON` (while) for
+> iteration; the `CYCLE` statement is tokenized and code-generated for, but not
+> yet parsed.
 
 ---
 
