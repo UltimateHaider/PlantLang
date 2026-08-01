@@ -1,0 +1,16 @@
+add=5
+a-after=20
+b-after=10
+sum=30
+open-bad=
+errno=2
+errmsg=No such file or directory
+open-ok=42
+errno-clear=0
+cfg-bad=-1
+cfg-errno=22
+cfg-errmsg=Invalid argument
+cfg-ok=7
+buflen=100
+free-ok=0
+free-null=22

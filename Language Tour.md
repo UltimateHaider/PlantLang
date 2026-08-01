@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.47.2
+# 🌿 PlantLang — Chloroplast v0.47.3
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -31,7 +31,7 @@ gcc -w -O0 -I runtime/c myfile.c runtime/c/plant_runtime.c -o myfile
 ```bash
 ./bin/Chloroplast file.plant out.c     # compile PlantLang to C
 ./bin/Chloroplast --help               # usage + options
-./bin/Chloroplast --version            # Chloroplast 0.47.2 (pure native)
+./bin/Chloroplast --version            # Chloroplast 0.47.3 (pure native)
 make test                              # native integration suite
 ```
 
@@ -83,6 +83,41 @@ REAP v FROM stack_pop, st.           # → "bottom"
 Empty `pop`/`peek` on a queue or stack return the empty string — never a crash.
 Stress workloads (thousands of inserts/lookups/deletes) are covered by the
 `std_set` / `std_queue` / `std_stack` native test suites.
+
+### Advanced FFI: REF, Result<T,E>, diagnostics (v0.47.3)
+
+Calling native C is done through external declarations. **REF** parameters are
+passed by pointer — the compiler emits `&var` at the call site automatically.
+**`-> Result<T, E>`** declares an FFI function whose C ABI returns the value on
+success and an error sentinel + `errno` on failure; check with
+`ffi_last_error()` / `ffi_last_error_msg()`.
+
+```plantlang
+# declare the FFI surface (C signatures live in plant_compat.h)
+ACTION ffi_swap_ref(a(REF NUM), b(REF NUM)) -> external.
+ACTION ffi_open(mode(NUM)) -> Result<NUM, TX>.
+
+CREATE a(NUM) TO 10.
+CREATE b(NUM) TO 20.
+REAP _ FROM ffi_swap_ref, a, b.      # → ffi_swap_ref(&a, &b); a=20, b=10
+
+REAP h FROM ffi_open, 0.             # "" on failure, errno set
+IF h IS "",
+  CREATE e(NUM) TO 0.
+  REAP e FROM ffi_last_error.        # errno (2 = ENOENT)
+  REAP m FROM ffi_last_error_msg.
+  SHOW m.                            # "No such file or directory"
+/IF.
+
+REAP buf FROM ffi_make_buf, 100.     # malloc'd buffer from C
+REAP _ FROM ffi_free, buf.           # lifecycle: free via ffi_free
+REAP _ FROM ffi_free, NULL.          # NULL → errno=EINVAL
+```
+
+`ffi_last_error()` returns `errno` (0 = success); `ffi_last_error_msg()`
+returns `dlerror()` when the dynamic loader failed, else `strerror(errno)`.
+The full workflow is exercised by the `ffi` native test suite with a mock C
+library (`tests/native/mock_ffi.c`).
 
 ### std/json (v0.47.1)
 

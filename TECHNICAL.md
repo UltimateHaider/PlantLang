@@ -3089,3 +3089,54 @@ caller-owned (matching the existing `PlantArray` convention), so no ownership
 transfer or hidden free occurs — the 2000/3000-operation stress tests
 (`tests/native/std_set.plant`, `std_queue.plant`, `std_stack.plant`) exercise
 insert/lookup/delete/pop cycles to monitor memory stability.
+
+## 30. Advanced FFI (v0.47.3)
+
+### 30.1 Signature Table & REF Parameters
+
+`parse_action_decl` accepts `(REF TYPE)` parameters: the lexeme `REF` is
+consumed and the following type token is folded into the stored type string
+(`"REF " + TYPE`), so `a(REF NUM)` yields `"REF NUM"`. `generate_c` runs a
+pre-pass over the program body building a signature table (`sigs`) for every
+`external_decl` and `action_decl` (name → params list), which is threaded
+through `generate_node`/`generate_body` into `reap_stmt` codegen. There, each
+argument is checked with `is_ref_at`; REF positions emit `&var` instead of
+`var`. The C type mapping (`plant_ctype`) is: `REF NUM` → `long*`,
+`REF FACT` → `int*`, `REF LIST` → `PlantArray**`, `REF TX` → `tx_t*`.
+
+Because the compiler is single-pass with no runtime symbol table, the
+signature pre-pass is what makes call-site rewriting possible at all —
+declarations may appear textually after their call sites (e.g. the compiler's
+own `_map_get` is used throughout `codegen_c.plant` and declared at the file
+bottom).
+
+### 30.2 Result<T, E> Returns
+
+`-> Result<T, E>.` is parsed as: consume the `Result` identifier, then the
+`<T, E>` generic list (`LESS`, T, `COMMA`, E, `GREATER` tokens), and produce an
+`external_decl` node — identical to `-> external.` for codegen purposes (the
+declaration emits no C; the ABI comes from `plant_compat.h`). The contract is
+conventional C FFI: success returns the `T` value, failure returns an error
+sentinel and sets `errno`; callers branch on the sentinel and diagnose with
+`ffi_last_error()` / `ffi_last_error_msg()`.
+
+### 30.3 Diagnostics & Memory Lifecycle
+
+```c
+long ffi_last_error(void);   /* errno from the last FFI call (0 = ok) */
+tx_t ffi_last_error_msg(void);/* dlerror() first, else strerror(errno) */
+void ffi_free(void* p);      /* free(); NULL → errno=EINVAL */
+```
+
+`ffi_free` clears `errno` on success so success/failure is uniformly
+observable; the `-ldl` link flag covers `dlerror()` on pre-2.34 glibc.
+
+### 30.4 Test Coverage
+
+`tests/native/ffi.plant` exercises: plain calls, REF swap through pointers
+(verified via arithmetic on the swapped variables), `Result<NUM,TX>` failure
+(ENOENT) and success (errno cleared), `Result`-style parse failure (EINVAL),
+`ffi_free` on a `ffi_make_buf` allocation and NULL rejection. The mock library
+`mock_ffi.c`/`mock_ffi.h` is force-included (`-include`) and linked into every
+test binary; suite at 18/18 passing with the self-hosting fixed point at
+72 756 bytes.

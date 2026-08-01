@@ -1,0 +1,76 @@
+ACTION ffi_swap_ref(a(REF NUM), b(REF NUM)) -> external.
+ACTION ffi_add(a(NUM), b(NUM)) -> external.
+ACTION ffi_open_mock(mode(NUM)) -> Result<NUM, TX>.
+ACTION ffi_parse_cfg(path(TX)) -> Result<NUM, TX>.
+ACTION ffi_make_buf(n(NUM)) -> external.
+
+ACTION main(),
+  # ── plain FFI call ─────────────────────────────────────────
+  REAP s0 FROM ffi_add, 2, 3.
+  SHOW "add=" + s0.
+  # ── REF pass-by-reference: swap through pointers ───────────
+  CREATE a(NUM) TO 10.
+  CREATE b(NUM) TO 20.
+  REAP _ FROM ffi_swap_ref, a, b.
+  REAP s1 FROM ffi_add, a, 0.
+  SHOW "a-after=" + s1.
+  REAP s2 FROM ffi_add, b, 0.
+  SHOW "b-after=" + s2.
+  REAP s3 FROM ffi_add, a, b.
+  SHOW "sum=" + s3.
+  # ── Result<NUM, TX>: failure path ──────────────────────────
+  REAP h1 FROM ffi_open_mock, 0.
+  SHOW "open-bad=" + h1.
+  CREATE e1(NUM) TO 0.
+  REAP e1 FROM ffi_last_error.
+  CREATE e1s(TX) TO "".
+  REAP e1s FROM _from_long, e1.
+  SHOW "errno=" + e1s.
+  REAP m1 FROM ffi_last_error_msg.
+  SHOW "errmsg=" + m1.
+  # ── Result<NUM, TX>: success path (errno cleared) ──────────
+  REAP h2 FROM ffi_open_mock, 1.
+  SHOW "open-ok=" + h2.
+  CREATE e2(NUM) TO 0.
+  REAP e2 FROM ffi_last_error.
+  CREATE e2s(TX) TO "".
+  REAP e2s FROM _from_long, e2.
+  SHOW "errno-clear=" + e2s.
+  # ── Result<TX-returning, TX>: parse cfg ────────────────────
+  CREATE c1(NUM) TO 0.
+  REAP c1 FROM ffi_parse_cfg, "bad".
+  CREATE c1s(TX) TO "".
+  REAP c1s FROM _from_long, c1.
+  SHOW "cfg-bad=" + c1s.
+  CREATE e3(NUM) TO 0.
+  REAP e3 FROM ffi_last_error.
+  CREATE e3s(TX) TO "".
+  REAP e3s FROM _from_long, e3.
+  SHOW "cfg-errno=" + e3s.
+  REAP m3 FROM ffi_last_error_msg.
+  SHOW "cfg-errmsg=" + m3.
+  CREATE c2(NUM) TO 0.
+  REAP c2 FROM ffi_parse_cfg, "ok".
+  CREATE c2s(TX) TO "".
+  REAP c2s FROM _from_long, c2.
+  SHOW "cfg-ok=" + c2s.
+  # ── ffi_free lifecycle ─────────────────────────────────────
+  REAP buf FROM ffi_make_buf, 100.
+  CREATE bl(NUM) TO LEN(buf).
+  CREATE bls(TX) TO "".
+  REAP bls FROM _from_long, bl.
+  SHOW "buflen=" + bls.
+  REAP _ FROM ffi_free, buf.
+  CREATE e4(NUM) TO 0.
+  REAP e4 FROM ffi_last_error.
+  CREATE e4s(TX) TO "".
+  REAP e4s FROM _from_long, e4.
+  SHOW "free-ok=" + e4s.
+  REAP _ FROM ffi_free, NULL.
+  CREATE e5(NUM) TO 0.
+  REAP e5 FROM ffi_last_error.
+  CREATE e5s(TX) TO "".
+  REAP e5s FROM _from_long, e5.
+  SHOW "free-null=" + e5s.
+  GIVE 0.
+/GIVE main.

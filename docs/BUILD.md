@@ -25,7 +25,7 @@ make install     # install to $PREFIX/bin (default ~/.local)
 make clean       # remove build artifacts (keeps dist/Chloroplast bootstrap)
 ```
 
-Variables: `VERSION` (default `0.47.2`), `PREFIX` (default `~/.local`),
+Variables: `VERSION` (default `0.47.3`), `PREFIX` (default `~/.local`),
 `CC` (default `gcc`).
 
 ## How the Bootstrap Works
@@ -81,18 +81,24 @@ Since v0.47.1 the core standard library ships in the native runtime
 - `std/time` — `time_now`, `time_format`, `time_parse`, `time_sleep`
 - Native data structures (v0.47.2) — `set_create/add/has/remove/size/to_list`,
   `queue_create/push/pop/peek/size`, `stack_create/push/pop/peek/size`
+- Advanced FFI (v0.47.3) — `REF` pointer parameters, `-> Result<T, E>`
+  returns, `ffi_free(ptr)`, `ffi_last_error()` (errno), `ffi_last_error_msg()`
+  (dlerror → strerror); link with `-ldl` for loader diagnostics
 
 ## Tests
 
 `make test` — native integration suite in `tests/native/`:
 
-- CLI checks (`--help`, `--version` → `Chloroplast 0.47.2 (pure native)`,
+- CLI checks (`--help`, `--version` → `Chloroplast 0.47.3 (pure native)`,
   missing-file exit code)
 - compile + gcc + run + output-diff cases (hello, join/`strings:LENGTH`,
   number concatenation, string escapes, list ops, `strings:` module calls)
 - standard library cases: `json` (valid + invalid/nil + unicode + stringify
   round-trip + raw MAP), `strings2` (repeat/reverse/pad), `fs`
   (copy/move/stat + error paths), `math`, `time`
+- advanced FFI case: `ffi` (mock C library `mock_ffi.c`/`mock_ffi.h`,
+  force-included with `-include`; REF swap, Result-style error paths with
+  errno/errmsg checks, `ffi_free` lifecycle + NULL rejection)
 
 The legacy JavaScript test suites were removed in v0.46.4 (Pure Native purge).
 
