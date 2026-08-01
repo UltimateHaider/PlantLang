@@ -1,0 +1,5 @@
+ACTION main(),
+  SHOW "hello from plant".
+  SHOW "self-hosted!".
+  GIVE 0.
+/GIVE main.

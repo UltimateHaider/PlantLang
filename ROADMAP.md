@@ -1,4 +1,84 @@
-# PlantLang Roadmap: v0.45.0+ (Completed & Future)
+# PlantLang Roadmap: v0.46.4+ (Completed & Future)
+
+## ✅ Version v0.46.4: Pure Native & Chloroplast Transition
+
+**Status:** ✅ Completed
+
+### Scope & Engineering Implementation
+
+#### The Purge of Legacy JavaScript
+- Total removal of all Node.js/JavaScript components from the compiler pipeline:
+  - `core/interpreter.js` permanently deleted
+  - All legacy JS test suites (`tests/*.test.js`, `tests/test_*.js`, `tests/llvm/`,
+    `tests/parity/`) deleted after review — every one exercised the purged JS engine
+  - Legacy JS CLI (`src/cli/plantc.js`) and root drivers (`chloroplast.js`,
+    `trace_parse.js`) removed
+- The language is now **100% Pure Native**: source → C → native executable, with
+  zero interpreter involvement at any stage
+
+#### Rebranding: plantc → Chloroplast
+- Compiler binary renamed to **Chloroplast** everywhere:
+  - `bin/Chloroplast` (native build output) and `dist/Chloroplast` (v1 bootstrap)
+  - Makefile targets, install paths (`$PREFIX/bin/Chloroplast`), CLI strings
+    (`usage: Chloroplast <source.plant> [out.c]`, `Chloroplast 0.46.4 (pure native)`)
+- Compiler sources (`src/plantc/*.plant`) re-bootstrapped to a new fixed point:
+  `v3 == v4 == v5` at **69 668 bytes** of generated C
+- `package.json` reduced to pure metadata (`name: chloroplast`, `version: 0.46.4`,
+  MIT) — no scripts, no devDependencies
+
+#### Documentation
+- README rewritten for programmers coming from other languages (philosophy,
+  standout features, why PlantLang, install/usage with `./bin/Chloroplast`)
+- ROADMAP marks v0.46.4 completed and details the upcoming milestone plan
+- CHANGELOG updated to v0.46.4; TECHNICAL.md and Language Tour.md re-aligned
+- `PHASE4_COMPLETED.md` records the transition
+
+### Release Readiness
+- `make all` / `make self` / `make test` (9/9) / `make dist` (DISTCHECK OK) /
+  `make install` — all verified green with the rebranded binary
+- Declared: **v0.46.4 Pure Native release ready**
+
+---
+
+## 🚀 Upcoming Roadmap
+
+### v0.47.0 — Standard Library & Direct FFI
+- `std/json` — JSON parsing and serialization in pure native
+- `std/math` — typed math functions (trig, exp/log, random)
+- `std/time` — wall-clock and monotonic time APIs
+- Collections — richer `LIST`/`MAP` operations (filter, map, reduce, sort, iterators)
+- Native C FFI direct calls — first-class call syntax for arbitrary C functions
+  (beyond the current `-> external` declarations)
+
+### v0.48.0 — Advanced Programming Capabilities
+- Generics `[T]` — without conflicts with existing bracket syntax
+- Closures — with explicit `MOVE`/`REF` capture semantics
+- `ASYNC` / `AWAIT` — cooperative concurrency in the native runtime
+
+### v0.49.0 — Developer Tooling & Modularity
+- `plantm` — package manager (publish, fetch, resolve dependencies)
+- `plantfmt` — standard formatter for PlantLang sources
+- `plantlang init` / `build` — project scaffolding and build tooling
+
+### v0.50.0 — Distributed Systems & Consensus
+- Distributed GC (DGC) — cross-node garbage collection
+- Raft Consensus by default for `SHARED_WRITE` — with Paxos abstraction layer
+  for pluggable consensus
+
+### v0.51.0 — Language Server & Debugging Tools
+- Language Server Protocol (LSP) — with live CodeWords inspection
+- Debugger — DWARF/GDB integration for native binaries
+
+### v0.52.0 — WebAssembly & Benchmarking
+- `--target=wasm` — compile PlantLang to run in browsers
+- `plant bench` — benchmarking suite for native performance measurement
+
+### v1.0.0 — Morphon Target for Quantum Computers
+- `--target=morphon` — Carbon Paradigm v5.1 QPU Dataflow target
+- Macros — hygienic compile-time metaprogramming
+- `plantdoc` — documentation generator
+
+---
 
 ## ✅ Version v0.45.0: Self-Hosting Compiler Pipeline (Stage 0)
 

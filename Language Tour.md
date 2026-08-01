@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.45.0
+# 🌿 PlantLang — Chloroplast v0.46.4
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -16,21 +16,23 @@
 
 ## Installation
 
+**Chloroplast** is a pure native compiler (v0.46.4+) — no Node.js required:
+
 ```bash
-npm install -g plantlang          # global CLI
-# or
 git clone https://github.com/your/plantlang && cd plantlang
-node chloroplast.js run myfile.plnt
+make all        # builds bin/Chloroplast (self-hosted)
+./bin/Chloroplast myfile.plant myfile.c
+gcc -w -O0 -I runtime/c myfile.c runtime/c/plant_runtime.c -o myfile
+./myfile
 ```
 
 ## Quick Start
 
 ```bash
-chloroplast run    file.plnt         # run a program
-chloroplast verify tests.plnt        # run VERIFY test suite
-chloroplast check  file.plnt         # static type check
-chloroplast compile file.plnt --run  # compile to native binary and run it
-chloroplast repl                     # interactive REPL
+./bin/Chloroplast file.plant out.c     # compile PlantLang to C
+./bin/Chloroplast --help               # usage + options
+./bin/Chloroplast --version            # Chloroplast 0.46.4 (pure native)
+make test                              # native integration suite
 ```
 
 ---
@@ -920,7 +922,29 @@ Four modes (Run / Check / Verify / Compile), a live connection indicator, curate
 
 ## Architecture
 
-Chloroplast v0.45.0 uses a dual-engine architecture — an AST interpreter for development and an LLVM compiler for production — augmented with parallel compilation, distributed failover, lock-free telemetry, zero-trust security, a cluster layer, a geo-routing governance engine, distributed cycles, geo-aware topology, stream compaction, dynamic replica rebalancing, and an integrated testing framework with native networking:
+Chloroplast v0.46.4 is a **pure native, self-hosted compiler** — no JavaScript
+engine. Source is compiled to C by the self-hosted compiler
+(`src/plantc/*.plant`) and linked against the native C runtime
+(`runtime/c/plant_runtime.c`):
+
+```
+Source (.plant)
+   ↓  src/plantc/lexer.plant        — depth-aware lexer (handles \N prefix)
+   ↓  src/plantc/parser.plant       — recursive-descent parser → AST (LISTS)
+   ↓  src/plantc/codegen_c.plant    — C code generator
+   ↓  bin/Chloroplast               — CLI driver (--help / --version / compile)
+   ↓  runtime/c/plant_runtime.c     — native runtime (arenas, LIST/MAP, PLANT modules)
+   ↓  gcc
+Native executable
+```
+
+The compiler is bootstrapped `dist/Chloroplast (v1) → v2 → v3 → v4 → v5` and
+`make self` verifies the generations are byte-identical (fixed point).
+
+> The remainder of this section documents the legacy JavaScript-era
+> architecture (v0.44.0 and earlier, including `core/*.js` interpreter
+> modules, distributed cluster layers, and CodeWords services). It is kept as
+> a historical record — none of it ships in the v0.46.4 Pure Native release.
 
 ```
 Source (.plnt)
@@ -1896,9 +1920,11 @@ SUITE/.
 | `#ALLOW_HARVEST` | — | Permit outbound HTTP requests |
 | `#ALLOW_LISTEN` | — | Permit TCP socket listeners |
 
-### 2. `SUITE` / `VERIFY` — Test Runner
+### 2. `SUITE` / `VERIFY` — Test Runner (legacy JS-era)
 
-The `plantc test <file.plant>` subcommand discovers all `SUITE` blocks and executes their `VERIFY` assertions:
+> Removed in v0.46.4 with the JavaScript engine. Kept for historical record.
+
+The legacy `plantc test <file.plant>` subcommand discovers all `SUITE` blocks and executes their `VERIFY` assertions:
 
 ```
 SUITE "Arithmetic",

@@ -2245,15 +2245,15 @@ int main(int argc, char **argv) {
   tx_t c_len = "";
   arg0 = get_cli_arg(0);
   if (strcmp(arg0,"-h") == 0 || strcmp(arg0,"--help") == 0) {
-      plant_print("plantc — PlantLang self-hosted compiler");
-      plant_print("usage: plantc <source.plant> [out.c]");
+      plant_print("Chloroplast — Pure Native PlantLang compiler");
+      plant_print("usage: Chloroplast <source.plant> [out.c]");
       plant_print("options:");
       plant_print("  -h, --help     show this help and exit");
       plant_print("  -v, --version  show version and exit");
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("plantc 1.0.0-phase5 (self-hosted)");
+      plant_print("Chloroplast 0.46.4 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

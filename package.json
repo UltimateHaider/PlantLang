@@ -1,6 +1,6 @@
 {
-  "name": "plantlang",
-  "version": "1.0.0-phase5",
-  "description": "PlantLang — self-hosted compiler with a native C toolchain (make all/self/test/dist/install)",
+  "name": "chloroplast",
+  "version": "0.46.4",
+  "description": "Chloroplast Pure Native Programming Language Compiler and Build System",
   "license": "MIT"
 }

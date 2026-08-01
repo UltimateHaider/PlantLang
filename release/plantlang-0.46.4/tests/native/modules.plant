@@ -1,0 +1,7 @@
+ACTION main(),
+  REAP r FROM strings:LENGTH, "abcd".
+  SHOW "len=" + r.
+  REAP s FROM strings:REPLACE, "a-b-c", "-", "+".
+  SHOW s.
+  GIVE 0.
+/GIVE main.

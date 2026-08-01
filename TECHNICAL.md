@@ -1,5 +1,15 @@
 # PlantLang Technical Reference
 
+> **Current architecture (v0.46.4+): Pure Native 🚀** — The PlantLang compiler,
+> **Chloroplast**, is fully self-hosted: `src/plantc/*.plant` (lexer, parser, C
+> codegen, driver) compiles to C and links against the native runtime
+> (`runtime/c/plant_runtime.c`, `runtime/c/plant_compat.h`). There is no
+> interpreter: `dist/Chloroplast` (v1) bootstraps `v2 → v3 → v4 → v5` to a
+> byte-identical fixed point (`make self`). The compiler binary is
+> `bin/Chloroplast` (`./bin/Chloroplast app.plant out.c`). Sections below
+> referencing `core/*.js` / the legacy JS engine describe historical versions
+> (≤ v0.45.x) and are kept as an architectural record.
+
 ## 0. Module System & Standard Library
 
 See sections 9–10 below for the IMPORT/FFI and Standard Library architecture.
@@ -2404,9 +2414,11 @@ The `TestRunner` discovers `SUITE` blocks and evaluates `VERIFY` assertions:
 - Non-empty string passes, `"false"` and `"FALSE"` and `"0"` fail
 - Context variable lookup evaluated as truthy
 
-### 24.3 plantc test Subcommand
+### 24.3 plantc test Subcommand (legacy, JS-era)
 
-The `plantc test <file.plant>` subcommand:
+> Removed in v0.46.4 with the JavaScript engine. Kept for historical record.
+
+The legacy `plantc test <file.plant>` subcommand (JS engine):
 1. Reads the source file
 2. (Optional) Runs `CodeWordsChecker.checkAST()` — rejects with violations on unprotected network statements
 3. Parses the AST and collects all top-level `SuiteStatement` nodes
@@ -2927,93 +2939,77 @@ All pass through without requiring directives (they are not sensitive network op
   - CHOICE exhaustiveness: complete (1), incomplete detected (1)
   - Total: 75 tests, all green
 
-## 28. Self-Hosting Compiler Pipeline (Stage 0) (v0.45.0)
+## 28. Self-Hosting Compiler Pipeline (Pure Native)
 
-The v0.45.0 release introduces the Stage 0 self-hosting compiler pipeline, where the compiler driver (`main.plant`) is itself written in PlantLang and compiled by Chloroplast.
+Since v0.46.4 the PlantLang compiler — **Chloroplast** — is 100% pure native:
+no interpreter, no Node.js, no JavaScript. The compiler driver (`main.plant`)
+is itself written in PlantLang, compiled to C, and bootstrapped through five
+generations to a byte-identical fixed point.
 
 ### 28.1 Compiler Driver (`src/plantc/main.plant`)
 
-The entry point for the PlantLang self-hosted compiler:
+The entry point for the Chloroplast compiler, written entirely in PlantLang:
 
 ```
-1\ IMPORT "std/io".
-2\ IMPORT "std/string".
-3\ IMPORT "std/fs".
-4\ ACTION main(),
-5\   SHOW "PlantLang Self-Hosted Compiler v0.1.0".
-6\   SHOW "Stage 0: source → tokens → AST → C".
-7\   SHOW "".
-8\
-9\   REAP sourceFile FROM get_cli_arg, 1.
-10\   IF sourceFile IS "",
-11\     SHOW "Usage: node chloroplast.js main.plant <source.plant>".
-12\     SHOW "REAP code FROM fs:READ, sourceFile.".
-13\     GIVE.
-14\   /IF.
-15\
-16\   REAP code FROM fs:READ, sourceFile.
-17\   IF code IS "",
-18\     SHOW "Error: Could not read source file".
-19\     GIVE.
-20\   /IF.
-21\
-22\   REAP tokens FROM scan_tokens, code.
-23\   REAP ast FROM parse_program, tokens.
-24\   REAP cCode FROM generate_c, ast.
-25\
-26\   REAP outFile FROM strings:REPLACE, sourceFile, ".plant", ".c".
-27\   REAP written FROM fs:WRITE, outFile, cCode.
-28\   SHOW "Wrote " + outFile + " (" + COUNT(cCode) + " chars)".
-29\ /ACTION.
-30\
-31\ REAP exitCode FROM main.
-32\ REAP _ FROM fs:EXISTS, "output.c".
+REAP arg0 FROM get_cli_arg, 0.
+IF arg0 IS "-h" OR arg0 IS "--help",
+  SHOW "Chloroplast — Pure Native PlantLang compiler".
+  SHOW "usage: Chloroplast <source.plant> [out.c]".
+  GIVE 0.
+/IF.
+IF arg0 IS "-v" OR arg0 IS "--version",
+  SHOW "Chloroplast 0.46.4 (pure native)".
+  GIVE 0.
+/IF.
+# ... read source via fs:READ, tokenize via scan_tokens,
+#     parse via parse_program, generate C via generate_c,
+#     write output via fs:WRITE
 ```
 
 **Key components:**
-- **`get_cli_arg(n)`** → FFI stub returning the Nth CLI argument (1-based)
+- **`get_cli_arg(n)`** → C runtime stub returning the Nth CLI argument (1-based)
 - **`scan_tokens(code)`** → PlantLang-native lexer producing a token list
 - **`parse_program(tokens)`** → PlantLang-native parser producing an AST
 - **`generate_c(ast)`** → PlantLang-native code generator producing C source
 - **`PLANT fs`** — `fs:EXISTS`, `fs:READ`, `fs:WRITE` for file I/O
 - **`PLANT strings`** — `strings:REPLACE`, `strings:LENGTH` for string manipulation
 
-### 28.2 FFI Integration (`core/interpreter.js`)
+### 28.2 FFI Integration (`runtime/c/plant_compat.h`)
 
-`get_cli_arg` is registered in `_registerStdStubs`:
+All FFI stubs are registered in the native C runtime, not in any interpreter.
+`get_cli_arg` reads `argv` directly:
 
-```js
-this.env.set('get_cli_arg', {
-  type: 'ACTION', arity: 1,
-  body: (args) => {
-    const idx = this.interp.toNative(args[0]);
-    const cliArgs = this.interp.cliArgs || [];
-    const val = idx >= 0 && idx < cliArgs.length ? cliArgs[idx] : '';
-    return this.interp.toPlant(val);
-  }
-});
+```c
+tx_t get_cli_arg(tx_t idx) {
+  long i = from_long(idx);
+  if (i < 1 || (size_t)i > g_argc) return cstr_to_tx("");
+  return cstr_to_tx(g_argv[i]);
+}
 ```
 
-The interpreter receives `cliArgs` from `chloroplast.js` which passes `process.argv.slice(2)` on construction.
+The runtime (`plant_runtime.c`) provides every `PLANT` module implementation:
+`fs_EXISTS`, `fs_READ`, `fs_WRITE`, `strings_LENGTH`, `strings_REPLACE`,
+`plant_list_push`, `plant_list_get`, `plant_list_make`, `plant_array_length`,
+and the `_cat`/`_from_long` helpers used by the generated code.
 
 ### 28.3 Pipeline Execution
 
-The full pipeline is invoked as:
+The full pipeline is invoked natively:
 
 ```bash
-node chloroplast.js src/plantc/main.plant myapp.plant
+./bin/Chloroplast src/plantc/main.plant myapp.c
+# or, after the five-generation self-hosting chain:
+# dist/Chloroplast → build/plantc_v2 → build/plantc_v3 (== v4 == v5)
 ```
 
-This produces `myapp.c` as output. The compiler driver handles error cases: missing source file, unreadable file, and usage help.
+This produces `myapp.c` as output. The compiler driver handles error cases:
+missing source file (exit 1), unreadable file, and usage help.
 
 ### 28.4 Test Coverage
 
-- `tests/v0.45.0_self_hosting_compiler.test.js` — 7+ tests:
-  - `get_cli_arg` FFI returns correct arguments by index (1)
-  - `get_cli_arg` returns empty string for out-of-bounds index (1)
-  - `get_cli_arg` returns empty string for negative index (1)
-  - `main.plant` parses successfully (1)
-  - Pipeline handles missing source file gracefully (1)
-  - Pipeline handles empty source file (1)
-  - Full end-to-end: all 34/34 npm regression tests pass (34)
-  - Total: 7+ tests, all 34/34 npm tests green
+- `make self` — multi-generation self-hosting byte-convergence check
+  (`plantc_v3.c == plantc_v4.c == plantc_v5.c`, fixed point 69 668 bytes)
+- `make test` — native integration suite (`tests/native/`): CLI checks
+  (`--help`, `--version`, missing-file exit code) plus compile + run +
+  output-diff cases — 9/9 passing
+- Legacy JS test suites were removed in v0.46.4 (Pure Native purge)
