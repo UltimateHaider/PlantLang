@@ -3302,3 +3302,111 @@ nested `Wrap[T]` with mock-FFI round-trips). The runner supports optional
 (`!`-prefixed lines must be absent, e.g. `!} plant_Box_T;`) — and links
 `mock_ffi.c` for struct-FFI interop. Native suite stays 18/18; the
 self-hosting chain converges with the engine active.
+
+## 32. Closures Engine — Env Structs & Native Functions (v0.48.2)
+
+Closures lower to **plain C** with explicit environments: a heap-allocated
+env struct holds the captured values and a native function reads them. There
+is no runtime closure machinery — generated code is `typedef struct` +
+`tx_t fn(tx_t env, …)` exactly as a C programmer would write by hand.
+
+### 32.1 Syntax
+
+```plant
+ACTION make_counter(base(NUM)),
+  SET n TO base.
+  CREATE f TO [MOVE n](step(NUM)) -> step + n.   # capture n BY VALUE
+  REAP r1 FROM f, 3.
+  REAP r2 FROM f, 4.    # state persists: r2 = 7 + n-in-closure, outer n == 0
+  GIVE r2.
+/ACTION.
+
+ACTION tracer(v(NUM)),
+  CREATE t TO [REF v](d(NUM)) -> d + v.   # capture v BY REFERENCE
+  SET v TO 100.                           # change visible inside t
+  REAP r FROM t, 1.   # r == 101
+  GIVE r.
+/ACTION.
+```
+
+- `[MOVE x, REF y]` after the action name — the **explicit capture list**.
+  `MOVE` = value copy (outer var cleared to `0` at create time);
+  `REF` = borrow (`&var` stored in the env).
+- Args `(n(NUM))` — normal parameters (names optional).
+- Body: expression form `-> expr.` or block form `-> ( stmts )`.
+
+### 32.2 Parser
+
+`parse_closure` (parser.plant) consumes `CREATE <name> TO` then an optional
+`[ … ]` capture list (each item `MOVE x` / `REF y`, also in REAP args as
+inline `"@@CLOSURE@@"` placeholders), then `( args )` then `->` then either
+an expression (via `collect_value`, which stops at a `.` **or a `)` at depth
+0** — the block terminator) or a `( stmts )` block parsed with the regular
+statement loop into a body list. Nodes are `plant_list_make(4, "closure",
+name, capture-list, body-or-expr-text)`; the node holds an optional
+`"clargs"` map of name → arg-type pairs. Inline closure REAP args carry the
+real closure node text.
+
+### 32.3 Pass 0d — Discovery & Stamping
+
+`collect_closures(ast)` walks every non-generic `action_decl` in pass 0d
+(also used by generics), building per-action:
+
+- `_cl_scopes` — parameter names, local `SET`/`CREATE` targets, `REAP`
+  targets, cycle iterators, match bindings (a flat `[name, "x", …]` list).
+- `_cl_stamp_cnode` — for each `[MOVE x, REF y]` pair, resolves `x`/`y`
+  against the enclosing scope stack and records capture metadata.
+- `_cl_walk` — recurses into `CREATE`/`REAP` statements, nested closure
+  bodies (`bkind IS "block"` — expr-form bodies are plain text and are
+  **never** walked), SEASON/IF/CYCLE bodies and match clauses.
+
+The result is a flat `clmaps` list `[action-name, [varname, closurenode, …]]`
+stamped into the AST: `"clcaps"` (the ordered capture list — stored under a
+new key because `_map_get` returns the *first* key match), `"moved"` (MOVE
+names), `"shadows"` (names shadowed by params), `"clmap"` (nested closure
+maps).
+
+### 32.4 Codegen
+
+Per closure, with id `N` and capture list `[c1 t1, c2 t2, …]`:
+
+```c
+typedef struct { <t1> c1; tx_t c2; /* REF fields are tx_t */ } plant_Env_N;
+tx_t plant_Closure_N_fn(tx_t env, <argtypes>);          /* forward */
+tx_t plant_Closure_N_fn(tx_t env, <argtypes>) {         /* definition */
+  <t1> c1 = ((plant_Env_N*)env)->c1;                    /* shadow reads */
+  <t1> c1 = *(( <t1>*)((plant_Env_N*)env)->c1);         /* REF shadows */
+  <body>  /* returns via implicit-return semantics */
+}
+```
+
+- Typedefs + forwards are emitted **before** the ACTION definitions;
+  definitions after (grouped under the owning ACTION).
+- Create site: `f = (tx_t)plant_env_alloc(sizeof(plant_Env_N));`
+  `((plant_Env_N*)f)->cap = val;` then `MOVE` clears the outer var:
+  `var = 0;`. `REF` stores `(tx_t)&var`.
+- Call site (REAP): `tgt = plant_Closure_N_fn((tx_t)f, <args>);` with an
+  env-init prelude for inline closures. Plain (non-closure) REAP calls are
+  unchanged. `REAP x FROM COUNT f` compiles to the `COUNT` builtin.
+
+### 32.5 Semantics
+
+- Closure vars are `tx_t` env pointers; invocable only in the defining
+  ACTION body + nested bodies (per-body clmap lookup). A closure may be
+  *passed* into another ACTION but cannot be invoked there.
+- MOVE state persists across invocations (private env); outer var cleared
+  (consumed). REF tracks the outer variable live (`&var` — changes after
+  creation are visible inside).
+- Params shadow captures (`"shadows"`); duplicate capture names take the
+  first-listed.
+
+### 32.6 Verification
+
+`tests/closures/` (6 cases, wired into `make test`): `move` (MOVE capture +
+state persistence + outer clearing), `ref` (REF live tracking), `mix`
+(multi-capture NUM/REF/TX + string concat body), `nested` (closure defined
+inside a closure block body), `block` (block-form body with multiple
+statements), `invoke` (invocation from SEASON/IF bodies). `.grep` files
+check the emitted C structurally (`typedef struct { long cap; } plant_Env_…;`,
+`plant_env_alloc(sizeof`, `&y`, `*)env)->`). Full suite: native 18/18,
+generics 7/7, closures 6/6; self-hosting converges with the engine active.

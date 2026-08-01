@@ -1,0 +1,19 @@
+# Multiple closures with mixed MOVE/REF captures; string-typed
+# captures ride along as tx_t values.
+ACTION main(),
+  CREATE a(NUM) TO 3.
+  CREATE b(NUM) TO 4.
+  CREATE s(TX) TO "tag".
+  CREATE m TO [MOVE a, REF b](v(NUM)) -> v + a + b + 1.
+  CREATE t TO [MOVE s](u(NUM)) -> "s:" + s + ":" + _from_long(u).
+  REAP r FROM m, 10.
+  REAP rs FROM _from_long, r.
+  SHOW "mixed=" + rs.
+  REAP ts FROM t, 7.
+  SHOW ts.
+  SET b TO 40.
+  REAP r2 FROM m, 10.
+  REAP rs2 FROM _from_long, r2.
+  SHOW "mixed2=" + rs2.
+  GIVE 0.
+/GIVE main.

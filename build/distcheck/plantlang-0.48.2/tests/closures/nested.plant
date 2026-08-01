@@ -1,0 +1,17 @@
+# Nested closures: a closure created inside another closure's
+# block body captures the outer closure's parameter (a shadow
+# local), and its fn is resolvable from inside the outer body.
+ACTION main(),
+  CREATE x(NUM) TO 5.
+  CREATE outer TO [MOVE x](a(NUM)) -> (
+    CREATE inner TO [MOVE a](b(NUM)) -> b + a + 1.
+    REAP ri FROM inner, 10.
+    REAP ris FROM _from_long, ri.
+    SHOW "inner=" + ris.
+    GIVE ri
+  ).
+  REAP r FROM outer, 2.
+  REAP rs FROM _from_long, r.
+  SHOW "outer=" + rs.
+  GIVE 0.
+/GIVE main.

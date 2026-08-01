@@ -1,0 +1,19 @@
+# Closure vars are invocable from nested SEASON/IF bodies within
+# the defining ACTION (the closure map threads through blocks).
+ACTION main(),
+  CREATE x(NUM) TO 9.
+  CREATE k TO [MOVE x](v(NUM)) -> v + x + 1.
+  CREATE i(NUM) TO 0.
+  SEASON i < 3,
+    REAP r FROM k, i.
+    REAP rs FROM _from_long, r.
+    SHOW "it" + rs.
+    SET i TO i + 1.
+  /SEASON.
+  IF TRUE,
+    REAP r2 FROM k, 5.
+    REAP rs2 FROM _from_long, r2.
+    SHOW "if=" + rs2.
+  /IF.
+  GIVE 0.
+/GIVE main.

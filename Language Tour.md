@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.48.1
+# 🌿 PlantLang — Chloroplast v0.48.2
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -31,7 +31,7 @@ gcc -w -O0 -I runtime/c myfile.c runtime/c/plant_runtime.c -o myfile
 ```bash
 ./bin/Chloroplast file.plant out.c     # compile PlantLang to C
 ./bin/Chloroplast --help               # usage + options
-./bin/Chloroplast --version            # Chloroplast 0.48.1 (pure native)
+./bin/Chloroplast --version            # Chloroplast 0.48.2 (pure native)
 make test                              # native integration suite
 ```
 
@@ -292,6 +292,45 @@ Structs can be composed:
 ```
 
 STRUCT also supports anonymous struct literals in `CREATE` context and INCREASE/DECREASE on fields.
+
+### CLOSURES (v0.48.2)
+
+Anonymous functions with explicit capture lists — `MOVE` copies a value
+(outer variable is cleared), `REF` tracks a variable live via pointer:
+
+```
+1\ ACTION counter(start(NUM)),
+2\   CREATE f TO [MOVE start](step(NUM)) -> step + start.
+2\   REAP a FROM f, 5.        # → 5
+2\   REAP b FROM f, 5.        # state persists → 5
+2\   SHOW start.              # → 0 (MOVE cleared the outer var)
+1\ /ACTION.
+
+1\ ACTION tracer(v(NUM)),
+2\   CREATE t TO [REF v](d(NUM)) -> d + v.
+2\   SET v TO 100.            # visible inside t
+2\   REAP r FROM t, 1.        # → 101
+1\ /ACTION.
+```
+
+Block-form bodies run full statements and may nest closures:
+
+```
+1\ ACTION make_adder(base(NUM)),
+2\   CREATE outer TO [MOVE base] -> (
+3\     CREATE inner TO [MOVE base](k(NUM)) -> k + base.
+4\     GIVE inner.
+5\   ).
+2\   REAP g FROM outer.
+2\   REAP r FROM g, 10.       # → 10 + base
+1\ /ACTION.
+```
+
+String captures and mixed NUM/TX lists work too
+(`-> "s:" + s + ":"` style bodies). Closures are invocable anywhere in the
+ACTION body (including SEASON/IF/CYCLE bodies); each closure compiles to a
+`plant_Env_N` struct + `plant_Closure_N_fn` native function — no runtime
+dispatch.
 
 ### Methods on Structs
 
