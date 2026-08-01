@@ -1400,3 +1400,764 @@ void ffi_free(void* p) {
     errno = 0;
     free(p);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.48.3 — Advanced Async Engine
+   Cooperative coroutine runtime: segmented arenas with lazy
+   copy-on-write, adaptive RR↔priority-queue dispatcher, timers,
+   contexts with deadline/priority inheritance, cancel tokens,
+   MetricsAggregator ring buffer + adaptive sampling, tracing.
+   Generated ASYNC ACTIONs are state structs + step functions.
+   Value convention (matches the runtime): tx_t results are raw
+   pointers or long bits — never dereferenced or freed by the
+   engine; numeric results are converted with _from_long at call
+   sites. Task-lifetime memory (state structs, arenas, task
+   records, queue nodes) is freed exactly once at teardown.
+   ═══════════════════════════════════════════════════════════════ */
+
+typedef struct plant_seg {
+    size_t   cap;
+    size_t   used;
+    int      refs;               /* shared segments: refcount */
+    struct plant_seg* next;
+} plant_seg;
+
+typedef struct plant_arena {
+    plant_seg* segs;             /* in-use segments (most recent first) */
+    size_t     seg_size;         /* adaptive segment size */
+    size_t     hits, misses;     /* allocator stats (cache policy) */
+} plant_arena;
+
+typedef struct plant_actx {
+    int      magic;              /* 0xA51A4C7 */
+    int      adaptive;
+    long     cap;                /* congestion threshold (queue length) */
+    long     priority;           /* context priority inheritance */
+    long     deadline_scale;     /* 100..150 (percent) */
+    long     congested_since;    /* ms when congestion started, -1 none */
+    int      cancelled;
+    struct plant_task* tasks;    /* live tasks in this context */
+    struct plant_actx* next;     /* global context list */
+} plant_actx;
+
+typedef struct plant_ctok {
+    int magic;                   /* 0xA51A700 */
+    int cancelled;
+} plant_ctok;
+
+struct plant_task {
+    int64_t      id;
+    long         prio;           /* 0 HIGH, 1 NORMAL, 2 LOW */
+    long         deadline;       /* absolute ms, -1 none */
+    long         to;             /* timeout ms at spawn, -1 none */
+    long         wake;           /* timer wake ms, -1 none */
+    long         tkey;           /* timer list key: min(wake, deadline) */
+    long         state_size;
+    tx_t         st;             /* state struct (arena-allocated) */
+    plant_stepfn step;
+    tx_t         name;
+    tx_t         res;            /* completed result (opaque, transferred) */
+    struct plant_task* parent;
+    struct plant_task* aw;       /* awaited child (self for sleeps) */
+    struct plant_task* next;     /* ready queue / timer list link */
+    struct plant_task* allnext;  /* global live-task list */
+    struct plant_task* clink;    /* context task list link */
+    struct plant_task* csib;     /* parent children list link */
+    struct plant_task* chd, *chtail;
+    plant_actx*  ctx;
+    plant_ctok*  tok;
+    int          status;         /* 0 ready, 1 suspended, 2 done */
+    int          fatal;          /* skip body on pop (circular await) */
+    int          dead;           /* freed guard */
+    int          magic;          /* 0xA51A4C8 task handle */
+    plant_arena  ar;
+};
+
+#define P_TASK_OF(st)   ((plant_task*)(*((tx_t*)(st))))   /* __self is field 0 */
+
+static void plant_push_ready(plant_task* t);
+static void plant_cancel_task(plant_task* t, const char* marker);
+
+static long g_task_seq = 0;
+static long g_live = 0;
+static long g_completed = 0;
+static plant_task* g_all = NULL;      /* live task list */
+static plant_task* g_rr_head = NULL, *g_rr_tail = NULL;
+static plant_task** g_pq = NULL;      /* binary min-heap by (prio, deadline, id) */
+static int g_pq_len = 0, g_pq_cap = 0;
+static plant_task* g_timer_head = NULL;
+static int g_mode = 0;                /* 0 RR, 1 PQ */
+static int g_mode_samples = 0;
+static long g_threshold = 64;         /* MISSION CONFIG ADAPTIVE_THRESHOLD */
+static int g_sampling_mode = 0;       /* 0 I/O, 1 CPU */
+static plant_actx* g_dctx = NULL;
+static plant_actx* g_ctxs = NULL;     /* all contexts */
+static int g_metrics_on = 1;
+static int g_metrics_interval = 16;
+static long g_next_sample = 0;
+static int g_trace_on = 0;
+static int g_trace_level = 0;         /* 0 INFO, 1 DEBUG, 2 PERF */
+static FILE* g_trace_fp = NULL;
+static plant_seg* g_seg_cache = NULL;
+static size_t g_seg_size = 1024;
+static size_t g_cache_max = 64;
+static long g_arena_hits = 0, g_arena_misses = 0;
+static int g_inited = 0;
+static plant_task* g_running = NULL;  /* task currently mid-step */
+
+static long plant_ms(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (long)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
+}
+static void plant_msleep(long ms) {
+    if (ms <= 0) ms = 1;
+    struct timespec ts = { ms / 1000, (long)(ms % 1000) * 1000000 };
+    while (nanosleep(&ts, &ts) != 0 && errno == EINTR) {}
+}
+
+/* ── Segmented arenas: refcounted segments + adaptive cache ── */
+static void* plant_arena_alloc(plant_arena* a, size_t n) {
+    plant_seg* s = a->segs;
+    while (s) {
+        if (s->used + n <= s->cap) {
+            void* p = (char*)(s + 1) + s->used;
+            s->used += n; a->hits++; g_arena_hits++;
+            return p;
+        }
+        s = s->next;
+    }
+    a->misses++; g_arena_misses++;
+    size_t cap = n > a->seg_size ? n : a->seg_size;
+    plant_seg* prev = NULL;
+    for (plant_seg* c = g_seg_cache; c; prev = c, c = c->next) {
+        if (c->cap >= cap) {
+            if (prev) prev->next = c->next; else g_seg_cache = c->next;
+            c->used = 0; c->refs = 1; c->next = a->segs; a->segs = c;
+            void* p = (char*)(c + 1); c->used = n;
+            return p;
+        }
+    }
+    plant_seg* ns = (plant_seg*)malloc(sizeof(plant_seg) + cap);
+    if (!ns) return NULL;
+    ns->cap = cap; ns->used = n; ns->refs = 1; ns->next = a->segs; a->segs = ns;
+    return (void*)(ns + 1);
+}
+
+/* lazy copy: share segments (refs++) — no bytes copied */
+static void plant_arena_share(plant_arena* dst, plant_arena* src) {
+    dst->segs = NULL; dst->seg_size = src->seg_size;
+    dst->hits = dst->misses = 0;
+    for (plant_seg* s = src->segs; s; s = s->next) {
+        plant_seg* c = (plant_seg*)malloc(sizeof(plant_seg));
+        if (!c) continue;
+        memcpy(c, s, sizeof(plant_seg));
+        c->refs++;
+        c->next = dst->segs;
+        dst->segs = c;
+    }
+}
+
+/* copy-on-write materialization: any segment with refs > 1 becomes
+   an exclusive copy (refs == 1) — no pointer sharing afterwards */
+static void plant_arena_own(plant_arena* a) {
+    plant_seg* s = a->segs;
+    while (s) {
+        if (s->refs > 1) {
+            plant_seg* c = (plant_seg*)malloc(sizeof(plant_seg) + s->cap);
+            if (c) {
+                c->cap = s->cap; c->used = s->used; c->refs = 1;
+                memcpy((void*)(c + 1), (void*)(s + 1), s->used);
+                s->refs--;
+                c->next = s->next;
+                s->next = c;
+            }
+        }
+        s = s->next;
+    }
+}
+
+static void plant_arena_free(plant_arena* a) {
+    if (a->hits + a->misses > 0) {
+        double mr = (double)a->misses / (double)(a->hits + a->misses);
+        if (mr > 0.08 && a->seg_size < (size_t)1 << 20) a->seg_size *= 2;
+        else if (mr < 0.02 && a->seg_size > 256) a->seg_size /= 2;
+    }
+    if (a->seg_size > g_seg_size && g_seg_size < (size_t)1 << 20) g_seg_size = a->seg_size;
+    plant_seg* s = a->segs;
+    while (s) {
+        plant_seg* nx = s->next;
+        if (--s->refs <= 0) {
+            if (g_cache_max > 0) {
+                g_cache_max--;
+                s->next = g_seg_cache;
+                g_seg_cache = s;
+            } else {
+                free(s);
+            }
+        }
+        s = nx;
+    }
+    a->segs = NULL;
+}
+
+/* ── Ready queue: adaptive RR ↔ priority queue ── */
+static void plant_pq_swap(plant_task** a, plant_task** b) {
+    plant_task* t = *a; *a = *b; *b = t;
+}
+static int plant_pq_less(plant_task* a, plant_task* b) {
+    if (a->prio != b->prio) return a->prio < b->prio;
+    if (a->deadline != b->deadline) return a->deadline < b->deadline;
+    return a->id < b->id;
+}
+static void plant_pq_push(plant_task* t) {
+    if (g_pq_len >= g_pq_cap) {
+        g_pq_cap = g_pq_cap ? g_pq_cap * 2 : 64;
+        g_pq = (plant_task**)realloc(g_pq, (size_t)g_pq_cap * sizeof(plant_task*));
+    }
+    int i = g_pq_len++;
+    g_pq[i] = t;
+    while (i > 0) {
+        int p = (i - 1) / 2;
+        if (plant_pq_less(g_pq[i], g_pq[p])) { plant_pq_swap(&g_pq[i], &g_pq[p]); i = p; }
+        else break;
+    }
+}
+static plant_task* plant_pq_pop(void) {
+    if (g_pq_len == 0) return NULL;
+    plant_task* top = g_pq[0];
+    g_pq[0] = g_pq[--g_pq_len];
+    int i = 0;
+    while (1) {
+        int l = 2 * i + 1, r = 2 * i + 2, m = i;
+        if (l < g_pq_len && plant_pq_less(g_pq[l], g_pq[m])) m = l;
+        if (r < g_pq_len && plant_pq_less(g_pq[r], g_pq[m])) m = r;
+        if (m == i) break;
+        plant_pq_swap(&g_pq[i], &g_pq[m]);
+        i = m;
+    }
+    return top;
+}
+
+static long plant_ready_len(void) {
+    if (g_mode == 0) {
+        long n = 0;
+        for (plant_task* t = g_rr_head; t; t = t->next) n++;
+        return n;
+    }
+    return g_pq_len;
+}
+
+/* dynamic threshold with hysteresis: enter PQ after 2 sustained
+   samples at/above threshold; drop back to RR after 2 sustained
+   samples at/below 70% of it (stabilizes under continuous load) */
+static void plant_async_adjust_mode(long qlen) {
+    if (g_mode == 0 && qlen >= g_threshold) {
+        if (++g_mode_samples >= 2) { g_mode = 1; g_mode_samples = 0; }
+    } else if (g_mode == 1 && qlen <= g_threshold * 7 / 10) {
+        if (++g_mode_samples >= 2) { g_mode = 0; g_mode_samples = 0; }
+    } else {
+        g_mode_samples = 0;
+    }
+}
+
+static void plant_push_ready(plant_task* t) {
+    t->status = 0;
+    plant_async_adjust_mode(plant_ready_len());
+    if (g_mode == 0) {
+        t->next = NULL;
+        if (g_rr_tail) g_rr_tail->next = t; else g_rr_head = t;
+        g_rr_tail = t;
+    } else {
+        plant_pq_push(t);
+    }
+}
+
+static plant_task* plant_pop_ready(void) {
+    plant_async_adjust_mode(plant_ready_len());
+    plant_task* t = NULL;
+    if (g_mode == 0) {
+        t = g_rr_head;
+        if (t) { g_rr_head = t->next; if (!g_rr_head) g_rr_tail = NULL; t->next = NULL; }
+    } else {
+        t = plant_pq_pop();
+    }
+    return t;
+}
+
+/* ── Timer list (sorted by tkey = min(wake, deadline)) ── */
+static void plant_timer_insert(plant_task* t) {
+    t->tkey = -1;
+    if (t->wake >= 0 && (t->tkey < 0 || t->wake < t->tkey)) t->tkey = t->wake;
+    if (t->deadline >= 0 && (t->tkey < 0 || t->deadline < t->tkey)) t->tkey = t->deadline;
+    plant_task** pp = &g_timer_head;
+    while (*pp && (*pp)->tkey < t->tkey) pp = &(*pp)->next;
+    t->next = *pp;
+    *pp = t;
+    t->status = 1;
+}
+static void plant_timer_remove(plant_task* t) {
+    plant_task** pp = &g_timer_head;
+    while (*pp && *pp != t) pp = &(*pp)->next;
+    if (*pp == t) *pp = t->next;
+}
+static void plant_fire_timers(long now) {
+    while (g_timer_head && g_timer_head->tkey <= now) {
+        plant_task* t = g_timer_head;
+        g_timer_head = t->next;
+        t->next = NULL;
+        int is_timeout = (t->deadline >= 0 && t->deadline <= now &&
+                          (t->wake < 0 || t->wake > t->deadline));
+        if (is_timeout) {
+            plant_cancel_task(t, "TIMEOUT");
+        } else {
+            plant_push_ready(t);
+        }
+    }
+}
+static long plant_next_timer(void) {
+    return g_timer_head ? g_timer_head->tkey : -1;
+}
+
+/* ── Context deadline/priority scaling ── */
+static void plant_ctx_tick(plant_actx* ctx, long qlen) {
+    if (!ctx || !ctx->adaptive) return;
+    long now = plant_ms();
+    if (qlen > ctx->cap) {
+        if (ctx->congested_since < 0) ctx->congested_since = now;
+        else if (now - ctx->congested_since >= 50 && ctx->deadline_scale < 150) {
+            ctx->deadline_scale += 10;
+            ctx->congested_since = now;
+        }
+    } else {
+        ctx->congested_since = -1;
+        if (ctx->deadline_scale > 100) ctx->deadline_scale -= 5;
+    }
+}
+
+/* ── Tracing ── */
+static void plant_trace_write(const char* line) {
+    if (g_trace_on && g_trace_fp) {
+        fprintf(g_trace_fp, "%s\n", line);
+        fflush(g_trace_fp);
+    }
+}
+
+/* ── Task teardown / cancellation ── */
+static void plant_unlink_ready(plant_task* t) {
+    if (t->status != 0) return;
+    if (g_mode == 0) {
+        if (g_rr_head == t) { g_rr_head = t->next; if (!g_rr_head) g_rr_tail = NULL; return; }
+        for (plant_task* p = g_rr_head; p; p = p->next)
+            if (p->next == t) { p->next = t->next; if (g_rr_tail == t) g_rr_tail = p; break; }
+    } else {
+        for (int i = 0; i < g_pq_len; i++)
+            if (g_pq[i] == t) { g_pq[i] = g_pq[--g_pq_len]; break; }
+    }
+}
+
+static void plant_task_free(plant_task* t) {
+    if (t->dead) return;
+    t->dead = 1;
+    if (t->status == 1) plant_timer_remove(t);
+    plant_unlink_ready(t);
+    if (t->ctx) {
+        for (plant_task** pp = &t->ctx->tasks; *pp; pp = &(*pp)->clink)
+            if (*pp == t) { *pp = t->clink; break; }
+    }
+    for (plant_task** pp = &g_all; *pp; pp = &(*pp)->allnext)
+        if (*pp == t) { *pp = t->allnext; break; }
+    if (t->parent) {
+        plant_task** cp = &t->parent->chd;
+        while (*cp && *cp != t) cp = &(*cp)->csib;
+        if (*cp == t) {
+            *cp = t->csib;
+            if (t->parent->chtail == t) t->parent->chtail = *cp;
+        }
+    }
+    for (plant_task* c = t->chd; c; c = c->csib) c->parent = NULL;
+    plant_arena_free(&t->ar);
+    free(t);
+    g_live--;
+}
+
+static void plant_teardown_tree(plant_task* t) {
+    plant_task* c = t->chd;
+    while (c) {
+        plant_task* nx = c->csib;
+        plant_teardown_tree(c);
+        c = nx;
+    }
+    t->chd = t->chtail = NULL;
+    plant_task_free(t);
+}
+
+static void plant_teardown_children(plant_task* t) {
+    plant_task* c = t->chd;
+    while (c) {
+        plant_task* nx = c->csib;
+        plant_teardown_tree(c);
+        c = nx;
+    }
+    t->chd = t->chtail = NULL;
+}
+
+/* cancel (marker "CANCELLED"/"TIMEOUT"): isolation arenas of the
+   cancelled subtree are freed immediately; a parent awaiting the
+   task resumes with the marker */
+static void plant_cancel_task(plant_task* t, const char* marker) {
+    if (t->dead || t->status == 2 || t == g_running) return;
+    int self_await = (t->status == 1 && t->aw == t);
+    plant_task* aw = t->aw;
+    t->aw = NULL;
+    plant_teardown_children(t);
+    if (t->status == 1) {
+        if (self_await) {
+            t->res = (tx_t)marker;
+            plant_push_ready(t);
+            return;
+        }
+        if (aw) plant_task_free(aw);
+        t->res = (tx_t)marker;
+        plant_push_ready(t);
+        return;
+    }
+    /* ready task awaiting nothing: parent resumes with the marker */
+    if (t->parent && t->parent->aw == t) {
+        t->parent->aw = NULL;
+        t->parent->res = (tx_t)marker;
+        plant_push_ready(t->parent);
+    }
+    plant_task_free(t);
+}
+
+/* ── MetricsAggregator: ring buffer + adaptive sampling ── */
+typedef struct {
+    long ms, mode, qlen, tps, scale, miss;
+} plant_metric;
+static plant_metric g_mbuf[256];
+static int g_mhead = 0, g_mcount = 0;
+
+static void plant_metric_sample(long now) {
+    if (!g_metrics_on || now < g_next_sample) return;
+    static long last_ms = 0, last_done = 0;
+    long tps = 0;
+    if (last_ms > 0 && now > last_ms) tps = (g_completed - last_done) * 1000 / (now - last_ms);
+    long miss = 0;
+    if (g_arena_hits + g_arena_misses > 0)
+        miss = g_arena_misses * 100 / (g_arena_hits + g_arena_misses);
+    plant_metric m = { now, g_mode, plant_ready_len(), tps,
+                       g_dctx ? g_dctx->deadline_scale : 100, miss };
+    g_mbuf[g_mhead] = m;
+    g_mhead = (g_mhead + 1) % 256;
+    if (g_mcount < 256) g_mcount++;
+    char line[160];
+    snprintf(line, sizeof(line), "M,%ld,%ld,%ld,%ld,%ld,%ld",
+             m.ms, m.mode, m.qlen, m.tps, m.scale, m.miss);
+    plant_trace_write(line);
+    /* adaptive sampling rate: finer under sustained high load */
+    long ql = plant_ready_len();
+    int base = g_sampling_mode == 1 ? 4 : 16;
+    g_metrics_interval = ql > g_threshold * 2 ? 2 : base;
+    g_next_sample = now + g_metrics_interval;
+    last_ms = now;
+    last_done = g_completed;
+}
+
+/* ── Public API ── */
+tx_t plant_async_alloc_state(long size, tx_t name) {
+    plant_task* t = (plant_task*)calloc(1, sizeof(plant_task));
+    if (!t) return NULL;
+    t->state_size = size;
+    t->name = name;
+    t->magic = 0xA51A4C8;
+    t->ar.seg_size = g_seg_size;
+    t->st = plant_arena_alloc(&t->ar, (size_t)size);
+    if (!t->st) { free(t); return NULL; }
+    memset(t->st, 0, (size_t)size);
+    *((tx_t*)t->st) = (tx_t)t;      /* __self = task */
+    t->allnext = g_all;
+    g_all = t;
+    return t->st;
+}
+
+tx_t plant_async_register(tx_t st, plant_stepfn step, tx_t parent, tx_t ctx,
+                          long prio, long dl, long to, tx_t tok, tx_t name) {
+    plant_async_init();
+    plant_task* t = P_TASK_OF(st);
+    plant_task* p = parent ? P_TASK_OF(parent) : NULL;
+    t->step = step;
+    t->name = name;
+    t->ctx = NULL;
+    if (ctx) {
+        for (plant_actx* c = g_ctxs; c; c = c->next)
+            if ((void*)c == (void*)ctx) { t->ctx = c; break; }
+    }
+    if (!t->ctx) t->ctx = g_dctx;
+    t->tok = tok ? (plant_ctok*)tok : NULL;
+    t->prio = prio;
+    if (p && p->prio < t->prio) t->prio = p->prio;           /* inheritance */
+    if (t->ctx && t->ctx->priority < t->prio) t->prio = t->ctx->priority;
+    t->to = to;
+    long now = plant_ms();
+    long dl_abs = -1;
+    if (dl >= 0) dl_abs = now + dl;
+    if (p && p->deadline >= 0 && (dl_abs < 0 || p->deadline < dl_abs)) dl_abs = p->deadline;
+    if (to >= 0) { long toa = now + to; if (dl_abs < 0 || toa < dl_abs) dl_abs = toa; }
+    if (t->ctx && t->ctx->adaptive && dl_abs >= 0 && t->ctx->deadline_scale > 100)
+        dl_abs = now + (dl_abs - now) * t->ctx->deadline_scale / 100;  /* adaptive scaling */
+    t->deadline = dl_abs;
+    t->parent = p;
+    if (p) { t->csib = p->chd; p->chd = t; if (!p->chtail) p->chtail = t; }
+    if (t->ctx) { t->clink = t->ctx->tasks; t->ctx->tasks = t; }
+    if (t->ctx && t->ctx->cancelled) {
+        t->fatal = 1;
+        t->res = (tx_t)"CANCELLED";
+    }
+    /* deadlock prevention: circular awaits are rejected at spawn time */
+    for (plant_task* a = p; a; a = a->parent) {
+        if (a->step == step) {
+            t->fatal = 1;
+            t->res = (tx_t)"CIRCULAR_AWAIT";
+            break;
+        }
+    }
+    plant_ctx_tick(t->ctx, plant_ready_len());
+    t->id = ++g_task_seq;
+    g_live++;
+    if (g_trace_on) {
+        char line[160];
+        snprintf(line, sizeof(line), "S,%ld,%ld,%s,%ld", now, t->id,
+                 _S(name), t->prio);
+        plant_trace_write(line);
+    }
+    plant_push_ready(t);
+    return (tx_t)t;
+}
+
+/* result is an opaque tx_t (pointer or long bits) — transferred,
+   never dereferenced or freed by the engine (see header comment) */
+void plant_async_finish(tx_t st, tx_t res) {
+    plant_task* t = P_TASK_OF(st);
+    t->res = res;
+    t->status = 2;
+    g_completed++;
+    if (g_trace_on) {
+        char line[160];
+        snprintf(line, sizeof(line), "C,%ld,%ld,%s,ok", plant_ms(), t->id, _S(t->name));
+        plant_trace_write(line);
+    }
+    if (t->parent) {
+        plant_task* p = t->parent;
+        if (p->aw == t) {
+            if (p->status == 1) plant_push_ready(p);
+            return;                     /* kept until await_result */
+        }
+    }
+    plant_task_free(t);
+}
+
+void plant_async_suspend(tx_t st, tx_t child) {
+    plant_task* t = P_TASK_OF(st);
+    /* child is the task handle returned by plant_async_register:
+       t->aw must equal the child's plant_task* so finish/await_result/
+       cancel all agree on the same record. 0 = self (sleep path). */
+    t->aw = child ? (plant_task*)child : t;
+    if (t->aw == t && t->wake >= 0) {   /* sleep: into the timer list */
+        plant_timer_insert(t);
+        return;
+    }
+    t->status = 1;                      /* waiting on child */
+}
+
+void plant_async_sleep(tx_t st, long ms) {
+    plant_task* t = P_TASK_OF(st);
+    t->wake = plant_ms() + ms;
+}
+
+tx_t plant_async_await_result(tx_t st) {
+    plant_task* t = P_TASK_OF(st);
+    plant_task* c = t->aw;
+    if (!c) {                           /* cancelled-before-completion path */
+        tx_t r = t->res;
+        t->res = NULL;
+        return r ? r : (tx_t)"";
+    }
+    tx_t res = c->res;
+    c->res = NULL;
+    if (c != t) {
+        plant_task_free(c);
+    } else {
+        t->wake = -1;
+    }
+    t->aw = NULL;
+    return res ? res : (tx_t)"";
+}
+
+tx_t plant_async_ctx_create(long adaptive, long cap) {
+    plant_async_init();
+    plant_actx* ctx = (plant_actx*)calloc(1, sizeof(plant_actx));
+    if (!ctx) return NULL;
+    ctx->magic = 0xA51A4C7;
+    ctx->adaptive = (int)adaptive;
+    ctx->cap = cap > 0 ? cap : 64;
+    ctx->priority = 1;
+    ctx->deadline_scale = 100;
+    ctx->congested_since = -1;
+    ctx->next = g_ctxs;
+    g_ctxs = ctx;
+    return (tx_t)ctx;
+}
+
+tx_t plant_async_token_create(void) {
+    plant_ctok* tok = (plant_ctok*)calloc(1, sizeof(plant_ctok));
+    if (!tok) return NULL;
+    tok->magic = 0xA51A700;
+    return (tx_t)tok;
+}
+
+void plant_async_ctx_cancel(tx_t ctxv) {
+    plant_actx* ctx = (plant_actx*)ctxv;
+    if (!ctx || ctx->magic != 0xA51A4C7) return;
+    ctx->cancelled = 1;
+    plant_task* t = ctx->tasks;
+    while (t) {
+        plant_task* nx = t->clink;
+        plant_cancel_task(t, "CANCELLED");
+        t = nx;
+    }
+    ctx->tasks = NULL;
+}
+
+void plant_async_cancel(tx_t x) {
+    if (!x) return;
+    if (((plant_task*)x)->magic == 0xA51A4C8) {
+        plant_task* t = (plant_task*)x;
+        if (!t->dead && t->status != 2) plant_cancel_task(t, "CANCELLED");
+        return;
+    }
+    if (((plant_actx*)x)->magic == 0xA51A4C7) { plant_async_ctx_cancel(x); return; }
+    if (((plant_ctok*)x)->magic == 0xA51A700) {
+        plant_ctok* tok = (plant_ctok*)x;
+        tok->cancelled = 1;
+        plant_task* t = g_all;
+        while (t) {
+            plant_task* nx = t->allnext;
+            if (!t->dead && t->tok == tok) plant_cancel_task(t, "CANCELLED");
+            t = nx;
+        }
+        return;
+    }
+}
+
+/* work stealing: clone a task into a NEW arena; segments are shared
+   (lazy copy) then materialized (copy-on-write) so the clone holds
+   an exclusive arena — no pointer sharing across workers */
+tx_t plant_async_steal(tx_t handle) {
+    plant_task* src = P_TASK_OF(handle);
+    plant_task* c = (plant_task*)calloc(1, sizeof(plant_task));
+    if (!c) return NULL;
+    c->state_size = src->state_size;
+    c->name = src->name;
+    c->step = src->step;
+    plant_arena_share(&c->ar, &src->ar);   /* lazy: shared segments */
+    plant_arena_own(&c->ar);               /* COW: exclusive arena */
+    c->st = plant_arena_alloc(&c->ar, (size_t)c->state_size);
+    if (!c->st) { free(c); return NULL; }
+    memcpy(c->st, src->st, (size_t)c->state_size);
+    *((tx_t*)c->st) = (tx_t)c;
+    c->id = ++g_task_seq;
+    c->ctx = src->ctx;
+    c->prio = src->prio;
+    c->deadline = src->deadline;
+    return c->st;
+}
+
+void plant_trace(long level, tx_t scope, tx_t msg) {
+    if (!g_trace_on || level > g_trace_level) return;
+    char line[512];
+    snprintf(line, sizeof(line), "T,%ld,%s,%ld,%s", plant_ms(),
+             _S(scope), level, _S(msg));
+    plant_trace_write(line);
+}
+
+tx_t plant_async_stats(void) {
+    static char buf[256];
+    long miss = 0;
+    if (g_arena_hits + g_arena_misses > 0)
+        miss = g_arena_misses * 100 / (g_arena_hits + g_arena_misses);
+    snprintf(buf, sizeof(buf),
+             "tasks=%ld done=%ld mode=%ld scale=%ld miss=%ld live=%ld",
+             g_completed + g_live, g_completed, (long)g_mode,
+             g_dctx ? g_dctx->deadline_scale : 100, miss, g_live);
+    return buf;
+}
+
+void plant_async_config(tx_t keyv, tx_t valv) {
+    plant_async_init();
+    const char* key = _S(keyv);
+    const char* val = _S(valv);
+    if (strcmp(key, "ADAPTIVE_THRESHOLD") == 0) {
+        g_threshold = atol(val);
+        if (g_threshold < 1) g_threshold = 1;
+    } else if (strcmp(key, "SAMPLING_MODE") == 0) {
+        g_sampling_mode = (strcmp(val, "CPU") == 0) ? 1 : 0;
+        g_metrics_interval = g_sampling_mode == 1 ? 4 : 16;
+    } else if (strcmp(key, "TRACE_LEVEL") == 0) {
+        if (strcmp(val, "DEBUG") == 0) g_trace_level = 1;
+        else if (strcmp(val, "PERF") == 0) g_trace_level = 2;
+        else g_trace_level = 0;
+    } else if (strcmp(key, "METRICS") == 0) {
+        g_metrics_on = (strcmp(val, "OFF") == 0) ? 0 : 1;
+    } else if (strcmp(key, "TRACE") == 0) {
+        g_trace_on = (strcmp(val, "OFF") == 0) ? 0 : 1;
+    } else if (strcmp(key, "TRACE_FILE") == 0) {
+        if (g_trace_fp) { fclose(g_trace_fp); g_trace_fp = NULL; }
+        if (val && *val && strcmp(val, "OFF") != 0)
+            g_trace_fp = fopen(val, "w");
+    }
+}
+
+void plant_async_init(void) {
+    if (g_inited) return;
+    g_inited = 1;
+    const char* env = getenv("PLANT_TRACE");
+    if (env && strcmp(env, "1") == 0) g_trace_on = 1;
+    env = getenv("PLANT_TRACE_FILE");
+    if (env && *env) g_trace_fp = fopen(env, "w");
+    env = getenv("PLANT_METRICS");
+    if (env && strcmp(env, "0") == 0) g_metrics_on = 0;
+    g_dctx = (plant_actx*)plant_async_ctx_create(1, 64);
+    g_next_sample = 0;
+}
+
+void plant_async_drain(void) {
+    plant_async_init();
+    while (g_live > 0) {
+        long now = plant_ms();
+        plant_fire_timers(now);
+        for (plant_actx* c = g_ctxs; c; c = c->next)
+            plant_ctx_tick(c, plant_ready_len());
+        plant_task* t = plant_pop_ready();
+        if (!t) {
+            long key = plant_next_timer();
+            if (key < 0) break;
+            long d = key - plant_ms();
+            if (d > 0) plant_msleep(d);
+            continue;
+        }
+        plant_metric_sample(plant_ms());
+        if (t->fatal) {
+            t->fatal = 0;
+            plant_async_finish(t->st, t->res);
+            continue;
+        }
+        g_running = t;
+        int done = t->step(t->st);       /* step calls plant_async_finish when done */
+        g_running = NULL;
+        (void)done;
+    }
+    if (g_trace_fp) fflush(g_trace_fp);
+}
