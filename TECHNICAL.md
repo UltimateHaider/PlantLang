@@ -3131,7 +3131,26 @@ void ffi_free(void* p);      /* free(); NULL → errno=EINVAL */
 `ffi_free` clears `errno` on success so success/failure is uniformly
 observable; the `-ldl` link flag covers `dlerror()` on pre-2.34 glibc.
 
-### 30.4 Test Coverage
+### 30.4 Memory Management
+
+The toolchain follows a caller-owned string-heap model (script semantics):
+external functions that return `tx_t` values return `strdup`'d (or otherwise
+heap-allocated) strings owned by the caller; generated programs never free
+them individually and rely on process exit. This is the documented
+convention for every generated program and keeps the ABI simple — the
+compiler's own generated C behaves identically.
+
+FFI introduces the one place where an explicit lifecycle is needed: C
+libraries may hand back malloc'd buffers that outlive the string model.
+`ffi_free(ptr)` is the contract for those — mirroring `free()` but
+rejecting `NULL` with `errno = EINVAL` so failure is detectable. The
+ownership rule is: **pointer returned by FFI → release with `ffi_free`;
+string returned by FFI → caller-owned, exit-time freed**. `ffi_make_buf` /
+`ffi_free` in the mock library exercise exactly this pairing; the
+AddressSanitizer/LeakSanitizer run confirms the buffer is released while
+only design-convention string allocations remain at exit.
+
+### 30.5 Test Coverage
 
 `tests/native/ffi.plant` exercises: plain calls, REF swap through pointers
 (verified via arithmetic on the swapped variables), `Result<NUM,TX>` failure

@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.47.3
+# 🌿 PlantLang — Chloroplast v0.47.4
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -31,7 +31,7 @@ gcc -w -O0 -I runtime/c myfile.c runtime/c/plant_runtime.c -o myfile
 ```bash
 ./bin/Chloroplast file.plant out.c     # compile PlantLang to C
 ./bin/Chloroplast --help               # usage + options
-./bin/Chloroplast --version            # Chloroplast 0.47.3 (pure native)
+./bin/Chloroplast --version            # Chloroplast 0.47.4 (pure native)
 make test                              # native integration suite
 ```
 

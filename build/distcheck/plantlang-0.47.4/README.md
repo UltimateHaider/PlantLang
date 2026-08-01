@@ -1,6 +1,6 @@
 # PlantLang — Chloroplast
 
-**Pure Native 🚀** · Self-Hosting Compiler & Build System · v0.47.3
+**Pure Native 🚀** · Self-Hosting Compiler & Build System · v0.47.4
 
 **Chloroplast** is the official PlantLang compiler: a 100% pure native, self-hosted
 toolchain that compiles PlantLang source to C and links it against a lightweight C
@@ -81,7 +81,7 @@ CLI:
 
 ```sh
 ./bin/Chloroplast --help        # usage + options
-./bin/Chloroplast --version     # Chloroplast 0.47.3 (pure native)
+./bin/Chloroplast --version     # Chloroplast 0.47.4 (pure native)
 ```
 
 For the full build system reference (targets, packaging, install), see
@@ -153,7 +153,7 @@ no GC, no manual free.
 | [TECHNICAL.md](TECHNICAL.md) | Deep technical details: architecture, codegen, memory model, systems |
 | [ROADMAP.md](ROADMAP.md) | Completed milestones + future plans (v0.47.0 → v1.0.0) |
 | [docs/BUILD.md](docs/BUILD.md) | Build system reference: targets, packaging, install |
-| [CHANGELOG.md](CHANGELOG.md) | Full version history through v0.47.3 |
+| [CHANGELOG.md](CHANGELOG.md) | Full version history through v0.47.4 |
 | [PHASE4_COMPLETED.md](PHASE4_COMPLETED.md) | Pure Native transition record (plantc → Chloroplast) |
 
 ---

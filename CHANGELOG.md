@@ -1,5 +1,36 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.47.4 — 2026 (Integration, Convergence & Release)
+
+### Verification
+- Full native integration suite (`make test`) green at **18/18** — CLI checks,
+  compile+run+diff cases, standard libraries (`json`, `strings2`, `fs`, `math`,
+  `time`), native data structures (`std_set`, `std_queue`, `std_stack` with
+  2000/3000-op stress workloads) and the advanced FFI suite (`ffi`)
+- Self-hosting convergence re-verified from a clean tree:
+  `make clean && make all && make self` → **SELF-HOSTING CONVERGED
+  (72 756 bytes)** — v3 ≡ v4 ≡ v5 byte-identical, with the REF / Result /
+  diagnostics FFI features active in every generation
+- FFI memory-lifecycle validation under AddressSanitizer + LeakSanitizer:
+  `ffi_make_buf`'s allocation is released by `ffi_free` (no leak recorded);
+  the only residual allocations are the runtime's design-convention string
+  heap (`_cat`/`_from_long`/`ffi_last_error_msg` strdup results — caller-owned,
+  freed at process exit like all generated programs)
+
+### Documentation
+- `Language Tour.md` — practical examples for std/json, std/string, std/fs,
+  std/math, std/time, Set/Queue/Stack, and the advanced FFI workflow
+  (REF swap, `-> Result<T, E>` error paths, `ffi_free` lifecycle)
+- `TECHNICAL.md` §30 — FFI architecture (signature pre-pass, REF rewriting,
+  Result<T,E> parsing, diagnostics) + memory management notes
+- `README.md`, `docs/BUILD.md` — v0.47.4 metadata and FFI/test-suite entries
+
+### Notes
+- Version bumped to v0.47.4 (CLI, package.json, Makefile tarball)
+- Known scope limit: string-heap allocations are freed at process exit by
+  design (script semantics); explicit lifecycle (`ffi_free`) covers
+  FFI-returned heap pointers
+
 ## v0.47.3 — 2026 (Advanced FFI: REF, Result<T,E>, diagnostics)
 
 ### New: Advanced Native C FFI (compiler + runtime + tests)
