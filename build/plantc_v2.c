@@ -34,6 +34,7 @@ tx_t parse_if_stmt(PlantArray* tokens, long pos);
 tx_t parse_season_stmt(PlantArray* tokens, long pos);
 tx_t parse_statement(PlantArray* tokens, long pos);
 tx_t parse_enum_decl(PlantArray* tokens, long pos);
+tx_t parse_struct_decl(PlantArray* tokens, long pos);
 tx_t parse_action_decl(PlantArray* tokens, long pos);
 tx_t parse_declaration(PlantArray* tokens, long pos);
 tx_t parse_program(PlantArray* tokens);
@@ -58,6 +59,12 @@ tx_t base_of(tx_t act);
 tx_t parse_type_args(tx_t act);
 tx_t mangle(tx_t base, PlantArray* args);
 tx_t find_template(PlantArray* templates, tx_t base);
+tx_t find_struct(PlantArray* structs, tx_t name);
+tx_t scan_type(tx_t t, PlantArray* subst, PlantArray* structs, PlantArray* acc);
+tx_t scan_params(PlantArray* params, PlantArray* subst, PlantArray* structs, PlantArray* acc);
+tx_t scan_fields(PlantArray* fields, PlantArray* subst, PlantArray* structs, PlantArray* acc);
+tx_t collect_struct_insts(PlantArray* bd, PlantArray* subst, PlantArray* structs, PlantArray* acc);
+tx_t struct_typedef(PlantArray* tpl, PlantArray* args);
 tx_t key_in_acc(tx_t key, PlantArray* acc);
 tx_t build_subst(PlantArray* generics, PlantArray* args);
 tx_t collect_insts(PlantArray* bd, PlantArray* subst, PlantArray* templates, PlantArray* acc);
@@ -861,13 +868,11 @@ tx_t collect_type_text(PlantArray* tokens, long start, tx_t stopc, long stopcomm
         }
         tok = peek(tokens, p2);
         lx = tok_lex(tok);
-        if (stopcomma == 1 && pdepth == 0 && bdepth == 0) {
-            if (strcmp(lx,",") == 0 || strcmp(lx,")") == 0) {
+        if (pdepth == 0 && bdepth == 0) {
+            if (strcmp(_cat ( "" , lx ),_cat ( "" , stopc )) == 0) {
                 return plant_list_make ( 2 , text , p2 );
             }
-        }
-        if (stopcomma == 0 && pdepth == 0 && bdepth == 0) {
-            if (strcmp(lx,"]") == 0 || strcmp(lx,")") == 0) {
+            if (stopcomma == 1 && strcmp(lx,",") == 0) {
                 return plant_list_make ( 2 , text , p2 );
             }
         }
@@ -902,8 +907,8 @@ tx_t parse_create_stmt(PlantArray* tokens, long pos) {
   tx_t lx = "";
   tx_t lp = "";
   tx_t p4 = "";
-  tx_t tp = "";
-  tx_t tp_name = "";
+  tx_t tv = "";
+  tx_t tt = "";
   tx_t p5 = "";
   tx_t rp = "";
   tx_t p6 = "";
@@ -923,12 +928,12 @@ tx_t parse_create_stmt(PlantArray* tokens, long pos) {
     if (strcmp(lx,"(") == 0) {
         lp = consume(tokens, p3);
         p4 = _second(lp);
-        tp = consume(tokens, p4);
-        tp_name = tok_lex(plant_list_get(tp,  0 ));
-        p5 = _second(tp);
+        tv = collect_type_text(tokens, p4, ")", 0);
+        tt = _first(tv);
+        p5 = _second(tv);
         rp = consume(tokens, p5);
         p6 = _second(rp);
-        vtype = tp_name;
+        vtype = tt;
         p3 = p6;
     }
     tok2 = peek(tokens, p3);
@@ -1010,8 +1015,8 @@ tx_t parse_let_stmt(PlantArray* tokens, long pos) {
   tx_t lx = "";
   tx_t lp = "";
   tx_t p4 = "";
-  tx_t tp = "";
-  tx_t tp_name = "";
+  tx_t tv = "";
+  tx_t tt = "";
   tx_t p5 = "";
   tx_t rp = "";
   tx_t p6 = "";
@@ -1031,12 +1036,12 @@ tx_t parse_let_stmt(PlantArray* tokens, long pos) {
     if (strcmp(lx,"(") == 0) {
         lp = consume(tokens, p3);
         p4 = _second(lp);
-        tp = consume(tokens, p4);
-        tp_name = tok_lex(plant_list_get(tp,  0 ));
-        p5 = _second(tp);
+        tv = collect_type_text(tokens, p4, ")", 0);
+        tt = _first(tv);
+        p5 = _second(tv);
         rp = consume(tokens, p5);
         p6 = _second(rp);
-        vtype = tp_name;
+        vtype = tt;
         p3 = p6;
     }
     tok2 = peek(tokens, p3);
@@ -1474,6 +1479,101 @@ tx_t parse_enum_decl(PlantArray* tokens, long pos) {
     }
   return parse_enum_decl;
 }
+tx_t parse_struct_decl(PlantArray* tokens, long pos) {
+  tx_t pair = "";
+  tx_t p2 = "";
+  tx_t name_pair = "";
+  tx_t sname = "";
+  tx_t p3 = "";
+  tx_t sg_tok = "";
+  tx_t sg_lx = "";
+  tx_t sg_lb = "";
+  tx_t sgv = "";
+  tx_t sgtext = "";
+  tx_t sg_rb = "";
+  tx_t sgparts = "";
+  tx_t sget = "";
+  tx_t lb = "";
+  tx_t p4 = "";
+  tx_t is_eof_flag = "";
+  tx_t tok = "";
+  tx_t lx = "";
+  tx_t rb = "";
+  tx_t p5 = "";
+  tx_t fn_pair = "";
+  tx_t fname = "";
+  tx_t col_pair = "";
+  tx_t p6 = "";
+  tx_t ftv = "";
+  tx_t ftype = "";
+  tx_t p7 = "";
+  tx_t ftypet = "";
+  tx_t tok2 = "";
+  tx_t lx2 = "";
+  tx_t com = "";
+    pair = consume(tokens, pos);
+    p2 = _second(pair);
+    name_pair = consume(tokens, p2);
+    sname = tok_lex(plant_list_get(name_pair,  0 ));
+    p3 = _second(name_pair);
+    PlantArray* generics = plant_list_make ( 0 );
+    sg_tok = peek(tokens, p3);
+    sg_lx = tok_lex(sg_tok);
+    if (strcmp(sg_lx,"[") == 0) {
+        sg_lb = consume(tokens, p3);
+        p3 = _second(sg_lb);
+        sgv = collect_type_text(tokens, p3, "]", 0);
+        sgtext = _first(sgv);
+        p3 = _second(sgv);
+        sg_rb = consume(tokens, p3);
+        p3 = _second(sg_rb);
+        sgparts = strings_SPLIT(sgtext, ",");
+        long sgi = 0;
+        tx_t sge = "";
+        while (sgi < plant_array_length(sgparts)) {
+            sge = plant_list_get(sgparts, sgi);
+            sget = trim(sge);
+            if (strcmp(sget,"") > 0) {
+                generics = plant_list_push(generics, sget);
+            }
+            sgi = sgi+1;
+        }
+    }
+    lb = consume(tokens, p3);
+    p4 = _second(lb);
+    PlantArray* fields = plant_list_make ( 0 );
+    while (1) {
+        is_eof_flag = is_eof(tokens, p4);
+        if (is_eof_flag) {
+            return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "struct_decl" , "name" , sname , "generics" , generics , "fields" , fields ) , p4 );
+        }
+        tok = peek(tokens, p4);
+        lx = tok_lex(tok);
+        if (strcmp(lx,"}") == 0) {
+            rb = consume(tokens, p4);
+            p5 = _second(rb);
+            return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "struct_decl" , "name" , sname , "generics" , generics , "fields" , fields ) , p5 );
+        }
+        fn_pair = consume(tokens, p4);
+        fname = tok_lex(plant_list_get(fn_pair,  0 ));
+        p5 = _second(fn_pair);
+        col_pair = consume(tokens, p5);
+        p6 = _second(col_pair);
+        ftv = collect_type_text(tokens, p6, "}", 1);
+        ftype = _first(ftv);
+        p7 = _second(ftv);
+        ftypet = trim(ftype);
+        fields = plant_list_push(fields, plant_list_make ( 4 , "name" , fname , "type" , ftypet ));
+        tok2 = peek(tokens, p7);
+        lx2 = tok_lex(tok2);
+        if (strcmp(lx2,",") == 0) {
+            com = consume(tokens, p7);
+            p7 = _second(com);
+        }
+        p4 = p7;
+    }
+  return parse_struct_decl;
+}
 tx_t parse_action_decl(PlantArray* tokens, long pos) {
   tx_t pair = "";
   tx_t p2 = "";
@@ -1687,6 +1787,10 @@ tx_t parse_declaration(PlantArray* tokens, long pos) {
     lx = tok_lex(tok);
     if (strcmp(lx,"ENUM") == 0) {
         r = parse_enum_decl(tokens, pos);
+        return r;
+    }
+    if (strcmp(lx,"STRUCT") == 0) {
+        r = parse_struct_decl(tokens, pos);
         return r;
     }
     if (strcmp(lx,"ACTION") == 0) {
@@ -2245,6 +2349,9 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst) 
     if (strcmp(ntype,"external_decl") == 0) {
         return "";
     }
+    if (strcmp(ntype,"struct_decl") == 0) {
+        return "";
+    }
     if (strcmp(ntype,"action_decl") == 0) {
         PlantArray* gens_nd = _map_get ( node , "generics" );
         if (plant_array_length(gens_nd) == 0) {
@@ -2482,10 +2589,155 @@ tx_t find_template(PlantArray* templates, tx_t base) {
         }
         fi = fi+1;
     }
-    if (plant_array_length(found) == 0) {
-        return "";
+    return found;
+}
+tx_t find_struct(PlantArray* structs, tx_t name) {
+    long fi = 0;
+    tx_t fe = "";
+    tx_t fn = "";
+    PlantArray* found = plant_list_make ( 0 );
+    while (fi < plant_array_length(structs)) {
+        fe = plant_list_get(structs, fi);
+        fn = _map_get(fe, "name");
+        if (strcmp(str_eq ( fn , name ),"1") == 0) {
+            found = fe;
+        }
+        fi = fi+1;
     }
     return found;
+}
+tx_t scan_type(tx_t t, PlantArray* subst, PlantArray* structs, PlantArray* acc) {
+  tx_t base = "";
+  tx_t btrim = "";
+  tx_t rf = "";
+  tx_t tpl = "";
+  tx_t args = "";
+  tx_t found = "";
+  tx_t generics = "";
+  tx_t nsubst = "";
+  tx_t fields = "";
+    tx_t st = "";
+    long bi = - 1;
+    long ai2b = - 1;
+    st = subst_type(t, subst);
+    bi = find_any(st, "[");
+    if (bi != - 1) {
+        base = base_of(st);
+        btrim = trim(base);
+        rf = substring(btrim, 0, 4);
+        if (strcmp(rf,"REF ") == 0) {
+            btrim = substring(btrim, 4, strlen( btrim ));
+        }
+        tpl = find_struct(structs, btrim);
+        if (plant_array_length(tpl) > 0) {
+            args = parse_type_args(st);
+            found = key_in_acc(st, acc);
+            if (strcmp(found,"0") == 0) {
+                acc = plant_list_push(acc, st);
+                generics = _map_get(tpl, "generics");
+                nsubst = build_subst(generics, args);
+                fields = _map_get(tpl, "fields");
+                long fi2 = 0;
+                tx_t fv = "";
+                while (fi2 < plant_array_length(fields)) {
+                    fv = _map_get(plant_list_get(fields,  fi2 ), "type");
+                    acc = scan_type(fv, nsubst, structs, acc);
+                    fi2 = fi2+1;
+                }
+            }
+        }
+        args = parse_type_args(st);
+        long ai2 = 0;
+        tx_t av = "";
+        while (ai2 < plant_array_length(args)) {
+            av = plant_list_get(args, ai2);
+            ai2b = find_any(av, "[");
+            if (ai2b != - 1) {
+                acc = scan_type(av, subst, structs, acc);
+            }
+            ai2 = ai2+1;
+        }
+    }
+    return acc;
+}
+tx_t scan_params(PlantArray* params, PlantArray* subst, PlantArray* structs, PlantArray* acc) {
+    long pi = 0;
+    tx_t pv = "";
+    while (pi < plant_array_length(params)) {
+        pv = _map_get(plant_list_get(params,  pi ), "type");
+        acc = scan_type(pv, subst, structs, acc);
+        pi = pi+1;
+    }
+    return acc;
+}
+tx_t scan_fields(PlantArray* fields, PlantArray* subst, PlantArray* structs, PlantArray* acc) {
+    long fi = 0;
+    tx_t fv = "";
+    while (fi < plant_array_length(fields)) {
+        fv = _map_get(plant_list_get(fields,  fi ), "type");
+        acc = scan_type(fv, subst, structs, acc);
+        fi = fi+1;
+    }
+    return acc;
+}
+tx_t collect_struct_insts(PlantArray* bd, PlantArray* subst, PlantArray* structs, PlantArray* acc) {
+    long ci = 0;
+    tx_t nd = "";
+    tx_t ty = "";
+    tx_t vt = "";
+    PlantArray* sub_bd = plant_list_make ( 0 );
+    while (ci < plant_array_length(bd)) {
+        nd = plant_list_get(bd, ci);
+        ty = _map_get(nd, "type");
+        if (strcmp(ty,"create_stmt") == 0 || strcmp(ty,"let_stmt") == 0) {
+            vt = _map_get(nd, "var_type");
+            if (strcmp(vt,"") > 0) {
+                acc = scan_type(vt, subst, structs, acc);
+            }
+        }
+        if (strcmp(ty,"if_stmt") == 0 || strcmp(ty,"season_stmt") == 0) {
+            sub_bd = _map_get(nd, "body");
+            acc = collect_struct_insts(sub_bd, subst, structs, acc);
+        }
+        ci = ci+1;
+    }
+    return acc;
+}
+tx_t struct_typedef(PlantArray* tpl, PlantArray* args) {
+  tx_t sname = "";
+  tx_t generics = "";
+  tx_t fields = "";
+  tx_t subst = "";
+    sname = _map_get(tpl, "name");
+    generics = _map_get(tpl, "generics");
+    fields = _map_get(tpl, "fields");
+    subst = build_subst(generics, args);
+    tx_t tname = _cat("plant_", sname);
+    long mi = 0;
+    tx_t ae = "";
+    while (mi < plant_array_length(args)) {
+        ae = plant_list_get(args, mi);
+        tname = _cat(_cat(tname, "_"), ae);
+        mi = mi+1;
+    }
+    tx_t ccode = "typedef struct {\n";
+    long fi = 0;
+    PlantArray* fel = plant_list_make ( 0 );
+    tx_t fname = "";
+    tx_t ftype = "";
+    tx_t fsub = "";
+    tx_t ctype = "";
+    while (fi < plant_array_length(fields)) {
+        fel = plant_list_get(fields, fi);
+        fname = _map_get(fel, "name");
+        ftype = _map_get(fel, "type");
+        fsub = subst_type(ftype, subst);
+        ctype = plant_ctype(fsub);
+        ccode = _cat(_cat(_cat(_cat(_cat(ccode, "  "), ctype), " "), fname), ";\n");
+        fi = fi+1;
+    }
+    ccode = _cat(_cat(_cat(ccode, "} "), tname), ";\n");
+    return ccode;
 }
 tx_t key_in_acc(tx_t key, PlantArray* acc) {
     long fi = 0;
@@ -2705,6 +2957,16 @@ tx_t is_ref_at(PlantArray* params, long idx) {
 }
 tx_t generate_c(PlantArray* ast) {
   tx_t ntype = "";
+  tx_t sname = "";
+  tx_t ibase = "";
+  tx_t iargs = "";
+  tx_t itpl = "";
+  tx_t igns = "";
+  tx_t insub = "";
+  tx_t ipms = "";
+  tx_t ibd = "";
+  tx_t stdef = "";
+  tx_t ibtrim = "";
   tx_t inst_code = "";
   tx_t nd_code = "";
   tx_t ns_code = "";
@@ -2725,6 +2987,7 @@ tx_t generate_c(PlantArray* ast) {
     tx_t paramstr = "";
     PlantArray* sigs = plant_list_make ( 0 );
     PlantArray* templates = plant_list_make ( 0 );
+    PlantArray* structs = plant_list_make ( 0 );
     i = 0;
     while (i < plant_array_length(ast)) {
         node_el = plant_list_get(ast, i);
@@ -2743,6 +3006,12 @@ tx_t generate_c(PlantArray* ast) {
                 templates = plant_list_push(templates, plant_list_make ( 8 , "name" , aname , "generics" , gens2 , "params" , pms2 , "body" , bd2 ));
             }
         }
+        if (strcmp(ntype,"struct_decl") == 0) {
+            sname = _map_get(node_el, "name");
+            PlantArray* sgens2 = _map_get ( node_el , "generics" );
+            PlantArray* sfields2 = _map_get ( node_el , "fields" );
+            structs = plant_list_push(structs, plant_list_make ( 6 , "name" , sname , "generics" , sgens2 , "fields" , sfields2 ));
+        }
         i = i+1;
     }
     PlantArray* insts = plant_list_make ( 0 );
@@ -2758,8 +3027,82 @@ tx_t generate_c(PlantArray* ast) {
                 insts = collect_insts(bd3, esub, templates, insts);
             }
         }
-        if (strcmp(ntype,"action_decl") != 0 && strcmp(ntype,"enum_decl") != 0 && strcmp(ntype,"external_decl") != 0) {
+        if (strcmp(ntype,"action_decl") != 0 && strcmp(ntype,"enum_decl") != 0 && strcmp(ntype,"external_decl") != 0 && strcmp(ntype,"struct_decl") != 0) {
             insts = collect_insts(plant_list_make ( 1 , node_el ), esub, templates, insts);
+        }
+        i = i+1;
+    }
+    PlantArray* structs_insts = plant_list_make ( 0 );
+    i = 0;
+    while (i < plant_array_length(ast)) {
+        node_el = plant_list_get(ast, i);
+        ntype = _map_get(node_el, "type");
+        if (strcmp(ntype,"action_decl") == 0) {
+            PlantArray* gs5 = _map_get ( node_el , "generics" );
+            if (plant_array_length(gs5) == 0) {
+                PlantArray* ps5 = _map_get ( node_el , "params" );
+                PlantArray* bd5 = _map_get ( node_el , "body" );
+                structs_insts = scan_params(ps5, esub, structs, structs_insts);
+                structs_insts = collect_struct_insts(bd5, esub, structs, structs_insts);
+            }
+        }
+        if (strcmp(ntype,"external_decl") == 0) {
+            PlantArray* ps6 = _map_get ( node_el , "params" );
+            structs_insts = scan_params(ps6, esub, structs, structs_insts);
+        }
+        if (strcmp(ntype,"struct_decl") == 0) {
+            PlantArray* gs6 = _map_get ( node_el , "generics" );
+            if (plant_array_length(gs6) == 0) {
+                PlantArray* fs6 = _map_get ( node_el , "fields" );
+                structs_insts = scan_fields(fs6, esub, structs, structs_insts);
+            }
+        }
+        if (strcmp(ntype,"action_decl") != 0 && strcmp(ntype,"enum_decl") != 0 && strcmp(ntype,"external_decl") != 0 && strcmp(ntype,"struct_decl") != 0) {
+            structs_insts = collect_struct_insts(plant_list_make ( 1 , node_el ), esub, structs, structs_insts);
+        }
+        i = i+1;
+    }
+    i = 0;
+    while (i < plant_array_length(insts)) {
+        node_el = plant_list_get(insts, i);
+        ibase = base_of(node_el);
+        iargs = parse_type_args(node_el);
+        itpl = find_template(templates, ibase);
+        if (plant_array_length(itpl) > 0) {
+            igns = _map_get(itpl, "generics");
+            insub = build_subst(igns, iargs);
+            ipms = _map_get(itpl, "params");
+            ibd = _map_get(itpl, "body");
+            structs_insts = scan_params(ipms, insub, structs, structs_insts);
+            structs_insts = collect_struct_insts(ibd, insub, structs, structs_insts);
+        }
+        i = i+1;
+    }
+    tx_t struct_code = "";
+    i = 0;
+    while (i < plant_array_length(ast)) {
+        node_el = plant_list_get(ast, i);
+        ntype = _map_get(node_el, "type");
+        if (strcmp(ntype,"struct_decl") == 0) {
+            PlantArray* sgens4 = _map_get ( node_el , "generics" );
+            if (plant_array_length(sgens4) == 0) {
+                PlantArray* eargs = plant_list_make ( 0 );
+                stdef = struct_typedef(node_el, eargs);
+                struct_code = _cat(struct_code, stdef);
+            }
+        }
+        i = i+1;
+    }
+    i = 0;
+    while (i < plant_array_length(structs_insts)) {
+        node_el = plant_list_get(structs_insts, i);
+        ibase = base_of(node_el);
+        ibtrim = trim(ibase);
+        iargs = parse_type_args(node_el);
+        itpl = find_struct(structs, ibtrim);
+        if (plant_array_length(itpl) > 0) {
+            stdef = struct_typedef(itpl, iargs);
+            struct_code = _cat(struct_code, stdef);
         }
         i = i+1;
     }
@@ -2823,7 +3166,7 @@ tx_t generate_c(PlantArray* ast) {
             decl_code = _cat(decl_code, nd_code);
             has_decl = 1;
         }
-        if (strcmp(ntype,"action_decl") != 0 && strcmp(ntype,"enum_decl") != 0 && strcmp(ntype,"external_decl") != 0) {
+        if (strcmp(ntype,"action_decl") != 0 && strcmp(ntype,"enum_decl") != 0 && strcmp(ntype,"external_decl") != 0 && strcmp(ntype,"struct_decl") != 0) {
             ns_code = generate_node(node_el, 0, sigs, esub);
             stmt_code = _cat(stmt_code, ns_code);
             has_stmt = 1;
@@ -2841,7 +3184,7 @@ tx_t generate_c(PlantArray* ast) {
     if (has_stmt) {
         stmt_code = _cat(_cat(_cat("int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n", dcode), stmt_code), "  return 0;\n}\n");
     }
-    return _cat(_cat(_cat(_cat(header, pro_code), "\n"), decl_code), stmt_code);
+    return _cat(_cat(_cat(_cat(_cat(header, struct_code), pro_code), "\n"), decl_code), stmt_code);
 }
 int main(int argc, char **argv) {
   plant_init_cli(argc, argv);

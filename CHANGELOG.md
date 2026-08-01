@@ -24,9 +24,19 @@
   generics with multiple instantiations, multi-type params + `LIST[U]`
   container params, nested instantiations + cache reuse, `REF T`
   pass-by-reference params; wired into `make test`
+- **Generic structs** — `STRUCT Name[T, U] { field: T, ... }` declares data
+  templates with type-parameter lists; the monomorphization engine emits
+  concrete C typedefs (`plant_Box_NUM`, `plant_Pair_NUM_TX`) for every
+  instantiation reachable from action parameters, `CREATE`/`LET` variable
+  types, top-level statements and other structs' fields. Nested generic
+  structs (`Wrap[T] { box: Box[T], tag: TX }`) and multi-type params are
+  supported; uninstantiated templates emit nothing (no phantom typedefs)
 
 ### Verification
-- `make test` green — native suite **18/18** + generics suite **5/5**
+- `make test` green — native suite **18/18** + generics suite **7/7**
+  (incl. `structs` — non-generic STRUCT + FFI round-trip, and `gstruct` —
+  generic `Box[T]`, multi-type `Pair[T, U]`, nested `Wrap[T]` with
+  generated-C structural checks via `.grep` files)
 - Self-hosting convergence from a clean tree:
   `make clean && make all && make self` → **SELF-HOSTING CONVERGED** —
   v3 ≡ v4 ≡ v5 byte-identical with the generics engine active
@@ -35,14 +45,18 @@
 
 ### Documentation
 - `TECHNICAL.md` §31 — Generics Engine architecture (parser rules,
-  monomorphization pipeline, mangling scheme, instantiation cache)
+  monomorphization pipeline, mangling scheme, instantiation cache,
+  generic-struct discovery and typedef emission)
 - `Language Tour.md`, `README.md`, `docs/BUILD.md` — v0.48.1 metadata and
   generics examples
 
 ### Notes
 - Version bumped to v0.48.1 (CLI, package.json, Makefile tarball)
-- Scope limit: generic actions only — the language has no SHAPE construct;
-  `T` in `CREATE x(T)` inside a generic body resolves to the instantiated C
+- `STRUCT` supersedes the old `SHAPE` doc sketch in `tokens.plant`; struct
+  values are opaque `tx_t` at runtime — the emitted C typedefs
+  (`plant_Point`, `plant_Box_NUM`, …) exist for the C FFI side to cast and
+  read the concrete layout
+- `T` in `CREATE x(T)` inside a generic body resolves to the instantiated C
   type; type safety is enforced by monomorphization (C compile errors surface
   for incompatible instantiations)
 

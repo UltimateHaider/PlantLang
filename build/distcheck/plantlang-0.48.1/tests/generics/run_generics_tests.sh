@@ -1,5 +1,8 @@
 #!/bin/sh
 # PlantLang generics engine integration test runner.
+# Optional $name.grep files hold fixed-string structural checks on
+# the generated C: each non-empty line must appear, except lines
+# prefixed with "!" which must NOT appear (e.g. "!} plant_Box_T;").
 # Usage: sh tests/generics/run_generics_tests.sh [path-to-Chloroplast]
 set -u
 PLANTC=${1:-bin/Chloroplast}
@@ -17,10 +20,28 @@ for src in "$DIR"/*.plant; do
   if ! "$PLANTC" "$src" "$BUILD/$name.c" >"$BUILD/$name.compile.log" 2>&1; then
     echo "FAIL  $name (compile)"; fail=$((fail+1)); continue
   fi
-  if ! gcc -w -O0 -I "$ROOT/runtime/c" "$BUILD/$name.c" \
-        "$ROOT/runtime/c/plant_runtime.c" -lm -ldl -o "$BUILD/$name" \
+  if ! gcc -w -O0 -include "$ROOT/tests/native/mock_ffi.h" -I "$ROOT/runtime/c" "$BUILD/$name.c" \
+        "$ROOT/runtime/c/plant_runtime.c" "$ROOT/tests/native/mock_ffi.c" \
+        -lm -ldl -o "$BUILD/$name" \
         >>"$BUILD/$name.compile.log" 2>&1; then
     echo "FAIL  $name (gcc)"; fail=$((fail+1)); continue
+  fi
+  # optional structural checks on the generated C
+  if [ -f "$DIR/$name.grep" ]; then
+    gok=1
+    while IFS= read -r pat; do
+      [ -z "$pat" ] && continue
+      if [ "${pat#!}" != "$pat" ]; then
+        if grep -qF -- "${pat#!}" "$BUILD/$name.c"; then
+          echo "FAIL  $name (grep forbidden: ${pat#!})"; gok=0; break
+        fi
+      elif ! grep -qF -- "$pat" "$BUILD/$name.c"; then
+        echo "FAIL  $name (grep missing: $pat)"; gok=0; break
+      fi
+    done < "$DIR/$name.grep"
+    if [ "$gok" -eq 0 ]; then
+      fail=$((fail+1)); continue
+    fi
   fi
   if "$BUILD/$name" 2>&1 | diff - "$DIR/$name.expected" >/dev/null; then
     echo "PASS  $name"; pass=$((pass+1))

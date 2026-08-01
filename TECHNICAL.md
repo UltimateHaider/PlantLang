@@ -3188,6 +3188,21 @@ REAP r FROM process_list[NUM], 5, xs.   # call-site type arguments
   single-token + `REF`-special-case reading.
 - Invocations attach concrete type arguments to the action name in REAP
   statements; the same collector parses them (stopping at `]`).
+- **STRUCT declarations** use the same syntax style:
+
+  ```plant
+  STRUCT Box[T] { val: T }
+  STRUCT Pair[T, U] { first: T, second: U }
+  STRUCT Wrap[T] { box: Box[T], tag: TX }   # nested generic struct
+
+  ACTION ffi_box_write(b(Box[NUM]), v(NUM)) -> external.
+  ```
+
+  `parse_struct_decl` consumes `STRUCT`, the name, an optional `[T, U]`
+  parameter list and a `{ name : type, ... }` field block (types again via
+  `collect_type_text`, stopping at `}` or `,`); the AST node is
+  `("type","struct_decl","name",…,"generics",…,"fields",…)`. STRUCT
+  supersedes the older `SHAPE` doc sketch in `tokens.plant`.
 
 ### 31.2 Monomorphization Pipeline
 
@@ -3195,7 +3210,8 @@ REAP r FROM process_list[NUM], 5, xs.   # call-site type arguments
 
 1. **Pass 0 — template table**: every `action_decl` with a non-empty
    `generics` field is registered as a template (name, generics, params,
-   body). Non-generic actions are untouched.
+   body). Non-generic actions are untouched. Struct declarations are
+   collected into a parallel `structs` table (name, generics, fields).
 2. **Pass 0b — instantiation discovery** (`collect_insts`): every body is
    walked for REAP actions containing `[`. For each generic call, the type
    arguments are substituted through the *current* type context
@@ -3241,11 +3257,48 @@ REF-ness is preserved through substitution, and REF call-site rewriting
 (`&var`) reuses the existing `sigs`/`is_ref_at` machinery with the template's
 base name.
 
-### 31.5 Verification
+### 31.5 Generic Structs
 
-`tests/generics/` (5 cases, wired into `make test`):
+Struct instantiation follows the same zero-cost, cache-driven model as
+actions, in an extra pass (**pass 0c**) that runs after action-instantiation
+discovery and before decl emission:
+
+1. **Seed scan** — instantiation seeds come from every *concrete* context:
+   non-generic action params, non-generic action bodies
+   (`collect_struct_insts` walks `create_stmt`/`let_stmt` variable types and
+   any REAP/GIVE expressions nested in `if_stmt`/`season_stmt` bodies),
+   `external_decl` params, non-generic struct fields, and top-level
+   statements.
+2. **Field recursion** — for each candidate struct type
+   (`find_struct` on the base name after stripping `REF `), type arguments
+   are extracted and substituted (`build_subst`), and the template's own
+   fields are scanned recursively — so `Wrap[T] { box: Box[T], tag: TX }`
+   reached via `Wrap[NUM]` pulls in `Box[NUM]`. The **instantiation cache**
+   is keyed by the fully substituted type string (`Box [ NUM ]`), so
+   `ffi_box_write(b(Box[NUM]), …)` and `Wrap[NUM]`'s field share one
+   typedef.
+3. **Typedef emission** — cached instantiations emit
+   `typedef struct { <ctype> <field>; … } plant_<Name>_<T1>_<T2>;` ahead of
+   all decls (`struct_typedef`; field C types via `plant_ctype`, brackets
+   stripped through `base_of`). Plain (non-generic) structs emit their
+   `plant_Point`-style typedef directly from the AST. Struct declarations
+   generate nothing per-node, and uninstantiated templates emit nothing —
+   phantom `plant_Box_T` typedefs cannot occur.
+
+Struct values remain opaque `tx_t` handles at runtime; the emitted typedefs
+exist so C FFI stubs (mock_ffi, user C) can cast and read concrete layouts.
+Nested generic fields keep their opaque `tx_t` C type.
+
+### 31.6 Verification
+
+`tests/generics/` (7 cases, wired into `make test`):
 `basic` (single param, three instantiations + cache reuse), `multi`
 (multi-type `[T, U]` + `LIST[U]` container params), `nested` (generic calls
 generic with substituted context), `listgen` (`LIST[T]` params), `refgen`
-(`REF T` params with `&var` emission). Native suite stays 18/18; the
+(`REF T` params with `&var` emission), `structs` (non-generic `Point` +
+FFI round-trip), `gstruct` (generic `Box[T]`, multi-type `Pair[T, U]`,
+nested `Wrap[T]` with mock-FFI round-trips). The runner supports optional
+`$name.grep` files — fixed-string structural checks on the generated C
+(`!`-prefixed lines must be absent, e.g. `!} plant_Box_T;`) — and links
+`mock_ffi.c` for struct-FFI interop. Native suite stays 18/18; the
 self-hosting chain converges with the engine active.

@@ -146,7 +146,7 @@ ACTION collect_until(tokens(LIST), start(NUM), delim(TX)),
 
 # collect_type_text: collects a type string until stopc (or "," when
 # stopcomma=1) at depth 0, WITHOUT consuming the delimiter.
-# Handles T, LIST[T], REF NUM, REF LIST[T] etc.
+# Handles T, LIST[T], REF NUM, REF LIST[T], Box[NUM], Pair[NUM, TX] etc.
 ACTION collect_type_text(tokens(LIST), start(NUM), stopc(TX), stopcomma(NUM)),
   CREATE text(TX) TO "".
   CREATE p2(NUM) TO start.
@@ -159,13 +159,11 @@ ACTION collect_type_text(tokens(LIST), start(NUM), stopc(TX), stopcomma(NUM)),
     /IF.
     REAP tok FROM peek, tokens, p2.
     REAP lx FROM tok_lex, tok.
-    IF stopcomma IS 1 AND pdepth IS 0 AND bdepth IS 0,
-      IF lx IS "," OR lx IS ")",
+    IF pdepth IS 0 AND bdepth IS 0,
+      IF _cat("", lx) IS _cat("", stopc),
         GIVE plant_list_make(2, text, p2).
       /IF.
-    /IF.
-    IF stopcomma IS 0 AND pdepth IS 0 AND bdepth IS 0,
-      IF lx IS "]" OR lx IS ")",
+      IF stopcomma IS 1 AND lx IS ",",
         GIVE plant_list_make(2, text, p2).
       /IF.
     /IF.
@@ -196,12 +194,12 @@ ACTION parse_create_stmt(tokens(LIST), pos(NUM)),
   IF lx IS "(",
     REAP lp FROM consume, tokens, p3.
     REAP p4 FROM _second, lp.
-    REAP tp FROM consume, tokens, p4.
-    REAP tp_name FROM tok_lex, tp[0].
-    REAP p5 FROM _second, tp.
+    REAP tv FROM collect_type_text, tokens, p4, ")", 0.
+    REAP tt FROM _first, tv.
+    REAP p5 FROM _second, tv.
     REAP rp FROM consume, tokens, p5.
     REAP p6 FROM _second, rp.
-    SET vtype TO tp_name.
+    SET vtype TO tt.
     SET p3 TO p6.
   /IF.
   REAP tok2 FROM peek, tokens, p3.
@@ -272,12 +270,12 @@ ACTION parse_let_stmt(tokens(LIST), pos(NUM)),
   IF lx IS "(",
     REAP lp FROM consume, tokens, p3.
     REAP p4 FROM _second, lp.
-    REAP tp FROM consume, tokens, p4.
-    REAP tp_name FROM tok_lex, tp[0].
-    REAP p5 FROM _second, tp.
+    REAP tv FROM collect_type_text, tokens, p4, ")", 0.
+    REAP tt FROM _first, tv.
+    REAP p5 FROM _second, tv.
     REAP rp FROM consume, tokens, p5.
     REAP p6 FROM _second, rp.
-    SET vtype TO tp_name.
+    SET vtype TO tt.
     SET p3 TO p6.
   /IF.
   REAP tok2 FROM peek, tokens, p3.
@@ -599,6 +597,71 @@ ACTION parse_enum_decl(tokens(LIST), pos(NUM)),
   /SEASON.
 /ACTION.
 
+ACTION parse_struct_decl(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP name_pair FROM consume, tokens, p2.
+  REAP sname FROM tok_lex, name_pair[0].
+  REAP p3 FROM _second, name_pair.
+  # generic type parameter list: [T, U] right after the struct name
+  CREATE generics(LIST) TO plant_list_make(0).
+  REAP sg_tok FROM peek, tokens, p3.
+  REAP sg_lx FROM tok_lex, sg_tok.
+  IF sg_lx IS "[",
+    REAP sg_lb FROM consume, tokens, p3.
+    REAP p3 FROM _second, sg_lb.
+    REAP sgv FROM collect_type_text, tokens, p3, "]", 0.
+    REAP sgtext FROM _first, sgv.
+    REAP p3 FROM _second, sgv.
+    REAP sg_rb FROM consume, tokens, p3.
+    REAP p3 FROM _second, sg_rb.
+    REAP sgparts FROM strings:SPLIT, sgtext, ",".
+    CREATE sgi(NUM) TO 0.
+    CREATE sge(TX) TO "".
+    SEASON sgi < COUNT sgparts,
+      REAP sge FROM plant_list_get, sgparts, sgi.
+      REAP sget FROM trim, sge.
+      IF sget > "",
+        PUT sget INTO generics.
+      /IF.
+      SET sgi TO sgi + 1.
+    /SEASON.
+  /IF.
+  REAP lb FROM consume, tokens, p3.
+  REAP p4 FROM _second, lb.
+  CREATE fields(LIST) TO plant_list_make(0).
+  SEASON TRUE,
+    REAP is_eof_flag FROM is_eof, tokens, p4.
+    IF is_eof_flag,
+      GIVE plant_list_make(2, plant_list_make(8, "type", "struct_decl", "name", sname, "generics", generics, "fields", fields), p4).
+    /IF.
+    REAP tok FROM peek, tokens, p4.
+    REAP lx FROM tok_lex, tok.
+    IF lx IS "}",
+      REAP rb FROM consume, tokens, p4.
+      REAP p5 FROM _second, rb.
+      GIVE plant_list_make(2, plant_list_make(8, "type", "struct_decl", "name", sname, "generics", generics, "fields", fields), p5).
+    /IF.
+    REAP fn_pair FROM consume, tokens, p4.
+    REAP fname FROM tok_lex, fn_pair[0].
+    REAP p5 FROM _second, fn_pair.
+    REAP col_pair FROM consume, tokens, p5.
+    REAP p6 FROM _second, col_pair.
+    REAP ftv FROM collect_type_text, tokens, p6, "}", 1.
+    REAP ftype FROM _first, ftv.
+    REAP p7 FROM _second, ftv.
+    REAP ftypet FROM trim, ftype.
+    PUT plant_list_make(4, "name", fname, "type", ftypet) INTO fields.
+    REAP tok2 FROM peek, tokens, p7.
+    REAP lx2 FROM tok_lex, tok2.
+    IF lx2 IS ",",
+      REAP com FROM consume, tokens, p7.
+      REAP p7 FROM _second, com.
+    /IF.
+    SET p4 TO p7.
+  /SEASON.
+/ACTION.
+
 ACTION parse_action_decl(tokens(LIST), pos(NUM)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -756,6 +819,10 @@ ACTION parse_declaration(tokens(LIST), pos(NUM)),
   REAP lx FROM tok_lex, tok.
   IF lx IS "ENUM",
     REAP r FROM parse_enum_decl, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "STRUCT",
+    REAP r FROM parse_struct_decl, tokens, pos.
     GIVE r.
   /IF.
   IF lx IS "ACTION",

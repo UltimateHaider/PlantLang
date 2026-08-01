@@ -487,7 +487,7 @@ ACTION collect_until(tokens(LIST), start(NUM), delim(TX)),
 
 # collect_type_text: collects a type string until stopc (or "," when
 # stopcomma=1) at depth 0, WITHOUT consuming the delimiter.
-# Handles T, LIST[T], REF NUM, REF LIST[T] etc.
+# Handles T, LIST[T], REF NUM, REF LIST[T], Box[NUM], Pair[NUM, TX] etc.
 ACTION collect_type_text(tokens(LIST), start(NUM), stopc(TX), stopcomma(NUM)),
   CREATE text(TX) TO "".
   CREATE p2(NUM) TO start.
@@ -500,13 +500,11 @@ ACTION collect_type_text(tokens(LIST), start(NUM), stopc(TX), stopcomma(NUM)),
     /IF.
     REAP tok FROM peek, tokens, p2.
     REAP lx FROM tok_lex, tok.
-    IF stopcomma IS 1 AND pdepth IS 0 AND bdepth IS 0,
-      IF lx IS "," OR lx IS ")",
+    IF pdepth IS 0 AND bdepth IS 0,
+      IF _cat("", lx) IS _cat("", stopc),
         GIVE plant_list_make(2, text, p2).
       /IF.
-    /IF.
-    IF stopcomma IS 0 AND pdepth IS 0 AND bdepth IS 0,
-      IF lx IS "]" OR lx IS ")",
+      IF stopcomma IS 1 AND lx IS ",",
         GIVE plant_list_make(2, text, p2).
       /IF.
     /IF.
@@ -537,12 +535,12 @@ ACTION parse_create_stmt(tokens(LIST), pos(NUM)),
   IF lx IS "(",
     REAP lp FROM consume, tokens, p3.
     REAP p4 FROM _second, lp.
-    REAP tp FROM consume, tokens, p4.
-    REAP tp_name FROM tok_lex, tp[0].
-    REAP p5 FROM _second, tp.
+    REAP tv FROM collect_type_text, tokens, p4, ")", 0.
+    REAP tt FROM _first, tv.
+    REAP p5 FROM _second, tv.
     REAP rp FROM consume, tokens, p5.
     REAP p6 FROM _second, rp.
-    SET vtype TO tp_name.
+    SET vtype TO tt.
     SET p3 TO p6.
   /IF.
   REAP tok2 FROM peek, tokens, p3.
@@ -613,12 +611,12 @@ ACTION parse_let_stmt(tokens(LIST), pos(NUM)),
   IF lx IS "(",
     REAP lp FROM consume, tokens, p3.
     REAP p4 FROM _second, lp.
-    REAP tp FROM consume, tokens, p4.
-    REAP tp_name FROM tok_lex, tp[0].
-    REAP p5 FROM _second, tp.
+    REAP tv FROM collect_type_text, tokens, p4, ")", 0.
+    REAP tt FROM _first, tv.
+    REAP p5 FROM _second, tv.
     REAP rp FROM consume, tokens, p5.
     REAP p6 FROM _second, rp.
-    SET vtype TO tp_name.
+    SET vtype TO tt.
     SET p3 TO p6.
   /IF.
   REAP tok2 FROM peek, tokens, p3.
@@ -940,6 +938,71 @@ ACTION parse_enum_decl(tokens(LIST), pos(NUM)),
   /SEASON.
 /ACTION.
 
+ACTION parse_struct_decl(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP name_pair FROM consume, tokens, p2.
+  REAP sname FROM tok_lex, name_pair[0].
+  REAP p3 FROM _second, name_pair.
+  # generic type parameter list: [T, U] right after the struct name
+  CREATE generics(LIST) TO plant_list_make(0).
+  REAP sg_tok FROM peek, tokens, p3.
+  REAP sg_lx FROM tok_lex, sg_tok.
+  IF sg_lx IS "[",
+    REAP sg_lb FROM consume, tokens, p3.
+    REAP p3 FROM _second, sg_lb.
+    REAP sgv FROM collect_type_text, tokens, p3, "]", 0.
+    REAP sgtext FROM _first, sgv.
+    REAP p3 FROM _second, sgv.
+    REAP sg_rb FROM consume, tokens, p3.
+    REAP p3 FROM _second, sg_rb.
+    REAP sgparts FROM strings:SPLIT, sgtext, ",".
+    CREATE sgi(NUM) TO 0.
+    CREATE sge(TX) TO "".
+    SEASON sgi < COUNT sgparts,
+      REAP sge FROM plant_list_get, sgparts, sgi.
+      REAP sget FROM trim, sge.
+      IF sget > "",
+        PUT sget INTO generics.
+      /IF.
+      SET sgi TO sgi + 1.
+    /SEASON.
+  /IF.
+  REAP lb FROM consume, tokens, p3.
+  REAP p4 FROM _second, lb.
+  CREATE fields(LIST) TO plant_list_make(0).
+  SEASON TRUE,
+    REAP is_eof_flag FROM is_eof, tokens, p4.
+    IF is_eof_flag,
+      GIVE plant_list_make(2, plant_list_make(8, "type", "struct_decl", "name", sname, "generics", generics, "fields", fields), p4).
+    /IF.
+    REAP tok FROM peek, tokens, p4.
+    REAP lx FROM tok_lex, tok.
+    IF lx IS "}",
+      REAP rb FROM consume, tokens, p4.
+      REAP p5 FROM _second, rb.
+      GIVE plant_list_make(2, plant_list_make(8, "type", "struct_decl", "name", sname, "generics", generics, "fields", fields), p5).
+    /IF.
+    REAP fn_pair FROM consume, tokens, p4.
+    REAP fname FROM tok_lex, fn_pair[0].
+    REAP p5 FROM _second, fn_pair.
+    REAP col_pair FROM consume, tokens, p5.
+    REAP p6 FROM _second, col_pair.
+    REAP ftv FROM collect_type_text, tokens, p6, "}", 1.
+    REAP ftype FROM _first, ftv.
+    REAP p7 FROM _second, ftv.
+    REAP ftypet FROM trim, ftype.
+    PUT plant_list_make(4, "name", fname, "type", ftypet) INTO fields.
+    REAP tok2 FROM peek, tokens, p7.
+    REAP lx2 FROM tok_lex, tok2.
+    IF lx2 IS ",",
+      REAP com FROM consume, tokens, p7.
+      REAP p7 FROM _second, com.
+    /IF.
+    SET p4 TO p7.
+  /SEASON.
+/ACTION.
+
 ACTION parse_action_decl(tokens(LIST), pos(NUM)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -1097,6 +1160,10 @@ ACTION parse_declaration(tokens(LIST), pos(NUM)),
   REAP lx FROM tok_lex, tok.
   IF lx IS "ENUM",
     REAP r FROM parse_enum_decl, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "STRUCT",
+    REAP r FROM parse_struct_decl, tokens, pos.
     GIVE r.
   /IF.
   IF lx IS "ACTION",
@@ -1663,6 +1730,13 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST)),
         GIVE "".
     /IF.
 
+    # ── struct_decl: STRUCT name { field: TYPE, … } → no code here;
+    #    typedefs (plain + mangled instantiations) come from the
+    #    structs table pass in generate_c.
+    IF ntype IS "struct_decl",
+        GIVE "".
+    /IF.
+
     # ── action_decl: ACTION name(params), body /ACTION. → void name(…) {…} ─
     # Generic templates emit nothing here; monomorphized copies are emitted
     # separately for each instantiation (see emit_inst).
@@ -1874,6 +1948,8 @@ ACTION mangle(base(TX), args(LIST)),
 /ACTION.
 
 # find_template — locate a generic action template by base name
+# (returns a real empty LIST when missing, so COUNT on the result
+# is safe — never the "" sentinel, which would be read as a list)
 ACTION find_template(templates(LIST), base(TX)),
     CREATE fi(NUM) TO 0.
     CREATE fe(TX) TO "".
@@ -1887,8 +1963,169 @@ ACTION find_template(templates(LIST), base(TX)),
         /IF.
         SET fi TO fi + 1.
     /SEASON.
-    IF COUNT found IS 0, GIVE "". /IF.
     GIVE found.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
+#  STRUCT generics — struct template table + instantiation scan
+#
+#  structs is a list of [name, generics, fields] maps. Struct
+#  types map to tx_t in generated C (opaque handles); the
+#  typedefs plant_<Name>[_<T1>_<T2>] are emitted so C FFI code
+#  (mocks, libraries) can cast and read the concrete layout.
+# ──────────────────────────────────────────────────────────────
+
+# find_struct — locate a STRUCT template by base name
+# (real empty LIST when missing — never the "" sentinel, so
+# COUNT on the result is safe)
+ACTION find_struct(structs(LIST), name(TX)),
+    CREATE fi(NUM) TO 0.
+    CREATE fe(TX) TO "".
+    CREATE fn(TX) TO "".
+    CREATE found(LIST) TO plant_list_make(0).
+    SEASON fi < COUNT structs,
+        REAP fe FROM plant_list_get, structs, fi.
+        REAP fn FROM _map_get, fe, "name".
+        IF str_eq(fn, name) IS "1",
+            SET found TO fe.
+        /IF.
+        SET fi TO fi + 1.
+    /SEASON.
+    GIVE found.
+/ACTION.
+
+# scan_type — collect every concrete struct instantiation named
+# inside a type string (substituted first), recursing into the
+# template's fields and into nested bracket args
+# (LIST[Box[NUM]], Pair[NUM, Box[U]], Node[T] …).
+ACTION scan_type(t(TX), subst(LIST), structs(LIST), acc(LIST)),
+    CREATE st(TX) TO "".
+    CREATE bi(NUM) TO -1.
+    CREATE ai2b(NUM) TO -1.
+    REAP st FROM subst_type, t, subst.
+    REAP bi FROM find_any, st, "[".
+    IF bi ISNT -1,
+        REAP base FROM base_of, st.
+        REAP btrim FROM trim, base.
+        REAP rf FROM substring, btrim, 0, 4.
+        IF rf IS "REF ",
+            REAP btrim FROM substring, btrim, 4, LEN(btrim).
+        /IF.
+        REAP tpl FROM find_struct, structs, btrim.
+        IF COUNT tpl > 0,
+            REAP args FROM parse_type_args, st.
+            REAP found FROM key_in_acc, st, acc.
+            IF found IS "0",
+                PUT st INTO acc.
+                REAP generics FROM _map_get, tpl, "generics".
+                REAP nsubst FROM build_subst, generics, args.
+                REAP fields FROM _map_get, tpl, "fields".
+                CREATE fi2(NUM) TO 0.
+                CREATE fv(TX) TO "".
+                SEASON fi2 < COUNT fields,
+                    REAP fv FROM _map_get, fields[fi2], "type".
+                    REAP acc FROM scan_type, fv, nsubst, structs, acc.
+                    SET fi2 TO fi2 + 1.
+                /SEASON.
+            /IF.
+        /IF.
+        REAP args FROM parse_type_args, st.
+        CREATE ai2(NUM) TO 0.
+        CREATE av(TX) TO "".
+        SEASON ai2 < COUNT args,
+            REAP av FROM plant_list_get, args, ai2.
+            REAP ai2b FROM find_any, av, "[".
+            IF ai2b ISNT -1,
+                REAP acc FROM scan_type, av, subst, structs, acc.
+            /IF.
+            SET ai2 TO ai2 + 1.
+        /SEASON.
+    /IF.
+    GIVE acc.
+/ACTION.
+
+# scan_params — scan every param type of a decl
+ACTION scan_params(params(LIST), subst(LIST), structs(LIST), acc(LIST)),
+    CREATE pi(NUM) TO 0.
+    CREATE pv(TX) TO "".
+    SEASON pi < COUNT params,
+        REAP pv FROM _map_get, params[pi], "type".
+        REAP acc FROM scan_type, pv, subst, structs, acc.
+        SET pi TO pi + 1.
+    /SEASON.
+    GIVE acc.
+/ACTION.
+
+# scan_fields — scan every field type of a struct template
+ACTION scan_fields(fields(LIST), subst(LIST), structs(LIST), acc(LIST)),
+    CREATE fi(NUM) TO 0.
+    CREATE fv(TX) TO "".
+    SEASON fi < COUNT fields,
+        REAP fv FROM _map_get, fields[fi], "type".
+        REAP acc FROM scan_type, fv, subst, structs, acc.
+        SET fi TO fi + 1.
+    /SEASON.
+    GIVE acc.
+/ACTION.
+
+# collect_struct_insts — walk a body for struct-typed declarations
+ACTION collect_struct_insts(bd(LIST), subst(LIST), structs(LIST), acc(LIST)),
+    CREATE ci(NUM) TO 0.
+    CREATE nd(TX) TO "".
+    CREATE ty(TX) TO "".
+    CREATE vt(TX) TO "".
+    CREATE sub_bd(LIST) TO plant_list_make(0).
+    SEASON ci < COUNT bd,
+        REAP nd FROM plant_list_get, bd, ci.
+        REAP ty FROM _map_get, nd, "type".
+        IF ty IS "create_stmt" OR ty IS "let_stmt",
+            REAP vt FROM _map_get, nd, "var_type".
+            IF vt > "",
+                REAP acc FROM scan_type, vt, subst, structs, acc.
+            /IF.
+        /IF.
+        IF ty IS "if_stmt" OR ty IS "season_stmt",
+            REAP sub_bd FROM _map_get, nd, "body".
+            REAP acc FROM collect_struct_insts, sub_bd, subst, structs, acc.
+        /IF.
+        SET ci TO ci + 1.
+    /SEASON.
+    GIVE acc.
+/ACTION.
+
+# struct_typedef — C typedef text for a struct template, optionally
+# instantiated: typedef struct { … } plant_<Name>[_<T1>_<T2>];
+ACTION struct_typedef(tpl(LIST), args(LIST)),
+    REAP sname FROM _map_get, tpl, "name".
+    REAP generics FROM _map_get, tpl, "generics".
+    REAP fields FROM _map_get, tpl, "fields".
+    REAP subst FROM build_subst, generics, args.
+    CREATE tname(TX) TO "plant_" + sname.
+    CREATE mi(NUM) TO 0.
+    CREATE ae(TX) TO "".
+    SEASON mi < COUNT args,
+        REAP ae FROM plant_list_get, args, mi.
+        SET tname TO tname + "_" + ae.
+        SET mi TO mi + 1.
+    /SEASON.
+    CREATE ccode(TX) TO "typedef struct \{\n".
+    CREATE fi(NUM) TO 0.
+    CREATE fel(LIST) TO plant_list_make(0).
+    CREATE fname(TX) TO "".
+    CREATE ftype(TX) TO "".
+    CREATE fsub(TX) TO "".
+    CREATE ctype(TX) TO "".
+    SEASON fi < COUNT fields,
+        REAP fel FROM plant_list_get, fields, fi.
+        REAP fname FROM _map_get, fel, "name".
+        REAP ftype FROM _map_get, fel, "type".
+        REAP fsub FROM subst_type, ftype, subst.
+        REAP ctype FROM plant_ctype, fsub.
+        SET ccode TO ccode + "  " + ctype + " " + fname + ";\n".
+        SET fi TO fi + 1.
+    /SEASON.
+    SET ccode TO ccode + "\} " + tname + ";\n".
+    GIVE ccode.
 /ACTION.
 
 # key_in_acc — is key already in the instantiation cache?
@@ -2118,9 +2355,10 @@ ACTION generate_c(ast(LIST)),
     CREATE aname(TX) TO "".
     CREATE paramstr(TX) TO "".
     # pass 0: signature table (sigs) for REF-param call-site rewriting +
-    # generic template table (templates)
+    # generic action template table (templates) + struct template table (structs)
     CREATE sigs(LIST) TO plant_list_make(0).
     CREATE templates(LIST) TO plant_list_make(0).
+    CREATE structs(LIST) TO plant_list_make(0).
     SET i TO 0.
     SEASON i < COUNT ast,
         REAP node_el FROM plant_list_get, ast, i.
@@ -2138,6 +2376,12 @@ ACTION generate_c(ast(LIST)),
                 CREATE bd2(LIST) TO _map_get(node_el, "body").
                 PUT plant_list_make(8, "name", aname, "generics", gens2, "params", pms2, "body", bd2) INTO templates.
             /IF.
+        /IF.
+        IF ntype IS "struct_decl",
+            REAP sname FROM _map_get, node_el, "name".
+            CREATE sgens2(LIST) TO _map_get(node_el, "generics").
+            CREATE sfields2(LIST) TO _map_get(node_el, "fields").
+            PUT plant_list_make(6, "name", sname, "generics", sgens2, "fields", sfields2) INTO structs.
         /IF.
         SET i TO i + 1.
     /SEASON.
@@ -2157,8 +2401,91 @@ ACTION generate_c(ast(LIST)),
                 REAP insts FROM collect_insts, bd3, esub, templates, insts.
             /IF.
         /IF.
-        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl",
+        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl",
             REAP insts FROM collect_insts, plant_list_make(1, node_el), esub, templates, insts.
+        /IF.
+        SET i TO i + 1.
+    /SEASON.
+    # pass 0c: discover every reachable struct instantiation from
+    # type positions (params, struct fields, typed vars). Generic
+    # struct templates are only scanned per-instantiation with the
+    # substituted type context — never bare (avoids phantom T-typed
+    # typedefs like plant_Box_T).
+    CREATE structs_insts(LIST) TO plant_list_make(0).
+    SET i TO 0.
+    SEASON i < COUNT ast,
+        REAP node_el FROM plant_list_get, ast, i.
+        REAP ntype FROM _map_get, node_el, "type".
+        IF ntype IS "action_decl",
+            CREATE gs5(LIST) TO _map_get(node_el, "generics").
+            IF COUNT gs5 IS 0,
+                CREATE ps5(LIST) TO _map_get(node_el, "params").
+                CREATE bd5(LIST) TO _map_get(node_el, "body").
+                REAP structs_insts FROM scan_params, ps5, esub, structs, structs_insts.
+                REAP structs_insts FROM collect_struct_insts, bd5, esub, structs, structs_insts.
+            /IF.
+        /IF.
+        IF ntype IS "external_decl",
+            CREATE ps6(LIST) TO _map_get(node_el, "params").
+            REAP structs_insts FROM scan_params, ps6, esub, structs, structs_insts.
+        /IF.
+        IF ntype IS "struct_decl",
+            CREATE gs6(LIST) TO _map_get(node_el, "generics").
+            IF COUNT gs6 IS 0,
+                CREATE fs6(LIST) TO _map_get(node_el, "fields").
+                REAP structs_insts FROM scan_fields, fs6, esub, structs, structs_insts.
+            /IF.
+        /IF.
+        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl",
+            REAP structs_insts FROM collect_struct_insts, plant_list_make(1, node_el), esub, structs, structs_insts.
+        /IF.
+        SET i TO i + 1.
+    /SEASON.
+    # per-instantiation struct scans: generic action templates with
+    # the substituted type context of each discovered instantiation
+    SET i TO 0.
+    SEASON i < COUNT insts,
+        REAP node_el FROM plant_list_get, insts, i.
+        REAP ibase FROM base_of, node_el.
+        REAP iargs FROM parse_type_args, node_el.
+        REAP itpl FROM find_template, templates, ibase.
+        IF COUNT itpl > 0,
+            REAP igns FROM _map_get, itpl, "generics".
+            REAP insub FROM build_subst, igns, iargs.
+            REAP ipms FROM _map_get, itpl, "params".
+            REAP ibd FROM _map_get, itpl, "body".
+            REAP structs_insts FROM scan_params, ipms, insub, structs, structs_insts.
+            REAP structs_insts FROM collect_struct_insts, ibd, insub, structs, structs_insts.
+        /IF.
+        SET i TO i + 1.
+    /SEASON.
+    # struct typedefs: plain templates + every instantiation, emitted
+    # right after the includes so C FFI code can use them.
+    CREATE struct_code(TX) TO "".
+    SET i TO 0.
+    SEASON i < COUNT ast,
+        REAP node_el FROM plant_list_get, ast, i.
+        REAP ntype FROM _map_get, node_el, "type".
+        IF ntype IS "struct_decl",
+            CREATE sgens4(LIST) TO _map_get(node_el, "generics").
+            IF COUNT sgens4 IS 0,
+                CREATE eargs(LIST) TO plant_list_make(0).
+                REAP stdef FROM struct_typedef, node_el, eargs.
+                SET struct_code TO struct_code + stdef.
+            /IF.
+        /IF.
+        SET i TO i + 1.
+    /SEASON.
+    SET i TO 0.
+    SEASON i < COUNT structs_insts,
+        REAP node_el FROM plant_list_get, structs_insts, i.
+        REAP ibase FROM base_of, node_el.
+        REAP ibtrim FROM trim, ibase.
+        REAP iargs FROM parse_type_args, node_el.
+        REAP itpl FROM find_struct, structs, ibtrim.
+        IF COUNT itpl > 0,
+            REAP stdef FROM struct_typedef, itpl, iargs.
+            SET struct_code TO struct_code + stdef.
         /IF.
         SET i TO i + 1.
     /SEASON.
@@ -2222,7 +2549,7 @@ ACTION generate_c(ast(LIST)),
             SET decl_code TO decl_code + nd_code.
             SET has_decl TO 1.
         /IF.
-        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl",
+        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl",
             REAP ns_code FROM generate_node, node_el, 0, sigs, esub.
             SET stmt_code TO stmt_code + ns_code.
             SET has_stmt TO 1.
@@ -2241,7 +2568,7 @@ ACTION generate_c(ast(LIST)),
     IF has_stmt,
         SET stmt_code TO "int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n" + dcode + stmt_code + "  return 0;\n}\n".
     /IF.
-    GIVE header + pro_code + "\n" + decl_code + stmt_code.
+    GIVE header + struct_code + pro_code + "\n" + decl_code + stmt_code.
 /ACTION.
 
 

@@ -17,5 +17,7 @@ ENUM TokenType {
   DOT_DOT, WILDCARD, HASH, TOK_EOF, ERROR
 }
 
-# ── Token struct ────────────────────────────────────────────
-SHAPE TokenData { type: NUM, lexeme: TX, line: NUM, col: NUM }
+# ── Token struct (doc sketch) ────────────────────────────────
+# v0.48.1: the language keyword is STRUCT; a generic form would be
+# STRUCT TokenData[T] { lexeme: T, line: NUM, col: NUM }.
+STRUCT TokenData { type: NUM, lexeme: TX, line: NUM, col: NUM }

@@ -50,6 +50,11 @@ picking between readable and fast. PlantLang refuses the tradeoff:
   with zero-cost monomorphization and name mangling: call sites like
   `process_list[NUM]` compile to unique native C functions
   (`plant_process_list_NUM`) with an instantiation cache — no runtime overhead
+- **STRUCT generics (v0.48.1)** — `STRUCT Box[T] { val: T }` data templates;
+  the monomorphization engine emits concrete C typedefs (`plant_Box_NUM`,
+  `plant_Pair_NUM_TX`) for every instantiation used by action params,
+  variables and other structs' fields — nested and multi-type structs
+  supported, uninstantiated templates emit nothing
 - **Self-hosting** — the entire compiler pipeline (lexer, parser, C codegen,
   CLI) is written in PlantLang under `src/plantc/`
 

@@ -128,7 +128,7 @@ dist: all self test ## Build versioned tarball + unpack/build/test validation
 	@cp tests/native/*.plant tests/native/*.expected tests/native/*.c tests/native/*.h tests/native/run_native_tests.sh \
 		release/plantlang-$(VERSION)/tests/native/
 	@mkdir -p release/plantlang-$(VERSION)/tests/generics
-	@cp tests/generics/*.plant tests/generics/*.expected tests/generics/run_generics_tests.sh \
+	@cp tests/generics/*.plant tests/generics/*.expected tests/generics/*.grep tests/generics/run_generics_tests.sh \
 		release/plantlang-$(VERSION)/tests/generics/
 	@cp $(BOOTSTRAP) release/plantlang-$(VERSION)/dist/Chloroplast
 	@tar -C release -czf release/plantlang-$(VERSION).tar.gz plantlang-$(VERSION)
