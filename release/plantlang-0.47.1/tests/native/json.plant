@@ -1,0 +1,82 @@
+ACTION main(),
+  REAP j FROM json_parse, "{\"name\": \"Alice\", \"age\": 30, \"ok\": true, \"nothing\": null, \"tags\": [\"a\", \"b\"], \"addr\": {\"city\": \"Zurich\", \"zip\": 8000}}".
+  IF j IS NULL,
+    SHOW "FAIL: parse".
+    GIVE 1.
+  /IF.
+  CREATE k(NUM) TO 0.
+  REAP k FROM json_kind, j.
+  CREATE ks(TX) TO "".
+  REAP ks FROM _from_long, k.
+  SHOW "kind=" + ks.
+  REAP nm FROM json_get, j, "name".
+  SHOW "name=" + json_val(nm).
+  REAP ag FROM json_get, j, "age".
+  SHOW "age=" + json_val(ag).
+  REAP ok FROM json_get, j, "ok".
+  SHOW "ok=" + json_val(ok).
+  REAP nu FROM json_get, j, "nothing".
+  CREATE nk(NUM) TO 0.
+  REAP nk FROM json_kind, nu.
+  CREATE nks(TX) TO "".
+  REAP nks FROM _from_long, nk.
+  SHOW "nullkind=" + nks.
+  REAP miss FROM json_get, j, "nope".
+  IF miss IS NULL,
+    SHOW "missing-nil".
+  /IF.
+  REAP tags FROM json_get, j, "tags".
+  CREATE tl(NUM) TO 0.
+  REAP tl FROM json_len, tags.
+  CREATE tls(TX) TO "".
+  REAP tls FROM _from_long, tl.
+  SHOW "tagslen=" + tls.
+  REAP t0 FROM json_at, tags, 0.
+  SHOW "tag0=" + json_val(t0).
+  REAP addr FROM json_get, j, "addr".
+  REAP city FROM json_get, addr, "city".
+  SHOW "city=" + json_val(city).
+  REAP ju FROM json_parse, "{\"u\": \"\\u0041\"}".
+  REAP u FROM json_get, ju, "u".
+  SHOW "u=" + json_val(u).
+  REAP out FROM json_stringify, j.
+  SHOW out.
+  REAP ja FROM json_parse, "[1, 2, 3]".
+  CREATE jal(NUM) TO 0.
+  REAP jal FROM json_len, ja.
+  CREATE jals(TX) TO "".
+  REAP jals FROM _from_long, jal.
+  SHOW "arrlen=" + jals.
+  REAP j1 FROM json_at, ja, 1.
+  SHOW "arr1=" + json_val(j1).
+  REAP jao FROM json_stringify, ja.
+  SHOW jao.
+  REAP jn FROM json_parse, "42".
+  CREATE jnk(NUM) TO 0.
+  REAP jnk FROM json_kind, jn.
+  CREATE jnks(TX) TO "".
+  REAP jnks FROM _from_long, jnk.
+  SHOW "numkind=" + jnks.
+  REAP jnv FROM json_val, jn.
+  SHOW "numval=" + jnv.
+  REAP jns FROM json_stringify, jn.
+  SHOW jns.
+  REAP js FROM json_parse, "\"hi\"".
+  SHOW "strroot=" + json_val(js).
+  REAP jss FROM json_stringify, js.
+  SHOW "strstr=" + jss.
+  REAP bad FROM json_parse, "{invalid".
+  IF bad IS NULL,
+    SHOW "bad-parse-nil".
+  /IF.
+  REAP njs FROM json_stringify, bad.
+  SHOW "str-null=" + njs.
+  CREATE m(LIST) TO plant_list_make(0).
+  PUT "name" INTO m.
+  PUT "Bob" INTO m.
+  PUT "age" INTO m.
+  PUT "42" INTO m.
+  REAP mj FROM json_stringify, m.
+  SHOW "map-obj=" + mj.
+  GIVE 0.
+/GIVE main.

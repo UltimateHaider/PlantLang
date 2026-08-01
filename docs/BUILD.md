@@ -25,7 +25,7 @@ make install     # install to $PREFIX/bin (default ~/.local)
 make clean       # remove build artifacts (keeps dist/Chloroplast bootstrap)
 ```
 
-Variables: `VERSION` (default `0.46.4`), `PREFIX` (default `~/.local`),
+Variables: `VERSION` (default `0.47.1`), `PREFIX` (default `~/.local`),
 `CC` (default `gcc`).
 
 ## How the Bootstrap Works
@@ -56,21 +56,41 @@ cat src/plantc/{lexer,parser,codegen_c,main}.plant | \
 
 ```sh
 ./bin/Chloroplast app.plant app.c            # generate C
-gcc -w -O0 -I runtime/c app.c runtime/c/plant_runtime.c -o app
+gcc -w -O0 -I runtime/c app.c runtime/c/plant_runtime.c -lm -o app
 ./app
 ```
 
 The generated C includes `<plant_compat.h>` (runtime helpers) and links against
-`runtime/c/plant_runtime.c`.
+`runtime/c/plant_runtime.c`. Link with `-lm` when using `std/math`
+(`math_sin`, `math_sqrt`, …) or any other module — the runtime always
+references libm functions.
+
+## Standard Library (std/*)
+
+Since v0.47.1 the core standard library ships in the native runtime
+(signatures in `plant_compat.h`, implementations in `plant_runtime.c`):
+
+- `std/json` — `json_parse` (→ native MAP/LIST/scalars; safe nil `NULL` on
+  invalid JSON, never crashes), `json_stringify`, `json_get`, `json_at`,
+  `json_len`, `json_kind`, `json_val`
+- `std/string` — `string_repeat`, `string_reverse`, `string_pad`
+- `std/fs` — `file_copy`, `file_move`, `file_stat` (MAP: size/mtime/mode)
+- `std/math` — `math_sin`, `math_cos`, `math_sqrt`, `math_pow`,
+  `math_floor`, `math_ceil`, `math_round`, `math_min`, `math_max`,
+  `math_random`
+- `std/time` — `time_now`, `time_format`, `time_parse`, `time_sleep`
 
 ## Tests
 
 `make test` — native integration suite in `tests/native/`:
 
-- CLI checks (`--help`, `--version` → `Chloroplast 0.46.4 (pure native)`,
+- CLI checks (`--help`, `--version` → `Chloroplast 0.47.1 (pure native)`,
   missing-file exit code)
 - compile + gcc + run + output-diff cases (hello, join/`strings:LENGTH`,
   number concatenation, string escapes, list ops, `strings:` module calls)
+- standard library cases: `json` (valid + invalid/nil + unicode + stringify
+  round-trip + raw MAP), `strings2` (repeat/reverse/pad), `fs`
+  (copy/move/stat + error paths), `math`, `time`
 
 The legacy JavaScript test suites were removed in v0.46.4 (Pure Native purge).
 

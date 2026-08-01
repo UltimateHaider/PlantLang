@@ -1,0 +1,10 @@
+write=1
+copy=1
+exists=1
+size=8
+mode=644
+mtimelen=10
+move=1
+oldgone=0
+newhere=1
+stat-missing-nil

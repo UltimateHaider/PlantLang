@@ -1,0 +1,28 @@
+ACTION main(),
+  REAP t FROM time_now.
+  CREATE tl(NUM) TO LEN(t).
+  CREATE tls(TX) TO "".
+  REAP tls FROM _from_long, tl.
+  SHOW "nowlen=" + tls.
+  REAP fmt FROM time_format, t, "%Y-%m-%d".
+  CREATE dl(NUM) TO LEN(fmt).
+  CREATE dls(TX) TO "".
+  REAP dls FROM _from_long, dl.
+  SHOW "datelen=" + dls.
+  REAP t2 FROM time_parse, "2026-08-01 12:00:00", "%Y-%m-%d %H:%M:%S".
+  CREATE pl(NUM) TO LEN(t2).
+  CREATE pls(TX) TO "".
+  REAP pls FROM _from_long, pl.
+  SHOW "parselen=" + pls.
+  REAP t3 FROM time_format, t, "%Y-%m-%d %H:%M:%S".
+  REAP t4 FROM time_parse, t3, "%Y-%m-%d %H:%M:%S".
+  CREATE rt(NUM) TO LEN(t4).
+  CREATE rts(TX) TO "".
+  REAP rts FROM _from_long, rt.
+  SHOW "rtlen=" + rts.
+  REAP sl FROM time_sleep, "0.05".
+  SHOW "sleep=" + sl.
+  REAP t5 FROM time_parse, "notadate", "%Y-%m-%d".
+  SHOW "[" + t5 + "]".
+  GIVE 0.
+/GIVE main.

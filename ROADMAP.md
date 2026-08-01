@@ -43,6 +43,12 @@
 ## 🚀 Upcoming Roadmap
 
 ### v0.47.0 — Standard Library & Direct FFI
+- **✅ Phase 1 completed: Core Standard Library** — `std/json`
+  (`json_parse`/`json_stringify` + accessors, safe nil on invalid JSON),
+  `std/string` (repeat/reverse/pad), `std/fs` (copy/move/stat),
+  `std/math` (sin/cos/sqrt/pow/floor/ceil/round/min/max/random),
+  `std/time` (now/format/parse/sleep) — pure native C in
+  `plant_runtime.c`/`plant_compat.h` (see CHANGELOG v0.47.1)
 - `std/json` — JSON parsing and serialization in pure native
 - `std/math` — typed math functions (trig, exp/log, random)
 - `std/time` — wall-clock and monotonic time APIs
