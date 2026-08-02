@@ -2,7 +2,7 @@
 
 - Generated: 2026-08-02 01:58 UTC
 - Toolchain: Linux 6.6.76-08111-g8df27f55632a x86_64
-- Compiler:  Chloroplast 0.48.3a (pure native)
+- Compiler:  Chloroplast 0.48.4 (pure native)
 - Host CC:   gcc (Debian 12.2.0-14+deb12u1) 12.2.0
 - Method: 3 runs per benchmark; real time via `date +%s%N`, peak RSS polled from /proc/PID/status (VmHWM).
 

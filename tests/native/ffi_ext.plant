@@ -1,0 +1,64 @@
+STRUCT Point { x: NUM, y: NUM }
+STRUCT WrapV { p: STRUCT Point, tag: NUM }
+STRUCT L4 { a: STRUCT L3 }
+STRUCT L3 { a: STRUCT L2 }
+STRUCT L2 { a: STRUCT L1 }
+STRUCT L1 { v: NUM }
+
+ACTION ffi_point_sumv(p(STRUCT Point)) -> external.
+ACTION ffi_scale_ref(p(REF STRUCT Point), k(NUM)) -> external.
+ACTION ffi_get_point() -> STRUCT Point.
+ACTION ffi_wrap_sumv(w(STRUCT WrapV)) -> external.
+ACTION ffi_l4_v(v(STRUCT L4)) -> external.
+ACTION ffi_run_cb(cb(CALLBACK), ctx(NUM), v(TX)) -> external.
+ACTION ffi_buf_lenv(b(void*)) -> external.
+ACTION ffi_get_buf() -> void*.
+ACTION ffi_vprintf(fmt(TX), ...) -> external.
+
+ACTION double_it(ctx(NUM), v(TX)),
+  GIVE ctx * 2 + v.
+/ACTION.
+
+ACTION cb_demo(n(NUM)),
+  SHOW "cb_demo got " + n.
+  GIVE n + 1.
+/ACTION.
+
+ACTION main(),
+  CREATE p(TX) TO plant_map_create(0).
+  plant_map_set(p, "x", 3).
+  plant_map_set(p, "y", 4).
+  REAP s FROM ffi_point_sumv, p.
+  SHOW "point_sumv: " + s.
+  REAP s2 FROM ffi_scale_ref, p, 10.
+  SHOW "scale_ref: " + s2.
+  REAP g FROM ffi_get_point.
+  REAP gx FROM _from_long, plant_map_get(g, "x").
+  REAP gy FROM _from_long, plant_map_get(g, "y").
+  SHOW "get_point x: " + gx + " y: " + gy.
+  CREATE w(TX) TO plant_map_create(0).
+  plant_map_set(w, "p", p).
+  plant_map_set(w, "tag", 5).
+  plant_map_set(p, "x", 10).
+  REAP ws FROM ffi_wrap_sumv, w.
+  SHOW "wrap_sumv: " + ws.
+  REAP b FROM ffi_get_buf.
+  REAP bl FROM ffi_buf_lenv, b.
+  SHOW "buf_len: " + bl.
+  ffi_free(b).
+  REAP vp FROM ffi_vprintf, "n=%d s=%s", 42, "hi".
+  SHOW "vprintf: " + vp.
+  REAP rc1 FROM ffi_run_cb, double_it, 11, 21.
+  SHOW "run_cb: " + _from_long(rc1).
+  REAP rc2 FROM ffi_run_cb, cb_demo, 0, 7.
+  SHOW "cb_demo via ensure: " + _from_long(rc2).
+  CREATE l(TX) TO plant_map_create(0).
+  CREATE l2(TX) TO plant_map_create(0).
+  CREATE l1(TX) TO plant_map_create(0).
+  plant_map_set(l1, "v", 9).
+  plant_map_set(l2, "a", l1).
+  plant_map_set(l, "a", l2).
+  REAP lr FROM ffi_l4_v, l.
+  SHOW "l4 deep(guard): " + lr.
+  GIVE 0.
+/GIVE main.

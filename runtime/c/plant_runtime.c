@@ -1402,6 +1402,137 @@ void ffi_free(void* p) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   v0.48.4 — FFI Optional Extensions
+   Error codes, debug switch, callback registry, profiling hooks.
+   Signatures in plant_compat.h
+   ═══════════════════════════════════════════════════════════════ */
+
+long plant_ffi_errno = FFI_OK;
+
+static long plant_ffi_debug_on = -1;  /* -1 = follow PLANT_FFI_DEBUG */
+
+void plant_ffi_debug_set(long on) {
+    plant_ffi_debug_on = on;
+}
+
+void plant_ffi_debug_print(tx_t msg) {
+    long on = plant_ffi_debug_on;
+    if (on < 0) {
+        const char* e = getenv("PLANT_FFI_DEBUG");
+        on = (e && *e && strcmp(e, "0") != 0) ? 1 : 0;
+    }
+    if (on) fprintf(stderr, "[ffi] %s\n", _S(msg));
+}
+
+/* callback registry: tag → fn; tags are plain C strings */
+typedef struct CbEntry { char* tag; plant_cb_t fn; } CbEntry;
+
+static CbEntry* plant_cb_table = NULL;
+static size_t   plant_cb_cap   = 0;
+static size_t   plant_cb_count = 0;
+
+static long plant_cb_find(tx_t tag) {
+    const char* t = _S(tag);
+    for (size_t i = 0; i < plant_cb_count; i++)
+        if (strcmp(plant_cb_table[i].tag, t) == 0) return (long)i;
+    return -1;
+}
+
+tx_t plant_cb_ensure(tx_t tag, plant_cb_t fn) {
+    if (!fn) { plant_ffi_errno = FFI_ERR_SIGNATURE; return ""; }
+    long i = plant_cb_find(tag);
+    if (i < 0) {
+        if (plant_cb_count >= plant_cb_cap) {
+            size_t nc = plant_cb_cap ? plant_cb_cap * 2 : 8;
+            CbEntry* nt = (CbEntry*)realloc(plant_cb_table, nc * sizeof(CbEntry));
+            if (!nt) { plant_ffi_errno = FFI_ERR_MEMORY; return ""; }
+            plant_cb_table = nt;
+            plant_cb_cap = nc;
+        }
+        i = (long)plant_cb_count++;
+        plant_cb_table[i].tag = strdup(_S(tag));
+    }
+    plant_cb_table[i].fn = fn;
+    plant_ffi_errno = FFI_OK;
+    return tag;
+}
+
+tx_t plant_cb_call(tx_t tag, long ctx, tx_t val) {
+    long i = plant_cb_find(tag);
+    if (i < 0) { plant_ffi_errno = FFI_ERR_CALLBACK; return ""; }
+    plant_ffi_errno = FFI_OK;
+    return plant_cb_table[i].fn(ctx, val);
+}
+
+void plant_cb_unregister(tx_t tag) {
+    long i = plant_cb_find(tag);
+    if (i < 0) return;
+    free(plant_cb_table[i].tag);
+    for (size_t k = (size_t)i; k + 1 < plant_cb_count; k++)
+        plant_cb_table[k] = plant_cb_table[k + 1];
+    plant_cb_count--;
+}
+
+tx_t plant_cb_get(tx_t tag) {
+    long i = plant_cb_find(tag);
+    if (i < 0) return (tx_t)0;
+    return (tx_t)(uintptr_t)plant_cb_table[i].fn;
+}
+
+/* profiling hooks — monotonic ns deltas per named section */
+#define PLANT_PROFILE_MAX 64
+typedef struct { char name[64]; int64_t start_ns; int64_t total_ns; int64_t count; } PlantProfile;
+static PlantProfile plant_profiles[PLANT_PROFILE_MAX];
+static size_t plant_profiles_count = 0;
+
+static int64_t plant_ns_now(void) {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (int64_t)ts.tv_sec * 1000000000LL + (int64_t)ts.tv_nsec;
+}
+
+void plant_profile_start(tx_t name) {
+    const char* n = _S(name);
+    for (size_t i = 0; i < plant_profiles_count; i++)
+        if (strcmp(plant_profiles[i].name, n) == 0) {
+            plant_profiles[i].start_ns = plant_ns_now();
+            return;
+        }
+    if (plant_profiles_count >= PLANT_PROFILE_MAX) return;
+    size_t i = plant_profiles_count++;
+    memset(&plant_profiles[i], 0, sizeof(PlantProfile));
+    snprintf(plant_profiles[i].name, sizeof(plant_profiles[i].name), "%s", n);
+    plant_profiles[i].start_ns = plant_ns_now();
+}
+
+void plant_profile_end(tx_t name) {
+    int64_t now = plant_ns_now();
+    const char* n = _S(name);
+    for (size_t i = 0; i < plant_profiles_count; i++)
+        if (strcmp(plant_profiles[i].name, n) == 0) {
+            plant_profiles[i].total_ns += now - plant_profiles[i].start_ns;
+            plant_profiles[i].count++;
+            return;
+        }
+}
+
+tx_t plant_profile_dump(void) {
+    tx_t r = (tx_t)plant_map_create(8);
+    for (size_t i = 0; i < plant_profiles_count; i++) {
+        char buf[128];
+        double ms = (double)plant_profiles[i].total_ns / 1e6;
+        snprintf(buf, sizeof(buf), "%.3f ms / %lld calls", ms,
+                 (long long)plant_profiles[i].count);
+        plant_map_set((PlantMap*)r, plant_profiles[i].name, strdup(buf));
+    }
+    return r;
+}
+
+void plant_struct_free(void* p) {
+    if (p) free(p);
+}
+
+/* ═══════════════════════════════════════════════════════════════
 
 /* ═══════════════════════════════════════════════════════════════
    v0.48.3 — Advanced Async Engine

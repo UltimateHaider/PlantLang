@@ -23,7 +23,7 @@ fi
 
 out=$("$PLANTC" --version 2>&1)
 rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '0.48.3a'; then
+if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '0.48.4'; then
   echo "PASS  cli --version"; pass=$((pass+1))
 else
   echo "FAIL  cli --version"; fail=$((fail+1))
@@ -43,7 +43,13 @@ for src in "$DIR"/*.plant; do
   if ! "$PLANTC" "$src" "$BUILD/$name.c" >"$BUILD/$name.compile.log" 2>&1; then
     echo "FAIL  $name (compile)"; fail=$((fail+1)); continue
   fi
-  if ! gcc -w -O0 -include "$ROOT/tests/native/mock_ffi.h" -I "$ROOT/runtime/c" "$BUILD/$name.c" \
+  # extract the generated FFI types block (v0.48.4) into a header so
+  # mock_ffi.c sees the real struct typedefs + FFI-extension prototypes
+  types="$BUILD/$name.types.h"
+  sed -n '/\/\*__PLANT_TYPES_BEGIN__\*\//,/\/\*__PLANT_TYPES_END__\*\//p' \
+       "$BUILD/$name.c" | sed '1d;$d' > "$types"
+  if ! gcc -w -O0 -include "$ROOT/tests/native/mock_ffi.h" \
+        -include "$types" -I "$ROOT/runtime/c" "$BUILD/$name.c" \
         "$ROOT/runtime/c/plant_runtime.c" "$ROOT/tests/native/mock_ffi.c" \
         -lm -ldl -o "$BUILD/$name" \
         >>"$BUILD/$name.compile.log" 2>&1; then

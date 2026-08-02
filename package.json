@@ -1,6 +1,6 @@
 {
   "name": "chloroplast",
-  "version": "0.48.3a",
+  "version": "0.48.4",
   "description": "Chloroplast Pure Native Programming Language Compiler and Build System",
   "license": "MIT"
 }

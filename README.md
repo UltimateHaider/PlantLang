@@ -1,6 +1,6 @@
 # PlantLang — Chloroplast
 
-**Pure Native 🚀** · Self-Hosting Compiler & Build System · v0.48.3a
+**Pure Native 🚀** · Self-Hosting Compiler & Build System · v0.48.4
 
 **Chloroplast** is the official PlantLang compiler: a 100% pure native, self-hosted
 toolchain that compiles PlantLang source to C and links it against a lightweight C
@@ -76,6 +76,14 @@ picking between readable and fast. PlantLang refuses the tradeoff:
 - **Perf suite (v0.48.3a)** — `make perf` compiles `tests/perf/` benchmarks
   (concat, 20-worker async, mixed) and writes `perf_results.md` with real
   time, peak RSS and CPU ticks
+- **FFI extensions (v0.48.4)** — externals now compile to correct, linkable C
+  for the full signature space: struct-by-value and `REF STRUCT` parameters,
+  struct-valued returns (map form via `plant_X_to_map`), `void*` handles,
+  varargs (`..., ...`), and `CALLBACK` parameters (auto-generated
+  `plant_cbw_<name>` adapters + `plant_cb_ensure`). The generated C ships a
+  `__PLANT_TYPES_BEGIN__/END__` block with topologically ordered struct
+  typedefs and extension prototypes, and bare call statements
+  (`plant_map_set(p, "x", 3).`) are parsed and emitted
 - **Self-hosting** — the entire compiler pipeline (lexer, parser, C codegen,
   CLI) is written in PlantLang under `src/plantc/`
 
@@ -111,7 +119,7 @@ CLI:
 
 ```sh
 ./bin/Chloroplast --help        # usage + options
-./bin/Chloroplast --version     # Chloroplast 0.48.2 (pure native)
+./bin/Chloroplast --version     # Chloroplast 0.48.4 (pure native)
 ```
 
 For the full build system reference (targets, packaging, install), see
@@ -183,7 +191,7 @@ no GC, no manual free.
 | [TECHNICAL.md](TECHNICAL.md) | Deep technical details: architecture, codegen, memory model, systems |
 | [ROADMAP.md](ROADMAP.md) | Completed milestones + future plans (v0.47.0 → v1.0.0) |
 | [docs/BUILD.md](docs/BUILD.md) | Build system reference: targets, packaging, install |
-| [CHANGELOG.md](CHANGELOG.md) | Full version history through v0.48.3a |
+| [CHANGELOG.md](CHANGELOG.md) | Full version history through v0.48.4 |
 | [PHASE4_COMPLETED.md](PHASE4_COMPLETED.md) | Pure Native transition record (plantc → Chloroplast) |
 
 ---

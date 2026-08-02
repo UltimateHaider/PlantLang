@@ -352,4 +352,37 @@ void  plant_async_config(tx_t key, tx_t val);
 void  plant_async_init(void);
 void  plant_async_drain(void);                   /* run dispatcher to idle */
 
+/* ═══════════════════════════════════════════════════════════════
+   v0.48.4 — FFI Optional Extensions
+   Signatures here; implementations in plant_runtime.c
+   ═══════════════════════════════════════════════════════════════ */
+
+/* FFI error codes — plant_ffi_errno after an FFI-extension call */
+#define FFI_OK         0
+#define FFI_ERR_TYPE   1   /* unsupported field type in a struct conversion */
+#define FFI_ERR_DEPTH  2   /* struct nesting deeper than 3 levels */
+#define FFI_ERR_CALLBACK 3 /* callback tag not registered */
+#define FFI_ERR_MEMORY 4   /* allocation failure during marshalling */
+#define FFI_ERR_SIGNATURE 5 /* callback wrapper ABI mismatch */
+
+extern long plant_ffi_errno;
+void plant_ffi_debug_set(long on);           /* runtime override for PLANT_FFI_DEBUG */
+void plant_ffi_debug_print(tx_t msg);        /* stderr debug line (env-gated) */
+
+/* callback ABI: handlers are PlantLang ACTIONs compiled to
+   tx_t name(long ctx, tx_t val) and wrapped by the compiler */
+typedef tx_t (*plant_cb_t)(long ctx, tx_t val);
+tx_t plant_cb_ensure(tx_t tag, plant_cb_t fn);    /* register; → tag */
+tx_t plant_cb_call(tx_t tag, long ctx, tx_t val); /* invoke; FFI_ERR_CALLBACK if missing */
+void plant_cb_unregister(tx_t tag);
+tx_t plant_cb_get(tx_t tag);                      /* registered fn | 0 */
+
+/* profiling hooks (monotonic ns) */
+void plant_profile_start(tx_t name);
+void plant_profile_end(tx_t name);
+tx_t plant_profile_dump(void);
+
+/* struct helpers used by generated marshalling code */
+void plant_struct_free(void* p);              /* free() a marshalled copy */
+
 #endif

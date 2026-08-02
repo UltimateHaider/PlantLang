@@ -26,4 +26,7 @@ tx_t ffi_pair_read(tx_t p);
 tx_t ffi_make_wrap(tx_t box, tx_t tag);
 tx_t ffi_w_read(tx_t w);
 
+/* v0.48.4 FFI-extension errno reader */
+long ffi_ffi_errno(void);
+
 #endif

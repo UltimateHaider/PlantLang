@@ -7,6 +7,7 @@
  */
 #include <plant_compat.h>
 #include <errno.h>
+#include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -120,3 +121,112 @@ tx_t ffi_w_read(tx_t w) {
     MockBox* mb = (MockBox*)mw->box;
     return mb ? mb->val : (tx_t)"";
 }
+
+/* ── v0.48.4 FFI Optional Extensions ─────────────────────────────
+   By-value struct params, REF STRUCT pointers, STRUCT returns,
+   void*, CALLBACK lifecycle, variadic calls. The generated types
+   header (-include) provides plant_Point & co + the prototypes,
+   so these definitions only compile for tests that declare the
+   matching feature macros. */
+
+#ifndef MOCK_FFI_EXT_H
+#define MOCK_FFI_EXT_H
+#ifdef PLANT_STRUCT_plant_Point
+
+tx_t ffi_point_sumv(plant_Point p) {
+    return _from_long(p.x + p.y);
+}
+
+tx_t ffi_scale_ref(plant_Point* p, long k) {
+    if (!p) return _from_long(0);
+    return _from_long(p->x * k);
+}
+
+plant_Point ffi_get_point(void) {
+    plant_Point p;
+    memset(&p, 0, sizeof(p));
+    p.x = 7;
+    p.y = 9;
+    return p;
+}
+
+#endif /* PLANT_STRUCT_plant_Point */
+
+#ifdef PLANT_STRUCT_plant_WrapV
+
+tx_t ffi_wrap_sumv(plant_WrapV w) {
+    return _from_long(w.p.x + w.p.y);
+}
+
+#endif /* PLANT_STRUCT_plant_WrapV */
+
+#ifdef PLANT_STRUCT_plant_L4
+
+tx_t ffi_l4_v(plant_L4 v) {
+    return _from_long(v.a.a.a.v);
+}
+
+#endif /* PLANT_STRUCT_plant_L4 */
+
+#ifdef PLANT_FFI_HAS_CALLBACKS
+
+tx_t ffi_run_cb(plant_cb_t cb, long ctx, tx_t val) {
+    return plant_cb_call((tx_t)cb, ctx, val);
+}
+
+#endif /* PLANT_FFI_HAS_CALLBACKS */
+
+#ifdef PLANT_FFI_HAS_VOIDPTR
+
+tx_t ffi_buf_lenv(void* b) {
+    if (!b) return _from_long(0);
+    return _from_long((long)strlen((const char*)b));
+}
+
+void* ffi_get_buf(void) {
+    char* b = (char*)malloc(5);
+    if (!b) return NULL;
+    memcpy(b, "buf!", 5);
+    return b;
+}
+
+#endif /* PLANT_FFI_HAS_VOIDPTR */
+
+#ifdef PLANT_FFI_HAS_VARARGS
+
+tx_t ffi_vprintf(tx_t fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    const char* f = _S(fmt);
+    char out[1024];
+    size_t o = 0;
+    for (const char* p = f; *p && o + 1 < sizeof(out); p++) {
+        if (*p == '%' && p[1]) {
+            p++;
+            if (*p == 'd') {
+                long v = (long)(intptr_t)va_arg(ap, tx_t);
+                o += (size_t)snprintf(out + o, sizeof(out) - o, "%ld", v);
+            } else if (*p == 's') {
+                const char* s = _S(va_arg(ap, tx_t));
+                o += (size_t)snprintf(out + o, sizeof(out) - o, "%s", s ? s : "");
+            } else {
+                out[o++] = '%';
+                out[o++] = *p;
+            }
+        } else {
+            out[o++] = *p;
+        }
+    }
+    va_end(ap);
+    out[o] = 0;
+    return strdup(out);
+}
+
+#endif /* PLANT_FFI_HAS_VARARGS */
+
+/* FFI-extension errno reader (plain external, always available) */
+long ffi_ffi_errno(void) {
+    return plant_ffi_errno;
+}
+
+#endif /* MOCK_FFI_EXT_H */

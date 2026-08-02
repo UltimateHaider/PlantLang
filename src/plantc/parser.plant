@@ -812,8 +812,105 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM)),
   /SEASON.
 /ACTION.
 
-ACTION parse_put_stmt(tokens(LIST), pos(NUM)),
-  REAP pair FROM consume, tokens, pos.
+# parse_call_stmt — bare call: name(args). → call_stmt node.
+# (void FFI calls like plant_map_set / ffi_swap_ref; the codegen
+#  reuses the reap_stmt discard path with target "_")
+ACTION parse_call_stmt(tokens(LIST), pos(NUM)),
+  REAP act_pair FROM consume, tokens, pos.
+  REAP act_name FROM tok_lex, act_pair[0].
+  REAP p5 FROM _second, act_pair.
+  REAP next_tok FROM peek, tokens, p5.
+  REAP next_ty FROM tok_type, next_tok.
+  IF next_ty IS "COLON",
+    SET act_name TO act_name + ":".
+    REAP colon_pair FROM consume, tokens, p5.
+    REAP p5 FROM _second, colon_pair.
+    REAP func_pair FROM consume, tokens, p5.
+    REAP func_name FROM tok_lex, func_pair[0].
+    SET act_name TO act_name + func_name.
+    REAP p5 FROM _second, func_pair.
+  /IF.
+  REAP ga_tok FROM peek, tokens, p5.
+  REAP ga_lx FROM tok_lex, ga_tok.
+  IF ga_lx IS "[",
+    REAP ga_lb FROM consume, tokens, p5.
+    REAP p5 FROM _second, ga_lb.
+    REAP gv FROM collect_type_text, tokens, p5, "]", 0.
+    REAP gtext FROM _first, gv.
+    REAP p5 FROM _second, gv.
+    REAP ga_rb FROM consume, tokens, p5.
+    REAP p5 FROM _second, ga_rb.
+    SET act_name TO act_name + "[" + gtext + "]".
+  /IF.
+  REAP lpar FROM consume, tokens, p5.
+  REAP p5 FROM _second, lpar.
+  CREATE args(LIST) TO plant_list_make(0).
+  CREATE clargs(LIST) TO plant_list_make(0).
+  SEASON TRUE,
+    REAP tok0 FROM peek, tokens, p5.
+    REAP lx0 FROM tok_lex, tok0.
+    REAP ty0 FROM tok_type, tok0.
+    IF lx0 IS "," AND ty0 ISNT "STRING",
+      REAP com0 FROM consume, tokens, p5.
+      REAP p5 FROM _second, com0.
+    /IF.
+    REAP ctok FROM peek, tokens, p5.
+    REAP clx FROM tok_lex, ctok.
+    IF clx IS "[",
+      REAP clp FROM parse_closure, tokens, p5.
+      REAP cnode FROM _first, clp.
+      REAP p6 FROM _second, clp.
+      IF COUNT cnode > 0,
+        PUT "@@CLOSURE@@" INTO args.
+        PUT cnode INTO clargs.
+        SET p5 TO p6.
+        REAP ctok2 FROM peek, tokens, p5.
+        REAP clx2 FROM tok_lex, ctok2.
+        IF clx2 IS ",",
+          REAP ccom FROM consume, tokens, p5.
+          REAP p5 FROM _second, ccom.
+        /IF.
+      /IF.
+    /IF.
+    REAP tok FROM peek, tokens, p5.
+    REAP lx FROM tok_lex, tok.
+    IF lx IS ")",
+      REAP rp FROM consume, tokens, p5.
+      REAP p5 FROM _second, rp.
+      REAP dot FROM consume, tokens, p5.
+      REAP p6 FROM _second, dot.
+      GIVE plant_list_make(2, plant_list_make(10, "type", "call_stmt", "action", act_name, "args", args, "clargs", clargs), p6).
+    /IF.
+    CREATE arg_text(TX) TO "".
+    CREATE adepth(NUM) TO 0.
+    SEASON TRUE,
+      REAP atok FROM peek, tokens, p5.
+      REAP alx FROM tok_lex, atok.
+      REAP atype FROM tok_type, atok.
+      IF atype IS "STRING",
+        REAP alx FROM escape_string, alx.
+        SET alx TO "\"" + alx + "\"".
+      /IF.
+      IF alx IS "," AND adepth IS 0, BREAK 0. /IF.
+      IF alx IS ")" AND adepth IS 0, BREAK 0. /IF.
+      IF alx IS "(", SET adepth TO adepth + 1. /IF.
+      IF alx IS ")", SET adepth TO adepth - 1. /IF.
+      IF arg_text > "", SET arg_text TO arg_text + " ". /IF.
+      SET arg_text TO arg_text + alx.
+      REAP cp FROM consume, tokens, p5.
+      REAP p5 FROM _second, cp.
+    /SEASON.
+    PUT arg_text INTO args.
+    REAP tok2 FROM peek, tokens, p5.
+    REAP lx2 FROM tok_lex, tok2.
+    IF lx2 IS ",",
+      REAP com FROM consume, tokens, p5.
+      REAP p5 FROM _second, com.
+    /IF.
+  /SEASON.
+/ACTION.
+
+ACTION parse_put_stmt(tokens(LIST), pos(NUM)),  REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
   REAP vpair FROM collect_until, tokens, p2, "INTO".
   CREATE item TO vpair[0].
@@ -994,6 +1091,23 @@ ACTION parse_statement(tokens(LIST), pos(NUM)),
     REAP r FROM parse_trace_stmt, tokens, pos.
     GIVE r.
   /IF.
+  # bare call: IDENT( or module:IDENT( → call_stmt (void FFI calls)
+  REAP nx FROM peek, tokens, pos + 1.
+  REAP nx_ty FROM tok_type, nx.
+  IF nx_ty IS "LPAREN",
+    REAP r FROM parse_call_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  REAP nx2 FROM peek, tokens, pos + 1.
+  REAP nx2_ty FROM tok_type, nx2.
+  IF nx2_ty IS "COLON",
+    REAP nx3 FROM peek, tokens, pos + 2.
+    REAP nx3_ty FROM tok_type, nx3.
+    IF nx3_ty IS "LPAREN",
+      REAP r FROM parse_call_stmt, tokens, pos.
+      GIVE r.
+    /IF.
+  /IF.
   GIVE plant_list_make(2, null, pos + 1).
 /ACTION.
 
@@ -1134,6 +1248,7 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
   REAP lp FROM consume, tokens, p3.
   REAP p4 FROM _second, lp.
   CREATE params(LIST) TO plant_list_make(0).
+  CREATE vararg(TX) TO "0".
   SEASON TRUE,
     REAP is_eof_flag FROM is_eof, tokens, p4.
     IF is_eof_flag,
@@ -1141,6 +1256,50 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
     /IF.
     REAP tok FROM peek, tokens, p4.
     REAP lx FROM tok_lex, tok.
+    # v0.48.4: variadic marker "..." — lexer yields DOT_DOT+DOT or
+    # DOT DOT DOT
+    IF lx IS "..",
+      REAP tokv2 FROM peek, tokens, p4 + 1.
+      REAP lxv2 FROM tok_lex, tokv2.
+      IF lxv2 IS ".",
+        SET vararg TO "1".
+        SET p4 TO p4 + 2.
+        REAP ctok2 FROM peek, tokens, p4.
+        REAP clx2 FROM tok_lex, ctok2.
+        IF clx2 IS ")", SET p4 TO p4 + 1. /IF.
+        IF clx2 IS ",", SET p4 TO p4 + 2. /IF.
+        SET p5 TO p4.
+        BREAK 0.
+      /IF.
+    /IF.
+    IF lx IS ".",
+      REAP tokv2 FROM peek, tokens, p4 + 1.
+      REAP lxv2 FROM tok_lex, tokv2.
+      IF lxv2 IS "..",
+        SET vararg TO "1".
+        SET p4 TO p4 + 2.
+        REAP ctok2 FROM peek, tokens, p4.
+        REAP clx2 FROM tok_lex, ctok2.
+        IF clx2 IS ")", SET p4 TO p4 + 1. /IF.
+        IF clx2 IS ",", SET p4 TO p4 + 2. /IF.
+        SET p5 TO p4.
+        BREAK 0.
+      /IF.
+      IF lxv2 IS ".",
+        REAP tokv3 FROM peek, tokens, p4 + 2.
+        REAP lxv3 FROM tok_lex, tokv3.
+        IF lxv3 IS ".",
+          SET vararg TO "1".
+          SET p4 TO p4 + 3.
+          REAP ctok2 FROM peek, tokens, p4.
+          REAP clx2 FROM tok_lex, ctok2.
+          IF clx2 IS ")", SET p4 TO p4 + 1. /IF.
+          IF clx2 IS ",", SET p4 TO p4 + 2. /IF.
+          SET p5 TO p4.
+          BREAK 0.
+        /IF.
+      /IF.
+    /IF.
     IF lx IS ")",
       REAP rp FROM consume, tokens, p4.
       REAP p5 FROM _second, rp.
@@ -1159,6 +1318,9 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
       REAP ptv FROM collect_type_text, tokens, p6, ")", 1.
       REAP pt FROM _first, ptv.
       REAP p7 FROM _second, ptv.
+      # normalize pointer markers: "void *" → "void*" (lexer splits *)
+      REAP pt FROM strings:REPLACE, pt, " *", "*".
+      REAP pt FROM strings:REPLACE, pt, "* ", "*".
       # consume the closing ")" of the type group
       REAP rp2 FROM consume, tokens, p7.
       REAP p7 FROM _second, rp2.
@@ -1192,6 +1354,25 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
     REAP ret_pair FROM consume, tokens, p5.
     REAP ret_lx FROM tok_lex, ret_pair[0].
     REAP p5 FROM _second, ret_pair.
+    # v0.48.4: FFI return types — external (default), Result<T,E>,
+    # STRUCT X (by-value struct), void*
+    CREATE ret(TX) TO "".
+    IF ret_lx IS "Result", SET ret TO "Result". /IF.
+    IF ret_lx IS "STRUCT",
+      REAP rtv FROM collect_type_text, tokens, p5, ".", 0.
+      REAP rtt FROM _first, rtv.
+      REAP p5 FROM _second, rtv.
+      SET ret TO "STRUCT " + rtt.
+    /IF.
+    IF ret_lx IS "void",
+      REAP vst FROM peek, tokens, p5.
+      REAP vsl FROM tok_lex, vst.
+      IF vsl IS "*",
+        REAP vsp FROM consume, tokens, p5.
+        REAP p5 FROM _second, vsp.
+        SET ret TO "void*".
+      /IF.
+    /IF.
     # Result<T, E> generics: -> Result<NUM, TX>. (E = TX error string)
     IF ret_lx IS "Result",
       REAP lt_tok FROM peek, tokens, p5.
@@ -1231,11 +1412,8 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
     IF after_lx IS ".",
       REAP dot_pair FROM consume, tokens, p5.
       REAP p5 FROM _second, dot_pair.
-      IF ret_lx IS "external",
-        GIVE plant_list_make(2, plant_list_make(6, "type", "external_decl", "name", aname, "params", params), p5).
-      /IF.
-      IF ret_lx IS "Result",
-        GIVE plant_list_make(2, plant_list_make(6, "type", "external_decl", "name", aname, "params", params), p5).
+      IF ret_lx IS "external" OR ret_lx IS "Result" OR ret_lx IS "STRUCT" OR ret IS "void*",
+        GIVE plant_list_make(2, plant_list_make(10, "type", "external_decl", "name", aname, "params", params, "ret", ret, "varargs", vararg), p5).
       /IF.
       GIVE plant_list_make(2, plant_list_make(12, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", plant_list_make(0), "prio", prio), p5).
     /IF.

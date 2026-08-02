@@ -443,7 +443,7 @@ ACTION collect_nums_cb(bd(LIST), params(LIST), shads(LIST), subst(LIST)),
 # async_argstr — C argument list for an async action call site
 # (mirrors reap_stmt arg handling: strings raw, exprs translated,
 # REF params get &; async ABI adds __parent/__ctx before user args)
-ACTION async_argstr(args(LIST), sigs(LIST), act(TX), nums(LIST)),
+ACTION async_argstr(args(LIST), sigs(LIST), act(TX), nums(LIST), stvars(LIST)),
   CREATE argstr(TX) TO "".
   REAP fparams FROM find_params, sigs, act.
   CREATE ai(NUM) TO 0.
@@ -458,6 +458,51 @@ ACTION async_argstr(args(LIST), sigs(LIST), act(TX), nums(LIST)),
     /IF.
     REAP rp FROM is_ref_at, fparams, ai.
     IF rp IS "1", SET aex TO "&" + aex. /IF.
+    IF ai < COUNT fparams,
+      REAP fp_el FROM plant_list_get, fparams, ai.
+      REAP fp_ty FROM _map_get, fp_el, "type".
+      REAP fp_kind FROM ffi_param_kind, fp_ty.
+      IF fp_kind IS "struct_val",
+        REAP fpx FROM is_bare_id, ael.
+        REAP fpk2 FROM stvar_kind, stvars, ael.
+        IF fpx IS "1" AND fpk2 > "",
+          IF fpk2 IS "struct_ref", SET aex TO "*" + aex. /IF.
+        /IF.
+        IF fpx IS "0" OR fpk2 IS "",
+          REAP e0 FROM substring, ael, 0, 1.
+          IF e0 ISNT "\"",
+            REAP cnm3 FROM ffi_struct_cname, fp_ty.
+            SET aex TO "plant_map_to_" + cnm3 + "(" + aex + ")".
+          /IF.
+        /IF.
+      /IF.
+      IF fp_kind IS "struct_ref",
+        REAP fpx FROM is_bare_id, ael.
+        REAP fpk2 FROM stvar_kind, stvars, ael.
+        REAP amp0 FROM substring, aex, 0, 1.
+        IF amp0 IS "&", SET aex TO substring(aex, 1, LEN(aex)). /IF.
+        IF fpx IS "1" AND fpk2 IS "struct_val", SET aex TO "&" + aex. /IF.
+        IF fpx IS "0" OR fpk2 IS "",
+          REAP e0 FROM substring, ael, 0, 1.
+          IF e0 ISNT "\"",
+            REAP cnm3 FROM ffi_struct_cname, fp_ty.
+            SET aex TO "plant_map_to_ref_" + cnm3 + "(" + aex + ")".
+          /IF.
+        /IF.
+      /IF.
+      IF fp_kind IS "callback",
+        REAP fpx FROM is_bare_id, ael.
+        IF fpx IS "1",
+          REAP fpk2 FROM stvar_kind, stvars, ael.
+          IF fpk2 IS "",
+            REAP fs2 FROM find_sig, sigs, ael.
+            IF COUNT fs2 > 0,
+              SET aex TO "plant_cb_ensure(\"" + ael + "\", plant_cbw_" + ael + ")".
+            /IF.
+          /IF.
+        /IF.
+      /IF.
+    /IF.
     IF ai > 0, SET argstr TO argstr + ", ". /IF.
     SET argstr TO argstr + aex.
     SET ai TO ai + 1.
@@ -494,7 +539,7 @@ ACTION async_walk_decl(bd(LIST), acc(LIST)),
     IF ty IS "create_stmt" OR ty IS "let_stmt",
       REAP tg FROM _map_get, nd, "target".
       REAP vt FROM _map_get, nd, "var_type".
-      REAP ct FROM plant_ctype, vt.
+      REAP ct FROM ffi_ctype, vt.
       REAP acc FROM async_var_add, acc, tg, ct.
     /IF.
     IF ty IS "if_stmt" OR ty IS "season_stmt",
@@ -530,7 +575,7 @@ ACTION async_collect_vars(bd(LIST), params(LIST)),
     REAP pe FROM plant_list_get, params, pi.
     REAP pn FROM _map_get, pe, "name".
     REAP pt FROM _map_get, pe, "type".
-    REAP ct FROM plant_ctype, pt.
+    REAP ct FROM ffi_ctype, pt.
     REAP acc FROM async_var_add, acc, pn, ct.
     SET pi TO pi + 1.
   /SEASON.
@@ -599,7 +644,7 @@ ACTION async_emit_entry(name(TX), params(LIST), prio(TX)),
     REAP pe FROM plant_list_get, params, pi.
     REAP pn FROM _map_get, pe, "name".
     REAP pt FROM _map_get, pe, "type".
-    REAP ct FROM plant_ctype, pt.
+    REAP ct FROM ffi_ctype, pt.
     IF pi > 0, SET pstr TO pstr + ", ". /IF.
     SET pstr TO pstr + ct + " " + pn.
     SET pi TO pi + 1.
@@ -624,7 +669,7 @@ ACTION async_emit_entry(name(TX), params(LIST), prio(TX)),
 # (aliases of the state fields) are restored at entry; the phase
 # dispatch jumps to the saved program counter; AWAIT saves all
 # locals back, bumps __pc and suspends on the child task.
-ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIST), clmap(LIST)),
+ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIST), clmap(LIST), stvars(LIST)),
   CREATE code(TX) TO "static int plant_a_" + name + "_step(tx_t st) \{\n".
   SET code TO code + "  plant_a_" + name + "_state* s = (plant_a_" + name + "_state*)st;\n".
   SET code TO code + "  if (s->__pc > 0) plant_async_await_result(st);\n".
@@ -662,13 +707,13 @@ ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIS
         PUT ls INTO lead.
         SET lj TO lj + 1.
       /SEASON.
-      REAP lcode FROM generate_body, lead, 1, sigs, subst, clmap, "a", nums_s.
+      REAP lcode FROM generate_body, lead, 1, sigs, subst, clmap, "a", nums_s, stvars.
       SET code TO code + lcode.
       CREATE aw_last(NUM) TO nst - 1.
       REAP awnd FROM plant_list_get, phd, aw_last.
       REAP act_s FROM _map_get, awnd, "action".
       CREATE awargs(LIST) TO _map_get(awnd, "args").
-      REAP arg_s FROM async_argstr, awargs, sigs, act_s, nums_s.
+      REAP arg_s FROM async_argstr, awargs, sigs, act_s, nums_s, stvars.
       CREATE vi2(NUM) TO 0.
       CREATE vn2(TX) TO "".
       SEASON vi2 + 1 < COUNT vars,
@@ -683,7 +728,7 @@ ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIS
       SET code TO code + "));\n  return 0;\n".
     /IF.
     IF nxt IS nph,
-      REAP tcode FROM generate_body, phd, 1, sigs, subst, clmap, "a", nums_s.
+      REAP tcode FROM generate_body, phd, 1, sigs, subst, clmap, "a", nums_s, stvars.
       SET code TO code + tcode.
     /IF.
     SET ph2 TO ph2 + 1.
@@ -756,19 +801,19 @@ ACTION indent_str(level(NUM)),
 #  plant_async_finish + return 1).
 #  nums: names of numeric scalar vars in scope (_handle_cat).
 # ──────────────────────────────────────────────────────────────
-ACTION generate_body(bd(LIST), indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST)),
-    CREATE res(TX) TO "".
-    CREATE i(NUM) TO 0.
-    CREATE node_el(TX) TO "".
-    SEASON i < COUNT bd,
-        REAP node_el FROM plant_list_get, bd, i.
-        REAP node_code FROM generate_node, node_el, indent, sigs, subst, clmap, actx, nums.
-        IF node_code > "",
-            SET res TO res + node_code.
-        /IF.
-        SET i TO i + 1.
-    /SEASON.
-    GIVE res.
+ACTION generate_body(bd(LIST), indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST)),
+  CREATE res(TX) TO "".
+  CREATE i(NUM) TO 0.
+  CREATE node_el(TX) TO "".
+  SEASON i < COUNT bd,
+    REAP node_el FROM plant_list_get, bd, i.
+    REAP node_code FROM generate_node, node_el, indent, sigs, subst, clmap, actx, nums, stvars.
+    IF node_code > "",
+      SET res TO res + node_code.
+    /IF.
+    SET i TO i + 1.
+  /SEASON.
+  GIVE res.
 /ACTION.
 
 # ──────────────────────────────────────────────────────────────
@@ -778,7 +823,7 @@ ACTION generate_body(bd(LIST), indent(NUM), sigs(LIST), subst(LIST), clmap(LIST)
 #  actx: "" = normal body, "a" = async step phase body.
 #  nums: names of numeric scalar vars in scope (_handle_cat).
 # ──────────────────────────────────────────────────────────────
-ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST)),
+ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST)),
     REAP ntype FROM _map_get, node, "type".
     IF clmap IS "",
         SET clmap TO plant_list_make(0).
@@ -845,8 +890,19 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF vtype IS "LIST",
             GIVE isel + "  PlantArray* " + target + " = " + cval + ";\n".
         /IF.
+        REAP vst2 FROM is_struct_type, vtype.
+        IF vst2 IS "1",
+            REAP vct2 FROM ffi_ctype, vtype.
+            IF actx IS "a",
+                GIVE isel + "  " + target + " = " + cval + ";\n".
+            /IF.
+            GIVE isel + "  " + vct2 + " " + target + " = " + cval + ";\n".
+        /IF.
         IF vtype ISNT "NUM" AND vtype ISNT "FACT" AND vtype ISNT "LIST",
-            GIVE isel + "  tx_t " + target + " = " + cval + ";\n".
+            REAP vst3 FROM is_struct_type, vtype.
+            IF vst3 ISNT "1",
+                GIVE isel + "  tx_t " + target + " = " + cval + ";\n".
+            /IF.
         /IF.
     /IF.
   
@@ -905,8 +961,19 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF vtype IS "NUM",
             GIVE isel + "  long " + target + " = " + cval + ";\n".
         /IF.
+        REAP vst4 FROM is_struct_type, vtype.
+        IF vst4 IS "1",
+            REAP vct4 FROM ffi_ctype, vtype.
+            IF actx IS "a",
+                GIVE isel + "  " + target + " = " + cval + ";\n".
+            /IF.
+            GIVE isel + "  " + vct4 + " " + target + " = " + cval + ";\n".
+        /IF.
         IF vtype ISNT "NUM",
-            GIVE isel + "  tx_t " + target + " = " + cval + ";\n".
+            REAP vst5 FROM is_struct_type, vtype.
+            IF vst5 ISNT "1",
+                GIVE isel + "  tx_t " + target + " = " + cval + ";\n".
+            /IF.
         /IF.
     /IF.
   
@@ -964,7 +1031,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF ctx_n ISNT "" AND ctx_n ISNT "null", SET ctx_s TO ctx_n. /IF.
         CREATE args_s(LIST) TO _map_get(node, "args").
         CREATE argstr_s(TX) TO "".
-        REAP argstr_s FROM async_argstr, args_s, sigs, act, nums.
+        REAP argstr_s FROM async_argstr, args_s, sigs, act, nums, stvars.
         REAP isel FROM indent_str, indent.
         IF argstr_s > "",
             GIVE isel + "  " + act + "(0, " + ctx_s + ", " + argstr_s + ");\n".
@@ -1003,6 +1070,21 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         GIVE isel + "  plant_async_config(\"" + key + "\", \"" + val + "\");\n".
     /IF.
   
+    # ── call_stmt: bare call for void FFI helpers — reuses the
+    #    reap_stmt discard path (target "_") so the call is emitted
+    #    with the full ffi/struct/varargs arg handling. ─
+    IF ntype IS "call_stmt",
+        REAP ca2 FROM _map_get, node, "action".
+        CREATE cargs2(LIST) TO _map_get(node, "args").
+        CREATE ccl2(LIST) TO _map_get(node, "clargs").
+        IF ccl2 IS "",
+            SET ccl2 TO plant_list_make(0).
+        /IF.
+        CREATE cnode2(LIST) TO plant_list_make(10, "type", "reap_stmt", "target", "_", "action", ca2, "args", cargs2, "clargs", ccl2).
+        REAP ccode3 FROM generate_node, cnode2, indent, sigs, subst, clmap, actx, nums, stvars.
+        GIVE ccode3.
+    /IF.
+
     # ── reap_stmt: REAP var FROM action, args. → var = action(…); ─
     # Generic calls (action[T1, T2]) emit the mangled monomorphized name.
     IF ntype IS "reap_stmt",
@@ -1087,27 +1169,113 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
                     SET aexpr TO arg_el.
                 /IF.
             /IF.
-            # plain argument: translate + REF handling
-            IF cl_ok IS "0",
-                REAP arg0 FROM substring, arg_el, 0, 1.
+            # plain argument: translate + REF handling + FFI
+            # extension marshalling (STRUCT by value/ref, void*,
+            # CALLBACK, varargs cast)
+             IF cl_ok IS "0",
+                 REAP arg0 FROM substring, arg_el, 0, 1.
                 IF arg0 ISNT "\"",
                     REAP aexpr FROM translate_expr, arg_el.
                     REAP aexpr FROM _handle_cat, aexpr, nums.
                 /IF.
-                REAP rp FROM is_ref_at, fparams, ai.
-                IF rp IS "1",
-                    SET aexpr TO "&" + aexpr.
+                CREATE fp_ty(TX) TO "".
+                IF ai < COUNT fparams,
+                    REAP fp_el FROM plant_list_get, fparams, ai.
+                    REAP fp_ty FROM _map_get, fp_el, "type".
+                /IF.
+                REAP fk2 FROM ffi_param_kind, fp_ty.
+                IF fk2 IS "struct_val",
+                    REAP fpx FROM is_bare_id, arg_el.
+                    REAP fpk2 FROM stvar_kind, stvars, arg_el.
+                    IF fpx IS "1" AND fpk2 IS "struct_ref", SET aexpr TO "*" + aexpr. /IF.
+                    IF fpx IS "0" OR fpk2 IS "",
+                        REAP e0 FROM substring, arg_el, 0, 1.
+                        IF e0 ISNT "\"",
+                            REAP cnm4 FROM ffi_struct_cname, fp_ty.
+                            SET aexpr TO "plant_map_to_" + cnm4 + "(" + aexpr + ")".
+                        /IF.
+                    /IF.
+                /IF.
+                IF fk2 IS "struct_ref",
+                    REAP fpx FROM is_bare_id, arg_el.
+                    REAP fpk2 FROM stvar_kind, stvars, arg_el.
+                    REAP amp0 FROM substring, aexpr, 0, 1.
+                    IF amp0 IS "&", SET aexpr TO substring(aexpr, 1, LEN(aexpr)). /IF.
+                    IF fpx IS "1" AND fpk2 IS "struct_val", SET aexpr TO "&" + aexpr. /IF.
+                    IF fpx IS "0" OR fpk2 IS "",
+                        REAP e0 FROM substring, arg_el, 0, 1.
+                        IF e0 ISNT "\"",
+                            REAP cnm4 FROM ffi_struct_cname, fp_ty.
+                            SET aexpr TO "plant_map_to_ref_" + cnm4 + "(" + aexpr + ")".
+                        /IF.
+                    /IF.
+                /IF.
+                IF fk2 IS "callback",
+                    REAP fpx FROM is_bare_id, arg_el.
+                    IF fpx IS "1",
+                        REAP fpk2 FROM stvar_kind, stvars, arg_el.
+                        IF fpk2 IS "",
+                            REAP fs2 FROM find_sig, sigs, arg_el.
+                            IF COUNT fs2 > 0,
+                                SET aexpr TO "plant_cb_ensure(\"" + arg_el + "\", plant_cbw_" + arg_el + ")".
+                            /IF.
+                        /IF.
+                    /IF.
+                /IF.
+                IF fk2 IS "plain",
+                    REAP rp3 FROM is_ref_at, fparams, ai.
+                    IF rp3 IS "1",
+                        SET aexpr TO "&" + aexpr.
+                    /IF.
+                /IF.
+                IF fk2 IS "voidptr",
+                    SET aexpr TO "(void*)" + aexpr.
+                /IF.
+                IF ai >= COUNT fparams,
+                    REAP sv2 FROM expr_is_stringlike, aexpr.
+                    IF sv2 IS "0",
+                        REAP sf2 FROM list_contains, nums, arg_el.
+                        IF sf2 IS 0, SET aexpr TO "(tx_t)" + aexpr. /IF.
+                    /IF.
                 /IF.
             /IF.
             IF ai > 0, SET argstr TO argstr + ", ". /IF.
             SET argstr TO argstr + aexpr.
             SET ai TO ai + 1.
         /SEASON.
-        IF tgt IS "_",
-            GIVE clpre + isel + "  " + callname + "(" + clcall + argstr + ");\n" + clclears.
+        # FFI extension return handling: STRUCT X → plant_X_to_map
+        # wrapper; void* → direct (tx_t is void*); Result/"" → direct.
+        CREATE ffi_ret(TX) TO "".
+        CREATE ffi_rtk(TX) TO "".
+        REAP sig2 FROM find_sig, sigs, act.
+        IF COUNT sig2 > 0,
+            REAP ffi_ret FROM _map_get, sig2, "ret".
+            REAP ffi_rtk FROM ffi_param_kind, ffi_ret.
         /IF.
-        IF tgt ISNT "_",
-            GIVE clpre + isel + "  " + tgt + " = " + callname + "(" + clcall + argstr + ");\n" + clclears.
+        CREATE call_expr(TX) TO callname + "(" + clcall + argstr + ")".
+        CREATE ffi_pref(TX) TO "".
+        IF ffi_rtk IS "struct_val",
+            REAP rcnm FROM ffi_struct_cname, ffi_ret.
+            SET ffi_pref TO ffi_pref + isel + "  plant_ffi_errno = 0;\n".
+            IF tgt IS "_",
+                GIVE clpre + ffi_pref + isel + "  " + call_expr + ";\n" + clclears.
+            /IF.
+            REAP stk2 FROM stvar_kind, stvars, tgt.
+            IF stk2 > "",
+                GIVE clpre + ffi_pref + isel + "  " + tgt + " = plant_" + rcnm + "_to_map(" + call_expr + ");\n" + clclears.
+            /IF.
+            GIVE clpre + ffi_pref + isel + "  " + tgt + " = plant_" + rcnm + "_to_map(" + call_expr + ");\n" + clclears.
+        /IF.
+        IF ffi_rtk ISNT "struct_val",
+            IF ffi_rtk IS "voidptr" OR ffi_rtk IS "struct_ref",
+                SET ffi_pref TO ffi_pref + isel + "  plant_ffi_errno = 0;\n".
+            /IF.
+            IF tgt IS "_",
+                GIVE clpre + ffi_pref + isel + "  " + call_expr + ";\n" + clclears.
+            /IF.
+            IF tgt ISNT "_",
+                GIVE clpre + ffi_pref + isel + "  " + tgt + " = " + call_expr + ";\n" + clclears.
+            /IF.
         /IF.
     /IF.
   
@@ -1119,7 +1287,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP ccond FROM handle_strcmp, ccond.
         REAP isel FROM indent_str, indent.
         CREATE ccode(TX) TO isel + "  if (" + ccond + ") \{\n".
-        REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums.
+        REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars.
         SET ccode TO ccode + bcode + isel + "  \}\n".
         GIVE ccode.
     /IF.
@@ -1132,7 +1300,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP ccond FROM handle_strcmp, ccond.
         REAP isel FROM indent_str, indent.
         CREATE ccode(TX) TO isel + "  while (" + ccond + ") \{\n".
-        REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums.
+        REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars.
         SET ccode TO ccode + bcode + isel + "  \}\n".
         GIVE ccode.
     /IF.
@@ -1159,7 +1327,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
                 SET stepstr TO cstep.
             /IF.
             SET ccode TO isel + "  for (long " + ivar + " = " + cfrom + "; " + ivar + " <= " + cto + "; " + ivar + " += " + stepstr + ") \{\n".
-            REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums.
+            REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars.
             SET ccode TO ccode + bcode + isel + "  \}\n".
             GIVE ccode.
         /IF.
@@ -1175,7 +1343,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             SET ccode TO ccode + isel + "    long " + idxvar + " = 0;\n".
             SET ccode TO ccode + isel + "    while (" + idxvar + " < plant_array_length(" + clist + ")) \{\n".
             SET ccode TO ccode + isel + "      tx_t " + ivar + " = plant_array_get(" + clist + ", " + idxvar + ");\n".
-            REAP bcode FROM generate_body, bd, indent + 4, sigs, subst, clmap, actx, nums.
+            REAP bcode FROM generate_body, bd, indent + 4, sigs, subst, clmap, actx, nums, stvars.
             SET ccode TO ccode + bcode + isel + "      " + idxvar + "++;\n".
             SET ccode TO ccode + isel + "    }\n".
             SET ccode TO ccode + isel + "  }\n".
@@ -1203,11 +1371,11 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             IF binding > "" AND binding ISNT "null",
                 SET ccode TO ccode + isel + "      \{\n".
                 SET ccode TO ccode + isel + "        tx_t " + binding + " = " + csubj + ";\n".
-                REAP bcode FROM generate_body, cbody, indent + 4, sigs, subst, clmap, actx, nums.
+                REAP bcode FROM generate_body, cbody, indent + 4, sigs, subst, clmap, actx, nums, stvars.
                 SET ccode TO ccode + bcode + isel + "      \}\n".
             /IF.
             IF binding IS "" OR binding IS "null",
-                REAP bcode FROM generate_body, cbody, indent + 4, sigs, subst, clmap, actx, nums.
+                REAP bcode FROM generate_body, cbody, indent + 4, sigs, subst, clmap, actx, nums, stvars.
                 SET ccode TO ccode + bcode.
             /IF.
             SET ccode TO ccode + isel + "      break;\n".
@@ -1238,6 +1406,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             REAP aname FROM _map_get, node, "name".
             CREATE params(LIST) TO _map_get(node, "params").
             REAP bd FROM _map_get, node, "body".
+            CREATE stvars_a(LIST) TO collect_stvars(bd, params, subst).
         # ── ASYNC ACTION: state struct + step function + entry ──
         #    (v0.48.3 async engine; generic async actions unsupported)
         CREATE asy_mark(TX) TO _map_get(node, "async").
@@ -1247,7 +1416,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             CREATE aphases(LIST) TO async_split_phases(bd).
             REAP st_code FROM async_emit_state, aname, avars.
             REAP en_code FROM async_emit_entry, aname, params, prio_s.
-            REAP stp_code FROM async_emit_step, aname, aphases, avars, sigs, subst, clmap.
+            REAP stp_code FROM async_emit_step, aname, aphases, avars, sigs, subst, clmap, stvars_a.
             GIVE "static int plant_a_" + aname + "_step(tx_t st);\n\n" + st_code + en_code + stp_code.
         /IF.
         CREATE paramstr(TX) TO "".
@@ -1257,7 +1426,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             REAP param_el FROM plant_list_get, params, pi.
             REAP pname FROM _map_get, param_el, "name".
             REAP ptype FROM _map_get, param_el, "type".
-            REAP ctype FROM plant_ctype, ptype.
+            REAP ctype FROM ffi_ctype, ptype.
             IF pi > 0, SET paramstr TO paramstr + ", ". /IF.
             SET paramstr TO paramstr + ctype + " " + pname.
             SET pi TO pi + 1.
@@ -1273,7 +1442,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             SET dcode TO dcode + "  tx_t " + dv + " = \"\";\n".
             SET di TO di + 1.
         /SEASON.
-        REAP bcode FROM generate_body, bd, 1, sigs, subst, clmap, actx, nums_a.
+        REAP bcode FROM generate_body, bd, 1, sigs, subst, clmap, actx, nums_a, stvars_a.
         # plant_async_drain() for ACTION main() when async is
         # reachable from its call graph (drain_after marker set by
         # generate_c pass 2b). Skipped when main ends in explicit
@@ -1341,6 +1510,395 @@ ACTION plant_ctype(ptype(TX)),
     IF base IS "REF LIST", GIVE "PlantArray**". /IF.
     IF base IS "REF TX", GIVE "tx_t*". /IF.
     GIVE "tx_t".
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
+#  v0.48.4 — FFI Optional Extensions
+#  Type classification + marshalling helpers for STRUCT-by-value,
+#  STRUCT-by-pointer (REF STRUCT), void*, CALLBACK and varargs.
+#  Plain struct names (no STRUCT prefix) keep the opaque tx_t ABI.
+# ──────────────────────────────────────────────────────────────
+
+# ffi_param_kind — classify an FFI param type:
+#   struct_val   STRUCT X (by value)
+#   struct_ref   REF STRUCT X (by pointer)
+#   voidptr      void*
+#   callback     CALLBACK
+#   plain        everything else
+ACTION ffi_param_kind(ptype(TX)),
+  REAP p0 FROM substring, ptype, 0, 4.
+  IF p0 IS "REF ",
+    REAP rest FROM substring, ptype, 4, LEN(ptype).
+    REAP r0 FROM substring, rest, 0, 7.
+    IF r0 IS "STRUCT ", GIVE "struct_ref". /IF.
+    GIVE "plain".
+  /IF.
+  REAP s0 FROM substring, ptype, 0, 7.
+  IF s0 IS "STRUCT ", GIVE "struct_val". /IF.
+  IF str_eq(ptype, "void*") IS "1", GIVE "voidptr". /IF.
+  IF str_eq(ptype, "CALLBACK") IS "1", GIVE "callback". /IF.
+  GIVE "plain".
+/ACTION.
+
+# ffi_struct_name — "STRUCT Point" / "REF STRUCT Box [ NUM ]" →
+# "Point" / "Box [ NUM ]" (struct type text without markers)
+ACTION ffi_struct_name(typ(TX)),
+  REAP p0 FROM substring, typ, 0, 4.
+  IF p0 IS "REF ",
+    REAP rest FROM substring, typ, 4, LEN(typ).
+    SET typ TO rest.
+  /IF.
+  REAP s0 FROM substring, typ, 0, 7.
+  IF s0 IS "STRUCT ",
+    GIVE substring(typ, 7, LEN(typ)).
+  /IF.
+  GIVE typ.
+/ACTION.
+
+# ffi_struct_cname — struct type text → generated C typedef name:
+# "Point" → plant_Point, "Box [ NUM ]" → plant_Box_NUM
+ACTION ffi_struct_cname(typ(TX)),
+  REAP p0 FROM substring, typ, 0, 4.
+  IF p0 IS "REF ",
+    REAP typ FROM substring, typ, 4, LEN(typ).
+  /IF.
+  REAP s0 FROM substring, typ, 0, 7.
+  IF s0 IS "STRUCT ",
+    REAP typ FROM substring, typ, 7, LEN(typ).
+  /IF.
+  REAP b0 FROM base_of, typ.
+  REAP bt0 FROM trim, b0.
+  CREATE cname(TX) TO "plant_" + bt0.
+  REAP bi FROM find_any, typ, "[".
+  IF bi ISNT -1,
+    REAP gargs FROM parse_type_args, typ.
+    CREATE ai(NUM) TO 0.
+    CREATE av(TX) TO "".
+    SEASON ai < COUNT gargs,
+      REAP av FROM plant_list_get, gargs, ai.
+      SET cname TO cname + "_" + av.
+      SET ai TO ai + 1.
+    /SEASON.
+  /IF.
+  GIVE cname.
+/ACTION.
+
+# is_struct_type — 1 when a type is a struct type (not a primitive
+# scalar NUM/FACT/TX/LIST, not a REF, not empty)
+ACTION is_struct_type(t(TX)),
+  REAP base FROM type_base, t.
+  REAP tb FROM trim, base.
+  IF tb IS "NUM", GIVE "0". /IF.
+  IF tb IS "FACT", GIVE "0". /IF.
+  IF tb IS "TX", GIVE "0". /IF.
+  IF tb IS "LIST", GIVE "0". /IF.
+  IF tb IS "", GIVE "0". /IF.
+  REAP rf FROM substring, tb, 0, 4.
+  IF rf IS "REF ", GIVE "0". /IF.
+  GIVE "1".
+/ACTION.
+
+# collect_stvars_walk — struct-typed CREATE/LET targets in a body
+ACTION collect_stvars_walk(bd(LIST), subst(LIST), res(LIST)),
+  CREATE wi(NUM) TO 0.
+  CREATE wnd(TX) TO "".
+  CREATE wty(TX) TO "".
+  CREATE wtg(TX) TO "".
+  CREATE wvt(TX) TO "".
+  CREATE wbs(TX) TO "".
+  SEASON wi < COUNT bd,
+    REAP wnd FROM plant_list_get, bd, wi.
+    REAP wty FROM _map_get, wnd, "type".
+    IF wty IS "create_stmt" OR wty IS "let_stmt",
+      REAP wtg FROM _map_get, wnd, "target".
+      REAP wvt FROM _map_get, wnd, "var_type".
+      REAP wbs FROM subst_type, wvt, subst.
+      REAP wsf FROM is_struct_type, wbs.
+      IF wsf IS "1",
+        REAP wfound FROM list_contains, res, wtg.
+        IF wfound IS 0,
+          PUT wtg INTO res.
+          REAP wk2 FROM ffi_param_kind, wbs.
+          PUT wk2 INTO res.
+        /IF.
+      /IF.
+    /IF.
+    IF wty IS "if_stmt" OR wty IS "season_stmt" OR wty IS "cycle_stmt" OR wty IS "match_stmt",
+      REAP wbd2 FROM _map_get, wnd, "body".
+      REAP wret2 FROM collect_stvars_walk, wbd2, subst, res.
+    /IF.
+    SET wi TO wi + 1.
+  /SEASON.
+  GIVE res.
+/ACTION.
+
+# collect_stvars — struct-typed var names in scope for an action:
+# struct params + struct CREATE/LET targets (mirrors collect_nums).
+# Flat [name, kind, …] pairs; kind = ffi_param_kind of the type.
+ACTION collect_stvars(bd(LIST), params(LIST), subst(LIST)),
+  CREATE res(LIST) TO plant_list_make(0).
+  CREATE pi(NUM) TO 0.
+  CREATE pnd(LIST) TO plant_list_make(0).
+  CREATE pn2(TX) TO "".
+  CREATE pty2(TX) TO "".
+  CREATE psu2(TX) TO "".
+  SEASON pi < COUNT params,
+    REAP pnd FROM plant_list_get, params, pi.
+    REAP pn2 FROM _map_get, pnd, "name".
+    REAP pty2 FROM _map_get, pnd, "type".
+    REAP psu2 FROM subst_type, pty2, subst.
+    REAP pbs2 FROM is_struct_type, psu2.
+    IF pbs2 IS "1",
+      REAP pf FROM list_contains, res, pn2.
+      IF pf IS 0,
+        PUT pn2 INTO res.
+        REAP pk2 FROM ffi_param_kind, psu2.
+        PUT pk2 INTO res.
+      /IF.
+    /IF.
+    SET pi TO pi + 1.
+  /SEASON.
+  REAP ret FROM collect_stvars_walk, bd, subst, res.
+  GIVE res.
+/ACTION.
+
+# find_sig — look up the full sigs entry (name/params/ret/varargs)
+# by declaration name; real empty LIST when missing
+ACTION find_sig(sigs(LIST), name(TX)),
+  CREATE fi(NUM) TO 0.
+  CREATE fe(TX) TO "".
+  CREATE fn(TX) TO "".
+  CREATE found(LIST) TO plant_list_make(0).
+  SEASON fi < COUNT sigs,
+    REAP fe FROM plant_list_get, sigs, fi.
+    REAP fn FROM _map_get, fe, "name".
+    IF str_eq(fn, name) IS "1",
+      SET found TO fe.
+    /IF.
+    SET fi TO fi + 1.
+  /SEASON.
+  GIVE found.
+/ACTION.
+
+# ffi_ctype — C type for an FFI param/return type
+ACTION ffi_ctype(ptype(TX)),
+  REAP k FROM ffi_param_kind, ptype.
+  IF k IS "struct_val",
+    REAP sn FROM ffi_struct_name, ptype.
+    GIVE ffi_struct_cname(sn).
+  /IF.
+  IF k IS "struct_ref",
+    REAP sn FROM ffi_struct_name, ptype.
+    GIVE ffi_struct_cname(sn) + "*".
+  /IF.
+  IF k IS "voidptr", GIVE "void*". /IF.
+  IF k IS "callback", GIVE "plant_cb_t". /IF.
+  GIVE plant_ctype(ptype).
+/ACTION.
+
+# is_bare_id — expr is a single identifier [A-Za-z0-9_]+
+ACTION is_bare_id(e(TX)),
+  CREATE bi2(NUM) TO 0.
+  CREATE bc(TX) TO "".
+  SEASON bi2 < LEN(e),
+    REAP bc FROM char_at, e, bi2.
+    IF bc IS " " OR bc IS "(" OR bc IS ")" OR bc IS "+" OR bc IS "-" OR bc IS "\"" OR bc IS "[" OR bc IS "]" OR bc IS "@" OR bc IS "*" OR bc IS "&" OR bc IS "=" OR bc IS "!",
+      GIVE "0".
+    /IF.
+    SET bi2 TO bi2 + 1.
+  /SEASON.
+  GIVE "1".
+/ACTION.
+
+# expr_is_stringlike — a translated expression yields a TX string:
+# starts with a string literal, is a _cat call, or a _from_long call
+# (quote checks use substring comparisons — call-arg string literals
+#  cannot contain quote characters in the v1 bootstrap)
+ACTION expr_is_stringlike(e(TX)),
+  REAP q0 FROM substring, e, 0, 1.
+  IF q0 IS "\"", GIVE "1". /IF.
+  REAP c1 FROM find_any, e, "_cat(".
+  IF c1 ISNT -1, GIVE "1". /IF.
+  REAP s1 FROM substring, e, 0, 11.
+  IF s1 IS "_from_long(", GIVE "1". /IF.
+  GIVE "0".
+/ACTION.
+
+# stvar_kind — flat [name, kind, …] lookup: struct-var kind
+# ("struct_val"/"struct_ref") for a name, or "" when not a stvar
+ACTION stvar_kind(stvars(LIST), name(TX)),
+  CREATE si(NUM) TO 0.
+  SEASON si + 1 < COUNT stvars,
+    REAP sv1 FROM plant_list_get, stvars, si.
+    IF str_eq(sv1, name) IS "1",
+      REAP sk1 FROM plant_list_get, stvars, si + 1.
+      GIVE sk1.
+    /IF.
+    SET si TO si + 2.
+  /SEASON.
+  GIVE "".
+/ACTION.
+
+# collect_cb_uses — action names passed as CALLBACK args anywhere
+# in a body (recurses IF/SEASON/CYCLE/MATCH)
+ACTION collect_cb_uses(bd(LIST), sigs(LIST), acc(LIST)),
+  CREATE wi(NUM) TO 0.
+  CREATE nd(TX) TO "".
+  CREATE ty(TX) TO "".
+  SEASON wi < COUNT bd,
+    REAP nd FROM plant_list_get, bd, wi.
+    REAP ty FROM _map_get, nd, "type".
+    IF ty IS "reap_stmt" OR ty IS "start_stmt" OR ty IS "await_stmt",
+      REAP caact FROM _map_get, nd, "action".
+      IF caact > "",
+        REAP caact FROM strings:REPLACE, caact, ":", "_".
+        REAP cafp FROM find_params, sigs, caact.
+        CREATE caargs(LIST) TO _map_get(nd, "args").
+        CREATE kai(NUM) TO 0.
+        SEASON kai < COUNT caargs,
+          IF kai < COUNT cafp,
+            REAP kap FROM plant_list_get, cafp, kai.
+            REAP kpty FROM _map_get, kap, "type".
+            REAP kk FROM ffi_param_kind, kpty.
+            IF kk IS "callback",
+              REAP karg FROM plant_list_get, caargs, kai.
+              REAP kb FROM is_bare_id, karg.
+              IF kb IS "1",
+                REAP kfound FROM callee_add, acc, karg.
+                SET acc TO kfound.
+              /IF.
+            /IF.
+          /IF.
+          SET kai TO kai + 1.
+        /SEASON.
+      /IF.
+    /IF.
+    IF ty IS "if_stmt" OR ty IS "season_stmt" OR ty IS "cycle_stmt",
+      REAP sb FROM _map_get, nd, "body".
+      REAP acc FROM collect_cb_uses, sb, sigs, acc.
+    /IF.
+    IF ty IS "match_stmt",
+      CREATE cl9(LIST) TO _map_get(nd, "clauses").
+      CREATE ci9(NUM) TO 0.
+      SEASON ci9 < COUNT cl9,
+        REAP cl2 FROM plant_list_get, cl9, ci9.
+        REAP cb9 FROM _map_get, cl2, "bodyStatements".
+        REAP acc FROM collect_cb_uses, cb9, sigs, acc.
+        SET ci9 TO ci9 + 1.
+      /SEASON.
+    /IF.
+    SET wi TO wi + 1.
+  /SEASON.
+  GIVE acc.
+/ACTION.
+
+# ffi_ret_ctype — FFI return type text → C type
+ACTION ffi_ret_ctype(ret(TX)),
+  REAP rk FROM ffi_param_kind, ret.
+  IF rk IS "struct_val",
+    REAP sn FROM ffi_struct_name, ret.
+    GIVE ffi_struct_cname(sn).
+  /IF.
+  IF rk IS "voidptr", GIVE "void*". /IF.
+  GIVE "tx_t".
+/ACTION.
+
+# struct_fields_at — subst'd field pairs [name, type, …] of a
+# struct template for a type instantiation (args may be empty)
+ACTION struct_fields_at(tpl(LIST), args(LIST)),
+  CREATE flds(LIST) TO plant_list_make(0).
+  CREATE sgens(LIST) TO _map_get(tpl, "generics").
+  CREATE sfields(LIST) TO _map_get(tpl, "fields").
+  CREATE fsub(LIST) TO build_subst(sgens, args).
+  CREATE fi9(NUM) TO 0.
+  CREATE fel9(TX) TO "".
+  SEASON fi9 < COUNT sfields,
+    REAP fel9 FROM plant_list_get, sfields, fi9.
+    REAP fn9 FROM _map_get, fel9, "name".
+    REAP ft9 FROM _map_get, fel9, "type".
+    REAP fs9 FROM subst_type, ft9, fsub.
+    PUT fn9 INTO flds.
+    PUT fs9 INTO flds.
+    SET fi9 TO fi9 + 1.
+  /SEASON.
+  GIVE flds.
+/ACTION.
+
+# ffi_emit_struct_helpers — map↔C-struct conversion helpers for
+# one struct type (fields as [name, type, …] pairs, depth ≤ 3)
+ACTION ffi_emit_struct_helpers(cname(TX), flds(LIST)),
+  CREATE h1(TX) TO "".
+  CREATE h2(TX) TO "".
+  CREATE h3(TX) TO "".
+  CREATE h4(TX) TO "".
+  CREATE hall(TX) TO "".
+  SET h1 TO "static " + cname + " plant_map_to_" + cname + "_d(tx_t m, long depth) \{\n".
+  SET h1 TO h1 + "  " + cname + " r;\n  memset(&r, 0, sizeof(r));\n".
+  SET h1 TO h1 + "  if (depth > 3) { plant_ffi_errno = FFI_ERR_DEPTH; plant_ffi_debug_print(\"map_to_" + cname + ": depth limit\"); return r; }\n".
+  SET h1 TO h1 + "  if (!m) { plant_ffi_errno = FFI_ERR_TYPE; return r; }\n".
+  CREATE fi8(NUM) TO 0.
+  CREATE fn8(TX) TO "".
+  CREATE ft8(TX) TO "".
+  SEASON fi8 + 1 < COUNT flds,
+    REAP fn8 FROM plant_list_get, flds, fi8.
+    REAP ft8 FROM plant_list_get, flds, fi8 + 1.
+    REAP fb8 FROM type_base, ft8.
+    IF fb8 IS "NUM",
+      SET h1 TO h1 + "  r." + fn8 + " = (long)(intptr_t)plant_map_get(m, \"" + fn8 + "\");\n".
+    /IF.
+    IF fb8 IS "FACT",
+      SET h1 TO h1 + "  r." + fn8 + " = (int)(intptr_t)plant_map_get(m, \"" + fn8 + "\");\n".
+    /IF.
+    IF fb8 IS "TX",
+      SET h1 TO h1 + "  r." + fn8 + " = plant_map_get(m, \"" + fn8 + "\");\n".
+    /IF.
+    REAP fs8 FROM is_struct_type, ft8.
+    IF fs8 IS "1",
+      REAP fcn8 FROM ffi_struct_cname, ft8.
+      SET h1 TO h1 + "  r." + fn8 + " = plant_map_to_" + fcn8 + "_d(plant_map_get(m, \"" + fn8 + "\"), depth + 1);\n".
+    /IF.
+    IF fb8 IS "LIST",
+      SET h1 TO h1 + "  plant_ffi_errno = FFI_ERR_TYPE;\n  return r;\n".
+    /IF.
+    SET fi8 TO fi8 + 2.
+  /SEASON.
+  SET h1 TO h1 + "  return r;\n\}\n".
+  SET h2 TO "static " + cname + " plant_map_to_" + cname + "(tx_t m) { return plant_map_to_" + cname + "_d(m, 1); }\n".
+  SET h3 TO "static void* plant_struct_alloc_copy_" + cname + "(" + cname + " v) { " + cname + "* r = (" + cname + "*)plant_alloc(sizeof(" + cname + ")); *r = v; return (void*)r; }\n".
+  SET h3 TO h3 + "static " + cname + "* plant_map_to_ref_" + cname + "(tx_t m) { return (" + cname + "*)plant_struct_alloc_copy_" + cname + "(plant_map_to_" + cname + "(m)); }\n".
+  SET h4 TO "static tx_t plant_" + cname + "_to_map(" + cname + " v) \{\n".
+  SET h4 TO h4 + "  tx_t r = (tx_t)plant_map_create(8);\n".
+  CREATE fi7(NUM) TO 0.
+  CREATE fn7(TX) TO "".
+  CREATE ft7(TX) TO "".
+  SEASON fi7 + 1 < COUNT flds,
+    REAP fn7 FROM plant_list_get, flds, fi7.
+    REAP ft7 FROM plant_list_get, flds, fi7 + 1.
+    REAP fb7 FROM type_base, ft7.
+    IF fb7 IS "NUM",
+      SET h4 TO h4 + "  plant_map_set(r, \"" + fn7 + "\", (void*)(intptr_t)v." + fn7 + ");\n".
+    /IF.
+    IF fb7 IS "FACT",
+      SET h4 TO h4 + "  plant_map_set(r, \"" + fn7 + "\", (void*)(intptr_t)v." + fn7 + ");\n".
+    /IF.
+    IF fb7 IS "TX",
+      SET h4 TO h4 + "  plant_map_set(r, \"" + fn7 + "\", v." + fn7 + ");\n".
+    /IF.
+    REAP fs7 FROM is_struct_type, ft7.
+    IF fs7 IS "1",
+      REAP fcn7 FROM ffi_struct_cname, ft7.
+      SET h4 TO h4 + "  plant_map_set(r, \"" + fn7 + "\", plant_" + fcn7 + "_to_map(v." + fn7 + "));\n".
+    /IF.
+    IF fb7 IS "LIST",
+      SET h4 TO h4 + "  plant_ffi_errno = FFI_ERR_TYPE;\n  return r;\n".
+    /IF.
+    SET fi7 TO fi7 + 2.
+  /SEASON.
+  SET h4 TO h4 + "  return r;\n\}\n".
+  SET hall TO h1 + h2 + "".
+  SET hall TO hall + h3 + "".
+  SET hall TO hall + h4 + "".
+  GIVE hall.
 /ACTION.
 
 # ──────────────────────────────────────────────────────────────
@@ -1423,6 +1981,97 @@ ACTION base_of(act(TX)),
     REAP bi FROM find_any, act, "[".
     IF bi IS -1, GIVE act. /IF.
     GIVE substring(act, 0, bi).
+/ACTION.
+
+# ffi_topo_order — reorder a list of {scn, flds} maps so that every
+# struct comes after all structs referenced by its fields (deps not
+# present in the entries are ignored). Returns the reordered list.
+ACTION ffi_topo_order(entries(LIST)),
+  CREATE tdone(LIST) TO plant_list_make(0).
+  CREATE tprog(NUM) TO 1.
+  CREATE ti(NUM) TO 0.
+  CREATE te9(LIST) TO plant_list_make(0).
+  CREATE tscn(TX) TO "".
+  CREATE tflds2(LIST) TO plant_list_make(0).
+  CREATE td1(TX) TO "0".
+  CREATE td2(TX) TO "0".
+  CREATE td3(TX) TO "0".
+  CREATE tj(NUM) TO 0.
+  CREATE tok(NUM) TO 1.
+  CREATE ft9(TX) TO "".
+  CREATE fs9(TX) TO "".
+  CREATE fc9(TX) TO "".
+  CREATE res(LIST) TO plant_list_make(0).
+  CREATE entries_scns(LIST) TO plant_list_make(0).
+  SET ti TO 0.
+  SEASON ti < COUNT entries,
+    REAP te9 FROM plant_list_get, entries, ti.
+    REAP tscn FROM _map_get, te9, "scn".
+    PUT tscn INTO entries_scns.
+    SET ti TO ti + 1.
+  /SEASON.
+  SEASON tprog IS 1,
+    SET tprog TO 0.
+    SET ti TO 0.
+    SEASON ti < COUNT entries,
+      REAP te9 FROM plant_list_get, entries, ti.
+      REAP tscn FROM _map_get, te9, "scn".
+      REAP td1 FROM key_in_acc, tscn, tdone.
+      IF td1 IS "1",
+        SET ti TO ti + 1.
+        CONTINUE.
+      /IF.
+      CREATE tflds2(LIST) TO _map_get(te9, "flds").
+      SET tok TO 1.
+      SET tj TO 0.
+      SEASON tj < COUNT tflds2,
+        REAP ft9 FROM plant_list_get, tflds2, tj.
+        REAP fs9 FROM is_struct_type, ft9.
+        IF fs9 IS "1",
+          REAP fc9 FROM ffi_struct_cname, ft9.
+          REAP td2 FROM key_in_acc, fc9, entries_scns.
+          IF td2 IS "1",
+            REAP td3 FROM key_in_acc, fc9, tdone.
+            IF td3 IS "0",
+              SET tok TO 0.
+            /IF.
+          /IF.
+        /IF.
+        SET tj TO tj + 1.
+      /SEASON.
+      IF tok IS 1,
+        PUT te9 INTO res.
+        PUT tscn INTO tdone.
+        SET tprog TO 1.
+      /IF.
+      SET ti TO ti + 1.
+    /SEASON.
+  /SEASON.
+  GIVE res.
+/ACTION.
+
+# ffi_topo_emit_helpers — emit FFI struct conversion helpers
+# (ffi_fwd + ffi_def text) in dependency order so that structs
+# referenced as fields are emitted before their parents.
+ACTION ffi_topo_emit_helpers(entries(LIST)),
+  REAP ord FROM ffi_topo_order, entries.
+  CREATE tfw(TX) TO "".
+  CREATE tdf(TX) TO "".
+  CREATE tscn(TX) TO "".
+  CREATE tflds2(LIST) TO plant_list_make(0).
+  CREATE ffd1(TX) TO "".
+  CREATE ti(NUM) TO 0.
+  CREATE te9(LIST) TO plant_list_make(0).
+  SEASON ti < COUNT ord,
+    REAP te9 FROM plant_list_get, ord, ti.
+    REAP tscn FROM _map_get, te9, "scn".
+    SET tfw TO tfw + "static " + tscn + " plant_map_to_" + tscn + "_d(tx_t m, long depth);\nstatic " + tscn + " plant_map_to_" + tscn + "(tx_t m);\nstatic void* plant_struct_alloc_copy_" + tscn + "(" + tscn + " v);\nstatic " + tscn + "* plant_map_to_ref_" + tscn + "(tx_t m);\nstatic tx_t plant_" + tscn + "_to_map(" + tscn + " v);\n".
+    CREATE tflds2(LIST) TO _map_get(te9, "flds").
+    REAP ffd1 FROM ffi_emit_struct_helpers, tscn, tflds2.
+    SET tdf TO tdf + ffd1 + "\n".
+    SET ti TO ti + 1.
+  /SEASON.
+  GIVE tfw + tdf.
 /ACTION.
 
 # parse_type_args — extract the type-arg list from foo[NUM, TX]
@@ -1519,7 +2168,7 @@ ACTION scan_type(t(TX), subst(LIST), structs(LIST), acc(LIST)),
     REAP st FROM subst_type, t, subst.
     REAP bi FROM find_any, st, "[".
     IF bi ISNT -1,
-        REAP base FROM base_of, st.
+            REAP base FROM base_of, st.
         REAP btrim FROM trim, base.
         REAP rf FROM substring, btrim, 0, 4.
         IF rf IS "REF ",
@@ -1634,7 +2283,13 @@ ACTION struct_typedef(tpl(LIST), args(LIST)),
         REAP fname FROM _map_get, fel, "name".
         REAP ftype FROM _map_get, fel, "type".
         REAP fsub FROM subst_type, ftype, subst.
-        REAP ctype FROM plant_ctype, fsub.
+        REAP sp8 FROM substring, fsub, 0, 7.
+        IF sp8 IS "STRUCT ",
+            REAP ctype FROM ffi_ctype, fsub.
+        /IF.
+        IF sp8 ISNT "STRUCT ",
+            REAP ctype FROM plant_ctype, fsub.
+        /IF.
         SET ccode TO ccode + "  " + ctype + " " + fname + ";\n".
         SET fi TO fi + 1.
     /SEASON.
@@ -1735,7 +2390,7 @@ ACTION inst_fwddecl(inst(TX), templates(LIST)),
         REAP pname FROM _map_get, param_el, "name".
         REAP ptype FROM _map_get, param_el, "type".
         REAP psub FROM subst_type, ptype, subst.
-        REAP ctype FROM plant_ctype, psub.
+        REAP ctype FROM ffi_ctype, psub.
         IF pi > 0, SET paramstr TO paramstr + ", ". /IF.
         SET paramstr TO paramstr + ctype + " " + pname.
         SET pi TO pi + 1.
@@ -1766,13 +2421,14 @@ ACTION emit_inst(inst(TX), templates(LIST), sigs(LIST)),
         REAP pname FROM _map_get, param_el, "name".
         REAP ptype FROM _map_get, param_el, "type".
         REAP psub FROM subst_type, ptype, subst.
-        REAP ctype FROM plant_ctype, psub.
+        REAP ctype FROM ffi_ctype, psub.
         IF pi > 0, SET paramstr TO paramstr + ", ". /IF.
         SET paramstr TO paramstr + ctype + " " + pname.
         SET pi TO pi + 1.
     /SEASON.
     CREATE ccode(TX) TO "tx_t " + mname + "(" + paramstr + ") \{\n".
     CREATE nums_m(LIST) TO collect_nums(bd, params, subst).
+    CREATE stvars_m(LIST) TO collect_stvars(bd, params, subst).
     CREATE implicit(LIST) TO collect_implicit(bd, params).
     CREATE dcode(TX) TO "".
     CREATE di(NUM) TO 0.
@@ -1782,7 +2438,7 @@ ACTION emit_inst(inst(TX), templates(LIST), sigs(LIST)),
         SET dcode TO dcode + "  tx_t " + dv + " = \"\";\n".
         SET di TO di + 1.
     /SEASON.
-    REAP bcode FROM generate_body, bd, 1, sigs, subst, plant_list_make(0), "", nums_m.
+    REAP bcode FROM generate_body, bd, 1, sigs, subst, plant_list_make(0), "", nums_m, stvars_m.
     IF (COUNT bd) IS 0,
         SET bcode TO "  return " + mname + ";\n".
     /IF.
@@ -1866,6 +2522,25 @@ ACTION find_node(ast(LIST), name(TX)),
       IF str_eq(fnm, name) IS "1", GIVE fe. /IF.
     /IF.
     SET fi TO fi + 1.
+  /SEASON.
+  GIVE "".
+/ACTION.
+
+# find_ext_node — locate an external_decl node by name (FFI
+# signatures live on external_decl nodes, not action_decl)
+ACTION find_ext_node(ast(LIST), name(TX)),
+  CREATE fei(NUM) TO 0.
+  CREATE fee(TX) TO "".
+  CREATE fet(TX) TO "".
+  CREATE fen(TX) TO "".
+  SEASON fei < COUNT ast,
+    REAP fee FROM plant_list_get, ast, fei.
+    REAP fet FROM _map_get, fee, "type".
+    IF fet IS "external_decl",
+      REAP fen FROM _map_get, fee, "name".
+      IF str_eq(fen, name) IS "1", GIVE fee. /IF.
+    /IF.
+    SET fei TO fei + 1.
   /SEASON.
   GIVE "".
 /ACTION.
@@ -2016,7 +2691,9 @@ ACTION generate_c(ast(LIST)),
         IF ntype IS "action_decl" OR ntype IS "external_decl",
             REAP aname FROM _map_get, node_el, "name".
             CREATE params2(LIST) TO _map_get(node_el, "params").
-            PUT plant_list_make(4, "name", aname, "params", params2) INTO sigs.
+            CREATE rt2(TX) TO _map_get(node_el, "ret").
+            CREATE vg2(TX) TO _map_get(node_el, "varargs").
+            PUT plant_list_make(8, "name", aname, "params", params2, "ret", rt2, "varargs", vg2) INTO sigs.
         /IF.
         IF ntype IS "action_decl",
             REAP aname FROM _map_get, node_el, "name".
@@ -2032,6 +2709,49 @@ ACTION generate_c(ast(LIST)),
             CREATE sgens2(LIST) TO _map_get(node_el, "generics").
             CREATE sfields2(LIST) TO _map_get(node_el, "fields").
             PUT plant_list_make(6, "name", sname, "generics", sgens2, "fields", sfields2) INTO structs.
+        /IF.
+        SET i TO i + 1.
+    /SEASON.
+    # pass 0f: FFI-extension externals (ffi_exts: STRUCT/CALLBACK/
+    # void*/varargs signatures) + actions passed as callback args
+    # (cb_acts — they get plant_cbw_<name> wrappers)
+    CREATE ffi_exts(LIST) TO plant_list_make(0).
+    CREATE cb_acts(LIST) TO plant_list_make(0).
+    SET i TO 0.
+    SEASON i < COUNT ast,
+        REAP node_el FROM plant_list_get, ast, i.
+        REAP ntype FROM _map_get, node_el, "type".
+        IF ntype IS "external_decl",
+            CREATE fparams7(LIST) TO _map_get(node_el, "params").
+            CREATE fret7(TX) TO _map_get(node_el, "ret").
+            CREATE fvg7(TX) TO _map_get(node_el, "varargs").
+            CREATE ffi_ok(NUM) TO 0.
+            IF fret7 > "", SET ffi_ok TO 1. /IF.
+            IF fvg7 IS "1", SET ffi_ok TO 1. /IF.
+            CREATE fai(NUM) TO 0.
+            SEASON fai < COUNT fparams7,
+                REAP fpel FROM plant_list_get, fparams7, fai.
+                REAP fpty FROM _map_get, fpel, "type".
+                REAP fk7 FROM ffi_param_kind, fpty.
+                IF fk7 ISNT "plain", SET ffi_ok TO 1. /IF.
+                SET fai TO fai + 1.
+            /SEASON.
+            IF ffi_ok IS 1,
+                REAP anm7 FROM _map_get, node_el, "name".
+                PUT anm7 INTO ffi_exts.
+            /IF.
+        /IF.
+        IF ntype IS "action_decl",
+            CREATE gsf(LIST) TO _map_get(node_el, "generics").
+            IF COUNT gsf IS 0,
+                CREATE bdf(LIST) TO _map_get(node_el, "body").
+                REAP cb2 FROM collect_cb_uses, bdf, sigs, cb_acts.
+                SET cb_acts TO cb2.
+            /IF.
+        /IF.
+        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl",
+            REAP cb3 FROM collect_cb_uses, plant_list_make(1, node_el), sigs, cb_acts.
+            SET cb_acts TO cb3.
         /IF.
         SET i TO i + 1.
     /SEASON.
@@ -2110,8 +2830,14 @@ ACTION generate_c(ast(LIST)),
         SET i TO i + 1.
     /SEASON.
     # struct typedefs: plain templates + every instantiation, emitted
-    # right after the includes so C FFI code can use them.
-    CREATE struct_code(TX) TO "".
+    # right after the includes so C FFI code can use them. The block
+    # is bracketed by markers so run_native_tests.sh can extract it
+    # into a header for mock_ffi.c (-include).
+    CREATE struct_code(TX) TO "/*__PLANT_TYPES_BEGIN__*/\n#ifndef PLANT_TYPES_INCLUDED\n#define PLANT_TYPES_INCLUDED\n".
+    CREATE ffi_tentries(LIST) TO plant_list_make(0).
+    CREATE ffi_torder(LIST) TO plant_list_make(0).
+    CREATE tscnX(TX) TO "".
+    CREATE tstdef(TX) TO "".
     SET i TO 0.
     SEASON i < COUNT ast,
         REAP node_el FROM plant_list_get, ast, i.
@@ -2119,9 +2845,19 @@ ACTION generate_c(ast(LIST)),
         IF ntype IS "struct_decl",
             CREATE sgens4(LIST) TO _map_get(node_el, "generics").
             IF COUNT sgens4 IS 0,
+                REAP sname4 FROM _map_get, node_el, "name".
+                REAP scn4 FROM ffi_struct_cname, sname4.
                 CREATE eargs(LIST) TO plant_list_make(0).
                 REAP stdef FROM struct_typedef, node_el, eargs.
-                SET struct_code TO struct_code + stdef.
+                CREATE sfldsT(LIST) TO struct_fields_at(node_el, eargs).
+                CREATE enT(LIST) TO plant_list_make(0).
+                PUT "scn" INTO enT.
+                PUT scn4 INTO enT.
+                PUT "flds" INTO enT.
+                PUT sfldsT INTO enT.
+                PUT "stdef" INTO enT.
+                PUT stdef INTO enT.
+                PUT enT INTO ffi_tentries.
             /IF.
         /IF.
         SET i TO i + 1.
@@ -2134,11 +2870,193 @@ ACTION generate_c(ast(LIST)),
         REAP iargs FROM parse_type_args, node_el.
         REAP itpl FROM find_struct, structs, ibtrim.
         IF COUNT itpl > 0,
+            REAP scnA FROM ffi_struct_cname, node_el.
             REAP stdef FROM struct_typedef, itpl, iargs.
-            SET struct_code TO struct_code + stdef.
+            CREATE sfldsT(LIST) TO struct_fields_at(itpl, iargs).
+            CREATE enT(LIST) TO plant_list_make(0).
+            PUT "scn" INTO enT.
+            PUT scnA INTO enT.
+            PUT "flds" INTO enT.
+            PUT sfldsT INTO enT.
+            PUT "stdef" INTO enT.
+            PUT stdef INTO enT.
+            PUT enT INTO ffi_tentries.
         /IF.
         SET i TO i + 1.
     /SEASON.
+    REAP ffi_torder FROM ffi_topo_order, ffi_tentries.
+    SET i TO 0.
+    SEASON i < COUNT ffi_torder,
+        REAP node_el FROM plant_list_get, ffi_torder, i.
+        REAP tscnX FROM _map_get, node_el, "scn".
+        SET struct_code TO struct_code + "#define PLANT_STRUCT_" + tscnX + " 1\n".
+        REAP tstdef FROM _map_get, node_el, "stdef".
+        SET struct_code TO struct_code + tstdef.
+        SET i TO i + 1.
+    /SEASON.
+    # FFI-extension prototypes (STRUCT/CALLBACK/void*/varargs sigs) —
+    # the mock defines matching functions; plain externals keep the
+    # hand-written mock_ffi.h prototypes (no duplicates).
+    CREATE ffi_has_cb(NUM) TO 0.
+    CREATE ffi_has_vp(NUM) TO 0.
+    CREATE ffi_has_va(NUM) TO 0.
+    SET i TO 0.
+    SEASON i < COUNT ffi_exts,
+        REAP fex FROM plant_list_get, ffi_exts, i.
+        REAP fnode FROM find_ext_node, ast, fex.
+        IF COUNT fnode > 0,
+            CREATE fpars(LIST) TO _map_get(fnode, "params").
+            CREATE fret2(TX) TO _map_get(fnode, "ret").
+            CREATE fvga(TX) TO _map_get(fnode, "varargs").
+            REAP fretc FROM ffi_ret_ctype, fret2.
+            CREATE fexneed(NUM) TO 0.
+            REAP fkr2 FROM ffi_param_kind, fret2.
+            IF fkr2 IS "plain", SET fexneed TO 0. /IF.
+            IF fkr2 IS "struct_val", SET fexneed TO 1. /IF.
+            IF fkr2 IS "struct_ref", SET fexneed TO 1. /IF.
+            IF fkr2 IS "callback", SET fexneed TO 1. /IF.
+            IF fkr2 IS "voidptr", SET fexneed TO 1. /IF.
+            CREATE fci(NUM) TO 0.
+            CREATE fcel(TX) TO "".
+            SEASON fci < COUNT fpars,
+                REAP fcel FROM plant_list_get, fpars, fci.
+                REAP fcnx FROM _map_get, fcel, "name".
+                REAP fct2 FROM _map_get, fcel, "type".
+                REAP fccx FROM ffi_ctype, fct2.
+                REAP fk9 FROM ffi_param_kind, fct2.
+                IF fk9 IS "callback", SET ffi_has_cb TO 1. /IF.
+                IF fk9 IS "voidptr", SET ffi_has_vp TO 1. /IF.
+                IF fk9 IS "struct_val", SET fexneed TO 1. /IF.
+                IF fk9 IS "struct_ref", SET fexneed TO 1. /IF.
+                IF fk9 IS "callback", SET fexneed TO 1. /IF.
+                IF fk9 IS "voidptr", SET fexneed TO 1. /IF.
+                SET fci TO fci + 1.
+            /SEASON.
+            IF fvga IS "1",
+                SET ffi_has_va TO 1.
+                SET fexneed TO 1.
+            /IF.
+            # Only emit prototypes that mock_ffi.h does NOT already
+            # cover: struct/callback/void*/varargs signatures. Plain
+            # externs keep the hand-written prototypes (their C types
+            # are mock-specific, e.g. `long` for Result<NUM,TX>).
+            IF fexneed IS 1,
+                SET struct_code TO struct_code + fretc + " " + fex + "(".
+                SET fci TO 0.
+                SEASON fci < COUNT fpars,
+                    REAP fcel FROM plant_list_get, fpars, fci.
+                    REAP fcnx FROM _map_get, fcel, "name".
+                    REAP fct2 FROM _map_get, fcel, "type".
+                    REAP fccx FROM ffi_ctype, fct2.
+                    IF fci > 0, SET struct_code TO struct_code + ", ". /IF.
+                    SET struct_code TO struct_code + fccx + " " + fcnx.
+                    SET fci TO fci + 1.
+                /SEASON.
+                IF fvga IS "1",
+                    SET struct_code TO struct_code + ", ...".
+                /IF.
+                SET struct_code TO struct_code + ");\n".
+            /IF.
+        /IF.
+        SET i TO i + 1.
+    /SEASON.
+    IF ffi_has_cb IS 1, SET struct_code TO struct_code + "#define PLANT_FFI_HAS_CALLBACKS 1\n". /IF.
+    IF ffi_has_vp IS 1, SET struct_code TO struct_code + "#define PLANT_FFI_HAS_VOIDPTR 1\n". /IF.
+    IF ffi_has_va IS 1, SET struct_code TO struct_code + "#define PLANT_FFI_HAS_VARARGS 1\n". /IF.
+    SET struct_code TO struct_code + "#endif\n/*__PLANT_TYPES_END__*/\n\n".
+    # FFI conversion helpers for every reachable struct type:
+    # plant_map_to_X / plant_map_to_ref_X / plant_struct_alloc_copy_X /
+    # plant_X_to_map. Emitted in dependency order (topo) so nested
+    # struct fields can reference each other's helpers.
+    CREATE ffi_entries(LIST) TO plant_list_make(0).
+    CREATE ffi_topo(TX) TO "".
+    CREATE enA(LIST) TO plant_list_make(0).
+    SET i TO 0.
+    SEASON i < COUNT ast,
+        REAP node_el FROM plant_list_get, ast, i.
+        REAP ntype FROM _map_get, node_el, "type".
+        IF ntype IS "struct_decl",
+            CREATE sgensQ(LIST) TO _map_get(node_el, "generics").
+            IF COUNT sgensQ IS 0,
+                REAP snameQ FROM _map_get, node_el, "name".
+                CREATE eargsQ(LIST) TO plant_list_make(0).
+                REAP scnA FROM ffi_struct_cname, snameQ.
+                CREATE sfldsA(LIST) TO struct_fields_at(node_el, eargsQ).
+                CREATE enA(LIST) TO plant_list_make(0).
+                PUT "scn" INTO enA.
+                PUT scnA INTO enA.
+                PUT "flds" INTO enA.
+                PUT sfldsA INTO enA.
+                PUT enA INTO ffi_entries.
+            /IF.
+        /IF.
+        SET i TO i + 1.
+    /SEASON.
+    SET i TO 0.
+    SEASON i < COUNT structs_insts,
+        REAP node_el FROM plant_list_get, structs_insts, i.
+        REAP ibase2 FROM base_of, node_el.
+        REAP ibtrim2 FROM trim, ibase2.
+        REAP iargs2 FROM parse_type_args, node_el.
+        REAP itpl2 FROM find_struct, structs, ibtrim2.
+        IF COUNT itpl2 > 0,
+            REAP scnB FROM ffi_struct_cname, node_el.
+            CREATE sfldsB(LIST) TO struct_fields_at(itpl2, iargs2).
+            CREATE enA(LIST) TO plant_list_make(0).
+            PUT "scn" INTO enA.
+            PUT scnB INTO enA.
+            PUT "flds" INTO enA.
+            PUT sfldsB INTO enA.
+            PUT enA INTO ffi_entries.
+        /IF.
+        SET i TO i + 1.
+    /SEASON.
+    REAP ffi_topo FROM ffi_topo_emit_helpers, ffi_entries.
+    # callback wrappers: static tx_t plant_cbw_<name>(long ctx,
+    # tx_t val) { return <name>(...); } for every ACTION passed as a
+    # CALLBACK argument (ABI: ctx is the ensure-token, val the call
+    # value). A 2-param action maps (ctx → p0, val → p1); a 1-param
+    # action gets val; 0 params gets a plain call.
+    CREATE cb_code(TX) TO "".
+    CREATE cbnode(LIST) TO plant_list_make(0).
+    CREATE cbprms(LIST) TO plant_list_make(0).
+    CREATE cbp(TX) TO "".
+    CREATE cbt(TX) TO "".
+    CREATE cbtk(TX) TO "".
+    CREATE cbcn(TX) TO "".
+    CREATE cbak(NUM) TO 0.
+    CREATE cbcast(TX) TO "".
+    SET i TO 0.
+    SEASON i < COUNT cb_acts,
+        REAP cba FROM plant_list_get, cb_acts, i.
+        REAP cbnode FROM find_node, ast, cba.
+        CREATE cbprms(LIST) TO _map_get(cbnode, "params").
+        SET cbcn TO cba + "(".
+        SET cbak TO 0.
+        SEASON cbak < COUNT cbprms,
+            REAP cbp FROM plant_list_get, cbprms, cbak.
+            REAP cbt FROM _map_get, cbp, "type".
+            REAP cbtk FROM ffi_param_kind, cbt.
+            SET cbcast TO "".
+            IF cbtk IS "plain" AND cbt IS "NUM", SET cbcast TO "(long)(intptr_t)". /IF.
+            IF cbtk IS "plain" AND cbt IS "FACT", SET cbcast TO "(int)(intptr_t)". /IF.
+            IF cbak > 0, SET cbcn TO cbcn + ", ". /IF.
+            IF cbak IS 0 AND COUNT cbprms IS 1,
+                SET cbcn TO cbcn + cbcast + "val".
+            /IF.
+            IF cbak IS 0 AND COUNT cbprms IS 2,
+                SET cbcn TO cbcn + cbcast + "ctx".
+            /IF.
+            IF cbak IS 1,
+                SET cbcn TO cbcn + cbcast + "val".
+            /IF.
+            SET cbak TO cbak + 1.
+        /SEASON.
+        SET cbcn TO cbcn + ")".
+        SET cb_code TO cb_code + "static tx_t plant_cbw_" + cba + "(long ctx, tx_t val) { return " + cbcn + "; }\n".
+        SET i TO i + 1.
+    /SEASON.
+    IF COUNT cb_acts > 0, SET cb_code TO cb_code + "\n". /IF.
     # pass 1: forward declarations for every non-generic action_decl +
     # every monomorphized instantiation
     SET i TO 0.
@@ -2157,7 +3075,7 @@ ACTION generate_c(ast(LIST)),
                     REAP param_el FROM plant_list_get, params3, pi.
                     REAP pname FROM _map_get, param_el, "name".
                     REAP ptype FROM _map_get, param_el, "type".
-                    REAP ctype FROM plant_ctype, ptype.
+                    REAP ctype FROM ffi_ctype, ptype.
                     IF pi > 0, SET paramstr TO paramstr + ", ". /IF.
                     SET paramstr TO paramstr + ctype + " " + pname.
                     SET pi TO pi + 1.
@@ -2234,18 +3152,18 @@ ACTION generate_c(ast(LIST)),
                     REAP node_el2 FROM map_add, node_el, "drain_after", "1".
                 /IF.
                 REAP cmact FROM _cl_map_get, clmaps, aname.
-                REAP nd_code FROM generate_node, node_el2, 0, sigs, esub, cmact, "", plant_list_make(0).
+                REAP nd_code FROM generate_node, node_el2, 0, sigs, esub, cmact, "", plant_list_make(0), plant_list_make(0).
                 SET decl_code TO decl_code + nd_code.
                 SET has_decl TO 1.
             /IF.
         /IF.
         IF ntype IS "enum_decl",
-            REAP nd_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0).
+            REAP nd_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0).
             SET decl_code TO decl_code + nd_code.
             SET has_decl TO 1.
         /IF.
         IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl",
-            REAP ns_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0).
+            REAP ns_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0).
             SET stmt_code TO stmt_code + ns_code.
             SET has_stmt TO 1.
         /IF.
@@ -2263,7 +3181,7 @@ ACTION generate_c(ast(LIST)),
     IF has_stmt,
         SET stmt_code TO "int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n" + dcode + stmt_code + "  plant_async_drain();\n  return 0;\n}\n".
     /IF.
-    GIVE header + struct_code + cltype_code + pro_code + clfwd_code + "\n" + cldef_code + "\n" + decl_code + stmt_code.
+    GIVE header + struct_code + ffi_topo + cltype_code + pro_code + cb_code + clfwd_code + "\n" + cldef_code + "\n" + decl_code + stmt_code.
 /ACTION.
 
 # ═══════════════════════════════════════════════════════════════
@@ -2642,12 +3560,12 @@ ACTION _cl_emit_fn(cnode(LIST), sigs(LIST), subst(LIST)),
         REAP se5 FROM plant_list_get, shads, si5.
         REAP sm5 FROM _map_get, se5, "mode".
         REAP sct5 FROM _map_get, se5, "ctype".
-        REAP sname5 FROM _map_get, se5, "name".
+        REAP snameQ FROM _map_get, se5, "name".
         IF str_eq(sm5, "MOVE") IS "1",
-            SET fnc TO fnc + "  " + sct5 + " " + sname5 + " = ((" + envn2 + "*)env)->" + sname5 + ";\n".
+            SET fnc TO fnc + "  " + sct5 + " " + snameQ + " = ((" + envn2 + "*)env)->" + snameQ + ";\n".
         /IF.
         IF str_eq(sm5, "REF") IS "1",
-            SET fnc TO fnc + "  " + sct5 + " " + sname5 + " = *(( " + sct5 + "*)((" + envn2 + "*)env)->" + sname5 + ");\n".
+            SET fnc TO fnc + "  " + sct5 + " " + snameQ + " = *(( " + sct5 + "*)((" + envn2 + "*)env)->" + snameQ + ");\n".
         /IF.
         SET si5 TO si5 + 1.
     /SEASON.
@@ -2661,6 +3579,7 @@ ACTION _cl_emit_fn(cnode(LIST), sigs(LIST), subst(LIST)),
     IF str_eq(bk, "block") IS "1",
         REAP bb FROM _map_get, cnode, "body".
         CREATE nums_c(LIST) TO collect_nums_cb(bb, params, shads, subst).
+        CREATE stvars_c(LIST) TO collect_stvars_walk(bb, subst, plant_list_make(0)).
         CREATE cbpars(LIST) TO params.
         CREATE si6(NUM) TO 0.
         CREATE se6(TX) TO "".
@@ -2677,7 +3596,7 @@ ACTION _cl_emit_fn(cnode(LIST), sigs(LIST), subst(LIST)),
             SET fnc TO fnc + "  tx_t " + dv6 + " = \"\";\n".
             SET di6 TO di6 + 1.
         /SEASON.
-        REAP bc3 FROM generate_body, bb, 1, sigs, subst, cm2, "", nums_c.
+        REAP bc3 FROM generate_body, bb, 1, sigs, subst, cm2, "", nums_c, stvars_c.
         SET fnc TO fnc + bc3 + "".
     /IF.
     SET fnc TO fnc + "\}\n".

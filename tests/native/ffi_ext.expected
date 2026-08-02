@@ -1,0 +1,10 @@
+point_sumv: 7
+scale_ref: 30
+get_point x: 7 y: 9
+wrap_sumv: 14
+buf_len: 4
+vprintf: n=42 s=hi
+run_cb: 43
+cb_demo got 7
+cb_demo via ensure: 8
+l4 deep(guard): 0

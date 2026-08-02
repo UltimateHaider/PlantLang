@@ -1,5 +1,47 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.4 — 2026 (FFI Extensions — Full Signature Space)
+
+### New Features
+- **FFI-extension codegen** — `-> external` declarations now emit correct,
+  compilable C for every signature shape: struct-by-value parameters
+  (`STRUCT X`) convert call-site maps via `plant_map_to_X`; `REF STRUCT`
+  params pass `plant_map_to_ref_X` (heap copy); struct-valued returns come
+  back as maps (`plant_plant_X_to_map(...)`); `void*` params/returns pass
+  through untouched; varargs externals (`..., ...`) forward `tx_t` args with
+  string detection; `CALLBACK` params bind PlantLang actions through
+  `plant_cb_ensure(tag, plant_cbw_<name>)` with auto-generated adapters
+  (`plant_cbw_<name>`) that handle 2-param, 1-param and 0-param action
+  arities and NUM/FACT `(intptr_t)` casts
+- **Struct conversion helpers** — `plant_map_to_X` / `plant_map_to_ref_X` /
+  `plant_struct_alloc_copy_X` / `plant_X_to_map` are emitted for every
+  reachable struct (including generic instantiations) in topological
+  dependency order (`ffi_topo_order` / `ffi_topo_emit_helpers`), so nested
+  struct fields reference each other's helpers; a depth guard
+  (`depth > 3`) protects against cyclic struct conversions
+- **Types header block** — generated C carries a
+  `/*__PLANT_TYPES_BEGIN__*/ … /*__PLANT_TYPES_END__*/` block (guarded by
+  `PLANT_TYPES_INCLUDED`) containing struct typedefs plus FFI-extension
+  prototypes; the native harness extracts it with `sed '1d;$d'` and
+  force-includes it next to the mock, so plain externals keep the
+  hand-written `mock_ffi.h` prototypes (mock-specific C types like
+  `long` for `Result<NUM,TX>` stay authoritative)
+- **Bare call statements** — `plant_map_set(p, "x", 3).` as a statement
+  (previously unrecognized and silently dropped) now parses via
+  `parse_call_stmt` and routes through the generic `reap_stmt` codegen
+  (`target="_"`), including generic `[T]` calls, closure args and string
+  escaping
+
+### Verification
+- Native suite extended with `tests/native/ffi_ext.plant` covering
+  struct-by-value/ref params, struct returns, `void*`, varargs, CALLBACK
+  adapters (`plant_cb_ensure` + `plant_cbw_`), nested struct maps and bare
+  `call_stmt` — suite green **19/19** with both `build/plantc_v2` and the
+  final self-hosted `bin/Chloroplast`
+- Full self-hosting chain converged (`make self`: v3 = v4 = v5,
+  217217 bytes); ASAN-clean runs of the extension scenarios (only benign
+  runtime arena leaks)
+
 ## v0.48.3a — 2026 (Post-Async Polish — Auto Concat & Async Drain)
 
 ### New Features
