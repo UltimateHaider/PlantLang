@@ -3410,3 +3410,159 @@ statements), `invoke` (invocation from SEASON/IF bodies). `.grep` files
 check the emitted C structurally (`typedef struct { long cap; } plant_Env_…;`,
 `plant_env_alloc(sizeof`, `&y`, `*)env)->`). Full suite: native 18/18,
 generics 7/7, closures 6/6; self-hosting converges with the engine active.
+
+## 33. Async Engine — Cooperative Tasks & AWAIT (v0.48.3)
+
+Async actions lower to **single-threaded cooperative state machines**. No
+threads, no locks: the runtime keeps a task registry and a ready queue, and
+a `plant_async_drain()` loop steps tasks to completion.
+
+### 33.1 Lowering
+
+`ASYNC ACTION name(params)` produces three C artifacts:
+
+```plant
+ASYNC ACTION phase2(tag(TX)),
+  GIVE "p2-" + tag.
+/ACTION.
+
+ASYNC ACTION worker(tag(TX), n(NUM)),
+  CREATE i(NUM) TO 0.
+  CREATE sum(NUM) TO 0.
+  SEASON i < n,
+    SET sum TO sum + i.
+    SET i TO i + 1.
+  /SEASON.
+  AWAIT phase2, tag.
+  GIVE sum.
+/ACTION.
+```
+
+```c
+typedef struct {
+  long __pc;            /* resume point */
+  long __parent, __ctx;
+  tx_t tag; long n;     /* params + async vars hoisted to state */
+  long i, sum;
+} plant_a_worker_state;
+
+tx_t worker(tx_t __parent, tx_t __ctx, tx_t tag, long n) {
+  plant_a_worker_state* s = plant_async_alloc_state(sizeof(*s), "worker");
+  s->tag = tag; s->n = n;
+  return plant_async_register((tx_t)s, plant_a_worker_step, __parent, __ctx, …);
+}
+
+static int plant_a_worker_step(tx_t st) {
+  … tx_t tag = s->tag; … long sum = s->sum;   /* locals reloaded from state */
+  switch (s->__pc) { case 0: goto L0; case 1: goto L1; }
+L0: i = 0; sum = 0;
+  while (i < n) { sum = sum+i; i = i+1; }
+  s->i = i; s->sum = sum; s->__pc = 1;         /* checkpoint */
+  plant_async_suspend(st, phase2(st, 0, tag)); /* run child; resume when done */
+  return 0;
+L1: while (i < n) { sum = sum+i; i = i+1; }
+  plant_async_finish(st, sum); return 1;
+}
+```
+
+The `switch`/`goto` resume protocol restores the exact suspension point;
+variables alive across an `AWAIT` are hoisted into the state struct
+(`async_var_add` / `async_walk_decl`). A child action is *spawned* simply by
+calling its entry wrapper — it registers itself on the ready queue.
+
+### 33.2 Statements
+
+- `AWAIT child, args.` — suspend the current task; the runtime resumes it
+  when the child finishes (`plant_async_finish` → `plant_async_await_result`)
+- `START child, args.` — spawn without waiting (fire-and-forget)
+- `ASYNC IN … ` — block form declaring and starting async tasks
+- `GIVE v.` — finish the task and transfer `v` as the result
+
+### 33.3 Runtime
+
+`plant_runtime.c` adds a ~760-line async engine: task ids and a task list,
+ready queue, priority/deadline/timeout fields (inherited from parent and
+active context `plant_actx`/`g_dctx`), timers, `plant_ms()`/`plant_msleep()`,
+metrics sampling, and a spawn/completion trace enabled with
+`PLANT_TRACE=1` (lines `S,…` spawn, `C,…` complete) or written to
+`PLANT_TRACE_FILE`.
+
+### 33.4 Verification
+
+`perf_async` spawns 20 workers that each run a numeric loop, `AWAIT` a
+chained async `phase2`, then run a second loop and `GIVE` their sum. With
+`PLANT_TRACE=1` the trace shows all 20 `S` spawns, all 20 `phase2` `C`s and
+all 20 worker `C`s during `plant_async_drain()`.
+
+## 34. Auto Concat & Async Drain (v0.48.3a)
+
+### 34.1 `+` classification
+
+The codegen (`_handle_cat`) classifies every top-level `+` expression by
+scanning it outside string literals at paren depth 0:
+
+- **no ` + ` segments** — return the expression unchanged (single operand)
+- **no string, has digit** — v0.48.3 behavior preserved: strip spaces
+  (`sum + i` → `sum+i`, `parse_type_args(bi + 1)` etc. stay arithmetic)
+- **no string, no digit** — if every segment is numeric per
+  `seg_is_numeric` (NUM/FACT vars in scope, `strlen(`/`plant_array_length(`/
+  `_to_long(` prefixes, digits, operators `+-*/%^<>=!&|()`) → strip spaces;
+  otherwise fall through to concat
+- **any string** — string concat: each numeric segment is wrapped with
+  `_from_long(…)`, e.g. `"v: " + i + "!"` →
+  `_cat(_cat("v: ", _from_long(i)), "!")`
+
+The numeric-identifier set (`nums`) is computed per function: params whose
+`type_base` is NUM/FACT, `CREATE`/`LET` targets (through generics `subst`),
+async state fields (`nums_from_avars`, ctype `long`/`int`), and closure
+captures (`collect_nums_cb`, including MOVE/REF shadows). It is threaded
+through `generate_body`/`generate_node`/`async_argstr`/`async_emit_step`/
+`emit_inst`/`_cl_emit_fn` so every `+` in every context — sync bodies, async
+step bodies, closure bodies, generic instantiations — is classified
+identically.
+
+### 34.2 Async drain
+
+`generate_c` computes `async_reachable(ast)` — a BFS from `main` over
+declared action names, following `REAP`/`START`/`AWAIT` action fields and
+`START`-values inside set/create/let/give/show/put/cancel/trace/config
+statements, recursing into IF/SEASON/CYCLE/MATCH bodies. If `main` (non-async)
+can reach any async action, the generated `main` appends
+`plant_async_drain();` before its fallback return — but only when the body
+does not end in an explicit `GIVE` (drain would be unreachable there).
+
+```plant
+ACTION main(),
+  CREATE i(NUM) TO 0.
+  SEASON i < 20, START worker, "w" + i, 1000. SET i TO i + 1. /SEASON.
+/ACTION.
+```
+
+```c
+tx_t main() {
+  long i = 0;
+  while (i < 20) { worker(0, 0, "w" + i, 1000); i = i+1; }
+  plant_async_drain();     /* ← injected: every worker runs to completion */
+  return main;
+}
+```
+
+### 34.3 Perf suite
+
+`make perf` runs `tests/perf/run_perf.sh`: compiles each `tests/perf/*.plant`
+with `bin/Chloroplast`, builds with `gcc -O2`, runs 3 times per benchmark
+(real ms via `date +%s%N`, peak RSS polled from `/proc/PID/status` VmHWM,
+CPU ticks from `/proc/PID/stat`) and writes `perf_results.md` with toolchain
+versions. Benchmarks: `perf_concat` (5k `"k" + i + ";"` appends),
+`perf_async` (20 workers × 2 loops of 1000 around a chained `AWAIT`),
+`perf_mixed` (10 workers concatenating inside async step bodies).
+
+### 34.4 Verification
+
+`tests/native/concat.plant` regression (18/18 native): bare numeric concat
+(`"x=" + x`), multi-segment mixes (`"multi " + msg + " " + x + "!"`),
+parenthesized numeric sub-expressions (`"expr " + (x + 1)`), `LEN` results,
+and numeric-only guards (`7 + 2`, `x + 3` stay arithmetic — verified via
+`"" + k`). Drain scenarios verified: direct `START`, transitive helper,
+`START`-in-expression, `ASYNC IN`, negative no-async case. Full suite:
+native 18/18, generics 7/7, closures 6/6; self-hosting converges.

@@ -1,6 +1,72 @@
 # Changelog — PlantLang / Chloroplast
 
-## v0.48.2 — 2026 (Closures Engine — Env Structs & Native Functions)
+## v0.48.3a — 2026 (Post-Async Polish — Auto Concat & Async Drain)
+
+### New Features
+- **Automatic string + number concat (v0.48.3a)** — `"x=" + i` where `i` is a
+  NUM/FACT variable now compiles to a string concatenation
+  (`_cat("x=", _from_long(i))`) instead of breaking `+` arithmetic. The codegen
+  tracks every numeric variable in scope (params, creates/lets, async state
+  fields, closure captures) via `collect_nums`/`nums_from_avars`/
+  `collect_nums_cb` and classifies each `+` expression: pure-numeric
+  expressions (e.g. `sum + i`, `7 + 2`) stay plain C arithmetic, while
+  string mixes (e.g. `"v: " + i + "!"`, `"len " + LEN(msg)`) wrap numeric
+  segments with `_from_long` per segment — including numeric calls
+  (`LEN`→`strlen`, `COUNT`→`plant_array_length`, `_to_long`) and parenthesized
+  sub-expressions `(x + 1)`
+- **Async drain for top-level `main`** — when `ACTION main` spawns async work
+  (`START`, `AWAIT`, `ASYNC IN`) anywhere in its call graph, the generated
+  `main` ends with `plant_async_drain();` so all workers run to completion
+  before the program exits. The compiler computes `async_reachable(ast)` —
+  a BFS over `main`'s callees (through `REAP`/`START`/`AWAIT` action names
+  and `START`-values inside set/create/let/give/show/put/cancel/trace/config
+  statements, recursing into IF/SEASON/CYCLE/MATCH bodies). Actions that
+  finish with an explicit `GIVE` skip the drain (unreachable by design)
+- **Perf suite** — `make perf` compiles and runs `tests/perf/` benchmarks
+  (`perf_concat` string building, `perf_async` 20 cooperative workers with
+  chained `AWAIT`, `perf_mixed` concat-in-async) and auto-writes
+  `perf_results.md` with real time, peak RSS and CPU ticks
+
+### Verification
+- Native suite extended: `tests/native/concat.plant` now covers bare-numeric
+  concat, multi-segment mixes, numeric sub-expressions, `LEN` results and
+  numeric-only arithmetic guards — **18/18**
+- Full suite green: native **18/18**, generics **7/7**, closures **6/6**
+- Drain verified for: direct `START`, transitive (helper action calling
+  `START`), `START`-in-expression, `ASYNC IN`, and negative (no-async)
+  cases; `perf_async` trace (`PLANT_TRACE=1`) shows all 20 workers spawn,
+  suspend on `AWAIT phase2`, resume and complete during `plant_async_drain()`
+- ASAN-clean crash-fixing cycle: `collect_nums_cb` expr-body overflow and
+  the `strlen(`-prefix off-by-one in `seg_is_numeric` both fixed under ASAN
+
+## v0.48.3 — 2026 (Async Engine — Cooperative Tasks & AWAIT)
+
+### New Features
+- **`ASYNC ACTION`** — cooperative concurrency: every async action lowers to a
+  C state machine (state struct, `plant_async_register` entry wrapper, step
+  function with a `switch (s->__pc)`/label resume protocol) with **zero**
+  thread usage — single-threaded cooperative scheduling in the native runtime
+- **`AWAIT child, args.`** — suspends the current task and resumes it when
+  the awaited task finishes (`plant_async_suspend` /
+  `plant_async_await_result`); results transfer via the task's `res` slot
+- **`START worker, args.`** — spawns a task without waiting (fire-and-forget)
+- **`ASYNC IN` context** — declare and start async tasks from a block form
+- **Async engine runtime** (`plant_runtime.c`, +~760 lines) — task registry
+  with ids, ready queue, priorities/deadlines/timeouts with inheritance,
+  active contexts (`plant_actx`/`g_dctx`), timers, `plant_ms()`/`plant_msleep`,
+  metrics sampling, and a `PLANT_TRACE=1` spawn/completion trace for
+  verification and debugging
+- **Async vars** — local state is hoisted into the state struct (`async_var_add`
+  /`async_walk_decl`), including variables captured across `AWAIT` points
+
+### Verification
+- Self-hosting chain still converges byte-identically with the async engine
+  active (v3 ≡ v4 ≡ v5)
+- Full test suite green with the async engine shipped (native/generics/
+  closures suites unchanged and passing)
+- Trace-verified scenarios: 20-worker fan-out with chained `AWAIT`,
+  suspension/resume across phases, task completion accounting
+
 
 ### New Features
 - **Closures** — `CREATE f TO [MOVE x, REF y](v(NUM)) -> v + x + y.` declares
@@ -54,6 +120,35 @@
   terminator); `_handle_cat`'s numeric-literal detection was fixed
   (`find_any` instead of pointer-range compares) — both fix latent bugs
   exposed by closure block bodies
+
+## v0.48.2 — 2026 (Closures Engine — Env Structs & Native Functions)
+
+### New Features
+- **Closures** — `CREATE f TO [MOVE x, REF y](v(NUM)) -> v + x + y.` declares
+  an anonymous function with an explicit capture list; `MOVE` copies the
+  variable's value into the closure's private environment, `REF` borrows a
+  pointer to the outer variable
+- **Env structs** — every closure lowers to a concrete C struct
+  (`typedef struct { … } plant_Env_N;`), heap-allocated at the create site
+  (`plant_env_alloc`), plus a plain native function
+  `tx_t plant_Closure_N_fn(tx_t env, …)` — zero runtime dispatch, no
+  closures-in-tables, no allocation in the hot path
+- **Invocation** — `REAP r FROM f, args.` resolves closure variables defined
+  in the same ACTION scope and emits `plant_Closure_N_fn((tx_t)f, …)`;
+  invocable from nested `IF`/`SEASON`/`CYCLE` bodies
+- **Block-form bodies** — `-> ( stmts )` runs full statements (CREATE/SHOW/
+  SET/REAP/…), including closures nested inside closures
+- **MOVE semantics** — the outer variable is cleared (`= 0`) at create time
+  (consumed), while the closure keeps its own private, mutable copy across
+  invocations; `REF` semantics — mutations to the outer variable after
+  creation are visible inside the closure (pointer tracking)
+- **Mixed/string captures** — NUM/FACT/LIST/TX captures all supported;
+  string closures `-> "s:" + s + ":" + …` work out of the box
+- **Closure test suite** — `tests/closures/` (6 cases): MOVE value capture +
+  state persistence + outer-var clearing, REF pointer tracking, mixed
+  multi-capture closures, nested closures, block-form bodies, invocation
+  from SEASON/IF bodies — plus `.grep` structural checks on the emitted C
+  (env typedefs, `plant_env_alloc`, capture assignment, `&y` borrows)
 
 ## v0.48.1 — 2026 (Generics Engine — Monomorphization & Name Mangling)
 

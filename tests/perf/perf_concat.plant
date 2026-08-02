@@ -1,0 +1,11 @@
+# perf_concat — 5k iterations of "text" + number concatenation
+# Exercises _cat/_from_long codegen (v0.48.3a auto string+num concat).
+ACTION main(),
+  CREATE i(NUM) TO 0.
+  CREATE acc(TX) TO "".
+  SEASON i < 5000,
+    SET acc TO acc + "n" + i + ".".
+    SET i TO i + 1.
+  /SEASON.
+  SHOW "concat-len " + LEN(acc).
+/ACTION.

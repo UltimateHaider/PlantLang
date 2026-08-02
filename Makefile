@@ -5,6 +5,7 @@
 #   make            build the native compiler (bin/Chloroplast)
 #   make self       full multi-generation self-hosting chain + convergence check
 #   make test       native integration test suite (compile+run+compare)
+#   make perf       compile + run benchmarks, write perf_results.md
 #   make fmt        format generated C with clang-format (skips if missing)
 #   make lint       static-analyze generated C with cppcheck (skips if missing)
 #   make dist       versioned tarball + unpack/build/test validation
@@ -13,7 +14,7 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.48.2
+VERSION    ?= 0.48.3a
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
@@ -96,6 +97,9 @@ test: $(NATIVE_BIN) ## Run native + generics + closures integration test suites
 	@sh tests/native/run_native_tests.sh $(NATIVE_BIN)
 	@sh tests/generics/run_generics_tests.sh $(NATIVE_BIN)
 	@sh tests/closures/run_closures_tests.sh $(NATIVE_BIN)
+
+perf: $(NATIVE_BIN) ## Compile + run benchmarks, write perf_results.md
+	@sh tests/perf/run_perf.sh $(NATIVE_BIN)
 
 # ── fmt / lint: gracefully skip when tools are missing ────────
 fmt: ## Format generated C with clang-format (skips if missing)

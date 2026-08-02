@@ -1,6 +1,6 @@
 # PlantLang — Chloroplast
 
-**Pure Native 🚀** · Self-Hosting Compiler & Build System · v0.48.2
+**Pure Native 🚀** · Self-Hosting Compiler & Build System · v0.48.3a
 
 **Chloroplast** is the official PlantLang compiler: a 100% pure native, self-hosted
 toolchain that compiles PlantLang source to C and links it against a lightweight C
@@ -61,6 +61,21 @@ picking between readable and fast. PlantLang refuses the tradeoff:
   (`plant_Closure_N_fn`) — `MOVE` copies values (outer var cleared), `REF`
   tracks variables live via `&var`; block-form bodies (`-> ( … )`) support
   full statements, nested closures, and invocation from SEASON/IF bodies
+- **Async engine (v0.48.3)** — `ASYNC ACTION` + `AWAIT` / `START` for
+  cooperative concurrency: async actions lower to single-threaded C state
+  machines (no threads, no locks) with suspension/resume across awaits,
+  priorities, deadlines and a `PLANT_TRACE=1` verification trace
+- **Async drain (v0.48.3a)** — a top-level `ACTION main` that spawns async
+  work (directly or through helpers) automatically ends with
+  `plant_async_drain()` so every worker completes before the program exits
+- **Automatic string+number concat (v0.48.3a)** — `"x=" + i` with a NUM
+  variable now concatenates correctly (`_cat("x=", _from_long(i))`), while
+  pure-numeric expressions like `sum + i` stay plain C arithmetic; works in
+  async state fields, closure captures, and with `LEN(...)`/`COUNT(...)`
+  results
+- **Perf suite (v0.48.3a)** — `make perf` compiles `tests/perf/` benchmarks
+  (concat, 20-worker async, mixed) and writes `perf_results.md` with real
+  time, peak RSS and CPU ticks
 - **Self-hosting** — the entire compiler pipeline (lexer, parser, C codegen,
   CLI) is written in PlantLang under `src/plantc/`
 
@@ -168,7 +183,7 @@ no GC, no manual free.
 | [TECHNICAL.md](TECHNICAL.md) | Deep technical details: architecture, codegen, memory model, systems |
 | [ROADMAP.md](ROADMAP.md) | Completed milestones + future plans (v0.47.0 → v1.0.0) |
 | [docs/BUILD.md](docs/BUILD.md) | Build system reference: targets, packaging, install |
-| [CHANGELOG.md](CHANGELOG.md) | Full version history through v0.48.2 |
+| [CHANGELOG.md](CHANGELOG.md) | Full version history through v0.48.3a |
 | [PHASE4_COMPLETED.md](PHASE4_COMPLETED.md) | Pure Native transition record (plantc → Chloroplast) |
 
 ---
