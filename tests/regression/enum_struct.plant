@@ -1,0 +1,14 @@
+# enum_struct — STRUCT containing an ENUM field: by-value struct
+# returns marshal the enum member through the map helpers and the
+# field read displays as the member name (v0.48.10).
+ENUM Color { RED, GREEN, BLUE }.
+
+STRUCT Ball { weight: NUM, color: Color }
+ACTION ffi_get_ball() -> STRUCT Ball.
+
+ACTION main(),
+  REAP b FROM ffi_get_ball.
+  SHOW "w=" + _from_long(plant_map_get(b, "weight")).
+  SHOW plant_map_get(b, "color").
+  GIVE 0.
+/ACTION.

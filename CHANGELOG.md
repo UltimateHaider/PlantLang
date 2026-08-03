@@ -1,5 +1,27 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.10 — 2026 (ENUM Structs)
+
+### New Features
+- **ENUM in STRUCT fields** — enum field values inside STRUCT instances now
+  display correctly through `SHOW` and string concatenation. `build_enum_registry`
+  emits `STRUCT.<Name>` entries (raw `name:type` field CSV) for every struct
+  declaration, and a new `add_struct_enum_keys` resolves the struct template
+  (with generic arguments via `build_subst`/`parse_type_args`) and registers
+  each enum-typed field read (`plant_map_get ( var , "field" )`) in the per-action
+  enum table. `collect_enums`/`collect_enums_walk` also resolve REAP targets
+  against action signatures (`find_ret`), covering struct-typed parameters,
+  reap targets, and generic struct instances (e.g. `Box[Color]`).
+- **ENUM structs in CLOSUREs** — `_cl_scopes` now threads action signatures
+  (`sigs`) so a REAP target captured by a closure records its PlantLang type
+  (`#t` twin key, resolved via `find_ret`), letting `_cl_stamp_cnode` set the
+  shadow `ptype` and `_cl_emit_fn` build the closure's enum table from struct
+  field reads inside the closure body.
+- **ENUM typedefs in types block** — enum typedefs are now emitted inside the
+  `/*__PLANT_TYPES_BEGIN__*/` types block (before `PLANT_STRUCT_` defines),
+  so FFI mock code and struct marshallers can reference enum members; the
+  dedicated `enum_code` hoisting block was removed.
+
 ## v0.48.9 — 2026 (ENUM Closures)
 
 ### New Features

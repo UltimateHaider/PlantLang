@@ -152,6 +152,30 @@ plant_Point ffi_get_point(void) {
 
 #endif /* PLANT_STRUCT_plant_Point */
 
+#ifdef PLANT_STRUCT_plant_Ball
+
+plant_Ball ffi_get_ball(void) {
+    plant_Ball p;
+    memset(&p, 0, sizeof(p));
+    p.weight = 5;
+    p.color = GREEN;
+    return p;
+}
+
+#endif /* PLANT_STRUCT_plant_Ball */
+
+#ifdef PLANT_STRUCT_plant_Game
+
+plant_Game ffi_get_game(void) {
+    plant_Game g;
+    memset(&g, 0, sizeof(g));
+    g.state = DONE;
+    g.color = BLUE;
+    return g;
+}
+
+#endif /* PLANT_STRUCT_plant_Game */
+
 #ifdef PLANT_STRUCT_plant_WrapV
 
 tx_t ffi_wrap_sumv(plant_WrapV w) {

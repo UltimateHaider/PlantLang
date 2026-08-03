@@ -1,0 +1,22 @@
+# enum_struct_show — direct SHOW of ENUM field values from struct
+# instances, including through a struct-typed action parameter (v0.48.10).
+ENUM Color { RED, GREEN, BLUE }.
+ENUM State { IDLE, RUN, DONE }.
+
+STRUCT Ball { weight: NUM, color: Color }
+STRUCT Game { state: State, color: Color }
+ACTION ffi_get_ball() -> STRUCT Ball.
+ACTION ffi_get_game() -> STRUCT Game.
+
+ACTION peek(p(Game)),
+  SHOW plant_map_get(p, "state").
+  SHOW plant_map_get(p, "color").
+/ACTION.
+
+ACTION main(),
+  REAP b FROM ffi_get_ball.
+  SHOW plant_map_get(b, "color").
+  REAP g FROM ffi_get_game.
+  REAP r FROM peek, g.
+  GIVE 0.
+/ACTION.

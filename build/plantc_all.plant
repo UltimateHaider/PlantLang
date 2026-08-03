@@ -2208,7 +2208,92 @@ ACTION build_enum_registry(ast(LIST)),
     /IF.
     SET ei TO ei + 1.
   /SEASON.
+  # struct entries: "STRUCT.<Name>" → "gensCsv;fieldCsv" (raw field
+  # types, generics comma-joined, fields "name:type" comma-joined).
+  # collect_enums uses them to register enum field reads of
+  # struct-typed vars as plant_map_get(var, "field") keys (v0.48.10).
+  CREATE si(NUM) TO 0.
+  CREATE sn(TX) TO "".
+  CREATE sty(TX) TO "".
+  SEASON si < COUNT ast,
+    REAP sn FROM plant_list_get, ast, si.
+    REAP sty FROM _map_get, sn, "type".
+    IF sty IS "struct_decl",
+      REAP sname2 FROM _map_get, sn, "name".
+      CREATE gslst(LIST) TO _map_get(sn, "generics").
+      CREATE fslst(LIST) TO _map_get(sn, "fields").
+      CREATE gcsv(TX) TO "".
+      CREATE gidx(NUM) TO 0.
+      SEASON gidx < COUNT gslst,
+        IF gidx > 0, SET gcsv TO gcsv + ",". /IF.
+        SET gcsv TO gcsv + plant_list_get(gslst, gidx).
+        SET gidx TO gidx + 1.
+      /SEASON.
+      CREATE fcsv(TX) TO "".
+      CREATE fidx(NUM) TO 0.
+      CREATE fel3(TX) TO "".
+      SEASON fidx < COUNT fslst,
+        REAP fel3 FROM plant_list_get, fslst, fidx.
+        IF fidx > 0, SET fcsv TO fcsv + ",". /IF.
+        SET fcsv TO fcsv + _map_get(fel3, "name") + ":" + _map_get(fel3, "type").
+        SET fidx TO fidx + 1.
+      /SEASON.
+      CREATE srekey(TX) TO "STRUCT." + sname2.
+      CREATE sreval(TX) TO gcsv + ";" + fcsv.
+      PUT srekey INTO reg.
+      PUT sreval INTO reg.
+    /IF.
+    SET si TO si + 1.
+  /SEASON.
   GIVE reg.
+/ACTION.
+
+# add_struct_enum_keys — for a struct-typed variable, register the
+# enum field reads plant_map_get(var, "field") into the flat table
+# res (keyed by the canonical token-joined expression form emitted
+# by translate_expr). vtype is the (subst'd) declared type; enum
+# fields of generic structs resolve through their type args.
+ACTION add_struct_enum_keys(reg(LIST), vtype(TX), vname(TX), res(LIST)),
+  CREATE vty2(TX) TO vtype.
+  REAP rp0 FROM substring, vty2, 0, 4.
+  IF rp0 IS "REF ", SET vty2 TO substring(vty2, 4, LEN(vty2)). /IF.
+  REAP rp1 FROM substring, vty2, 0, 7.
+  IF rp1 IS "STRUCT ", SET vty2 TO substring(vty2, 7, LEN(vty2)). /IF.
+  REAP wbase2 FROM type_base, vty2.
+  CREATE srlk(TX) TO "STRUCT." + wbase2.
+  REAP raw2 FROM _cl_map_get, reg, srlk.
+  IF raw2 IS "", GIVE res. /IF.
+  REAP halves FROM strings:SPLIT, raw2, ";".
+  CREATE gens2(LIST) TO plant_list_make(0).
+  CREATE flds2(LIST) TO plant_list_make(0).
+  IF COUNT halves > 0, REAP gens2 FROM strings:SPLIT, halves[0], ",". /IF.
+  IF COUNT halves > 1, REAP flds2 FROM strings:SPLIT, halves[1], ",". /IF.
+  REAP args2 FROM parse_type_args, vtype.
+  CREATE fsub2(LIST) TO build_subst(gens2, args2).
+  CREATE fi2(NUM) TO 0.
+  CREATE fe2(TX) TO "".
+  CREATE fnm2(TX) TO "".
+  CREATE fty2(TX) TO "".
+  SEASON fi2 < COUNT flds2,
+    REAP fe2 FROM plant_list_get, flds2, fi2.
+    REAP colon2 FROM find_any, fe2, ":".
+    IF colon2 ISNT -1,
+      REAP fnm2 FROM substring, fe2, 0, colon2.
+      REAP fty2 FROM substring, fe2, colon2 + 1, LEN(fe2).
+      REAP fty2 FROM subst_type, fty2, fsub2.
+      REAP fcsv2 FROM enum_members_of, reg, fty2.
+      IF fcsv2 ISNT "",
+        CREATE ekey2(TX) TO "plant_map_get ( " + vname + " , \"" + fnm2 + "\" )".
+        REAP ef2 FROM list_contains, res, ekey2.
+        IF ef2 IS 0,
+          PUT ekey2 INTO res.
+          PUT fcsv2 INTO res.
+        /IF.
+      /IF.
+    /IF.
+    SET fi2 TO fi2 + 1.
+  /SEASON.
+  GIVE res.
 /ACTION.
 
 # enum_members_of — membersCsv for a type in a flat registry, or ""
@@ -2228,8 +2313,10 @@ ACTION enum_members_of(reg(LIST), ty(TX)),
 
 # collect_enums_walk — add enum-typed CREATE/LET targets (as
 # [name, membersCsv] pairs) from a body, recursing IF/SEASON/CYCLE/
-# MATCH bodies, into the flat table res.
-ACTION collect_enums_walk(bd, subst, reg, res),
+# MATCH bodies, into the flat table res. REAP targets inherit the
+# callee's return type from sigs so struct-returning calls register
+# their enum field reads too (v0.48.10).
+ACTION collect_enums_walk(bd, subst, reg, sigs, res),
   CREATE wi(NUM) TO 0.
   CREATE wnd(TX) TO "".
   CREATE wty(TX) TO "".
@@ -2252,10 +2339,24 @@ ACTION collect_enums_walk(bd, subst, reg, res),
           PUT wms INTO res.
         /IF.
       /IF.
+      IF wms IS "",
+        REAP wrf FROM add_struct_enum_keys, reg, wbs, wtg, res.
+      /IF.
+    /IF.
+    IF wty IS "reap_stmt",
+      REAP wtg FROM _map_get, wnd, "target".
+      IF wtg ISNT "_" AND wtg ISNT "null",
+        REAP wact FROM _map_get, wnd, "action".
+        REAP wbase FROM base_of, wact.
+        REAP wret FROM find_ret, sigs, wbase.
+        IF wret > "",
+          REAP wrf FROM add_struct_enum_keys, reg, wret, wtg, res.
+        /IF.
+      /IF.
     /IF.
     IF wty IS "if_stmt" OR wty IS "season_stmt" OR wty IS "cycle_stmt" OR wty IS "match_stmt",
       CREATE sbl(LIST) TO _map_get(wnd, "body").
-      REAP wret FROM collect_enums_walk, sbl, subst, reg, res.
+      REAP wret FROM collect_enums_walk, sbl, subst, reg, sigs, res.
     /IF.
     SET wi TO wi + 1.
   /SEASON.
@@ -2264,8 +2365,9 @@ ACTION collect_enums_walk(bd, subst, reg, res),
 
 # collect_enums — every enum member name (module-scope constants)
 # plus enum-typed params and CREATE/LET targets, as a flat
-# [name, membersCsv, …] table.
-ACTION collect_enums(bd, params, subst, reg),
+# [name, membersCsv, …] table. Struct-typed vars/params/reap targets
+# contribute plant_map_get(var, "field") keys for enum fields.
+ACTION collect_enums(bd, params, subst, reg, sigs),
   CREATE res(LIST) TO plant_list_make(0).
   CREATE pi(NUM) TO 0.
   CREATE pn2(TX) TO "".
@@ -2283,6 +2385,9 @@ ACTION collect_enums(bd, params, subst, reg),
         PUT pn2 INTO res.
         PUT pm2 INTO res.
       /IF.
+    /IF.
+    IF pm2 IS "",
+      REAP prf FROM add_struct_enum_keys, reg, psu2, pn2, res.
     /IF.
     SET pi TO pi + 1.
   /SEASON.
@@ -2310,7 +2415,7 @@ ACTION collect_enums(bd, params, subst, reg),
     /SEASON.
     SET ri TO ri + 2.
   /SEASON.
-  REAP wr FROM collect_enums_walk, bd, subst, reg, res.
+  REAP wr FROM collect_enums_walk, bd, subst, reg, sigs, res.
   GIVE res.
 /ACTION.
 
@@ -3471,7 +3576,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             REAP prio_s FROM _map_get, node, "prio".
             CREATE avars(LIST) TO async_collect_vars(bd, params).
             CREATE aphases(LIST) TO async_split_phases(bd).
-            CREATE evars_asy(LIST) TO collect_enums(bd, params, subst, evars).
+            CREATE evars_asy(LIST) TO collect_enums(bd, params, subst, evars, sigs).
             REAP st_code FROM async_emit_state, aname, avars.
             REAP en_code FROM async_emit_entry, aname, params, prio_s.
             REAP stp_code FROM async_emit_step, aname, aphases, avars, sigs, subst, clmap, stvars_a, evars_asy.
@@ -3490,7 +3595,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             SET pi TO pi + 1.
         /SEASON.
         CREATE nums_a(LIST) TO collect_nums(bd, params, subst).
-        CREATE evars_a(LIST) TO collect_enums(bd, params, subst, evars).
+        CREATE evars_a(LIST) TO collect_enums(bd, params, subst, evars, sigs).
         CREATE ccode(TX) TO "tx_t " + aname + "(" + paramstr + ") \{\n".
         CREATE implicit(LIST) TO collect_implicit(bd, params).
         CREATE dcode(TX) TO "".
@@ -4516,7 +4621,7 @@ ACTION emit_inst(inst(TX), templates(LIST), sigs(LIST), reg(LIST)),
     CREATE ccode(TX) TO "tx_t " + mname + "(" + paramstr + ") \{\n".
     CREATE nums_m(LIST) TO collect_nums(bd, params, subst).
     CREATE stvars_m(LIST) TO collect_stvars(bd, params, subst).
-    CREATE evars_m(LIST) TO collect_enums(bd, params, subst, reg).
+    CREATE evars_m(LIST) TO collect_enums(bd, params, subst, reg, sigs).
     CREATE implicit(LIST) TO collect_implicit(bd, params).
     CREATE dcode(TX) TO "".
     CREATE di(NUM) TO 0.
@@ -4558,6 +4663,23 @@ ACTION find_params(sigs(LIST), name(TX)),
         SET fi TO fi + 1.
     /SEASON.
     GIVE fp.
+/ACTION.
+
+# find_ret — return type of a sig entry (by action name), or ""
+ACTION find_ret(sigs(LIST), name(TX)),
+    CREATE fi(NUM) TO 0.
+    CREATE fe(TX) TO "".
+    CREATE fn(TX) TO "".
+    CREATE fr(TX) TO "".
+    SEASON fi < COUNT sigs,
+        REAP fe FROM plant_list_get, sigs, fi.
+        REAP fn FROM _map_get, fe, "name".
+        IF str_eq(fn, name) IS "1",
+            REAP fr FROM _map_get, fe, "ret".
+        /IF.
+        SET fi TO fi + 1.
+    /SEASON.
+    GIVE fr.
 /ACTION.
 
 # ──────────────────────────────────────────────────────────────
@@ -4923,6 +5045,20 @@ ACTION generate_c(ast(LIST)),
     # is bracketed by markers so run_native_tests.sh can extract it
     # into a header for mock_ffi.c (-include).
     CREATE struct_code(TX) TO "/*__PLANT_TYPES_BEGIN__*/\n#ifndef PLANT_TYPES_INCLUDED\n#define PLANT_TYPES_INCLUDED\n".
+    # enum typedefs live in the shared types block (extracted into
+    # the mock-FFI header), so both the generated C and the mock can
+    # reference enum member constants — e.g. mock struct constructors
+    # that fill enum fields (v0.48.10).
+    SET i TO 0.
+    SEASON i < COUNT ast,
+        REAP node_el FROM plant_list_get, ast, i.
+        REAP ntype FROM _map_get, node_el, "type".
+        IF ntype IS "enum_decl",
+            REAP nd_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs.
+            SET struct_code TO struct_code + nd_code.
+        /IF.
+        SET i TO i + 1.
+    /SEASON.
     CREATE ffi_tentries(LIST) TO plant_list_make(0).
     CREATE ffi_torder(LIST) TO plant_list_make(0).
     CREATE tscnX(TX) TO "".
@@ -5192,15 +5328,14 @@ ACTION generate_c(ast(LIST)),
     # builds the per-action clmap table + the ordered closure list;
     # env typedefs and closure fn forwards/definitions go into
     # pro_code before the ACTION definitions so all calls resolve.
-    REAP clres FROM collect_closures, ast.
+    REAP clres FROM collect_closures, ast, sigs.
     REAP clmaps FROM plant_list_get, clres, 0.
     REAP cllist FROM plant_list_get, clres, 1.
     CREATE cltype_code(TX) TO "".
     CREATE clfwd_code(TX) TO "".
     CREATE cldef_code(TX) TO "".
-    # enum typedefs are hoisted before the closure defs so enum
-    # member constants resolve inside closure bodies (v0.48.9)
-    CREATE enum_code(TX) TO "".
+    # enum typedefs now live in the shared types block (struct_code),
+    # before every consumer — closure defs, action defs, mock FFI.
     SET i TO 0.
     SEASON i < COUNT cllist,
         REAP cnode FROM plant_list_get, cllist, i.
@@ -5250,8 +5385,6 @@ ACTION generate_c(ast(LIST)),
             /IF.
         /IF.
         IF ntype IS "enum_decl",
-            REAP nd_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs.
-            SET enum_code TO enum_code + nd_code.
             SET has_decl TO 1.
         /IF.
         IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl",
@@ -5273,7 +5406,7 @@ ACTION generate_c(ast(LIST)),
     IF has_stmt,
         SET stmt_code TO "int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n" + dcode + stmt_code + "  plant_async_drain();\n  return 0;\n}\n".
     /IF.
-    GIVE header + struct_code + ffi_topo + enum_code + cltype_code + pro_code + cb_code + clfwd_code + "\n" + cldef_code + "\n" + decl_code + stmt_code.
+    GIVE header + struct_code + ffi_topo + cltype_code + pro_code + cb_code + clfwd_code + "\n" + cldef_code + "\n" + decl_code + stmt_code.
 /ACTION.
 
 # ═══════════════════════════════════════════════════════════════
@@ -5321,8 +5454,9 @@ ACTION _cl_map_get(clmap(LIST), key(TX)),
 
 # _cl_scopes — extend a scope stack with the declarations a
 # statement list introduces (create/let locals, reap targets,
-# cycle iterators, match bindings)
-ACTION _cl_scopes(bd(LIST), scopes(LIST)),
+# cycle iterators, match bindings). sigs resolves reap targets to
+# their callee return type for the "#t" twin keys (v0.48.10).
+ACTION _cl_scopes(bd(LIST), scopes(LIST), sigs(LIST)),
     CREATE n2(NUM) TO 0.
     CREATE st(TX) TO "".
     CREATE res(LIST) TO scopes.
@@ -5356,6 +5490,13 @@ ACTION _cl_scopes(bd(LIST), scopes(LIST)),
                 IF oldc IS "",
                     PUT stg INTO res.
                     PUT "tx_t" INTO res.
+                    REAP stact FROM _map_get, st, "action".
+                    REAP stbs FROM base_of, stact.
+                    REAP stre FROM find_ret, sigs, stbs.
+                    IF stre > "",
+                        PUT stg + "#t" INTO res.
+                        PUT stre INTO res.
+                    /IF.
                 /IF.
             /IF.
         /IF.
@@ -5394,7 +5535,7 @@ ACTION _cl_scopes(bd(LIST), scopes(LIST)),
 # enclosing scope, recurse into its own body, stamp cid/envname/
 # fnname/captures/moved/shadows/clmap keys in place, append it to
 # the closure sequence. Returns [clseq, cid].
-ACTION _cl_stamp_cnode(cnode(LIST), scopes(LIST), cc(NUM), res(LIST)),
+ACTION _cl_stamp_cnode(cnode(LIST), scopes(LIST), cc(NUM), res(LIST), sigs(LIST)),
     REAP cnp FROM _map_get, cnode, "params".
     REAP cnb FROM _map_get, cnode, "body".
     REAP ccap FROM _map_get, cnode, "captures".
@@ -5456,7 +5597,7 @@ ACTION _cl_stamp_cnode(cnode(LIST), scopes(LIST), cc(NUM), res(LIST)),
     CREATE cck(NUM) TO cc + 1.
     REAP cnk FROM _map_get, cnode, "bkind".
     IF str_eq(cnk, "block") IS "1",
-        REAP cres FROM _cl_walk, cnb, cpsc, res, plant_list_make(0), cc + 1.
+        REAP cres FROM _cl_walk, cnb, cpsc, res, plant_list_make(0), cc + 1, sigs.
         REAP res FROM plant_list_get, cres, 0.
         REAP cmap3 FROM plant_list_get, cres, 1.
         REAP cck FROM plant_list_get, cres, 2.
@@ -5483,7 +5624,7 @@ ACTION _cl_stamp_cnode(cnode(LIST), scopes(LIST), cc(NUM), res(LIST)),
 # _cl_walk — walk one statement list, stamping closures in place.
 # scopes: flat [name, ctype, …] of the current C function scope.
 # Returns the accumulator triple [clseq, clmap, cid].
-ACTION _cl_walk(bd(LIST), scopes(LIST), clseq(LIST), clmap(LIST), cid(NUM)),
+ACTION _cl_walk(bd(LIST), scopes(LIST), clseq(LIST), clmap(LIST), cid(NUM), sigs(LIST)),
     CREATE n3(NUM) TO 0.
     CREATE st3(TX) TO "".
     CREATE res(LIST) TO clseq.
@@ -5492,12 +5633,12 @@ ACTION _cl_walk(bd(LIST), scopes(LIST), clseq(LIST), clmap(LIST), cid(NUM)),
     SEASON n3 < COUNT bd,
         REAP st3 FROM plant_list_get, bd, n3.
         REAP sty3 FROM _map_get, st3, "type".
-        REAP sc3 FROM _cl_scopes, plant_list_make(1, st3), scopes.
+        REAP sc3 FROM _cl_scopes, plant_list_make(1, st3), scopes, sigs.
         # create_stmt / let_stmt carrying a closure node
         REAP cnode3 FROM _map_get, st3, "closure".
         IF cnode3 > "",
             REAP tgt3 FROM _map_get, st3, "target".
-            REAP cres FROM _cl_stamp_cnode, cnode3, sc3, cc, res.
+            REAP cres FROM _cl_stamp_cnode, cnode3, sc3, cc, res, sigs.
             REAP res FROM plant_list_get, cres, 0.
             REAP cc FROM plant_list_get, cres, 1.
             PUT tgt3 INTO rmap.
@@ -5512,7 +5653,7 @@ ACTION _cl_walk(bd(LIST), scopes(LIST), clseq(LIST), clmap(LIST), cid(NUM)),
                 CREATE clae(TX) TO "".
                 SEASON clai < COUNT cla3,
                     REAP clae FROM plant_list_get, cla3, clai.
-                    REAP cres FROM _cl_stamp_cnode, clae, sc3, cc, res.
+                    REAP cres FROM _cl_stamp_cnode, clae, sc3, cc, res, sigs.
                     REAP res FROM plant_list_get, cres, 0.
                     REAP cc FROM plant_list_get, cres, 1.
                     SET clai TO clai + 1.
@@ -5522,8 +5663,8 @@ ACTION _cl_walk(bd(LIST), scopes(LIST), clseq(LIST), clmap(LIST), cid(NUM)),
         # recurse into nested bodies (same scope + their own locals)
         REAP bd3 FROM _map_get, st3, "body".
         IF bd3 > "",
-            REAP scn FROM _cl_scopes, bd3, sc3.
-            REAP cres FROM _cl_walk, bd3, scn, res, rmap, cc.
+            REAP scn FROM _cl_scopes, bd3, sc3, sigs.
+            REAP cres FROM _cl_walk, bd3, scn, res, rmap, cc, sigs.
             REAP res FROM plant_list_get, cres, 0.
             REAP rmap FROM plant_list_get, cres, 1.
             REAP cc FROM plant_list_get, cres, 2.
@@ -5535,8 +5676,8 @@ ACTION _cl_walk(bd(LIST), scopes(LIST), clseq(LIST), clmap(LIST), cid(NUM)),
             SEASON mn3 < COUNT mcl3,
                 REAP mel3 FROM plant_list_get, mcl3, mn3.
                 REAP mb3 FROM _map_get, mel3, "bodyStatements".
-                REAP scm FROM _cl_scopes, mb3, sc3.
-                REAP cres FROM _cl_walk, mb3, scm, res, rmap, cc.
+                REAP scm FROM _cl_scopes, mb3, sc3, sigs.
+                REAP cres FROM _cl_walk, mb3, scm, res, rmap, cc, sigs.
                 REAP res FROM plant_list_get, cres, 0.
                 REAP rmap FROM plant_list_get, cres, 1.
                 REAP cc FROM plant_list_get, cres, 2.
@@ -5549,7 +5690,7 @@ ACTION _cl_walk(bd(LIST), scopes(LIST), clseq(LIST), clmap(LIST), cid(NUM)),
 /ACTION.
 
 # collect_closures — pass 0d over the whole AST
-ACTION collect_closures(ast(LIST)),
+ACTION collect_closures(ast(LIST), sigs(LIST)),
     CREATE clmaps(LIST) TO plant_list_make(0).
     CREATE cllist(LIST) TO plant_list_make(0).
     CREATE ai5(NUM) TO 0.
@@ -5563,7 +5704,7 @@ ACTION collect_closures(ast(LIST)),
                 REAP aname5 FROM _map_get, ae5, "name".
                 REAP apms5 FROM _map_get, ae5, "params".
                 REAP abd5 FROM _map_get, ae5, "body".
-                REAP apsc FROM _cl_scopes, abd5, plant_list_make(0).
+                REAP apsc FROM _cl_scopes, abd5, plant_list_make(0), sigs.
                 CREATE ai6(NUM) TO 0.
                 CREATE ae6(TX) TO "".
                 SEASON ai6 < COUNT apms5,
@@ -5587,7 +5728,7 @@ ACTION collect_closures(ast(LIST)),
                     SET di5 TO di5 + 1.
                 /SEASON.
                 CREATE cseedd(NUM) TO COUNT cllist.
-                REAP cres FROM _cl_walk, abd5, apsc, cllist, plant_list_make(0), cseedd.
+                REAP cres FROM _cl_walk, abd5, apsc, cllist, plant_list_make(0), cseedd, sigs.
                 REAP cllist FROM plant_list_get, cres, 0.
                 REAP cmap5 FROM plant_list_get, cres, 1.
                 PUT aname5 INTO clmaps.
@@ -5705,7 +5846,7 @@ ACTION _cl_emit_fn(cnode(LIST), sigs(LIST), subst(LIST), reg(LIST)),
         REAP bx FROM _map_get, cnode, "body".
         REAP cx3 FROM translate_expr, bx.
         CREATE nums_c(LIST) TO collect_nums_cb(plant_list_make(0), params, shads, subst).
-        CREATE evars_c(LIST) TO collect_enums(plant_list_make(0), cbpars2, subst, reg).
+        CREATE evars_c(LIST) TO collect_enums(plant_list_make(0), cbpars2, subst, reg, sigs).
         REAP cx3 FROM _handle_cat, cx3, nums_c, evars_c.
         SET fnc TO fnc + "  return " + cx3 + ";\n".
     /IF.
@@ -5729,7 +5870,7 @@ ACTION _cl_emit_fn(cnode(LIST), sigs(LIST), subst(LIST), reg(LIST)),
             SET fnc TO fnc + "  tx_t " + dv6 + " = \"\";\n".
             SET di6 TO di6 + 1.
         /SEASON.
-        CREATE evars_c(LIST) TO collect_enums(bb, cbpars2, subst, reg).
+        CREATE evars_c(LIST) TO collect_enums(bb, cbpars2, subst, reg, sigs).
         REAP bc3 FROM generate_body, bb, 1, sigs, subst, cm2, "", nums_c, stvars_c, evars_c.
         SET fnc TO fnc + bc3 + "".
     /IF.
@@ -5759,7 +5900,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.48.9 (pure native)".
+  SHOW "Chloroplast 0.48.10 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

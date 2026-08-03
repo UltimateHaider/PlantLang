@@ -1,0 +1,16 @@
+# enum_struct_concat — string concatenation with ENUM fields inside
+# a struct context: field reads concatenated in the action body and
+# inside a closure that captures the struct instance (v0.48.10).
+ENUM Color { RED, GREEN, BLUE }.
+
+STRUCT Ball { weight: NUM, color: Color }
+ACTION ffi_get_ball() -> STRUCT Ball.
+
+ACTION main(),
+  REAP b FROM ffi_get_ball.
+  SHOW "ball=" + plant_map_get(b, "color") + ":" + _from_long(plant_map_get(b, "weight")).
+  CREATE f TO [MOVE b](q(TX)) -> "cl=" + plant_map_get(b, "color") + " q=" + q.
+  REAP r FROM f, "z".
+  SHOW r.
+  GIVE 0.
+/ACTION.
