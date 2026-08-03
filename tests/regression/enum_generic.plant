@@ -1,0 +1,18 @@
+# enum_generic — basic generic action instantiated with an ENUM type;
+# the param flows through generic substitution and displays via SHOW
+# using the underlying member names (v0.48.7).
+ENUM Color { RED, GREEN, BLUE }.
+ENUM Suit { HEARTS, SPADES, DIAMONDS, CLUBS }.
+
+ACTION ped[T](v(T)),
+  SHOW v.
+  GIVE v.
+/ACTION.
+
+ACTION main(),
+  CREATE c(Color) TO GREEN.
+  CREATE s(Suit) TO SPADES.
+  REAP r1 FROM ped[Color], c.
+  REAP r2 FROM ped[Suit], s.
+  GIVE 0.
+/ACTION.

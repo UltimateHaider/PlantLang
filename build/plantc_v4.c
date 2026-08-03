@@ -122,7 +122,7 @@ tx_t key_in_acc(tx_t key, PlantArray* acc);
 tx_t build_subst(PlantArray* generics, PlantArray* args);
 tx_t collect_insts(PlantArray* bd, PlantArray* subst, PlantArray* templates, PlantArray* acc);
 tx_t inst_fwddecl(tx_t inst, PlantArray* templates);
-tx_t emit_inst(tx_t inst, PlantArray* templates, PlantArray* sigs);
+tx_t emit_inst(tx_t inst, PlantArray* templates, PlantArray* sigs, PlantArray* reg);
 tx_t find_params(PlantArray* sigs, tx_t name);
 tx_t is_ref_param(tx_t ptype);
 tx_t is_ref_at(PlantArray* params, long idx);
@@ -3210,11 +3210,13 @@ tx_t collect_enums(tx_t bd, tx_t params, tx_t subst, tx_t reg) {
     long pi = 0;
     tx_t pn2 = "";
     tx_t pt2 = "";
+    tx_t psu2 = "";
     tx_t pm2 = "";
     while (pi < plant_array_length(params)) {
         pn2 = _map_get(plant_list_get(params,  pi ), "name");
         pt2 = _map_get(plant_list_get(params,  pi ), "type");
-        pm2 = enum_members_of(reg, pt2);
+        psu2 = subst_type(pt2, subst);
+        pm2 = enum_members_of(reg, psu2);
         if (strcmp(pm2,"") != 0) {
             pfound = list_contains(res, pn2);
             if (pfound == 0) {
@@ -5454,7 +5456,7 @@ tx_t inst_fwddecl(tx_t inst, PlantArray* templates) {
     }
     return _cat(_cat(_cat(_cat("tx_t ", mname), "("), paramstr), ");\n");
 }
-tx_t emit_inst(tx_t inst, PlantArray* templates, PlantArray* sigs) {
+tx_t emit_inst(tx_t inst, PlantArray* templates, PlantArray* sigs, PlantArray* reg) {
   tx_t base = "";
   tx_t args = "";
   tx_t tpl = "";
@@ -5497,6 +5499,7 @@ tx_t emit_inst(tx_t inst, PlantArray* templates, PlantArray* sigs) {
     tx_t ccode = _cat(_cat(_cat(_cat("tx_t ", mname), "("), paramstr), ") {\n");
     PlantArray* nums_m = collect_nums ( bd , params , subst );
     PlantArray* stvars_m = collect_stvars ( bd , params , subst );
+    PlantArray* evars_m = collect_enums ( bd , params , subst , reg );
     PlantArray* implicit = collect_implicit ( bd , params );
     tx_t dcode = "";
     long di = 0;
@@ -5506,7 +5509,7 @@ tx_t emit_inst(tx_t inst, PlantArray* templates, PlantArray* sigs) {
         dcode = _cat(_cat(_cat(dcode, "  tx_t "), dv), " = \"\";\n");
         di = di+1;
     }
-    bcode = generate_body(bd, 1, sigs, subst, plant_list_make ( 0 ), "", nums_m, stvars_m, plant_list_make ( 0 ));
+    bcode = generate_body(bd, 1, sigs, subst, plant_list_make ( 0 ), "", nums_m, stvars_m, evars_m);
     if (( plant_array_length(bd) ) == 0) {
         bcode = _cat(_cat("  return ", mname), ";\n");
     }
@@ -6281,7 +6284,7 @@ tx_t generate_c(PlantArray* ast) {
     i = 0;
     while (i < plant_array_length(insts)) {
         node_el = plant_list_get(insts, i);
-        nd_code = emit_inst(node_el, templates, sigs);
+        nd_code = emit_inst(node_el, templates, sigs, eregs);
         decl_code = _cat(decl_code, nd_code);
         has_decl = 1;
         i = i+1;
@@ -6742,7 +6745,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.6 (pure native)");
+      plant_print("Chloroplast 0.48.7 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

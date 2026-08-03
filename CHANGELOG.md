@@ -1,5 +1,24 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.7 — 2026 (ENUM Generics)
+
+### New Features
+- **ENUM as generic type argument** — an ENUM can now be passed as a generic
+  type parameter (`ACTION foo[T](v(T))` with `foo[Color]`). The enum table
+  (`collect_enums`) now substitutes generic type parameters via
+  `subst_type` before resolving member lists, and the monomorphization
+  emitter (`emit_inst`) builds the per-instantiation enum table from the
+  module enum registry and threads it through `generate_body`, so `SHOW` and
+  string-concatenation of generic ENUM params (including `CREATE x(T)`
+  locals, multi-param `foo[T, U]`, and nested generic call chains) display
+  member names through `_from_enum`. Non-enum instantiations
+  (`ped[TX]/[NUM]/[FACT]`) are unaffected.
+
+### Bug Fixes
+- `collect_enums` ignored generic substitution: params typed `T` were looked
+  up raw in the registry, so generic ENUM display silently fell back to the
+  broken raw-int path.
+
 ## v0.48.6 — 2026 (ENUM Display Repair)
 
 ### Bug Fixes

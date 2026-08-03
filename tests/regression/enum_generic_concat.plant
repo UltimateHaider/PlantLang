@@ -1,0 +1,22 @@
+# enum_generic_concat — string concatenation with generic ENUM params
+# and multiple generic params of different enum types (v0.48.7).
+ENUM Color { RED, GREEN, BLUE }.
+ENUM Suit { HEARTS, SPADES, DIAMONDS, CLUBS }.
+
+ACTION tag[T](v(T)),
+  SHOW "tag:" + v + "!".
+  GIVE 0.
+/ACTION.
+
+ACTION pair[T, U](a(T), b(U)),
+  SHOW a + "/" + b.
+  GIVE 0.
+/ACTION.
+
+ACTION main(),
+  CREATE c(Color) TO BLUE.
+  CREATE s(Suit) TO DIAMONDS.
+  REAP r1 FROM tag[Color], c.
+  REAP r2 FROM pair[Color, Suit], c, s.
+  GIVE 0.
+/ACTION.

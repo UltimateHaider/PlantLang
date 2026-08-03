@@ -1,0 +1,16 @@
+# enum_generic_show — direct SHOW of generic ENUM params plus a local
+# CREATE of the substituted enum type inside a generic body (v0.48.7).
+ENUM Level { LOW, MEDIUM, HIGH }.
+
+ACTION report[T](v(T)),
+  CREATE mine(T) TO v.
+  SHOW mine.
+  SHOW v.
+  GIVE 0.
+/ACTION.
+
+ACTION main(),
+  CREATE lv(Level) TO HIGH.
+  REAP r FROM report[Level], lv.
+  GIVE 0.
+/ACTION.
