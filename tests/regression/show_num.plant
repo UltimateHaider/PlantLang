@@ -1,0 +1,14 @@
+# show_num — bare numeric SHOW no longer emits plant_print(long).
+# Raw NUM vars, arithmetic and numeric readers must print their value.
+ACTION main(),
+  CREATE x(NUM) TO 42.
+  SHOW x.
+  SHOW x + 1.
+  SHOW x * 2 - 1.
+  SHOW LEN("hello world").
+  SHOW "12".
+  SHOW 7.
+  CREATE f(NUM) TO 2.
+  SHOW f + x.
+  GIVE 0.
+/ACTION.

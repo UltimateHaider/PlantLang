@@ -1,0 +1,20 @@
+# ffi_num — FFI numeric results: TX-string returns keep plain concat;
+# raw long FFI returns (parse result / errno) land in NUM vars and
+# SHOW correctly without the caller's explicit _from_long.
+ACTION ffi_add(a(NUM), b(NUM)) -> external.
+ACTION ffi_parse_cfg(path(TX)) -> Result<NUM, TX>.
+ACTION ffi_last_error() -> external.
+
+ACTION main()
+  REAP s0 FROM ffi_add, 2, 3.
+  SHOW "add=" + s0.
+  CREATE c(NUM) TO 0.
+  REAP c FROM ffi_parse_cfg, "ok".
+  SHOW "cfg=" + c.
+  SHOW c.
+  CREATE e(NUM) TO 0.
+  REAP e FROM ffi_last_error.
+  SHOW "err=" + e.
+  SHOW e.
+  GIVE 0.
+/ACTION.

@@ -1,0 +1,15 @@
+# list_num — NUM values carried in LISTs: COUNT is a numeric reader
+# (SHOwable), elements print via concat, and a NUM accumulator summed
+# from the container length prints via bare SHOW.
+ACTION main()
+  CREATE xs(LIST) TO plant_list_make(0).
+  PUT _from_long(3) INTO xs.
+  PUT _from_long(8) INTO xs.
+  SHOW COUNT xs.
+  REAP e0 FROM plant_list_get, xs, 0.
+  SHOW "first " + e0.
+  CREATE acc(NUM) TO 0.
+  SET acc TO acc + 10.
+  SHOW acc.
+  GIVE 0.
+/ACTION.

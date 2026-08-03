@@ -93,10 +93,11 @@ $(V5_C): $(ALL_PLANT) $(V4_BIN)
 	@$(V4_BIN) $(ALL_PLANT) $@ >/dev/null 2>&1
 
 # ── test: native + generics + closures integration suites ─────
-test: $(NATIVE_BIN) ## Run native + generics + closures integration test suites
+test: $(NATIVE_BIN) ## Run native + generics + closures + regression suites
 	@sh tests/native/run_native_tests.sh $(NATIVE_BIN)
 	@sh tests/generics/run_generics_tests.sh $(NATIVE_BIN)
 	@sh tests/closures/run_closures_tests.sh $(NATIVE_BIN)
+	@sh tests/regression/run_regression_tests.sh $(NATIVE_BIN)
 
 perf: $(NATIVE_BIN) ## Compile + run benchmarks, write perf_results.md
 	@sh tests/perf/run_perf.sh $(NATIVE_BIN)
@@ -138,6 +139,9 @@ dist: all self test ## Build versioned tarball + unpack/build/test validation
 	@mkdir -p release/plantlang-$(VERSION)/tests/closures
 	@cp tests/closures/*.plant tests/closures/*.expected tests/closures/*.grep tests/closures/run_closures_tests.sh \
 		release/plantlang-$(VERSION)/tests/closures/
+	@mkdir -p release/plantlang-$(VERSION)/tests/regression
+	@cp tests/regression/*.plant tests/regression/*.expected tests/regression/run_regression_tests.sh \
+		release/plantlang-$(VERSION)/tests/regression/
 	@cp $(BOOTSTRAP) release/plantlang-$(VERSION)/dist/Chloroplast
 	@tar -C release -czf release/plantlang-$(VERSION).tar.gz plantlang-$(VERSION)
 	@rm -rf build/distcheck && mkdir -p build/distcheck

@@ -1,0 +1,16 @@
+# struct_num — NUM fields inside a STRUCT round-trip through the FFI
+# marshalling helpers; bare NUM reads from the returned map display
+# correctly, including via concatenation.
+STRUCT Point { x: NUM, y: NUM }
+ACTION ffi_get_point() -> STRUCT Point.
+
+ACTION main()
+  REAP g FROM ffi_get_point.
+  REAP gx FROM _from_long, plant_map_get(g, "x").
+  CREATE gy(NUM) TO 0.
+  REAP gy FROM plant_map_get, g, "y".
+  SHOW "x=" + gx + " y=" + gy.
+  SHOW gy.
+  SHOW gy + 1.
+  GIVE 0.
+/ACTION.

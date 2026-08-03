@@ -1,0 +1,16 @@
+# numeric_return — non-generic ACTION returns raw numeric bits in tx_t;
+# callers receive into NUM vars (SET) and SHOW them (now value-converted).
+ACTION add(a(NUM), b(NUM)),
+  GIVE a + b.
+/ACTION.
+
+ACTION main(),
+  REAP r FROM add, 30, 12.
+  CREATE n(NUM) TO 0.
+  SET n TO r.
+  REAP s FROM _from_long, n.
+  SHOW "num=" + s.
+  SHOW n.
+  SHOW n * 2.
+  GIVE 0.
+/ACTION.

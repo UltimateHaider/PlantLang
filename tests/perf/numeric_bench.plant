@@ -1,0 +1,12 @@
+# numeric_bench — 500k iterations of NUM arithmetic including the
+# SHOW path (bare numeric accumulators print via _from_long, v0.48.5).
+# Exercises the numeric-SHOW wrapper cost vs raw prints.
+ACTION main()
+  CREATE i(NUM) TO 0.
+  CREATE acc(NUM) TO 0.
+  SEASON i < 500000,
+    SET acc TO acc + i * 3 - (i % 7).
+    SET i TO i + 1.
+  /SEASON.
+  SHOW acc.
+/ACTION.

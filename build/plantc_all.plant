@@ -1940,6 +1940,18 @@ ACTION seg_is_numeric(seg(TX), nums(LIST)),
   IF pre1 IS "plant_array_length(", GIVE 1. /IF.
   REAP pre2 FROM substring, sb, 0, 9.
   IF pre2 IS "_to_long(", GIVE 1. /IF.
+  REAP pre3 FROM substring, sb, 0, 9.
+  IF pre3 IS "json_len(", GIVE 1. /IF.
+  REAP pre4 FROM substring, sb, 0, 10.
+  IF pre4 IS "json_kind(", GIVE 1. /IF.
+  REAP pre5 FROM substring, sb, 0, 9.
+  IF pre5 IS "set_size(", GIVE 1. /IF.
+  REAP pre6 FROM substring, sb, 0, 11.
+  IF pre6 IS "queue_size(", GIVE 1. /IF.
+  REAP pre7 FROM substring, sb, 0, 11.
+  IF pre7 IS "stack_size(", GIVE 1. /IF.
+  REAP pre8 FROM substring, sb, 0, 14.
+  IF pre8 IS "ffi_last_error(", GIVE 1. /IF.
   CREATE si(NUM) TO 0.
   CREATE sc(TX) TO "".
   CREATE tok(TX) TO "".
@@ -1973,6 +1985,22 @@ ACTION seg_is_numeric(seg(TX), nums(LIST)),
     /IF.
   /IF.
   GIVE 1.
+/ACTION.
+
+# ──────────────────────────────────────────────
+#  expr_is_numeric — 1 when a tx_t-context value expression is a
+#  scalar C numeric: a digit literal, a NUM/FACT var reference,
+#  arithmetic built only from numerics, or a known numeric-returning
+#  call (LEN/COUNT/_to_long/std numeric readers). Quoted string
+#  literals are never numeric ("12" stays text). Used by the
+#  show_stmt generator to wrap raw longs in _from_long before
+#  plant_print (v0.48.5 numeric SHOW).
+# ──────────────────────────────────────────────
+ACTION expr_is_numeric(e(TX), nums(LIST)),
+    REAP q0 FROM substring, e, 0, 1.
+    IF q0 IS "\"", GIVE 0. /IF.
+    REAP sn FROM seg_is_numeric, e, nums.
+    GIVE sn.
 /ACTION.
 
 # ──────────────────────────────────────────────────────────────
@@ -2691,10 +2719,17 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     /IF.
   
     # ── show_stmt: SHOW expr. → plant_print(expr); ────────────
+    #    numeric expressions are wrapped in _from_long so a bare
+    #    NUM var / arithmetic / numeric reader prints its value
+    #    instead of raw long-as-pointer bits (v0.48.5).
     IF ntype IS "show_stmt",
         REAP val FROM _map_get, node, "value".
         REAP cval FROM translate_expr, val.
         REAP cval FROM _handle_cat, cval, nums.
+        REAP isn2 FROM expr_is_numeric, cval, nums.
+        IF isn2 IS 1,
+            SET cval TO "_from_long(" + cval + ")".
+        /IF.
         REAP isel FROM indent_str, indent.
         GIVE isel + "  plant_print(" + cval + ");\n".
     /IF.
@@ -3715,8 +3750,14 @@ ACTION ffi_emit_struct_helpers(cname(TX), flds(LIST)),
     /IF.
     REAP fs8 FROM is_struct_type, ft8.
     IF fs8 IS "1",
-      REAP fcn8 FROM ffi_struct_cname, ft8.
-      SET h1 TO h1 + "  r." + fn8 + " = plant_map_to_" + fcn8 + "_d(plant_map_get(m, \"" + fn8 + "\"), depth + 1);\n".
+      REAP es8 FROM substring, ft8, 0, 7.
+      IF es8 IS "STRUCT ",
+        REAP fcn8 FROM ffi_struct_cname, ft8.
+        SET h1 TO h1 + "  r." + fn8 + " = plant_map_to_" + fcn8 + "_d(plant_map_get(m, \"" + fn8 + "\"), depth + 1);\n".
+      /IF.
+      IF es8 ISNT "STRUCT ",
+        SET h1 TO h1 + "  r." + fn8 + " = plant_map_get(m, \"" + fn8 + "\");\n".
+      /IF.
     /IF.
     IF fb8 IS "LIST",
       SET h1 TO h1 + "  plant_ffi_errno = FFI_ERR_TYPE;\n  return r;\n".
@@ -3747,8 +3788,14 @@ ACTION ffi_emit_struct_helpers(cname(TX), flds(LIST)),
     /IF.
     REAP fs7 FROM is_struct_type, ft7.
     IF fs7 IS "1",
-      REAP fcn7 FROM ffi_struct_cname, ft7.
-      SET h4 TO h4 + "  plant_map_set(r, \"" + fn7 + "\", plant_" + fcn7 + "_to_map(v." + fn7 + "));\n".
+      REAP es7 FROM substring, ft7, 0, 7.
+      IF es7 IS "STRUCT ",
+        REAP fcn7 FROM ffi_struct_cname, ft7.
+        SET h4 TO h4 + "  plant_map_set(r, \"" + fn7 + "\", plant_" + fcn7 + "_to_map(v." + fn7 + "));\n".
+      /IF.
+      IF es7 ISNT "STRUCT ",
+        SET h4 TO h4 + "  plant_map_set(r, \"" + fn7 + "\", v." + fn7 + ");\n".
+      /IF.
     /IF.
     IF fb7 IS "LIST",
       SET h4 TO h4 + "  plant_ffi_errno = FFI_ERR_TYPE;\n  return r;\n".
@@ -4149,7 +4196,23 @@ ACTION struct_typedef(tpl(LIST), args(LIST)),
             REAP ctype FROM ffi_ctype, fsub.
         /IF.
         IF sp8 ISNT "STRUCT ",
-            REAP ctype FROM plant_ctype, fsub.
+            # Non-STRUCT fields: explicit REF STRUCT → pointer layout; a
+            # plain/generic struct reference (Box[NUM]) is an opaque tx_t
+            # handle at runtime, so the typedef keeps the handle and the
+            # marshalling helpers pass it through (v0.48.5).
+            REAP fk9 FROM ffi_param_kind, fsub.
+            IF fk9 IS "struct_ref",
+                REAP ctype FROM ffi_ctype, fsub.
+            /IF.
+            IF fk9 ISNT "struct_ref",
+                REAP base9 FROM type_base, fsub.
+                IF base9 IS "NUM" OR base9 IS "FACT" OR base9 IS "TX" OR base9 IS "LIST",
+                    REAP ctype FROM plant_ctype, fsub.
+                /IF.
+                IF base9 ISNT "NUM" AND base9 ISNT "FACT" AND base9 ISNT "TX" AND base9 ISNT "LIST",
+                    SET ctype TO "tx_t".
+                /IF.
+            /IF.
         /IF.
         SET ccode TO ccode + "  " + ctype + " " + fname + ";\n".
         SET fi TO fi + 1.

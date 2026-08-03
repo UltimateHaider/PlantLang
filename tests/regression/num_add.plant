@@ -1,0 +1,12 @@
+# num_add — NUM + NUM must stay arithmetic (30), never concatenated,
+# while string mixes of the same NUM var concatenate via _from_long.
+ACTION main(),
+  CREATE a(NUM) TO 10.
+  CREATE b(NUM) TO 20.
+  CREATE c(NUM) TO a + b.
+  SHOW c.
+  SHOW a + b + 5.
+  CREATE t(TX) TO "sum " + c.
+  SHOW t.
+  GIVE 0.
+/ACTION.

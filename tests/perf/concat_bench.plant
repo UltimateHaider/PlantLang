@@ -1,0 +1,12 @@
+# concat_bench — 5k iterations of "text" + number concatenation.
+# Exercises the _cat + _from_long codegen cost (v0.48.3a auto
+# string+num concat; unchanged by the v0.48.5 numeric SHOW work).
+ACTION main()
+  CREATE i(NUM) TO 0.
+  CREATE acc(TX) TO "".
+  SEASON i < 5000,
+    SET acc TO acc + "n" + i + ".".
+    SET i TO i + 1.
+  /SEASON.
+  SHOW "concat-len " + LEN(acc).
+/ACTION.

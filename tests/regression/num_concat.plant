@@ -1,0 +1,12 @@
+# num_concat — "text: " + num and num + "text" concatenations, incl.
+# multi-segment mixes, parenthesised arithmetic and LEN results.
+ACTION main(),
+  CREATE x(NUM) TO 41.
+  CREATE m(TX) TO "xx".
+  SHOW "x=" + x.
+  SHOW x + "!".
+  SHOW "multi " + m + " " + x + ".".
+  SHOW "expr " + (x + 1).
+  SHOW "len " + LEN(m).
+  GIVE 0.
+/ACTION.

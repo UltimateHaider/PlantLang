@@ -17,6 +17,11 @@ static void* plant_env_alloc(size_t size) { return malloc(size); }
 static tx_t _cat(tx_t a, tx_t b) { const char* sa=_S(a), *sb=_S(b); size_t al=strlen(sa), bl=strlen(sb); char *r=malloc(al+bl+1); if(r){memcpy(r,sa,al);memcpy(r+al,sb,bl+1);} return r?r:a; }
 static long _to_long(tx_t s) { const char* _s=_S(s); return _s ? atol(_s) : 0; }
 static tx_t _from_long(long n) { char buf[64]; snprintf(buf,64,"%ld",n); return strdup(buf); }
+/* v0.48.5 — FFI numeric results: C functions returning `long` hand
+   raw integer bits back in tx_t. On this runtime intptr_t == void*,
+   so the conversion is identical to _from_long; this single choke
+   point lets a future ABI that distinguishes FFI nums diverge. */
+static tx_t _from_ffi_num(long long n) { return _from_long((long)n); }
 static tx_t _at(tx_t s, long i) { PlantArray*_p=_P(s); if(_p&&_p->magic==PLANT_ARRAY_MAGIC)return plant_list_get(_p,i); const char*_s=_S(s); if(!_s||i<0||i>=(long)strlen(_s))return""; char _b[2]; _b[0]=_s[i]; _b[1]=0; return strdup(_b); }
 static int _cli_argc; static char **_cli_argv;
 static void plant_init_cli(int c, char **v) { _cli_argc=c; _cli_argv=v; }
