@@ -1,0 +1,14 @@
+# enum_closure_concat — string concatenation with ENUM values inside
+# a closure context: enum param, captured enum, and enum local
+# (v0.48.9).
+ENUM Color { RED, GREEN, BLUE }.
+
+ACTION main(),
+  CREATE c(Color) TO GREEN.
+  CREATE f TO [MOVE c](col(Color)) -> (
+    CREATE cc(Color) TO BLUE.
+    GIVE "p=" + col + " cap=" + c + " loc=" + cc
+  ).
+  REAP r FROM f, RED.
+  SHOW r.
+/GIVE main.

@@ -1,0 +1,20 @@
+# enum_closure — ENUM values inside CLOSUREs: MOVE/REF captures and
+# enum params display as member names via _from_enum (v0.48.9).
+ENUM Color { RED, GREEN, BLUE }.
+
+ACTION main(),
+  CREATE c(Color) TO GREEN.
+  CREATE f TO [MOVE c](v(TX)) -> "moved:" + c + ":" + v.
+  REAP r FROM f, "a".
+  SHOW r.
+  CREATE c2(Color) TO BLUE.
+  CREATE g TO [REF c2](v(TX)) -> "ref:" + c2 + ":" + v.
+  REAP r FROM g, "b".
+  SHOW r.
+  SET c2 TO RED.
+  REAP r FROM g, "c".
+  SHOW r.
+  CREATE h TO [](col(Color)) -> "param:" + col.
+  REAP r FROM h, GREEN.
+  SHOW r.
+/GIVE main.

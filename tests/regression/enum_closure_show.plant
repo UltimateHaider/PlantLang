@@ -1,0 +1,17 @@
+# enum_closure_show — SHOW of enum values inside a closure body:
+# bare enum param, MOVE-captured enum, and enum local (v0.48.9).
+ENUM Color { RED, GREEN, BLUE }.
+ENUM State { IDLE, RUN, DONE }.
+
+ACTION main(),
+  CREATE c(Color) TO BLUE.
+  CREATE f TO [MOVE c](st(State)) -> (
+    SHOW st.
+    SHOW c.
+    CREATE cc(Color) TO RED.
+    SHOW cc.
+    GIVE "ok"
+  ).
+  REAP r FROM f, RUN.
+  GIVE 0.
+/GIVE main.

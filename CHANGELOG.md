@@ -1,5 +1,21 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.9 — 2026 (ENUM Closures)
+
+### New Features
+- **ENUM in CLOSUREs** — enum values inside closure bodies now display
+  correctly through `SHOW` and string concatenation. `_cl_scopes` and
+  `collect_closures` carry PlantLang types (`#t` twin keys) through the
+  closure scope stack, `_cl_stamp_cnode` resolves each MOVE/REF capture's
+  PlantLang type (`ptype`), and `_cl_emit_fn` builds a per-closure enum
+  table from closure params, captured shadows, and enum CREATE/LET targets
+  so `generate_body` / `_handle_cat` wrap enum refs with `_from_enum` —
+  covering expr-body closures, block-form bodies, and closures nested in
+  other closures or async step bodies.
+- **ENUM typedef hoisting** — `generate_c` now emits enum typedefs into a
+  dedicated `enum_code` block placed before the closure definitions, so
+  enum member constants used inside closure bodies resolve in C.
+
 ## v0.48.8 — 2026 (ENUM Async)
 
 ### New Features
