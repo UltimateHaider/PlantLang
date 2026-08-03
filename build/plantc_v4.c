@@ -73,14 +73,14 @@ tx_t collect_nums_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_nums(PlantArray* bd, PlantArray* params, PlantArray* subst);
 tx_t nums_from_avars(PlantArray* vars);
 tx_t collect_nums_cb(PlantArray* bd, PlantArray* params, PlantArray* shads, PlantArray* subst);
-tx_t async_argstr(PlantArray* args, PlantArray* sigs, tx_t act, PlantArray* nums, PlantArray* stvars);
+tx_t async_argstr(PlantArray* args, PlantArray* sigs, tx_t act, PlantArray* nums, PlantArray* stvars, PlantArray* evars);
 tx_t async_var_add(PlantArray* acc, tx_t name, tx_t ctype);
 tx_t async_walk_decl(PlantArray* bd, PlantArray* acc);
 tx_t async_collect_vars(PlantArray* bd, PlantArray* params);
 tx_t async_split_phases(PlantArray* bd);
 tx_t async_emit_state(tx_t name, PlantArray* vars);
 tx_t async_emit_entry(tx_t name, PlantArray* params, tx_t prio);
-tx_t async_emit_step(tx_t name, PlantArray* phases, PlantArray* vars, PlantArray* sigs, PlantArray* subst, PlantArray* clmap, PlantArray* stvars);
+tx_t async_emit_step(tx_t name, PlantArray* phases, PlantArray* vars, PlantArray* sigs, PlantArray* subst, PlantArray* clmap, PlantArray* stvars, PlantArray* evars);
 tx_t translate_expr(tx_t expr);
 tx_t indent_str(long level);
 tx_t generate_body(PlantArray* bd, long indent, PlantArray* sigs, PlantArray* subst, PlantArray* clmap, tx_t actx, PlantArray* nums, PlantArray* stvars, PlantArray* evars);
@@ -3396,7 +3396,7 @@ tx_t collect_nums_cb(PlantArray* bd, PlantArray* params, PlantArray* shads, Plan
     ret7 = collect_nums_walk(bd, subst, res);
     return res;
 }
-tx_t async_argstr(PlantArray* args, PlantArray* sigs, tx_t act, PlantArray* nums, PlantArray* stvars) {
+tx_t async_argstr(PlantArray* args, PlantArray* sigs, tx_t act, PlantArray* nums, PlantArray* stvars, PlantArray* evars) {
   tx_t fparams = "";
   tx_t a0 = "";
   tx_t rp = "";
@@ -3419,7 +3419,7 @@ tx_t async_argstr(PlantArray* args, PlantArray* sigs, tx_t act, PlantArray* nums
         a0 = substring(ael, 0, 1);
         if (strcmp(a0,"\"") != 0) {
             aex = translate_expr(ael);
-            aex = _handle_cat(aex, nums, plant_list_make ( 0 ));
+            aex = _handle_cat(aex, nums, evars);
         }
         rp = is_ref_at(fparams, ai);
         if (strcmp(rp,"1") == 0) {
@@ -3644,7 +3644,7 @@ tx_t async_emit_entry(tx_t name, PlantArray* params, tx_t prio) {
     code = _cat(code, "}\n\n");
     return code;
 }
-tx_t async_emit_step(tx_t name, PlantArray* phases, PlantArray* vars, PlantArray* sigs, PlantArray* subst, PlantArray* clmap, PlantArray* stvars) {
+tx_t async_emit_step(tx_t name, PlantArray* phases, PlantArray* vars, PlantArray* sigs, PlantArray* subst, PlantArray* clmap, PlantArray* stvars, PlantArray* evars) {
   tx_t phd = "";
   tx_t ls = "";
   tx_t lcode = "";
@@ -3689,13 +3689,13 @@ tx_t async_emit_step(tx_t name, PlantArray* phases, PlantArray* vars, PlantArray
                 lead = plant_list_push(lead, ls);
                 lj = lj+1;
             }
-            lcode = generate_body(lead, 1, sigs, subst, clmap, "a", nums_s, stvars, plant_list_make ( 0 ));
+            lcode = generate_body(lead, 1, sigs, subst, clmap, "a", nums_s, stvars, evars);
             code = _cat(code, lcode);
             long aw_last = nst - 1;
             awnd = plant_list_get(phd, aw_last);
             act_s = _map_get(awnd, "action");
             PlantArray* awargs = _map_get ( awnd , "args" );
-            arg_s = async_argstr(awargs, sigs, act_s, nums_s, stvars);
+            arg_s = async_argstr(awargs, sigs, act_s, nums_s, stvars, evars);
             long vi2 = 0;
             tx_t vn2 = "";
             while (vi2 + 1 < plant_array_length(vars)) {
@@ -3712,7 +3712,7 @@ tx_t async_emit_step(tx_t name, PlantArray* phases, PlantArray* vars, PlantArray
             code = _cat(code, "));\n  return 0;\n");
         }
         if (nxt == nph) {
-            tcode = generate_body(phd, 1, sigs, subst, clmap, "a", nums_s, stvars, plant_list_make ( 0 ));
+            tcode = generate_body(phd, 1, sigs, subst, clmap, "a", nums_s, stvars, evars);
             code = _cat(code, tcode);
         }
         ph2 = ph2+1;
@@ -4058,7 +4058,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         }
         PlantArray* args_s = _map_get ( node , "args" );
         tx_t argstr_s = "";
-        argstr_s = async_argstr(args_s, sigs, act, nums, stvars);
+        argstr_s = async_argstr(args_s, sigs, act, nums, stvars, evars);
         isel = indent_str(indent);
         if (strcmp(argstr_s,"") > 0) {
             return _cat(_cat(_cat(_cat(_cat(_cat(_cat(isel, "  "), act), "(0, "), ctx_s), ", "), argstr_s), ");\n");
@@ -4409,9 +4409,10 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
                 prio_s = _map_get(node, "prio");
                 PlantArray* avars = async_collect_vars ( bd , params );
                 PlantArray* aphases = async_split_phases ( bd );
+                PlantArray* evars_asy = collect_enums ( bd , params , subst , evars );
                 st_code = async_emit_state(aname, avars);
                 en_code = async_emit_entry(aname, params, prio_s);
-                stp_code = async_emit_step(aname, aphases, avars, sigs, subst, clmap, stvars_a);
+                stp_code = async_emit_step(aname, aphases, avars, sigs, subst, clmap, stvars_a, evars_asy);
                 return _cat(_cat(_cat(_cat(_cat("static int plant_a_", aname), "_step(tx_t st);\n\n"), st_code), en_code), stp_code);
             }
             tx_t paramstr = "";
@@ -6745,7 +6746,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.7 (pure native)");
+      plant_print("Chloroplast 0.48.8 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

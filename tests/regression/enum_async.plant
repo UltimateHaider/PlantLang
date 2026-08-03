@@ -1,0 +1,19 @@
+# enum_async — ENUM values inside ASYNC ACTIONs: param flows through
+# the async state struct and displays as the member name (v0.48.8).
+ENUM Color { RED, GREEN, BLUE }.
+
+ASYNC ACTION greet(c(Color)),
+  SHOW "color=" + c.
+  AWAIT phase2, c.
+  SHOW c.
+/ACTION.
+
+ASYNC ACTION phase2(tag(Color)),
+  SHOW "p2 " + tag.
+  GIVE "done".
+/ACTION.
+
+ACTION main(),
+  CREATE c(Color) TO GREEN.
+  START greet, c.
+/ACTION.

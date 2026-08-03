@@ -1,0 +1,19 @@
+# enum_async_concat — string concatenation with enum values inside an
+# async context, including passing the enum through AWAIT (v0.48.8).
+ENUM Suit { HEARTS, SPADES, DIAMONDS, CLUBS }.
+
+ASYNC ACTION tag(su(Suit), n(NUM)),
+  SHOW "suit " + su + " n=" + n.
+  AWAIT echo, su.
+  SHOW "done " + su.
+/ACTION.
+
+ASYNC ACTION echo(su(Suit)),
+  SHOW "got " + su.
+  GIVE "ok".
+/ACTION.
+
+ACTION main(),
+  CREATE su(Suit) TO DIAMONDS.
+  START tag, su, 3.
+/ACTION.

@@ -625,7 +625,7 @@ ACTION collect_nums_cb(bd(LIST), params(LIST), shads(LIST), subst(LIST)),
 # async_argstr — C argument list for an async action call site
 # (mirrors reap_stmt arg handling: strings raw, exprs translated,
 # REF params get &; async ABI adds __parent/__ctx before user args)
-ACTION async_argstr(args(LIST), sigs(LIST), act(TX), nums(LIST), stvars(LIST)),
+ACTION async_argstr(args(LIST), sigs(LIST), act(TX), nums(LIST), stvars(LIST), evars(LIST)),
   CREATE argstr(TX) TO "".
   REAP fparams FROM find_params, sigs, act.
   CREATE ai(NUM) TO 0.
@@ -636,7 +636,7 @@ ACTION async_argstr(args(LIST), sigs(LIST), act(TX), nums(LIST), stvars(LIST)),
     REAP a0 FROM substring, ael, 0, 1.
     IF a0 ISNT "\"",
       REAP aex FROM translate_expr, ael.
-      REAP aex FROM _handle_cat, aex, nums, plant_list_make(0).
+      REAP aex FROM _handle_cat, aex, nums, evars.
     /IF.
     REAP rp FROM is_ref_at, fparams, ai.
     IF rp IS "1", SET aex TO "&" + aex. /IF.
@@ -851,7 +851,7 @@ ACTION async_emit_entry(name(TX), params(LIST), prio(TX)),
 # (aliases of the state fields) are restored at entry; the phase
 # dispatch jumps to the saved program counter; AWAIT saves all
 # locals back, bumps __pc and suspends on the child task.
-ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIST), clmap(LIST), stvars(LIST)),
+ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIST), clmap(LIST), stvars(LIST), evars(LIST)),
   CREATE code(TX) TO "static int plant_a_" + name + "_step(tx_t st) \{\n".
   SET code TO code + "  plant_a_" + name + "_state* s = (plant_a_" + name + "_state*)st;\n".
   SET code TO code + "  if (s->__pc > 0) plant_async_await_result(st);\n".
@@ -889,13 +889,13 @@ ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIS
         PUT ls INTO lead.
         SET lj TO lj + 1.
       /SEASON.
-      REAP lcode FROM generate_body, lead, 1, sigs, subst, clmap, "a", nums_s, stvars, plant_list_make(0).
+      REAP lcode FROM generate_body, lead, 1, sigs, subst, clmap, "a", nums_s, stvars, evars.
       SET code TO code + lcode.
       CREATE aw_last(NUM) TO nst - 1.
       REAP awnd FROM plant_list_get, phd, aw_last.
       REAP act_s FROM _map_get, awnd, "action".
       CREATE awargs(LIST) TO _map_get(awnd, "args").
-      REAP arg_s FROM async_argstr, awargs, sigs, act_s, nums_s, stvars.
+      REAP arg_s FROM async_argstr, awargs, sigs, act_s, nums_s, stvars, evars.
       CREATE vi2(NUM) TO 0.
       CREATE vn2(TX) TO "".
       SEASON vi2 + 1 < COUNT vars,
@@ -910,7 +910,7 @@ ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIS
       SET code TO code + "));\n  return 0;\n".
     /IF.
     IF nxt IS nph,
-      REAP tcode FROM generate_body, phd, 1, sigs, subst, clmap, "a", nums_s, stvars, plant_list_make(0).
+      REAP tcode FROM generate_body, phd, 1, sigs, subst, clmap, "a", nums_s, stvars, evars.
       SET code TO code + tcode.
     /IF.
     SET ph2 TO ph2 + 1.
@@ -1227,7 +1227,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF ctx_n ISNT "" AND ctx_n ISNT "null", SET ctx_s TO ctx_n. /IF.
         CREATE args_s(LIST) TO _map_get(node, "args").
         CREATE argstr_s(TX) TO "".
-        REAP argstr_s FROM async_argstr, args_s, sigs, act, nums, stvars.
+        REAP argstr_s FROM async_argstr, args_s, sigs, act, nums, stvars, evars.
         REAP isel FROM indent_str, indent.
         IF argstr_s > "",
             GIVE isel + "  " + act + "(0, " + ctx_s + ", " + argstr_s + ");\n".
@@ -1610,9 +1610,10 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             REAP prio_s FROM _map_get, node, "prio".
             CREATE avars(LIST) TO async_collect_vars(bd, params).
             CREATE aphases(LIST) TO async_split_phases(bd).
+            CREATE evars_asy(LIST) TO collect_enums(bd, params, subst, evars).
             REAP st_code FROM async_emit_state, aname, avars.
             REAP en_code FROM async_emit_entry, aname, params, prio_s.
-            REAP stp_code FROM async_emit_step, aname, aphases, avars, sigs, subst, clmap, stvars_a.
+            REAP stp_code FROM async_emit_step, aname, aphases, avars, sigs, subst, clmap, stvars_a, evars_asy.
             GIVE "static int plant_a_" + aname + "_step(tx_t st);\n\n" + st_code + en_code + stp_code.
         /IF.
         CREATE paramstr(TX) TO "".

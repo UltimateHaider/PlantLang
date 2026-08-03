@@ -1,0 +1,18 @@
+# enum_async_show — direct SHOW of enum params and enum locals created
+# inside an async body, across WAIT phase boundaries (v0.48.8).
+ENUM Level { LOW, MEDIUM, HIGH }.
+
+ASYNC ACTION report(lv(Level)),
+  SHOW lv.
+  CREATE mine(Level) TO lv.
+  SHOW mine.
+  WAIT.
+  SHOW lv.
+  CREATE next(Level) TO MEDIUM.
+  SHOW next.
+/ACTION.
+
+ACTION main(),
+  CREATE l(Level) TO HIGH.
+  START report, l.
+/ACTION.

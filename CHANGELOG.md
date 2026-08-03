@@ -1,5 +1,19 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.8 — 2026 (ENUM Async)
+
+### New Features
+- **ENUM in ASYNC ACTIONs** — enum parameters and enum locals inside
+  asynchronous actions now display correctly through `SHOW` and string
+  concatenation. The async branch of `generate_node` builds the per-action
+  enum table (`collect_enums`) from the module registry, and
+  `async_emit_step` / `async_argstr` thread it through the phase-body
+  generation (`generate_body`), the AWAIT/START argument serializer, and the
+  state-machine step function. Enum values cross WAIT phase boundaries via
+  the async state struct (stored as `tx_t`) and are wrapped with
+  `_from_enum` on restore/display, including AWAIT/START argument
+  pass-through to child async actions.
+
 ## v0.48.7 — 2026 (ENUM Generics)
 
 ### New Features
