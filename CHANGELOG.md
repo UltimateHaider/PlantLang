@@ -1,5 +1,19 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.6 — 2026 (ENUM Display Repair)
+
+### Bug Fixes
+- **ENUM member display** — `SHOW` and string-concatenation of an ENUM-typed
+  variable now print the member name (`GREEN`, `"suit=SPADES"`) instead of the
+  raw enum-int stored in the `tx_t` slot (which printed garbage / crashed on
+  the `plant_print` pointer path). The codegen threads a per-action enum table
+  (`collect_enums`) built from the module enum registry
+  (`build_enum_registry`) and wraps enum refs at SHOW/concat sites with the
+  runtime helper `_from_enum(var, "RED,GREEN,BLUE")`. Bare enum member
+  constants, enum-typed params, CREATE/LET targets and refs inside
+  IF/SEASON/CYCLE/MATCH bodies are covered; async/closure/generic bodies are
+  unchanged (deferred).
+
 ## v0.48.4 — 2026 (FFI Extensions — Full Signature Space)
 
 ### New Features

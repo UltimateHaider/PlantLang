@@ -1,0 +1,12 @@
+# enum_concat — string-concatenating an ENUM-typed var yields the
+# member name inline instead of raw int bits (v0.48.6).
+ENUM Suit { HEARTS, SPADES, DIAMONDS, CLUBS }.
+
+ACTION main(),
+  CREATE s(Suit) TO SPADES.
+  SHOW "suit=" + s.
+  SHOW "result: " + s + "!".
+  CREATE d(Suit) TO DIAMONDS.
+  SHOW d + " is valid".
+  GIVE 0.
+/ACTION.

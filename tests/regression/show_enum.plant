@@ -1,0 +1,13 @@
+# show_enum — SHOW of an ENUM-typed var prints the member name,
+# not raw enum-int-as-pointer bits (v0.48.6).
+ENUM Color { RED, GREEN, BLUE }.
+
+ACTION main(),
+  CREATE c(Color) TO GREEN.
+  SHOW c.
+  CREATE d(Color) TO BLUE.
+  SHOW d.
+  CREATE e(Color) TO RED.
+  SHOW e.
+  GIVE 0.
+/ACTION.

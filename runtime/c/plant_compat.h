@@ -22,6 +22,29 @@ static tx_t _from_long(long n) { char buf[64]; snprintf(buf,64,"%ld",n); return 
    so the conversion is identical to _from_long; this single choke
    point lets a future ABI that distinguishes FFI nums diverge. */
 static tx_t _from_ffi_num(long long n) { return _from_long((long)n); }
+/* v0.48.6 — ENUM member display. An ENUM-typed variable holds the raw
+   member int in its tx_t slot; names is the comma-separated member list
+   the codegen emitted for the enum typedef ("RED,GREEN,BLUE"). Returns a
+   copy of the member name for that value, else the numeric string. */
+static tx_t _from_enum(tx_t v, tx_t names) {
+  long idx = _L(v);
+  const char* s = _S(names);
+  if (!s || idx < 0) return _from_ffi_num(idx);
+  const char* p = s; long cur = 0;
+  while (cur < idx && *p) {
+    while (*p && *p != ',') p++;
+    if (*p == ',') { p++; cur++; }
+    else break;
+  }
+  const char* start = p;
+  while (*p && *p != ',') p++;
+  if (p == start) return _from_ffi_num(idx);
+  size_t n = (size_t)(p - start);
+  char* buf = malloc(n + 1);
+  if (!buf) return _from_ffi_num(idx);
+  memcpy(buf, start, n); buf[n] = 0;
+  return buf;
+}
 static tx_t _at(tx_t s, long i) { PlantArray*_p=_P(s); if(_p&&_p->magic==PLANT_ARRAY_MAGIC)return plant_list_get(_p,i); const char*_s=_S(s); if(!_s||i<0||i>=(long)strlen(_s))return""; char _b[2]; _b[0]=_s[i]; _b[1]=0; return strdup(_b); }
 static int _cli_argc; static char **_cli_argv;
 static void plant_init_cli(int c, char **v) { _cli_argc=c; _cli_argv=v; }

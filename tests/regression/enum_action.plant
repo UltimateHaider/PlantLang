@@ -1,0 +1,17 @@
+# enum_action — an ENUM-typed value passed to an ACTION and read back
+# prints member names inside the callee; enum var in main stays stable
+# (v0.48.6).
+ENUM Player { ALICE, BOB, CAD }.
+
+ACTION describe(id(Player)),
+  SHOW "player " + id.
+  GIVE 0.
+/ACTION.
+
+ACTION main(),
+  CREATE who(Player) TO BOB.
+  SHOW who.
+  REAP rr FROM describe, who.
+  REAP rr2 FROM describe, CAD.
+  GIVE 0.
+/ACTION.
