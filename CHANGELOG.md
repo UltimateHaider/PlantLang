@@ -1,5 +1,40 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.13 — 2026 (Generics Numeric Returns)
+
+### New Features
+- **Generic actions can now return numeric values as text** — an action with
+  an explicit `-> T` return whose instantiation substitutes `T` to `NUM` (or
+  `FACT`) wraps its numeric `GIVE`s in `_from_long` at the return site, so
+  reap targets display and concatenate directly without a manual `_from_long`
+  at the caller. Previously the instantiated C emitted bare `long` bits into
+  the `tx_t` return slot, producing garbage text for `SHOW`/`+` on reaps of
+  generic actions such as `max2[NUM]`.
+- **Declared return type threaded through code generation** — `generate_body`
+  and `generate_node` carry the enclosing action's substituted return type
+  (`rty`), and `GIVE` sites gate the numeric wrap on it: only explicit
+  numeric returns get `_from_long`. Implicit-return actions (`ACTION add(a(NUM),
+  b(NUM)), GIVE a+b.`) keep the raw-bit convention, so existing callers
+  (`numeric_return`, `ffi.plant`, `struct_num`, `tests/generics/multi.plant`)
+  are untouched.
+- **Parser records plain return types** — `ACTION max2[T](a(T), b(T)) -> T.`
+  now stores `"ret"` on the action_decl node (only `Result`/`STRUCT`/`ENUM`/
+  `void*` returns were captured before; `-> T` and `-> NUM` were dropped),
+  and template instantiations substitute it (`T`→`NUM`) via the existing
+  `subst_type` machinery to drive the wrap.
+- **Enum returns and numeric returns coexist** — an enum-typed generic return
+  (`-> T` with `T = Color`) still uses `_from_enum`, while the `_from_long`
+  wrap fires only for `NUM`/`FACT` instantiations, verified by FFI/`_to_enum`
+  probes alongside the numeric path.
+
+### Regression Tests
+- `generic_num_return` — explicit `-> T` actions instantiated with `NUM`/
+  `FACT`; reap targets SHOW and concatenate directly.
+- `generic_num_concat` — generic NUM results inside `_cat` chains.
+- `generic_num_struct` — NUM fields in `Box[NUM]` round-trip through FFI.
+- `generic_num_ffi` — enum-typed generic return + ENUM FFI marshalling in
+  one program, zero conflict with the numeric wrap.
+
 ## v0.48.12 — 2026 (ENUM FFI)
 
 ### New Features

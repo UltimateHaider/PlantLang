@@ -1252,7 +1252,7 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
   SEASON TRUE,
     REAP is_eof_flag FROM is_eof, tokens, p4.
     IF is_eof_flag,
-      GIVE plant_list_make(2, plant_list_make(12, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", plant_list_make(0), "prio", prio), p4).
+      GIVE plant_list_make(2, plant_list_make(14, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", plant_list_make(0), "prio", prio, "ret", ""), p4).
     /IF.
     REAP tok FROM peek, tokens, p4.
     REAP lx FROM tok_lex, tok.
@@ -1339,6 +1339,7 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
     SET p4 TO p5.
   /SEASON.
   # skip optional -> Type (then check if , or .)
+  CREATE ret(TX) TO "".
   REAP arrow_tok FROM peek, tokens, p5.
   REAP arrow_lx FROM tok_lex, arrow_tok.
   IF arrow_lx IS "->",
@@ -1356,7 +1357,6 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
     REAP p5 FROM _second, ret_pair.
     # v0.48.4: FFI return types — external (default), Result<T,E>,
     # STRUCT X (by-value struct), void*
-    CREATE ret(TX) TO "".
     IF ret_lx IS "Result", SET ret TO "Result". /IF.
     IF ret_lx IS "STRUCT",
       REAP rtv FROM collect_type_text, tokens, p5, ".", 0.
@@ -1398,6 +1398,13 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
         REAP p5 FROM _second, gt_pair.
       /IF.
     /IF.
+    # v0.48.13: plain return types (T, NUM, TX, enum names…) are
+    # stored on the action_decl node so generic instantiations know
+    # their substituted return type (drives _from_long wrapping of
+    # numeric GIVEs). FFI marker keywords are never stored here.
+    IF ret IS "" AND ret_lx ISNT "external" AND ret_lx ISNT "Result" AND ret_lx ISNT "STRUCT" AND ret_lx ISNT "ENUM" AND ret_lx ISNT "void",
+      SET ret TO ret_lx.
+    /IF.
     # optional PRIORITY HIGH|NORMAL|LOW modifier (async actions)
     REAP pr_tok FROM peek, tokens, p5.
     REAP pr_lx FROM tok_lex, pr_tok.
@@ -1423,14 +1430,14 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
       IF ret_lx IS "external" OR ret_lx IS "Result" OR ret_lx IS "STRUCT" OR ret_lx IS "ENUM" OR ret IS "void*",
         GIVE plant_list_make(2, plant_list_make(10, "type", "external_decl", "name", aname, "params", params, "ret", ret, "varargs", vararg), p5).
       /IF.
-      GIVE plant_list_make(2, plant_list_make(12, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", plant_list_make(0), "prio", prio), p5).
+      GIVE plant_list_make(2, plant_list_make(14, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", plant_list_make(0), "prio", prio, "ret", ret), p5).
     /IF.
   /IF.
   CREATE body(LIST) TO plant_list_make(0).
   SEASON TRUE,
     REAP is_eof_flag FROM is_eof, tokens, p5.
     IF is_eof_flag,
-      GIVE plant_list_make(2, plant_list_make(12, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", body, "prio", prio), p5).
+      GIVE plant_list_make(2, plant_list_make(14, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", body, "prio", prio, "ret", ret), p5).
     /IF.
     REAP tok4 FROM peek, tokens, p5.
     REAP lx4 FROM tok_lex, tok4.
@@ -1441,7 +1448,7 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
       REAP p7 FROM _second, end.
       REAP dot FROM consume, tokens, p7.
       REAP p8 FROM _second, dot.
-      GIVE plant_list_make(2, plant_list_make(12, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", body, "prio", prio), p8).
+      GIVE plant_list_make(2, plant_list_make(14, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", body, "prio", prio, "ret", ret), p8).
     /IF.
     REAP stmt_pair FROM parse_statement, tokens, p5.
     CREATE stmt TO stmt_pair[0].

@@ -143,6 +143,17 @@ ACTION expr_is_numeric(e(TX), nums(LIST)),
 /ACTION.
 
 # ──────────────────────────────────────────────────────────────
+#  is_numeric_type — 1 when a (substituted) PlantLang type is a
+#  scalar numeric type (NUM/FACT). gen_give_stmt wraps the GIVE
+#  value of NUM-typed actions in _from_long so callers receive the
+#  value as text instead of raw long bits (v0.48.13).
+# ──────────────────────────────────────────────────────────────
+ACTION is_numeric_type(t(TX)),
+  IF t IS "NUM" OR t IS "FACT", GIVE 1. /IF.
+  GIVE 0.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
 #  _handle_cat — convert + to _cat() for string concatenation
 #  Only converts when string literals (") are present in expr
 #  nums: names of scalar NUM/FACT vars in scope; bare identifiers
@@ -1082,7 +1093,7 @@ ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIS
         PUT ls INTO lead.
         SET lj TO lj + 1.
       /SEASON.
-      REAP lcode FROM generate_body, lead, 1, sigs, subst, clmap, "a", nums_s, stvars, evars.
+      REAP lcode FROM generate_body, lead, 1, sigs, subst, clmap, "a", nums_s, stvars, evars, "".
       SET code TO code + lcode.
       CREATE aw_last(NUM) TO nst - 1.
       REAP awnd FROM plant_list_get, phd, aw_last.
@@ -1103,7 +1114,7 @@ ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIS
       SET code TO code + "));\n  return 0;\n".
     /IF.
     IF nxt IS nph,
-      REAP tcode FROM generate_body, phd, 1, sigs, subst, clmap, "a", nums_s, stvars, evars.
+      REAP tcode FROM generate_body, phd, 1, sigs, subst, clmap, "a", nums_s, stvars, evars, "".
       SET code TO code + tcode.
     /IF.
     SET ph2 TO ph2 + 1.
@@ -1175,14 +1186,17 @@ ACTION indent_str(level(NUM)),
 #  (CREATE/LET emit assignments into the state struct, GIVE emits
 #  plant_async_finish + return 1).
 #  nums: names of numeric scalar vars in scope (_handle_cat).
+#  rty: the enclosing action's return type after substitution (""
+#  for implicit returns / async steps / closures); gen_give_stmt
+#  uses it to wrap NUM-typed returns in _from_long (v0.48.13).
 # ──────────────────────────────────────────────────────────────
-ACTION generate_body(bd(LIST), indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST)),
+ACTION generate_body(bd(LIST), indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST), rty(TX)),
   CREATE res(TX) TO "".
   CREATE i(NUM) TO 0.
   CREATE node_el(TX) TO "".
   SEASON i < COUNT bd,
     REAP node_el FROM plant_list_get, bd, i.
-    REAP node_code FROM generate_node, node_el, indent, sigs, subst, clmap, actx, nums, stvars, evars.
+    REAP node_code FROM generate_node, node_el, indent, sigs, subst, clmap, actx, nums, stvars, evars, rty.
     IF node_code > "",
       SET res TO res + node_code.
     /IF.
@@ -1197,8 +1211,9 @@ ACTION generate_body(bd(LIST), indent(NUM), sigs(LIST), subst(LIST), clmap(LIST)
 #  current C function scope; "" (missing key) → empty list.
 #  actx: "" = normal body, "a" = async step phase body.
 #  nums: names of numeric scalar vars in scope (_handle_cat).
+#  rty: enclosing action's substituted return type ("" if implicit).
 # ──────────────────────────────────────────────────────────────
-ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST)),
+ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST), rty(TX)),
     REAP ntype FROM _map_get, node, "type".
     IF clmap IS "",
         SET clmap TO plant_list_make(0).
@@ -1371,6 +1386,11 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    ENUM values (bare member refs, enum vars, struct field
     #    reads) are wrapped with _from_enum at the return site so
     #    callers receive the member-name string (v0.48.11).
+    #    Pure numeric GIVEs of NUM-typed actions (explicit -> NUM
+    #    or -> T instantiated with NUM) are wrapped with _from_long
+    #    so callers get the value as text instead of raw long bits
+    #    (v0.48.13); implicit-return actions keep the raw-bit
+    #    convention so existing callers are unaffected.
     IF ntype IS "give_stmt",
         REAP val FROM _map_get, node, "value".
         REAP cval FROM translate_expr, val.
@@ -1380,6 +1400,12 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             REAP snm3 FROM enum_expr_of, evars, cval.
             IF snm3 ISNT "",
                 SET cval TO "_from_enum(" + cval + ", \"" + snm3 + "\")".
+            /IF.
+        /IF.
+        IF isn3 IS 1 AND rty ISNT "",
+            REAP in3 FROM is_numeric_type, rty.
+            IF in3 IS 1,
+                SET cval TO "_from_long(" + cval + ")".
             /IF.
         /IF.
         REAP isel FROM indent_str, indent.
@@ -1480,7 +1506,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             SET ccl2 TO plant_list_make(0).
         /IF.
         CREATE cnode2(LIST) TO plant_list_make(10, "type", "reap_stmt", "target", "_", "action", ca2, "args", cargs2, "clargs", ccl2).
-        REAP ccode3 FROM generate_node, cnode2, indent, sigs, subst, clmap, actx, nums, stvars, evars.
+        REAP ccode3 FROM generate_node, cnode2, indent, sigs, subst, clmap, actx, nums, stvars, evars, rty.
         GIVE ccode3.
     /IF.
 
@@ -1712,7 +1738,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP ccond FROM handle_strcmp, ccond.
         REAP isel FROM indent_str, indent.
         CREATE ccode(TX) TO isel + "  if (" + ccond + ") \{\n".
-        REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars.
+        REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty.
         SET ccode TO ccode + bcode + isel + "  \}\n".
         GIVE ccode.
     /IF.
@@ -1725,7 +1751,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP ccond FROM handle_strcmp, ccond.
         REAP isel FROM indent_str, indent.
         CREATE ccode(TX) TO isel + "  while (" + ccond + ") \{\n".
-        REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars.
+        REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty.
         SET ccode TO ccode + bcode + isel + "  \}\n".
         GIVE ccode.
     /IF.
@@ -1752,7 +1778,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
                 SET stepstr TO cstep.
             /IF.
             SET ccode TO isel + "  for (long " + ivar + " = " + cfrom + "; " + ivar + " <= " + cto + "; " + ivar + " += " + stepstr + ") \{\n".
-            REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars.
+            REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty.
             SET ccode TO ccode + bcode + isel + "  \}\n".
             GIVE ccode.
         /IF.
@@ -1768,7 +1794,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             SET ccode TO ccode + isel + "    long " + idxvar + " = 0;\n".
             SET ccode TO ccode + isel + "    while (" + idxvar + " < plant_array_length(" + clist + ")) \{\n".
             SET ccode TO ccode + isel + "      tx_t " + ivar + " = plant_array_get(" + clist + ", " + idxvar + ");\n".
-            REAP bcode FROM generate_body, bd, indent + 4, sigs, subst, clmap, actx, nums, stvars, evars.
+            REAP bcode FROM generate_body, bd, indent + 4, sigs, subst, clmap, actx, nums, stvars, evars, rty.
             SET ccode TO ccode + bcode + isel + "      " + idxvar + "++;\n".
             SET ccode TO ccode + isel + "    }\n".
             SET ccode TO ccode + isel + "  }\n".
@@ -1796,11 +1822,11 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             IF binding > "" AND binding ISNT "null",
                 SET ccode TO ccode + isel + "      \{\n".
                 SET ccode TO ccode + isel + "        tx_t " + binding + " = " + csubj + ";\n".
-                REAP bcode FROM generate_body, cbody, indent + 4, sigs, subst, clmap, actx, nums, stvars, evars.
+                REAP bcode FROM generate_body, cbody, indent + 4, sigs, subst, clmap, actx, nums, stvars, evars, rty.
                 SET ccode TO ccode + bcode + isel + "      \}\n".
             /IF.
             IF binding IS "" OR binding IS "null",
-                REAP bcode FROM generate_body, cbody, indent + 4, sigs, subst, clmap, actx, nums, stvars, evars.
+                REAP bcode FROM generate_body, cbody, indent + 4, sigs, subst, clmap, actx, nums, stvars, evars, rty.
                 SET ccode TO ccode + bcode.
             /IF.
             SET ccode TO ccode + isel + "      break;\n".
@@ -1869,7 +1895,10 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             SET dcode TO dcode + "  tx_t " + dv + " = \"\";\n".
             SET di TO di + 1.
         /SEASON.
-        REAP bcode FROM generate_body, bd, 1, sigs, subst, clmap, actx, nums_a, stvars_a, evars_a.
+        # v0.48.13: the declared -> Type after substitution drives
+        # _from_long wrapping of numeric GIVEs ("" for implicit)
+        CREATE rty_a(TX) TO subst_type(_map_get(node, "ret"), subst).
+        REAP bcode FROM generate_body, bd, 1, sigs, subst, clmap, actx, nums_a, stvars_a, evars_a, rty_a.
         # plant_async_drain() for ACTION main() when async is
         # reachable from its call graph (drain_after marker set by
         # generate_c pass 2b). Skipped when main ends in explicit
@@ -2869,6 +2898,10 @@ ACTION emit_inst(inst(TX), templates(LIST), sigs(LIST), reg(LIST)),
     REAP bd FROM _map_get, tpl, "body".
     REAP subst FROM build_subst, generics, args.
     REAP mname FROM mangle, base, args.
+    # v0.48.13: the template's declared -> Type after substitution
+    # drives _from_long wrapping of numeric GIVEs ("" if implicit)
+    CREATE rtpl(TX) TO _map_get(tpl, "ret").
+    CREATE rty_m(TX) TO subst_type(rtpl, subst).
     CREATE paramstr(TX) TO "".
     CREATE pi(NUM) TO 0.
     CREATE param_el(TX) TO "".
@@ -2899,7 +2932,7 @@ ACTION emit_inst(inst(TX), templates(LIST), sigs(LIST), reg(LIST)),
         SET dcode TO dcode + "  tx_t " + dv + " = \"\";\n".
         SET di TO di + 1.
     /SEASON.
-    REAP bcode FROM generate_body, bd, 1, sigs, subst, plant_list_make(0), "", nums_m, stvars_m, evars_m.
+    REAP bcode FROM generate_body, bd, 1, sigs, subst, plant_list_make(0), "", nums_m, stvars_m, evars_m, rty_m.
     IF (COUNT bd) IS 0,
         SET bcode TO "  return " + mname + ";\n".
     /IF.
@@ -3180,7 +3213,8 @@ ACTION generate_c(ast(LIST)),
             IF COUNT gens2 > 0,
                 CREATE pms2(LIST) TO _map_get(node_el, "params").
                 CREATE bd2(LIST) TO _map_get(node_el, "body").
-                PUT plant_list_make(8, "name", aname, "generics", gens2, "params", pms2, "body", bd2) INTO templates.
+                CREATE rt2b(TX) TO _map_get(node_el, "ret").
+                PUT plant_list_make(10, "name", aname, "generics", gens2, "params", pms2, "body", bd2, "ret", rt2b) INTO templates.
             /IF.
         /IF.
         IF ntype IS "struct_decl",
@@ -3322,7 +3356,7 @@ ACTION generate_c(ast(LIST)),
         REAP node_el FROM plant_list_get, ast, i.
         REAP ntype FROM _map_get, node_el, "type".
         IF ntype IS "enum_decl",
-            REAP nd_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs.
+            REAP nd_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "".
             SET struct_code TO struct_code + nd_code.
         /IF.
         SET i TO i + 1.
@@ -3647,7 +3681,7 @@ ACTION generate_c(ast(LIST)),
                     REAP node_el2 FROM map_add, node_el, "drain_after", "1".
                 /IF.
                 REAP cmact FROM _cl_map_get, clmaps, aname.
-                REAP nd_code FROM generate_node, node_el2, 0, sigs, esub, cmact, "", plant_list_make(0), plant_list_make(0), eregs.
+                REAP nd_code FROM generate_node, node_el2, 0, sigs, esub, cmact, "", plant_list_make(0), plant_list_make(0), eregs, "".
                 SET decl_code TO decl_code + nd_code.
                 SET has_decl TO 1.
             /IF.
@@ -3656,7 +3690,7 @@ ACTION generate_c(ast(LIST)),
             SET has_decl TO 1.
         /IF.
         IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl",
-            REAP ns_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs.
+            REAP ns_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "".
             SET stmt_code TO stmt_code + ns_code.
             SET has_stmt TO 1.
         /IF.
@@ -4219,7 +4253,7 @@ ACTION _cl_emit_fn(cnode(LIST), sigs(LIST), subst(LIST), reg(LIST)),
             SET di6 TO di6 + 1.
         /SEASON.
         CREATE evars_c(LIST) TO collect_enums(bb, cbpars2, subst, reg, sigs).
-        REAP bc3 FROM generate_body, bb, 1, sigs, subst, cm2, "", nums_c, stvars_c, evars_c.
+        REAP bc3 FROM generate_body, bb, 1, sigs, subst, cm2, "", nums_c, stvars_c, evars_c, "".
         SET fnc TO fnc + bc3 + "".
     /IF.
     SET fnc TO fnc + "\}\n".

@@ -1,0 +1,20 @@
+# v0.48.13 — NUM fields inside a generic STRUCT instantiation
+# (Box[NUM]) round-trip through the FFI marshalling helpers with
+# the rty threading in place; numeric field values display via
+# concatenation.
+STRUCT Box[T] { val: T }.
+
+ACTION ffi_make_box(v(TX)) -> external.
+ACTION ffi_box_write(b(Box[NUM]), v(NUM)) -> external.
+ACTION ffi_box_read(b(Box[NUM])) -> external.
+
+ACTION main(),
+  REAP b FROM ffi_make_box, "0".
+  REAP _ FROM ffi_box_write, b, 42.
+  REAP v FROM ffi_box_read, b.
+  SHOW "box=" + v.
+  REAP b2 FROM ffi_make_box, "1".
+  REAP v2 FROM ffi_box_read, b2.
+  SHOW "seed=" + v2.
+  GIVE 0.
+/ACTION.

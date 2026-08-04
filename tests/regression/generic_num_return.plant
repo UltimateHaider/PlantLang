@@ -1,0 +1,25 @@
+# v0.48.13 — generic actions with an explicit -> T return their
+# numeric values as text: numeric GIVEs are wrapped in _from_long
+# at the return site (is_numeric_type on the substituted ret), so
+# reap targets display and concatenate directly without a manual
+# _from_long at the caller.
+ACTION max2[T](a(T), b(T)) -> T,
+  IF a > b, GIVE a. /IF.
+  GIVE b.
+/ACTION.
+
+ACTION add[T](a(T), b(T)) -> T,
+  GIVE a + b.
+/ACTION.
+
+ACTION main(),
+  REAP m FROM max2[NUM], 15, 9.
+  SHOW m.
+  REAP n FROM max2[NUM], 3, 8.
+  SHOW "max=" + n.
+  REAP s FROM add[NUM], 30, 12.
+  SHOW "sum=" + s.
+  REAP f FROM add[FACT], 2, 3.
+  SHOW "f=" + f.
+  GIVE 0.
+/ACTION.

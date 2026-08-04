@@ -1,0 +1,27 @@
+# v0.48.13 — generics + FFI integration has zero conflict: an
+# enum-typed generic return (-> T with T=Color) keeps the _from_enum
+# wrapping, while ENUM-returning externals and enum FFI params keep
+# their _from_enum/_to_enum marshalling alongside.
+ENUM Color { RED, GREEN, BLUE }.
+
+ACTION ffi_color() -> ENUM Color.
+ACTION ffi_is_green(c(ENUM Color)) -> external.
+
+ACTION pick[T](n(T)) -> T,
+  IF n IS 0, GIVE RED. /IF.
+  GIVE GREEN.
+/ACTION.
+
+ACTION main(),
+  REAP p FROM pick[Color], 1.
+  SHOW "p=" + p.
+  REAP z FROM pick[Color], 0.
+  SHOW "z=" + z.
+  REAP c FROM ffi_color.
+  SHOW "c=" + c.
+  REAP r FROM ffi_is_green, c.
+  SHOW "green=" + r.
+  REAP r2 FROM ffi_is_green, GREEN.
+  SHOW "g2=" + r2.
+  GIVE 0.
+/ACTION.

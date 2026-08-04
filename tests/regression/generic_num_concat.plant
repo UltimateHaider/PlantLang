@@ -1,0 +1,18 @@
+# v0.48.13 — generic NUM results inside string concatenation:
+# numeric GIVEs arrive as text, so _cat segments resolve without
+# any numeric-var bookkeeping at the caller; TX instantiations
+# pass strings through unwrapped.
+ACTION id[T](v(T)) -> T,
+  GIVE v.
+/ACTION.
+
+ACTION main(),
+  REAP a FROM id[NUM], 7.
+  SHOW "a=" + a.
+  SHOW "a+" + a + "!".
+  REAP b FROM id[TX], "str".
+  SHOW "b=" + b.
+  REAP c FROM id[NUM], 12.
+  SHOW "c=" + c + "+" + a.
+  GIVE 0.
+/ACTION.
