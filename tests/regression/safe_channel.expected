@@ -1,0 +1,4 @@
+send=0
+recv=hello channel
+big=0
+copies=1 transfers=1

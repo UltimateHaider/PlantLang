@@ -1,0 +1,6 @@
+isolated ran
+isolated ran
+workers=4 busy=0 spawns=4 restarts=0 fallback=0 served=2
+0,MODE_ENTER,SAFE isolated_worker
+1,MODE_ENTER,SAFE isolated_worker
+

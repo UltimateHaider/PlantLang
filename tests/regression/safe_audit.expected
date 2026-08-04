@@ -1,0 +1,22 @@
+read0=0
+grant=1
+read1=1
+net=1
+sys=0
+execve=0
+fork=0
+ptrace=0
+readsc=1
+chain=OK
+tamper=0
+chain2=TAMPERED 8
+0,MODE_ENTER,SAFE main
+1,CAP_CHECK,FILE_READ deny
+2,SAFE_GRANT,FILE_READ granted via MissionContext
+3,CAP_CHECK,FILE_READ grant
+4,SAFE_GRANT,NET_CONNECT granted via MissionContext
+5,SAFE_GRANT,SHUTDOWN_ANY denied (MissionContext grants FILE_READ/NET_CONNECT only)
+6,SYSCALL_BLOCK,execve blocked (zero-trust syscall filter)
+7,SYSCALL_BLOCK,fork blocked (zero-trust syscall filter)
+8,SYSCALL_BLOCK,qtrace blocked (zero-trust syscall filter)
+

@@ -347,4 +347,64 @@ tx_t ffi_cap_check(tx_t cap) {
     return plant_cap_check(cap);
 }
 
+/* ── v0.48.16 Mission Mode SAFE wrappers (warm pool + SafeChannel +
+   hash-chained audit). The pool/channel functions live in the runtime;
+   these wrappers also expose test-only fault injection (stall, starve,
+   tamper) so the heartbeat/starvation/audit tests are deterministic. */
+tx_t ffi_safe_status(void) {
+    return plant_safe_status();
+}
+
+tx_t ffi_safe_stall(tx_t namev) {
+    return plant_safe_stall(namev);
+}
+
+tx_t ffi_safe_heartbeat_tick(void) {
+    return _from_long(plant_pool_tick());
+}
+
+tx_t ffi_safe_starve(tx_t ms) {
+    return plant_safe_starve(ms);
+}
+
+tx_t ffi_safe_grant(tx_t cap) {
+    return plant_safe_grant(cap);
+}
+
+tx_t ffi_safe_syscall(tx_t name) {
+    return plant_syscall_check(name);
+}
+
+tx_t ffi_safe_channel_open(void) {
+    return plant_safe_channel_open();
+}
+
+tx_t ffi_safe_send(tx_t chan, tx_t payload) {
+    return plant_safe_send(chan, payload);
+}
+
+tx_t ffi_safe_send_big(tx_t chan, tx_t n) {
+    return plant_safe_send_big(chan, n);
+}
+
+tx_t ffi_safe_recv(tx_t chan) {
+    return plant_safe_recv(chan);
+}
+
+tx_t ffi_safe_stats(tx_t chan) {
+    return plant_safe_stats(chan);
+}
+
+tx_t ffi_audit_chain_verify(void) {
+    return plant_audit_chain_verify();
+}
+
+tx_t ffi_audit_chain_head(void) {
+    return plant_audit_chain_head();
+}
+
+tx_t ffi_audit_tamper(void) {
+    return plant_audit_tamper();
+}
+
 #endif /* MOCK_FFI_EXT_H */

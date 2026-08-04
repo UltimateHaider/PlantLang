@@ -1,0 +1,20 @@
+# safe_audit — SAFE governance: zero permissions by default (cap checks
+# deny until a MissionContext grant), granular FILE_READ/NET_CONNECT
+# grants only, syscall filtering (execve/fork/ptrace blocked), and the
+# hash-chained audit: the chain verifies OK until a tampered event is
+# injected, after which verification reports TAMPERED (v0.48.16).
+ACTION main() WITH MISSION SAFE,
+  SHOW "read0=" + ffi_cap_check("FILE_READ").
+  SHOW "grant=" + ffi_safe_grant("FILE_READ").
+  SHOW "read1=" + ffi_cap_check("FILE_READ").
+  SHOW "net=" + ffi_safe_grant("NET_CONNECT").
+  SHOW "sys=" + ffi_safe_grant("SHUTDOWN_ANY").
+  SHOW "execve=" + ffi_safe_syscall("execve").
+  SHOW "fork=" + ffi_safe_syscall("fork").
+  SHOW "ptrace=" + ffi_safe_syscall("ptrace").
+  SHOW "readsc=" + ffi_safe_syscall("read").
+  SHOW "chain=" + ffi_audit_chain_verify().
+  SHOW "tamper=" + ffi_audit_tamper().
+  SHOW "chain2=" + ffi_audit_chain_verify().
+  SHOW ffi_audit_dump().
+/ACTION.

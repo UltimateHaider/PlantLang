@@ -1,0 +1,27 @@
+# safe_pool_bench — Mission Mode SAFE pool overhead: 200k calls into a
+# SAFE action, each acquiring a warm-pool worker (heartbeat + channel
+# bind + release). Measures the isolation cost against the BALANCED
+# numeric_bench baseline: SAFE must stay within a small constant factor
+# per call while every entry runs under the zero-permission context.
+ACTION safe_worker() WITH MISSION SAFE,
+  CREATE i(NUM) TO 0.
+  CREATE acc(NUM) TO 0.
+  SEASON i < 8,
+    SET acc TO acc + i.
+    SET i TO i + 1.
+  /SEASON.
+  IF acc IS 28,
+    SHOW "ok".
+  /IF.
+/ACTION.
+
+ACTION main()
+  CREATE j(NUM) TO 0.
+  CREATE s(NUM) TO 0.
+  SEASON j < 200000,
+    CALL safe_worker().
+    SET s TO s + 1.
+    SET j TO j + 1.
+  /SEASON.
+  SHOW _from_long(s).
+/ACTION.

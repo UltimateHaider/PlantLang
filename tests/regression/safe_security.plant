@@ -1,0 +1,17 @@
+# safe_security — BoundaryViolationError: a SAFE action may not call
+# FAST, SMART or PERSISTENT actions — every forbidden pair is blocked
+# at the callee entry and logged as a BOUNDARY event. Only SAFE→SAFE
+# (and SAFE→BALANCED) pass; the blocked bodies never print (v0.48.16).
+ACTION fast_action() WITH MISSION FAST, SHOW "FAST RAN". /ACTION.
+ACTION smart_action() WITH MISSION SMART, SHOW "SMART RAN". /ACTION.
+ACTION persist_action() WITH MISSION PERSISTENT, SHOW "PERSISTENT RAN". /ACTION.
+ACTION safe_action() WITH MISSION SAFE, SHOW "SAFE RAN". /ACTION.
+
+ACTION main() WITH MISSION SAFE,
+  CALL fast_action().
+  CALL smart_action().
+  CALL persist_action().
+  CALL safe_action().
+  SHOW "done".
+  SHOW ffi_audit_dump().
+/ACTION.

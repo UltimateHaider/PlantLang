@@ -1,5 +1,84 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.16 — 2026 (Mission Mode SAFE)
+
+### New Features
+- **`WITH MISSION SAFE` executes actions on the WarmProcessPool** — the
+  codegen emits the boundary guard, `plant_safe_enter` (worker acquire,
+  heartbeat bind, zero-permission context) and `plant_safe_channel_init`
+  at the action entry, with `plant_safe_exit` (worker + channel release)
+  before the tail return. Workers are in-process isolated-process
+  emulations: default pool of 4, expandable to 16
+  (`SAFE_POOL_CAPACITY`/`SAFE_POOL_EXPAND`).
+- **Heartbeat health monitoring** — workers renew heartbeats per call;
+  the pool tick (`plant_pool_tick`, run at every acquire) terminates
+  workers that miss the heartbeat interval (default 5000ms,
+  `SAFE_HEARTBEAT_MS`) and stay past the response window (default 10ms,
+  `SAFE_HEARTBEAT_RESPONSE_MS`), then respawns them (restart counter +
+  `plant_safe_status` telemetry).
+- **Starvation protection** — when every worker is busy and the queue
+  wait exceeds `SAFE_STARVATION_MS` (default 50ms), the pool grows
+  toward the expand cap; at the cap it falls back gracefully to
+  BALANCED inline execution (`fallback=1` in status) and SAFE work
+  still completes.
+- **SafeChannel IPC transport** — payloads up to 1MB are
+  structured-cloned (deep copy, sender keeps its buffer); larger
+  payloads are transferable (zero-copy adoption, `plant_safe_send_big`).
+  `plant_safe_stats` reports `copies=`/`transfers=` counters;
+  `SAFE_CHANNEL_THRESHOLD` (default 1048576) sets the routing cutoff.
+- **BoundaryViolationError enforcement** — `plant_boundary_block` is now
+  mode-aware (callee mode passed from the codegen): SAFE callers are
+  blocked at FAST/SMART/PERSISTENT entries and FAST callers at SAFE
+  entries, each logged as a `BOUNDARY` event (`SAFE->X blocked <name>` /
+  `FAST->SAFE blocked <name>`); BALANCED calls pass everywhere.
+  `WITH MISSION SMART` and `WITH MISSION PERSISTENT` now parse as
+  guarded mission modes.
+- **Mission-mode stack** — FAST/SAFE entries push their mode, exits pop
+  it, so boundary decisions reflect the innermost active action instead
+  of a sticky flag (fixes a latent v0.48.15 bug where any earlier FAST
+  call would block later SAFE calls).
+- **SAFE governance & zero trust** — SAFE actions start with **zero
+  permissions**; only `FILE_READ`/`NET_CONNECT` can be granted, solely
+  through the MissionContext (`plant_safe_grant`, `SAFE_GRANT` audit
+  events); `plant_cap_check` inside SAFE consults the SAFE grants, not
+  the global list. Syscall filtering blocks `execve`/`fork`/`ptrace`
+  (`SYSCALL_BLOCK` events, `plant_syscall_check`).
+- **Hash-chained audit logging** — every ring event carries an FNV-1a
+  chain link (seq + kind + msg chained from the previous hash);
+  `plant_audit_chain_verify` returns `OK` or `TAMPERED <idx>` and
+  survives ring eviction (evicted chain captured); `plant_audit_chain_head`
+  exposes the current head hash. `plant_audit_tamper` injects a
+  deterministic fault for the integrity tests.
+- **`MISSION CONFIG` keys for SAFE** — `SAFE_POOL_CAPACITY`,
+  `SAFE_POOL_EXPAND`, `SAFE_HEARTBEAT_MS`, `SAFE_HEARTBEAT_RESPONSE_MS`,
+  `SAFE_STARVATION_MS`, `SAFE_CHANNEL_THRESHOLD` applied via
+  `plant_async_config` before `main` runs.
+
+### Regression Tests
+- `safe_isolation` — BALANCED main calls a SAFE worker twice: pool
+  telemetry proves worker binding (`workers=4 spawns=4 served=2`) and
+  both runs log `MODE_ENTER SAFE`.
+- `safe_heartbeat` — a stalled worker (fault injection backdating its
+  heartbeat) is restarted by the pool tick (`tick=1 restarts=1`) and
+  the respawned worker serves the next SAFE call.
+- `safe_starvation` — 1-worker pool expandable to 2: a 100ms queue wait
+  grows the pool (`workers=2`); at the expand cap the second starve
+  falls back to BALANCED inline (`fallback=1`) with SAFE work intact.
+- `safe_security` — SAFE main calling FAST/SMART/PERSISTENT is blocked
+  at each callee (`BOUNDARY SAFE->X blocked` events; bodies never run);
+  SAFE→SAFE passes.
+- `safe_audit` — zero-perm capability checks (`read0=0`), MissionContext
+  grants (`FILE_READ`/`NET_CONNECT` only; `SHUTDOWN_ANY` denied), syscall
+  filter (`execve`/`fork`/`ptrace` blocked, `read` allowed), and the
+  hash chain: `chain=OK` → tamper → `chain2=TAMPERED 8`.
+- `safe_channel` — small payload deep-copied (`recv` round-trips),
+  1.2MB payload transferred zero-copy; `copies=1 transfers=1`.
+
+### Perf
+- `safe_pool_bench` — 200k SAFE worker calls with pool acquire, channel
+  bind and release per entry (~0.5µs/call, ~1.8MB RSS), compared against
+  the BALANCED `numeric_bench` baseline in `perf_results.md`.
+
 ## v0.48.15 — 2026 (Mission Mode FAST)
 
 ### New Features

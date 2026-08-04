@@ -1,0 +1,20 @@
+# safe_starvation — WarmProcessPool starvation protection: with a
+# 1-worker pool (expandable to 2) and every worker busy for 100ms
+# (beyond the 50ms SAFE_STARVATION_MS threshold), the pool grows
+# dynamically. At the expansion cap the pool falls back gracefully to
+# BALANCED inline execution — SAFE work still completes (v0.48.16).
+MISSION CONFIG SAFE_POOL_CAPACITY = 1.
+MISSION CONFIG SAFE_POOL_EXPAND = 2.
+MISSION CONFIG SAFE_STARVATION_MS = 50.
+ACTION worker() WITH MISSION SAFE,
+  SHOW "w".
+/ACTION.
+
+ACTION main()
+  SHOW "starve=" + ffi_safe_starve(100).
+  CALL worker().
+  SHOW ffi_safe_status().
+  SHOW "starve2=" + ffi_safe_starve(100).
+  CALL worker().
+  SHOW ffi_safe_status().
+/ACTION.

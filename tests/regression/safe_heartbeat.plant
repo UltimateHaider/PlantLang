@@ -1,0 +1,16 @@
+# safe_heartbeat — WarmProcessPool heartbeat monitor: a stalled worker
+# (fault-injected via ffi_safe_stall) misses its response window and is
+# terminated + restarted by the pool tick. The restarted worker serves
+# subsequent SAFE calls (v0.48.16).
+ACTION beat() WITH MISSION SAFE,
+  SHOW "beat run".
+/ACTION.
+
+ACTION main()
+  CALL beat().
+  SHOW "stall=" + ffi_safe_stall("beat").
+  SHOW "tick=" + ffi_safe_heartbeat_tick().
+  CALL beat().
+  SHOW ffi_safe_status().
+  SHOW ffi_audit_dump().
+/ACTION.

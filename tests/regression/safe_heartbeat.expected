@@ -1,0 +1,8 @@
+beat run
+stall=0
+tick=1
+beat run
+workers=4 busy=0 spawns=4 restarts=1 fallback=0 served=2
+0,MODE_ENTER,SAFE beat
+1,MODE_ENTER,SAFE beat
+

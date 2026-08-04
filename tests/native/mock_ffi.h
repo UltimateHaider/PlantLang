@@ -48,5 +48,19 @@ tx_t ffi_fast_escalated(void);
 tx_t ffi_fast_status(void);
 tx_t ffi_audit_dump(void);
 tx_t ffi_cap_check(tx_t cap);
+tx_t ffi_safe_status(void);
+tx_t ffi_safe_stall(tx_t name);
+tx_t ffi_safe_heartbeat_tick(void);
+tx_t ffi_safe_starve(tx_t ms);
+tx_t ffi_safe_grant(tx_t cap);
+tx_t ffi_safe_syscall(tx_t name);
+tx_t ffi_safe_channel_open(void);
+tx_t ffi_safe_send(tx_t chan, tx_t payload);
+tx_t ffi_safe_send_big(tx_t chan, tx_t n);
+tx_t ffi_safe_recv(tx_t chan);
+tx_t ffi_safe_stats(tx_t chan);
+tx_t ffi_audit_chain_verify(void);
+tx_t ffi_audit_chain_head(void);
+tx_t ffi_audit_tamper(void);
 
 #endif

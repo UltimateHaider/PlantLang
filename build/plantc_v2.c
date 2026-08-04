@@ -4902,15 +4902,27 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
             bcode = generate_body(bd, 1, sigs, subst, clmap, actx, nums_a, stvars_a, evars_a, rty_a);
             tx_t mmode = _map_get ( node , "mission_mode" );
             if (strcmp(mmode,"FAST") == 0) {
-                bcode = _cat(_cat(_cat("  plant_fast_enter(\"", aname), "\");\n"), bcode);
+                bcode = _cat(_cat(_cat(_cat(_cat("  if (plant_boundary_block(\"", aname), "\", \"FAST\")) return \"\";\n  plant_fast_enter(\""), aname), "\");\n"), bcode);
             }
             if (strcmp(mmode,"SAFE") == 0) {
-                bcode = _cat(_cat(_cat("  if (plant_boundary_block(\"", aname), "\")) return \"\";\n"), bcode);
+                bcode = _cat(_cat(_cat(_cat(_cat(_cat(_cat("  if (plant_boundary_block(\"", aname), "\", \"SAFE\")) return \"\";\n  plant_safe_enter(\""), aname), "\");\n  plant_safe_channel_init(\""), aname), "\");\n"), bcode);
+            }
+            if (strcmp(mmode,"SMART") == 0) {
+                bcode = _cat(_cat(_cat("  if (plant_boundary_block(\"", aname), "\", \"SMART\")) return \"\";\n"), bcode);
+            }
+            if (strcmp(mmode,"PERSISTENT") == 0) {
+                bcode = _cat(_cat(_cat("  if (plant_boundary_block(\"", aname), "\", \"PERSISTENT\")) return \"\";\n"), bcode);
+            }
+            if (strcmp(mmode,"FAST") == 0) {
+                bcode = _cat(bcode, "  plant_fast_exit();\n");
+            }
+            if (strcmp(mmode,"SAFE") == 0) {
+                bcode = _cat(bcode, "  plant_safe_exit();\n");
             }
             drn2 = _map_get(node, "drain_after");
             if (( plant_array_length(bd) ) == 0) {
                 if (strcmp(drn2,"1") == 0) {
-                    bcode = "  plant_async_drain();\n";
+                    bcode = _cat(bcode, "  plant_async_drain();\n");
                 }
                 bcode = _cat(_cat(_cat(bcode, "  return "), fnname), ";\n");
             }
@@ -7419,7 +7431,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.15 (pure native)");
+      plant_print("Chloroplast 0.48.16 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

@@ -476,15 +476,39 @@ void plant_struct_free(void* p);              /* free() a marshalled copy */
    entry of every WITH MISSION SAFE action (callee-side handshake).
    ═══════════════════════════════════════════════════════════════ */
 void  plant_fast_enter(const char* name); /* bind bump heap, reset on scope enter */
+void  plant_fast_exit(void);              /* leave FAST mode (mode stack pop) */
 tx_t  plant_fast_alloc(tx_t n);           /* 8-byte aligned bump; escalate on overflow */
 tx_t  plant_fast_reset(void);             /* reset bump pointer (scope exit) */
 tx_t  plant_fast_used(void);              /* current used bytes (text) */
 tx_t  plant_fast_peak(void);              /* high-water mark (text) */
 tx_t  plant_fast_escalated(void);         /* "1" once BALANCED fallback fired */
 tx_t  plant_fast_status(void);            /* "used=.. cap=.. limit=.. escalated=.." */
-long  plant_boundary_block(const char* callee); /* 1 = FAST->SAFE blocked */
+long  plant_boundary_block(const char* callee, const char* callee_mode); /* 1 = forbidden pair blocked */
 tx_t  plant_cap_check(tx_t cap);          /* zero-trust capability grant check */
 tx_t  plant_audit_dump(void);             /* lock-free ring events, newest-last */
 void  plant_audit_log(const char* kind, const char* msg); /* ring writer */
+tx_t  plant_audit_chain_verify(void);     /* "OK" or "TAMPERED <idx>" */
+tx_t  plant_audit_chain_head(void);       /* chain head hash (hex) */
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.48.16 — Mission Mode SAFE: WarmProcessPool, SafeChannel IPC,
+   BoundaryViolationError enforcement, syscall filter, hash-chained
+   audit. Workers are in-process isolated-process emulations.
+   ═══════════════════════════════════════════════════════════════ */
+void  plant_safe_enter(const char* name);           /* pool acquire + zero-perm ctx */
+void  plant_safe_exit(void);                        /* release worker + channel */
+void  plant_safe_channel_init(const char* name);    /* action-private SafeChannel */
+tx_t  plant_safe_channel_open(void);                /* standalone channel handle */
+tx_t  plant_safe_send(tx_t chan, tx_t payload);     /* clone <=1MB, transfer >1MB */
+tx_t  plant_safe_send_big(tx_t chan, tx_t n);       /* transferable buffer of n bytes */
+tx_t  plant_safe_recv(tx_t chan);                   /* take current payload */
+tx_t  plant_safe_stats(tx_t chan);                  /* "copies=.. transfers=.." */
+tx_t  plant_safe_status(void);                      /* pool telemetry (text) */
+tx_t  plant_safe_grant(tx_t cap);                   /* MissionContext grant (1/0) */
+tx_t  plant_syscall_check(tx_t name);               /* execve/fork/ptrace filtered */
+long  plant_pool_tick(void);                        /* monitor: restart stalled workers */
+tx_t  plant_safe_stall(tx_t name);                  /* fault injection: mark worker stalled */
+tx_t  plant_safe_starve(tx_t ms);                   /* fault injection: simulate queue wait */
+tx_t  plant_audit_tamper(void);                     /* fault injection: flip newest audit byte */
 
 #endif

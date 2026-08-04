@@ -1,0 +1,8 @@
+SAFE RAN
+done
+0,MODE_ENTER,SAFE main
+1,BOUNDARY,SAFE->FAST blocked fast_action
+2,BOUNDARY,SAFE->SMART blocked smart_action
+3,BOUNDARY,SAFE->PERSISTENT blocked persist_action
+4,MODE_ENTER,SAFE safe_action
+

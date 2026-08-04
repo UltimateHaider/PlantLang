@@ -1965,18 +1965,32 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         # SAFE actions carry the Boundary Handshake guard so FAST
         # callers are blocked at the callee entry.
         CREATE mmode(TX) TO _map_get(node, "mission_mode").
-        IF mmode IS "FAST",            SET bcode TO "  plant_fast_enter(\"" + aname + "\");\n" + bcode.
+        # v0.48.16: every guarded mode (FAST/SAFE/SMART/PERSISTENT)
+        # carries the callee-side boundary guard with its mode; FAST
+        # binds the bump heap, SAFE binds the warm pool + SafeChannel.
+        IF mmode IS "FAST",
+            SET bcode TO "  if (plant_boundary_block(\"" + aname + "\", \"FAST\")) return \"\";\n  plant_fast_enter(\"" + aname + "\");\n" + bcode.
         /IF.
         IF mmode IS "SAFE",
-            SET bcode TO "  if (plant_boundary_block(\"" + aname + "\")) return \"\";\n" + bcode.
+            SET bcode TO "  if (plant_boundary_block(\"" + aname + "\", \"SAFE\")) return \"\";\n  plant_safe_enter(\"" + aname + "\");\n  plant_safe_channel_init(\"" + aname + "\");\n" + bcode.
         /IF.
+        IF mmode IS "SMART",
+            SET bcode TO "  if (plant_boundary_block(\"" + aname + "\", \"SMART\")) return \"\";\n" + bcode.
+        /IF.
+        IF mmode IS "PERSISTENT",
+            SET bcode TO "  if (plant_boundary_block(\"" + aname + "\", \"PERSISTENT\")) return \"\";\n" + bcode.
+        /IF.
+        # v0.48.16: leave the mission mode (release worker/channel for
+        # SAFE, pop the mode stack for FAST) before the tail returns.
+        IF mmode IS "FAST", SET bcode TO bcode + "  plant_fast_exit();\n". /IF.
+        IF mmode IS "SAFE", SET bcode TO bcode + "  plant_safe_exit();\n". /IF.
         # plant_async_drain() for ACTION main() when async is
         # reachable from its call graph (drain_after marker set by
         # generate_c pass 2b). Skipped when main ends in explicit
         # GIVE (the give's return would precede the drain).
         REAP drn2 FROM _map_get, node, "drain_after".
         IF (COUNT bd) IS 0,
-            IF drn2 IS "1", SET bcode TO "  plant_async_drain();\n". /IF.
+            IF drn2 IS "1", SET bcode TO bcode + "  plant_async_drain();\n". /IF.
             SET bcode TO bcode + "  return " + fnname + ";\n".
         /IF.
         IF (COUNT bd) > 0,

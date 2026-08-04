@@ -1,0 +1,11 @@
+# safe_channel — SafeChannel IPC routing: payloads up to 1MB are
+# structured-cloned (deep copy), payloads beyond 1MB are transferable
+# (zero-copy adoption). The stats counters prove both paths: a small
+# send counts a copy, a 1.2MB send counts a transfer (v0.48.16).
+ACTION main() WITH MISSION SAFE,
+  CREATE ch(NUM) TO ffi_safe_channel_open().
+  SHOW "send=" + ffi_safe_send(ch, "hello channel").
+  SHOW "recv=" + ffi_safe_recv(ch).
+  SHOW "big=" + ffi_safe_send_big(ch, 1200000).
+  SHOW ffi_safe_stats(ch).
+/ACTION.

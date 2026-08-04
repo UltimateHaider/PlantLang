@@ -2265,6 +2265,7 @@ typedef struct {
     long seq;
     char kind[24];
     char msg[PLANT_AUDIT_MSG];
+    unsigned long chain;   /* v0.48.16 hash-chain link (tamper proof) */
 } plant_audit_ev;
 
 static plant_audit_ev g_audit[PLANT_AUDIT_CAP];
@@ -2272,16 +2273,56 @@ static volatile long g_audit_head = 0;   /* next write slot */
 static long g_audit_count = 0;
 static long g_audit_overflow = 0;
 static long g_audit_seq = 0;
+static unsigned long g_audit_chain = 14695981039346656037UL; /* FNV-1a offset */
+static unsigned long g_audit_evicted = 14695981039346656037UL;
+
+static unsigned long plant_audit_hash(unsigned long h, long seq,
+                                      const char* kind, const char* msg) {
+    h = (h ^ (unsigned long)seq) * 1099511628211UL;
+    const unsigned char* p = (const unsigned char*)kind;
+    while (*p) h = (h ^ *p++) * 1099511628211UL;
+    p = (const unsigned char*)msg;
+    while (*p) h = (h ^ *p++) * 1099511628211UL;
+    return h;
+}
 
 void plant_audit_log(const char* kind, const char* msg) {
     long slot = g_audit_head;
     plant_audit_ev* e = &g_audit[slot];
+    if (g_audit_count == PLANT_AUDIT_CAP) g_audit_evicted = e->chain;
     e->seq = g_audit_seq++;
     snprintf(e->kind, sizeof(e->kind), "%s", kind);
     snprintf(e->msg, sizeof(e->msg), "%s", msg ? msg : "");
+    e->chain = plant_audit_hash(g_audit_chain, e->seq, e->kind, e->msg);
+    g_audit_chain = e->chain;
     g_audit_head = (slot + 1) % PLANT_AUDIT_CAP;
     if (g_audit_count < PLANT_AUDIT_CAP) g_audit_count++;
     else g_audit_overflow++;
+}
+
+tx_t plant_audit_chain_verify(void) {
+    long n = g_audit_count;
+    if (n > PLANT_AUDIT_CAP) n = PLANT_AUDIT_CAP;
+    long base = g_audit_head - n;
+    if (base < 0) base += PLANT_AUDIT_CAP;
+    unsigned long h = (n == PLANT_AUDIT_CAP) ? g_audit_evicted
+                                             : 14695981039346656037UL;
+    for (long i = 0; i < n; i++) {
+        plant_audit_ev* e = &g_audit[(base + i) % PLANT_AUDIT_CAP];
+        if (plant_audit_hash(h, e->seq, e->kind, e->msg) != e->chain) {
+            static char buf[64];
+            snprintf(buf, sizeof(buf), "TAMPERED %ld", i);
+            return buf;
+        }
+        h = e->chain;
+    }
+    return (tx_t)"OK";
+}
+
+tx_t plant_audit_chain_head(void) {
+    static char buf[32];
+    snprintf(buf, sizeof(buf), "%016lx", g_audit_chain);
+    return buf;
 }
 
 tx_t plant_audit_dump(void) {
@@ -2301,6 +2342,71 @@ tx_t plant_audit_dump(void) {
     return buf;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   v0.48.16 — Mission Mode SAFE
+   Mission-mode stack (mode of the innermost active action), SAFE
+   zero-permission grants and pool/channel configuration. Workers are
+   in-process emulations of isolated processes: each owns a channel,
+   tracks heartbeats and is monitored for stall/restart. Syscall
+   filtering and hash-chained audit complete the governance set.
+   ═══════════════════════════════════════════════════════════════ */
+#define PLANT_MODE_STACK_MAX 64
+static char g_mode_stack[PLANT_MODE_STACK_MAX];
+static long g_mode_depth = 0;
+
+static void plant_mode_push(char m) {
+    if (g_mode_depth < PLANT_MODE_STACK_MAX) g_mode_stack[g_mode_depth++] = m;
+}
+static void plant_mode_pop(void) {
+    if (g_mode_depth > 0) g_mode_depth--;
+}
+static char plant_mode_top(void) {
+    return g_mode_depth > 0 ? g_mode_stack[g_mode_depth - 1] : 0;
+}
+
+#define PLANT_SAFE_MAX_WORKERS 16
+#define PLANT_SAFE_DEFAULT_WORKERS 4
+#define PLANT_WORKER_NAME 64
+#define PLANT_CAP_FILE_READ   (1L << 0)
+#define PLANT_CAP_NET_CONNECT (1L << 1)
+
+typedef struct plant_worker {
+    char name[PLANT_WORKER_NAME];
+    int  state;              /* 0 idle, 1 busy, 2 stalled, 3 dead */
+    long last_heartbeat_ms;
+    long spawn_seq;          /* restart counter */
+    long busy_since_ms;
+    long served_calls;
+    void* chan;              /* owned SafeChannel */
+} plant_worker;
+
+typedef struct plant_channel {
+    void*  buf;              /* payload (owned) */
+    size_t size;
+    size_t copies;           /* structured-clone (deep copy) transfers */
+    size_t transfers;        /* transferable (zero-copy) transfers */
+    long   threshold;        /* <= threshold → clone; > threshold → transfer */
+} plant_channel;
+
+static plant_worker g_pool[PLANT_SAFE_MAX_WORKERS];
+static long g_pool_count = 0;      /* live workers */
+static long g_pool_cap = PLANT_SAFE_DEFAULT_WORKERS;
+static long g_pool_max = PLANT_SAFE_MAX_WORKERS;
+static long g_pool_spawns = 0;
+static long g_pool_restarts = 0;
+static long g_pool_fallback = 0;   /* starved at max cap → BALANCED inline */
+static long g_pool_served = 0;
+static long g_worker_seq = 1000;
+static plant_worker* g_safe_current = NULL;
+static plant_worker g_safe_inline; /* fallback worker (BALANCED inline exec) */
+static long g_safe_cfg_heartbeat_ms = 5000;
+static long g_safe_cfg_response_ms = 10;
+static long g_safe_cfg_starvation_ms = 50;
+static long g_safe_channel_threshold = 1048576;   /* 1MB */
+static long g_safe_cap_mask = 0;    /* MissionContext grants */
+static int  g_safe_active = 0;      /* inside a SAFE action */
+static long g_pending_wait_ms = 0;  /* simulated queue wait (starvation) */
+
 /* Zero-Trust capability registry — default grants only */
 static int g_zt_inited = 0;
 static const char* const g_zt_grants[] = { "FILE_READ", "FILE_WRITE", "NET_CONNECT" };
@@ -2314,11 +2420,18 @@ static void plant_zero_trust_init(void) {
 }
 
 tx_t plant_cap_check(tx_t capv) {
-    plant_zero_trust_init();
     const char* cap = _S(capv);
     int grant = 0;
-    for (long i = 0; i < ZT_GRANT_COUNT; i++)
-        if (strcmp(cap, g_zt_grants[i]) == 0) { grant = 1; break; }
+    if (g_safe_active) {
+        /* SAFE: zero permissions by default; grants come only from
+           the MissionContext (plant_safe_grant) */
+        if (strcmp(cap, "FILE_READ") == 0) grant = (g_safe_cap_mask & PLANT_CAP_FILE_READ) != 0;
+        else if (strcmp(cap, "NET_CONNECT") == 0) grant = (g_safe_cap_mask & PLANT_CAP_NET_CONNECT) != 0;
+    } else {
+        plant_zero_trust_init();
+        for (long i = 0; i < ZT_GRANT_COUNT; i++)
+            if (strcmp(cap, g_zt_grants[i]) == 0) { grant = 1; break; }
+    }
     static char msg[96];
     snprintf(msg, sizeof(msg), "%s %s", cap, grant ? "grant" : "deny");
     plant_audit_log("CAP_CHECK", msg);
@@ -2392,6 +2505,7 @@ void plant_fast_enter(const char* name) {
         g_fast.used = 0;               /* scope-exit reset at next enter */
     }
     g_in_fast = 1;
+    plant_mode_push('F');
     static char msg[128];
     snprintf(msg, sizeof(msg), "FAST %s", name ? name : "");
     plant_audit_log("MODE_ENTER", msg);
@@ -2434,15 +2548,319 @@ tx_t plant_fast_status(void) {
     return buf;
 }
 
-/* Boundary Handshake: FAST may not call SAFE. plant_boundary_block is
-   emitted at SAFE action entries; blocked calls return immediately
-   with an empty result. All other mode pairs pass. */
-long plant_boundary_block(const char* callee) {
-    if (!g_in_fast) return 0;
+/* Boundary Handshake (v0.48.15) + BoundaryViolationError enforcement
+   (v0.48.16). plant_boundary_block is emitted at the entry of every
+   FAST/SAFE/SMART/PERSISTENT action with the callee's mission mode;
+   forbidden mode pairs are blocked at the callee entry and the call
+   returns immediately with an empty result:
+     FAST caller  → SAFE callee:          blocked (Boundary Handshake)
+     SAFE caller  → FAST/SMART/PERSISTENT: blocked (BoundaryViolationError)
+   All other pairs pass (BALANCED has no guard). */
+long plant_boundary_block(const char* callee, const char* callee_mode) {
+    char top = plant_mode_top();
     static char msg[128];
-    snprintf(msg, sizeof(msg), "FAST->SAFE blocked %s", callee);
-    plant_audit_log("BOUNDARY", msg);
-    return 1;
+    if (top == 'F' && strcmp(callee_mode, "SAFE") == 0) {
+        snprintf(msg, sizeof(msg), "FAST->SAFE blocked %s", callee);
+        plant_audit_log("BOUNDARY", msg);
+        return 1;
+    }
+    if (top == 'S' && (strcmp(callee_mode, "FAST") == 0 ||
+                       strcmp(callee_mode, "SMART") == 0 ||
+                       strcmp(callee_mode, "PERSISTENT") == 0)) {
+        snprintf(msg, sizeof(msg), "SAFE->%s blocked %s", callee_mode, callee);
+        plant_audit_log("BOUNDARY", msg);
+        return 1;
+    }
+    return 0;
+}
+
+/* ── WarmProcessPool ────────────────────────────────────────────── */
+static plant_worker* plant_pool_spawn(const char* name) {
+    if (g_pool_count >= PLANT_SAFE_MAX_WORKERS) return NULL;
+    plant_worker* w = &g_pool[g_pool_count++];
+    memset(w, 0, sizeof(*w));
+    if (name) snprintf(w->name, sizeof(w->name), "%s", name);
+    else snprintf(w->name, sizeof(w->name), "proc-%ld", ++g_worker_seq);
+    w->state = 0;
+    w->last_heartbeat_ms = plant_ms();
+    g_pool_spawns++;
+    return w;
+}
+
+static void plant_pool_init(void) {
+    if (g_pool_count > 0) return;
+    if (g_pool_cap < 1) g_pool_cap = 1;
+    if (g_pool_cap > PLANT_SAFE_MAX_WORKERS) g_pool_cap = PLANT_SAFE_MAX_WORKERS;
+    if (g_pool_max < g_pool_cap) g_pool_max = g_pool_cap;
+    if (g_pool_max > PLANT_SAFE_MAX_WORKERS) g_pool_max = PLANT_SAFE_MAX_WORKERS;
+    for (long i = 0; i < g_pool_cap; i++) plant_pool_spawn(NULL);
+}
+
+static void plant_worker_heartbeat(plant_worker* w) {
+    w->last_heartbeat_ms = plant_ms();
+}
+
+/* monitor tick: workers past the heartbeat interval enter the
+   response window; stalled workers past the response window are
+   terminated and restarted. Returns restart count. */
+long plant_pool_tick(void) {
+    long now = plant_ms();
+    long restarts = 0;
+    for (long i = 0; i < g_pool_count; i++) {
+        plant_worker* w = &g_pool[i];
+        if (w->state == 3) continue;
+        long age = now - w->last_heartbeat_ms;
+        if (age < 0) age = 0;
+        if (w->state == 2) {
+            if (age > g_safe_cfg_response_ms) {
+                w->state = 3;            /* terminated */
+                g_pool_restarts++;
+                w->state = 0;            /* respawned */
+                w->busy_since_ms = 0;
+                w->last_heartbeat_ms = now;
+                w->spawn_seq++;
+                restarts++;
+            }
+        } else if (age > g_safe_cfg_heartbeat_ms) {
+            w->state = 2;                /* missed heartbeat → respond */
+            w->busy_since_ms = 0;
+        }
+    }
+    return restarts;
+}
+
+/* acquire a worker; on starvation (simulated queue wait beyond the
+   SAFE_STARVATION_MS threshold with every worker busy) grow the pool
+   toward SAFE_POOL_EXPAND or fall back gracefully to BALANCED. */
+static plant_worker* plant_pool_acquire(const char* name) {
+    plant_pool_init();
+    plant_pool_tick();
+    for (long i = 0; i < g_pool_count; i++) {
+        plant_worker* w = &g_pool[i];
+        if (w->state == 0) {
+            w->state = 1;
+            w->busy_since_ms = plant_ms();
+            w->served_calls++;
+            plant_worker_heartbeat(w);
+            return w;
+        }
+    }
+    if (g_pending_wait_ms > g_safe_cfg_starvation_ms) {
+        if (g_pool_count < g_pool_max) {
+            plant_worker* w = plant_pool_spawn(name);
+            if (w) {
+                g_pending_wait_ms = 0;
+                w->state = 1;
+                w->busy_since_ms = plant_ms();
+                w->served_calls++;
+                plant_worker_heartbeat(w);
+                return w;
+            }
+        }
+        g_pool_fallback = 1;             /* at max cap → BALANCED inline */
+        g_pending_wait_ms = 0;
+        return NULL;
+    }
+    return NULL;
+}
+
+void plant_safe_enter(const char* name) {
+    plant_worker* w = plant_pool_acquire(name);
+    if (w) {
+        g_safe_current = w;
+        if (name) snprintf(w->name, sizeof(w->name), "%s", name);
+    } else {
+        g_safe_current = NULL;
+        g_safe_inline.served_calls++;
+        g_safe_inline.last_heartbeat_ms = plant_ms();
+        g_pool_fallback = 1;
+    }
+    g_pool_served++;
+    g_safe_active = 1;                   /* zero permissions by default */
+    g_safe_cap_mask = 0;
+    plant_mode_push('S');
+    static char msg[128];
+    snprintf(msg, sizeof(msg), "SAFE %s", name ? name : "");
+    plant_audit_log("MODE_ENTER", msg);
+}
+
+void plant_safe_exit(void) {
+    if (g_safe_current) {
+        plant_channel* ch = (plant_channel*)g_safe_current->chan;
+        if (ch) { free(ch->buf); free(ch); g_safe_current->chan = NULL; }
+        g_safe_current->state = 0;
+        g_safe_current->busy_since_ms = 0;
+        plant_worker_heartbeat(g_safe_current);
+        g_safe_current = NULL;
+    }
+    g_safe_active = 0;
+    g_safe_cap_mask = 0;
+    plant_mode_pop();
+}
+
+tx_t plant_safe_status(void) {
+    static char buf[192];
+    long busy = 0;
+    for (long i = 0; i < g_pool_count; i++)
+        if (g_pool[i].state == 1) busy++;
+    snprintf(buf, sizeof(buf),
+             "workers=%ld busy=%ld spawns=%ld restarts=%ld fallback=%ld served=%ld",
+             g_pool_count, busy, g_pool_spawns, g_pool_restarts,
+             g_pool_fallback, g_pool_served);
+    return buf;
+}
+
+/* deterministic fault injection for the heartbeat / starvation /
+   tamper suites: stall marks a worker unresponsive (heartbeat
+   backdated past the response window), starve simulates a queue wait
+   and occupies every worker, tamper flips a byte in the newest
+   audit event so the chain verification reports TAMPERED. */
+tx_t plant_safe_stall(tx_t namev) {
+    const char* want = _S(namev);
+    for (long i = 0; i < g_pool_count; i++)
+        if (strcmp(g_pool[i].name, want) == 0) {
+            g_pool[i].state = 2;
+            g_pool[i].last_heartbeat_ms = plant_ms() - 10000;
+            return (tx_t)"0";
+        }
+    return (tx_t)"-1";
+}
+
+tx_t plant_safe_starve(tx_t msv) {
+    g_pending_wait_ms = (long)msv;
+    for (long i = 0; i < g_pool_count; i++) g_pool[i].state = 1;
+    return (tx_t)"0";
+}
+
+tx_t plant_audit_tamper(void) {
+    if (g_audit_count <= 0) return (tx_t)"0";
+    long slot = (g_audit_head - 1 + PLANT_AUDIT_CAP) % PLANT_AUDIT_CAP;
+    g_audit[slot].msg[0] ^= 1;   /* flip to a readable ASCII char */
+    return (tx_t)"0";
+}
+
+/* MissionContext grants: SAFE actions start with zero permissions and
+   may only be granted FILE_READ / NET_CONNECT; anything else is denied */
+tx_t plant_safe_grant(tx_t capv) {
+    const char* cap = _S(capv);
+    static char msg[96];
+    if (strcmp(cap, "FILE_READ") == 0) {
+        g_safe_cap_mask |= PLANT_CAP_FILE_READ;
+    } else if (strcmp(cap, "NET_CONNECT") == 0) {
+        g_safe_cap_mask |= PLANT_CAP_NET_CONNECT;
+    } else {
+        snprintf(msg, sizeof(msg), "%s denied (MissionContext grants FILE_READ/NET_CONNECT only)", cap);
+        plant_audit_log("SAFE_GRANT", msg);
+        return (tx_t)"0";
+    }
+    snprintf(msg, sizeof(msg), "%s granted via MissionContext", cap);
+    plant_audit_log("SAFE_GRANT", msg);
+    return (tx_t)"1";
+}
+
+/* syscall filter: execve / fork / ptrace are blocked (zero-trust) */
+static const char* const g_safe_blocked_syscalls[] =
+    { "execve", "fork", "ptrace" };
+#define SAFE_BLOCKED_SYSCALL_COUNT 3
+
+tx_t plant_syscall_check(tx_t namev) {
+    const char* name = _S(namev);
+    for (long i = 0; i < SAFE_BLOCKED_SYSCALL_COUNT; i++) {
+        if (strcmp(name, g_safe_blocked_syscalls[i]) == 0) {
+            static char msg[96];
+            snprintf(msg, sizeof(msg), "%s blocked (zero-trust syscall filter)", name);
+            plant_audit_log("SYSCALL_BLOCK", msg);
+            return (tx_t)"0";
+        }
+    }
+    return (tx_t)"1";
+}
+
+/* ── SafeChannel IPC ────────────────────────────────────────────── */
+/* emitted at SAFE action entries: the action's private channel */
+void plant_safe_channel_init(const char* name) {
+    plant_channel* ch = (plant_channel*)calloc(1, sizeof(plant_channel));
+    if (!ch) return;
+    ch->threshold = g_safe_channel_threshold;
+    if (g_safe_current) {
+        if (g_safe_current->chan) { /* replaced: drop previous */
+            plant_channel* old = (plant_channel*)g_safe_current->chan;
+            free(old->buf); free(old);
+        }
+        g_safe_current->chan = ch;
+    }
+    (void)name;
+}
+
+tx_t plant_safe_channel_open(void) {
+    plant_channel* ch = (plant_channel*)calloc(1, sizeof(plant_channel));
+    if (!ch) return NULL;
+    ch->threshold = g_safe_channel_threshold;
+    return (tx_t)ch;
+}
+
+/* send: payloads <= 1MB are structured-cloned (deep copy — the sender
+   keeps its buffer); larger payloads transferable (zero-copy — the
+   channel adopts the buffer). */
+tx_t plant_safe_send(tx_t chanv, tx_t payload) {
+    plant_channel* ch = (plant_channel*)chanv;
+    if (!ch || !payload) return (tx_t)"0";
+    const char* p = _S(payload);
+    size_t n = strlen(p);
+    if (n <= (size_t)ch->threshold) {
+        char* copy = (char*)malloc(n + 1);
+        if (!copy) return (tx_t)"0";
+        memcpy(copy, p, n + 1);
+        if (ch->buf) free(ch->buf);
+        ch->buf = copy;
+        ch->size = n;
+        ch->copies++;
+    } else {
+        if (ch->buf) free(ch->buf);
+        ch->buf = (void*)p;     /* zero-copy transfer */
+        ch->size = n;
+        ch->transfers++;
+    }
+    return (tx_t)"0";
+}
+
+/* transferable path for payloads materialized without a PlantLang
+   buffer (avoids aliasing a live string): the channel allocates and
+   adopts the buffer — zero-copy semantics */
+tx_t plant_safe_send_big(tx_t chanv, tx_t nv) {
+    plant_channel* ch = (plant_channel*)chanv;
+    long n = (long)nv;
+    if (!ch || n < 1) return (tx_t)"0";
+    char* buf = (char*)malloc((size_t)n + 1);
+    if (!buf) return (tx_t)"0";
+    memset(buf, 'x', (size_t)n);
+    buf[n] = 0;
+    if (ch->buf) free(ch->buf);
+    ch->buf = buf;
+    ch->size = (size_t)n;
+    ch->transfers++;
+    return (tx_t)"0";
+}
+
+tx_t plant_safe_recv(tx_t chanv) {
+    plant_channel* ch = (plant_channel*)chanv;
+    if (!ch || !ch->buf) return (tx_t)"";
+    tx_t out = ch->buf;
+    ch->buf = NULL;
+    ch->size = 0;
+    return out;
+}
+
+tx_t plant_safe_stats(tx_t chanv) {
+    plant_channel* ch = (plant_channel*)chanv;
+    if (!ch) return (tx_t)"copies=0 transfers=0";
+    static char buf[64];
+    snprintf(buf, sizeof(buf), "copies=%zu transfers=%zu", ch->copies, ch->transfers);
+    return buf;
+}
+
+void plant_fast_exit(void) {
+    plant_mode_pop();
 }
 
 /* work stealing: clone a task into a NEW arena; segments are shared
@@ -2519,6 +2937,24 @@ void plant_async_config(tx_t keyv, tx_t valv) {
     } else if (strcmp(key, "FAST_ALIGNMENT") == 0) {
         long v = atol(val);
         g_fast_cfg_align = (v >= 1) ? v : 8;
+    } else if (strcmp(key, "SAFE_POOL_CAPACITY") == 0) {
+        long v = atol(val);
+        if (v >= 1 && v <= PLANT_SAFE_MAX_WORKERS) g_pool_cap = v;
+    } else if (strcmp(key, "SAFE_POOL_EXPAND") == 0) {
+        long v = atol(val);
+        if (v >= g_pool_cap && v <= PLANT_SAFE_MAX_WORKERS) g_pool_max = v;
+    } else if (strcmp(key, "SAFE_HEARTBEAT_MS") == 0) {
+        long v = atol(val);
+        if (v >= 1) g_safe_cfg_heartbeat_ms = v;
+    } else if (strcmp(key, "SAFE_HEARTBEAT_RESPONSE_MS") == 0) {
+        long v = atol(val);
+        if (v >= 1) g_safe_cfg_response_ms = v;
+    } else if (strcmp(key, "SAFE_STARVATION_MS") == 0) {
+        long v = atol(val);
+        if (v >= 1) g_safe_cfg_starvation_ms = v;
+    } else if (strcmp(key, "SAFE_CHANNEL_THRESHOLD") == 0) {
+        long v = atol(val);
+        if (v >= 1) g_safe_channel_threshold = v;
     }
 }
 

@@ -1,0 +1,14 @@
+# safe_isolation — Mission Mode SAFE executes inside the WarmProcessPool:
+# every SAFE call acquires an isolated worker (separate process emulation
+# with its own channel + capability set). BALANCED → SAFE is allowed;
+# pool telemetry proves the worker binding (v0.48.16).
+ACTION isolated_worker() WITH MISSION SAFE,
+  SHOW "isolated ran".
+/ACTION.
+
+ACTION main()
+  CALL isolated_worker().
+  CALL isolated_worker().
+  SHOW ffi_safe_status().
+  SHOW ffi_audit_dump().
+/ACTION.
