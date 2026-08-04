@@ -1022,7 +1022,7 @@ ACTION async_emit_state(name(TX), vars(LIST)),
 # async_emit_entry — tx_t name(tx_t __parent, tx_t __ctx, params):
 # alloc the state, copy params in, register the task (prio/deadline
 # inheritance handled by the engine via __parent)
-ACTION async_emit_entry(name(TX), params(LIST), prio(TX)),
+ACTION async_emit_entry(name(TX), params(LIST), prio(TX), mmode(TX)),
   CREATE pstr(TX) TO "".
   CREATE pi(NUM) TO 0.
   CREATE pe(TX) TO "".
@@ -1038,6 +1038,9 @@ ACTION async_emit_entry(name(TX), params(LIST), prio(TX)),
   CREATE code(TX) TO "tx_t " + name + "(tx_t __parent, tx_t __ctx".
   IF pstr > "", SET code TO code + ", " + pstr. /IF.
   SET code TO code + ") \{\n".
+  IF mmode IS "FAST",
+    SET code TO code + "  plant_fast_enter(\"" + name + "\");\n".
+  /IF.
   SET code TO code + "  plant_a_" + name + "_state* s = (plant_a_" + name + "_state*)plant_async_alloc_state(sizeof(plant_a_" + name + "_state), \"" + name + "\");\n".
   CREATE ci(NUM) TO 0.
   SEASON ci < COUNT params,
@@ -1909,6 +1912,10 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         CREATE gens_nd(LIST) TO _map_get(node, "generics").
         IF COUNT gens_nd IS 0,
             REAP aname FROM _map_get, node, "name".
+            CREATE fnname(TX) TO aname.
+            IF aname IS "main" AND _map_get(node, "main_rename") IS "1",
+                SET fnname TO "plant_main".
+            /IF.
             CREATE params(LIST) TO _map_get(node, "params").
             REAP bd FROM _map_get, node, "body".
             CREATE stvars_a(LIST) TO collect_stvars(bd, params, subst).
@@ -1921,7 +1928,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             CREATE aphases(LIST) TO async_split_phases(bd).
             CREATE evars_asy(LIST) TO collect_enums(bd, params, subst, evars, sigs).
             REAP st_code FROM async_emit_state, aname, avars.
-            REAP en_code FROM async_emit_entry, aname, params, prio_s.
+            REAP en_code FROM async_emit_entry, aname, params, prio_s, _map_get(node, "mission_mode").
             REAP stp_code FROM async_emit_step, aname, aphases, avars, sigs, subst, clmap, stvars_a, evars_asy.
             GIVE "static int plant_a_" + aname + "_step(tx_t st);\n\n" + st_code + en_code + stp_code.
         /IF.
@@ -1939,7 +1946,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         /SEASON.
         CREATE nums_a(LIST) TO collect_nums(bd, params, subst).
         CREATE evars_a(LIST) TO collect_enums(bd, params, subst, evars, sigs).
-        CREATE ccode(TX) TO "tx_t " + aname + "(" + paramstr + ") \{\n".
+        CREATE ccode(TX) TO "tx_t " + fnname + "(" + paramstr + ") \{\n".
         CREATE implicit(LIST) TO collect_implicit(bd, params).
         CREATE dcode(TX) TO "".
         CREATE di(NUM) TO 0.
@@ -1953,6 +1960,16 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         # _from_long wrapping of numeric GIVEs ("" for implicit)
         CREATE rty_a(TX) TO subst_type(_map_get(node, "ret"), subst).
         REAP bcode FROM generate_body, bd, 1, sigs, subst, clmap, actx, nums_a, stvars_a, evars_a, rty_a.
+        # v0.48.15: Mission Mode binding — FAST actions bind the bump
+        # heap (plant_fast_enter resets it at every scope enter);
+        # SAFE actions carry the Boundary Handshake guard so FAST
+        # callers are blocked at the callee entry.
+        CREATE mmode(TX) TO _map_get(node, "mission_mode").
+        IF mmode IS "FAST",            SET bcode TO "  plant_fast_enter(\"" + aname + "\");\n" + bcode.
+        /IF.
+        IF mmode IS "SAFE",
+            SET bcode TO "  if (plant_boundary_block(\"" + aname + "\")) return \"\";\n" + bcode.
+        /IF.
         # plant_async_drain() for ACTION main() when async is
         # reachable from its call graph (drain_after marker set by
         # generate_c pass 2b). Skipped when main ends in explicit
@@ -1960,7 +1977,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP drn2 FROM _map_get, node, "drain_after".
         IF (COUNT bd) IS 0,
             IF drn2 IS "1", SET bcode TO "  plant_async_drain();\n". /IF.
-            SET bcode TO bcode + "  return " + aname + ";\n".
+            SET bcode TO bcode + "  return " + fnname + ";\n".
         /IF.
         IF (COUNT bd) > 0,
             CREATE bd_count(NUM) TO COUNT bd.
@@ -1970,7 +1987,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             IF drn2 IS "1" AND last_ty ISNT "give_stmt",
                 SET bcode TO bcode + "  plant_async_drain();\n".
             /IF.
-            IF last_ty ISNT "give_stmt", SET bcode TO bcode + "  return " + aname + ";\n". /IF.
+            IF last_ty ISNT "give_stmt", SET bcode TO bcode + "  return " + fnname + ";\n". /IF.
         /IF.
         SET ccode TO ccode + dcode + bcode + "\}\n".
         GIVE ccode.
@@ -3639,6 +3656,24 @@ ACTION generate_c(ast(LIST)),
         SET i TO i + 1.
     /SEASON.
     IF COUNT cb_acts > 0, SET cb_code TO cb_code + "\n". /IF.
+    # v0.48.15: top-level MISSION CONFIG stmts force a wrapper main; a
+    # plain ACTION main() is then emitted as plant_main() and invoked
+    # by the wrapper so the config keys apply before any FAST heap use
+    # (avoids the int-main/tx_t-main type clash in the generated C).
+    CREATE has_cfg(TX) TO "0".
+    CREATE has_plain_main(TX) TO "0".
+    SET i TO 0.
+    SEASON i < COUNT ast,
+        REAP ce_nd FROM plant_list_get, ast, i.
+        REAP ce_ty FROM _map_get, ce_nd, "type".
+        IF ce_ty IS "config_stmt", SET has_cfg TO "1". /IF.
+        IF ce_ty IS "action_decl",
+            REAP ce_nm FROM _map_get, ce_nd, "name".
+            REAP ce_as FROM _map_get, ce_nd, "async".
+            IF ce_nm IS "main" AND ce_as ISNT "1", SET has_plain_main TO "1". /IF.
+        /IF.
+        SET i TO i + 1.
+    /SEASON.
     # pass 1: forward declarations for every non-generic action_decl +
     # every monomorphized instantiation
     SET i TO 0.
@@ -3668,7 +3703,12 @@ ACTION generate_c(ast(LIST)),
                     SET pro_code TO pro_code + ");\n".
                 /IF.
                 IF asymark ISNT "1",
-                    SET pro_code TO pro_code + "tx_t " + aname + "(" + paramstr + ");\n".
+                    IF aname IS "main" AND has_cfg IS "1",
+                        SET pro_code TO pro_code + "tx_t plant_main(" + paramstr + ");\n".
+                    /IF.
+                    IF aname ISNT "main" OR has_cfg ISNT "1",
+                        SET pro_code TO pro_code + "tx_t " + aname + "(" + paramstr + ");\n".
+                    /IF.
                 /IF.
             /IF.
         /IF.
@@ -3735,6 +3775,9 @@ ACTION generate_c(ast(LIST)),
                 IF str_eq(aname, "main") IS "1" AND drn_main IS 1 AND asy4 ISNT "1",
                     REAP node_el2 FROM map_add, node_el, "drain_after", "1".
                 /IF.
+                IF str_eq(aname, "main") IS "1" AND has_cfg IS "1" AND asy4 ISNT "1",
+                    REAP node_el2 FROM map_add, node_el2, "main_rename", "1".
+                /IF.
                 REAP cmact FROM _cl_map_get, clmaps, aname.
                 REAP nd_code FROM generate_node, node_el2, 0, sigs, esub, cmact, "", plant_list_make(0), plant_list_make(0), eregs, "".
                 SET decl_code TO decl_code + nd_code.
@@ -3761,6 +3804,9 @@ ACTION generate_c(ast(LIST)),
         SET i TO i + 1.
     /SEASON.
     IF has_stmt,
+        IF has_plain_main IS "1",
+            SET stmt_code TO stmt_code + "  plant_main();\n".
+        /IF.
         SET stmt_code TO "int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n" + dcode + stmt_code + "  plant_async_drain();\n  return 0;\n}\n".
     /IF.
     GIVE header + struct_code + ffi_topo + cltype_code + pro_code + cb_code + clfwd_code + "\n" + cldef_code + "\n" + decl_code + stmt_code.

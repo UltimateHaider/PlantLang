@@ -1,0 +1,18 @@
+# fast_escalation — Mission Mode FAST with a tiny heap: allocations
+# exceed the 256-byte capacity, the bump heap doubles to the 512-byte
+# limit, then falls back to BALANCED (malloc) mode. plant_fast_escalated
+# reports the one-time fallback and the audit ring carries the
+# FAST_ESCALATE warning (v0.48.15).
+MISSION CONFIG FAST_HEAP_CAPACITY = 256.
+MISSION CONFIG FAST_HEAP_LIMIT = 512.
+MISSION CONFIG FAST_ALIGNMENT = 4.
+ACTION main() WITH MISSION FAST,
+  CREATE i(NUM) TO 0.
+  CREATE h(TX) TO "".
+  SEASON i < 40,
+    SET h TO plant_fast_alloc(64).
+    SET i TO i + 1.
+  /SEASON.
+  SHOW "escalated=" + ffi_fast_escalated().
+  SHOW ffi_audit_dump().
+/ACTION.

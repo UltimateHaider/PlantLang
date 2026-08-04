@@ -1,0 +1,11 @@
+# fast_audit — NonBlockingAuditLogger telemetry in Mission Mode FAST
+# (v0.48.15): zero-trust capability checks (default grants FILE_READ /
+# FILE_WRITE / NET_CONNECT only) and the lock-free audit ring dump.
+# Every plant_cap_check logs a CAP_CHECK event; the ring dump shows
+# ZT_GRANT (init), MODE_ENTER (FAST main) and the check results.
+ACTION main() WITH MISSION FAST,
+  SHOW "read=" + ffi_cap_check("FILE_READ").
+  SHOW "net=" + ffi_cap_check("NET_CONNECT").
+  SHOW "sys=" + ffi_cap_check("SHUTDOWN_ANY").
+  SHOW ffi_audit_dump().
+/ACTION.

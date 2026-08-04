@@ -1,0 +1,19 @@
+# fast_loop — 50M-iteration numeric loop in Mission Mode FAST (v0.48.15).
+# Exercises the bump-heap binding: plant_fast_enter at scope enter plus
+# periodic plant_fast_alloc churn (every 4096th iteration, ~12k bump
+# allocations, stays under the 8MB default capacity — no escalation).
+# Benchmarks the FAST path against the BALANCED default (numeric_bench).
+ACTION main() WITH MISSION FAST,
+  CREATE i(NUM) TO 0.
+  CREATE acc(NUM) TO 0.
+  CREATE h(TX) TO "".
+  SEASON i < 50000000,
+    IF (i & 4095) IS 0,
+      SET h TO plant_fast_alloc(256).
+    /IF.
+    SET acc TO acc + i * 3 - (i % 7).
+    SET i TO i + 1.
+  /SEASON.
+  SHOW acc.
+  SHOW "fast_peak=" + plant_fast_peak().
+/ACTION.

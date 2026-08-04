@@ -39,4 +39,14 @@ tx_t ffi_ctx_make(long adaptive, long cap, tx_t name);
 tx_t ffi_ctx_tasks(tx_t ctx);
 tx_t ffi_read_trace(tx_t path);
 
+/* v0.48.15 Mission Mode FAST (wraps the runtime bump heap + audit) */
+tx_t ffi_fast_alloc(tx_t n);
+tx_t ffi_fast_reset(void);
+tx_t ffi_fast_used(void);
+tx_t ffi_fast_peak(void);
+tx_t ffi_fast_escalated(void);
+tx_t ffi_fast_status(void);
+tx_t ffi_audit_dump(void);
+tx_t ffi_cap_check(tx_t cap);
+
 #endif

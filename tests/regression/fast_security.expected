@@ -1,0 +1,6 @@
+FAST RAN
+done
+0,MODE_ENTER,FAST main
+1,MODE_ENTER,FAST fast_worker
+2,BOUNDARY,FAST->SAFE blocked safe_worker
+

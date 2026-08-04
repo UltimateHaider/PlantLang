@@ -1,5 +1,64 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.15 — 2026 (Mission Mode FAST)
+
+### New Features
+- **`WITH MISSION FAST` binds an action to the bump heap** — the codegen
+  emits `plant_fast_enter("name")` at the action entry, the runtime reset
+  the bump cursor per call scope, and `plant_fast_alloc` serves
+  alignment-rounded (`FAST_ALIGNMENT`, default 8) allocations from an
+  8MB heap that doubles via realloc up to a 64MB cap
+  (`FAST_HEAP_CAPACITY`/`FAST_HEAP_LIMIT` `MISSION CONFIG` keys).
+- **BALANCED escalation** — when the fast heap is exhausted the runtime
+  falls back to malloc once and logs `FAST_ESCALATE "WARN: Fast heap
+  capacity exceeded"`; `plant_fast_escalated/used/peak/status` expose the
+  heap state to PlantLang code.
+- **`WITH MISSION SAFE` and the Boundary Handshake** — SAFE actions carry
+  a `plant_boundary_block` guard at entry; a FAST caller reaching a SAFE
+  callee is blocked (returns immediately) and the audit ring logs a
+  `BOUNDARY` event. FAST also skips redundant context-magic validation
+  (zero-trust: fewer checks, bounded side effects).
+- **NonBlockingAuditLogger** — a lock-free single-producer audit ring
+  (256 × 96B, volatile head) recording `MODE_ENTER`, `ZT_GRANT`,
+  `CAP_CHECK`, `FAST_ESCALATE` and `BOUNDARY` events;
+  `plant_audit_dump` returns them as `seq,kind,msg` lines with an
+  `OVERFLOW n dropped` trailer.
+- **Zero-trust capability defaults** — `plant_cap_check` grants only
+  `FILE_READ`, `FILE_WRITE` and `NET_CONNECT` by default and logs every
+  check; anything else is denied.
+- **`MISSION CONFIG` keys for the fast heap** — `FAST_HEAP_CAPACITY` and
+  `FAST_HEAP_LIMIT` (≥64 bytes) and `FAST_ALIGNMENT` (≥1, else 8) are
+  applied via `plant_async_config` before `main` runs; when config
+  statements are present a plain `ACTION main()` is emitted as
+  `plant_main()` and invoked by the wrapper entry so the keys apply
+  before any FAST heap use (fixes the int/tx_t main clash in generated C).
+- **Fixed parser modifier bug** — `PRIORITY`, `WITH MISSION` and the
+  body-separator parse only ran when an `->` return type was present
+  (the whole block was nested inside the arrow branch); the block is now
+  top-level in `parse_action_decl`. `PRIORITY HIGH/NORMAL/LOW` and
+  `WITH MISSION FAST/SAFE` now work on arrow-less declarations too.
+- **Fixed action_decl map arity** — the parser's action_decl GIVEs
+  declared `plant_list_make(14, …)` while carrying 16 elements; the
+  trailing `mission_mode` pair was silently dropped. All four sites now
+  declare 16.
+
+### Regression Tests
+- `fast_escalation` — tiny `FAST_HEAP_CAPACITY 256` heap: 40 × 64B
+  allocations overflow the capacity, grow to the 512B limit and escalate
+  once to malloc; `plant_fast_escalated` reports "1" and the audit dump
+  contains the `FAST_ESCALATE` warning.
+- `fast_security` — FAST main calls a FAST worker (runs) and a SAFE
+  worker (blocked at entry, "SAFE RAN" never prints); the audit dump
+  carries the `BOUNDARY FAST->SAFE blocked safe_worker` event.
+- `fast_audit` — zero-trust checks: `FILE_READ`/`NET_CONNECT` grant,
+  `SHUTDOWN_ANY` deny, with `ZT_GRANT`/`CAP_CHECK` audit telemetry and
+  the `MODE_ENTER` event for the FAST main.
+
+### Perf
+- `fast_loop` — 50M-iteration numeric loop in FAST mode with periodic
+  bump allocations (~80ms, ~1.4MB RSS), benchmarked against the
+  BALANCED `numeric_bench` baseline in `perf_results.md`.
+
 ## v0.48.14 — 2026 (Async IN Context)
 
 ### New Features

@@ -1,0 +1,18 @@
+# fast_security — Boundary Handshake (v0.48.15): a FAST action may not
+# call a SAFE action. The SAFE callee entry carries the
+# plant_boundary_block guard; blocked calls return immediately and the
+# audit ring logs a BOUNDARY event. "SAFE RAN" must never print.
+ACTION fast_worker() WITH MISSION FAST,
+  SHOW "FAST RAN".
+/ACTION.
+
+ACTION safe_worker() WITH MISSION SAFE,
+  SHOW "SAFE RAN".
+/ACTION.
+
+ACTION main() WITH MISSION FAST,
+  CALL fast_worker().
+  CALL safe_worker().
+  SHOW "done".
+  SHOW ffi_audit_dump().
+/ACTION.

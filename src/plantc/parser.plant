@@ -1294,6 +1294,8 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
   REAP p3 FROM _second, name_pair.
   # async priority modifier (default NORMAL=1)
   CREATE prio(TX) TO "1".
+  # v0.48.15: mission mode (default BALANCED; WITH MISSION FAST/SAFE)
+  CREATE mission_mode(TX) TO "BALANCED".
   # generic type parameter list: [T, U] right after the action name
   CREATE generics(LIST) TO plant_list_make(0).
   REAP ga_tok FROM peek, tokens, p3.
@@ -1325,7 +1327,7 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
   SEASON TRUE,
     REAP is_eof_flag FROM is_eof, tokens, p4.
     IF is_eof_flag,
-      GIVE plant_list_make(2, plant_list_make(14, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", plant_list_make(0), "prio", prio, "ret", ""), p4).
+      GIVE plant_list_make(2, plant_list_make(16, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", plant_list_make(0), "prio", prio, "ret", "", "mission_mode", mission_mode), p4).
     /IF.
     REAP tok FROM peek, tokens, p4.
     REAP lx FROM tok_lex, tok.
@@ -1478,8 +1480,9 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
     IF ret IS "" AND ret_lx ISNT "external" AND ret_lx ISNT "Result" AND ret_lx ISNT "STRUCT" AND ret_lx ISNT "ENUM" AND ret_lx ISNT "void",
       SET ret TO ret_lx.
     /IF.
-    # optional PRIORITY HIGH|NORMAL|LOW modifier (async actions)
-    REAP pr_tok FROM peek, tokens, p5.
+  /IF.
+  # optional PRIORITY HIGH|NORMAL|LOW modifier (async actions)
+  REAP pr_tok FROM peek, tokens, p5.
     REAP pr_lx FROM tok_lex, pr_tok.
     IF pr_lx IS "PRIORITY",
       REAP pr_pair FROM consume, tokens, p5.
@@ -1490,6 +1493,23 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
       IF lv_lx IS "HIGH", SET prio TO "0". /IF.
       IF lv_lx IS "NORMAL", SET prio TO "1". /IF.
       IF lv_lx IS "LOW", SET prio TO "2". /IF.
+    /IF.
+    # v0.48.15: WITH MISSION <MODE> — FAST (bump heap) / SAFE (boundary
+    # guarded) / BALANCED (default). Optional; comes after PRIORITY.
+    REAP wm_tok FROM peek, tokens, p5.
+    REAP wm_lx FROM tok_lex, wm_tok.
+    IF wm_lx IS "WITH",
+      REAP wm_pair FROM consume, tokens, p5.
+      REAP p5 FROM _second, wm_pair.
+      REAP ms_pair FROM consume, tokens, p5.
+      REAP ms_lx FROM tok_lex, ms_pair[0].
+      REAP p5 FROM _second, ms_pair.
+      IF ms_lx IS "MISSION",
+        REAP md_pair FROM consume, tokens, p5.
+        REAP md_lx FROM tok_lex, md_pair[0].
+        REAP p5 FROM _second, md_pair.
+        SET mission_mode TO md_lx.
+      /IF.
     /IF.
     REAP after_tok FROM peek, tokens, p5.
     REAP after_lx FROM tok_lex, after_tok.
@@ -1503,14 +1523,13 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
       IF ret_lx IS "external" OR ret_lx IS "Result" OR ret_lx IS "STRUCT" OR ret_lx IS "ENUM" OR ret IS "void*",
         GIVE plant_list_make(2, plant_list_make(10, "type", "external_decl", "name", aname, "params", params, "ret", ret, "varargs", vararg), p5).
       /IF.
-      GIVE plant_list_make(2, plant_list_make(14, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", plant_list_make(0), "prio", prio, "ret", ret), p5).
+      GIVE plant_list_make(2, plant_list_make(16, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", plant_list_make(0), "prio", prio, "ret", ret, "mission_mode", mission_mode), p5).
     /IF.
-  /IF.
   CREATE body(LIST) TO plant_list_make(0).
   SEASON TRUE,
     REAP is_eof_flag FROM is_eof, tokens, p5.
     IF is_eof_flag,
-      GIVE plant_list_make(2, plant_list_make(14, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", body, "prio", prio, "ret", ret), p5).
+      GIVE plant_list_make(2, plant_list_make(16, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", body, "prio", prio, "ret", ret, "mission_mode", mission_mode), p5).
     /IF.
     REAP tok4 FROM peek, tokens, p5.
     REAP lx4 FROM tok_lex, tok4.
@@ -1521,7 +1540,7 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
       REAP p7 FROM _second, end.
       REAP dot FROM consume, tokens, p7.
       REAP p8 FROM _second, dot.
-      GIVE plant_list_make(2, plant_list_make(14, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", body, "prio", prio, "ret", ret), p8).
+      GIVE plant_list_make(2, plant_list_make(16, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", body, "prio", prio, "ret", ret, "mission_mode", mission_mode), p8).
     /IF.
     REAP stmt_pair FROM parse_statement, tokens, p5.
     CREATE stmt TO stmt_pair[0].

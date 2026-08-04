@@ -1,0 +1,4 @@
+escalated=1
+0,MODE_ENTER,FAST main
+1,FAST_ESCALATE,WARN: Fast heap capacity exceeded
+

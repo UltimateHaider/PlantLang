@@ -312,4 +312,39 @@ tx_t ffi_read_trace(tx_t path) {
     return strdup(out);
 }
 
+/* ── v0.48.15 Mission Mode FAST wrappers (bump heap + audit) ──
+   ffi_fast_alloc returns the bump pointer as a tx_t handle (never
+   dereferenced from PlantLang); counts/status come back as text. */
+tx_t ffi_fast_alloc(tx_t n) {
+    return plant_fast_alloc(n);
+}
+
+tx_t ffi_fast_reset(void) {
+    return plant_fast_reset();
+}
+
+tx_t ffi_fast_used(void) {
+    return plant_fast_used();
+}
+
+tx_t ffi_fast_peak(void) {
+    return plant_fast_peak();
+}
+
+tx_t ffi_fast_escalated(void) {
+    return plant_fast_escalated();
+}
+
+tx_t ffi_fast_status(void) {
+    return plant_fast_status();
+}
+
+tx_t ffi_audit_dump(void) {
+    return plant_audit_dump();
+}
+
+tx_t ffi_cap_check(tx_t cap) {
+    return plant_cap_check(cap);
+}
+
 #endif /* MOCK_FFI_EXT_H */

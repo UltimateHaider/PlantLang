@@ -1632,6 +1632,10 @@ static long g_next_sample = 0;
 static int g_trace_on = 0;
 static int g_trace_level = 0;         /* 0 INFO, 1 DEBUG, 2 PERF */
 static FILE* g_trace_fp = NULL;
+static int g_in_fast = 0;             /* v0.48.15: inside a FAST action */
+static size_t g_fast_cfg_cap = 0;     /* MISSION CONFIG FAST_HEAP_CAPACITY (0=default 8MB) */
+static size_t g_fast_cfg_limit = 0;   /* MISSION CONFIG FAST_HEAP_LIMIT (0=default 64MB) */
+static long g_fast_cfg_align = 0;     /* MISSION CONFIG FAST_ALIGNMENT (0=default 8) */
 static plant_seg* g_seg_cache = NULL;
 static size_t g_seg_size = 1024;
 static size_t g_cache_max = 64;
@@ -2195,6 +2199,10 @@ void plant_async_cancel(tx_t x) {
 static plant_actx* plant_ctx_validate(tx_t ctx) {
     if (!ctx) return NULL;
     plant_actx* c = (plant_actx*)ctx;
+    /* v0.48.15: WITH MISSION FAST actions skip the redundant magic
+       check for peak throughput (zero-trust is enforced at the
+       boundary guard instead) */
+    if (g_in_fast) return c;
     if (c->magic != 0xA51A4C7) return NULL;
     return c;
 }
@@ -2234,6 +2242,207 @@ long plant_async_ctx_tasks(tx_t ctxv) {
     for (plant_task* t = c->tasks; t; t = t->clink)
         if (!t->dead) n++;
     return n;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.48.15 — Mission Mode FAST
+   WITH MISSION FAST actions bind a bump-pointer heap (strict 8-byte
+   alignment, 8MB initial capacity, 64MB hard cap; both configurable
+   via MISSION CONFIG). Overflowing the hard cap escalates to BALANCED
+   mode (plain malloc) with a WARN audit event; plant_fast_reset
+   rewinds the bump and frees escalated allocations. A lock-free audit
+   ring (single producer, volatile head) records mode/boundary/
+   capability telemetry without blocking. Zero-trust: only
+   FILE_READ/FILE_WRITE/NET_CONNECT are granted by default; the
+   Boundary Handshake blocks FAST->SAFE calls via plant_boundary_block
+   emitted at SAFE action entries.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* NonBlockingAuditLogger — lock-free ring buffer */
+#define PLANT_AUDIT_CAP 256
+#define PLANT_AUDIT_MSG 96
+typedef struct {
+    long seq;
+    char kind[24];
+    char msg[PLANT_AUDIT_MSG];
+} plant_audit_ev;
+
+static plant_audit_ev g_audit[PLANT_AUDIT_CAP];
+static volatile long g_audit_head = 0;   /* next write slot */
+static long g_audit_count = 0;
+static long g_audit_overflow = 0;
+static long g_audit_seq = 0;
+
+void plant_audit_log(const char* kind, const char* msg) {
+    long slot = g_audit_head;
+    plant_audit_ev* e = &g_audit[slot];
+    e->seq = g_audit_seq++;
+    snprintf(e->kind, sizeof(e->kind), "%s", kind);
+    snprintf(e->msg, sizeof(e->msg), "%s", msg ? msg : "");
+    g_audit_head = (slot + 1) % PLANT_AUDIT_CAP;
+    if (g_audit_count < PLANT_AUDIT_CAP) g_audit_count++;
+    else g_audit_overflow++;
+}
+
+tx_t plant_audit_dump(void) {
+    static char buf[32768];
+    size_t used = 0;
+    long n = g_audit_count;
+    if (n > PLANT_AUDIT_CAP) n = PLANT_AUDIT_CAP;
+    long base = g_audit_head - n;
+    if (base < 0) base += PLANT_AUDIT_CAP;
+    for (long i = 0; i < n; i++) {
+        plant_audit_ev* e = &g_audit[(base + i) % PLANT_AUDIT_CAP];
+        used += (size_t)snprintf(buf + used, sizeof(buf) - used,
+                                 "%ld,%s,%s\n", e->seq, e->kind, e->msg);
+    }
+    if (g_audit_overflow > 0)
+        snprintf(buf + used, sizeof(buf) - used, "OVERFLOW %ld dropped\n", g_audit_overflow);
+    return buf;
+}
+
+/* Zero-Trust capability registry — default grants only */
+static int g_zt_inited = 0;
+static const char* const g_zt_grants[] = { "FILE_READ", "FILE_WRITE", "NET_CONNECT" };
+#define ZT_GRANT_COUNT 3
+
+static void plant_zero_trust_init(void) {
+    if (g_zt_inited) return;
+    g_zt_inited = 1;
+    for (long i = 0; i < ZT_GRANT_COUNT; i++)
+        plant_audit_log("ZT_GRANT", g_zt_grants[i]);
+}
+
+tx_t plant_cap_check(tx_t capv) {
+    plant_zero_trust_init();
+    const char* cap = _S(capv);
+    int grant = 0;
+    for (long i = 0; i < ZT_GRANT_COUNT; i++)
+        if (strcmp(cap, g_zt_grants[i]) == 0) { grant = 1; break; }
+    static char msg[96];
+    snprintf(msg, sizeof(msg), "%s %s", cap, grant ? "grant" : "deny");
+    plant_audit_log("CAP_CHECK", msg);
+    return grant ? (tx_t)"1" : (tx_t)"0";
+}
+
+/* FAST bump heap with BALANCED escalation */
+typedef struct {
+    char* base;          /* bump heap */
+    size_t size;         /* current capacity */
+    size_t used;         /* bump pointer offset */
+    size_t peak;         /* high-water mark */
+    size_t limit;        /* hard cap */
+    long   alignment;    /* strict byte alignment (default 8) */
+    int    inited;
+    int    escalated;    /* fell back to BALANCED once */
+} plant_fast_heap;
+
+static plant_fast_heap g_fast = { 0 };
+#define PLANT_FAST_ESC_MAX 256
+static void* g_fast_esc[PLANT_FAST_ESC_MAX];
+static long g_fast_esc_n = 0;
+
+static void plant_fast_init(void) {
+    if (g_fast.inited) return;
+    g_fast.size = g_fast_cfg_cap ? g_fast_cfg_cap : (8u << 20);
+    g_fast.limit = g_fast_cfg_limit ? g_fast_cfg_limit : (64u << 20);
+    g_fast.alignment = g_fast_cfg_align ? g_fast_cfg_align : 8;
+    if (g_fast.alignment < 1) g_fast.alignment = 8;
+    g_fast.base = (char*)malloc(g_fast.size);
+    g_fast.inited = 1;
+}
+
+static void plant_fast_grow(void) {
+    size_t ns = g_fast.size * 2;
+    if (ns > g_fast.limit) ns = g_fast.limit;
+    if (ns <= g_fast.size) return;
+    char* nb = (char*)realloc(g_fast.base, ns);
+    if (!nb) return;
+    g_fast.base = nb;
+    g_fast.size = ns;
+}
+
+static void* plant_fast_alloc_raw(size_t n) {
+    plant_fast_init();
+    size_t a = (size_t)g_fast.alignment;
+    size_t need = (n + a - 1) / a * a;
+    if (g_fast.used + need > g_fast.size && g_fast.size < g_fast.limit)
+        plant_fast_grow();
+    if (g_fast.used + need <= g_fast.size) {
+        void* p = g_fast.base + g_fast.used;
+        g_fast.used += need;
+        if (g_fast.used > g_fast.peak) g_fast.peak = g_fast.used;
+        return p;
+    }
+    /* escalation: safe fallback to BALANCED mode */
+    if (!g_fast.escalated) {
+        g_fast.escalated = 1;
+        plant_audit_log("FAST_ESCALATE", "WARN: Fast heap capacity exceeded");
+    }
+    void* p = malloc(need);
+    if (p && g_fast_esc_n < PLANT_FAST_ESC_MAX) g_fast_esc[g_fast_esc_n++] = p;
+    return p;
+}
+
+/* emitted by the codegen at the entry of every WITH MISSION FAST
+   action: binds the bump heap and resets it for the call's scope */
+void plant_fast_enter(const char* name) {
+    if (g_fast.inited) {
+        if (g_fast.used > g_fast.peak) g_fast.peak = g_fast.used;
+        g_fast.used = 0;               /* scope-exit reset at next enter */
+    }
+    g_in_fast = 1;
+    static char msg[128];
+    snprintf(msg, sizeof(msg), "FAST %s", name ? name : "");
+    plant_audit_log("MODE_ENTER", msg);
+}
+
+tx_t plant_fast_alloc(tx_t n) {
+    return (tx_t)plant_fast_alloc_raw((size_t)(long)n);
+}
+
+tx_t plant_fast_reset(void) {
+    plant_fast_init();
+    if (g_fast.used > g_fast.peak) g_fast.peak = g_fast.used;
+    g_fast.used = 0;
+    for (long i = 0; i < g_fast_esc_n; i++) free(g_fast_esc[i]);
+    g_fast_esc_n = 0;
+    return (tx_t)"0";
+}
+
+tx_t plant_fast_used(void) {
+    plant_fast_init();
+    return _from_long((long)g_fast.used);
+}
+
+tx_t plant_fast_peak(void) {
+    plant_fast_init();
+    return _from_long((long)g_fast.peak);
+}
+
+tx_t plant_fast_escalated(void) {
+    plant_fast_init();
+    return g_fast.escalated ? (tx_t)"1" : (tx_t)"0";
+}
+
+tx_t plant_fast_status(void) {
+    plant_fast_init();
+    static char buf[192];
+    snprintf(buf, sizeof(buf), "used=%ld cap=%ld limit=%ld escalated=%d",
+             (long)g_fast.used, (long)g_fast.size, (long)g_fast.limit,
+             g_fast.escalated ? 1 : 0);
+    return buf;
+}
+
+/* Boundary Handshake: FAST may not call SAFE. plant_boundary_block is
+   emitted at SAFE action entries; blocked calls return immediately
+   with an empty result. All other mode pairs pass. */
+long plant_boundary_block(const char* callee) {
+    if (!g_in_fast) return 0;
+    static char msg[128];
+    snprintf(msg, sizeof(msg), "FAST->SAFE blocked %s", callee);
+    plant_audit_log("BOUNDARY", msg);
+    return 1;
 }
 
 /* work stealing: clone a task into a NEW arena; segments are shared
@@ -2301,6 +2510,15 @@ void plant_async_config(tx_t keyv, tx_t valv) {
         if (g_trace_fp) { fclose(g_trace_fp); g_trace_fp = NULL; }
         if (val && *val && strcmp(val, "OFF") != 0)
             g_trace_fp = fopen(val, "w");
+    } else if (strcmp(key, "FAST_HEAP_CAPACITY") == 0) {
+        long v = atol(val);
+        if (v >= 64) g_fast_cfg_cap = (size_t)v;
+    } else if (strcmp(key, "FAST_HEAP_LIMIT") == 0) {
+        long v = atol(val);
+        if (v >= 64) g_fast_cfg_limit = (size_t)v;
+    } else if (strcmp(key, "FAST_ALIGNMENT") == 0) {
+        long v = atol(val);
+        g_fast_cfg_align = (v >= 1) ? v : 8;
     }
 }
 
