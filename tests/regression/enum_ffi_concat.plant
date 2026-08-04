@@ -1,0 +1,13 @@
+# v0.48.12 — ENUM-returning FFI calls inside string concat
+# (_cat) resolve via the FFI call-name entries registered by
+# collect_enums; reap targets concat as their member names.
+ENUM Color { RED, GREEN, BLUE }.
+
+ACTION ffi_color() -> ENUM Color.
+
+ACTION main(),
+  SHOW "got=" + ffi_color() + "!".
+  REAP c FROM ffi_color.
+  SHOW "c=" + c + ".".
+  GIVE 0.
+/ACTION.

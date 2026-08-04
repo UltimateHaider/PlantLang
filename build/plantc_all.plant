@@ -1705,6 +1705,14 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
       REAP p5 FROM _second, rtv.
       SET ret TO "STRUCT " + rtt.
     /IF.
+    # v0.48.12: ENUM X — FFI boundary enums (raw member ints in C,
+    # wrapped with _from_enum on the PlantLang side)
+    IF ret_lx IS "ENUM",
+      REAP rtv FROM collect_type_text, tokens, p5, ".", 0.
+      REAP rtt FROM _first, rtv.
+      REAP p5 FROM _second, rtv.
+      SET ret TO "ENUM " + rtt.
+    /IF.
     IF ret_lx IS "void",
       REAP vst FROM peek, tokens, p5.
       REAP vsl FROM tok_lex, vst.
@@ -1753,7 +1761,7 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
     IF after_lx IS ".",
       REAP dot_pair FROM consume, tokens, p5.
       REAP p5 FROM _second, dot_pair.
-      IF ret_lx IS "external" OR ret_lx IS "Result" OR ret_lx IS "STRUCT" OR ret IS "void*",
+      IF ret_lx IS "external" OR ret_lx IS "Result" OR ret_lx IS "STRUCT" OR ret_lx IS "ENUM" OR ret IS "void*",
         GIVE plant_list_make(2, plant_list_make(10, "type", "external_decl", "name", aname, "params", params, "ret", ret, "varargs", vararg), p5).
       /IF.
       GIVE plant_list_make(2, plant_list_make(12, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", plant_list_make(0), "prio", prio), p5).
@@ -2083,7 +2091,7 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
         IF sgn IS 1,
             SET pel2 TO "_from_long(" + pel2 + ")".
         /IF.
-        REAP snm FROM enum_in_table, evars, pel2.
+        REAP snm FROM enum_expr_of, evars, pel2.
         IF sgn IS 0 AND snm ISNT "",
             SET pel2 TO "_from_enum(" + pel2 + ", \"" + snm + "\")".
         /IF.
@@ -2299,13 +2307,16 @@ ACTION add_struct_enum_keys(reg(LIST), vtype(TX), vname(TX), res(LIST)),
 # enum_members_of — membersCsv for a type in a flat registry, or ""
 ACTION enum_members_of(reg(LIST), ty(TX)),
   CREATE res(TX) TO "".
+  CREATE ty2(TX) TO ty.
+  REAP rp0 FROM substring, ty2, 0, 5.
+  IF rp0 IS "ENUM ", SET ty2 TO substring(ty2, 5, LEN(ty2)). /IF.
   CREATE ri(NUM) TO 0.
   CREATE rn(TX) TO "".
   CREATE rv(TX) TO "".
   SEASON ri + 1 < COUNT reg,
     REAP rn FROM plant_list_get, reg, ri.
     REAP rv FROM plant_list_get, reg, ri + 1.
-    IF str_eq(rn, ty) IS "1", SET res TO rv. /IF.
+    IF str_eq(rn, ty2) IS "1", SET res TO rv. /IF.
     SET ri TO ri + 2.
   /SEASON.
   GIVE res.
@@ -2367,9 +2378,27 @@ ACTION collect_enums_walk(bd, subst, reg, sigs, res),
       IF wtg ISNT "_" AND wtg ISNT "null",
         REAP wact FROM _map_get, wnd, "action".
         REAP wbase FROM base_of, wact.
-        REAP wret FROM find_ret, sigs, wbase.
-        IF wret > "",
-          REAP wrf FROM add_struct_enum_keys, reg, wret, wtg, res.
+        REAP wsig FROM find_sig, sigs, wbase.
+        IF COUNT wsig > 0,
+          REAP wst2 FROM _map_get, wsig, "type".
+          REAP wret FROM _map_get, wsig, "ret".
+          IF wret > "",
+            REAP wrf FROM add_struct_enum_keys, reg, wret, wtg, res.
+            # FFI (external) callees return raw member ints from C:
+            # register the target so the call site wraps it with
+            # _from_enum and displays/concat resolve (v0.48.12)
+            IF wst2 IS "external_decl",
+              REAP wretb FROM subst_type, wret, subst.
+              REAP wms2 FROM enum_members_of, reg, wretb.
+              IF wms2 > "",
+                REAP wf2 FROM list_contains, res, wtg.
+                IF wf2 IS 0,
+                  PUT wtg INTO res.
+                  PUT wms2 INTO res.
+                /IF.
+              /IF.
+            /IF.
+          /IF.
         /IF.
       /IF.
     /IF.
@@ -2434,7 +2463,37 @@ ACTION collect_enums(bd, params, subst, reg, sigs),
       /IF.
       SET mi TO mi + 1.
     /SEASON.
+    # enum type names resolve FFI formal params at call sites (v0.48.12)
+    REAP rpre0 FROM substring, rn, 0, 7.
+    IF rpre0 ISNT "STRUCT.",
+      REAP tf FROM list_contains, res, rn.
+      IF tf IS 0,
+        PUT rn INTO res.
+        PUT rv INTO res.
+      /IF.
+    /IF.
     SET ri TO ri + 2.
+  /SEASON.
+  # FFI call names with ENUM returns: inline ffi_color() expressions
+  # display/concat correctly (matched via enum_expr_of) (v0.48.12)
+  CREATE fi3(NUM) TO 0.
+  CREATE fs3(TX) TO "".
+  SEASON fi3 < COUNT sigs,
+    REAP fs3 FROM plant_list_get, sigs, fi3.
+    REAP fst3 FROM _map_get, fs3, "type".
+    IF fst3 IS "external_decl",
+      REAP fsnm3 FROM _map_get, fs3, "name".
+      REAP fsrt3 FROM _map_get, fs3, "ret".
+      REAP fsc3 FROM enum_members_of, reg, fsrt3.
+      IF fsc3 ISNT "",
+        REAP fsf3 FROM list_contains, res, fsnm3.
+        IF fsf3 IS 0,
+          PUT fsnm3 INTO res.
+          PUT fsc3 INTO res.
+        /IF.
+      /IF.
+    /IF.
+    SET fi3 TO fi3 + 1.
   /SEASON.
   REAP wr FROM collect_enums_walk, bd, subst, reg, sigs, res.
   GIVE res.
@@ -2453,6 +2512,22 @@ ACTION enum_in_table(evars(LIST), name(TX)),
     SET ej TO ej + 2.
   /SEASON.
   GIVE res.
+/ACTION.
+
+# enum_expr_of — membersCsv for a value expression: exact key, or
+# the call prefix of an inline call like ffi_color(1) → ffi_color
+# (FFI call names with ENUM returns are registered bare) (v0.48.12)
+ACTION enum_expr_of(evars(LIST), cval(TX)),
+  REAP e2 FROM enum_in_table, evars, cval.
+  IF e2 ISNT "", GIVE e2. /IF.
+  REAP lp2 FROM find_any, cval, "(".
+  IF lp2 ISNT -1,
+    REAP lpre2 FROM substring, cval, 0, lp2.
+    REAP lpre2 FROM trim, lpre2.
+    REAP e2 FROM enum_in_table, evars, lpre2.
+    IF e2 ISNT "", GIVE e2. /IF.
+  /IF.
+  GIVE "".
 /ACTION.
 ACTION list_contains(lst(LIST), x(TX)),
   CREATE found(NUM) TO 0.
@@ -3013,7 +3088,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF isn2 IS 1,
             SET cval TO "_from_long(" + cval + ")".
         /IF.
-        REAP snm2 FROM enum_in_table, evars, cval.
+        REAP snm2 FROM enum_expr_of, evars, cval.
         IF isn2 IS 0 AND snm2 ISNT "",
             SET cval TO "_from_enum(" + cval + ", \"" + snm2 + "\")".
         /IF.
@@ -3171,7 +3246,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP cval FROM _handle_cat, cval, nums, evars.
         REAP isn3 FROM expr_is_numeric, cval, nums.
         IF isn3 IS 0,
-            REAP snm3 FROM enum_in_table, evars, cval.
+            REAP snm3 FROM enum_expr_of, evars, cval.
             IF snm3 ISNT "",
                 SET cval TO "_from_enum(" + cval + ", \"" + snm3 + "\")".
             /IF.
@@ -3416,6 +3491,19 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
                     /IF.
                 /IF.
                 IF fk2 IS "plain",
+                    # ENUM-typed FFI params: C expects the raw member
+                    # int; _to_enum passes small ints through and maps
+                    # member-name strings (from enum-typed function
+                    # boundaries) back to their index (v0.48.12)
+                    CREATE fty0(TX) TO fp_ty.
+                    REAP fp0 FROM substring, fty0, 0, 4.
+                    IF fp0 IS "REF ", SET fty0 TO substring(fty0, 4, LEN(fty0)). /IF.
+                    REAP fp0 FROM substring, fty0, 0, 5.
+                    IF fp0 IS "ENUM ", SET fty0 TO substring(fty0, 5, LEN(fty0)). /IF.
+                    REAP fcsv2 FROM enum_in_table, evars, fty0.
+                    IF fcsv2 ISNT "",
+                        SET aexpr TO "_to_enum(" + aexpr + ", \"" + fcsv2 + "\")".
+                    /IF.
                     REAP rp3 FROM is_ref_at, fparams, ai.
                     IF rp3 IS "1",
                         SET aexpr TO "&" + aexpr.
@@ -3443,6 +3531,8 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP sig2 FROM find_sig, sigs, act.
         IF COUNT sig2 > 0,
             REAP ffi_ret FROM _map_get, sig2, "ret".
+            REAP fp9 FROM substring, ffi_ret, 0, 5.
+            IF fp9 IS "ENUM ", SET ffi_ret TO substring(ffi_ret, 5, LEN(ffi_ret)). /IF.
             REAP ffi_rtk FROM ffi_param_kind, ffi_ret.
         /IF.
         CREATE call_expr(TX) TO callname + "(" + clcall + argstr + ")".
@@ -3467,6 +3557,17 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
                 GIVE clpre + ffi_pref + isel + "  " + call_expr + ";\n" + clclears.
             /IF.
             IF tgt ISNT "_",
+                # ENUM-typed FFI reap targets (registered by
+                # collect_enums_walk): raw member int from C → member
+                # name string; idempotent for already-wrapped values
+                # (v0.48.12)
+                REAP ffr2 FROM enum_in_table, evars, ffi_ret.
+                IF ffr2 ISNT "",
+                    REAP rtg2 FROM enum_in_table, evars, tgt.
+                    IF rtg2 ISNT "",
+                        SET call_expr TO "_from_enum(" + call_expr + ", \"" + rtg2 + "\")".
+                    /IF.
+                /IF.
                 GIVE clpre + ffi_pref + isel + "  " + tgt + " = " + call_expr + ";\n" + clclears.
             /IF.
         /IF.
@@ -3677,7 +3778,9 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             SET mi TO mi + 1.
         /SEASON.
         SET ccode TO ccode + "\n\} " + ename + ";\n".
-        GIVE ccode.
+        # guard macro lets FFI mock code reference the enum type and
+        # its member constants (#ifdef PLANT_ENUM_Color) (v0.48.12)
+        GIVE "#define PLANT_ENUM_" + ename + " 1\n" + ccode.
     /IF.
     GIVE "".
 /ACTION.
@@ -4938,7 +5041,7 @@ ACTION generate_c(ast(LIST)),
             CREATE params2(LIST) TO _map_get(node_el, "params").
             CREATE rt2(TX) TO _map_get(node_el, "ret").
             CREATE vg2(TX) TO _map_get(node_el, "varargs").
-            PUT plant_list_make(8, "name", aname, "params", params2, "ret", rt2, "varargs", vg2) INTO sigs.
+            PUT plant_list_make(10, "name", aname, "type", ntype, "params", params2, "ret", rt2, "varargs", vg2) INTO sigs.
         /IF.
         IF ntype IS "action_decl",
             REAP aname FROM _map_get, node_el, "name".
@@ -6014,7 +6117,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.48.11 (pure native)".
+  SHOW "Chloroplast 0.48.12 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

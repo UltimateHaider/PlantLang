@@ -1,5 +1,36 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.12 — 2026 (ENUM FFI)
+
+### New Features
+- **ENUM across FFI boundaries** — external functions can now take and return
+  enum values. `ACTION ffi_x() -> ENUM Color.` parses as an `external_decl`
+  (new parser rule mirroring the `-> STRUCT X.` convention), so the FFI
+  extension machinery, signature table, and reap handling see the real
+  enum-typed signature.
+- **`_to_enum` param marshalling** — every call to an external whose formal
+  parameter is `ENUM Color` wraps the argument with
+  `_to_enum(arg, "RED,GREEN,BLUE")`: raw member ints pass through unchanged,
+  member-name strings (from enum-typed action boundaries or reap targets)
+  map back to their index, unknown strings pass through untouched.
+- **`_from_enum` return marshalling** — inline calls to enum-returning
+  externals (`SHOW ffi_color()`, `"got=" + ffi_color()`) and their reap
+  targets (`REAP c FROM ffi_color.`) are wrapped with `_from_enum`, so the
+  raw member int the C side returns becomes the member-name string.
+  `collect_enums` registers FFI call names (matched by the call prefix in
+  `enum_expr_of`) and the walk registers reap targets against `external_decl`
+  signatures (now distinguishable in `sigs` via a `type` key).
+- **`PLANT_ENUM_<Name>` guard macro** — the generated types block emits
+  `#define PLANT_ENUM_Color 1` next to the `typedef enum`, letting mock FFI
+  libraries guard their enum functions the same way struct mocks use
+  `PLANT_STRUCT_plant_X`.
+
+### Tests
+- `enum_ffi` — enum literals, enum-typed variables, enum-returning action
+  results, and raw ints as FFI arguments.
+- `enum_ffi_show` — inline FFI enum returns through `SHOW` and reap targets.
+- `enum_ffi_concat` — FFI enum returns inside string concatenation.
+
 ## v0.48.11 — 2026 (ENUM Returns & Perf)
 
 ### New Features

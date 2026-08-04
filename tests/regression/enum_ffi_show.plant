@@ -1,0 +1,17 @@
+# v0.48.12 — inline ENUM-returning FFI calls display correctly
+# (matched by call name) and reap targets registered by the walk
+# wrap with _from_enum — raw member ints become member names.
+ENUM Color { RED, GREEN, BLUE }.
+
+ACTION ffi_color() -> ENUM Color.
+ACTION ffi_color_idx(c(ENUM Color)) -> external.
+
+ACTION main(),
+  SHOW ffi_color().
+  REAP c FROM ffi_color.
+  SHOW c.
+  SHOW "c=" + c.
+  REAP i FROM ffi_color_idx, GREEN.
+  SHOW "idx=" + i.
+  GIVE 0.
+/ACTION.

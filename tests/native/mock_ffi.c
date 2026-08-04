@@ -253,4 +253,30 @@ long ffi_ffi_errno(void) {
     return plant_ffi_errno;
 }
 
+/* ── v0.48.12 ENUM FFI ─────────────────────────────────────────
+   External functions that take/return ENUM Color values. The C
+   side works with raw member ints (RED=0, GREEN=1, BLUE=2); the
+   generated code marshals with _to_enum (params) and _from_enum
+   (returns). Guarded by the PLANT_ENUM_Color macro emitted into
+   the generated types header by the enum_decl codegen. */
+
+#ifdef PLANT_ENUM_Color
+
+/* ffi_color() -> ENUM Color: raw member index of GREEN */
+tx_t ffi_color(void) {
+    return (tx_t)1;
+}
+
+/* ffi_is_green(c(ENUM Color)) -> external: 1 when c is GREEN */
+tx_t ffi_is_green(tx_t c) {
+    return _from_long((long)c == 1);
+}
+
+/* ffi_color_idx(c(ENUM Color)) -> external: the raw member int */
+tx_t ffi_color_idx(tx_t c) {
+    return _from_long((long)c);
+}
+
+#endif /* PLANT_ENUM_Color */
+
 #endif /* MOCK_FFI_EXT_H */

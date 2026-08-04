@@ -63,6 +63,31 @@ static tx_t _from_enum(tx_t v, tx_t names) {
   memcpy(buf, start, n); buf[n] = 0;
   return buf;
 }
+/* v0.48.12 — ENUM FFI params. External C functions expect the raw
+   member int. PlantLang enum values are either the raw int (member
+   constants, struct/map field reads) or the member-name string (they
+   crossed an enum-typed function boundary). Small values pass through
+   unchanged; member-name strings map back to their index; unknown
+   strings pass through untouched. */
+static tx_t _to_enum(tx_t v, tx_t names) {
+  long idx = _L(v);
+  const char* s = _S(names);
+  if (!s || idx < 65536) return v;
+  {
+    const char* vp = _S(v);
+    long vl = 0;
+    if (vp) { while (vp[vl] && vl < 64) vl++; }
+    const char* p = s; long cur = 0;
+    while (vl > 0 && *p) {
+      const char* c = strchr(p, ',');
+      size_t n = c ? (size_t)(c - p) : strlen(p);
+      if ((long)n == vl && strncmp(vp, p, n) == 0) return (tx_t)(intptr_t)cur;
+      if (!c) break;
+      p = c + 1; cur++;
+    }
+  }
+  return v;
+}
 static tx_t _at(tx_t s, long i) { PlantArray*_p=_P(s); if(_p&&_p->magic==PLANT_ARRAY_MAGIC)return plant_list_get(_p,i); const char*_s=_S(s); if(!_s||i<0||i>=(long)strlen(_s))return""; char _b[2]; _b[0]=_s[i]; _b[1]=0; return strdup(_b); }
 static int _cli_argc; static char **_cli_argv;
 static void plant_init_cli(int c, char **v) { _cli_argc=c; _cli_argv=v; }

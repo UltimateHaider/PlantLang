@@ -1364,6 +1364,14 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
       REAP p5 FROM _second, rtv.
       SET ret TO "STRUCT " + rtt.
     /IF.
+    # v0.48.12: ENUM X — FFI boundary enums (raw member ints in C,
+    # wrapped with _from_enum on the PlantLang side)
+    IF ret_lx IS "ENUM",
+      REAP rtv FROM collect_type_text, tokens, p5, ".", 0.
+      REAP rtt FROM _first, rtv.
+      REAP p5 FROM _second, rtv.
+      SET ret TO "ENUM " + rtt.
+    /IF.
     IF ret_lx IS "void",
       REAP vst FROM peek, tokens, p5.
       REAP vsl FROM tok_lex, vst.
@@ -1412,7 +1420,7 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
     IF after_lx IS ".",
       REAP dot_pair FROM consume, tokens, p5.
       REAP p5 FROM _second, dot_pair.
-      IF ret_lx IS "external" OR ret_lx IS "Result" OR ret_lx IS "STRUCT" OR ret IS "void*",
+      IF ret_lx IS "external" OR ret_lx IS "Result" OR ret_lx IS "STRUCT" OR ret_lx IS "ENUM" OR ret IS "void*",
         GIVE plant_list_make(2, plant_list_make(10, "type", "external_decl", "name", aname, "params", params, "ret", ret, "varargs", vararg), p5).
       /IF.
       GIVE plant_list_make(2, plant_list_make(12, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", plant_list_make(0), "prio", prio), p5).

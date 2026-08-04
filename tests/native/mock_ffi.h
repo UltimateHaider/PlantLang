@@ -29,4 +29,9 @@ tx_t ffi_w_read(tx_t w);
 /* v0.48.4 FFI-extension errno reader */
 long ffi_ffi_errno(void);
 
+/* v0.48.12 ENUM FFI (tests declare ENUM Color + these externals) */
+tx_t ffi_color(void);
+tx_t ffi_is_green(tx_t c);
+tx_t ffi_color_idx(tx_t c);
+
 #endif

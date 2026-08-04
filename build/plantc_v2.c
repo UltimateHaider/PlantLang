@@ -64,6 +64,7 @@ tx_t reg_has_enum(PlantArray* reg);
 tx_t collect_enums_walk(tx_t bd, tx_t subst, tx_t reg, tx_t sigs, tx_t res);
 tx_t collect_enums(tx_t bd, tx_t params, tx_t subst, tx_t reg, tx_t sigs);
 tx_t enum_in_table(PlantArray* evars, tx_t name);
+tx_t enum_expr_of(PlantArray* evars, tx_t cval);
 tx_t list_contains(PlantArray* lst, tx_t x);
 tx_t collect_nums_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_nums(PlantArray* bd, PlantArray* params, PlantArray* subst);
@@ -2615,6 +2616,12 @@ tx_t parse_action_decl(PlantArray* tokens, long pos) {
             p5 = _second(rtv);
             ret = _cat("STRUCT ", rtt);
         }
+        if (strcmp(ret_lx,"ENUM") == 0) {
+            rtv = collect_type_text(tokens, p5, ".", 0);
+            rtt = _first(rtv);
+            p5 = _second(rtv);
+            ret = _cat("ENUM ", rtt);
+        }
         if (strcmp(ret_lx,"void") == 0) {
             vst = peek(tokens, p5);
             vsl = tok_lex(vst);
@@ -2667,7 +2674,7 @@ tx_t parse_action_decl(PlantArray* tokens, long pos) {
         if (strcmp(after_lx,".") == 0) {
             dot_pair = consume(tokens, p5);
             p5 = _second(dot_pair);
-            if (strcmp(ret_lx,"external") == 0 || strcmp(ret_lx,"Result") == 0 || strcmp(ret_lx,"STRUCT") == 0 || strcmp(ret,"void*") == 0) {
+            if (strcmp(ret_lx,"external") == 0 || strcmp(ret_lx,"Result") == 0 || strcmp(ret_lx,"STRUCT") == 0 || strcmp(ret_lx,"ENUM") == 0 || strcmp(ret,"void*") == 0) {
                 return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "external_decl" , "name" , aname , "params" , params , "ret" , ret , "varargs" , vararg ) , p5 );
             }
             return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "action_decl" , "name" , aname , "generics" , generics , "params" , params , "body" , plant_list_make ( 0 ) , "prio" , prio ) , p5 );
@@ -3028,7 +3035,7 @@ tx_t _handle_cat(tx_t expr, PlantArray* nums, PlantArray* evars) {
         if (sgn == 1) {
             pel2 = _cat(_cat("_from_long(", pel2), ")");
         }
-        snm = enum_in_table(evars, pel2);
+        snm = enum_expr_of(evars, pel2);
         if (sgn == 0 && strcmp(snm,"") != 0) {
             pel2 = _cat(_cat(_cat(_cat("_from_enum(", pel2), ", \""), snm), "\")");
         }
@@ -3251,14 +3258,20 @@ tx_t add_struct_enum_keys(PlantArray* reg, tx_t vtype, tx_t vname, PlantArray* r
     return res;
 }
 tx_t enum_members_of(PlantArray* reg, tx_t ty) {
+  tx_t rp0 = "";
     tx_t res = "";
+    tx_t ty2 = ty;
+    rp0 = substring(ty2, 0, 5);
+    if (strcmp(rp0,"ENUM ") == 0) {
+        ty2 = substring ( ty2 , 5 , strlen( ty2 ) );
+    }
     long ri = 0;
     tx_t rn = "";
     tx_t rv = "";
     while (ri + 1 < plant_array_length(reg)) {
         rn = plant_list_get(reg, ri);
         rv = plant_list_get(reg, ri+1);
-        if (strcmp(str_eq ( rn , ty ),"1") == 0) {
+        if (strcmp(str_eq ( rn , ty2 ),"1") == 0) {
             res = rv;
         }
         ri = ri+2;
@@ -3284,7 +3297,12 @@ tx_t collect_enums_walk(tx_t bd, tx_t subst, tx_t reg, tx_t sigs, tx_t res) {
   tx_t wrf = "";
   tx_t wact = "";
   tx_t wbase = "";
+  tx_t wsig = "";
+  tx_t wst2 = "";
   tx_t wret = "";
+  tx_t wretb = "";
+  tx_t wms2 = "";
+  tx_t wf2 = "";
     long wi = 0;
     tx_t wnd = "";
     tx_t wty = "";
@@ -3316,9 +3334,24 @@ tx_t collect_enums_walk(tx_t bd, tx_t subst, tx_t reg, tx_t sigs, tx_t res) {
             if (strcmp(wtg,"_") != 0 && strcmp(wtg,"null") != 0) {
                 wact = _map_get(wnd, "action");
                 wbase = base_of(wact);
-                wret = find_ret(sigs, wbase);
-                if (strcmp(wret,"") > 0) {
-                    wrf = add_struct_enum_keys(reg, wret, wtg, res);
+                wsig = find_sig(sigs, wbase);
+                if (plant_array_length(wsig) > 0) {
+                    wst2 = _map_get(wsig, "type");
+                    wret = _map_get(wsig, "ret");
+                    if (strcmp(wret,"") > 0) {
+                        wrf = add_struct_enum_keys(reg, wret, wtg, res);
+                        if (strcmp(wst2,"external_decl") == 0) {
+                            wretb = subst_type(wret, subst);
+                            wms2 = enum_members_of(reg, wretb);
+                            if (strcmp(wms2,"") > 0) {
+                                wf2 = list_contains(res, wtg);
+                                if (wf2 == 0) {
+                                    res = plant_list_push(res, wtg);
+                                    res = plant_list_push(res, wms2);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -3335,6 +3368,13 @@ tx_t collect_enums(tx_t bd, tx_t params, tx_t subst, tx_t reg, tx_t sigs) {
   tx_t pfound = "";
   tx_t prf = "";
   tx_t mf = "";
+  tx_t rpre0 = "";
+  tx_t tf = "";
+  tx_t fst3 = "";
+  tx_t fsnm3 = "";
+  tx_t fsrt3 = "";
+  tx_t fsc3 = "";
+  tx_t fsf3 = "";
   tx_t wr = "";
     PlantArray* res = plant_list_make ( 0 );
     he2 = reg_has_enum(reg);
@@ -3384,7 +3424,34 @@ tx_t collect_enums(tx_t bd, tx_t params, tx_t subst, tx_t reg, tx_t sigs) {
             }
             mi = mi+1;
         }
+        rpre0 = substring(rn, 0, 7);
+        if (strcmp(rpre0,"STRUCT.") != 0) {
+            tf = list_contains(res, rn);
+            if (tf == 0) {
+                res = plant_list_push(res, rn);
+                res = plant_list_push(res, rv);
+            }
+        }
         ri = ri+2;
+    }
+    long fi3 = 0;
+    tx_t fs3 = "";
+    while (fi3 < plant_array_length(sigs)) {
+        fs3 = plant_list_get(sigs, fi3);
+        fst3 = _map_get(fs3, "type");
+        if (strcmp(fst3,"external_decl") == 0) {
+            fsnm3 = _map_get(fs3, "name");
+            fsrt3 = _map_get(fs3, "ret");
+            fsc3 = enum_members_of(reg, fsrt3);
+            if (strcmp(fsc3,"") != 0) {
+                fsf3 = list_contains(res, fsnm3);
+                if (fsf3 == 0) {
+                    res = plant_list_push(res, fsnm3);
+                    res = plant_list_push(res, fsc3);
+                }
+            }
+        }
+        fi3 = fi3+1;
     }
     wr = collect_enums_walk(bd, subst, reg, sigs, res);
     return res;
@@ -3403,6 +3470,25 @@ tx_t enum_in_table(PlantArray* evars, tx_t name) {
         ej = ej+2;
     }
     return res;
+}
+tx_t enum_expr_of(PlantArray* evars, tx_t cval) {
+  tx_t e2 = "";
+  tx_t lp2 = "";
+  tx_t lpre2 = "";
+    e2 = enum_in_table(evars, cval);
+    if (strcmp(e2,"") != 0) {
+        return e2;
+    }
+    lp2 = find_any(cval, "(");
+    if (lp2 != - 1) {
+        lpre2 = substring(cval, 0, lp2);
+        lpre2 = trim(lpre2);
+        e2 = enum_in_table(evars, lpre2);
+        if (strcmp(e2,"") != 0) {
+            return e2;
+        }
+    }
+    return "";
 }
 tx_t list_contains(PlantArray* lst, tx_t x) {
     long found = 0;
@@ -3967,12 +4053,17 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t cnm4 = "";
   tx_t amp0 = "";
   tx_t fs2 = "";
+  tx_t fp0 = "";
+  tx_t fcsv2 = "";
   tx_t rp3 = "";
   tx_t sv2 = "";
   tx_t sf2 = "";
   tx_t sig2 = "";
+  tx_t fp9 = "";
   tx_t rcnm = "";
   tx_t stk2 = "";
+  tx_t ffr2 = "";
+  tx_t rtg2 = "";
   tx_t cond = "";
   tx_t bd = "";
   tx_t ccond = "";
@@ -4017,7 +4108,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         if (isn2 == 1) {
             cval = _cat(_cat("_from_long(", cval), ")");
         }
-        snm2 = enum_in_table(evars, cval);
+        snm2 = enum_expr_of(evars, cval);
         if (isn2 == 0 && strcmp(snm2,"") != 0) {
             cval = _cat(_cat(_cat(_cat("_from_enum(", cval), ", \""), snm2), "\")");
         }
@@ -4164,7 +4255,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         cval = _handle_cat(cval, nums, evars);
         isn3 = expr_is_numeric(cval, nums);
         if (isn3 == 0) {
-            snm3 = enum_in_table(evars, cval);
+            snm3 = enum_expr_of(evars, cval);
             if (strcmp(snm3,"") != 0) {
                 cval = _cat(_cat(_cat(_cat("_from_enum(", cval), ", \""), snm3), "\")");
             }
@@ -4387,6 +4478,19 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
                     }
                 }
                 if (strcmp(fk2,"plain") == 0) {
+                    tx_t fty0 = fp_ty;
+                    fp0 = substring(fty0, 0, 4);
+                    if (strcmp(fp0,"REF ") == 0) {
+                        fty0 = substring ( fty0 , 4 , strlen( fty0 ) );
+                    }
+                    fp0 = substring(fty0, 0, 5);
+                    if (strcmp(fp0,"ENUM ") == 0) {
+                        fty0 = substring ( fty0 , 5 , strlen( fty0 ) );
+                    }
+                    fcsv2 = enum_in_table(evars, fty0);
+                    if (strcmp(fcsv2,"") != 0) {
+                        aexpr = _cat(_cat(_cat(_cat("_to_enum(", aexpr), ", \""), fcsv2), "\")");
+                    }
                     rp3 = is_ref_at(fparams, ai);
                     if (strcmp(rp3,"1") == 0) {
                         aexpr = _cat("&", aexpr);
@@ -4416,6 +4520,10 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         sig2 = find_sig(sigs, act);
         if (plant_array_length(sig2) > 0) {
             ffi_ret = _map_get(sig2, "ret");
+            fp9 = substring(ffi_ret, 0, 5);
+            if (strcmp(fp9,"ENUM ") == 0) {
+                ffi_ret = substring ( ffi_ret , 5 , strlen( ffi_ret ) );
+            }
             ffi_rtk = ffi_param_kind(ffi_ret);
         }
         tx_t call_expr = _cat(_cat(_cat(_cat(callname, "("), clcall), argstr), ")");
@@ -4440,6 +4548,13 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
                 return _cat(_cat(_cat(_cat(_cat(_cat(clpre, ffi_pref), isel), "  "), call_expr), ";\n"), clclears);
             }
             if (strcmp(tgt,"_") != 0) {
+                ffr2 = enum_in_table(evars, ffi_ret);
+                if (strcmp(ffr2,"") != 0) {
+                    rtg2 = enum_in_table(evars, tgt);
+                    if (strcmp(rtg2,"") != 0) {
+                        call_expr = _cat(_cat(_cat(_cat("_from_enum(", call_expr), ", \""), rtg2), "\")");
+                    }
+                }
                 return _cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(clpre, ffi_pref), isel), "  "), tgt), " = "), call_expr), ";\n"), clclears);
             }
         }
@@ -4627,7 +4742,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
             mi = mi+1;
         }
         ccode = _cat(_cat(_cat(ccode, "\n} "), ename), ";\n");
-        return ccode;
+        return _cat(_cat(_cat("#define PLANT_ENUM_", ename), " 1\n"), ccode);
     }
     return "";
 }
@@ -5963,7 +6078,7 @@ tx_t generate_c(PlantArray* ast) {
             PlantArray* params2 = _map_get ( node_el , "params" );
             tx_t rt2 = _map_get ( node_el , "ret" );
             tx_t vg2 = _map_get ( node_el , "varargs" );
-            sigs = plant_list_push(sigs, plant_list_make ( 8 , "name" , aname , "params" , params2 , "ret" , rt2 , "varargs" , vg2 ));
+            sigs = plant_list_push(sigs, plant_list_make ( 10 , "name" , aname , "type" , ntype , "params" , params2 , "ret" , rt2 , "varargs" , vg2 ));
         }
         if (strcmp(ntype,"action_decl") == 0) {
             aname = _map_get(node_el, "name");
@@ -7063,7 +7178,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.11 (pure native)");
+      plant_print("Chloroplast 0.48.12 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

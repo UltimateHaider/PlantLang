@@ -1,0 +1,26 @@
+# v0.48.12 — ENUMs across FFI boundaries: raw member ints in C
+# are marshalled with _to_enum on the way in; member-name strings
+# (from enum-typed action boundaries) map back to their index.
+ENUM Color { RED, GREEN, BLUE }.
+
+ACTION ffi_color() -> ENUM Color.
+ACTION ffi_is_green(c(ENUM Color)) -> external.
+
+ACTION pick(n(NUM)) -> Color,
+  IF n IS 0, GIVE RED. /IF.
+  GIVE GREEN.
+/ACTION.
+
+ACTION main(),
+  REAP r1 FROM ffi_is_green, GREEN.
+  SHOW "literal=" + r1.
+  REAP c FROM ffi_color.
+  REAP r2 FROM ffi_is_green, c.
+  SHOW "var=" + r2.
+  REAP p FROM pick, 1.
+  REAP r3 FROM ffi_is_green, p.
+  SHOW "action=" + r3.
+  REAP r4 FROM ffi_is_green, 0.
+  SHOW "int=" + r4.
+  GIVE 0.
+/ACTION.
