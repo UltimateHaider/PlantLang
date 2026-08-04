@@ -1,0 +1,20 @@
+# persistent_bench — GlobalARCHeap overhead: 200k fully-audited ARC
+# lifecycles (alloc refs=1 → retain refs=2 → release refs=1 → release
+# refs=0 → finalize+free), with automatic cycle detection firing every
+# 1000 allocations (~200 mark-sweep passes over the live set).
+# Measures memory-management cost against the BALANCED numeric_bench
+# baseline: per-op overhead must stay in the microsecond range while
+# every lifecycle event is hash-chained into the audit log (v0.48.18).
+ACTION main()
+  CREATE j(NUM) TO 0.
+  CREATE s(NUM) TO 0.
+  SEASON j < 200000,
+    CREATE o(NUM) TO plant_arc_alloc(64).
+    CALL plant_arc_retain(o).
+    CALL plant_arc_release(o).
+    CALL plant_arc_release(o).
+    SET s TO s + 1.
+    SET j TO j + 1.
+  /SEASON.
+  SHOW _from_long(s).
+/ACTION.

@@ -870,7 +870,12 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM)),
       REAP cp FROM consume, tokens, p5.
       REAP p5 FROM _second, cp.
     /SEASON.
-    PUT arg_text INTO args.
+    # v0.48.18: `REAP r FROM f().` — the empty parens are collected
+    # as a "( )" arg expression; drop them so zero-arg reaps emit
+    # f() instead of the invalid f(( )).
+    IF arg_text ISNT "( )",
+        PUT arg_text INTO args.
+    /IF.
     REAP tok2 FROM peek, tokens, p5.
     REAP lx2 FROM tok_lex, tok2.
     IF lx2 IS ",",

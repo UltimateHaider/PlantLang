@@ -1,0 +1,22 @@
+# persistent_cache — lease-based long-term state: an object whose refs
+# hit zero stays in the GlobalARCHeap while its lease is live (the
+# persistent-cache path), and is reclaimed by GC.cycle() once the
+# lease expires (v0.48.18).
+MISSION CONFIG PERSIST_LEASE_MS = 30.
+
+ACTION serve() WITH MISSION PERSISTENT,
+  CREATE o(NUM) TO ffi_arc_alloc(64).
+  SHOW "lease=" + ffi_arc_lease(o, 30).
+  GIVE o.
+/ACTION.
+
+ACTION main()
+  REAP o FROM serve().
+  SHOW "retain=" + ffi_arc_retain(o).
+  SHOW "release1=" + ffi_arc_release(o).
+  SHOW "release2=" + ffi_arc_release(o).
+  SHOW "cached=" + ffi_persist_status().
+  CALL ffi_sleep(50).
+  SHOW "gc=" + ffi_arc_gc().
+  SHOW "after=" + ffi_persist_status().
+/ACTION.

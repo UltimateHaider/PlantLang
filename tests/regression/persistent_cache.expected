@@ -1,0 +1,7 @@
+lease=1
+retain=1
+release1=1
+release2=2
+cached=live=1 allocs=1 frees=0 finalizes=0 leased=1 gc_runs=0 reclaimed=0
+gc=1
+after=live=0 allocs=1 frees=1 finalizes=0 leased=1 gc_runs=1 reclaimed=1

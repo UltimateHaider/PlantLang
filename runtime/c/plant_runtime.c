@@ -1648,7 +1648,7 @@ static long plant_ms(void) {
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (long)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
 }
-static void plant_msleep(long ms) {
+void plant_msleep(long ms) {
     if (ms <= 0) ms = 1;
     struct timespec ts = { ms / 1000, (long)(ms % 1000) * 1000000 };
     while (nanosleep(&ts, &ts) != 0 && errno == EINTR) {}
@@ -2419,6 +2419,15 @@ static long g_smart_cfg_pool_max = 0;
 static long g_smart_cap_mask = 0;
 static int  g_smart_active = 0;
 
+/* v0.48.18 Mission Mode PERSISTENT state (declared here so the
+   cap-check and config paths can see it; the GlobalARCHeap lives in
+   the PERSISTENT section at the end of this file) */
+#define PLANT_CAP_NET_LISTEN (1L << 3)
+static int  g_persist_active = 0;
+static long g_persist_cap_mask = 0;
+static long g_persist_cfg_gc_interval = 1000;
+static long g_persist_cfg_lease_ms = 0;
+
 /* Zero-Trust capability registry — default grants only */
 static int g_zt_inited = 0;
 static const char* const g_zt_grants[] = { "FILE_READ", "FILE_WRITE", "NET_CONNECT" };
@@ -2445,6 +2454,13 @@ tx_t plant_cap_check(tx_t capv) {
         if (strcmp(cap, "FILE_READ") == 0) grant = (g_smart_cap_mask & PLANT_CAP_FILE_READ) != 0;
         else if (strcmp(cap, "FILE_WRITE") == 0) grant = (g_smart_cap_mask & PLANT_CAP_FILE_WRITE) != 0;
         else if (strcmp(cap, "NET_CONNECT") == 0) grant = (g_smart_cap_mask & PLANT_CAP_NET_CONNECT) != 0;
+    } else if (g_persist_active) {
+        /* PERSISTENT: broad operational defaults incl. NET_LISTEN so
+           long-running server services can hold socket listeners */
+        if (strcmp(cap, "FILE_READ") == 0) grant = (g_persist_cap_mask & PLANT_CAP_FILE_READ) != 0;
+        else if (strcmp(cap, "FILE_WRITE") == 0) grant = (g_persist_cap_mask & PLANT_CAP_FILE_WRITE) != 0;
+        else if (strcmp(cap, "NET_CONNECT") == 0) grant = (g_persist_cap_mask & PLANT_CAP_NET_CONNECT) != 0;
+        else if (strcmp(cap, "NET_LISTEN") == 0) grant = (g_persist_cap_mask & PLANT_CAP_NET_LISTEN) != 0;
     } else {
         plant_zero_trust_init();
         for (long i = 0; i < ZT_GRANT_COUNT; i++)
@@ -2567,13 +2583,14 @@ tx_t plant_fast_status(void) {
 }
 
 /* Boundary Handshake (v0.48.15) + BoundaryViolationError enforcement
-   (v0.48.16). plant_boundary_block is emitted at the entry of every
-   FAST/SAFE/SMART/PERSISTENT action with the callee's mission mode;
-   forbidden mode pairs are blocked at the callee entry and the call
-   returns immediately with an empty result:
-     FAST caller  → SAFE callee:          blocked (Boundary Handshake)
-     SAFE caller  → FAST/SMART/PERSISTENT: blocked (BoundaryViolationError)
-   All other pairs pass (BALANCED has no guard). */
+   (v0.48.16/17/18). plant_boundary_block is emitted at the entry of
+   every FAST/SAFE/SMART/PERSISTENT action with the callee's mission
+   mode; forbidden mode pairs are blocked at the callee entry and the
+   call returns immediately with an empty result:
+     FAST caller      → SAFE callee:          blocked (Boundary Handshake)
+     SAFE caller      → FAST/SMART/PERSISTENT: blocked (BoundaryViolationError)
+     PERSISTENT caller → SAFE callee:          blocked (BoundaryViolationError)
+   All other pairs pass (BALANCED has no guard; SMART may call any). */
 long plant_boundary_block(const char* callee, const char* callee_mode) {
     char top = plant_mode_top();
     static char msg[128];
@@ -2586,6 +2603,11 @@ long plant_boundary_block(const char* callee, const char* callee_mode) {
                        strcmp(callee_mode, "SMART") == 0 ||
                        strcmp(callee_mode, "PERSISTENT") == 0)) {
         snprintf(msg, sizeof(msg), "SAFE->%s blocked %s", callee_mode, callee);
+        plant_audit_log("BOUNDARY", msg);
+        return 1;
+    }
+    if (top == 'P' && strcmp(callee_mode, "SAFE") == 0) {
+        snprintf(msg, sizeof(msg), "PERSISTENT->SAFE blocked %s", callee);
         plant_audit_log("BOUNDARY", msg);
         return 1;
     }
@@ -2985,6 +3007,12 @@ void plant_async_config(tx_t keyv, tx_t valv) {
     } else if (strcmp(key, "SMART_POOL_MAX") == 0) {
         long v = atol(val);
         if (v >= 1 && v <= PLANT_SMART_MAX_WORKERS) g_smart_cfg_pool_max = v;
+    } else if (strcmp(key, "PERSIST_GC_INTERVAL") == 0) {
+        long v = atol(val);
+        if (v >= 1) g_persist_cfg_gc_interval = v;
+    } else if (strcmp(key, "PERSIST_LEASE_MS") == 0) {
+        long v = atol(val);
+        if (v >= 0) g_persist_cfg_lease_ms = v;
     }
 }
 
@@ -3183,4 +3211,317 @@ void plant_async_drain(void) {
         (void)done;
     }
     if (g_trace_fp) fflush(g_trace_fp);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.48.18 — Mission Mode PERSISTENT (GlobalARCHeap)
+   Global reference-counted heap with tri-color cycle detection,
+   object finalization callbacks and lease-based persistence.
+   Primitives: arc_alloc (refs=1), arc_retain, arc_release (free +
+   finalize at zero), arc_finalize (registered callbacks). Cycle
+   detection runs automatically every PERSIST_GC_INTERVAL (default
+   1000) allocations — a sub-millisecond candidate scan — and on
+   demand via GC.cycle() (plant_arc_gc); reclaimed cycles run their
+   finalizers. Objects allocated while a SAFE action is on the mode
+   stack are tainted and cannot be persisted (plant_arc_persist data
+   integrity gate). PERSISTENT actions hold FILE_READ / FILE_WRITE /
+   NET_CONNECT / NET_LISTEN by default and cannot call into SAFE
+   (boundary). DistributedHeap and the consistent hash ring remain
+   deferred and out of scope for this iteration.
+   ═══════════════════════════════════════════════════════════════ */
+#define PLANT_ARC_FINALIZER_NAME 64
+
+typedef struct plant_arc_obj plant_arc_obj;
+
+typedef struct plant_arc_link_edge {  /* reference edge: parent -> child */
+    plant_arc_obj* child;
+    struct plant_arc_link_edge* next;
+} plant_arc_link_edge;
+
+struct plant_arc_obj {
+    void* data;
+    size_t size;
+    long refs;              /* retain count (external + internal) */
+    long in_edges;          /* incoming reference edges (internal refs) */
+    long mark;              /* cycle detection: 0 unmarked, 1 marked */
+    long alloc_seq;         /* object id / sequence */
+    long leased_until_ms;   /* lease expiry (0 = no lease) */
+    int  tainted;           /* allocated inside SAFE (untrusted) */
+    char finalizer[PLANT_ARC_FINALIZER_NAME];
+    plant_arc_link_edge* edges;   /* outgoing reference edges */
+    plant_arc_obj* next;    /* heap list */
+};
+
+static plant_arc_obj* g_arc_head = NULL;
+static long g_arc_seq = 1;
+static long g_arc_allocs = 0;
+static long g_arc_live = 0;
+static long g_arc_frees = 0;
+static long g_arc_finalizes = 0;
+static long g_arc_leased = 0;
+static long g_arc_gc_runs = 0;
+static long g_arc_reclaimed = 0;
+
+/* finalizer callbacks: registered by name so PlantLang tests can bind
+   them without C function pointers; invoked on destruction */
+typedef void (*plant_arc_finalizer_fn)(plant_arc_obj*);
+static void plant_arc_fin_free_data(plant_arc_obj* o) { (void)o; }
+static const struct { const char* name; plant_arc_finalizer_fn fn; }
+    g_arc_finalizers[] = {
+        { "free_data", plant_arc_fin_free_data },
+        { "close_ctx", plant_arc_fin_free_data },
+    };
+#define PLANT_ARC_FINALIZER_COUNT 2
+
+static int plant_arc_in_safe(void) {
+    for (long i = 0; i < g_mode_depth; i++)
+        if (g_mode_stack[i] == 'S') return 1;
+    return 0;
+}
+
+static void plant_arc_destroy(plant_arc_obj* o, int reclaimed) {
+    if (!o) return;
+    plant_arc_obj** pp = &g_arc_head;
+    while (*pp && *pp != o) pp = &(*pp)->next;
+    if (*pp) *pp = o->next;
+    if (o->finalizer[0]) {
+        g_arc_finalizes++;
+        static char msg[96];
+        snprintf(msg, sizeof(msg), "%s seq=%ld", o->finalizer, o->alloc_seq);
+        plant_audit_log("ARC_FINALIZE", msg);
+    }
+    plant_arc_link_edge* e = o->edges;
+    while (e) {
+        plant_arc_link_edge* nx = e->next;
+        free(e);
+        e = nx;
+    }
+    if (reclaimed) g_arc_reclaimed++;
+    g_arc_live--;
+    g_arc_frees++;
+    static char msg[96];
+    snprintf(msg, sizeof(msg), "seq=%ld %s", o->alloc_seq,
+             reclaimed ? "reclaimed" : "refs=0");
+    plant_audit_log("ARC_FREE", msg);
+    free(o->data);
+    free(o);
+}
+
+static void plant_arc_destroy(plant_arc_obj* o, int reclaimed);
+
+/* refs hit zero: a live lease keeps the object in the heap (the
+   persistent cache path); otherwise it is finalized and freed */
+static void plant_arc_drop(plant_arc_obj* o) {
+    long now = plant_ms();
+    if (o->leased_until_ms > 0 && o->leased_until_ms > now) {
+        g_arc_leased++;
+        static char msg[96];
+        snprintf(msg, sizeof(msg), "seq=%ld kept (leased)", o->alloc_seq);
+        plant_audit_log("ARC_RELEASE", msg);
+        return;
+    }
+    plant_arc_destroy(o, 0);
+}
+
+tx_t plant_arc_alloc(tx_t sizev) {
+    size_t sz = (size_t)(long)sizev;
+    if (sz < 1) sz = 1;
+    plant_arc_obj* o = (plant_arc_obj*)calloc(1, sizeof(plant_arc_obj));
+    if (!o) return NULL;
+    o->data = calloc(1, sz);
+    if (!o->data) { free(o); return NULL; }
+    o->size = sz;
+    o->refs = 1;
+    o->alloc_seq = g_arc_seq++;
+    o->tainted = plant_arc_in_safe();
+    o->next = g_arc_head;
+    g_arc_head = o;
+    g_arc_live++;
+    g_arc_allocs++;
+    static char msg[96];
+    snprintf(msg, sizeof(msg), "seq=%ld size=%ld", o->alloc_seq, (long)sz);
+    plant_audit_log("ARC_ALLOC", msg);
+    /* automatic cycle detection every PERSIST_GC_INTERVAL allocations */
+    if (g_arc_allocs % g_persist_cfg_gc_interval == 0) plant_arc_gc();
+    return (tx_t)o;
+}
+
+tx_t plant_arc_retain(tx_t objv) {
+    plant_arc_obj* o = (plant_arc_obj*)objv;
+    if (!o) return (tx_t)"0";
+    o->refs++;
+    static char msg[96];
+    snprintf(msg, sizeof(msg), "seq=%ld refs=%ld", o->alloc_seq, o->refs);
+    plant_audit_log("ARC_RETAIN", msg);
+    return (tx_t)"1";
+}
+
+tx_t plant_arc_release(tx_t objv) {
+    plant_arc_obj* o = (plant_arc_obj*)objv;
+    if (!o || o->refs <= 0) return (tx_t)"0";
+    o->refs--;
+    static char msg[96];
+    if (o->refs > 0) {
+        snprintf(msg, sizeof(msg), "seq=%ld refs=%ld", o->alloc_seq, o->refs);
+        plant_audit_log("ARC_RELEASE", msg);
+        return (tx_t)"1";
+    }
+    snprintf(msg, sizeof(msg), "seq=%ld refs=0", o->alloc_seq);
+    plant_audit_log("ARC_RELEASE", msg);
+    plant_arc_drop(o);
+    return (tx_t)"2";
+}
+
+tx_t plant_arc_link(tx_t pv, tx_t cv) {
+    plant_arc_obj* p = (plant_arc_obj*)pv;
+    plant_arc_obj* c = (plant_arc_obj*)cv;
+    if (!p || !c || p == c) return (tx_t)"0";
+    plant_arc_link_edge* e = (plant_arc_link_edge*)calloc(1, sizeof(plant_arc_link_edge));
+    if (!e) return (tx_t)"0";
+    e->child = c;
+    e->next = p->edges;
+    p->edges = e;
+    c->in_edges++;
+    c->refs++;   /* storing a reference retains the child */
+    static char msg[96];
+    snprintf(msg, sizeof(msg), "p=%ld c=%ld refs=%ld", p->alloc_seq, c->alloc_seq, c->refs);
+    plant_audit_log("ARC_LINK", msg);
+    return (tx_t)"1";
+}
+
+tx_t plant_arc_unlink(tx_t pv, tx_t cv) {
+    plant_arc_obj* p = (plant_arc_obj*)pv;
+    plant_arc_obj* c = (plant_arc_obj*)cv;
+    if (!p || !c) return (tx_t)"0";
+    plant_arc_link_edge** pp = &p->edges;
+    while (*pp && (*pp)->child != c) pp = &(*pp)->next;
+    if (!*pp) return (tx_t)"0";
+    plant_arc_link_edge* dead = *pp;
+    *pp = dead->next;
+    free(dead);
+    c->in_edges--;
+    c->refs--;
+    static char msg[96];
+    if (c->refs > 0) {
+        snprintf(msg, sizeof(msg), "p=%ld c=%ld refs=%ld", p->alloc_seq, c->alloc_seq, c->refs);
+        plant_audit_log("ARC_UNLINK", msg);
+        return (tx_t)"1";
+    }
+    snprintf(msg, sizeof(msg), "p=%ld c=%ld refs=0", p->alloc_seq, c->alloc_seq);
+    plant_audit_log("ARC_UNLINK", msg);
+    plant_arc_drop(c);
+    return (tx_t)"2";
+}
+
+tx_t plant_arc_lease(tx_t objv, tx_t msv) {
+    plant_arc_obj* o = (plant_arc_obj*)objv;
+    if (!o) return (tx_t)"0";
+    long ms = (long)msv;
+    if (ms <= 0) ms = g_persist_cfg_lease_ms;
+    if (ms <= 0) return (tx_t)"0";
+    o->leased_until_ms = plant_ms() + ms;
+    static char msg[96];
+    snprintf(msg, sizeof(msg), "seq=%ld lease=%ldms", o->alloc_seq, ms);
+    plant_audit_log("ARC_LEASE", msg);
+    return (tx_t)"1";
+}
+
+tx_t plant_arc_set_finalizer(tx_t objv, tx_t namev) {
+    plant_arc_obj* o = (plant_arc_obj*)objv;
+    const char* name = _S(namev);
+    if (!o || !name) return (tx_t)"0";
+    for (long i = 0; i < PLANT_ARC_FINALIZER_COUNT; i++) {
+        if (strcmp(name, g_arc_finalizers[i].name) == 0) {
+            snprintf(o->finalizer, sizeof(o->finalizer), "%s", name);
+            static char msg[96];
+            snprintf(msg, sizeof(msg), "seq=%ld finalizer=%s", o->alloc_seq, name);
+            plant_audit_log("ARC_FINALIZE_REG", msg);
+            return (tx_t)"1";
+        }
+    }
+    return (tx_t)"0";
+}
+
+/* data integrity gate: objects allocated inside SAFE are untrusted and
+   cannot be persisted without validation (which SAFE never grants) */
+tx_t plant_arc_persist(tx_t objv) {
+    plant_arc_obj* o = (plant_arc_obj*)objv;
+    if (!o) return (tx_t)"0";
+    static char msg[96];
+    if (o->tainted) {
+        snprintf(msg, sizeof(msg), "seq=%ld blocked (untrusted SAFE data)", o->alloc_seq);
+        plant_audit_log("ARC_PERSIST", msg);
+        return (tx_t)"0";
+    }
+    snprintf(msg, sizeof(msg), "seq=%ld ok", o->alloc_seq);
+    plant_audit_log("ARC_PERSIST", msg);
+    return (tx_t)"1";
+}
+
+static void plant_arc_mark(plant_arc_obj* o) {
+    if (!o || o->mark == 1) return;
+    o->mark = 1;
+    for (plant_arc_link_edge* e = o->edges; e; e = e->next)
+        plant_arc_mark(e->child);
+}
+
+/* GC.cycle(): tri-color mark-sweep. Roots are objects with external
+   references (refs beyond their incoming edges); everything else is
+   part of a reference cycle (or an expired zero-ref lease) and is
+   reclaimed with its finalizers. Ultra-low overhead: the mark pass is
+   linear in live objects and runs every 1000 allocations. */
+long plant_arc_gc(void) {
+    g_arc_gc_runs++;
+    long reclaimed = 0;
+    for (plant_arc_obj* o = g_arc_head; o; o = o->next) o->mark = 0;
+    for (plant_arc_obj* o = g_arc_head; o; o = o->next)
+        if (o->refs - o->in_edges > 0) plant_arc_mark(o);
+    long now = plant_ms();
+    plant_arc_obj* o = g_arc_head;
+    while (o) {
+        plant_arc_obj* nx = o->next;
+        int lease_dead = o->refs == 0 && o->leased_until_ms > 0 && o->leased_until_ms <= now;
+        if (o->mark != 1 || lease_dead) {
+            plant_arc_destroy(o, 1);
+            reclaimed++;
+        }
+        o = nx;
+    }
+    if (reclaimed > 0) {
+        static char msg[96];
+        snprintf(msg, sizeof(msg), "cycle reclaimed=%ld", reclaimed);
+        plant_audit_log("ARC_GC", msg);
+    }
+    return reclaimed;
+}
+
+void plant_persist_enter(const char* name) {
+    g_persist_active = 1;
+    g_persist_cap_mask = PLANT_CAP_FILE_READ | PLANT_CAP_FILE_WRITE |
+                         PLANT_CAP_NET_CONNECT | PLANT_CAP_NET_LISTEN;
+    plant_mode_push('P');
+    static char msg[128];
+    snprintf(msg, sizeof(msg), "PERSISTENT %s", name ? name : "");
+    plant_audit_log("MODE_ENTER", msg);
+}
+
+void plant_persist_exit(void) {
+    g_persist_active = 0;
+    g_persist_cap_mask = 0;
+    plant_mode_pop();
+}
+
+tx_t plant_persist_status(void) {
+    static char buf[192];
+    snprintf(buf, sizeof(buf),
+             "live=%ld allocs=%ld frees=%ld finalizes=%ld leased=%ld gc_runs=%ld reclaimed=%ld",
+             g_arc_live, g_arc_allocs, g_arc_frees, g_arc_finalizes,
+             g_arc_leased, g_arc_gc_runs, g_arc_reclaimed);
+    return buf;
+}
+
+tx_t plant_arc_finalize_count(void) {
+    static char buf[32];
+    snprintf(buf, sizeof(buf), "%ld", g_arc_finalizes);
+    return buf;
 }

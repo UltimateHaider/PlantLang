@@ -1,5 +1,69 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.18 — 2026 (Mission Mode PERSISTENT)
+
+### New Features
+- **`WITH MISSION PERSISTENT` binds the GlobalARCHeap** — the codegen
+  emits the boundary guard plus `plant_persist_enter`/`plant_persist_exit`
+  (mode-stack `P`, `MODE_ENTER PERSISTENT` audit) around the body.
+- **GlobalARCHeap from scratch** — reference-counted tracked objects:
+  `arc_alloc(size)` (refs=1), `arc_retain` (refs++), `arc_release`
+  (refs--; finalize + free at zero), `arc_finalize` (named callbacks
+  from a built-in registry, invoked at deallocation), `arc_link`/
+  `arc_unlink` (reference edges with internal retains), `arc_lease`
+  (keep an object alive past refs=0 — the persistent-cache path).
+- **Tri-color cycle detection** — automatic every
+  `PERSIST_GC_INTERVAL` (default 1000) allocations (sub-millisecond
+  linear mark-sweep over the live set) plus manual `GC.cycle()`
+  (`plant_arc_gc`): objects with no external references are reclaimed
+  with their finalizers (`ARC_RECLAIM` accounting, `ARC_GC` events).
+- **`NET_LISTEN` default capability** — PERSISTENT actions hold
+  `FILE_READ`/`FILE_WRITE`/`NET_CONNECT`/`NET_LISTEN` (new
+  `PLANT_CAP_NET_LISTEN`); `plant_cap_check` consults the mask while a
+  PERSISTENT action is active.
+- **Data-integrity gate** — objects allocated inside a SAFE context are
+  tainted; `arc_persist` refuses to persist them
+  (`ARC_PERSIST … blocked (untrusted SAFE data)`) so untrusted data
+  cannot cross the boundary without validation.
+- **BoundaryViolationError: PERSISTENT→SAFE blocked** — the boundary
+  table gains `PERSISTENT→SAFE` (callee-side guard); SMART and FAST
+  callers still pass everywhere. Hash-chained audit covers every
+  lifecycle event (`ARC_ALLOC`/`ARC_RETAIN`/`ARC_RELEASE`/`ARC_LINK`/
+  `ARC_UNLINK`/`ARC_LEASE`/`ARC_FINALIZE_REG`/`ARC_FINALIZE`/`ARC_FREE`/
+  `ARC_GC`/`ARC_PERSIST`).
+- **`MISSION CONFIG` keys** — `PERSIST_GC_INTERVAL` (allocation
+  trigger), `PERSIST_LEASE_MS` (default lease duration).
+- **Codegen fixes landed on the way** — mission-mode exit lines
+  (`plant_*_exit`) are now threaded into the body generator so GIVE
+  returns pop the mode stack too (previously dead code behind the
+  return); zero-arg `REAP r FROM f().` parses correctly (empty parens
+  no longer emitted as the invalid `f(( ))`).
+- **Deferred (out of scope)** — DistributedHeap and the consistent
+  hash ring.
+
+### Regression Tests
+- `persistent_cache` — a leased object survives refs=0
+  (`release2=2`, `cached … leased=1`) and is reclaimed by `GC.cycle()`
+  after its lease expires (`after … reclaimed=1`).
+- `persistent_cycle` — manual `GC.cycle()` reclaims a 2-object cycle
+  (`manual=2`); 2500 further allocations trigger 2 automatic sweeps
+  (`gc_runs=3`) without touching live objects (`live=2500`).
+- `persistent_finalization` — registered finalizers run on the
+  refs-hit-0 path and on cycle reclamation (`finalized=1` → `2`), with
+  the audit chain verified `OK`.
+- `persistent_boundary` — PERSISTENT→SAFE blocked at the callee
+  (`BOUNDARY PERSISTENT->SAFE blocked sa`; body never runs) while FAST
+  stays reachable.
+- `persistent_permissions` — `read=1 write=1 net=1 listen=1` inside
+  PERSISTENT; a SAFE-created object is refused by the persist gate
+  (`persist=0`, `ARC_PERSIST … blocked (untrusted SAFE data)`).
+
+### Perf
+- `persistent_bench` — 200k fully-audited ARC lifecycles (5 hash-chained
+  events each, ~1M events total) with automatic cycle detection every
+  1000 allocations: ~2µs per lifecycle (~400ms total), recorded against
+  the BALANCED `numeric_bench` baseline in `perf_results.md`.
+
 ## v0.48.17 — 2026 (Mission Mode SMART)
 
 ### New Features

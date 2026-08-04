@@ -412,4 +412,45 @@ tx_t ffi_smart_status(void) {
     return plant_smart_status();
 }
 
+/* v0.48.18 Mission Mode PERSISTENT (GlobalARCHeap) */
+tx_t ffi_arc_alloc(tx_t size) {
+    return plant_arc_alloc(size);
+}
+tx_t ffi_arc_retain(tx_t obj) {
+    return plant_arc_retain(obj);
+}
+tx_t ffi_arc_release(tx_t obj) {
+    return plant_arc_release(obj);
+}
+tx_t ffi_arc_link(tx_t parent, tx_t child) {
+    return plant_arc_link(parent, child);
+}
+tx_t ffi_arc_unlink(tx_t parent, tx_t child) {
+    return plant_arc_unlink(parent, child);
+}
+tx_t ffi_arc_lease(tx_t obj, tx_t ms) {
+    return plant_arc_lease(obj, ms);
+}
+tx_t ffi_arc_set_finalizer(tx_t obj, tx_t name) {
+    return plant_arc_set_finalizer(obj, name);
+}
+tx_t ffi_arc_persist(tx_t obj) {
+    return plant_arc_persist(obj);
+}
+tx_t ffi_arc_gc(void) {
+    static char buf[32];
+    snprintf(buf, sizeof(buf), "%ld", plant_arc_gc());
+    return buf;
+}
+tx_t ffi_arc_finalized(void) {
+    return plant_arc_finalize_count();
+}
+tx_t ffi_persist_status(void) {
+    return plant_persist_status();
+}
+tx_t ffi_sleep(tx_t ms) {
+    plant_msleep((long)ms);
+    return (tx_t)"0";
+}
+
 #endif /* MOCK_FFI_EXT_H */

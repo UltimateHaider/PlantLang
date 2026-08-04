@@ -1,0 +1,24 @@
+# persistent_boundary — PERSISTENT callers are blocked at SAFE callee
+# entries (BoundaryViolationError, callee-side guard) while FAST
+# callees remain reachable; the blocked callee's body never runs
+# (v0.48.18).
+ACTION sa() WITH MISSION SAFE,
+  SHOW "safe ran".
+/ACTION.
+
+ACTION fa() WITH MISSION FAST,
+  SHOW "fast ran".
+/ACTION.
+
+ACTION pr() WITH MISSION PERSISTENT,
+  CALL sa().
+  SHOW "sa blocked ok".
+  CALL fa().
+  SHOW "fa ran ok".
+  SHOW "pr done".
+/ACTION.
+
+ACTION main()
+  CALL pr().
+  SHOW ffi_audit_dump().
+/ACTION.

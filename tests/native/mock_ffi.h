@@ -63,5 +63,17 @@ tx_t ffi_audit_chain_verify(void);
 tx_t ffi_audit_chain_head(void);
 tx_t ffi_audit_tamper(void);
 tx_t ffi_smart_status(void);
+tx_t ffi_arc_alloc(tx_t size);
+tx_t ffi_arc_retain(tx_t obj);
+tx_t ffi_arc_release(tx_t obj);
+tx_t ffi_arc_link(tx_t parent, tx_t child);
+tx_t ffi_arc_unlink(tx_t parent, tx_t child);
+tx_t ffi_arc_lease(tx_t obj, tx_t ms);
+tx_t ffi_arc_set_finalizer(tx_t obj, tx_t name);
+tx_t ffi_arc_persist(tx_t obj);
+tx_t ffi_arc_gc(void);
+tx_t ffi_arc_finalized(void);
+tx_t ffi_persist_status(void);
+tx_t ffi_sleep(tx_t ms);
 
 #endif

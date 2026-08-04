@@ -1,0 +1,8 @@
+sa blocked ok
+fast ran
+fa ran ok
+pr done
+0,MODE_ENTER,PERSISTENT pr
+1,BOUNDARY,PERSISTENT->SAFE blocked sa
+2,MODE_ENTER,FAST fa
+

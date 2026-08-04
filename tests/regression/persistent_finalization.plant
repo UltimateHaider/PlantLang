@@ -1,0 +1,20 @@
+# persistent_finalization — finalization callbacks: a registered
+# finalizer runs when an object is deallocated, both on the refs-hit-0
+# path and on cycle reclamation, and the event is recorded in the
+# hash-chained audit log (v0.48.18).
+ACTION main()
+  CREATE o(NUM) TO ffi_arc_alloc(16).
+  SHOW "reg=" + ffi_arc_set_finalizer(o, "free_data").
+  SHOW "rel=" + ffi_arc_release(o).
+  SHOW "finalized=" + ffi_arc_finalized().
+  CREATE p(NUM) TO ffi_arc_alloc(16).
+  CREATE q(NUM) TO ffi_arc_alloc(16).
+  SHOW "reg2=" + ffi_arc_set_finalizer(q, "close_ctx").
+  SHOW "link=" + ffi_arc_link(p, q).
+  SHOW "link2=" + ffi_arc_link(q, p).
+  SHOW "relP=" + ffi_arc_release(p).
+  SHOW "relQ=" + ffi_arc_release(q).
+  SHOW "gc=" + ffi_arc_gc().
+  SHOW "finalized2=" + ffi_arc_finalized().
+  SHOW "chain=" + ffi_audit_chain_verify().
+/ACTION.

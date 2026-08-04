@@ -1,0 +1,26 @@
+# persistent_permissions — PERSISTENT defaults grant FILE_READ /
+# FILE_WRITE / NET_CONNECT / NET_LISTEN, and the data-integrity gate
+# refuses to persist objects created inside SAFE (untrusted data
+# cannot cross the boundary without validation) (v0.48.18).
+ACTION grant_check() WITH MISSION PERSISTENT,
+  SHOW "read=" + ffi_cap_check("FILE_READ").
+  SHOW "write=" + ffi_cap_check("FILE_WRITE").
+  SHOW "net=" + ffi_cap_check("NET_CONNECT").
+  SHOW "listen=" + ffi_cap_check("NET_LISTEN").
+/ACTION.
+
+ACTION leak() WITH MISSION SAFE,
+  CREATE o(NUM) TO ffi_arc_alloc(8).
+  GIVE o.
+/ACTION.
+
+ACTION store(o(NUM)) WITH MISSION PERSISTENT,
+  SHOW "persist=" + ffi_arc_persist(o).
+/ACTION.
+
+ACTION main()
+  CALL grant_check().
+  REAP o2 FROM leak().
+  CALL store(o2).
+  SHOW ffi_audit_dump().
+/ACTION.

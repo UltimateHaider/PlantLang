@@ -1,0 +1,22 @@
+# persistent_cycle — reference cycle detection: a 2-object cycle whose
+# external references were released is unreachable, so GC.cycle()
+# reclaims both; automatic detection then fires every 1000 allocations
+# (gc_runs grows) without touching live objects (v0.48.18).
+MISSION CONFIG PERSIST_GC_INTERVAL = 1000.
+
+ACTION main()
+  CREATE a(NUM) TO ffi_arc_alloc(32).
+  CREATE b(NUM) TO ffi_arc_alloc(32).
+  SHOW "link1=" + ffi_arc_link(a, b).
+  SHOW "link2=" + ffi_arc_link(b, a).
+  SHOW "relA=" + ffi_arc_release(a).
+  SHOW "relB=" + ffi_arc_release(b).
+  SHOW "manual=" + ffi_arc_gc().
+  CREATE k(NUM) TO 0.
+  CREATE h(NUM) TO 0.
+  SEASON k < 2500,
+    CREATE h TO ffi_arc_alloc(16).
+    SET k TO k + 1.
+  /SEASON.
+  SHOW "auto=" + ffi_persist_status().
+/ACTION.

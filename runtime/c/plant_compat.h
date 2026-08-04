@@ -524,4 +524,26 @@ void  plant_smart_exit(const char* name);             /* leave SMART ctx */
 tx_t  plant_smart_route(const char* name, long size); /* "scalar" / "parallel" */
 tx_t  plant_smart_status(void);                       /* vec pool telemetry */
 
+/* ═══════════════════════════════════════════════════════════════
+   v0.48.18 — Mission Mode PERSISTENT: GlobalARCHeap with tri-color
+   cycle detection (auto every 1000 allocs + manual GC.cycle()),
+   finalization callbacks, lease-based persistence, NET_LISTEN default
+   capability, and the SAFE-data persistence gate. Objects are opaque
+   handles (alloc_seq ids). DistributedHeap / hash ring: deferred.
+   ═══════════════════════════════════════════════════════════════ */
+void  plant_persist_enter(const char* name);          /* bind ARC heap ctx */
+void  plant_persist_exit(void);                       /* leave PERSISTENT ctx */
+tx_t  plant_arc_alloc(tx_t size);                     /* new object, refs=1 */
+tx_t  plant_arc_retain(tx_t obj);                     /* refs++ */
+tx_t  plant_arc_release(tx_t obj);                    /* refs-- (2 if leased-kept) */
+tx_t  plant_arc_link(tx_t parent, tx_t child);        /* edge + internal retain */
+tx_t  plant_arc_unlink(tx_t parent, tx_t child);      /* drop edge + refs-- */
+tx_t  plant_arc_lease(tx_t obj, tx_t ms);             /* keep alive past refs=0 */
+tx_t  plant_arc_set_finalizer(tx_t obj, tx_t name);   /* register callback */
+tx_t  plant_arc_persist(tx_t obj);                    /* validation gate (1/0) */
+long  plant_arc_gc(void);                             /* GC.cycle(): reclaim */
+tx_t  plant_persist_status(void);                     /* heap telemetry (text) */
+tx_t  plant_arc_finalize_count(void);                 /* finalize counter */
+void  plant_msleep(long ms);                          /* sleep helper */
+
 #endif
