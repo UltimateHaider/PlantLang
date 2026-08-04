@@ -407,4 +407,9 @@ tx_t ffi_audit_tamper(void) {
     return plant_audit_tamper();
 }
 
+/* v0.48.17 Mission Mode SMART (SmartExecutionRouter vec pool) */
+tx_t ffi_smart_status(void) {
+    return plant_smart_status();
+}
+
 #endif /* MOCK_FFI_EXT_H */

@@ -1,0 +1,19 @@
+# smart_parallel — Parallel Vector Mode: datasets at/above the scalar
+# limit are partitioned into chunks (chunk size 1000) and dispatched
+# round-robin across the pinned 4-worker vec pool. The same action
+# then routes scalar again for N < 1000 (adaptive both ways), and the
+# telemetry proves chunks are served only on the parallel path
+# (v0.48.17).
+MISSION CONFIG SMART_POOL_CAPACITY = 4.
+MISSION CONFIG SMART_CHUNK_SIZE = 1000.
+
+ACTION proc(n(NUM)) WITH MISSION SMART,
+  SHOW "p" + _from_long(n).
+/ACTION.
+
+ACTION main()
+  CALL proc(2500).
+  SHOW ffi_smart_status().
+  CALL proc(999).
+  SHOW ffi_smart_status().
+/ACTION.

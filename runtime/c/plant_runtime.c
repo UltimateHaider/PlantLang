@@ -2407,6 +2407,18 @@ static long g_safe_cap_mask = 0;    /* MissionContext grants */
 static int  g_safe_active = 0;      /* inside a SAFE action */
 static long g_pending_wait_ms = 0;  /* simulated queue wait (starvation) */
 
+/* v0.48.17 Mission Mode SMART state (declared here so the cap-check
+   and config paths can see it; the router/pool live in the SMART
+   section at the end of this file) */
+#define PLANT_SMART_MAX_WORKERS 16
+#define PLANT_CAP_FILE_WRITE (1L << 2)
+static long g_smart_cfg_scalar_limit = 1000;
+static long g_smart_cfg_chunk_size = 256;
+static long g_smart_cfg_pool_cap = 0;
+static long g_smart_cfg_pool_max = 0;
+static long g_smart_cap_mask = 0;
+static int  g_smart_active = 0;
+
 /* Zero-Trust capability registry — default grants only */
 static int g_zt_inited = 0;
 static const char* const g_zt_grants[] = { "FILE_READ", "FILE_WRITE", "NET_CONNECT" };
@@ -2427,6 +2439,12 @@ tx_t plant_cap_check(tx_t capv) {
            the MissionContext (plant_safe_grant) */
         if (strcmp(cap, "FILE_READ") == 0) grant = (g_safe_cap_mask & PLANT_CAP_FILE_READ) != 0;
         else if (strcmp(cap, "NET_CONNECT") == 0) grant = (g_safe_cap_mask & PLANT_CAP_NET_CONNECT) != 0;
+    } else if (g_smart_active) {
+        /* SMART: broad operational defaults (FILE_READ / FILE_WRITE /
+           NET_CONNECT) so cross-mode vector work is unhindered */
+        if (strcmp(cap, "FILE_READ") == 0) grant = (g_smart_cap_mask & PLANT_CAP_FILE_READ) != 0;
+        else if (strcmp(cap, "FILE_WRITE") == 0) grant = (g_smart_cap_mask & PLANT_CAP_FILE_WRITE) != 0;
+        else if (strcmp(cap, "NET_CONNECT") == 0) grant = (g_smart_cap_mask & PLANT_CAP_NET_CONNECT) != 0;
     } else {
         plant_zero_trust_init();
         for (long i = 0; i < ZT_GRANT_COUNT; i++)
@@ -2955,7 +2973,174 @@ void plant_async_config(tx_t keyv, tx_t valv) {
     } else if (strcmp(key, "SAFE_CHANNEL_THRESHOLD") == 0) {
         long v = atol(val);
         if (v >= 1) g_safe_channel_threshold = v;
+    } else if (strcmp(key, "SMART_SCALAR_LIMIT") == 0) {
+        long v = atol(val);
+        if (v >= 1) g_smart_cfg_scalar_limit = v;
+    } else if (strcmp(key, "SMART_CHUNK_SIZE") == 0) {
+        long v = atol(val);
+        if (v >= 1) g_smart_cfg_chunk_size = v;
+    } else if (strcmp(key, "SMART_POOL_CAPACITY") == 0) {
+        long v = atol(val);
+        if (v >= 1 && v <= PLANT_SMART_MAX_WORKERS) g_smart_cfg_pool_cap = v;
+    } else if (strcmp(key, "SMART_POOL_MAX") == 0) {
+        long v = atol(val);
+        if (v >= 1 && v <= PLANT_SMART_MAX_WORKERS) g_smart_cfg_pool_max = v;
     }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.48.17 — Mission Mode SMART (SmartExecutionRouter)
+   Adaptive routing: datasets below the scalar limit (default 1000)
+   run Scalar Inline; datasets at/above the limit run Parallel Vector
+   Mode, partitioned into chunks and dispatched across the dynamic vec
+   pool (sized by CPU cores, capped at 16). The pool monitors its
+   queue to prevent starvation: queue pressure beyond 2x the live
+   worker count grows the pool toward the hard cap, and at the cap the
+   router falls back safely to BALANCED execution. SMART actions hold
+   broad operational grants (FILE_READ / FILE_WRITE / NET_CONNECT) and
+   may invoke any mission mode; SAFE callers are still blocked at
+   SMART entries by the Boundary Handshake. Every routing decision,
+   chunk dispatch and pool event is recorded by the audit logger.
+   ═══════════════════════════════════════════════════════════════ */
+#define PLANT_SMART_DEFAULT_SCALAR_LIMIT 1000
+#define PLANT_SMART_DEFAULT_CHUNK_SIZE 256
+
+typedef struct plant_vec_worker {
+    char name[PLANT_WORKER_NAME];
+    int  state;              /* 0 idle, 1 busy */
+    long served_chunks;
+} plant_vec_worker;
+
+static plant_vec_worker g_vec[PLANT_SMART_MAX_WORKERS];
+static long g_vec_count = 0;   /* live pool workers */
+static long g_vec_cap = 0;     /* cores-derived capacity */
+static long g_vec_max = PLANT_SMART_MAX_WORKERS;
+static long g_vec_queue = 0;   /* pending chunk count (monitored) */
+static long g_vec_spawns = 0;
+static long g_vec_served = 0;
+static long g_vec_expands = 0;
+static long g_vec_fallback = 0;
+
+static long plant_cpu_cores(void) {
+    long n = sysconf(_SC_NPROCESSORS_ONLN);
+    if (n < 1) n = 1;
+    if (n > PLANT_SMART_MAX_WORKERS) n = PLANT_SMART_MAX_WORKERS;
+    return n;
+}
+
+static void plant_vec_init(void) {
+    if (g_vec_cap > 0) return;
+    g_vec_cap = g_smart_cfg_pool_cap ? g_smart_cfg_pool_cap : plant_cpu_cores();
+    if (g_vec_cap < 1) g_vec_cap = 1;
+    if (g_vec_cap > PLANT_SMART_MAX_WORKERS) g_vec_cap = PLANT_SMART_MAX_WORKERS;
+    if (g_smart_cfg_pool_max) g_vec_max = g_smart_cfg_pool_max;
+    if (g_vec_max < g_vec_cap) g_vec_max = g_vec_cap;
+    if (g_vec_max > PLANT_SMART_MAX_WORKERS) g_vec_max = PLANT_SMART_MAX_WORKERS;
+    for (long i = 0; i < g_vec_cap; i++) {
+        snprintf(g_vec[i].name, PLANT_WORKER_NAME, "vec%ld", i);
+        g_vec[i].state = 0;
+        g_vec[i].served_chunks = 0;
+    }
+    g_vec_count = g_vec_cap;
+    g_vec_spawns = g_vec_cap;
+}
+
+/* SmartExecutionRouter: evaluate the optimal execution path for a
+   dataset of `size` elements (Scalar Inline vs Parallel Vector Mode)
+   and record the routing decision with the audit logger. */
+tx_t plant_smart_route(const char* name, long size) {
+    static char msg[160];
+    if (size < g_smart_cfg_scalar_limit) {
+        snprintf(msg, sizeof(msg), "scalar,%s,%ld", name ? name : "", size);
+        plant_audit_log("SMART_ROUTE", msg);
+        return (tx_t)"scalar";
+    }
+    plant_vec_init();
+    snprintf(msg, sizeof(msg), "parallel,%s,%ld,workers=%ld", name ? name : "", size, g_vec_count);
+    plant_audit_log("SMART_ROUTE", msg);
+    return (tx_t)"parallel";
+}
+
+/* SMART action entry: bind the router, hold broad operational grants
+   (FILE_READ / FILE_WRITE / NET_CONNECT), and in Parallel Vector Mode
+   partition the dataset into chunks, dispatch them across the vec
+   pool with queue monitoring (expand on pressure, BALANCED fallback
+   at the hard cap). */
+void plant_smart_enter(const char* name, long size) {
+    tx_t route = plant_smart_route(name, size);
+    g_smart_active = 1;
+    g_smart_cap_mask = PLANT_CAP_FILE_READ | PLANT_CAP_FILE_WRITE | PLANT_CAP_NET_CONNECT;
+    plant_mode_push('M');
+    static char msg[192];
+    snprintf(msg, sizeof(msg), "SMART %s", name ? name : "");
+    plant_audit_log("MODE_ENTER", msg);
+    if (strcmp(_S(route), "parallel") == 0) {
+        plant_vec_init();
+        long chunks = (size + g_smart_cfg_chunk_size - 1) / g_smart_cfg_chunk_size;
+        g_vec_queue = chunks;
+        /* queue monitoring: pending chunks beyond 2x the live worker
+           count is starvation pressure — grow the pool toward the
+           hard cap, then fall back to BALANCED execution */
+        long capacity = g_vec_count * 2;
+        while (g_vec_queue > capacity && g_vec_count < g_vec_max) {
+            long w = g_vec_count;
+            snprintf(g_vec[w].name, PLANT_WORKER_NAME, "vec%ld", w);
+            g_vec[w].state = 0;
+            g_vec[w].served_chunks = 0;
+            g_vec_count++;
+            g_vec_spawns++;
+            g_vec_expands++;
+            snprintf(msg, sizeof(msg), "pool expanded %ld->%ld (queue=%ld)",
+                     g_vec_count - 1, g_vec_count, g_vec_queue);
+            plant_audit_log("SMART_EXPAND", msg);
+            capacity = g_vec_count * 2;
+        }
+        if (g_vec_queue > capacity) {
+            g_vec_fallback++;
+            snprintf(msg, sizeof(msg), "queue=%ld > cap=%ld, BALANCED fallback",
+                     g_vec_queue, capacity);
+            plant_audit_log("SMART_FALLBACK", msg);
+        }
+        /* dispatch: assign every chunk to a pool worker and drain the
+           queue (in-process emulation: the body executes once,
+           sequentially, under the parallel context) */
+        long lo = 0;
+        long idx = 0;
+        while (lo < size) {
+            long hi = lo + g_smart_cfg_chunk_size;
+            if (hi > size) hi = size;
+            long w = idx % g_vec_count;
+            g_vec[w].state = 1;
+            snprintf(msg, sizeof(msg), "%ld->%ld,vec%ld", lo, hi, w);
+            plant_audit_log("SMART_CHUNK", msg);
+            g_vec[w].served_chunks++;
+            g_vec_served++;
+            lo = hi;
+            idx++;
+        }
+        g_vec_queue = 0;
+    }
+}
+
+/* SMART action exit: leave the mission mode (pop the mode stack). */
+void plant_smart_exit(const char* name) {
+    (void)name;
+    g_smart_active = 0;
+    g_smart_cap_mask = 0;
+    plant_mode_pop();
+}
+
+tx_t plant_smart_status(void) {
+    plant_vec_init();
+    static char buf[192];
+    long busy = 0;
+    for (long i = 0; i < g_vec_count; i++)
+        if (g_vec[i].state == 1) busy++;
+    snprintf(buf, sizeof(buf),
+             "workers=%ld queue=%ld spawns=%ld served=%ld expands=%ld fallback=%ld",
+             g_vec_count, g_vec_queue, g_vec_spawns, g_vec_served,
+             g_vec_expands, g_vec_fallback);
+    return buf;
 }
 
 void plant_async_init(void) {

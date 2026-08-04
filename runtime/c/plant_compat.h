@@ -511,4 +511,17 @@ tx_t  plant_safe_stall(tx_t name);                  /* fault injection: mark wor
 tx_t  plant_safe_starve(tx_t ms);                   /* fault injection: simulate queue wait */
 tx_t  plant_audit_tamper(void);                     /* fault injection: flip newest audit byte */
 
+/* ═══════════════════════════════════════════════════════════════
+   v0.48.17 — Mission Mode SMART: SmartExecutionRouter + dynamic vec
+   pool. Scalar Inline below the scalar limit, Parallel Vector Mode
+   (chunked dispatch) at/above it, with queue monitoring, pool growth
+   and BALANCED fallback at the hard cap. SMART holds broad operational
+   grants (FILE_READ / FILE_WRITE / NET_CONNECT) and may invoke any
+   mission mode.
+   ═══════════════════════════════════════════════════════════════ */
+void  plant_smart_enter(const char* name, long size); /* router bind + route */
+void  plant_smart_exit(const char* name);             /* leave SMART ctx */
+tx_t  plant_smart_route(const char* name, long size); /* "scalar" / "parallel" */
+tx_t  plant_smart_status(void);                       /* vec pool telemetry */
+
 #endif

@@ -1,0 +1,3 @@
+q4000
+workers=4 queue=0 spawns=4 served=40 expands=2 fallback=1
+chain=OK

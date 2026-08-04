@@ -1,6 +1,6 @@
 # Performance Results
 
-- Generated: 2026-08-04 09:25 UTC
+- Generated: 2026-08-04 10:10 UTC
 - Toolchain: Linux 6.6.76-08111-g8df27f55632a x86_64
 - Compiler:  Chloroplast 0.48.16 (pure native)
 - Host CC:   gcc (Debian 12.2.0-14+deb12u1) 12.2.0
@@ -8,24 +8,27 @@
 
 | benchmark | run | real (ms) | peak RSS (KB) | CPU ticks | exit |
 |---|---|---|---|---|---|
-| concat_bench | 1 | 219 | 199808 | 21 | 80 |
-| concat_bench | 2 | 127 | 203648 | 11 | 80 |
-| concat_bench | 3 | 129 | 205952 | 11 | 80 |
-| fast_loop | 1 | 100 | 1408 | 9 | 80 |
-| fast_loop | 2 | 93 | 1408 | 8 | 80 |
-| fast_loop | 3 | 90 | 1408 | 8 | 80 |
-| numeric_bench | 1 | 5 | 1280 | 0 | 80 |
-| numeric_bench | 2 | 15 | 1280 | 0 | 80 |
-| numeric_bench | 3 | 23 | 0 | 0 | 80 |
-| perf_async | 1 | 5 | 0 | 0 | 80 |
-| perf_async | 2 | 5 | 0 | 0 | 80 |
-| perf_async | 3 | 5 | 0 | 0 | 80 |
-| perf_concat | 1 | 104 | 206336 | 9 | 80 |
-| perf_concat | 2 | 110 | 206080 | 9 | 80 |
-| perf_concat | 3 | 154 | 203136 | 14 | 80 |
-| perf_mixed | 1 | 223 | 296704 | 19 | 80 |
-| perf_mixed | 2 | 154 | 297088 | 14 | 80 |
-| perf_mixed | 3 | 227 | 295936 | 21 | 80 |
-| safe_pool_bench | 1 | 112 | 1664 | 10 | 80 |
-| safe_pool_bench | 2 | 92 | 1664 | 8 | 80 |
-| safe_pool_bench | 3 | 86 | 1792 | 8 | 80 |
+| concat_bench | 1 | 134 | 198528 | 12 | 96 |
+| concat_bench | 2 | 131 | 198144 | 11 | 96 |
+| concat_bench | 3 | 123 | 194816 | 11 | 96 |
+| fast_loop | 1 | 75 | 1536 | 6 | 96 |
+| fast_loop | 2 | 73 | 1408 | 6 | 96 |
+| fast_loop | 3 | 71 | 1664 | 6 | 96 |
+| numeric_bench | 1 | 6 | 1280 | 0 | 96 |
+| numeric_bench | 2 | 10 | 1280 | 0 | 96 |
+| numeric_bench | 3 | 6 | 1280 | 0 | 96 |
+| perf_async | 1 | 8 | 0 | 0 | 96 |
+| perf_async | 2 | 8 | 0 | 0 | 96 |
+| perf_async | 3 | 6 | 0 | 0 | 96 |
+| perf_concat | 1 | 138 | 204032 | 12 | 96 |
+| perf_concat | 2 | 179 | 195328 | 16 | 96 |
+| perf_concat | 3 | 135 | 197376 | 12 | 96 |
+| perf_mixed | 1 | 187 | 303360 | 16 | 96 |
+| perf_mixed | 2 | 162 | 299264 | 14 | 96 |
+| perf_mixed | 3 | 186 | 299392 | 18 | 96 |
+| safe_pool_bench | 1 | 99 | 1792 | 9 | 96 |
+| safe_pool_bench | 2 | 87 | 1920 | 8 | 96 |
+| safe_pool_bench | 3 | 92 | 1792 | 8 | 96 |
+| smart_bench | 1 | 1104 | 1664 | 109 | 96 |
+| smart_bench | 2 | 1075 | 1664 | 106 | 96 |
+| smart_bench | 3 | 1058 | 1792 | 104 | 96 |

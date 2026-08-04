@@ -4246,6 +4246,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t pname = "";
   tx_t ptype = "";
   tx_t ctype = "";
+  tx_t sp_ty = "";
   tx_t drn2 = "";
   tx_t ename = "";
     ntype = _map_get(node, "type");
@@ -4915,7 +4916,17 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
                 bcode = _cat(_cat(_cat(_cat(_cat(_cat(_cat("  if (plant_boundary_block(\"", aname), "\", \"SAFE\")) return \"\";\n  plant_safe_enter(\""), aname), "\");\n  plant_safe_channel_init(\""), aname), "\");\n"), bcode);
             }
             if (strcmp(mmode,"SMART") == 0) {
-                bcode = _cat(_cat(_cat("  if (plant_boundary_block(\"", aname), "\", \"SMART\")) return \"\";\n"), bcode);
+                tx_t sp = "0";
+                long spi = 0;
+                while (spi < plant_array_length(params)) {
+                    sp_ty = _map_get(plant_list_get(params,  spi ), "type");
+                    if (strcmp(sp_ty,"NUM") == 0) {
+                        sp = _map_get(plant_list_get(params,  spi ), "name");
+                        spi = plant_array_length(params);
+                    }
+                    spi = spi+1;
+                }
+                bcode = _cat(_cat(_cat(_cat(_cat(_cat(_cat("  if (plant_boundary_block(\"", aname), "\", \"SMART\")) return \"\";\n  plant_smart_enter(\""), aname), "\", "), sp), ");\n"), bcode);
             }
             if (strcmp(mmode,"PERSISTENT") == 0) {
                 bcode = _cat(_cat(_cat("  if (plant_boundary_block(\"", aname), "\", \"PERSISTENT\")) return \"\";\n"), bcode);
@@ -4925,6 +4936,9 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
             }
             if (strcmp(mmode,"SAFE") == 0) {
                 bcode = _cat(bcode, "  plant_safe_exit();\n");
+            }
+            if (strcmp(mmode,"SMART") == 0) {
+                bcode = _cat(_cat(_cat(bcode, "  plant_smart_exit(\""), aname), "\");\n");
             }
             drn2 = _map_get(node, "drain_after");
             if (( plant_array_length(bd) ) == 0) {
@@ -7438,7 +7452,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.16 (pure native)");
+      plant_print("Chloroplast 0.48.17 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

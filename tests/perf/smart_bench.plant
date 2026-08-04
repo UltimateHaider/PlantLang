@@ -1,0 +1,34 @@
+# smart_bench — SmartExecutionRouter overhead: 200k routing decisions
+# into a SMART action, alternating Scalar Inline (N=100, below the
+# 1000-element limit) and Parallel Vector Mode (N=4000, chunked across
+# the CPU-core vec pool). Measures the adaptive routing cost against
+# the BALANCED numeric_bench and FAST fast_loop baselines: SMART must
+# stay within a small constant factor per decision while auditing
+# every route and chunk dispatch (v0.48.17).
+ACTION proc(n(NUM)) WITH MISSION SMART,
+  CREATE k(NUM) TO 0.
+  CREATE acc(NUM) TO 0.
+  SEASON k < n,
+    SET acc TO acc + k % 7.
+    SET k TO k + 1.
+  /SEASON.
+  IF acc IS 0,
+    SHOW "err".
+  /IF.
+/ACTION.
+
+ACTION main()
+  CREATE j(NUM) TO 0.
+  CREATE s(NUM) TO 0.
+  SEASON j < 200000,
+    IF (j & 1) IS 0,
+      CALL proc(100).
+    /IF.
+    IF (j & 1) IS 1,
+      CALL proc(4000).
+    /IF.
+    SET s TO s + 1.
+    SET j TO j + 1.
+  /SEASON.
+  SHOW _from_long(s).
+/ACTION.

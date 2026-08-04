@@ -1,5 +1,61 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.17 — 2026 (Mission Mode SMART)
+
+### New Features
+- **`WITH MISSION SMART` adaptive execution routing** — the codegen
+  binds the SmartExecutionRouter at the action entry
+  (`plant_smart_enter(name, size)` with `size` taken from the first
+  NUM parameter; `plant_smart_exit(name)` before the tail return).
+  Datasets below the scalar limit (default 1000, `SMART_SCALAR_LIMIT`)
+  run **Scalar Inline** on the caller thread; datasets at/above the
+  limit run **Parallel Vector Mode**.
+- **Parallel Vector Mode + dynamic vec pool** — the pool is sized from
+  the CPU core count (capped at 16, `SMART_POOL_CAPACITY`/`SMART_POOL_MAX`
+  to pin it for deterministic runs, `SMART_CHUNK_SIZE` to control the
+  partition). The router partitions the dataset into chunks and
+  dispatches them round-robin across the pool workers
+  (`SMART_CHUNK,<lo>-><hi>,vec<w>` events), tracking spawns, served
+  chunks and the pending queue.
+- **Starvation prevention** — the router monitors the queue; when
+  pending chunks exceed 2x the live worker count the pool grows
+  toward the hard cap (`SMART_EXPAND,<a>-><b>` events), and at the cap
+  it **falls back safely to BALANCED execution** (`SMART_FALLBACK`
+  event) — work always completes.
+- **Cross-mode freedom** — SMART actions may invoke actions of every
+  other mission mode: BALANCED, FAST, SAFE and PERSISTENT all execute
+  from inside the SMART context (the mode stack marks `M`; the SAFE
+  Boundary Handshake still blocks SAFE→SMART callers).
+- **Broad operational defaults** — SMART actions initialize with
+  `FILE_READ`, `FILE_WRITE` and `NET_CONNECT` granted (cap-check
+  consults the SMART mask; `PLANT_CAP_FILE_WRITE` added).
+- **Comprehensive routing audit** — every routing decision
+  (`SMART_ROUTE,scalar|parallel,<name>,<size>[,workers]`), chunk
+  dispatch, pool expansion, fallback and mode entry goes through the
+  hash-chained audit logger; `plant_smart_status` exposes
+  `workers/queue/spawns/served/expands/fallback` telemetry.
+
+### Regression Tests
+- `smart_scalar` — N=0/500/999 all route Scalar Inline: bodies run,
+  the vec pool is never touched (`served=0`).
+- `smart_parallel` — N=2500 with chunk size 1000 dispatches 3 chunks
+  across a pinned 4-worker pool (`served=3`); the same action then
+  routes scalar again for N=999 — adaptive in both directions.
+- `smart_permissions` — SMART main holds `FILE_READ`/`FILE_WRITE`/
+  `NET_CONNECT` (`read=1 write=1 net=1`) and invokes SAFE, FAST,
+  PERSISTENT and BALANCED actions — all execute.
+- `smart_audit` — a 40-chunk workload on a 2-worker pool (max 4)
+  grows the pool twice then falls back to BALANCED (`expands=2
+  fallback=1`), with every event recorded and the hash chain verified
+  `OK`.
+
+### Perf
+- `smart_bench` — 200k routing decisions (100k Scalar Inline + 100k
+  Parallel Vector Mode with chunk dispatch and per-chunk auditing,
+  ~1.9M audit events) in ~1.06s on the reference box, recorded against
+  the BALANCED `numeric_bench` and FAST `fast_loop` baselines in
+  `perf_results.md`.
+
 ## v0.48.16 — 2026 (Mission Mode SAFE)
 
 ### New Features

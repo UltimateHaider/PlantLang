@@ -1,0 +1,30 @@
+# smart_permissions — cross-mode freedom: SMART holds broad operational
+# grants (FILE_READ / FILE_WRITE / NET_CONNECT) by default and may
+# invoke actions of every other mission mode — BALANCED, FAST, SAFE
+# and PERSISTENT all execute from inside the SMART context (v0.48.17).
+ACTION sa() WITH MISSION SAFE,
+  SHOW "safe_ok".
+/ACTION.
+
+ACTION fa() WITH MISSION FAST,
+  SHOW "fast_ok".
+/ACTION.
+
+ACTION pa() WITH MISSION PERSISTENT,
+  SHOW "persist_ok".
+/ACTION.
+
+ACTION ba()
+  SHOW "balanced_ok".
+/ACTION.
+
+ACTION main() WITH MISSION SMART,
+  SHOW "read=" + ffi_cap_check("FILE_READ").
+  SHOW "write=" + ffi_cap_check("FILE_WRITE").
+  SHOW "net=" + ffi_cap_check("NET_CONNECT").
+  CALL sa().
+  CALL fa().
+  CALL pa().
+  CALL ba().
+  SHOW "smart_done".
+/ACTION.

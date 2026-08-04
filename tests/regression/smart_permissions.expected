@@ -1,0 +1,8 @@
+read=1
+write=1
+net=1
+safe_ok
+fast_ok
+persist_ok
+balanced_ok
+smart_done

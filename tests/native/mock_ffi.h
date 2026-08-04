@@ -62,5 +62,6 @@ tx_t ffi_safe_stats(tx_t chan);
 tx_t ffi_audit_chain_verify(void);
 tx_t ffi_audit_chain_head(void);
 tx_t ffi_audit_tamper(void);
+tx_t ffi_smart_status(void);
 
 #endif

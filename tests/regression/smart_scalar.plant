@@ -1,0 +1,16 @@
+# smart_scalar — Scalar Inline routing: datasets below the scalar
+# limit (default 1000) execute directly on the caller thread without
+# touching the vec pool (served stays 0). Pool pinned to 4 workers so
+# telemetry is deterministic (v0.48.17).
+MISSION CONFIG SMART_POOL_CAPACITY = 4.
+
+ACTION proc(n(NUM)) WITH MISSION SMART,
+  SHOW "s" + _from_long(n).
+/ACTION.
+
+ACTION main()
+  CALL proc(0).
+  CALL proc(500).
+  CALL proc(999).
+  SHOW ffi_smart_status().
+/ACTION.

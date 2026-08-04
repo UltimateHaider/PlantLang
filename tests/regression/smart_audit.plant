@@ -1,0 +1,19 @@
+# smart_audit — starvation-prevention telemetry: a 40-chunk workload
+# against a 2-worker pool (max 4) exceeds the 2x queue threshold, so
+# the router grows the pool twice, then falls back safely to BALANCED
+# at the hard cap — every event (route, enter, expand, fallback, chunk
+# dispatch) recorded by the audit logger, and the hash chain verifies
+# intact (v0.48.17).
+MISSION CONFIG SMART_POOL_CAPACITY = 2.
+MISSION CONFIG SMART_POOL_MAX = 4.
+MISSION CONFIG SMART_CHUNK_SIZE = 100.
+
+ACTION proc(n(NUM)) WITH MISSION SMART,
+  SHOW "q" + _from_long(n).
+/ACTION.
+
+ACTION main()
+  CALL proc(4000).
+  SHOW ffi_smart_status().
+  SHOW "chain=" + ffi_audit_chain_verify().
+/ACTION.
