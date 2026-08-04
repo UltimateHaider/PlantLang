@@ -1,5 +1,53 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.14 — 2026 (Async IN Context)
+
+### New Features
+- **`START ... IN ctx` spawns a task into a named execution context** — the
+  codegen routes the start through the new `plant_async_start_in`/`plant_async_in`
+  wrappers (macros in `plant_compat.h` that forward to the entry's
+  `(parent, ctx, …)` prefix), and `ASYNC ACTION ... IN ctx` uses the same
+  mechanism. Contexts are created by the runtime (`plant_async_ctx_create`
+  now takes a name) or via the FFI (`ffi_ctx_make`).
+- **`AWAIT ... IN ctx` suspends into the named context** — the child is
+  spawned with `parent = st, ctx = awctx` through `plant_async_await_in`, so
+  both the boss and the awaited task belong to the context, and the boss
+  resumes when the child completes.
+- **`CANCEL ... IN ctx` cancels a handle only if it lives in the context** —
+  `plant_async_cancel_in` checks the task's context membership (task magic +
+  `t->ctx` match) and no-ops on mismatches, falling through to the plain
+  cancel otherwise.
+- **`TRACE ... IN ctx` records with the context name as the scope** —
+  `plant_async_trace_in` validates the context (falling back to the default
+  context) and emits `T,<ms>,<ctx-name>,<level>,<msg>` into the trace file;
+  plain `TRACE` keeps an empty scope.
+- **`REAP ... IN ctx` and context-aware REAP of async actions** — `REAP h
+  FROM sleeper, "x" IN c.` now passes the context into the entry
+  (`sleeper(0, c, "x")`), fixing a pre-existing ABI bug where reaping an
+  async action emitted a plain call and lost the `__parent`/`__ctx` prefix.
+- **Execution-context runtime support** — `plant_actx` carries a name;
+  `plant_async_ctx_tasks` counts live tasks in a context; the parser stops
+  argument collection at a top-level `IN` and parses `IN ctx` on
+  `start`/`await`/`cancel`/`trace`/`reap` statements.
+- **`MISSION CONFIG` accepts quoted values** — `TRACE_FILE = "/tmp/x.log"`
+  parses correctly (unquoted paths broke on the `/` lexer token).
+
+### Regression Tests
+- `async_in_start` — START IN ctx + plain START: ctx task count tracks only
+  ctx members (1 vs default), both workers drain.
+- `async_in_await` — boss AWAITs IN ctx: count includes the suspended boss
+  (2), boss resumes on completion.
+- `async_in_cancel` — REAP ... IN ctx then CANCEL ... IN ctx: count drops
+  after cancel, other ctx tasks unaffected.
+- `async_in_trace` — TRACE IN ctx + plain TRACE read back via `ffi_read_trace`:
+  `wctx,0,hello ctx` / `,0,hello plain`.
+
+### Verification
+- Self-hosted chain converged (247245 bytes); 67/67 tests pass (native 19,
+  generics 7, closures 6, regression 35); compile benchmark on the
+  self-hosted compiler within budget (no regression on non-ctx async paths —
+  their emitted C is byte-identical).
+
 ## v0.48.13 — 2026 (Generics Numeric Returns)
 
 ### New Features

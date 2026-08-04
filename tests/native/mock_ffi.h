@@ -34,4 +34,9 @@ tx_t ffi_color(void);
 tx_t ffi_is_green(tx_t c);
 tx_t ffi_color_idx(tx_t c);
 
+/* v0.48.14 Async IN Context (wraps the runtime context API) */
+tx_t ffi_ctx_make(long adaptive, long cap, tx_t name);
+tx_t ffi_ctx_tasks(tx_t ctx);
+tx_t ffi_read_trace(tx_t path);
+
 #endif

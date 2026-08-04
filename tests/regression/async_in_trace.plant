@@ -1,0 +1,11 @@
+# async_in_trace — TRACE ... IN ctx records into the trace file with the
+# context name as the scope; plain TRACE keeps an empty scope (v0.48.14).
+MISSION CONFIG TRACE = ON.
+MISSION CONFIG TRACE_FILE = "/tmp/plantlang_async_in_trace.log".
+ACTION ffi_ctx_make(adaptive(NUM), cap(NUM), name(TX)) -> external.
+ACTION ffi_read_trace(path(TX)) -> external.
+REAP c FROM ffi_ctx_make, 1, 64, "wctx".
+TRACE INFO "hello ctx" IN c.
+TRACE INFO "hello plain".
+REAP lines FROM ffi_read_trace, "/tmp/plantlang_async_in_trace.log".
+SHOW "trace: " + lines.

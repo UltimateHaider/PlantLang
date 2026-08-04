@@ -1,0 +1,5 @@
+in ctx: 1
+after reap: 2
+after cancel: 1
+work a
+work b

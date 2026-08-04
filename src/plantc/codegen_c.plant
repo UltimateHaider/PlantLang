@@ -1098,6 +1098,7 @@ ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIS
       CREATE aw_last(NUM) TO nst - 1.
       REAP awnd FROM plant_list_get, phd, aw_last.
       REAP act_s FROM _map_get, awnd, "action".
+      REAP awctx FROM _map_get, awnd, "ctx".
       CREATE awargs(LIST) TO _map_get(awnd, "args").
       REAP arg_s FROM async_argstr, awargs, sigs, act_s, nums_s, stvars, evars.
       CREATE vi2(NUM) TO 0.
@@ -1109,9 +1110,19 @@ ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIS
       /SEASON.
       CREATE nxts(TX) TO _from_long(nxt).
       SET code TO code + "  s->__pc = " + nxts + ";\n".
-      SET code TO code + "  plant_async_suspend(st, " + act_s + "(st, 0".
-      IF arg_s > "", SET code TO code + ", " + arg_s. /IF.
-      SET code TO code + "));\n  return 0;\n".
+      # AWAIT ... IN ctx (v0.48.14): the child task is spawned into the
+      # context and the suspension is ctx-scoped; standard AWAIT keeps
+      # the plain spawn with the default context.
+      IF awctx ISNT "" AND awctx ISNT "null",
+        SET code TO code + "  plant_async_await_in(st, " + awctx + ", " + act_s + "(st, " + awctx + "".
+        IF arg_s > "", SET code TO code + ", " + arg_s. /IF.
+        SET code TO code + "));\n  return 0;\n".
+      /IF.
+      IF awctx IS "" OR awctx IS "null",
+        SET code TO code + "  plant_async_suspend(st, " + act_s + "(st, 0".
+        IF arg_s > "", SET code TO code + ", " + arg_s. /IF.
+        SET code TO code + "));\n  return 0;\n".
+      /IF.
     /IF.
     IF nxt IS nph,
       REAP tcode FROM generate_body, phd, 1, sigs, subst, clmap, "a", nums_s, stvars, evars, "".
@@ -1447,7 +1458,9 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     /IF.
 
     # ── start_stmt: START foo, args. / ASYNC IN ctx, foo, args.
-    #    → foo(0, ctx, args);  (fire-and-forget spawn)
+    #    → foo(0, 0, args);  (fire-and-forget spawn)
+    #    START foo, args IN ctx → plant_async_start_in(ctx, foo, args)
+    #    (v0.48.14 contextual spawn; same ABI, zero cost without ctx)
     IF ntype IS "start_stmt",
         REAP act FROM _map_get, node, "action".
         REAP act FROM strings:REPLACE, act, ":", "_".
@@ -1458,23 +1471,44 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         CREATE argstr_s(TX) TO "".
         REAP argstr_s FROM async_argstr, args_s, sigs, act, nums, stvars, evars.
         REAP isel FROM indent_str, indent.
+        REAP kind_s FROM _map_get, node, "kind".
+        IF ctx_n ISNT "" AND ctx_n ISNT "null",
+            CREATE spawn_fn(TX) TO "plant_async_start_in".
+            IF kind_s IS "async_in", SET spawn_fn TO "plant_async_in". /IF.
+            IF argstr_s > "",
+                GIVE isel + "  " + spawn_fn + "(" + ctx_n + ", " + act + ", " + argstr_s + ");\n".
+            /IF.
+            IF argstr_s IS "",
+                GIVE isel + "  " + spawn_fn + "(" + ctx_n + ", " + act + ");\n".
+            /IF.
+        /IF.
         IF argstr_s > "",
-            GIVE isel + "  " + act + "(0, " + ctx_s + ", " + argstr_s + ");\n".
+            GIVE isel + "  " + act + "(0, 0, " + argstr_s + ");\n".
         /IF.
         IF argstr_s IS "",
-            GIVE isel + "  " + act + "(0, " + ctx_s + ");\n".
+            GIVE isel + "  " + act + "(0, 0);\n".
         /IF.
     /IF.
 
-    # ── cancel_stmt: CANCEL expr. → plant_async_cancel(expr); ─
+    # ── cancel_stmt: CANCEL expr. → plant_async_cancel(expr);
+    #    CANCEL expr IN ctx → plant_async_cancel_in(ctx, expr) (v0.48.14:
+    #    only cancels the handle if it lives in the given context) ─
     IF ntype IS "cancel_stmt",
         REAP val FROM _map_get, node, "value".
         REAP cval FROM translate_expr, val.
+        REAP cctx FROM _map_get, node, "ctx".
         REAP isel FROM indent_str, indent.
-        GIVE isel + "  plant_async_cancel(" + cval + ");\n".
+        IF cctx ISNT "" AND cctx ISNT "null",
+            GIVE isel + "  plant_async_cancel_in(" + cctx + ", " + cval + ");\n".
+        /IF.
+        IF cctx IS "" OR cctx IS "null",
+            GIVE isel + "  plant_async_cancel(" + cval + ");\n".
+        /IF.
     /IF.
 
-    # ── trace_stmt: TRACE INFO|DEBUG|PERF expr. → plant_trace(…) ─
+    # ── trace_stmt: TRACE INFO|DEBUG|PERF expr. → plant_trace(…);
+    #    TRACE … IN ctx → plant_async_trace_in(ctx, level, msg), which
+    #    tags the event with the context name (v0.48.14) ─
     IF ntype IS "trace_stmt",
         REAP lv FROM _map_get, node, "level".
         CREATE lvnum(TX) TO "0".
@@ -1483,8 +1517,14 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     REAP val FROM _map_get, node, "value".
     REAP cval FROM translate_expr, val.
     REAP cval FROM _handle_cat, cval, nums, evars.
+    REAP tctx FROM _map_get, node, "ctx".
     REAP isel FROM indent_str, indent.
-    GIVE isel + "  plant_trace(" + lvnum + ", \"\", " + cval + ");\n".
+    IF tctx ISNT "" AND tctx ISNT "null",
+        GIVE isel + "  plant_async_trace_in(" + tctx + ", " + lvnum + ", " + cval + ");\n".
+    /IF.
+    IF tctx IS "" OR tctx IS "null",
+        GIVE isel + "  plant_trace(" + lvnum + ", \"\", " + cval + ");\n".
+    /IF.
     /IF.
 
     # ── config_stmt: MISSION CONFIG KEY = VALUE. → plant_async_config ─
@@ -1693,6 +1733,20 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             REAP ffi_rtk FROM ffi_param_kind, ffi_ret.
         /IF.
         CREATE call_expr(TX) TO callname + "(" + clcall + argstr + ")".
+        # v0.48.14: REAP of an ASYNC ACTION returns the task handle —
+        # the entry ABI is (tx_t __parent, tx_t __ctx, params…), so
+        # prepend (0, ctx); REAP … IN ctx spawns into that context.
+        REAP asy3 FROM _map_get, sig2, "async".
+        IF asy3 IS "1",
+            REAP reap_ctx FROM _map_get, node, "ctx".
+            IF reap_ctx IS "" OR reap_ctx IS "null", SET reap_ctx TO "0". /IF.
+            IF argstr > "",
+                SET call_expr TO callname + "(0, " + reap_ctx + ", " + clcall + argstr + ")".
+            /IF.
+            IF argstr IS "",
+                SET call_expr TO callname + "(0, " + reap_ctx + ")".
+            /IF.
+        /IF.
         CREATE ffi_pref(TX) TO "".
         IF ffi_rtk IS "struct_val",
             REAP rcnm FROM ffi_struct_cname, ffi_ret.
@@ -3205,7 +3259,8 @@ ACTION generate_c(ast(LIST)),
             CREATE params2(LIST) TO _map_get(node_el, "params").
             CREATE rt2(TX) TO _map_get(node_el, "ret").
             CREATE vg2(TX) TO _map_get(node_el, "varargs").
-            PUT plant_list_make(10, "name", aname, "type", ntype, "params", params2, "ret", rt2, "varargs", vg2) INTO sigs.
+            CREATE asy2(TX) TO _map_get(node_el, "async").
+            PUT plant_list_make(12, "name", aname, "type", ntype, "params", params2, "ret", rt2, "varargs", vg2, "async", asy2) INTO sigs.
         /IF.
         IF ntype IS "action_decl",
             REAP aname FROM _map_get, node_el, "name".

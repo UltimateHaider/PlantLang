@@ -99,6 +99,11 @@ ACTION collect_value(tokens(LIST), start(NUM)),
     IF lx IS ")" AND depth IS 0,
       GIVE plant_list_make(2, text, p2).
     /IF.
+    # a top-level "IN" terminates the value (CANCEL/TRACE ... IN ctx);
+    # left unconsumed so the caller parses the context
+    IF lx IS "IN" AND depth IS 0,
+      GIVE plant_list_make(2, text, p2).
+    /IF.
     IF lx IS "(",
       SET depth TO depth + 1.
     /IF.
@@ -210,6 +215,11 @@ ACTION collect_args(tokens(LIST), pos(NUM)),
     IF lx IS ")" AND ty ISNT "STRING",
       GIVE plant_list_make(2, args, p5).
     /IF.
+    # "IN" at depth 0 terminates the argument list (START/AWAIT/REAP
+    # ... IN ctx); left unconsumed so the caller parses the context
+    IF lx IS "IN" AND ty ISNT "STRING",
+      GIVE plant_list_make(2, args, p5).
+    /IF.
     CREATE arg_text(TX) TO "".
     CREATE adepth(NUM) TO 0.
     SEASON TRUE,
@@ -223,6 +233,7 @@ ACTION collect_args(tokens(LIST), pos(NUM)),
       IF alx IS "," AND adepth IS 0, BREAK 0. /IF.
       IF alx IS "." AND adepth IS 0, BREAK 0. /IF.
       IF alx IS ")" AND adepth IS 0, BREAK 0. /IF.
+      IF alx IS "IN" AND adepth IS 0, BREAK 0. /IF.
       IF alx IS "(", SET adepth TO adepth + 1. /IF.
       IF alx IS ")", SET adepth TO adepth - 1. /IF.
       IF arg_text > "", SET arg_text TO arg_text + " ". /IF.
@@ -240,7 +251,8 @@ ACTION collect_args(tokens(LIST), pos(NUM)),
   /SEASON.
 /ACTION.
 
-# AWAIT callname, args. — suspend until the async action completes
+# AWAIT callname, args [IN ctx]. — suspend until the async action
+# completes; the child task is spawned into ctx when given
 ACTION parse_await_stmt(tokens(LIST), pos(NUM)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -250,9 +262,22 @@ ACTION parse_await_stmt(tokens(LIST), pos(NUM)),
   REAP ap FROM collect_args, tokens, p3.
   CREATE args(LIST) TO ap[0].
   REAP p4 FROM _second, ap.
+  CREATE ctx_name(TX) TO "".
+  REAP tok FROM peek, tokens, p4.
+  REAP lx FROM tok_lex, tok.
+  IF lx IS "IN",
+    REAP in_pair FROM consume, tokens, p4.
+    REAP p5 FROM _second, in_pair.
+    REAP ctx_pair FROM consume, tokens, p5.
+    REAP ctx_name FROM tok_lex, ctx_pair[0].
+    REAP p6 FROM _second, ctx_pair.
+    REAP dot FROM consume, tokens, p6.
+    REAP p7 FROM _second, dot.
+    GIVE plant_list_make(2, plant_list_make(8, "type", "await_stmt", "action", act_name, "args", args, "ctx", ctx_name), p7).
+  /IF.
   REAP dot FROM consume, tokens, p4.
   REAP p5 FROM _second, dot.
-  GIVE plant_list_make(2, plant_list_make(6, "type", "await_stmt", "action", act_name, "args", args), p5).
+  GIVE plant_list_make(2, plant_list_make(8, "type", "await_stmt", "action", act_name, "args", args, "ctx", ctx_name), p5).
 /ACTION.
 
 # START callname, args [IN ctx]. — fire-and-forget spawn
@@ -302,20 +327,35 @@ ACTION parse_async_in_stmt(tokens(LIST), pos(NUM)),
   REAP p7 FROM _second, ap.
   REAP dot FROM consume, tokens, p7.
   REAP p8 FROM _second, dot.
-  GIVE plant_list_make(2, plant_list_make(8, "type", "start_stmt", "action", act_name, "args", args, "ctx", ctx_name), p8).
+  GIVE plant_list_make(2, plant_list_make(10, "type", "start_stmt", "action", act_name, "args", args, "ctx", ctx_name, "kind", "async_in"), p8).
 /ACTION.
 
-# CANCEL tok. or CANCEL ctx. — immediate cancellation + teardown
+# CANCEL tok. or CANCEL tok IN ctx. — immediate cancellation + teardown;
+# the IN form is scoped: only cancels the handle if it lives in ctx
 ACTION parse_cancel_stmt(tokens(LIST), pos(NUM)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
   REAP vpair FROM collect_value, tokens, p2.
   CREATE expr TO vpair[0].
   REAP p3 FROM _second, vpair.
-  GIVE plant_list_make(2, plant_list_make(4, "type", "cancel_stmt", "value", expr), p3).
+  CREATE ctx_name(TX) TO "".
+  REAP tok FROM peek, tokens, p3.
+  REAP lx FROM tok_lex, tok.
+  IF lx IS "IN",
+    REAP in_pair FROM consume, tokens, p3.
+    REAP p4 FROM _second, in_pair.
+    REAP ctx_pair FROM consume, tokens, p4.
+    REAP ctx_name FROM tok_lex, ctx_pair[0].
+    REAP p5 FROM _second, ctx_pair.
+    REAP dot FROM consume, tokens, p5.
+    REAP p6 FROM _second, dot.
+    GIVE plant_list_make(2, plant_list_make(6, "type", "cancel_stmt", "value", expr, "ctx", ctx_name), p6).
+  /IF.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "cancel_stmt", "value", expr, "ctx", ctx_name), p3).
 /ACTION.
 
-# TRACE INFO|DEBUG|PERF msg. — scoped trace event
+# TRACE INFO|DEBUG|PERF msg [IN ctx]. — scoped trace event; the IN
+# form tags the event with the context name
 ACTION parse_trace_stmt(tokens(LIST), pos(NUM)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -324,8 +364,22 @@ ACTION parse_trace_stmt(tokens(LIST), pos(NUM)),
   REAP p3 FROM _second, lv_pair.
   REAP vpair FROM collect_value, tokens, p3.
   CREATE expr TO vpair[0].
-  REAP p4 FROM _second, vpair.
-  GIVE plant_list_make(2, plant_list_make(6, "type", "trace_stmt", "level", lv, "value", expr), p4).
+  REAP p4b FROM _second, vpair.
+  CREATE ctx_name(TX) TO "".
+  REAP tok FROM peek, tokens, p4b.
+  REAP lx FROM tok_lex, tok.
+  IF lx IS "IN",
+    REAP in_pair FROM consume, tokens, p4b.
+    REAP p5 FROM _second, in_pair.
+    REAP ctx_pair FROM consume, tokens, p5.
+    REAP ctx_name FROM tok_lex, ctx_pair[0].
+    REAP p6 FROM _second, ctx_pair.
+    REAP dot FROM consume, tokens, p6.
+    REAP p7 FROM _second, dot.
+    GIVE plant_list_make(2, plant_list_make(8, "type", "trace_stmt", "level", lv, "value", expr, "ctx", ctx_name), p7).
+  /IF.
+  # collect_value already consumed the dot; p4b is after it
+  GIVE plant_list_make(2, plant_list_make(8, "type", "trace_stmt", "level", lv, "value", expr, "ctx", ctx_name), p4b).
 /ACTION.
 
 # MISSION CONFIG KEY = VALUE. — runtime configuration directive
@@ -345,6 +399,12 @@ ACTION parse_mission_stmt(tokens(LIST), pos(NUM)),
   /IF.
   REAP val_pair FROM consume, tokens, p4.
   REAP cfg_val FROM tok_lex, val_pair[0].
+  REAP vty FROM tok_type, val_pair[0].
+  # quoted values (paths, strings with spaces) keep the whole token;
+  # strip the quotes so the codegen emits a clean "value"
+  IF vty IS "STRING",
+    REAP cfg_val FROM escape_string, cfg_val.
+  /IF.
   REAP p5 FROM _second, val_pair.
   REAP dot FROM consume, tokens, p5.
   REAP p6 FROM _second, dot.
@@ -759,21 +819,33 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM)),
         IF clx2 IS ".",
           REAP cdot FROM consume, tokens, p5.
           REAP p6 FROM _second, cdot.
-          GIVE plant_list_make(2, plant_list_make(10, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args, "clargs", clargs), p6).
+          GIVE plant_list_make(2, plant_list_make(12, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args, "clargs", clargs, "ctx", ""), p6).
         /IF.
       /IF.
     /IF.
     REAP is_eof_flag FROM is_eof, tokens, p5.
     IF is_eof_flag,
-      GIVE plant_list_make(2, plant_list_make(10, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args, "clargs", clargs), p5).
+      GIVE plant_list_make(2, plant_list_make(12, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args, "clargs", clargs, "ctx", ""), p5).
     /IF.
     REAP tok FROM peek, tokens, p5.
     REAP lx FROM tok_lex, tok.
     REAP ty FROM tok_type, tok.
+    # "IN" at depth 0 after the args → REAP ... IN ctx (async spawn
+    # into a context; the reaped handle belongs to that context)
+    IF lx IS "IN" AND ty ISNT "STRING",
+      REAP in_pair FROM consume, tokens, p5.
+      REAP p5b FROM _second, in_pair.
+      REAP ctx_pair FROM consume, tokens, p5b.
+      REAP ctx_name FROM tok_lex, ctx_pair[0].
+      REAP p6b FROM _second, ctx_pair.
+      REAP dot2 FROM consume, tokens, p6b.
+      REAP p7b FROM _second, dot2.
+      GIVE plant_list_make(2, plant_list_make(12, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args, "clargs", clargs, "ctx", ctx_name), p7b).
+    /IF.
     IF lx IS "." AND ty ISNT "STRING",
       REAP dot FROM consume, tokens, p5.
       REAP p6 FROM _second, dot.
-      GIVE plant_list_make(2, plant_list_make(10, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args, "clargs", clargs), p6).
+      GIVE plant_list_make(2, plant_list_make(12, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args, "clargs", clargs, "ctx", ""), p6).
     /IF.
     # collect one argument until , or . at depth 0 (do NOT consume delimiter)
     CREATE arg_text(TX) TO "".
@@ -790,6 +862,7 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM)),
       IF alx IS "." AND adepth IS 0, BREAK 0. /IF.
       # ")" at depth 0 closes an enclosing closure block body
       IF alx IS ")" AND adepth IS 0, BREAK 0. /IF.
+      IF alx IS "IN" AND adepth IS 0, BREAK 0. /IF.
       IF alx IS "(", SET adepth TO adepth + 1. /IF.
       IF alx IS ")", SET adepth TO adepth - 1. /IF.
       IF arg_text > "", SET arg_text TO arg_text + " ". /IF.
@@ -807,7 +880,7 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM)),
     IF lx2 IS ".",
       REAP dot FROM consume, tokens, p5.
       REAP p6 FROM _second, dot.
-      GIVE plant_list_make(2, plant_list_make(10, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args, "clargs", clargs), p6).
+      GIVE plant_list_make(2, plant_list_make(12, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args, "clargs", clargs, "ctx", ""), p6).
     /IF.
   /SEASON.
 /ACTION.

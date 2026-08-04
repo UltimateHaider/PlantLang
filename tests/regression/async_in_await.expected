@@ -1,0 +1,4 @@
+in ctx: 1
+boss start
+greet in ctx: 2
+boss end

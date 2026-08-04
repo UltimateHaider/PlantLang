@@ -279,4 +279,37 @@ tx_t ffi_color_idx(tx_t c) {
 
 #endif /* PLANT_ENUM_Color */
 
+/* ── v0.48.14 Async IN Context ───────────────────────────────
+   ffi_ctx_make: create a named execution context (wraps the
+   runtime plant_async_ctx_create; a tx_t handle).
+   ffi_ctx_tasks: live task count inside the context.
+   ffi_read_trace: read a trace file, stripping the "T," type tag
+   and the nondeterministic ms timestamp so regression expected
+   output stays deterministic ("<scope>,<level>,<msg>"). */
+tx_t ffi_ctx_make(long adaptive, long cap, tx_t name) {
+    return plant_async_ctx_create(adaptive, cap, name);
+}
+
+tx_t ffi_ctx_tasks(tx_t ctx) {
+  return _from_long(plant_async_ctx_tasks(ctx));
+}
+
+tx_t ffi_read_trace(tx_t path) {
+    FILE* f = fopen(_S(path), "r");
+    if (!f) return strdup("");
+    static char out[4096];
+    size_t used = 0;
+    char line[512];
+    while (fgets(line, sizeof(line), f) && used < sizeof(out) - 1) {
+        char* p = line;
+        if (strncmp(p, "T,", 2) == 0) p += 2;       /* strip type tag */
+        char* c1 = strchr(p, ',');
+        if (c1) p = c1 + 1;                          /* strip ms field */
+        used += (size_t)snprintf(out + used, sizeof(out) - used, "%s", p);
+    }
+    fclose(f);
+    if (used > 0 && out[used - 1] == '\n') out[--used] = 0;
+    return strdup(out);
+}
+
 #endif /* MOCK_FFI_EXT_H */

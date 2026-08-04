@@ -1,0 +1,14 @@
+# async_in_start — START ... IN ctx spawns a task into an execution context;
+# the context task count only tracks ctx members, plain START stays default (v0.48.14).
+ACTION ffi_ctx_make(adaptive(NUM), cap(NUM), name(TX)) -> external.
+ACTION ffi_ctx_tasks(ctx(TX)) -> external.
+ASYNC ACTION worker(tag(TX)),
+  SHOW "work " + tag.
+/ACTION.
+ACTION main(),
+  REAP c FROM ffi_ctx_make, 1, 64, "wctx".
+  START worker, "a" IN c.
+  START worker, "b".
+  REAP n FROM ffi_ctx_tasks, c.
+  SHOW "in ctx: " + n.
+/ACTION.

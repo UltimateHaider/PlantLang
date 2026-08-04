@@ -408,10 +408,23 @@ void  plant_async_sleep(tx_t st, long ms);       /* timer suspension */
 tx_t  plant_async_await_result(tx_t st);         /* child result / marker */
 
 /* contexts + cancel tokens */
-tx_t  plant_async_ctx_create(long adaptive, long cap);
+tx_t  plant_async_ctx_create(long adaptive, long cap, tx_t name);
 void  plant_async_ctx_cancel(tx_t ctx);          /* cascade cancel */
 tx_t  plant_async_token_create(void);
 void  plant_async_cancel(tx_t x);                /* ctx or token */
+
+/* v0.48.14 — Async IN Context wrappers.
+   START ... IN ctx / ASYNC IN ctx spawn into the context: the entry
+   ABI is tx_t fn(tx_t __parent, tx_t __ctx, ...), so the spawn
+   helpers are macros (a variadic forwarder is not portable); the
+   macro keeps the non-contextual call path byte-identical. */
+#define plant_async_start_in(ctx, fn, ...) ((tx_t)(fn)(0, (ctx), ##__VA_ARGS__))
+#define plant_async_in(ctx, fn, ...)       plant_async_start_in(ctx, fn, ##__VA_ARGS__)
+
+tx_t  plant_async_await_in(tx_t st, tx_t ctx, tx_t handle);
+void  plant_async_cancel_in(tx_t ctx, tx_t x);   /* scoped cancel */
+void  plant_async_trace_in(tx_t ctx, long level, tx_t msg);
+long  plant_async_ctx_tasks(tx_t ctxv);          /* live task count */
 
 /* work stealing / lazy copy-on-write cloning */
 tx_t  plant_async_steal(tx_t t);                 /* exclusive arena clone */

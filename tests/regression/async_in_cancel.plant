@@ -1,0 +1,29 @@
+# async_in_cancel — REAP ... IN ctx and CANCEL ... IN ctx target the named
+# context: the handle is cancelled there (count drops), spawns stay scoped (v0.48.14).
+ACTION ffi_ctx_make(adaptive(NUM), cap(NUM), name(TX)) -> external.
+ACTION ffi_ctx_tasks(ctx(TX)) -> external.
+ASYNC ACTION worker(tag(TX)),
+  SHOW "work " + tag.
+/ACTION.
+ASYNC ACTION sleeper(tag(TX)),
+  SHOW "start " + tag.
+  AWAIT phase2, tag.
+  SHOW "end " + tag.
+/ACTION.
+ASYNC ACTION phase2(tag(TX)),
+  SHOW "p2 " + tag.
+  GIVE "done".
+/ACTION.
+ACTION main(),
+  REAP c FROM ffi_ctx_make, 1, 64, "wctx".
+  START worker, "a" IN c.
+  START worker, "b".
+  REAP n FROM ffi_ctx_tasks, c.
+  SHOW "in ctx: " + n.
+  REAP h FROM sleeper, "x" IN c.
+  REAP n2 FROM ffi_ctx_tasks, c.
+  SHOW "after reap: " + n2.
+  CANCEL h IN c.
+  REAP n3 FROM ffi_ctx_tasks, c.
+  SHOW "after cancel: " + n3.
+/ACTION.

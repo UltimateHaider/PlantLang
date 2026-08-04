@@ -1569,6 +1569,7 @@ typedef struct plant_actx {
     long     deadline_scale;     /* 100..150 (percent) */
     long     congested_since;    /* ms when congestion started, -1 none */
     int      cancelled;
+    tx_t     name;               /* context name (trace scope, v0.48.14) */
     struct plant_task* tasks;    /* live tasks in this context */
     struct plant_actx* next;     /* global context list */
 } plant_actx;
@@ -2127,7 +2128,7 @@ tx_t plant_async_await_result(tx_t st) {
     return res ? res : (tx_t)"";
 }
 
-tx_t plant_async_ctx_create(long adaptive, long cap) {
+tx_t plant_async_ctx_create(long adaptive, long cap, tx_t name) {
     plant_async_init();
     plant_actx* ctx = (plant_actx*)calloc(1, sizeof(plant_actx));
     if (!ctx) return NULL;
@@ -2137,6 +2138,7 @@ tx_t plant_async_ctx_create(long adaptive, long cap) {
     ctx->priority = 1;
     ctx->deadline_scale = 100;
     ctx->congested_since = -1;
+    ctx->name = name;
     ctx->next = g_ctxs;
     g_ctxs = ctx;
     return (tx_t)ctx;
@@ -2181,6 +2183,57 @@ void plant_async_cancel(tx_t x) {
         }
         return;
     }
+}
+
+/* ── v0.48.14 — Async IN Context: ctx-scoped wrappers ──
+   plant_async_start_in / plant_async_in are macros in plant_compat.h
+   (fire-and-forget spawn: fn(0, ctx, args)) — a real variadic
+   forwarder cannot be written portably, and the macro keeps the
+   non-contextual path byte-identical. The wrappers below add real
+   ctx scoping to await/cancel/trace. */
+
+static plant_actx* plant_ctx_validate(tx_t ctx) {
+    if (!ctx) return NULL;
+    plant_actx* c = (plant_actx*)ctx;
+    if (c->magic != 0xA51A4C7) return NULL;
+    return c;
+}
+
+/* AWAIT ... IN ctx: the child was spawned into ctx by the codegen
+   (entry called with (st, ctx, args)); suspend the parent on it. */
+tx_t plant_async_await_in(tx_t st, tx_t ctx, tx_t handle) {
+    plant_ctx_validate(ctx);            /* scope check only */
+    plant_async_suspend(st, handle);
+    return handle;
+}
+
+/* CANCEL h IN ctx: cancel the handle only if it lives in ctx;
+   ctx/token handles fall through to plain cancellation. */
+void plant_async_cancel_in(tx_t ctx, tx_t x) {
+    if (x && ((plant_task*)x)->magic == 0xA51A4C8) {
+        plant_task* t = (plant_task*)x;
+        plant_actx* c = plant_ctx_validate(ctx);
+        if (c && t->ctx && t->ctx != c) return;   /* not in this ctx */
+    }
+    plant_async_cancel(x);
+}
+
+/* TRACE lvl msg IN ctx: scope the event with the context name
+   (falls back to the default context for invalid handles). */
+void plant_async_trace_in(tx_t ctx, long level, tx_t msg) {
+    plant_actx* c = plant_ctx_validate(ctx);
+    if (!c) c = g_dctx;
+    plant_trace(level, c && c->name ? c->name : (tx_t)"", msg);
+}
+
+/* live task count inside a context (test/introspection helper) */
+long plant_async_ctx_tasks(tx_t ctxv) {
+    plant_actx* c = plant_ctx_validate(ctxv);
+    if (!c) return 0;
+    long n = 0;
+    for (plant_task* t = c->tasks; t; t = t->clink)
+        if (!t->dead) n++;
+    return n;
 }
 
 /* work stealing: clone a task into a NEW arena; segments are shared
@@ -2260,7 +2313,7 @@ void plant_async_init(void) {
     if (env && *env) g_trace_fp = fopen(env, "w");
     env = getenv("PLANT_METRICS");
     if (env && strcmp(env, "0") == 0) g_metrics_on = 0;
-    g_dctx = (plant_actx*)plant_async_ctx_create(1, 64);
+    g_dctx = (plant_actx*)plant_async_ctx_create(1, 64, "default");
     g_next_sample = 0;
 }
 

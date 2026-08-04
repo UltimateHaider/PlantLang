@@ -1,0 +1,20 @@
+# async_in_await — AWAIT ... IN ctx suspends the boss into the named context;
+# the suspended boss stays counted, then resumes on completion (v0.48.14).
+ACTION ffi_ctx_make(adaptive(NUM), cap(NUM), name(TX)) -> external.
+ACTION ffi_ctx_tasks(ctx(TX)) -> external.
+ASYNC ACTION greet(tag(TX), c(TX)),
+  REAP n FROM ffi_ctx_tasks, c.
+  SHOW "greet in ctx: " + n.
+  GIVE "hi".
+/ACTION.
+ASYNC ACTION boss(c(TX)),
+  SHOW "boss start".
+  AWAIT greet, "z", c IN c.
+  SHOW "boss end".
+/ACTION.
+ACTION main(),
+  REAP c FROM ffi_ctx_make, 1, 64, "wctx".
+  START boss, c IN c.
+  REAP n FROM ffi_ctx_tasks, c.
+  SHOW "in ctx: " + n.
+/ACTION.
