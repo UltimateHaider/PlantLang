@@ -25,11 +25,29 @@ static tx_t _from_ffi_num(long long n) { return _from_long((long)n); }
 /* v0.48.6 — ENUM member display. An ENUM-typed variable holds the raw
    member int in its tx_t slot; names is the comma-separated member list
    the codegen emitted for the enum typedef ("RED,GREEN,BLUE"). Returns a
-   copy of the member name for that value, else the numeric string. */
+   copy of the member name for that value, else the numeric string.
+   v0.48.11 — idempotent: when the value is already a member-name string
+   (it crossed an enum-typed function boundary, whose GIVE wraps with
+   _from_enum), it is returned unchanged instead of re-reading the
+   string pointer as an enum index. Plausible-pointer check (>= 64KB)
+   keeps small raw ints on the index path without dereferencing them. */
 static tx_t _from_enum(tx_t v, tx_t names) {
   long idx = _L(v);
   const char* s = _S(names);
   if (!s || idx < 0) return _from_ffi_num(idx);
+  if (idx >= 65536) {
+    const char* vp = _S(v);
+    long vl = 0;
+    if (vp) { while (vp[vl] && vl < 64) vl++; }
+    const char* p2 = s;
+    while (vl > 0 && *p2) {
+      const char* c2 = strchr(p2, ',');
+      size_t n2 = c2 ? (size_t)(c2 - p2) : strlen(p2);
+      if ((long)n2 == vl && strncmp(vp, p2, n2) == 0) return v;
+      if (!c2) break;
+      p2 = c2 + 1;
+    }
+  }
   const char* p = s; long cur = 0;
   while (cur < idx && *p) {
     while (*p && *p != ',') p++;

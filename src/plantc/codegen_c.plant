@@ -450,11 +450,30 @@ ACTION enum_members_of(reg(LIST), ty(TX)),
   GIVE res.
 /ACTION.
 
+# reg_has_enum — 1 when the registry carries at least one ENUM
+# entry (a key that is not one of the "STRUCT." field tables).
+# Modules without enums fast-skip the whole collect_enums body
+# traversal instead of walking every statement (v0.48.11).
+ACTION reg_has_enum(reg(LIST)),
+  CREATE ri(NUM) TO 0.
+  CREATE rk(TX) TO "".
+  CREATE rpre(TX) TO "".
+  SEASON ri + 1 < COUNT reg,
+    REAP rk FROM plant_list_get, reg, ri.
+    REAP rpre FROM substring, rk, 0, 7.
+    IF rpre ISNT "STRUCT.",
+      GIVE 1.
+    /IF.
+    SET ri TO ri + 2.
+  /SEASON.
+  GIVE 0.
+/ACTION.
+
 # collect_enums_walk — add enum-typed CREATE/LET targets (as
 # [name, membersCsv] pairs) from a body, recursing IF/SEASON/CYCLE/
 # MATCH bodies, into the flat table res. REAP targets inherit the
 # callee's return type from sigs so struct-returning calls register
-# their enum field reads too (v0.48.10).
+# their struct field reads too (v0.48.10).
 ACTION collect_enums_walk(bd, subst, reg, sigs, res),
   CREATE wi(NUM) TO 0.
   CREATE wnd(TX) TO "".
@@ -508,6 +527,8 @@ ACTION collect_enums_walk(bd, subst, reg, sigs, res),
 # contribute plant_map_get(var, "field") keys for enum fields.
 ACTION collect_enums(bd, params, subst, reg, sigs),
   CREATE res(LIST) TO plant_list_make(0).
+  REAP he2 FROM reg_has_enum, reg.
+  IF he2 IS 0, GIVE res. /IF.
   CREATE pi(NUM) TO 0.
   CREATE pn2(TX) TO "".
   CREATE pt2(TX) TO "".
@@ -1280,10 +1301,20 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
   
     # ── give_stmt: GIVE val. → return val; ────────────────────
     #    async step phase: complete the task with the value.
+    #    ENUM values (bare member refs, enum vars, struct field
+    #    reads) are wrapped with _from_enum at the return site so
+    #    callers receive the member-name string (v0.48.11).
     IF ntype IS "give_stmt",
         REAP val FROM _map_get, node, "value".
         REAP cval FROM translate_expr, val.
         REAP cval FROM _handle_cat, cval, nums, evars.
+        REAP isn3 FROM expr_is_numeric, cval, nums.
+        IF isn3 IS 0,
+            REAP snm3 FROM enum_in_table, evars, cval.
+            IF snm3 ISNT "",
+                SET cval TO "_from_enum(" + cval + ", \"" + snm3 + "\")".
+            /IF.
+        /IF.
         REAP isel FROM indent_str, indent.
         IF actx IS "a",
             GIVE isel + "  plant_async_finish(st, " + cval + ");\n  return 1;\n".
@@ -2259,7 +2290,10 @@ ACTION subst_append(acc(TX), w(TX), subst(LIST)),
 
 # subst_type — replace whole-token generic names inside a type
 # string; separators are space ( ) [ ] ,
+# Fast-path: with an empty substitution map nothing can change,
+# so the type is returned as-is without scanning (v0.48.11).
 ACTION subst_type(t(TX), subst(LIST)),
+    IF COUNT subst IS 0, GIVE t. /IF.
     CREATE res(TX) TO "".
     CREATE w(TX) TO "".
     CREATE si(NUM) TO 0.
@@ -3591,36 +3625,113 @@ ACTION _cl_map_get(clmap(LIST), key(TX)),
     GIVE "".
 /ACTION.
 
+# is_prim_type — "1" when a PlantLang type is a built-in scalar
+# (NUM/FACT/TX/LIST/STRING/DOUBLE/JSON/SET/QUEUE/STACK/BYTES/FUNC);
+# "0" for enum/struct/generic/REF types. Closure scopes skip the
+# "#t" twin keys for primitives since only enum/struct types can
+# carry enum values (v0.48.11).
+ACTION is_prim_type(ptype(TX)),
+  REAP pb FROM type_base, ptype.
+  REAP pbt FROM trim, pb.
+  IF pbt IS "NUM", GIVE "1". /IF.
+  IF pbt IS "FACT", GIVE "1". /IF.
+  IF pbt IS "LIST", GIVE "1". /IF.
+  IF pbt IS "TX", GIVE "1". /IF.
+  IF pbt IS "STRING", GIVE "1". /IF.
+  IF pbt IS "DOUBLE", GIVE "1". /IF.
+  IF pbt IS "JSON", GIVE "1". /IF.
+  IF pbt IS "SET", GIVE "1". /IF.
+  IF pbt IS "QUEUE", GIVE "1". /IF.
+  IF pbt IS "STACK", GIVE "1". /IF.
+  IF pbt IS "BYTES", GIVE "1". /IF.
+  IF pbt IS "FUNC", GIVE "1". /IF.
+  GIVE "0".
+/ACTION.
+
+# _cl_ccache_get — look up a resolved "ctype;prim" pair for a type
+# in the per-scope cache (flat triples [type, ctype, prim]); "" on
+# miss. Repeated types within one scope share one resolution
+# instead of recomputing plant_ctype/is_prim_type (v0.48.11).
+ACTION _cl_ccache_get(cache(LIST), t(TX)),
+  CREATE ci(NUM) TO 0.
+  CREATE ck(TX) TO "".
+  CREATE cv(TX) TO "".
+  CREATE cp(TX) TO "".
+  SEASON ci + 2 < COUNT cache,
+    REAP ck FROM plant_list_get, cache, ci.
+    REAP cv FROM plant_list_get, cache, ci + 1.
+    REAP cp FROM plant_list_get, cache, ci + 2.
+    IF str_eq(ck, t) IS "1",
+      GIVE cv + ";" + cp.
+    /IF.
+    SET ci TO ci + 3.
+  /SEASON.
+  GIVE "".
+/ACTION.
+
 # _cl_scopes — extend a scope stack with the declarations a
 # statement list introduces (create/let locals, reap targets,
 # cycle iterators, match bindings). sigs resolves reap targets to
 # their callee return type for the "#t" twin keys (v0.48.10).
+# Type resolution for create/let is memoized per call and the "#t"
+# twin keys are skipped for primitive types (v0.48.11).
 ACTION _cl_scopes(bd(LIST), scopes(LIST), sigs(LIST)),
     CREATE n2(NUM) TO 0.
     CREATE st(TX) TO "".
     CREATE res(LIST) TO scopes.
+    CREATE cch(LIST) TO plant_list_make(0).
     SEASON n2 < COUNT bd,
         REAP st FROM plant_list_get, bd, n2.
         REAP sty FROM _map_get, st, "type".
         IF sty IS "create_stmt",
             REAP stg FROM _map_get, st, "target".
             REAP stv FROM _map_get, st, "var_type".
-            REAP stc FROM plant_ctype, stv.
+            REAP ccv FROM _cl_ccache_get, cch, stv.
+            IF ccv IS "",
+                REAP stc FROM plant_ctype, stv.
+                REAP spr FROM is_prim_type, stv.
+                IF COUNT cch < 36,
+                    PUT stv INTO cch.
+                    PUT stc INTO cch.
+                    PUT spr INTO cch.
+                /IF.
+            /IF.
+            IF ccv ISNT "",
+                REAP ccparts FROM strings:SPLIT, ccv, ";".
+                REAP stc FROM plant_list_get, ccparts, 0.
+                REAP spr FROM plant_list_get, ccparts, 1.
+            /IF.
             PUT stg INTO res.
             PUT stc INTO res.
-            # "#t" twin keys carry the PlantLang type so closure
-            # captures can resolve enum membership (v0.48.9)
-            PUT stg + "#t" INTO res.
-            PUT stv INTO res.
+            IF spr IS "0",
+                PUT stg + "#t" INTO res.
+                PUT stv INTO res.
+            /IF.
         /IF.
         IF sty IS "let_stmt",
             REAP stg FROM _map_get, st, "target".
             REAP stv FROM _map_get, st, "var_type".
-            REAP stc FROM plant_ctype, stv.
+            REAP ccv FROM _cl_ccache_get, cch, stv.
+            IF ccv IS "",
+                REAP stc FROM plant_ctype, stv.
+                REAP spr FROM is_prim_type, stv.
+                IF COUNT cch < 36,
+                    PUT stv INTO cch.
+                    PUT stc INTO cch.
+                    PUT spr INTO cch.
+                /IF.
+            /IF.
+            IF ccv ISNT "",
+                REAP ccparts FROM strings:SPLIT, ccv, ";".
+                REAP stc FROM plant_list_get, ccparts, 0.
+                REAP spr FROM plant_list_get, ccparts, 1.
+            /IF.
             PUT stg INTO res.
             PUT stc INTO res.
-            PUT stg + "#t" INTO res.
-            PUT stv INTO res.
+            IF spr IS "0",
+                PUT stg + "#t" INTO res.
+                PUT stv INTO res.
+            /IF.
         /IF.
         IF sty IS "reap_stmt",
             REAP stg FROM _map_get, st, "target".
@@ -3695,8 +3806,11 @@ ACTION _cl_stamp_cnode(cnode(LIST), scopes(LIST), cc(NUM), res(LIST), sigs(LIST)
         REAP cct3 FROM plant_ctype, cpt3.
         PUT cpn3 INTO cpsc.
         PUT cct3 INTO cpsc.
-        PUT cpn3 + "#t" INTO cpsc.
-        PUT cpt3 INTO cpsc.
+        REAP cpr3 FROM is_prim_type, cpt3.
+        IF cpr3 IS "0",
+            PUT cpn3 + "#t" INTO cpsc.
+            PUT cpt3 INTO cpsc.
+        /IF.
         SET cpi3 TO cpi3 + 1.
     /SEASON.
     # resolve each capture against the enclosing scope

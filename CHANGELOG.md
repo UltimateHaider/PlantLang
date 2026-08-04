@@ -1,5 +1,31 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.11 — 2026 (ENUM Returns & Perf)
+
+### New Features
+- **ENUM GIVE wrapping** — `GIVE` statements now wrap enum values with
+  `_from_enum` at the return site, mirroring the `SHOW` path: bare member
+  constants, enum-typed variables, and struct field reads
+  (`plant_map_get ( v , "field" )`) returned from actions become the member-
+  name string. Callers can `SHOW`/concatenate the result directly, and
+  values crossing multiple enum-typed function boundaries stay printable —
+  `_from_enum` in the runtime is now idempotent (a value that is already a
+  member-name string is returned unchanged; small raw ints stay on the
+  index path, guarded by a plausible-pointer check).
+
+### Performance
+- **`collect_enums` fast-skip** — new `reg_has_enum` pre-check: modules
+  without ENUM declarations return an empty enum table immediately instead
+  of walking every action body (and per-statement `subst_type` /
+  `find_ret` lookups). Modules with only STRUCT entries skip too.
+- **`subst_type` fast-path** — an empty substitution map returns the type
+  string unchanged without token scanning.
+- **`_cl_scopes` type cache + primitive filtering** — create/let type
+  resolution (`plant_ctype` + primitivity) is memoized per scope in a
+  small flat cache, and the `#t` twin keys are skipped for primitive types
+  (`NUM`/`TX`/`LIST`/…); closure params get the same filtering, so only
+  enum/struct/generic types allocate the twin keys.
+
 ## v0.48.10 — 2026 (ENUM Structs)
 
 ### New Features

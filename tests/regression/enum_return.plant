@@ -1,0 +1,37 @@
+# enum_return — ENUM values returned from actions via GIVE are
+# wrapped with _from_enum at the return site (member constants,
+# enum vars, struct field reads), and _from_enum is idempotent so
+# values crossing multiple enum-typed functions stay printable
+# (v0.48.11).
+ENUM Color { RED, GREEN, BLUE }.
+
+STRUCT Ball { weight: NUM, color: Color }
+ACTION ffi_get_ball() -> STRUCT Ball.
+
+ACTION pick(n(NUM)) -> Color,
+  IF n IS 0, GIVE RED. /IF.
+  GIVE GREEN.
+/ACTION.
+
+ACTION color_of(p(Ball)) -> Color,
+  GIVE plant_map_get(p, "color").
+/ACTION.
+
+ACTION keep(e(Color)) -> Color,
+  GIVE e.
+/ACTION.
+
+ACTION main(),
+  REAP c1 FROM pick, 0.
+  SHOW c1.
+  SHOW "c=" + c1.
+  REAP c2 FROM pick, 1.
+  SHOW c2.
+  REAP b FROM ffi_get_ball.
+  REAP c3 FROM color_of, b.
+  SHOW c3.
+  SHOW "c3=" + c3.
+  REAP c4 FROM keep, c1.
+  SHOW c4.
+  GIVE 0.
+/ACTION.
