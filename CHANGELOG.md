@@ -30,6 +30,19 @@
 - `ORIF` tokenizes as an identifier (only `ELSE` is a lexer keyword);
   it is consumed by `parse_if_stmt` so no lexer change was needed.
 
+### Patch (v0.48.20-patch)
+Patched `_handle_cat` to correctly distinguish identifiers with digits
+from numeric literals. Prevents raw C + errors in concat contexts.
+`is_identifier` and `seg_has_literal_digit` now classify each
+top-level `+` segment: only a genuine numeric literal (digit outside
+an identifier, e.g. `1` in `p5 + 1`) keeps the raw C `+` arithmetic
+shortcut that REAP'd index vars rely on; identifiers that merely
+contain digits (`eb2`, `n2`) route to `_cat` instead of emitting
+`void* + void*`. `seg_is_numeric` was refactored onto `is_identifier`
+so identifier tokens are always verified against the numeric-var
+table. Regression tests: `cat_var_digit`, `cat_var_digit_pair`,
+`cat_num_literal`, `cat_mixed`.
+
 ## v0.48.19 — 2026 (Closures Syntax Repair)
 
 ### New Features

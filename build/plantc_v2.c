@@ -51,6 +51,8 @@ tx_t parse_program(PlantArray* tokens);
 tx_t _substr(tx_t str, long start, long end);
 tx_t _handle_func(tx_t expr, tx_t kw, tx_t cfn);
 tx_t _handle_func_paren(tx_t expr, tx_t kw, tx_t cfn);
+tx_t is_identifier(tx_t tok);
+tx_t seg_has_literal_digit(tx_t seg);
 tx_t seg_is_numeric(tx_t seg, PlantArray* nums);
 tx_t expr_is_numeric(tx_t e, PlantArray* nums);
 tx_t is_numeric_type(tx_t t);
@@ -3140,6 +3142,50 @@ tx_t _handle_func_paren(tx_t expr, tx_t kw, tx_t cfn) {
     }
     return res;
 }
+tx_t is_identifier(tx_t tok) {
+  tx_t f0 = "";
+    long i0 = 0;
+    tx_t ch0 = "";
+    if (strlen( tok ) == 0) {
+        return 0;
+    }
+    ch0 = char_at(tok, 0);
+    f0 = find_any(ch0, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_");
+    if (f0 == - 1) {
+        return 0;
+    }
+    i0 = 1;
+    while (i0 < strlen( tok )) {
+        ch0 = char_at(tok, i0);
+        f0 = find_any(ch0, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_");
+        if (f0 == - 1) {
+            return 0;
+        }
+        i0 = i0+1;
+    }
+    return 1;
+}
+tx_t seg_has_literal_digit(tx_t seg) {
+  tx_t sid = "";
+  tx_t sb = "";
+  tx_t sd = "";
+    sid = is_identifier(seg);
+    if (sid == 1) {
+        return 0;
+    }
+    sb = strings_REPLACE(seg, " ", "");
+    long si2 = 0;
+    tx_t sc2 = "";
+    while (si2 < strlen( sb )) {
+        sc2 = char_at(sb, si2);
+        sd = find_any(sc2, "0123456789");
+        if (sd != - 1) {
+            return 1;
+        }
+        si2 = si2+1;
+    }
+    return 0;
+}
 tx_t seg_is_numeric(tx_t seg, PlantArray* nums) {
   tx_t sb = "";
   tx_t pre0 = "";
@@ -3152,8 +3198,8 @@ tx_t seg_is_numeric(tx_t seg, PlantArray* nums) {
   tx_t pre7 = "";
   tx_t pre8 = "";
   tx_t isid = "";
-  tx_t isdig2 = "";
   tx_t isop = "";
+  tx_t tokid = "";
   tx_t mf = "";
     sb = strings_REPLACE(seg, " ", "");
     if (strcmp(sb,"") == 0) {
@@ -3204,10 +3250,6 @@ tx_t seg_is_numeric(tx_t seg, PlantArray* nums) {
         isid = find_any(sc, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_");
         if (isid != - 1) {
             tok = _cat(tok, sc);
-            isdig2 = find_any(sc, "0123456789");
-            if (isdig2 == - 1) {
-                toknum = 0;
-            }
         }
         if (isid == - 1) {
             isop = find_any(sc, "+-*/%^<>=!&|()");
@@ -3215,6 +3257,10 @@ tx_t seg_is_numeric(tx_t seg, PlantArray* nums) {
                 return 0;
             }
             if (strcmp(tok,"") > 0) {
+                tokid = is_identifier(tok);
+                if (tokid == 1) {
+                    toknum = 0;
+                }
                 if (toknum == 0) {
                     mf = list_contains(nums, tok);
                     if (mf == 0) {
@@ -3228,6 +3274,10 @@ tx_t seg_is_numeric(tx_t seg, PlantArray* nums) {
         si = si+1;
     }
     if (strcmp(tok,"") > 0) {
+        tokid = is_identifier(tok);
+        if (tokid == 1) {
+            toknum = 0;
+        }
         if (toknum == 0) {
             mf = list_contains(nums, tok);
             if (mf == 0) {
@@ -3254,7 +3304,7 @@ tx_t is_numeric_type(tx_t t) {
     return 0;
 }
 tx_t _handle_cat(tx_t expr, PlantArray* nums, PlantArray* evars) {
-  tx_t isdigit = "";
+  tx_t hl9 = "";
   tx_t sg0 = "";
   tx_t sgn = "";
   tx_t snm = "";
@@ -3271,7 +3321,6 @@ tx_t _handle_cat(tx_t expr, PlantArray* nums, PlantArray* evars) {
     long pi = 0;
     tx_t pel = "";
     long has_str = 0;
-    long has_digit = 0;
     while (i < strlen( expr )) {
         ch = char_at(expr, i);
         if (strcmp(ch,"\"") == 0) {
@@ -3280,10 +3329,6 @@ tx_t _handle_cat(tx_t expr, PlantArray* nums, PlantArray* evars) {
         }
         if (instr == 1 && strcmp(ch,"\\") == 0) {
             i = i+1;
-        }
-        isdigit = find_any(ch, "0123456789");
-        if (isdigit != - 1) {
-            has_digit = 1;
         }
         if (instr == 0 && strcmp(ch,"(") == 0) {
             depth = depth+1;
@@ -3306,11 +3351,26 @@ tx_t _handle_cat(tx_t expr, PlantArray* nums, PlantArray* evars) {
     if (( plant_array_length(parts) ) == 0) {
         return expr;
     }
-    if (has_str == 0 && has_digit == 1) {
+    long has_lit = 0;
+    long ni9 = 0;
+    tx_t p9 = "";
+    while (ni9 < plant_array_length(parts)) {
+        p9 = plant_list_get(parts, ni9);
+        hl9 = seg_has_literal_digit(p9);
+        if (hl9 == 1) {
+            has_lit = 1;
+        }
+        ni9 = ni9+1;
+    }
+    hl9 = seg_has_literal_digit(seg);
+    if (hl9 == 1) {
+        has_lit = 1;
+    }
+    if (has_str == 0 && has_lit == 1) {
         return strings_REPLACE ( expr , " + " , "+" );
     }
-    long allnum = 1;
-    if (has_str == 0 && has_digit == 0) {
+    if (has_str == 0) {
+        long allnum = 1;
         long ni0 = 0;
         tx_t pe0 = "";
         while (ni0 < plant_array_length(parts)) {

@@ -1,0 +1,13 @@
+# v0.48.20-patch: _handle_cat — two identifiers that CONTAIN digits
+# (eb2 + eb3) with no quoted strings must route to _cat(). Before the
+# patch the digit in "eb2" triggered the raw C "+" shortcut, emitting
+# `eb2+eb3` (void* + void* — a compile error).
+ACTION main(),
+  CREATE eb2(TX) TO "foo".
+  CREATE eb3(TX) TO "bar".
+  SHOW eb2 + eb3.
+  CREATE s2(TX) TO "num".
+  CREATE s3(TX) TO "ber".
+  SHOW s2 + s3.
+  GIVE 0.
+/GIVE main.

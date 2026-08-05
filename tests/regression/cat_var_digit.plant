@@ -1,0 +1,10 @@
+# v0.48.20-patch: _handle_cat — a quoted string concatenated with
+# an identifier that CONTAINS digits (eb2) must route to _cat(),
+# not raw C "+".
+ACTION main(),
+  CREATE eb2(TX) TO "world".
+  CREATE v2(TX) TO "yay".
+  SHOW "hello " + eb2.
+  SHOW "prefix" + v2.
+  GIVE 0.
+/GIVE main.

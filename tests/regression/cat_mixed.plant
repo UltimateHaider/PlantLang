@@ -1,0 +1,11 @@
+# v0.48.20-patch: _handle_cat — mixed string literal + numeric
+# literal/var must generate _cat("x", _from_long(2)) — no raw C "+".
+ACTION main(),
+  CREATE n2(NUM) TO 7.
+  SHOW "x" + 2.
+  SHOW "n=" + n2.
+  SHOW "n2=" + n2 + "!".
+  CREATE eb2(TX) TO "z".
+  SHOW "tag" + eb2.
+  GIVE 0.
+/GIVE main.

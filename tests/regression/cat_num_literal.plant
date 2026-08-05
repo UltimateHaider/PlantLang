@@ -1,0 +1,20 @@
+# v0.48.20-patch: _handle_cat — genuine numeric literals must still
+# use raw C arithmetic "+" (2 + 3 == 5), including on NUM vars whose
+# names contain digits (n2 + 1 == 8). NUM actions return raw bits
+# (numeric_return pattern): SET into a NUM var before SHOW.
+ACTION add(a(NUM), b(NUM)),
+  GIVE a + b.
+/GIVE add.
+
+ACTION main(),
+  CREATE n(NUM) TO 2 + 3.
+  SHOW n.
+  REAP r FROM add, 30, 12.
+  CREATE n1(NUM) TO 0.
+  SET n1 TO r.
+  SHOW n1.
+  CREATE n2(NUM) TO 7.
+  SHOW n2 + 1.
+  SHOW n2 * 2.
+  GIVE 0.
+/GIVE main.

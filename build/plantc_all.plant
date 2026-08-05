@@ -2198,11 +2198,61 @@ ACTION _handle_func_paren(expr(TX), kw(TX), cfn(TX)),
 /ACTION.
 
 # ──────────────────────────────────────────────────────────────
+#  is_identifier — 1 when the text is a C/PlantLang identifier
+#  (letter or _ first, then letters/digits/_). Digit literals like
+#  "2" or "0x10" are NOT identifiers. Used by seg_is_numeric so
+#  identifiers that merely contain digits (eb2, n2) are never
+#  mistaken for raw numeric literals (v0.48.20-patch).
+# ──────────────────────────────────────────────────────────────
+ACTION is_identifier(tok(TX)),
+  CREATE i0(NUM) TO 0.
+  CREATE ch0(TX) TO "".
+  IF LEN(tok) IS 0, GIVE 0. /IF.
+  REAP ch0 FROM char_at, tok, 0.
+  REAP f0 FROM find_any, ch0, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz_".
+  IF f0 IS -1, GIVE 0. /IF.
+  SET i0 TO 1.
+  SEASON i0 < LEN(tok),
+    REAP ch0 FROM char_at, tok, i0.
+    REAP f0 FROM find_any, ch0, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_".
+    IF f0 IS -1, GIVE 0. /IF.
+    SET i0 TO i0 + 1.
+  /SEASON.
+  GIVE 1.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
 #  seg_is_numeric — 1 when a concatenation segment is a numeric
 #  value or expression: digit literals and identifiers/expressions
 #  built only from NUM/FACT vars (nums) and arithmetic operators.
+#  Identifier tokens are checked against nums even when they
+#  contain digits (is_identifier), so "eb2" is never treated as a
+#  raw literal (v0.48.20-patch).
 #  Used by _handle_cat to decide _from_long() wrapping.
 # ──────────────────────────────────────────────────────────────
+#  seg_has_literal_digit — 1 when the segment text contains a digit
+#  that belongs to a genuine numeric literal rather than an
+#  identifier (is_identifier). "p5" has a digit but is an
+#  identifier → 0; "1" and "(2 + 3)" are literals → 1. Lets
+#  _handle_cat keep the raw C "+" arithmetic shortcut (which REAP'd
+#  index vars like p5 rely on) without letting identifier digits
+#  like "eb2" trigger it (v0.48.20-patch).
+# ──────────────────────────────────────────────────────────────
+ACTION seg_has_literal_digit(seg(TX)),
+  REAP sid FROM is_identifier, seg.
+  IF sid IS 1, GIVE 0. /IF.
+  REAP sb FROM strings:REPLACE, seg, " ", "".
+  CREATE si2(NUM) TO 0.
+  CREATE sc2(TX) TO "".
+  SEASON si2 < LEN(sb),
+    REAP sc2 FROM char_at, sb, si2.
+    REAP sd FROM find_any, sc2, "0123456789".
+    IF sd ISNT -1, GIVE 1. /IF.
+    SET si2 TO si2 + 1.
+  /SEASON.
+  GIVE 0.
+/ACTION.
+
 ACTION seg_is_numeric(seg(TX), nums(LIST)),
   REAP sb FROM strings:REPLACE, seg, " ", "".
   IF sb IS "", GIVE 0. /IF.
@@ -2235,13 +2285,13 @@ ACTION seg_is_numeric(seg(TX), nums(LIST)),
     REAP isid FROM find_any, sc, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_".
     IF isid ISNT -1,
       SET tok TO tok + sc.
-      REAP isdig2 FROM find_any, sc, "0123456789".
-      IF isdig2 IS -1, SET toknum TO 0. /IF.
     /IF.
     IF isid IS -1,
       REAP isop FROM find_any, sc, "+-*/%^<>=!&|()".
       IF isop IS -1, GIVE 0. /IF.
       IF tok > "",
+        REAP tokid FROM is_identifier, tok.
+        IF tokid IS 1, SET toknum TO 0. /IF.
         IF toknum IS 0,
           REAP mf FROM list_contains, nums, tok.
           IF mf IS 0, GIVE 0. /IF.
@@ -2253,6 +2303,8 @@ ACTION seg_is_numeric(seg(TX), nums(LIST)),
     SET si TO si + 1.
   /SEASON.
   IF tok > "",
+    REAP tokid FROM is_identifier, tok.
+    IF tokid IS 1, SET toknum TO 0. /IF.
     IF toknum IS 0,
       REAP mf FROM list_contains, nums, tok.
       IF mf IS 0, GIVE 0. /IF.
@@ -2290,7 +2342,10 @@ ACTION is_numeric_type(t(TX)),
 
 # ──────────────────────────────────────────────────────────────
 #  _handle_cat — convert + to _cat() for string concatenation
-#  Only converts when string literals (") are present in expr
+#  Raw C "+" only when every top-level segment is verifiably
+#  numeric (seg_is_numeric); identifiers containing digits like
+#  "eb2" now concatenate instead of producing void*+void* C errors
+#  (v0.48.20-patch).
 #  nums: names of scalar NUM/FACT vars in scope; bare identifiers
 #  listed there get _from_long() so "x" + n works (v0.48.3a)
 #  NOTE: does NOT handle quoted + inside string literals correctly
@@ -2311,14 +2366,11 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
     CREATE pi(NUM) TO 0.
     CREATE pel(TX) TO "".
     CREATE has_str(NUM) TO 0.
-    CREATE has_digit(NUM) TO 0.
     # scan for top-level " + " (outside parens and strings) and split there
     SEASON i < LEN(expr),
         REAP ch FROM char_at, expr, i.
         IF ch IS "\"", SET instr TO 1 - instr. SET has_str TO 1. /IF.
         IF instr IS 1 AND ch IS "\\", SET i TO i + 1. /IF.
-        REAP isdigit FROM find_any, ch, "0123456789".
-        IF isdigit ISNT -1, SET has_digit TO 1. /IF.
         IF instr IS 0 AND ch IS "(", SET depth TO depth + 1. /IF.
         IF instr IS 0 AND ch IS ")", SET depth TO depth - 1. /IF.
         IF instr IS 0 AND ch IS "+" AND depth IS 0,
@@ -2334,16 +2386,31 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
     /SEASON.
     REAP seg FROM substring, expr, start, LEN(expr).
     IF (COUNT parts) IS 0, GIVE expr. /IF.
-    # digit literal present, no string literal → numeric C "+" (keeps
-    # call results and numeric vars arithmetic, v0.48.3 behavior)
-    IF has_str IS 0 AND has_digit IS 1,
+    # genuine numeric literal present (digit outside identifiers, e.g.
+    # "1" in "p5 + 1") and no quoted string → raw numeric C "+", the
+    # v0.48.3 shortcut REAP'd index vars (tx_t holding bit patterns)
+    # depend on. Identifier digits alone (ccode + eb2) never fire it.
+    CREATE has_lit(NUM) TO 0.
+    CREATE ni9(NUM) TO 0.
+    CREATE p9(TX) TO "".
+    SEASON ni9 < COUNT parts,
+        REAP p9 FROM plant_list_get, parts, ni9.
+        REAP hl9 FROM seg_has_literal_digit, p9.
+        IF hl9 IS 1, SET has_lit TO 1. /IF.
+        SET ni9 TO ni9 + 1.
+    /SEASON.
+    REAP hl9 FROM seg_has_literal_digit, seg.
+    IF hl9 IS 1, SET has_lit TO 1. /IF.
+    IF has_str IS 0 AND has_lit IS 1,
         GIVE strings_REPLACE(expr, " + ", "+").
     /IF.
-    # no string literal and no digit literal: ambiguous — every segment
-    # numeric (digit/nums-member) → keep C "+"; otherwise fall through
-    # so string variables concatenate (v0.48.3 behavior).
-    CREATE allnum(NUM) TO 1.
-    IF has_str IS 0 AND has_digit IS 0,
+    # no genuine literal: ambiguous — every segment verifiably numeric
+    # (digit literal, NUM/FACT var in nums, known numeric-returning
+    # call) → keep C "+"; otherwise fall through so string variables
+    # concatenate (identifiers with digits like eb2 route to _cat,
+    # v0.48.20-patch).
+    IF has_str IS 0,
+        CREATE allnum(NUM) TO 1.
         CREATE ni0(NUM) TO 0.
         CREATE pe0(TX) TO "".
         SEASON ni0 < COUNT parts,
