@@ -1,5 +1,47 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.19 — 2026 (Closures Syntax Repair)
+
+### New Features
+- **Parenthesis-free closure parameter lists (short form).** A closure
+  header can now declare bare parameters directly in the bracket:
+  `[MOVE x] -> x + 1` (one parameter), `[MOVE x y z] -> x + y + z`
+  (several), and a mode-less list is accepted too (`[p q] -> p - q`).
+  Grammar: `closure_param_list → IDENT+` alongside the existing
+  `(IDENT, …)` form; the token following `]` selects the form — `(` is
+  the long form (bracket = captures), anything else is the short form
+  (bracket = parameters).
+- **Unified AST.** Both syntax variants produce the identical closure
+  node shape (`params` = list of `{name, type}` entries; short-form
+  parameters default to `NUM` so concise closures can be used in
+  arithmetic directly). Downstream code generation is untouched.
+- **`Mixed closure parameter syntax` diagnostic.** Mixing the forms is
+  a compile error that aborts the build with a clear message, e.g.
+  `[MOVE (x y)]` (parenthesized list inside the bracket) or a bare
+  multi-entry bracket followed by a parenthesized list
+  (`[MOVE x y](v)`). The parser raises a `syntax_error` node that
+  bubbles through statement/body/program parsing to the driver, which
+  prints `Error: Mixed closure parameter syntax.` and exits 1.
+- **Regression harness negative tests.** A `*.invalid` marker turns a
+  regression test into a negative test: the source must fail to
+  compile and the compiler log must contain every expected diagnostic
+  line (dist tarball now ships the markers).
+
+### Regression Tests
+- `closure_short` — single bare parameter (`[MOVE x]`) with expression
+  and block bodies.
+- `closure_short_multi` — `[MOVE x y z]` and mode-less `[p q]`.
+- `closure_mixed` — short form vs long form side by side: parameters
+  vs captures-plus-parameters, including MOVE-consumed outer values.
+- `closure_invalid` — negative test locking the `Mixed closure
+  parameter syntax` diagnostic.
+
+### Perf
+- Zero syntax-parser overhead: the self-hosting compiler converges at
+  257107 bytes (parser grew ~4.5 KB for the new grammar); the full
+  perf suite reruns clean with no regression vs the v0.48.18 rows in
+  `perf_results.md`.
+
 ## v0.48.18 — 2026 (Mission Mode PERSISTENT)
 
 ### New Features

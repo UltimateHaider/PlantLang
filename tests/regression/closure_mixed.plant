@@ -1,0 +1,26 @@
+# closure_mixed — short form and long form produce identical AST
+# parameter lists, so both syntax variants behave the same.
+# Short:  [MOVE x] -> expr         (x is a parameter)
+# Long:   [MOVE x](v(NUM)) -> expr (x is a capture, v a parameter)
+# Contrast here: short params vs long captures + params (v0.48.19).
+ACTION main(),
+  CREATE f1 TO [MOVE x] -> x * 2.
+  REAP r1 FROM f1, 21.
+  SHOW "short=" + _from_long(r1).
+  CREATE x(NUM) TO 20.
+  CREATE f2 TO [MOVE x](v(NUM)) -> v + x.
+  REAP r2 FROM f2, 1.
+  SHOW "long=" + _from_long(r2).
+  CREATE f3 TO [MOVE p q] -> p + q.
+  REAP r3 FROM f3, 10, 32.
+  SHOW "short2=" + _from_long(r3).
+  CREATE a(NUM) TO 10.
+  CREATE b(NUM) TO 32.
+  CREATE f4 TO [MOVE a, MOVE b](w(NUM)) -> w + a + b.
+  REAP r4 FROM f4, 0.
+  SHOW "long2=" + _from_long(r4).
+  REAP as FROM _from_long, a.
+  REAP bs FROM _from_long, b.
+  SHOW "consumed=" + as + "," + bs.
+  GIVE 0.
+/GIVE main.

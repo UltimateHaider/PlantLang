@@ -1,0 +1,18 @@
+# closure_short_multi — multiple bare parameters in the short closure
+# form: [MOVE x y z] declares three parameters without parentheses.
+# A mode-less bare list is also accepted: [p q] (v0.48.19).
+ACTION main(),
+  CREATE f TO [MOVE x y z] -> x + y + z.
+  REAP r FROM f, 1, 2, 3.
+  SHOW "sum=" + _from_long(r).
+  CREATE g TO [MOVE a b] -> a * b.
+  REAP r2 FROM g, 6, 7.
+  SHOW "prod=" + _from_long(r2).
+  CREATE h TO [p q] -> p - q.
+  REAP r3 FROM h, 30, 8.
+  SHOW "diff=" + _from_long(r3).
+  CREATE k TO [MOVE u v w] -> ( CREATE acc(NUM) TO (u + v) * w. GIVE acc ).
+  REAP r4 FROM k, 2, 3, 4.
+  SHOW "mul3=" + _from_long(r4).
+  GIVE 0.
+/GIVE main.

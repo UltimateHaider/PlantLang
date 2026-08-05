@@ -16,6 +16,24 @@ fail=0
 for src in "$DIR"/*.plant; do
   name=$(basename "$src" .plant)
   [ -f "$DIR/$name.expected" ] || continue
+  if [ -f "$DIR/$name.invalid" ]; then
+    # negative test: the source must FAIL to compile, and the compiler
+    # log must contain every diagnostic line from the .expected file
+    if ! "$PLANTC" "$src" "$BUILD/$name.c" >"$BUILD/$name.compile.log" 2>&1; then
+      ok=1
+      while IFS= read -r want; do
+        grep -Fq -- "$want" "$BUILD/$name.compile.log" || ok=0
+      done < "$DIR/$name.expected"
+      if [ "$ok" -eq 1 ]; then
+        echo "PASS  $name"; pass=$((pass+1))
+      else
+        echo "FAIL  $name (diagnostic mismatch)"; fail=$((fail+1))
+      fi
+    else
+      echo "FAIL  $name (compiled, should have failed)"; fail=$((fail+1))
+    fi
+    continue
+  fi
   if ! "$PLANTC" "$src" "$BUILD/$name.c" >"$BUILD/$name.compile.log" 2>&1; then
     echo "FAIL  $name (compile)"; fail=$((fail+1)); continue
   fi

@@ -1306,6 +1306,7 @@ tx_t parse_create_stmt(PlantArray* tokens, long pos) {
   tx_t cb_lx = "";
   tx_t clp = "";
   tx_t cnode = "";
+  tx_t cn_ty = "";
   tx_t dotp = "";
   tx_t vpair = "";
   tx_t to_pair = "";
@@ -1339,6 +1340,10 @@ tx_t parse_create_stmt(PlantArray* tokens, long pos) {
             clp = parse_closure(tokens, p4);
             cnode = _first(clp);
             p5 = _second(clp);
+            cn_ty = _map_get(cnode, "type");
+            if (strcmp(cn_ty,"syntax_error") == 0) {
+                return plant_list_make ( 2 , cnode , p5 );
+            }
             if (plant_array_length(cnode) > 0) {
                 dotp = consume(tokens, p5);
                 p6 = _second(dotp);
@@ -1359,6 +1364,10 @@ tx_t parse_create_stmt(PlantArray* tokens, long pos) {
             clp = parse_closure(tokens, p4);
             cnode = _first(clp);
             p5 = _second(clp);
+            cn_ty = _map_get(cnode, "type");
+            if (strcmp(cn_ty,"syntax_error") == 0) {
+                return plant_list_make ( 2 , cnode , p5 );
+            }
             if (plant_array_length(cnode) > 0) {
                 dotp = consume(tokens, p5);
                 p6 = _second(dotp);
@@ -1443,6 +1452,7 @@ tx_t parse_let_stmt(PlantArray* tokens, long pos) {
   tx_t cb_lx = "";
   tx_t clp = "";
   tx_t cnode = "";
+  tx_t cn_ty = "";
   tx_t dotp = "";
   tx_t vpair = "";
   tx_t to_pair = "";
@@ -1476,6 +1486,10 @@ tx_t parse_let_stmt(PlantArray* tokens, long pos) {
             clp = parse_closure(tokens, p4);
             cnode = _first(clp);
             p5 = _second(clp);
+            cn_ty = _map_get(cnode, "type");
+            if (strcmp(cn_ty,"syntax_error") == 0) {
+                return plant_list_make ( 2 , cnode , p5 );
+            }
             if (plant_array_length(cnode) > 0) {
                 dotp = consume(tokens, p5);
                 p6 = _second(dotp);
@@ -1496,6 +1510,10 @@ tx_t parse_let_stmt(PlantArray* tokens, long pos) {
             clp = parse_closure(tokens, p4);
             cnode = _first(clp);
             p5 = _second(clp);
+            cn_ty = _map_get(cnode, "type");
+            if (strcmp(cn_ty,"syntax_error") == 0) {
+                return plant_list_make ( 2 , cnode , p5 );
+            }
             if (plant_array_length(cnode) > 0) {
                 dotp = consume(tokens, p5);
                 p6 = _second(dotp);
@@ -1518,16 +1536,22 @@ tx_t parse_closure(PlantArray* tokens, long pos) {
   tx_t is_eof_flag = "";
   tx_t tok = "";
   tx_t lx = "";
+  tx_t ty = "";
   tx_t rb = "";
-  tx_t mode_pair = "";
-  tx_t mode = "";
-  tx_t name_pair = "";
-  tx_t cap_name = "";
+  tx_t ent_pair = "";
+  tx_t en0 = "";
+  tx_t ntok = "";
+  tx_t nlx = "";
+  tx_t nty = "";
+  tx_t npair = "";
   tx_t tok2 = "";
   tx_t lx2 = "";
   tx_t com = "";
   tx_t ptok = "";
   tx_t plx = "";
+  tx_t ce2 = "";
+  tx_t cm2 = "";
+  tx_t cn2 = "";
   tx_t lp = "";
   tx_t p3 = "";
   tx_t rp = "";
@@ -1542,6 +1566,8 @@ tx_t parse_closure(PlantArray* tokens, long pos) {
   tx_t tok3 = "";
   tx_t lx3 = "";
   tx_t com2 = "";
+  tx_t se2 = "";
+  tx_t sn2 = "";
   tx_t atok = "";
   tx_t alx = "";
   tx_t ap = "";
@@ -1558,6 +1584,7 @@ tx_t parse_closure(PlantArray* tokens, long pos) {
   tx_t blx3 = "";
   tx_t brp = "";
   tx_t d_pair = "";
+  tx_t dty = "";
   tx_t etok = "";
   tx_t elx = "";
   tx_t ety = "";
@@ -1566,6 +1593,8 @@ tx_t parse_closure(PlantArray* tokens, long pos) {
     lb = consume(tokens, pos);
     p2 = _second(lb);
     PlantArray* captures = plant_list_make ( 0 );
+    PlantArray* entries = plant_list_make ( 0 );
+    tx_t had_comma = "0";
     while (1) {
         is_eof_flag = is_eof(tokens, p2);
         if (is_eof_flag) {
@@ -1573,74 +1602,121 @@ tx_t parse_closure(PlantArray* tokens, long pos) {
         }
         tok = peek(tokens, p2);
         lx = tok_lex(tok);
+        ty = tok_type(tok);
         if (strcmp(lx,"]") == 0) {
             rb = consume(tokens, p2);
             p2 = _second(rb);
             break;
         }
-        mode_pair = consume(tokens, p2);
-        mode = tok_lex(plant_list_get(mode_pair,  0 ));
-        p2 = _second(mode_pair);
-        if (strcmp(mode,"MOVE") != 0 && strcmp(mode,"REF") != 0) {
-            return plant_list_make ( 2 , plant_list_make ( 0 ) , start_pos );
+        if (strcmp(lx,"(") == 0) {
+            return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "Mixed closure parameter syntax" ) , p2 );
         }
-        name_pair = consume(tokens, p2);
-        cap_name = tok_lex(plant_list_get(name_pair,  0 ));
-        p2 = _second(name_pair);
-        captures = plant_list_push(captures, plant_list_make ( 4 , "name" , cap_name , "mode" , mode ));
+        ent_pair = consume(tokens, p2);
+        en0 = tok_lex(plant_list_get(ent_pair,  0 ));
+        p2 = _second(ent_pair);
+        tx_t en_mode = "";
+        tx_t en_name = "";
+        if (strcmp(en0,"MOVE") == 0 || strcmp(en0,"REF") == 0) {
+            en_mode = en0;
+            ntok = peek(tokens, p2);
+            nlx = tok_lex(ntok);
+            nty = tok_type(ntok);
+            if (strcmp(nlx,"(") == 0) {
+                return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "Mixed closure parameter syntax" ) , p2 );
+            }
+            if (strcmp(nty,"IDENT") != 0) {
+                return plant_list_make ( 2 , plant_list_make ( 0 ) , start_pos );
+            }
+            npair = consume(tokens, p2);
+            en_name = tok_lex(plant_list_get(npair,  0 ));
+            p2 = _second(npair);
+        }
+        if (strcmp(en_mode,"") == 0) {
+            if (strcmp(ty,"IDENT") != 0) {
+                return plant_list_make ( 2 , plant_list_make ( 0 ) , start_pos );
+            }
+            en_name = en0;
+        }
+        entries = plant_list_push(entries, plant_list_make ( 2 , en_mode , en_name ));
         tok2 = peek(tokens, p2);
         lx2 = tok_lex(tok2);
         if (strcmp(lx2,",") == 0) {
+            had_comma = "1";
             com = consume(tokens, p2);
             p2 = _second(com);
         }
     }
     ptok = peek(tokens, p2);
     plx = tok_lex(ptok);
-    if (strcmp(plx,"(") != 0) {
-        return plant_list_make ( 2 , plant_list_make ( 0 ) , start_pos );
-    }
-    lp = consume(tokens, p2);
-    p3 = _second(lp);
     PlantArray* params = plant_list_make ( 0 );
-    while (1) {
-        is_eof_flag = is_eof(tokens, p3);
-        if (is_eof_flag) {
-            return plant_list_make ( 2 , plant_list_make ( 0 ) , start_pos );
+    if (strcmp(plx,"(") == 0) {
+        if (strcmp(had_comma,"0") == 0) {
+            if (plant_array_length(entries) > 1) {
+                return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "Mixed closure parameter syntax" ) , p2 );
+            }
         }
-        tok = peek(tokens, p3);
-        lx = tok_lex(tok);
-        if (strcmp(lx,")") == 0) {
-            rp = consume(tokens, p3);
-            p4 = _second(rp);
-            break;
+        long ci2 = 0;
+        while (ci2 < plant_array_length(entries)) {
+            ce2 = plant_list_get(entries, ci2);
+            cm2 = _first(ce2);
+            cn2 = _second(ce2);
+            if (strcmp(cm2,"") == 0) {
+                return plant_list_make ( 2 , plant_list_make ( 0 ) , start_pos );
+            }
+            captures = plant_list_push(captures, plant_list_make ( 4 , "name" , cn2 , "mode" , cm2 ));
+            ci2 = ci2+1;
         }
-        pn_pair = consume(tokens, p3);
-        pn = tok_lex(plant_list_get(pn_pair,  0 ));
-        p4 = _second(pn_pair);
-        tok2 = peek(tokens, p4);
-        lx2 = tok_lex(tok2);
-        if (strcmp(lx2,"(") == 0) {
-            lp2 = consume(tokens, p4);
-            p5 = _second(lp2);
-            ptv = collect_type_text(tokens, p5, ")", 1);
-            pt = _first(ptv);
-            p5 = _second(ptv);
-            rp2 = consume(tokens, p5);
-            p5 = _second(rp2);
-            params = plant_list_push(params, plant_list_make ( 4 , "name" , pn , "type" , pt ));
-            p4 = p5;
+        lp = consume(tokens, p2);
+        p3 = _second(lp);
+        while (1) {
+            is_eof_flag = is_eof(tokens, p3);
+            if (is_eof_flag) {
+                return plant_list_make ( 2 , plant_list_make ( 0 ) , start_pos );
+            }
+            tok = peek(tokens, p3);
+            lx = tok_lex(tok);
+            if (strcmp(lx,")") == 0) {
+                rp = consume(tokens, p3);
+                p4 = _second(rp);
+                break;
+            }
+            pn_pair = consume(tokens, p3);
+            pn = tok_lex(plant_list_get(pn_pair,  0 ));
+            p4 = _second(pn_pair);
+            tok2 = peek(tokens, p4);
+            lx2 = tok_lex(tok2);
+            if (strcmp(lx2,"(") == 0) {
+                lp2 = consume(tokens, p4);
+                p5 = _second(lp2);
+                ptv = collect_type_text(tokens, p5, ")", 1);
+                pt = _first(ptv);
+                p5 = _second(ptv);
+                rp2 = consume(tokens, p5);
+                p5 = _second(rp2);
+                params = plant_list_push(params, plant_list_make ( 4 , "name" , pn , "type" , pt ));
+                p4 = p5;
+            }
+            if (strcmp(lx2,"(") != 0) {
+                params = plant_list_push(params, plant_list_make ( 4 , "name" , pn , "type" , "" ));
+            }
+            tok3 = peek(tokens, p4);
+            lx3 = tok_lex(tok3);
+            if (strcmp(lx3,",") == 0) {
+                com2 = consume(tokens, p4);
+                p4 = _second(com2);
+            }
+            p3 = p4;
         }
-        if (strcmp(lx2,"(") != 0) {
-            params = plant_list_push(params, plant_list_make ( 4 , "name" , pn , "type" , "" ));
+    }
+    if (strcmp(plx,"(") != 0) {
+        long si2 = 0;
+        while (si2 < plant_array_length(entries)) {
+            se2 = plant_list_get(entries, si2);
+            sn2 = _second(se2);
+            params = plant_list_push(params, plant_list_make ( 4 , "name" , sn2 , "type" , "NUM" ));
+            si2 = si2+1;
         }
-        tok3 = peek(tokens, p4);
-        lx3 = tok_lex(tok3);
-        if (strcmp(lx3,",") == 0) {
-            com2 = consume(tokens, p4);
-            p4 = _second(com2);
-        }
-        p3 = p4;
+        p4 = p2;
     }
     atok = peek(tokens, p4);
     alx = tok_lex(atok);
@@ -1683,6 +1759,10 @@ tx_t parse_closure(PlantArray* tokens, long pos) {
                 tx_t decl = plant_list_get(d_pair,  0 );
                 p6 = _second(d_pair);
                 if (strcmp(decl,"") > 0) {
+                    dty = _map_get(decl, "type");
+                    if (strcmp(dty,"syntax_error") == 0) {
+                        return d_pair;
+                    }
                     stmts = plant_list_push(stmts, decl);
                 }
             }
@@ -1768,6 +1848,7 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos) {
   tx_t clp = "";
   tx_t cnode = "";
   tx_t p6 = "";
+  tx_t cn_ty = "";
   tx_t ctok2 = "";
   tx_t clx2 = "";
   tx_t ccom = "";
@@ -1841,6 +1922,10 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos) {
             clp = parse_closure(tokens, p5);
             cnode = _first(clp);
             p6 = _second(clp);
+            cn_ty = _map_get(cnode, "type");
+            if (strcmp(cn_ty,"syntax_error") == 0) {
+                return plant_list_make ( 2 , cnode , p6 );
+            }
             if (plant_array_length(cnode) > 0) {
                 args = plant_list_push(args, "@@CLOSURE@@");
                 clargs = plant_list_push(clargs, cnode);
@@ -1957,6 +2042,7 @@ tx_t parse_call_stmt(PlantArray* tokens, long pos) {
   tx_t clp = "";
   tx_t cnode = "";
   tx_t p6 = "";
+  tx_t cn_ty = "";
   tx_t ctok2 = "";
   tx_t clx2 = "";
   tx_t ccom = "";
@@ -2015,6 +2101,10 @@ tx_t parse_call_stmt(PlantArray* tokens, long pos) {
             clp = parse_closure(tokens, p5);
             cnode = _first(clp);
             p6 = _second(clp);
+            cn_ty = _map_get(cnode, "type");
+            if (strcmp(cn_ty,"syntax_error") == 0) {
+                return plant_list_make ( 2 , cnode , p6 );
+            }
             if (plant_array_length(cnode) > 0) {
                 args = plant_list_push(args, "@@CLOSURE@@");
                 clargs = plant_list_push(clargs, cnode);
@@ -2150,6 +2240,7 @@ tx_t parse_if_stmt(PlantArray* tokens, long pos) {
   tx_t dot = "";
   tx_t p7 = "";
   tx_t stmt_pair = "";
+  tx_t sty = "";
     pair = consume(tokens, pos);
     p2 = _second(pair);
     cpair = collect_until(tokens, p2, ",");
@@ -2178,6 +2269,10 @@ tx_t parse_if_stmt(PlantArray* tokens, long pos) {
         tx_t stmt = plant_list_get(stmt_pair,  0 );
         p4 = _second(stmt_pair);
         if (strcmp(stmt,"") > 0) {
+            sty = _map_get(stmt, "type");
+            if (strcmp(sty,"syntax_error") == 0) {
+                return stmt_pair;
+            }
             body = plant_list_push(body, stmt);
         }
     }
@@ -2200,6 +2295,7 @@ tx_t parse_season_stmt(PlantArray* tokens, long pos) {
   tx_t dot = "";
   tx_t p7 = "";
   tx_t stmt_pair = "";
+  tx_t sty = "";
     pair = consume(tokens, pos);
     p2 = _second(pair);
     cpair = collect_until(tokens, p2, ",");
@@ -2228,6 +2324,10 @@ tx_t parse_season_stmt(PlantArray* tokens, long pos) {
         tx_t stmt = plant_list_get(stmt_pair,  0 );
         p4 = _second(stmt_pair);
         if (strcmp(stmt,"") > 0) {
+            sty = _map_get(stmt, "type");
+            if (strcmp(sty,"syntax_error") == 0) {
+                return stmt_pair;
+            }
             body = plant_list_push(body, stmt);
         }
     }
@@ -2568,6 +2668,7 @@ tx_t parse_action_decl(PlantArray* tokens, long pos) {
   tx_t dot = "";
   tx_t p8 = "";
   tx_t stmt_pair = "";
+  tx_t sty = "";
     pair = consume(tokens, pos);
     p2 = _second(pair);
     name_pair = consume(tokens, p2);
@@ -2825,6 +2926,10 @@ tx_t parse_action_decl(PlantArray* tokens, long pos) {
         tx_t stmt = plant_list_get(stmt_pair,  0 );
         p5 = _second(stmt_pair);
         if (strcmp(stmt,"") > 0) {
+            sty = _map_get(stmt, "type");
+            if (strcmp(sty,"syntax_error") == 0) {
+                return stmt_pair;
+            }
             body = plant_list_push(body, stmt);
         }
     }
@@ -2895,6 +3000,8 @@ tx_t parse_program(PlantArray* tokens) {
   tx_t is_eof_flag = "";
   tx_t d_pair = "";
   tx_t pos2 = "";
+  tx_t dty = "";
+  tx_t dmsg = "";
     long pos = 0;
     PlantArray* nodes = plant_list_make ( 0 );
     while (1) {
@@ -2905,6 +3012,13 @@ tx_t parse_program(PlantArray* tokens) {
         d_pair = parse_declaration(tokens, pos);
         tx_t decl = plant_list_get(d_pair,  0 );
         pos2 = _second(d_pair);
+        if (strcmp(decl,"") > 0) {
+            dty = _map_get(decl, "type");
+            if (strcmp(dty,"syntax_error") == 0) {
+                dmsg = _map_get(decl, "msg");
+                return plant_list_make ( 6 , "type" , "program" , "body" , nodes , "error" , dmsg );
+            }
+        }
         if (pos2 <= pos) {
             return plant_list_make ( 4 , "type" , "program" , "body" , nodes );
         }
@@ -7453,6 +7567,7 @@ int main(int argc, char **argv) {
   tx_t source_text = "";
   tx_t tokens = "";
   tx_t program_ast = "";
+  tx_t perr = "";
   tx_t body = "";
   tx_t c_code = "";
   tx_t out_path = "";
@@ -7468,7 +7583,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.18 (pure native)");
+      plant_print("Chloroplast 0.48.19 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);
@@ -7483,6 +7598,11 @@ int main(int argc, char **argv) {
   tokens = scan_tokens(source_text);
   plant_print("parsing...");
   program_ast = parse_program(tokens);
+  perr = _map_get(program_ast, "error");
+  if (strcmp(perr,"") > 0) {
+      plant_print(_cat(_cat("Error: ", perr), "."));
+      return 1;
+  }
   body = _map_get(program_ast, "body");
   plant_print("generating C...");
   c_code = generate_c(body);

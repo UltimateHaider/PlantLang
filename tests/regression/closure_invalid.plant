@@ -1,0 +1,7 @@
+# closure_invalid — negative test: mixing the parenthesized and bare
+# parameter forms is a compile error. This file MUST fail to compile
+# with the "Mixed closure parameter syntax" diagnostic (v0.48.19).
+ACTION main(),
+  CREATE f TO [MOVE (x y)] -> x + y.
+  GIVE 0.
+/GIVE main.

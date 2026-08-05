@@ -14,7 +14,7 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.48.18
+VERSION    ?= 0.48.19
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
@@ -140,7 +140,7 @@ dist: all self test ## Build versioned tarball + unpack/build/test validation
 	@cp tests/closures/*.plant tests/closures/*.expected tests/closures/*.grep tests/closures/run_closures_tests.sh \
 		release/plantlang-$(VERSION)/tests/closures/
 	@mkdir -p release/plantlang-$(VERSION)/tests/regression
-	@cp tests/regression/*.plant tests/regression/*.expected tests/regression/run_regression_tests.sh \
+	@cp tests/regression/*.plant tests/regression/*.expected tests/regression/*.invalid tests/regression/run_regression_tests.sh \
 		release/plantlang-$(VERSION)/tests/regression/
 	@cp $(BOOTSTRAP) release/plantlang-$(VERSION)/dist/Chloroplast
 	@tar -C release -czf release/plantlang-$(VERSION).tar.gz plantlang-$(VERSION)

@@ -1,0 +1,15 @@
+# closure_short — single bare parameter in the short closure form:
+# [MOVE x] declares x as the closure's parameter (no parentheses).
+# The body is a plain expression over the parameter (v0.48.19).
+ACTION main(),
+  CREATE f TO [MOVE x] -> x + 1.
+  REAP r FROM f, 5.
+  SHOW "one=" + _from_long(r).
+  CREATE g TO [MOVE n] -> ( CREATE acc(NUM) TO n * 3. GIVE acc ).
+  REAP r2 FROM g, 7.
+  SHOW "block=" + _from_long(r2).
+  CREATE h TO [MOVE a] -> a - 10.
+  REAP r3 FROM h, 50.
+  SHOW "neg=" + _from_long(r3).
+  GIVE 0.
+/GIVE main.
