@@ -1,0 +1,48 @@
+# v0.48.22: element + index iteration — CYCLE item, idx IN list over
+# empty, single-element, and multi-element lists, index arithmetic,
+# and index-based branching.
+ACTION main(),
+  CREATE items(LIST) TO plant_list_make(0).
+  PUT "a" INTO items.
+  PUT "b" INTO items.
+  PUT "c" INTO items.
+  PUT "d" INTO items.
+  CREATE s(TX) TO "".
+  CYCLE item, idx IN items,
+    SET s TO s + _from_long(idx) + ":" + item + " ".
+  /CYCLE.
+  SHOW "indexed=" + s.
+  CREATE one(LIST) TO plant_list_make(0).
+  PUT "solo" INTO one.
+  CYCLE item, idx IN one,
+    SHOW "single=" + _from_long(idx) + ":" + item.
+  /CYCLE.
+  CREATE empty(LIST) TO plant_list_make(0).
+  CREATE hit(TX) TO "none".
+  CYCLE item, idx IN empty,
+    SET hit TO "ran".
+  /CYCLE.
+  SHOW "empty=" + hit.
+  CREATE t(NUM) TO 0.
+  CYCLE item, idx IN items,
+    SET t TO t + idx.
+  /CYCLE.
+  SHOW "idxsum=" + t.
+  CREATE evens(TX) TO "".
+  CYCLE item, idx IN items,
+    IF idx % 2 IS 0,
+      SET evens TO evens + item + " ".
+    /IF.
+  /CYCLE.
+  SHOW "evens=" + evens.
+  CREATE nums(LIST) TO plant_list_make(0).
+  PUT "5" INTO nums.
+  PUT "15" INTO nums.
+  PUT "25" INTO nums.
+  CREATE total(NUM) TO 0.
+  CYCLE item, idx IN nums,
+    SET total TO total + _to_long(item) + idx.
+  /CYCLE.
+  SHOW "sum-plus-idx=" + total.
+  GIVE 0.
+/GIVE main.

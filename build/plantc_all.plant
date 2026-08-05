@@ -1587,10 +1587,14 @@ ACTION parse_season_stmt(tokens(LIST), pos(NUM)),
   /SEASON.
 /ACTION.
 
-# ── CYCLE i FROM lo TO hi [STEP k], body /CYCLE. → cycle_stmt ─
-# Numeric range loop (v0.48.21). STEP defaults to 1; negative steps
-# iterate downward. The STEP clause is detected in the collected
-# to-expression text (split on " STEP "); FROM/TO/STEP are consumed
+# ── CYCLE forms: FROM/TO numeric range (v0.48.21), IN list
+#    iteration with optional index (v0.48.22) →
+#    cycle_stmt AST node:
+#    CYCLE i FROM lo TO hi [STEP k],      → fromExpr/toExpr/stepExpr
+#    CYCLE item IN list,                  → listExpr, indexVar ""
+#    CYCLE item, idx IN list,             → listExpr + indexVar
+# STEP defaults to 1; the STEP clause is detected in the collected
+# to-expression text (split on " STEP "); keywords are consumed
 # token-wise so nested parens and commas inside expressions survive.
 ACTION parse_cycle_stmt(tokens(LIST), pos(NUM)),
   REAP pair FROM consume, tokens, pos.
@@ -1599,34 +1603,69 @@ ACTION parse_cycle_stmt(tokens(LIST), pos(NUM)),
   REAP ivar FROM tok_lex, tok.
   REAP cpair FROM consume, tokens, p2.
   REAP p2 FROM _second, cpair.
+  CREATE fromExpr(TX) TO "".
+  CREATE toExpr(TX) TO "".
+  CREATE stepExpr(TX) TO "".
+  CREATE listExpr(TX) TO "".
+  CREATE indexVar(TX) TO "".
   REAP tok FROM peek, tokens, p2.
   REAP lx FROM tok_lex, tok.
-  IF lx ISNT "FROM",
-    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "Expected FROM in CYCLE header"), p2).
+  IF lx IS "FROM",
+    REAP cpair FROM consume, tokens, p2.
+    REAP p2 FROM _second, cpair.
+    REAP cpair FROM collect_until, tokens, p2, "TO".
+    SET fromExpr TO cpair[0].
+    REAP p3 FROM _second, cpair.
+    REAP cpair FROM consume, tokens, p3.
+    REAP p3 FROM _second, cpair.
+    REAP cpair FROM collect_until, tokens, p3, ",".
+    SET toExpr TO cpair[0].
+    REAP p4 FROM _second, cpair.
+    REAP sparts FROM strings:SPLIT, toExpr, " STEP ".
+    IF COUNT sparts IS 2,
+      REAP toExpr FROM plant_list_get, sparts, 0.
+      REAP stepExpr FROM plant_list_get, sparts, 1.
+    /IF.
+    REAP cpair FROM consume, tokens, p4.
+    REAP p4 FROM _second, cpair.
   /IF.
-  REAP cpair FROM consume, tokens, p2.
-  REAP p2 FROM _second, cpair.
-  REAP cpair FROM collect_until, tokens, p2, "TO".
-  CREATE fromExpr TO cpair[0].
-  REAP p3 FROM _second, cpair.
-  REAP cpair FROM consume, tokens, p3.
-  REAP p3 FROM _second, cpair.
-  REAP cpair FROM collect_until, tokens, p3, ",".
-  CREATE toExpr TO cpair[0].
-  REAP p4 FROM _second, cpair.
-  CREATE stepExpr(TX) TO "".
-  REAP sparts FROM strings:SPLIT, toExpr, " STEP ".
-  IF COUNT sparts IS 2,
-    REAP toExpr FROM plant_list_get, sparts, 0.
-    REAP stepExpr FROM plant_list_get, sparts, 1.
+  IF lx IS "IN",
+    REAP cpair FROM consume, tokens, p2.
+    REAP p2 FROM _second, cpair.
+    REAP cpair FROM collect_until, tokens, p2, ",".
+    SET listExpr TO cpair[0].
+    REAP p3 FROM _second, cpair.
+    REAP cpair FROM consume, tokens, p3.
+    REAP p4 FROM _second, cpair.
   /IF.
-  REAP cpair FROM consume, tokens, p4.
-  REAP p4 FROM _second, cpair.
+  IF lx IS ",",
+    REAP cpair FROM consume, tokens, p2.
+    REAP p2 FROM _second, cpair.
+    REAP tok FROM peek, tokens, p2.
+    REAP indexVar FROM tok_lex, tok.
+    REAP cpair FROM consume, tokens, p2.
+    REAP p2 FROM _second, cpair.
+    REAP tok FROM peek, tokens, p2.
+    REAP lx2 FROM tok_lex, tok.
+    IF lx2 ISNT "IN",
+      GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "Expected IN in CYCLE header"), p2).
+    /IF.
+    REAP cpair FROM consume, tokens, p2.
+    REAP p2 FROM _second, cpair.
+    REAP cpair FROM collect_until, tokens, p2, ",".
+    SET listExpr TO cpair[0].
+    REAP p3 FROM _second, cpair.
+    REAP cpair FROM consume, tokens, p3.
+    REAP p4 FROM _second, cpair.
+  /IF.
+  IF lx ISNT "FROM" AND lx ISNT "IN" AND lx ISNT ",",
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "Expected FROM or IN in CYCLE header"), p2).
+  /IF.
   CREATE body(LIST) TO plant_list_make(0).
   SEASON TRUE,
     REAP is_eof_flag FROM is_eof, tokens, p4.
     IF is_eof_flag,
-      GIVE plant_list_make(2, plant_list_make(16, "type", "cycle_stmt", "iterVar", ivar, "fromExpr", fromExpr, "toExpr", toExpr, "stepExpr", stepExpr, "listExpr", "", "indexVar", "", "body", body), p4).
+      GIVE plant_list_make(2, plant_list_make(16, "type", "cycle_stmt", "iterVar", ivar, "fromExpr", fromExpr, "toExpr", toExpr, "stepExpr", stepExpr, "listExpr", listExpr, "indexVar", indexVar, "body", body), p4).
     /IF.
     REAP tok FROM peek, tokens, p4.
     REAP lx FROM tok_lex, tok.
@@ -1637,7 +1676,7 @@ ACTION parse_cycle_stmt(tokens(LIST), pos(NUM)),
       REAP p6 FROM _second, cclose.
       REAP dot FROM consume, tokens, p6.
       REAP p7 FROM _second, dot.
-      GIVE plant_list_make(2, plant_list_make(16, "type", "cycle_stmt", "iterVar", ivar, "fromExpr", fromExpr, "toExpr", toExpr, "stepExpr", stepExpr, "listExpr", "", "indexVar", "", "body", body), p7).
+      GIVE plant_list_make(2, plant_list_make(16, "type", "cycle_stmt", "iterVar", ivar, "fromExpr", fromExpr, "toExpr", toExpr, "stepExpr", stepExpr, "listExpr", listExpr, "indexVar", indexVar, "body", body), p7).
     /IF.
     REAP stmt_pair FROM parse_statement, tokens, p4.
     CREATE stmt TO stmt_pair[0].
@@ -3056,6 +3095,13 @@ ACTION collect_nums_walk(bd(LIST), subst(LIST), res(LIST)),
         REAP wf2 FROM list_contains, res, wit.
         IF wf2 IS 0, PUT wit INTO res. /IF.
       /IF.
+      IF wle2 ISNT "",
+        REAP widx FROM _map_get, wnd, "indexVar".
+        IF widx > "" AND widx ISNT "null",
+          REAP wf3 FROM list_contains, res, widx.
+          IF wf3 IS 0, PUT widx INTO res. /IF.
+        /IF.
+      /IF.
     /IF.
     SET wi TO wi + 1.
   /SEASON.
@@ -4235,21 +4281,19 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             GIVE ccode.
         /IF.
     
-        # IN list form (CYCLE var IN list)
+        # IN list form (CYCLE var IN list): a C for loop so CONTINUE
+        # still runs the index increment (a while with a trailing
+        # idx++ skips it — infinite loop, fixed v0.48.22)
         IF listExpr ISNT "",
             CREATE idxvar(TX) TO "__cycle_i".
             IF indexVar ISNT "" AND indexVar ISNT "null",
                 SET idxvar TO indexVar.
             /IF.
             REAP clist FROM translate_expr, listExpr.
-            SET ccode TO isel + "  \{\n".
-            SET ccode TO ccode + isel + "    long " + idxvar + " = 0;\n".
-            SET ccode TO ccode + isel + "    while (" + idxvar + " < plant_array_length(" + clist + ")) \{\n".
-            SET ccode TO ccode + isel + "      tx_t " + ivar + " = plant_array_get(" + clist + ", " + idxvar + ");\n".
-            REAP bcode FROM generate_body, bd, indent + 4, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit.
-            SET ccode TO ccode + bcode + isel + "      " + idxvar + "++;\n".
-            SET ccode TO ccode + isel + "    }\n".
-            SET ccode TO ccode + isel + "  }\n".
+            SET ccode TO isel + "  for (long " + idxvar + " = 0; " + idxvar + " < plant_array_length(" + clist + "); " + idxvar + "++) \{\n".
+            SET ccode TO ccode + isel + "    tx_t " + ivar + " = plant_list_get(" + clist + ", " + idxvar + ");\n".
+            REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit.
+            SET ccode TO ccode + bcode + isel + "  \}\n".
             GIVE ccode.
         /IF.
     
@@ -6898,7 +6942,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.48.21 (pure native)".
+  SHOW "Chloroplast 0.48.22 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

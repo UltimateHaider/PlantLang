@@ -1,5 +1,39 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.22 — 2026 (List Iteration CYCLE)
+
+### New Features
+- **List iteration.** `CYCLE item IN list, body /CYCLE.` iterates the
+  elements of any list expression, and `CYCLE item, idx IN list,`
+  additionally binds the element's runtime index. `parse_cycle_stmt`
+  now dispatches on the header token after the loop variable: `FROM`
+  (numeric range, v0.48.21), `IN` (element-only), or `,` (element +
+  index, followed by `IN`); a missing `IN` raises a `syntax_error`.
+- **Idiomatic C `for` loop.** List iteration compiles to
+  `for (long idx = 0; idx < plant_array_length(list); idx++) {
+  tx_t item = plant_list_get(list, idx); … }`. The increment lives
+  in the `for` header so `CONTINUE` cannot skip it — the previous
+  `while` + trailing `idx++` form looped forever on CONTINUE.
+- **Correct list accessor.** Iteration reads elements with
+  `plant_list_get` (the text-list accessor) instead of
+  `plant_array_get` (which is the legacy int64-array reader and
+  crashed on PlantArray lists).
+- **Index is numeric.** The index variable is registered in the
+  action's numeric-var table, so `SET t TO t + idx.` stays raw C
+  `+` and `"idx=" + idx` wraps via `_from_long`.
+
+### Regression Tests
+- `cycle_list`: element-only iteration over multi-element, empty, and
+  single-element lists, nested IN loops (list of lists), numeric
+  summing via `_to_long`, and BREAK/CONTINUE inside the loop.
+- `cycle_index`: element + index over empty/single/multi lists,
+  index arithmetic, index-based branching (`idx % 2`), and
+  `_to_long(item) + idx` sums.
+
+### Notes
+- Element variables are text (`tx_t`): numeric list payloads convert
+  with `_to_long(item)` (or `_from_long` for output).
+
 ## v0.48.21 — 2026 (Numeric Range CYCLE)
 
 ### New Features

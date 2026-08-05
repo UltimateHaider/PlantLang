@@ -852,6 +852,13 @@ ACTION collect_nums_walk(bd(LIST), subst(LIST), res(LIST)),
         REAP wf2 FROM list_contains, res, wit.
         IF wf2 IS 0, PUT wit INTO res. /IF.
       /IF.
+      IF wle2 ISNT "",
+        REAP widx FROM _map_get, wnd, "indexVar".
+        IF widx > "" AND widx ISNT "null",
+          REAP wf3 FROM list_contains, res, widx.
+          IF wf3 IS 0, PUT widx INTO res. /IF.
+        /IF.
+      /IF.
     /IF.
     SET wi TO wi + 1.
   /SEASON.
@@ -2031,21 +2038,19 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             GIVE ccode.
         /IF.
     
-        # IN list form (CYCLE var IN list)
+        # IN list form (CYCLE var IN list): a C for loop so CONTINUE
+        # still runs the index increment (a while with a trailing
+        # idx++ skips it — infinite loop, fixed v0.48.22)
         IF listExpr ISNT "",
             CREATE idxvar(TX) TO "__cycle_i".
             IF indexVar ISNT "" AND indexVar ISNT "null",
                 SET idxvar TO indexVar.
             /IF.
             REAP clist FROM translate_expr, listExpr.
-            SET ccode TO isel + "  \{\n".
-            SET ccode TO ccode + isel + "    long " + idxvar + " = 0;\n".
-            SET ccode TO ccode + isel + "    while (" + idxvar + " < plant_array_length(" + clist + ")) \{\n".
-            SET ccode TO ccode + isel + "      tx_t " + ivar + " = plant_array_get(" + clist + ", " + idxvar + ");\n".
-            REAP bcode FROM generate_body, bd, indent + 4, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit.
-            SET ccode TO ccode + bcode + isel + "      " + idxvar + "++;\n".
-            SET ccode TO ccode + isel + "    }\n".
-            SET ccode TO ccode + isel + "  }\n".
+            SET ccode TO isel + "  for (long " + idxvar + " = 0; " + idxvar + " < plant_array_length(" + clist + "); " + idxvar + "++) \{\n".
+            SET ccode TO ccode + isel + "    tx_t " + ivar + " = plant_list_get(" + clist + ", " + idxvar + ");\n".
+            REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit.
+            SET ccode TO ccode + bcode + isel + "  \}\n".
             GIVE ccode.
         /IF.
     

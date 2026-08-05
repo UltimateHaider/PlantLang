@@ -1,0 +1,57 @@
+# v0.48.22: element-only list iteration — CYCLE item IN list over
+# multi-element lists, empty lists, single-element lists, nested IN
+# loops, numeric summing via _to_long, and BREAK/CONTINUE.
+ACTION main(),
+  CREATE items(LIST) TO plant_list_make(0).
+  PUT "one" INTO items.
+  PUT "two" INTO items.
+  PUT "three" INTO items.
+  CREATE s(TX) TO "".
+  CYCLE item IN items,
+    SET s TO s + item + " ".
+  /CYCLE.
+  SHOW "elems=" + s.
+  CREATE empty(LIST) TO plant_list_make(0).
+  CREATE hit(TX) TO "none".
+  CYCLE item IN empty,
+    SET hit TO "ran".
+  /CYCLE.
+  SHOW "empty=" + hit.
+  CREATE one(LIST) TO plant_list_make(0).
+  PUT "solo" INTO one.
+  CYCLE item IN one,
+    SHOW "single=" + item.
+  /CYCLE.
+  CREATE nums(LIST) TO plant_list_make(0).
+  PUT "10" INTO nums.
+  PUT "20" INTO nums.
+  PUT "30" INTO nums.
+  CREATE total(NUM) TO 0.
+  CYCLE item IN nums,
+    SET total TO total + _to_long(item).
+  /CYCLE.
+  SHOW "sum=" + total.
+  CREATE grid(LIST) TO plant_list_make(0).
+  CREATE row1(LIST) TO plant_list_make(0).
+  CREATE row2(LIST) TO plant_list_make(0).
+  PUT "a" INTO row1.
+  PUT "b" INTO row1.
+  PUT "c" INTO row2.
+  PUT row1 INTO grid.
+  PUT row2 INTO grid.
+  CREATE flat(TX) TO "".
+  CYCLE row IN grid,
+    CYCLE cell IN row,
+      SET flat TO flat + cell + " ".
+    /CYCLE.
+  /CYCLE.
+  SHOW "nested=" + flat.
+  CREATE s2(TX) TO "".
+  CYCLE item IN items,
+    IF item IS "two", CONTINUE 0. /IF.
+    IF item IS "three", BREAK 0. /IF.
+    SET s2 TO s2 + item + " ".
+  /CYCLE.
+  SHOW "ctl=" + s2.
+  GIVE 0.
+/GIVE main.

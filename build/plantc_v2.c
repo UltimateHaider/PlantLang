@@ -2406,6 +2406,7 @@ tx_t parse_cycle_stmt(PlantArray* tokens, long pos) {
   tx_t p3 = "";
   tx_t p4 = "";
   tx_t sparts = "";
+  tx_t lx2 = "";
   tx_t is_eof_flag = "";
   tx_t slash = "";
   tx_t p5 = "";
@@ -2421,34 +2422,69 @@ tx_t parse_cycle_stmt(PlantArray* tokens, long pos) {
     ivar = tok_lex(tok);
     cpair = consume(tokens, p2);
     p2 = _second(cpair);
+    tx_t fromExpr = "";
+    tx_t toExpr = "";
+    tx_t stepExpr = "";
+    tx_t listExpr = "";
+    tx_t indexVar = "";
     tok = peek(tokens, p2);
     lx = tok_lex(tok);
-    if (strcmp(lx,"FROM") != 0) {
-        return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "Expected FROM in CYCLE header" ) , p2 );
+    if (strcmp(lx,"FROM") == 0) {
+        cpair = consume(tokens, p2);
+        p2 = _second(cpair);
+        cpair = collect_until(tokens, p2, "TO");
+        fromExpr = plant_list_get(cpair,  0 );
+        p3 = _second(cpair);
+        cpair = consume(tokens, p3);
+        p3 = _second(cpair);
+        cpair = collect_until(tokens, p3, ",");
+        toExpr = plant_list_get(cpair,  0 );
+        p4 = _second(cpair);
+        sparts = strings_SPLIT(toExpr, " STEP ");
+        if (plant_array_length(sparts) == 2) {
+            toExpr = plant_list_get(sparts, 0);
+            stepExpr = plant_list_get(sparts, 1);
+        }
+        cpair = consume(tokens, p4);
+        p4 = _second(cpair);
     }
-    cpair = consume(tokens, p2);
-    p2 = _second(cpair);
-    cpair = collect_until(tokens, p2, "TO");
-    tx_t fromExpr = plant_list_get(cpair,  0 );
-    p3 = _second(cpair);
-    cpair = consume(tokens, p3);
-    p3 = _second(cpair);
-    cpair = collect_until(tokens, p3, ",");
-    tx_t toExpr = plant_list_get(cpair,  0 );
-    p4 = _second(cpair);
-    tx_t stepExpr = "";
-    sparts = strings_SPLIT(toExpr, " STEP ");
-    if (plant_array_length(sparts) == 2) {
-        toExpr = plant_list_get(sparts, 0);
-        stepExpr = plant_list_get(sparts, 1);
+    if (strcmp(lx,"IN") == 0) {
+        cpair = consume(tokens, p2);
+        p2 = _second(cpair);
+        cpair = collect_until(tokens, p2, ",");
+        listExpr = plant_list_get(cpair,  0 );
+        p3 = _second(cpair);
+        cpair = consume(tokens, p3);
+        p4 = _second(cpair);
     }
-    cpair = consume(tokens, p4);
-    p4 = _second(cpair);
+    if (strcmp(lx,",") == 0) {
+        cpair = consume(tokens, p2);
+        p2 = _second(cpair);
+        tok = peek(tokens, p2);
+        indexVar = tok_lex(tok);
+        cpair = consume(tokens, p2);
+        p2 = _second(cpair);
+        tok = peek(tokens, p2);
+        lx2 = tok_lex(tok);
+        if (strcmp(lx2,"IN") != 0) {
+            return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "Expected IN in CYCLE header" ) , p2 );
+        }
+        cpair = consume(tokens, p2);
+        p2 = _second(cpair);
+        cpair = collect_until(tokens, p2, ",");
+        listExpr = plant_list_get(cpair,  0 );
+        p3 = _second(cpair);
+        cpair = consume(tokens, p3);
+        p4 = _second(cpair);
+    }
+    if (strcmp(lx,"FROM") != 0 && strcmp(lx,"IN") != 0 && strcmp(lx,",") != 0) {
+        return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "Expected FROM or IN in CYCLE header" ) , p2 );
+    }
     PlantArray* body = plant_list_make ( 0 );
     while (1) {
         is_eof_flag = is_eof(tokens, p4);
         if (is_eof_flag) {
-            return plant_list_make ( 2 , plant_list_make ( 16 , "type" , "cycle_stmt" , "iterVar" , ivar , "fromExpr" , fromExpr , "toExpr" , toExpr , "stepExpr" , stepExpr , "listExpr" , "" , "indexVar" , "" , "body" , body ) , p4 );
+            return plant_list_make ( 2 , plant_list_make ( 16 , "type" , "cycle_stmt" , "iterVar" , ivar , "fromExpr" , fromExpr , "toExpr" , toExpr , "stepExpr" , stepExpr , "listExpr" , listExpr , "indexVar" , indexVar , "body" , body ) , p4 );
         }
         tok = peek(tokens, p4);
         lx = tok_lex(tok);
@@ -2459,7 +2495,7 @@ tx_t parse_cycle_stmt(PlantArray* tokens, long pos) {
             p6 = _second(cclose);
             dot = consume(tokens, p6);
             p7 = _second(dot);
-            return plant_list_make ( 2 , plant_list_make ( 16 , "type" , "cycle_stmt" , "iterVar" , ivar , "fromExpr" , fromExpr , "toExpr" , toExpr , "stepExpr" , stepExpr , "listExpr" , "" , "indexVar" , "" , "body" , body ) , p7 );
+            return plant_list_make ( 2 , plant_list_make ( 16 , "type" , "cycle_stmt" , "iterVar" , ivar , "fromExpr" , fromExpr , "toExpr" , toExpr , "stepExpr" , stepExpr , "listExpr" , listExpr , "indexVar" , indexVar , "body" , body ) , p7 );
         }
         stmt_pair = parse_statement(tokens, p4);
         tx_t stmt = plant_list_get(stmt_pair,  0 );
@@ -4021,6 +4057,8 @@ tx_t collect_nums_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
   tx_t wle2 = "";
   tx_t wit = "";
   tx_t wf2 = "";
+  tx_t widx = "";
+  tx_t wf3 = "";
     long wi = 0;
     tx_t wnd = "";
     tx_t wty = "";
@@ -4063,6 +4101,15 @@ tx_t collect_nums_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
                 wf2 = list_contains(res, wit);
                 if (wf2 == 0) {
                     res = plant_list_push(res, wit);
+                }
+            }
+            if (strcmp(wle2,"") != 0) {
+                widx = _map_get(wnd, "indexVar");
+                if (strcmp(widx,"") > 0 && strcmp(widx,"null") != 0) {
+                    wf3 = list_contains(res, widx);
+                    if (wf3 == 0) {
+                        res = plant_list_push(res, widx);
+                    }
                 }
             }
         }
@@ -5259,14 +5306,10 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
                 idxvar = indexVar;
             }
             clist = translate_expr(listExpr);
-            ccode = _cat(isel, "  {\n");
-            ccode = _cat(_cat(_cat(_cat(ccode, isel), "    long "), idxvar), " = 0;\n");
-            ccode = _cat(_cat(_cat(_cat(_cat(_cat(ccode, isel), "    while ("), idxvar), " < plant_array_length("), clist), ")) {\n");
-            ccode = _cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(ccode, isel), "      tx_t "), ivar), " = plant_array_get("), clist), ", "), idxvar), ");\n");
-            bcode = generate_body(bd, indent+4, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit);
-            ccode = _cat(_cat(_cat(_cat(_cat(ccode, bcode), isel), "      "), idxvar), "++;\n");
-            ccode = _cat(_cat(ccode, isel), "    }\n");
-            ccode = _cat(_cat(ccode, isel), "  }\n");
+            ccode = _cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(isel, "  for (long "), idxvar), " = 0; "), idxvar), " < plant_array_length("), clist), "); "), idxvar), "++) {\n");
+            ccode = _cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(ccode, isel), "    tx_t "), ivar), " = plant_list_get("), clist), ", "), idxvar), ");\n");
+            bcode = generate_body(bd, indent+2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit);
+            ccode = _cat(_cat(_cat(ccode, bcode), isel), "  }\n");
             return ccode;
         }
         return "";
@@ -7999,7 +8042,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.21 (pure native)");
+      plant_print("Chloroplast 0.48.22 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

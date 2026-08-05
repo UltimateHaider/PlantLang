@@ -75,7 +75,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `EVAPORATE` / `LOCK` / `EMPTY` | S | M | EMPTY was already a parse stub in legacy |
 | `IF cond, body [ORIF][ELSE]` | S | **S** | Shipped in v0.48.20 (multi-branch chains) |
 | `SEASON cond, body` | S | **S** | |
-| `CYCLE x IN list` / `CYCLE i, idx IN` / `CYCLE i FROM lo TO hi` | S | P | CYCLE i FROM lo TO hi shipped in v0.48.21; IN forms still M |
+| `CYCLE x IN list` / `CYCLE i, idx IN` / `CYCLE i FROM lo TO hi` | S | P | All three CYCLE forms shipped in v0.48.22 (FROM/TO in v0.48.21) |
 | `FOR item IN coll` | S | M | |
 | `BREAK` / `CONTINUE` | S | **S** | |
 | `STOP IF cond` | S | M | |
