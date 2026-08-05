@@ -1,0 +1,50 @@
+# v0.48.20: ORIF — multi-branch chains with optional ELSE,
+# no-else fallthrough, and string conditions on ORIF arms.
+ACTION grade(n(NUM)),
+  IF n >= 90,
+    GIVE "A".
+  ORIF n >= 80,
+    GIVE "B".
+  ORIF n >= 70,
+    GIVE "C".
+  ORIF n >= 60,
+    GIVE "D".
+  ELSE,
+    GIVE "F".
+  /IF.
+/GIVE grade.
+
+ACTION mood(w(TX)),
+  IF w IS "sunny",
+    GIVE "happy".
+  ORIF w IS "rainy",
+    GIVE "cozy".
+  ELSE,
+    GIVE "meh".
+  /IF.
+/GIVE mood.
+
+ACTION main(),
+  SHOW grade(95).
+  SHOW grade(85).
+  SHOW grade(75).
+  SHOW grade(65).
+  SHOW grade(10).
+  CREATE n(NUM) TO 5.
+  IF n > 10,
+    SHOW "big".
+  ORIF n > 7,
+    SHOW "mid".
+  ORIF n > 3,
+    SHOW "small".
+  /IF.
+  IF n > 100,
+    SHOW "never".
+  ORIF n > 200,
+    SHOW "still-never".
+  /IF.
+  SHOW mood("sunny").
+  SHOW mood("rainy").
+  SHOW mood("windy").
+  GIVE 0.
+/GIVE main.

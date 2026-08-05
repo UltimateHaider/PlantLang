@@ -61,6 +61,7 @@ tx_t seg_is_numeric(tx_t seg, PlantArray* nums);
 tx_t expr_is_numeric(tx_t e, PlantArray* nums);
 tx_t is_numeric_type(tx_t t);
 tx_t _handle_cat(tx_t expr, PlantArray* nums, PlantArray* evars);
+tx_t _if_bodies(tx_t nd);
 tx_t collect_declared_walk(PlantArray* bd, PlantArray* declared);
 tx_t collect_used_walk(PlantArray* bd, PlantArray* used, PlantArray* declared);
 tx_t collect_implicit(PlantArray* bd, PlantArray* params);
@@ -2246,6 +2247,11 @@ tx_t parse_if_stmt(PlantArray* tokens, long pos) {
   tx_t p6 = "";
   tx_t dot = "";
   tx_t p7 = "";
+  tx_t o_pair = "";
+  tx_t ocp = "";
+  tx_t ocond = "";
+  tx_t ocom = "";
+  tx_t e_pair = "";
   tx_t stmt_pair = "";
   tx_t sty = "";
     pair = consume(tokens, pos);
@@ -2256,10 +2262,20 @@ tx_t parse_if_stmt(PlantArray* tokens, long pos) {
     com = consume(tokens, p3);
     p4 = _second(com);
     PlantArray* body = plant_list_make ( 0 );
+    tx_t cur_cond = "";
+    PlantArray* cur_body = plant_list_make ( 0 );
+    PlantArray* elif = plant_list_make ( 0 );
+    PlantArray* else_body = plant_list_make ( 0 );
+    tx_t in_elif = "0";
+    tx_t in_else = "0";
     while (1) {
         is_eof_flag = is_eof(tokens, p4);
         if (is_eof_flag) {
-            return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "if_stmt" , "cond" , cond , "body" , body ) , p4 );
+            if (strcmp(in_elif,"1") == 0) {
+                elif = plant_list_push(elif, cur_cond);
+                elif = plant_list_push(elif, cur_body);
+            }
+            return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "if_stmt" , "cond" , cond , "body" , body , "elif" , elif , "else" , else_body ) , p4 );
         }
         tok = peek(tokens, p4);
         lx = tok_lex(tok);
@@ -2270,7 +2286,41 @@ tx_t parse_if_stmt(PlantArray* tokens, long pos) {
             p6 = _second(if_close);
             dot = consume(tokens, p6);
             p7 = _second(dot);
-            return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "if_stmt" , "cond" , cond , "body" , body ) , p7 );
+            if (strcmp(in_elif,"1") == 0) {
+                elif = plant_list_push(elif, cur_cond);
+                elif = plant_list_push(elif, cur_body);
+            }
+            return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "if_stmt" , "cond" , cond , "body" , body , "elif" , elif , "else" , else_body ) , p7 );
+        }
+        if (strcmp(lx,"ORIF") == 0) {
+            if (strcmp(in_elif,"1") == 0) {
+                elif = plant_list_push(elif, cur_cond);
+                elif = plant_list_push(elif, cur_body);
+            }
+            o_pair = consume(tokens, p4);
+            p5 = _second(o_pair);
+            ocp = collect_until(tokens, p5, ",");
+            ocond = _first(ocp);
+            p6 = _second(ocp);
+            ocom = consume(tokens, p6);
+            p7 = _second(ocom);
+            cur_cond = ocond;
+            cur_body = plant_list_make ( 0 );
+            in_elif = "1";
+            in_else = "0";
+            p4 = p7;
+            continue;
+        }
+        if (strcmp(lx,"ELSE") == 0) {
+            if (strcmp(in_elif,"1") == 0) {
+                elif = plant_list_push(elif, cur_cond);
+                elif = plant_list_push(elif, cur_body);
+            }
+            e_pair = consume(tokens, p4);
+            p5 = _second(e_pair);
+            in_else = "1";
+            p4 = p5;
+            continue;
         }
         stmt_pair = parse_statement(tokens, p4);
         tx_t stmt = plant_list_get(stmt_pair,  0 );
@@ -2280,7 +2330,17 @@ tx_t parse_if_stmt(PlantArray* tokens, long pos) {
             if (strcmp(sty,"syntax_error") == 0) {
                 return stmt_pair;
             }
-            body = plant_list_push(body, stmt);
+            if (strcmp(in_else,"1") == 0) {
+                else_body = plant_list_push(else_body, stmt);
+            }
+            if (strcmp(in_else,"0") == 0) {
+                if (strcmp(in_elif,"1") == 0) {
+                    cur_body = plant_list_push(cur_body, stmt);
+                }
+                if (strcmp(in_elif,"0") == 0) {
+                    body = plant_list_push(body, stmt);
+                }
+            }
         }
     }
   return parse_if_stmt;
@@ -3302,10 +3362,33 @@ tx_t _handle_cat(tx_t expr, PlantArray* nums, PlantArray* evars) {
     }
     return res;
 }
+tx_t _if_bodies(tx_t nd) {
+  tx_t mb = "";
+  tx_t el = "";
+  tx_t eb = "";
+  tx_t eb2 = "";
+    PlantArray* out = plant_list_make ( 0 );
+    mb = _map_get(nd, "body");
+    out = plant_list_push(out, mb);
+    el = _map_get(nd, "elif");
+    long ei = 1;
+    while (ei < plant_array_length(el)) {
+        eb = plant_list_get(el, ei);
+        out = plant_list_push(out, eb);
+        ei = ei+2;
+    }
+    eb2 = _map_get(nd, "else");
+    if (plant_array_length(eb2) > 0) {
+        out = plant_list_push(out, eb2);
+    }
+    return out;
+}
 tx_t collect_declared_walk(PlantArray* bd, PlantArray* declared) {
   tx_t tgt = "";
-  tx_t sub_bd = "";
+  tx_t ib = "";
+  tx_t ibd = "";
   tx_t sub_ret = "";
+  tx_t sub_bd = "";
     long wi = 0;
     tx_t nd = "";
     tx_t ty = "";
@@ -3316,7 +3399,16 @@ tx_t collect_declared_walk(PlantArray* bd, PlantArray* declared) {
             tgt = _map_get(nd, "target");
             declared = plant_list_push(declared, tgt);
         }
-        if (strcmp(ty,"if_stmt") == 0 || strcmp(ty,"season_stmt") == 0) {
+        if (strcmp(ty,"if_stmt") == 0) {
+            ib = _if_bodies(nd);
+            long ii2 = 0;
+            while (ii2 < plant_array_length(ib)) {
+                ibd = plant_list_get(ib, ii2);
+                sub_ret = collect_declared_walk(ibd, declared);
+                ii2 = ii2+1;
+            }
+        }
+        if (strcmp(ty,"season_stmt") == 0) {
             sub_bd = _map_get(nd, "body");
             sub_ret = collect_declared_walk(sub_bd, declared);
         }
@@ -3326,8 +3418,10 @@ tx_t collect_declared_walk(PlantArray* bd, PlantArray* declared) {
 }
 tx_t collect_used_walk(PlantArray* bd, PlantArray* used, PlantArray* declared) {
   tx_t tgt = "";
-  tx_t sub_bd = "";
+  tx_t ib = "";
+  tx_t ibd = "";
   tx_t sub_ret = "";
+  tx_t sub_bd = "";
     long wi = 0;
     tx_t nd = "";
     tx_t ty = "";
@@ -3358,7 +3452,16 @@ tx_t collect_used_walk(PlantArray* bd, PlantArray* used, PlantArray* declared) {
                 used = plant_list_push(used, tgt);
             }
         }
-        if (strcmp(ty,"if_stmt") == 0 || strcmp(ty,"season_stmt") == 0) {
+        if (strcmp(ty,"if_stmt") == 0) {
+            ib = _if_bodies(nd);
+            long ii2 = 0;
+            while (ii2 < plant_array_length(ib)) {
+                ibd = plant_list_get(ib, ii2);
+                sub_ret = collect_used_walk(ibd, used, declared);
+                ii2 = ii2+1;
+            }
+        }
+        if (strcmp(ty,"season_stmt") == 0) {
             sub_bd = _map_get(nd, "body");
             sub_ret = collect_used_walk(sub_bd, used, declared);
         }
@@ -3554,6 +3657,8 @@ tx_t collect_enums_walk(tx_t bd, tx_t subst, tx_t reg, tx_t sigs, tx_t res) {
   tx_t wretb = "";
   tx_t wms2 = "";
   tx_t wf2 = "";
+  tx_t ib = "";
+  tx_t ibd3 = "";
     long wi = 0;
     tx_t wnd = "";
     tx_t wty = "";
@@ -3606,7 +3711,16 @@ tx_t collect_enums_walk(tx_t bd, tx_t subst, tx_t reg, tx_t sigs, tx_t res) {
                 }
             }
         }
-        if (strcmp(wty,"if_stmt") == 0 || strcmp(wty,"season_stmt") == 0 || strcmp(wty,"cycle_stmt") == 0 || strcmp(wty,"match_stmt") == 0) {
+        if (strcmp(wty,"if_stmt") == 0) {
+            ib = _if_bodies(wnd);
+            long ii3 = 0;
+            while (ii3 < plant_array_length(ib)) {
+                ibd3 = plant_list_get(ib, ii3);
+                wret = collect_enums_walk(ibd3, subst, reg, sigs, res);
+                ii3 = ii3+1;
+            }
+        }
+        if (strcmp(wty,"season_stmt") == 0 || strcmp(wty,"cycle_stmt") == 0 || strcmp(wty,"match_stmt") == 0) {
             PlantArray* sbl = _map_get ( wnd , "body" );
             wret = collect_enums_walk(sbl, subst, reg, sigs, res);
         }
@@ -3756,8 +3870,10 @@ tx_t list_contains(PlantArray* lst, tx_t x) {
 }
 tx_t collect_nums_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
   tx_t wfound = "";
-  tx_t wbd2 = "";
+  tx_t ib = "";
+  tx_t ibd4 = "";
   tx_t wret2 = "";
+  tx_t wbd2 = "";
     long wi = 0;
     tx_t wnd = "";
     tx_t wty = "";
@@ -3780,7 +3896,16 @@ tx_t collect_nums_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
                 }
             }
         }
-        if (strcmp(wty,"if_stmt") == 0 || strcmp(wty,"season_stmt") == 0 || strcmp(wty,"cycle_stmt") == 0 || strcmp(wty,"match_stmt") == 0) {
+        if (strcmp(wty,"if_stmt") == 0) {
+            ib = _if_bodies(wnd);
+            long ii4 = 0;
+            while (ii4 < plant_array_length(ib)) {
+                ibd4 = plant_list_get(ib, ii4);
+                wret2 = collect_nums_walk(ibd4, subst, res);
+                ii4 = ii4+1;
+            }
+        }
+        if (strcmp(wty,"season_stmt") == 0 || strcmp(wty,"cycle_stmt") == 0 || strcmp(wty,"match_stmt") == 0) {
             wbd2 = _map_get(wnd, "body");
             wret2 = collect_nums_walk(wbd2, subst, res);
         }
@@ -3979,6 +4104,8 @@ tx_t async_walk_decl(PlantArray* bd, PlantArray* acc) {
   tx_t tg = "";
   tx_t vt = "";
   tx_t ct = "";
+  tx_t ib = "";
+  tx_t ibd5 = "";
   tx_t sb = "";
   tx_t cl2 = "";
   tx_t cb = "";
@@ -3994,7 +4121,16 @@ tx_t async_walk_decl(PlantArray* bd, PlantArray* acc) {
             ct = ffi_ctype(vt);
             acc = async_var_add(acc, tg, ct);
         }
-        if (strcmp(ty,"if_stmt") == 0 || strcmp(ty,"season_stmt") == 0) {
+        if (strcmp(ty,"if_stmt") == 0) {
+            ib = _if_bodies(nd);
+            long ii5 = 0;
+            while (ii5 < plant_array_length(ib)) {
+                ibd5 = plant_list_get(ib, ii5);
+                acc = async_walk_decl(ibd5, acc);
+                ii5 = ii5+1;
+            }
+        }
+        if (strcmp(ty,"season_stmt") == 0) {
             sb = _map_get(nd, "body");
             acc = async_walk_decl(sb, acc);
         }
@@ -4339,6 +4475,13 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t bd = "";
   tx_t ccond = "";
   tx_t bcode = "";
+  tx_t elif = "";
+  tx_t econd = "";
+  tx_t ebd = "";
+  tx_t ecc = "";
+  tx_t ebc = "";
+  tx_t ebody = "";
+  tx_t ebod = "";
   tx_t ivar = "";
   tx_t fromExpr = "";
   tx_t toExpr = "";
@@ -4886,7 +5029,28 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         isel = indent_str(indent);
         tx_t ccode = _cat(_cat(_cat(isel, "  if ("), ccond), ") {\n");
         bcode = generate_body(bd, indent+2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit);
-        ccode = _cat(_cat(_cat(ccode, bcode), isel), "  }\n");
+        ccode = _cat(ccode, bcode);
+        elif = _map_get(node, "elif");
+        if (plant_array_length(elif) > 0) {
+            long ei2 = 0;
+            while (ei2 < plant_array_length(elif)) {
+                econd = plant_list_get(elif, ei2);
+                ebd = plant_list_get(elif, ei2+1);
+                ecc = translate_expr(econd);
+                ecc = handle_strcmp(ecc);
+                ccode = _cat(_cat(_cat(_cat(ccode, isel), "  } else if ("), ecc), ") {\n");
+                ebc = generate_body(ebd, indent+2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit);
+                ccode = _cat(ccode, ebc);
+                ei2 = ei2+2;
+            }
+        }
+        ebody = _map_get(node, "else");
+        if (plant_array_length(ebody) > 0) {
+            ccode = _cat(_cat(ccode, isel), "  } else {\n");
+            ebod = generate_body(ebody, indent+2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit);
+            ccode = _cat(ccode, ebod);
+        }
+        ccode = _cat(_cat(ccode, isel), "  }\n");
         return ccode;
     }
     if (strcmp(ntype,"season_stmt") == 0) {
@@ -5261,8 +5425,10 @@ tx_t collect_stvars_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
   tx_t wsf = "";
   tx_t wfound = "";
   tx_t wk2 = "";
-  tx_t wbd2 = "";
+  tx_t ib = "";
+  tx_t ibd6 = "";
   tx_t wret2 = "";
+  tx_t wbd2 = "";
     long wi = 0;
     tx_t wnd = "";
     tx_t wty = "";
@@ -5286,7 +5452,16 @@ tx_t collect_stvars_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
                 }
             }
         }
-        if (strcmp(wty,"if_stmt") == 0 || strcmp(wty,"season_stmt") == 0 || strcmp(wty,"cycle_stmt") == 0 || strcmp(wty,"match_stmt") == 0) {
+        if (strcmp(wty,"if_stmt") == 0) {
+            ib = _if_bodies(wnd);
+            long ii6 = 0;
+            while (ii6 < plant_array_length(ib)) {
+                ibd6 = plant_list_get(ib, ii6);
+                wret2 = collect_stvars_walk(ibd6, subst, res);
+                ii6 = ii6+1;
+            }
+        }
+        if (strcmp(wty,"season_stmt") == 0 || strcmp(wty,"cycle_stmt") == 0 || strcmp(wty,"match_stmt") == 0) {
             wbd2 = _map_get(wnd, "body");
             wret2 = collect_stvars_walk(wbd2, subst, res);
         }
@@ -5412,6 +5587,8 @@ tx_t collect_cb_uses(PlantArray* bd, PlantArray* sigs, PlantArray* acc) {
   tx_t karg = "";
   tx_t kb = "";
   tx_t kfound = "";
+  tx_t ib = "";
+  tx_t ibd7 = "";
   tx_t sb = "";
   tx_t cl2 = "";
   tx_t cb9 = "";
@@ -5446,7 +5623,16 @@ tx_t collect_cb_uses(PlantArray* bd, PlantArray* sigs, PlantArray* acc) {
                 }
             }
         }
-        if (strcmp(ty,"if_stmt") == 0 || strcmp(ty,"season_stmt") == 0 || strcmp(ty,"cycle_stmt") == 0) {
+        if (strcmp(ty,"if_stmt") == 0) {
+            ib = _if_bodies(nd);
+            long ii7 = 0;
+            while (ii7 < plant_array_length(ib)) {
+                ibd7 = plant_list_get(ib, ii7);
+                acc = collect_cb_uses(ibd7, sigs, acc);
+                ii7 = ii7+1;
+            }
+        }
+        if (strcmp(ty,"season_stmt") == 0 || strcmp(ty,"cycle_stmt") == 0) {
             sb = _map_get(nd, "body");
             acc = collect_cb_uses(sb, sigs, acc);
         }
@@ -5903,6 +6089,8 @@ tx_t scan_fields(PlantArray* fields, PlantArray* subst, PlantArray* structs, Pla
     return acc;
 }
 tx_t collect_struct_insts(PlantArray* bd, PlantArray* subst, PlantArray* structs, PlantArray* acc) {
+  tx_t ib = "";
+  tx_t ibd8 = "";
     long ci = 0;
     tx_t nd = "";
     tx_t ty = "";
@@ -5917,7 +6105,16 @@ tx_t collect_struct_insts(PlantArray* bd, PlantArray* subst, PlantArray* structs
                 acc = scan_type(vt, subst, structs, acc);
             }
         }
-        if (strcmp(ty,"if_stmt") == 0 || strcmp(ty,"season_stmt") == 0) {
+        if (strcmp(ty,"if_stmt") == 0) {
+            ib = _if_bodies(nd);
+            long ii8 = 0;
+            while (ii8 < plant_array_length(ib)) {
+                ibd8 = plant_list_get(ib, ii8);
+                acc = collect_struct_insts(ibd8, subst, structs, acc);
+                ii8 = ii8+1;
+            }
+        }
+        if (strcmp(ty,"season_stmt") == 0) {
             sub_bd = _map_get(nd, "body");
             acc = collect_struct_insts(sub_bd, subst, structs, acc);
         }
@@ -6019,6 +6216,8 @@ tx_t collect_insts(PlantArray* bd, PlantArray* subst, PlantArray* templates, Pla
   tx_t generics = "";
   tx_t nsubst = "";
   tx_t tbd = "";
+  tx_t ib = "";
+  tx_t ibd9 = "";
   tx_t sub_bd = "";
     long ci = 0;
     tx_t nd = "";
@@ -6048,7 +6247,16 @@ tx_t collect_insts(PlantArray* bd, PlantArray* subst, PlantArray* templates, Pla
                 }
             }
         }
-        if (strcmp(ty,"if_stmt") == 0 || strcmp(ty,"season_stmt") == 0) {
+        if (strcmp(ty,"if_stmt") == 0) {
+            ib = _if_bodies(nd);
+            long ii9 = 0;
+            while (ii9 < plant_array_length(ib)) {
+                ibd9 = plant_list_get(ib, ii9);
+                acc = collect_insts(ibd9, subst, templates, acc);
+                ii9 = ii9+1;
+            }
+        }
+        if (strcmp(ty,"season_stmt") == 0) {
             sub_bd = _map_get(nd, "body");
             acc = collect_insts(sub_bd, subst, templates, acc);
         }
@@ -6294,8 +6502,10 @@ tx_t callee_from_value(PlantArray* acc, tx_t val) {
     return acc;
 }
 tx_t callees_of(PlantArray* bd) {
-  tx_t cbd2 = "";
+  tx_t ib = "";
+  tx_t ibd10 = "";
   tx_t cret2 = "";
+  tx_t cbd2 = "";
     PlantArray* acc = plant_list_make ( 0 );
     long ci = 0;
     tx_t cnd = "";
@@ -6318,7 +6528,23 @@ tx_t callees_of(PlantArray* bd) {
                 acc = callee_from_value(acc, cval);
             }
         }
-        if (strcmp(cty,"if_stmt") == 0 || strcmp(cty,"season_stmt") == 0 || strcmp(cty,"cycle_stmt") == 0 || strcmp(cty,"match_stmt") == 0) {
+        if (strcmp(cty,"if_stmt") == 0) {
+            ib = _if_bodies(cnd);
+            long ii10 = 0;
+            while (ii10 < plant_array_length(ib)) {
+                ibd10 = plant_list_get(ib, ii10);
+                cret2 = callees_of(ibd10);
+                long cj0 = 0;
+                tx_t cje0 = "";
+                while (cj0 < plant_array_length(cret2)) {
+                    cje0 = plant_list_get(cret2, cj0);
+                    acc = callee_add(acc, cje0);
+                    cj0 = cj0+1;
+                }
+                ii10 = ii10+1;
+            }
+        }
+        if (strcmp(cty,"season_stmt") == 0 || strcmp(cty,"cycle_stmt") == 0 || strcmp(cty,"match_stmt") == 0) {
             cbd2 = _map_get(cnd, "body");
             cret2 = callees_of(cbd2);
             long cj = 0;
@@ -7299,6 +7525,8 @@ tx_t _cl_walk(PlantArray* bd, PlantArray* scopes, PlantArray* clseq, PlantArray*
   tx_t cla3 = "";
   tx_t bd3 = "";
   tx_t scn = "";
+  tx_t ib3 = "";
+  tx_t ibd5 = "";
   tx_t mcl3 = "";
   tx_t mb3 = "";
   tx_t scm = "";
@@ -7334,13 +7562,28 @@ tx_t _cl_walk(PlantArray* bd, PlantArray* scopes, PlantArray* clseq, PlantArray*
                 }
             }
         }
-        bd3 = _map_get(st3, "body");
-        if (strcmp(bd3,"") > 0) {
-            scn = _cl_scopes(bd3, sc3, sigs);
-            cres = _cl_walk(bd3, scn, res, rmap, cc, sigs);
-            res = plant_list_get(cres, 0);
-            rmap = plant_list_get(cres, 1);
-            cc = plant_list_get(cres, 2);
+        if (strcmp(sty3,"if_stmt") != 0) {
+            bd3 = _map_get(st3, "body");
+            if (strcmp(bd3,"") > 0) {
+                scn = _cl_scopes(bd3, sc3, sigs);
+                cres = _cl_walk(bd3, scn, res, rmap, cc, sigs);
+                res = plant_list_get(cres, 0);
+                rmap = plant_list_get(cres, 1);
+                cc = plant_list_get(cres, 2);
+            }
+        }
+        if (strcmp(sty3,"if_stmt") == 0) {
+            ib3 = _if_bodies(st3);
+            long ibi3 = 0;
+            while (ibi3 < plant_array_length(ib3)) {
+                ibd5 = plant_list_get(ib3, ibi3);
+                scn = _cl_scopes(ibd5, sc3, sigs);
+                cres = _cl_walk(ibd5, scn, res, rmap, cc, sigs);
+                res = plant_list_get(cres, 0);
+                rmap = plant_list_get(cres, 1);
+                cc = plant_list_get(cres, 2);
+                ibi3 = ibi3+1;
+            }
         }
         if (strcmp(sty3,"match_stmt") == 0) {
             mcl3 = _map_get(st3, "clauses");
@@ -7590,7 +7833,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.19 (pure native)");
+      plant_print("Chloroplast 0.48.20 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

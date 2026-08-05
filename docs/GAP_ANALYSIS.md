@@ -73,7 +73,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `SET t TO e.` | S | **S** | `SELF:prop`/`obj:field` member targets M |
 | `INCREASE` / `DECREASE … BY` | S | M | |
 | `EVAPORATE` / `LOCK` / `EMPTY` | S | M | EMPTY was already a parse stub in legacy |
-| `IF cond, body [ORIF][ELSE]` | S | **P** | **IF only — no ORIF/ELSE** |
+| `IF cond, body [ORIF][ELSE]` | S | **S** | Shipped in v0.48.20 (multi-branch chains) |
 | `SEASON cond, body` | S | **S** | |
 | `CYCLE x IN list` / `CYCLE i, idx IN` / `CYCLE i FROM lo TO hi` | S | M | |
 | `FOR item IN coll` | S | M | |

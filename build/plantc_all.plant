@@ -1466,10 +1466,20 @@ ACTION parse_if_stmt(tokens(LIST), pos(NUM)),
   REAP com FROM consume, tokens, p3.
   REAP p4 FROM _second, com.
   CREATE body(LIST) TO plant_list_make(0).
+  CREATE cur_cond(TX) TO "".
+  CREATE cur_body(LIST) TO plant_list_make(0).
+  CREATE elif(LIST) TO plant_list_make(0).
+  CREATE else_body(LIST) TO plant_list_make(0).
+  CREATE in_elif(TX) TO "0".
+  CREATE in_else(TX) TO "0".
   SEASON TRUE,
     REAP is_eof_flag FROM is_eof, tokens, p4.
     IF is_eof_flag,
-      GIVE plant_list_make(2, plant_list_make(6, "type", "if_stmt", "cond", cond, "body", body), p4).
+      IF in_elif IS "1",
+        PUT cur_cond INTO elif.
+        PUT cur_body INTO elif.
+      /IF.
+      GIVE plant_list_make(2, plant_list_make(12, "type", "if_stmt", "cond", cond, "body", body, "elif", elif, "else", else_body), p4).
     /IF.
     REAP tok FROM peek, tokens, p4.
     REAP lx FROM tok_lex, tok.
@@ -1480,7 +1490,41 @@ ACTION parse_if_stmt(tokens(LIST), pos(NUM)),
       REAP p6 FROM _second, if_close.
       REAP dot FROM consume, tokens, p6.
       REAP p7 FROM _second, dot.
-      GIVE plant_list_make(2, plant_list_make(6, "type", "if_stmt", "cond", cond, "body", body), p7).
+      IF in_elif IS "1",
+        PUT cur_cond INTO elif.
+        PUT cur_body INTO elif.
+      /IF.
+      GIVE plant_list_make(2, plant_list_make(12, "type", "if_stmt", "cond", cond, "body", body, "elif", elif, "else", else_body), p7).
+    /IF.
+    IF lx IS "ORIF",
+      IF in_elif IS "1",
+        PUT cur_cond INTO elif.
+        PUT cur_body INTO elif.
+      /IF.
+      REAP o_pair FROM consume, tokens, p4.
+      REAP p5 FROM _second, o_pair.
+      REAP ocp FROM collect_until, tokens, p5, ",".
+      REAP ocond FROM _first, ocp.
+      REAP p6 FROM _second, ocp.
+      REAP ocom FROM consume, tokens, p6.
+      REAP p7 FROM _second, ocom.
+      SET cur_cond TO ocond.
+      SET cur_body TO plant_list_make(0).
+      SET in_elif TO "1".
+      SET in_else TO "0".
+      SET p4 TO p7.
+      CONTINUE 0.
+    /IF.
+    IF lx IS "ELSE",
+      IF in_elif IS "1",
+        PUT cur_cond INTO elif.
+        PUT cur_body INTO elif.
+      /IF.
+      REAP e_pair FROM consume, tokens, p4.
+      REAP p5 FROM _second, e_pair.
+      SET in_else TO "1".
+      SET p4 TO p5.
+      CONTINUE 0.
     /IF.
     REAP stmt_pair FROM parse_statement, tokens, p4.
     CREATE stmt TO stmt_pair[0].
@@ -1490,7 +1534,17 @@ ACTION parse_if_stmt(tokens(LIST), pos(NUM)),
       IF sty IS "syntax_error",
         GIVE stmt_pair.
       /IF.
-      PUT stmt INTO body.
+      IF in_else IS "1",
+        PUT stmt INTO else_body.
+      /IF.
+      IF in_else IS "0",
+        IF in_elif IS "1",
+          PUT stmt INTO cur_body.
+        /IF.
+        IF in_elif IS "0",
+          PUT stmt INTO body.
+        /IF.
+      /IF.
     /IF.
   /SEASON.
 /ACTION.
@@ -2335,6 +2389,28 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
 #  collect_implicit — REAP targets never declared (params,
 #  CREATE/LET) in an action body; auto-declare them as tx_t.
 # ──────────────────────────────────────────────────────────────
+#  _if_bodies — flatten an if_stmt's branch bodies (main body,
+#  every ORIF body, and the ELSE body) into one list so every
+#  statement-walking pass treats all branches uniformly (v0.48.20).
+# ──────────────────────────────────────────────────────────────
+ACTION _if_bodies(nd),
+  CREATE out(LIST) TO plant_list_make(0).
+  REAP mb FROM _map_get, nd, "body".
+  PUT mb INTO out.
+  REAP el FROM _map_get, nd, "elif".
+  CREATE ei(NUM) TO 1.
+  SEASON ei < COUNT el,
+    REAP eb FROM plant_list_get, el, ei.
+    PUT eb INTO out.
+    SET ei TO ei + 2.
+  /SEASON.
+  REAP eb2 FROM _map_get, nd, "else".
+  IF COUNT eb2 > 0,
+    PUT eb2 INTO out.
+  /IF.
+  GIVE out.
+/ACTION.
+
 ACTION collect_declared_walk(bd(LIST), declared(LIST)),
   CREATE wi(NUM) TO 0.
   CREATE nd(TX) TO "".
@@ -2346,7 +2422,16 @@ ACTION collect_declared_walk(bd(LIST), declared(LIST)),
       REAP tgt FROM _map_get, nd, "target".
       PUT tgt INTO declared.
     /IF.
-    IF ty IS "if_stmt" OR ty IS "season_stmt",
+    IF ty IS "if_stmt",
+      REAP ib FROM _if_bodies, nd.
+      CREATE ii2(NUM) TO 0.
+      SEASON ii2 < COUNT ib,
+        REAP ibd FROM plant_list_get, ib, ii2.
+        REAP sub_ret FROM collect_declared_walk, ibd, declared.
+        SET ii2 TO ii2 + 1.
+      /SEASON.
+    /IF.
+    IF ty IS "season_stmt",
       REAP sub_bd FROM _map_get, nd, "body".
       REAP sub_ret FROM collect_declared_walk, sub_bd, declared.
     /IF.
@@ -2382,7 +2467,16 @@ ACTION collect_used_walk(bd(LIST), used(LIST), declared(LIST)),
         PUT tgt INTO used.
       /IF.
     /IF.
-    IF ty IS "if_stmt" OR ty IS "season_stmt",
+    IF ty IS "if_stmt",
+      REAP ib FROM _if_bodies, nd.
+      CREATE ii2(NUM) TO 0.
+      SEASON ii2 < COUNT ib,
+        REAP ibd FROM plant_list_get, ib, ii2.
+        REAP sub_ret FROM collect_used_walk, ibd, used, declared.
+        SET ii2 TO ii2 + 1.
+      /SEASON.
+    /IF.
+    IF ty IS "season_stmt",
       REAP sub_bd FROM _map_get, nd, "body".
       REAP sub_ret FROM collect_used_walk, sub_bd, used, declared.
     /IF.
@@ -2625,7 +2719,16 @@ ACTION collect_enums_walk(bd, subst, reg, sigs, res),
         /IF.
       /IF.
     /IF.
-    IF wty IS "if_stmt" OR wty IS "season_stmt" OR wty IS "cycle_stmt" OR wty IS "match_stmt",
+    IF wty IS "if_stmt",
+      REAP ib FROM _if_bodies, wnd.
+      CREATE ii3(NUM) TO 0.
+      SEASON ii3 < COUNT ib,
+        REAP ibd3 FROM plant_list_get, ib, ii3.
+        REAP wret FROM collect_enums_walk, ibd3, subst, reg, sigs, res.
+        SET ii3 TO ii3 + 1.
+      /SEASON.
+    /IF.
+    IF wty IS "season_stmt" OR wty IS "cycle_stmt" OR wty IS "match_stmt",
       CREATE sbl(LIST) TO _map_get(wnd, "body").
       REAP wret FROM collect_enums_walk, sbl, subst, reg, sigs, res.
     /IF.
@@ -2789,7 +2892,16 @@ ACTION collect_nums_walk(bd(LIST), subst(LIST), res(LIST)),
         IF wfound IS 0, PUT wtg INTO res. /IF.
       /IF.
     /IF.
-    IF wty IS "if_stmt" OR wty IS "season_stmt" OR wty IS "cycle_stmt" OR wty IS "match_stmt",
+    IF wty IS "if_stmt",
+      REAP ib FROM _if_bodies, wnd.
+      CREATE ii4(NUM) TO 0.
+      SEASON ii4 < COUNT ib,
+        REAP ibd4 FROM plant_list_get, ib, ii4.
+        REAP wret2 FROM collect_nums_walk, ibd4, subst, res.
+        SET ii4 TO ii4 + 1.
+      /SEASON.
+    /IF.
+    IF wty IS "season_stmt" OR wty IS "cycle_stmt" OR wty IS "match_stmt",
       REAP wbd2 FROM _map_get, wnd, "body".
       REAP wret2 FROM collect_nums_walk, wbd2, subst, res.
     /IF.
@@ -3009,7 +3121,16 @@ ACTION async_walk_decl(bd(LIST), acc(LIST)),
       REAP ct FROM ffi_ctype, vt.
       REAP acc FROM async_var_add, acc, tg, ct.
     /IF.
-    IF ty IS "if_stmt" OR ty IS "season_stmt",
+    IF ty IS "if_stmt",
+      REAP ib FROM _if_bodies, nd.
+      CREATE ii5(NUM) TO 0.
+      SEASON ii5 < COUNT ib,
+        REAP ibd5 FROM plant_list_get, ib, ii5.
+        REAP acc FROM async_walk_decl, ibd5, acc.
+        SET ii5 TO ii5 + 1.
+      /SEASON.
+    /IF.
+    IF ty IS "season_stmt",
       REAP sb FROM _map_get, nd, "body".
       REAP acc FROM async_walk_decl, sb, acc.
     /IF.
@@ -3874,7 +3995,8 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         /IF.
     /IF.
   
-    # ── if_stmt: IF cond, body /IF. ──────────────────────────
+    # ── if_stmt: IF cond, body [ORIF cond2, body2]* [ELSE, bodyE] /IF. ─
+    #    → if (c) { … } else if (c2) { … } else { … }  (v0.48.20)
     IF ntype IS "if_stmt",
         REAP cond FROM _map_get, node, "cond".
         REAP bd FROM _map_get, node, "body".
@@ -3883,7 +4005,28 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP isel FROM indent_str, indent.
         CREATE ccode(TX) TO isel + "  if (" + ccond + ") \{\n".
         REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit.
-        SET ccode TO ccode + bcode + isel + "  \}\n".
+        SET ccode TO ccode + bcode.
+        REAP elif FROM _map_get, node, "elif".
+        IF COUNT elif > 0,
+            CREATE ei2(NUM) TO 0.
+            SEASON ei2 < COUNT elif,
+                REAP econd FROM plant_list_get, elif, ei2.
+                REAP ebd FROM plant_list_get, elif, ei2 + 1.
+                REAP ecc FROM translate_expr, econd.
+                REAP ecc FROM handle_strcmp, ecc.
+                SET ccode TO ccode + isel + "  \} else if (" + ecc + ") \{\n".
+                REAP ebc FROM generate_body, ebd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit.
+                SET ccode TO ccode + ebc.
+                SET ei2 TO ei2 + 2.
+            /SEASON.
+        /IF.
+        REAP ebody FROM _map_get, node, "else".
+        IF COUNT ebody > 0,
+            SET ccode TO ccode + isel + "  \} else \{\n".
+            REAP ebod FROM generate_body, ebody, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit.
+            SET ccode TO ccode + ebod.
+        /IF.
+        SET ccode TO ccode + isel + "  \}\n".
         GIVE ccode.
     /IF.
   
@@ -4291,7 +4434,16 @@ ACTION collect_stvars_walk(bd(LIST), subst(LIST), res(LIST)),
         /IF.
       /IF.
     /IF.
-    IF wty IS "if_stmt" OR wty IS "season_stmt" OR wty IS "cycle_stmt" OR wty IS "match_stmt",
+    IF wty IS "if_stmt",
+      REAP ib FROM _if_bodies, wnd.
+      CREATE ii6(NUM) TO 0.
+      SEASON ii6 < COUNT ib,
+        REAP ibd6 FROM plant_list_get, ib, ii6.
+        REAP wret2 FROM collect_stvars_walk, ibd6, subst, res.
+        SET ii6 TO ii6 + 1.
+      /SEASON.
+    /IF.
+    IF wty IS "season_stmt" OR wty IS "cycle_stmt" OR wty IS "match_stmt",
       REAP wbd2 FROM _map_get, wnd, "body".
       REAP wret2 FROM collect_stvars_walk, wbd2, subst, res.
     /IF.
@@ -4441,7 +4593,16 @@ ACTION collect_cb_uses(bd(LIST), sigs(LIST), acc(LIST)),
         /SEASON.
       /IF.
     /IF.
-    IF ty IS "if_stmt" OR ty IS "season_stmt" OR ty IS "cycle_stmt",
+    IF ty IS "if_stmt",
+      REAP ib FROM _if_bodies, nd.
+      CREATE ii7(NUM) TO 0.
+      SEASON ii7 < COUNT ib,
+        REAP ibd7 FROM plant_list_get, ib, ii7.
+        REAP acc FROM collect_cb_uses, ibd7, sigs, acc.
+        SET ii7 TO ii7 + 1.
+      /SEASON.
+    /IF.
+    IF ty IS "season_stmt" OR ty IS "cycle_stmt",
       REAP sb FROM _map_get, nd, "body".
       REAP acc FROM collect_cb_uses, sb, sigs, acc.
     /IF.
@@ -4930,7 +5091,16 @@ ACTION collect_struct_insts(bd(LIST), subst(LIST), structs(LIST), acc(LIST)),
                 REAP acc FROM scan_type, vt, subst, structs, acc.
             /IF.
         /IF.
-        IF ty IS "if_stmt" OR ty IS "season_stmt",
+        IF ty IS "if_stmt",
+            REAP ib FROM _if_bodies, nd.
+            CREATE ii8(NUM) TO 0.
+            SEASON ii8 < COUNT ib,
+                REAP ibd8 FROM plant_list_get, ib, ii8.
+                REAP acc FROM collect_struct_insts, ibd8, subst, structs, acc.
+                SET ii8 TO ii8 + 1.
+            /SEASON.
+        /IF.
+        IF ty IS "season_stmt",
             REAP sub_bd FROM _map_get, nd, "body".
             REAP acc FROM collect_struct_insts, sub_bd, subst, structs, acc.
         /IF.
@@ -5058,7 +5228,16 @@ ACTION collect_insts(bd(LIST), subst(LIST), templates(LIST), acc(LIST)),
                 /IF.
             /IF.
         /IF.
-        IF ty IS "if_stmt" OR ty IS "season_stmt",
+        IF ty IS "if_stmt",
+            REAP ib FROM _if_bodies, nd.
+            CREATE ii9(NUM) TO 0.
+            SEASON ii9 < COUNT ib,
+                REAP ibd9 FROM plant_list_get, ib, ii9.
+                REAP acc FROM collect_insts, ibd9, subst, templates, acc.
+                SET ii9 TO ii9 + 1.
+            /SEASON.
+        /IF.
+        IF ty IS "season_stmt",
             REAP sub_bd FROM _map_get, nd, "body".
             REAP acc FROM collect_insts, sub_bd, subst, templates, acc.
         /IF.
@@ -5327,7 +5506,23 @@ ACTION callees_of(bd(LIST)),
         REAP acc FROM callee_from_value, acc, cval.
       /IF.
     /IF.
-    IF cty IS "if_stmt" OR cty IS "season_stmt" OR cty IS "cycle_stmt" OR cty IS "match_stmt",
+    IF cty IS "if_stmt",
+      REAP ib FROM _if_bodies, cnd.
+      CREATE ii10(NUM) TO 0.
+      SEASON ii10 < COUNT ib,
+        REAP ibd10 FROM plant_list_get, ib, ii10.
+        REAP cret2 FROM callees_of, ibd10.
+        CREATE cj0(NUM) TO 0.
+        CREATE cje0(TX) TO "".
+        SEASON cj0 < COUNT cret2,
+          REAP cje0 FROM plant_list_get, cret2, cj0.
+          REAP acc FROM callee_add, acc, cje0.
+          SET cj0 TO cj0 + 1.
+        /SEASON.
+        SET ii10 TO ii10 + 1.
+      /SEASON.
+    /IF.
+    IF cty IS "season_stmt" OR cty IS "cycle_stmt" OR cty IS "match_stmt",
       REAP cbd2 FROM _map_get, cnd, "body".
       REAP cret2 FROM callees_of, cbd2.
       CREATE cj(NUM) TO 0.
@@ -6282,14 +6477,30 @@ ACTION _cl_walk(bd(LIST), scopes(LIST), clseq(LIST), clmap(LIST), cid(NUM), sigs
                 /SEASON.
             /IF.
         /IF.
-        # recurse into nested bodies (same scope + their own locals)
-        REAP bd3 FROM _map_get, st3, "body".
-        IF bd3 > "",
-            REAP scn FROM _cl_scopes, bd3, sc3, sigs.
-            REAP cres FROM _cl_walk, bd3, scn, res, rmap, cc, sigs.
-            REAP res FROM plant_list_get, cres, 0.
-            REAP rmap FROM plant_list_get, cres, 1.
-            REAP cc FROM plant_list_get, cres, 2.
+        # recurse into nested bodies (same scope + their own locals);
+        # if_stmt branches are walked uniformly via _if_bodies (v0.48.20)
+        IF sty3 ISNT "if_stmt",
+            REAP bd3 FROM _map_get, st3, "body".
+            IF bd3 > "",
+                REAP scn FROM _cl_scopes, bd3, sc3, sigs.
+                REAP cres FROM _cl_walk, bd3, scn, res, rmap, cc, sigs.
+                REAP res FROM plant_list_get, cres, 0.
+                REAP rmap FROM plant_list_get, cres, 1.
+                REAP cc FROM plant_list_get, cres, 2.
+            /IF.
+        /IF.
+        IF sty3 IS "if_stmt",
+            REAP ib3 FROM _if_bodies, st3.
+            CREATE ibi3(NUM) TO 0.
+            SEASON ibi3 < COUNT ib3,
+                REAP ibd5 FROM plant_list_get, ib3, ibi3.
+                REAP scn FROM _cl_scopes, ibd5, sc3, sigs.
+                REAP cres FROM _cl_walk, ibd5, scn, res, rmap, cc, sigs.
+                REAP res FROM plant_list_get, cres, 0.
+                REAP rmap FROM plant_list_get, cres, 1.
+                REAP cc FROM plant_list_get, cres, 2.
+                SET ibi3 TO ibi3 + 1.
+            /SEASON.
         /IF.
         IF sty3 IS "match_stmt",
             REAP mcl3 FROM _map_get, st3, "clauses".
@@ -6522,7 +6733,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.48.19 (pure native)".
+  SHOW "Chloroplast 0.48.20 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

@@ -1125,10 +1125,20 @@ ACTION parse_if_stmt(tokens(LIST), pos(NUM)),
   REAP com FROM consume, tokens, p3.
   REAP p4 FROM _second, com.
   CREATE body(LIST) TO plant_list_make(0).
+  CREATE cur_cond(TX) TO "".
+  CREATE cur_body(LIST) TO plant_list_make(0).
+  CREATE elif(LIST) TO plant_list_make(0).
+  CREATE else_body(LIST) TO plant_list_make(0).
+  CREATE in_elif(TX) TO "0".
+  CREATE in_else(TX) TO "0".
   SEASON TRUE,
     REAP is_eof_flag FROM is_eof, tokens, p4.
     IF is_eof_flag,
-      GIVE plant_list_make(2, plant_list_make(6, "type", "if_stmt", "cond", cond, "body", body), p4).
+      IF in_elif IS "1",
+        PUT cur_cond INTO elif.
+        PUT cur_body INTO elif.
+      /IF.
+      GIVE plant_list_make(2, plant_list_make(12, "type", "if_stmt", "cond", cond, "body", body, "elif", elif, "else", else_body), p4).
     /IF.
     REAP tok FROM peek, tokens, p4.
     REAP lx FROM tok_lex, tok.
@@ -1139,7 +1149,41 @@ ACTION parse_if_stmt(tokens(LIST), pos(NUM)),
       REAP p6 FROM _second, if_close.
       REAP dot FROM consume, tokens, p6.
       REAP p7 FROM _second, dot.
-      GIVE plant_list_make(2, plant_list_make(6, "type", "if_stmt", "cond", cond, "body", body), p7).
+      IF in_elif IS "1",
+        PUT cur_cond INTO elif.
+        PUT cur_body INTO elif.
+      /IF.
+      GIVE plant_list_make(2, plant_list_make(12, "type", "if_stmt", "cond", cond, "body", body, "elif", elif, "else", else_body), p7).
+    /IF.
+    IF lx IS "ORIF",
+      IF in_elif IS "1",
+        PUT cur_cond INTO elif.
+        PUT cur_body INTO elif.
+      /IF.
+      REAP o_pair FROM consume, tokens, p4.
+      REAP p5 FROM _second, o_pair.
+      REAP ocp FROM collect_until, tokens, p5, ",".
+      REAP ocond FROM _first, ocp.
+      REAP p6 FROM _second, ocp.
+      REAP ocom FROM consume, tokens, p6.
+      REAP p7 FROM _second, ocom.
+      SET cur_cond TO ocond.
+      SET cur_body TO plant_list_make(0).
+      SET in_elif TO "1".
+      SET in_else TO "0".
+      SET p4 TO p7.
+      CONTINUE 0.
+    /IF.
+    IF lx IS "ELSE",
+      IF in_elif IS "1",
+        PUT cur_cond INTO elif.
+        PUT cur_body INTO elif.
+      /IF.
+      REAP e_pair FROM consume, tokens, p4.
+      REAP p5 FROM _second, e_pair.
+      SET in_else TO "1".
+      SET p4 TO p5.
+      CONTINUE 0.
     /IF.
     REAP stmt_pair FROM parse_statement, tokens, p4.
     CREATE stmt TO stmt_pair[0].
@@ -1149,7 +1193,17 @@ ACTION parse_if_stmt(tokens(LIST), pos(NUM)),
       IF sty IS "syntax_error",
         GIVE stmt_pair.
       /IF.
-      PUT stmt INTO body.
+      IF in_else IS "1",
+        PUT stmt INTO else_body.
+      /IF.
+      IF in_else IS "0",
+        IF in_elif IS "1",
+          PUT stmt INTO cur_body.
+        /IF.
+        IF in_elif IS "0",
+          PUT stmt INTO body.
+        /IF.
+      /IF.
     /IF.
   /SEASON.
 /ACTION.

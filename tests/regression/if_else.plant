@@ -1,0 +1,50 @@
+# v0.48.20: IF/ELSE — plain two-branch conditionals,
+# branch-local state, nested IF inside a branch, string
+# conditions via strcmp.
+ACTION sign(n(NUM)),
+  IF n > 0,
+    GIVE "positive".
+  ELSE,
+    GIVE "negative".
+  /IF.
+/GIVE sign.
+
+ACTION classify(n(NUM)),
+  IF n >= 90,
+    GIVE "A".
+  ELSE,
+    IF n >= 80,
+      GIVE "B".
+    ELSE,
+      GIVE "C".
+    /IF.
+  /IF.
+/GIVE classify.
+
+ACTION main(),
+  SHOW sign(42).
+  SHOW sign(-3).
+  SHOW classify(95).
+  SHOW classify(85).
+  SHOW classify(70).
+  CREATE n(NUM) TO 7.
+  IF n > 5,
+    CREATE x(NUM) TO 1.
+    SET x TO x + 1.
+    SHOW "big" + x.
+  ELSE,
+    SHOW "small".
+  /IF.
+  CREATE s(TX) TO "hi".
+  IF s IS "hi",
+    SHOW "greeting".
+  ELSE,
+    SHOW "unknown".
+  /IF.
+  IF n > 100,
+    SHOW "huge".
+  ELSE,
+    SHOW "plain-else".
+  /IF.
+  GIVE 0.
+/GIVE main.

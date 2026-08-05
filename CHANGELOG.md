@@ -1,5 +1,35 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.20 — 2026 (IF/ORIF/ELSE Chains)
+
+### New Features
+- **Multi-branch conditionals.** `IF cond, body` can now be followed by
+  any number of `ORIF cond, body` arms and an optional `ELSE, body`
+  fallback. The parser chains every arm into a single `if_stmt` node
+  (flat `elif` list of cond/body pairs plus an `else` list), and code
+  generation emits idiomatic C `if/else if/else` chains — no nested
+  hoisting, no mode change, matching the classic 2015 PlantLang
+  dialect documented in the gap analysis.
+- **Uniform branch walking.** A new `_if_bodies` helper flattens the
+  main body, every `ORIF` body, and the `ELSE` body so all
+  statement-walking passes (implicit declarations, used-variable
+  collection, enums, nums, async, structs, templates, stvars, callback
+  uses, callee closure discovery, and closure scope walking) treat
+  every branch identically; variables declared in one branch are seen
+  by the others the same way they are in `season_stmt`.
+- **No-else fallthrough.** An `ORIF` chain without `ELSE` simply falls
+  through when no arm matches.
+
+### Regression Tests
+- `if_else`: plain IF/ELSE, nested IF inside a branch, branch-local
+  `CREATE`/`SET`, string conditions via strcmp.
+- `if_orif`: 2-4 arm chains with and without ELSE, string conditions on
+  `ORIF` arms, and an all-false no-else chain.
+
+### Notes
+- `ORIF` tokenizes as an identifier (only `ELSE` is a lexer keyword);
+  it is consumed by `parse_if_stmt` so no lexer change was needed.
+
 ## v0.48.19 — 2026 (Closures Syntax Repair)
 
 ### New Features
