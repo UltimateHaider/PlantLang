@@ -41,6 +41,7 @@ tx_t parse_break_stmt(PlantArray* tokens, long pos);
 tx_t parse_continue_stmt(PlantArray* tokens, long pos);
 tx_t parse_if_stmt(PlantArray* tokens, long pos);
 tx_t parse_season_stmt(PlantArray* tokens, long pos);
+tx_t parse_cycle_stmt(PlantArray* tokens, long pos);
 tx_t parse_statement(PlantArray* tokens, long pos);
 tx_t parse_enum_decl(PlantArray* tokens, long pos);
 tx_t parse_struct_decl(PlantArray* tokens, long pos);
@@ -2395,6 +2396,84 @@ tx_t parse_season_stmt(PlantArray* tokens, long pos) {
     }
   return parse_season_stmt;
 }
+tx_t parse_cycle_stmt(PlantArray* tokens, long pos) {
+  tx_t pair = "";
+  tx_t p2 = "";
+  tx_t tok = "";
+  tx_t ivar = "";
+  tx_t cpair = "";
+  tx_t lx = "";
+  tx_t p3 = "";
+  tx_t p4 = "";
+  tx_t sparts = "";
+  tx_t is_eof_flag = "";
+  tx_t slash = "";
+  tx_t p5 = "";
+  tx_t cclose = "";
+  tx_t p6 = "";
+  tx_t dot = "";
+  tx_t p7 = "";
+  tx_t stmt_pair = "";
+  tx_t sty = "";
+    pair = consume(tokens, pos);
+    p2 = _second(pair);
+    tok = peek(tokens, p2);
+    ivar = tok_lex(tok);
+    cpair = consume(tokens, p2);
+    p2 = _second(cpair);
+    tok = peek(tokens, p2);
+    lx = tok_lex(tok);
+    if (strcmp(lx,"FROM") != 0) {
+        return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "Expected FROM in CYCLE header" ) , p2 );
+    }
+    cpair = consume(tokens, p2);
+    p2 = _second(cpair);
+    cpair = collect_until(tokens, p2, "TO");
+    tx_t fromExpr = plant_list_get(cpair,  0 );
+    p3 = _second(cpair);
+    cpair = consume(tokens, p3);
+    p3 = _second(cpair);
+    cpair = collect_until(tokens, p3, ",");
+    tx_t toExpr = plant_list_get(cpair,  0 );
+    p4 = _second(cpair);
+    tx_t stepExpr = "";
+    sparts = strings_SPLIT(toExpr, " STEP ");
+    if (plant_array_length(sparts) == 2) {
+        toExpr = plant_list_get(sparts, 0);
+        stepExpr = plant_list_get(sparts, 1);
+    }
+    cpair = consume(tokens, p4);
+    p4 = _second(cpair);
+    PlantArray* body = plant_list_make ( 0 );
+    while (1) {
+        is_eof_flag = is_eof(tokens, p4);
+        if (is_eof_flag) {
+            return plant_list_make ( 2 , plant_list_make ( 16 , "type" , "cycle_stmt" , "iterVar" , ivar , "fromExpr" , fromExpr , "toExpr" , toExpr , "stepExpr" , stepExpr , "listExpr" , "" , "indexVar" , "" , "body" , body ) , p4 );
+        }
+        tok = peek(tokens, p4);
+        lx = tok_lex(tok);
+        if (strcmp(lx,"/") == 0) {
+            slash = consume(tokens, p4);
+            p5 = _second(slash);
+            cclose = consume(tokens, p5);
+            p6 = _second(cclose);
+            dot = consume(tokens, p6);
+            p7 = _second(dot);
+            return plant_list_make ( 2 , plant_list_make ( 16 , "type" , "cycle_stmt" , "iterVar" , ivar , "fromExpr" , fromExpr , "toExpr" , toExpr , "stepExpr" , stepExpr , "listExpr" , "" , "indexVar" , "" , "body" , body ) , p7 );
+        }
+        stmt_pair = parse_statement(tokens, p4);
+        tx_t stmt = plant_list_get(stmt_pair,  0 );
+        p4 = _second(stmt_pair);
+        if (strcmp(stmt,"") > 0) {
+            sty = _map_get(stmt, "type");
+            if (strcmp(sty,"syntax_error") == 0) {
+                return stmt_pair;
+            }
+            body = plant_list_push(body, stmt);
+        }
+    }
+  return parse_cycle_stmt;
+}
 tx_t parse_statement(PlantArray* tokens, long pos) {
   tx_t tok = "";
   tx_t tp = "";
@@ -2444,6 +2523,10 @@ tx_t parse_statement(PlantArray* tokens, long pos) {
     }
     if (strcmp(lx,"SEASON") == 0) {
         r = parse_season_stmt(tokens, pos);
+        return r;
+    }
+    if (strcmp(lx,"CYCLE") == 0) {
+        r = parse_cycle_stmt(tokens, pos);
         return r;
     }
     if (strcmp(lx,"REAP") == 0) {
@@ -3465,6 +3548,10 @@ tx_t collect_declared_walk(PlantArray* bd, PlantArray* declared) {
             sub_bd = _map_get(nd, "body");
             sub_ret = collect_declared_walk(sub_bd, declared);
         }
+        if (strcmp(ty,"cycle_stmt") == 0) {
+            sub_bd = _map_get(nd, "body");
+            sub_ret = collect_declared_walk(sub_bd, declared);
+        }
         wi = wi+1;
     }
     return "ok";
@@ -3515,6 +3602,10 @@ tx_t collect_used_walk(PlantArray* bd, PlantArray* used, PlantArray* declared) {
             }
         }
         if (strcmp(ty,"season_stmt") == 0) {
+            sub_bd = _map_get(nd, "body");
+            sub_ret = collect_used_walk(sub_bd, used, declared);
+        }
+        if (strcmp(ty,"cycle_stmt") == 0) {
             sub_bd = _map_get(nd, "body");
             sub_ret = collect_used_walk(sub_bd, used, declared);
         }
@@ -3927,6 +4018,9 @@ tx_t collect_nums_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
   tx_t ibd4 = "";
   tx_t wret2 = "";
   tx_t wbd2 = "";
+  tx_t wle2 = "";
+  tx_t wit = "";
+  tx_t wf2 = "";
     long wi = 0;
     tx_t wnd = "";
     tx_t wty = "";
@@ -3961,6 +4055,16 @@ tx_t collect_nums_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
         if (strcmp(wty,"season_stmt") == 0 || strcmp(wty,"cycle_stmt") == 0 || strcmp(wty,"match_stmt") == 0) {
             wbd2 = _map_get(wnd, "body");
             wret2 = collect_nums_walk(wbd2, subst, res);
+        }
+        if (strcmp(wty,"cycle_stmt") == 0) {
+            wle2 = _map_get(wnd, "listExpr");
+            if (strcmp(wle2,"") == 0) {
+                wit = _map_get(wnd, "iterVar");
+                wf2 = list_contains(res, wit);
+                if (wf2 == 0) {
+                    res = plant_list_push(res, wit);
+                }
+            }
         }
         wi = wi+1;
     }
@@ -4544,6 +4648,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t cfrom = "";
   tx_t cto = "";
   tx_t cstep = "";
+  tx_t step0 = "";
   tx_t clist = "";
   tx_t subj = "";
   tx_t csubj = "";
@@ -5135,7 +5240,15 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
                 cstep = translate_expr(stepExpr);
                 stepstr = cstep;
             }
-            ccode = _cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(isel, "  for (long "), ivar), " = "), cfrom), "; "), ivar), " <= "), cto), "; "), ivar), " += "), stepstr), ") {\n");
+            tx_t bound = _cat(_cat(ivar, " <= "), cto);
+            step0 = substring(stepstr, 0, 1);
+            if (strcmp(step0,"-") == 0) {
+                bound = _cat(_cat(ivar, " >= "), cto);
+            }
+            if (strcmp(step0,"-") != 0 && strcmp(step0,"0") != 0 && strcmp(step0,"1") != 0 && strcmp(step0,"2") != 0 && strcmp(step0,"3") != 0 && strcmp(step0,"4") != 0 && strcmp(step0,"5") != 0 && strcmp(step0,"6") != 0 && strcmp(step0,"7") != 0 && strcmp(step0,"8") != 0 && strcmp(step0,"9") != 0) {
+                bound = _cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat("((", stepstr), " > 0) && ("), ivar), " <= "), cto), ")) || (("), stepstr), " <= 0) && ("), ivar), " >= "), cto), "))");
+            }
+            ccode = _cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(isel, "  for (long "), ivar), " = "), cfrom), "; "), bound), "; "), ivar), " += "), stepstr), ") {\n");
             bcode = generate_body(bd, indent+2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit);
             ccode = _cat(_cat(_cat(ccode, bcode), isel), "  }\n");
             return ccode;
@@ -7886,7 +7999,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.20 (pure native)");
+      plant_print("Chloroplast 0.48.21 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

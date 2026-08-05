@@ -1,5 +1,44 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.21 — 2026 (Numeric Range CYCLE)
+
+### New Features
+- **Numeric range loops.** `CYCLE i FROM lo TO hi, body /CYCLE.`
+  compiles to an idiomatic C `for` loop with a `long` loop variable:
+  `for (long i = lo; i <= hi; i += 1) { … }`. Loop bounds are full
+  expressions (`CYCLE i FROM b TO b + 3,`), loops nest, and
+  BREAK/CONTINUE work inside the body.
+- **STEP clause.** An optional `STEP k` modifier sets the increment;
+  the default is 1. Step sizes may be negative for reverse
+  iteration (`CYCLE i FROM 5 TO 1 STEP -1,` iterates 5..1), and the
+  generated bound operator flips (`i >= hi`) when the step is a
+  negative literal. A runtime step expression emits a sign-aware
+  bound clause so both directions behave correctly.
+- **Parser wiring.** `CYCLE` was already a lexer keyword and the
+  code generator had cycle_stmt support, but the parser never
+  dispatched it — `parse_cycle_stmt` now parses the header
+  (`iterVar`, `fromExpr`, `toExpr`, optional `stepExpr`) and the
+  body, mirroring `parse_season_stmt`; a missing `FROM` raises a
+  `syntax_error`.
+- **Walker coverage.** `cycle_stmt` bodies are now walked by the
+  implicit-declaration passes, and the FROM/TO loop variable is
+  registered as a numeric scalar (in `nums`) so arithmetic on the
+  loop variable (`SET s TO s + i.`) stays raw C `+` instead of
+  routing to `_cat`.
+
+### Regression Tests
+- `cycle_num`: default-step ascending loops, expression bounds,
+  `lo == hi`, `lo > hi` (no iterations), nested loops, BREAK,
+  CONTINUE.
+- `cycle_step`: custom positive steps, negative steps descending to
+  and including `hi`, runtime step variables, and `lo > hi` with a
+  negative step (no iterations).
+
+### Notes
+- The ` : ` ternary separator is avoided in generated code because
+  `translate_expr` rewrites `" : "` to `"_"` (legacy dialect
+  transform); runtime-step loops use a `&&`/`||` bound clause.
+
 ## v0.48.20 — 2026 (IF/ORIF/ELSE Chains)
 
 ### New Features

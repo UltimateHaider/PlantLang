@@ -367,6 +367,10 @@ ACTION collect_declared_walk(bd(LIST), declared(LIST)),
       REAP sub_bd FROM _map_get, nd, "body".
       REAP sub_ret FROM collect_declared_walk, sub_bd, declared.
     /IF.
+    IF ty IS "cycle_stmt",
+      REAP sub_bd FROM _map_get, nd, "body".
+      REAP sub_ret FROM collect_declared_walk, sub_bd, declared.
+    /IF.
     SET wi TO wi + 1.
   /SEASON.
   GIVE "ok".
@@ -409,6 +413,10 @@ ACTION collect_used_walk(bd(LIST), used(LIST), declared(LIST)),
       /SEASON.
     /IF.
     IF ty IS "season_stmt",
+      REAP sub_bd FROM _map_get, nd, "body".
+      REAP sub_ret FROM collect_used_walk, sub_bd, used, declared.
+    /IF.
+    IF ty IS "cycle_stmt",
       REAP sub_bd FROM _map_get, nd, "body".
       REAP sub_ret FROM collect_used_walk, sub_bd, used, declared.
     /IF.
@@ -836,6 +844,14 @@ ACTION collect_nums_walk(bd(LIST), subst(LIST), res(LIST)),
     IF wty IS "season_stmt" OR wty IS "cycle_stmt" OR wty IS "match_stmt",
       REAP wbd2 FROM _map_get, wnd, "body".
       REAP wret2 FROM collect_nums_walk, wbd2, subst, res.
+    /IF.
+    IF wty IS "cycle_stmt",
+      REAP wle2 FROM _map_get, wnd, "listExpr".
+      IF wle2 IS "",
+        REAP wit FROM _map_get, wnd, "iterVar".
+        REAP wf2 FROM list_contains, res, wit.
+        IF wf2 IS 0, PUT wit INTO res. /IF.
+      /IF.
     /IF.
     SET wi TO wi + 1.
   /SEASON.
@@ -1987,7 +2003,10 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP isel FROM indent_str, indent.
         CREATE ccode(TX) TO "".
     
-        # FROM/TO form
+        # FROM/TO form: for (long i = lo; i <= hi; i += step), with the
+        # bound operator flipped for negative steps (STEP -1 → >=) so
+        # descending ranges work; a runtime step emits a sign test in
+        # the middle clause (v0.48.21).
         IF fromExpr ISNT "",
             REAP cfrom FROM translate_expr, fromExpr.
             REAP cto FROM translate_expr, toExpr.
@@ -1996,7 +2015,17 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
                 REAP cstep FROM translate_expr, stepExpr.
                 SET stepstr TO cstep.
             /IF.
-            SET ccode TO isel + "  for (long " + ivar + " = " + cfrom + "; " + ivar + " <= " + cto + "; " + ivar + " += " + stepstr + ") \{\n".
+            CREATE bound(TX) TO ivar + " <= " + cto.
+            REAP step0 FROM substring, stepstr, 0, 1.
+            IF step0 IS "-",
+                SET bound TO ivar + " >= " + cto.
+            /IF.
+            IF step0 ISNT "-" AND step0 ISNT "0" AND step0 ISNT "1" AND step0 ISNT "2" AND step0 ISNT "3" AND step0 ISNT "4" AND step0 ISNT "5" AND step0 ISNT "6" AND step0 ISNT "7" AND step0 ISNT "8" AND step0 ISNT "9",
+                # runtime step: sign-aware bound without a " : " literal
+                # (translate_expr rewrites " : " to "_", legacy dialect)
+                SET bound TO "((" + stepstr + " > 0) && (" + ivar + " <= " + cto + ")) || ((" + stepstr + " <= 0) && (" + ivar + " >= " + cto + "))".
+            /IF.
+            SET ccode TO isel + "  for (long " + ivar + " = " + cfrom + "; " + bound + "; " + ivar + " += " + stepstr + ") \{\n".
             REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit.
             SET ccode TO ccode + bcode + isel + "  \}\n".
             GIVE ccode.

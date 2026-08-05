@@ -1587,6 +1587,71 @@ ACTION parse_season_stmt(tokens(LIST), pos(NUM)),
   /SEASON.
 /ACTION.
 
+# ── CYCLE i FROM lo TO hi [STEP k], body /CYCLE. → cycle_stmt ─
+# Numeric range loop (v0.48.21). STEP defaults to 1; negative steps
+# iterate downward. The STEP clause is detected in the collected
+# to-expression text (split on " STEP "); FROM/TO/STEP are consumed
+# token-wise so nested parens and commas inside expressions survive.
+ACTION parse_cycle_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP tok FROM peek, tokens, p2.
+  REAP ivar FROM tok_lex, tok.
+  REAP cpair FROM consume, tokens, p2.
+  REAP p2 FROM _second, cpair.
+  REAP tok FROM peek, tokens, p2.
+  REAP lx FROM tok_lex, tok.
+  IF lx ISNT "FROM",
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "Expected FROM in CYCLE header"), p2).
+  /IF.
+  REAP cpair FROM consume, tokens, p2.
+  REAP p2 FROM _second, cpair.
+  REAP cpair FROM collect_until, tokens, p2, "TO".
+  CREATE fromExpr TO cpair[0].
+  REAP p3 FROM _second, cpair.
+  REAP cpair FROM consume, tokens, p3.
+  REAP p3 FROM _second, cpair.
+  REAP cpair FROM collect_until, tokens, p3, ",".
+  CREATE toExpr TO cpair[0].
+  REAP p4 FROM _second, cpair.
+  CREATE stepExpr(TX) TO "".
+  REAP sparts FROM strings:SPLIT, toExpr, " STEP ".
+  IF COUNT sparts IS 2,
+    REAP toExpr FROM plant_list_get, sparts, 0.
+    REAP stepExpr FROM plant_list_get, sparts, 1.
+  /IF.
+  REAP cpair FROM consume, tokens, p4.
+  REAP p4 FROM _second, cpair.
+  CREATE body(LIST) TO plant_list_make(0).
+  SEASON TRUE,
+    REAP is_eof_flag FROM is_eof, tokens, p4.
+    IF is_eof_flag,
+      GIVE plant_list_make(2, plant_list_make(16, "type", "cycle_stmt", "iterVar", ivar, "fromExpr", fromExpr, "toExpr", toExpr, "stepExpr", stepExpr, "listExpr", "", "indexVar", "", "body", body), p4).
+    /IF.
+    REAP tok FROM peek, tokens, p4.
+    REAP lx FROM tok_lex, tok.
+    IF lx IS "/",
+      REAP slash FROM consume, tokens, p4.
+      REAP p5 FROM _second, slash.
+      REAP cclose FROM consume, tokens, p5.
+      REAP p6 FROM _second, cclose.
+      REAP dot FROM consume, tokens, p6.
+      REAP p7 FROM _second, dot.
+      GIVE plant_list_make(2, plant_list_make(16, "type", "cycle_stmt", "iterVar", ivar, "fromExpr", fromExpr, "toExpr", toExpr, "stepExpr", stepExpr, "listExpr", "", "indexVar", "", "body", body), p7).
+    /IF.
+    REAP stmt_pair FROM parse_statement, tokens, p4.
+    CREATE stmt TO stmt_pair[0].
+    REAP p4 FROM _second, stmt_pair.
+    IF stmt > "",
+      REAP sty FROM _map_get, stmt, "type".
+      IF sty IS "syntax_error",
+        GIVE stmt_pair.
+      /IF.
+      PUT stmt INTO body.
+    /IF.
+  /SEASON.
+/ACTION.
+
 ACTION parse_statement(tokens(LIST), pos(NUM)),
   SEASON TRUE,
     REAP tok FROM peek, tokens, pos.
@@ -1623,6 +1688,10 @@ ACTION parse_statement(tokens(LIST), pos(NUM)),
   /IF.
   IF lx IS "SEASON",
     REAP r FROM parse_season_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "CYCLE",
+    REAP r FROM parse_cycle_stmt, tokens, pos.
     GIVE r.
   /IF.
   IF lx IS "REAP",
@@ -2502,6 +2571,10 @@ ACTION collect_declared_walk(bd(LIST), declared(LIST)),
       REAP sub_bd FROM _map_get, nd, "body".
       REAP sub_ret FROM collect_declared_walk, sub_bd, declared.
     /IF.
+    IF ty IS "cycle_stmt",
+      REAP sub_bd FROM _map_get, nd, "body".
+      REAP sub_ret FROM collect_declared_walk, sub_bd, declared.
+    /IF.
     SET wi TO wi + 1.
   /SEASON.
   GIVE "ok".
@@ -2544,6 +2617,10 @@ ACTION collect_used_walk(bd(LIST), used(LIST), declared(LIST)),
       /SEASON.
     /IF.
     IF ty IS "season_stmt",
+      REAP sub_bd FROM _map_get, nd, "body".
+      REAP sub_ret FROM collect_used_walk, sub_bd, used, declared.
+    /IF.
+    IF ty IS "cycle_stmt",
       REAP sub_bd FROM _map_get, nd, "body".
       REAP sub_ret FROM collect_used_walk, sub_bd, used, declared.
     /IF.
@@ -2971,6 +3048,14 @@ ACTION collect_nums_walk(bd(LIST), subst(LIST), res(LIST)),
     IF wty IS "season_stmt" OR wty IS "cycle_stmt" OR wty IS "match_stmt",
       REAP wbd2 FROM _map_get, wnd, "body".
       REAP wret2 FROM collect_nums_walk, wbd2, subst, res.
+    /IF.
+    IF wty IS "cycle_stmt",
+      REAP wle2 FROM _map_get, wnd, "listExpr".
+      IF wle2 IS "",
+        REAP wit FROM _map_get, wnd, "iterVar".
+        REAP wf2 FROM list_contains, res, wit.
+        IF wf2 IS 0, PUT wit INTO res. /IF.
+      /IF.
     /IF.
     SET wi TO wi + 1.
   /SEASON.
@@ -4122,7 +4207,10 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP isel FROM indent_str, indent.
         CREATE ccode(TX) TO "".
     
-        # FROM/TO form
+        # FROM/TO form: for (long i = lo; i <= hi; i += step), with the
+        # bound operator flipped for negative steps (STEP -1 → >=) so
+        # descending ranges work; a runtime step emits a sign test in
+        # the middle clause (v0.48.21).
         IF fromExpr ISNT "",
             REAP cfrom FROM translate_expr, fromExpr.
             REAP cto FROM translate_expr, toExpr.
@@ -4131,7 +4219,17 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
                 REAP cstep FROM translate_expr, stepExpr.
                 SET stepstr TO cstep.
             /IF.
-            SET ccode TO isel + "  for (long " + ivar + " = " + cfrom + "; " + ivar + " <= " + cto + "; " + ivar + " += " + stepstr + ") \{\n".
+            CREATE bound(TX) TO ivar + " <= " + cto.
+            REAP step0 FROM substring, stepstr, 0, 1.
+            IF step0 IS "-",
+                SET bound TO ivar + " >= " + cto.
+            /IF.
+            IF step0 ISNT "-" AND step0 ISNT "0" AND step0 ISNT "1" AND step0 ISNT "2" AND step0 ISNT "3" AND step0 ISNT "4" AND step0 ISNT "5" AND step0 ISNT "6" AND step0 ISNT "7" AND step0 ISNT "8" AND step0 ISNT "9",
+                # runtime step: sign-aware bound without a " : " literal
+                # (translate_expr rewrites " : " to "_", legacy dialect)
+                SET bound TO "((" + stepstr + " > 0) && (" + ivar + " <= " + cto + ")) || ((" + stepstr + " <= 0) && (" + ivar + " >= " + cto + "))".
+            /IF.
+            SET ccode TO isel + "  for (long " + ivar + " = " + cfrom + "; " + bound + "; " + ivar + " += " + stepstr + ") \{\n".
             REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit.
             SET ccode TO ccode + bcode + isel + "  \}\n".
             GIVE ccode.
@@ -6800,7 +6898,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.48.20 (pure native)".
+  SHOW "Chloroplast 0.48.21 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

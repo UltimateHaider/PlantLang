@@ -1,0 +1,40 @@
+# v0.48.21: numeric range CYCLE — CYCLE i FROM lo TO hi with the
+# default step of 1, expression bounds, lo == hi, lo > hi (no
+# iterations), nested loops, and BREAK/CONTINUE.
+ACTION main(),
+  CREATE s(NUM) TO 0.
+  CYCLE i FROM 1 TO 5,
+    SET s TO s + i.
+  /CYCLE.
+  SHOW "sum1-5=" + s.
+  CREATE b(NUM) TO 3.
+  CREATE s2(NUM) TO 0.
+  CYCLE i FROM b TO b + 3,
+    SET s2 TO s2 + i.
+  /CYCLE.
+  SHOW "sum3-6=" + s2.
+  CYCLE i FROM 1 TO 1,
+    SHOW "single=" + _from_long(i).
+  /CYCLE.
+  CREATE hit(TX) TO "none".
+  CYCLE i FROM 5 TO 1,
+    SET hit TO "ran".
+  /CYCLE.
+  SHOW "asc-norun=" + hit.
+  CREATE s3(TX) TO "".
+  CYCLE i FROM 1 TO 3,
+    CYCLE j FROM 1 TO 2,
+      SET s3 TO s3 + _from_long(i) + "," + _from_long(j) + " ".
+    /CYCLE.
+  /CYCLE.
+  SHOW "nested=" + s3.
+  CYCLE i FROM 1 TO 5,
+    IF i > 2, BREAK 0. /IF.
+    SHOW "brk=" + _from_long(i).
+  /CYCLE.
+  CYCLE i FROM 1 TO 5,
+    IF i IS 2, CONTINUE 0. /IF.
+    SHOW "con=" + _from_long(i).
+  /CYCLE.
+  GIVE 0.
+/GIVE main.

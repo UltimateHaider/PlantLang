@@ -1246,6 +1246,71 @@ ACTION parse_season_stmt(tokens(LIST), pos(NUM)),
   /SEASON.
 /ACTION.
 
+# ── CYCLE i FROM lo TO hi [STEP k], body /CYCLE. → cycle_stmt ─
+# Numeric range loop (v0.48.21). STEP defaults to 1; negative steps
+# iterate downward. The STEP clause is detected in the collected
+# to-expression text (split on " STEP "); FROM/TO/STEP are consumed
+# token-wise so nested parens and commas inside expressions survive.
+ACTION parse_cycle_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP tok FROM peek, tokens, p2.
+  REAP ivar FROM tok_lex, tok.
+  REAP cpair FROM consume, tokens, p2.
+  REAP p2 FROM _second, cpair.
+  REAP tok FROM peek, tokens, p2.
+  REAP lx FROM tok_lex, tok.
+  IF lx ISNT "FROM",
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "Expected FROM in CYCLE header"), p2).
+  /IF.
+  REAP cpair FROM consume, tokens, p2.
+  REAP p2 FROM _second, cpair.
+  REAP cpair FROM collect_until, tokens, p2, "TO".
+  CREATE fromExpr TO cpair[0].
+  REAP p3 FROM _second, cpair.
+  REAP cpair FROM consume, tokens, p3.
+  REAP p3 FROM _second, cpair.
+  REAP cpair FROM collect_until, tokens, p3, ",".
+  CREATE toExpr TO cpair[0].
+  REAP p4 FROM _second, cpair.
+  CREATE stepExpr(TX) TO "".
+  REAP sparts FROM strings:SPLIT, toExpr, " STEP ".
+  IF COUNT sparts IS 2,
+    REAP toExpr FROM plant_list_get, sparts, 0.
+    REAP stepExpr FROM plant_list_get, sparts, 1.
+  /IF.
+  REAP cpair FROM consume, tokens, p4.
+  REAP p4 FROM _second, cpair.
+  CREATE body(LIST) TO plant_list_make(0).
+  SEASON TRUE,
+    REAP is_eof_flag FROM is_eof, tokens, p4.
+    IF is_eof_flag,
+      GIVE plant_list_make(2, plant_list_make(16, "type", "cycle_stmt", "iterVar", ivar, "fromExpr", fromExpr, "toExpr", toExpr, "stepExpr", stepExpr, "listExpr", "", "indexVar", "", "body", body), p4).
+    /IF.
+    REAP tok FROM peek, tokens, p4.
+    REAP lx FROM tok_lex, tok.
+    IF lx IS "/",
+      REAP slash FROM consume, tokens, p4.
+      REAP p5 FROM _second, slash.
+      REAP cclose FROM consume, tokens, p5.
+      REAP p6 FROM _second, cclose.
+      REAP dot FROM consume, tokens, p6.
+      REAP p7 FROM _second, dot.
+      GIVE plant_list_make(2, plant_list_make(16, "type", "cycle_stmt", "iterVar", ivar, "fromExpr", fromExpr, "toExpr", toExpr, "stepExpr", stepExpr, "listExpr", "", "indexVar", "", "body", body), p7).
+    /IF.
+    REAP stmt_pair FROM parse_statement, tokens, p4.
+    CREATE stmt TO stmt_pair[0].
+    REAP p4 FROM _second, stmt_pair.
+    IF stmt > "",
+      REAP sty FROM _map_get, stmt, "type".
+      IF sty IS "syntax_error",
+        GIVE stmt_pair.
+      /IF.
+      PUT stmt INTO body.
+    /IF.
+  /SEASON.
+/ACTION.
+
 ACTION parse_statement(tokens(LIST), pos(NUM)),
   SEASON TRUE,
     REAP tok FROM peek, tokens, pos.
@@ -1282,6 +1347,10 @@ ACTION parse_statement(tokens(LIST), pos(NUM)),
   /IF.
   IF lx IS "SEASON",
     REAP r FROM parse_season_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "CYCLE",
+    REAP r FROM parse_cycle_stmt, tokens, pos.
     GIVE r.
   /IF.
   IF lx IS "REAP",
