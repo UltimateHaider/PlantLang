@@ -385,6 +385,57 @@ const char* plant_env_get_weather(void) {
 
 static PlantWeather* _plant_weather_head = NULL;
 
+/* v0.48.23-patch — the cumulative 12-kind storm registry. The six
+   legacy core kinds (ZERO/LOCK/MISSING/NETWORK/LOST/ANY) are joined
+   by six additive classifications (RANGE/TYPE/PARSE/HANDLE/HARVEST/
+   FALL). Every entry carries the default message plant_throw uses
+   when a THROW carries no explicit message; free-form identifiers
+   (neither the registry nor ANY_STORM) fall back to the generic
+   message below. */
+typedef struct { const char* name; const char* message; } PlantStormInfo;
+
+static const PlantStormInfo _plant_storm_registry[12] = {
+    { "ZERO_STORM",    "division by zero"                },
+    { "LOCK_STORM",    "operation locked or forbidden"   },
+    { "MISSING_STORM", "missing symbol, file, or value"  },
+    { "NETWORK_STORM", "network or I/O failure"          },
+    { "LOST_STORM",    "data lost or unavailable"        },
+    { "RANGE_STORM",   "index or range out of bounds"    },
+    { "TYPE_STORM",    "type or conversion mismatch"     },
+    { "PARSE_STORM",   "malformed input or syntax error" },
+    { "HANDLE_STORM",  "invalid or closed resource handle" },
+    { "HARVEST_STORM", "HTTP harvest failed"             },
+    { "FALL_STORM",    "requested abort or termination"  },
+    { "ANY_STORM",     "unclassified storm"              },
+};
+
+#define PLANT_STORM_COUNT \
+    ((int)(sizeof(_plant_storm_registry) / sizeof(_plant_storm_registry[0])))
+
+int plant_storm_match(const char* thrown_type, const char* shelter_type) {
+    if (shelter_type && strcmp(shelter_type, "ANY_STORM") == 0) return 1;
+    if (!thrown_type || !shelter_type) return 0;
+    return strcmp(thrown_type, shelter_type) == 0;
+}
+
+int plant_storm_is_known(const char* type) {
+    if (!type) return 0;
+    for (int i = 0; i < PLANT_STORM_COUNT; i++) {
+        if (strcmp(_plant_storm_registry[i].name, type) == 0) return 1;
+    }
+    return 0;
+}
+
+const char* plant_storm_default_message(const char* type) {
+    if (type) {
+        for (int i = 0; i < PLANT_STORM_COUNT; i++) {
+            if (strcmp(_plant_storm_registry[i].name, type) == 0)
+                return _plant_storm_registry[i].message;
+        }
+    }
+    return "(unclassified storm)";
+}
+
 void plant_weather_enter(PlantWeather* w) {
     if (!w) return;
     w->next = _plant_weather_head;
@@ -403,6 +454,7 @@ void plant_weather_leave(PlantWeather* w) {
 
 void plant_throw(const char* type, const char* msg) {
     PlantWeather* w = _plant_weather_head;
+    if (msg == NULL) msg = plant_storm_default_message(type);
     if (w == NULL) {
         fprintf(stderr, "[WEATHER] unhandled storm: %s %s\n",
                 type ? type : "(none)", msg ? msg : "");

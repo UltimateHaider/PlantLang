@@ -6320,20 +6320,10 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
             wbind2 = plant_list_get(sh, si2+1);
             wbd2 = plant_list_get(sh, si2+2);
             if (si2 == 0) {
-                if (strcmp(wty2,"ANY_STORM") == 0) {
-                    ccode = _cat3(ccode, isel, "      if (1) {\n");
-                }
-                if (strcmp(wty2,"ANY_STORM") != 0) {
-                    ccode = _cat(_cat4(ccode, isel, "      if (strcmp(__et, \"", wty2), "\") == 0) {\n");
-                }
+                ccode = _cat(_cat4(ccode, isel, "      if (plant_storm_match(__et, \"", wty2), "\")) {\n");
             }
             if (si2 > 0) {
-                if (strcmp(wty2,"ANY_STORM") == 0) {
-                    ccode = _cat3(ccode, isel, "      } else if (1) {\n");
-                }
-                if (strcmp(wty2,"ANY_STORM") != 0) {
-                    ccode = _cat(_cat4(ccode, isel, "      } else if (strcmp(__et, \"", wty2), "\") == 0) {\n");
-                }
+                ccode = _cat(_cat4(ccode, isel, "      } else if (plant_storm_match(__et, \"", wty2), "\")) {\n");
             }
             ccode = _cat(_cat4(ccode, isel, "        ", wfm), " = 1;\n");
             if (strcmp(wbind2,"") != 0 && strcmp(wbind2,"null") != 0) {
@@ -6360,7 +6350,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         wtype2 = _map_get(node, "storm");
         wmsg2 = _map_get(node, "msg");
         isel = indent_str(indent);
-        tx_t cmsg = "null";
+        tx_t cmsg = "NULL";
         if (strcmp(wmsg2,"") > 0) {
             cmsg = translate_expr(wmsg2);
             cmsg = _handle_cat(cmsg, nums, evars);

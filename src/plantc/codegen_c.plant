@@ -2681,9 +2681,12 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    Emits a setjmp/longjmp checkpoint frame: the protected body
     #    runs with the checkpoint pushed; a storm transfers control
     #    to the else branch, where the captured exception is matched
-    #    against each SHELTER type (ANY_STORM is the catch-all "if
-    #    (1)"), the message is optionally bound via `AS err`, and the
-    #    frame is popped so a handler THROW propagates outward. The
+    #    against each SHELTER type via plant_storm_match (name
+    #    equality, with ANY_STORM catching everything as the
+    #    catch-all — v0.48.23-patch centralizes matching in the
+    #    runtime so all 12 registered storm kinds route here), the
+    #    message is optionally bound via `AS err`, and the frame is
+    #    popped so a handler THROW propagates outward. The
     #    CALM body always runs; unmatched storms are rethrown after
     #    it, bubbling up to the enclosing WEATHER. The frame variable
     #    is named from the indent level so nested WEATHER blocks each
@@ -2719,20 +2722,10 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             REAP wbind2 FROM plant_list_get, sh, si2 + 1.
             REAP wbd2 FROM plant_list_get, sh, si2 + 2.
             IF si2 IS 0,
-                IF wty2 IS "ANY_STORM",
-                    SET ccode TO ccode + isel + "      if (1) \{\n".
-                /IF.
-                IF wty2 ISNT "ANY_STORM",
-                    SET ccode TO ccode + isel + "      if (strcmp(__et, \"" + wty2 + "\") == 0) \{\n".
-                /IF.
+                SET ccode TO ccode + isel + "      if (plant_storm_match(__et, \"" + wty2 + "\")) \{\n".
             /IF.
             IF si2 > 0,
-                IF wty2 IS "ANY_STORM",
-                    SET ccode TO ccode + isel + "      \} else if (1) \{\n".
-                /IF.
-                IF wty2 ISNT "ANY_STORM",
-                    SET ccode TO ccode + isel + "      \} else if (strcmp(__et, \"" + wty2 + "\") == 0) \{\n".
-                /IF.
+                SET ccode TO ccode + isel + "      \} else if (plant_storm_match(__et, \"" + wty2 + "\")) \{\n".
             /IF.
             SET ccode TO ccode + isel + "        " + wfm + " = 1;\n".
             IF wbind2 ISNT "" AND wbind2 ISNT "null",
@@ -2761,7 +2754,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP wtype2 FROM _map_get, node, "storm".
         REAP wmsg2 FROM _map_get, node, "msg".
         REAP isel FROM indent_str, indent.
-        CREATE cmsg(TX) TO "null".
+        CREATE cmsg(TX) TO "NULL".
         IF wmsg2 > "",
             REAP cmsg FROM translate_expr, wmsg2.
             REAP cmsg FROM _handle_cat, cmsg, nums, evars.

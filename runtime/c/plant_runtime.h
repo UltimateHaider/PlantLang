@@ -90,6 +90,9 @@ void        plant_weather_leave(PlantWeather* w);
 void        plant_throw(const char* type, const char* msg);
 const char* plant_exc_type(void);
 const char* plant_exc_msg(void);
+int         plant_storm_match(const char* thrown_type, const char* shelter_type);
+int         plant_storm_is_known(const char* type);
+const char* plant_storm_default_message(const char* type);
 
 /* ── v0.43.0: PlantArray type (dynamic string array for split results) ── */
 #define PLANT_ARRAY_MAGIC 0x504C4152 /* "PLAR" */

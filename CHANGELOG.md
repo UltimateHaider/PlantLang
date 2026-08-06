@@ -47,6 +47,31 @@
 - Six legacy storm kinds are recognized; the `storm()` factory, the
   remaining kinds, and location backfill remain future work.
 
+### Patch (v0.48.23-patch) — 12-Storm Registry (additive)
+- **Six new classifications.** `RANGE_STORM` (index/range bounds),
+  `TYPE_STORM` (type/conversion mismatch), `PARSE_STORM` (malformed
+  input), `HANDLE_STORM` (invalid resource handle), `HARVEST_STORM`
+  (HTTP harvest failure), and `FALL_STORM` (requested abort) join the
+  six core kinds (`ZERO_STORM`, `LOCK_STORM`, `MISSING_STORM`,
+  `NETWORK_STORM`, `LOST_STORM`, `ANY_STORM`) for a cumulative 12.
+- **Runtime registry.** `plant_runtime.c` maps all 12 kinds in
+  `_plant_storm_registry` with per-kind default messages; `THROW X.`
+  (no message) now raises the classification's default text, and
+  free-form identifiers fall back to `(unclassified storm)`.
+- **Runtime matcher.** `plant_storm_match(thrown, shelter)` — exact
+  name equality with `ANY_STORM` as the universal catch-all —
+  replaces the codegen `strcmp`/`if (1)` chains, so the routing
+  branch chain is identical for all 12 kinds and free-form names.
+
+### Regression Tests (v0.48.23-patch)
+- `weather_storms12`: each of the 11 concrete kinds thrown with an
+  explicit message and caught by its exact-name shelter, plus a
+  free-form `GHOST_STORM` routed to the `ANY_STORM` catch-all.
+- `weather_storm_defaults`: all 12 kinds plus an unknown name thrown
+  without messages, verifying the registry's default messages
+  (`division by zero` … `requested abort or termination`,
+  `(unclassified storm)` fallback).
+
 ## v0.48.22 — 2026 (List Iteration CYCLE)
 
 ### New Features

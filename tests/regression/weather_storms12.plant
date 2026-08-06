@@ -1,0 +1,88 @@
+ACTION main(),
+  SHOW "s1".
+  WEATHER,
+    THROW ZERO_STORM "zero msg".
+  SHELTER ZERO_STORM AS err,
+    SHOW "got zero: " + err.
+  CALM,
+  /WEATHER.
+  SHOW "s2".
+  WEATHER,
+    THROW LOCK_STORM "lock msg".
+  SHELTER LOCK_STORM AS err,
+    SHOW "got lock: " + err.
+  CALM,
+  /WEATHER.
+  SHOW "s3".
+  WEATHER,
+    THROW MISSING_STORM "missing msg".
+  SHELTER MISSING_STORM AS err,
+    SHOW "got missing: " + err.
+  CALM,
+  /WEATHER.
+  SHOW "s4".
+  WEATHER,
+    THROW NETWORK_STORM "network msg".
+  SHELTER NETWORK_STORM AS err,
+    SHOW "got network: " + err.
+  CALM,
+  /WEATHER.
+  SHOW "s5".
+  WEATHER,
+    THROW LOST_STORM "lost msg".
+  SHELTER LOST_STORM AS err,
+    SHOW "got lost: " + err.
+  CALM,
+  /WEATHER.
+  SHOW "s6".
+  WEATHER,
+    THROW RANGE_STORM "range msg".
+  SHELTER RANGE_STORM AS err,
+    SHOW "got range: " + err.
+  CALM,
+  /WEATHER.
+  SHOW "s7".
+  WEATHER,
+    THROW TYPE_STORM "type msg".
+  SHELTER TYPE_STORM AS err,
+    SHOW "got type: " + err.
+  CALM,
+  /WEATHER.
+  SHOW "s8".
+  WEATHER,
+    THROW PARSE_STORM "parse msg".
+  SHELTER PARSE_STORM AS err,
+    SHOW "got parse: " + err.
+  CALM,
+  /WEATHER.
+  SHOW "s9".
+  WEATHER,
+    THROW HANDLE_STORM "handle msg".
+  SHELTER HANDLE_STORM AS err,
+    SHOW "got handle: " + err.
+  CALM,
+  /WEATHER.
+  SHOW "s10".
+  WEATHER,
+    THROW HARVEST_STORM "harvest msg".
+  SHELTER HARVEST_STORM AS err,
+    SHOW "got harvest: " + err.
+  CALM,
+  /WEATHER.
+  SHOW "s11".
+  WEATHER,
+    THROW FALL_STORM "fall msg".
+  SHELTER FALL_STORM AS err,
+    SHOW "got fall: " + err.
+  CALM,
+  /WEATHER.
+  SHOW "s12".
+  WEATHER,
+    THROW GHOST_STORM "free-form kind".
+  SHELTER ANY_STORM AS err,
+    SHOW "got any: " + err.
+  CALM,
+  /WEATHER.
+  SHOW "done".
+  GIVE 0.
+/GIVE main.
