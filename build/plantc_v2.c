@@ -39,6 +39,8 @@ tx_t parse_closure(PlantArray* tokens, long pos);
 tx_t parse_reap_stmt(PlantArray* tokens, long pos);
 tx_t parse_call_stmt(PlantArray* tokens, long pos);
 tx_t parse_put_stmt(PlantArray* tokens, long pos);
+tx_t parse_sort_stmt(PlantArray* tokens, long pos);
+tx_t parse_shake_stmt(PlantArray* tokens, long pos);
 tx_t parse_break_stmt(PlantArray* tokens, long pos);
 tx_t parse_continue_stmt(PlantArray* tokens, long pos);
 tx_t parse_if_stmt(PlantArray* tokens, long pos);
@@ -1902,7 +1904,7 @@ tx_t parse_closure(PlantArray* tokens, long pos) {
     if (strcmp(blx,"(") == 0) {
         btok2 = peek(tokens, p5+1);
         blx2 = tok_lex(btok2);
-        if (strcmp(blx2,"CREATE") == 0 || strcmp(blx2,"SHOW") == 0 || strcmp(blx2,"GIVE") == 0 || strcmp(blx2,"SET") == 0 || strcmp(blx2,"LET") == 0 || strcmp(blx2,"IF") == 0 || strcmp(blx2,"SEASON") == 0 || strcmp(blx2,"REAP") == 0 || strcmp(blx2,"PUT") == 0 || strcmp(blx2,"BREAK") == 0 || strcmp(blx2,"CONTINUE") == 0) {
+        if (strcmp(blx2,"CREATE") == 0 || strcmp(blx2,"SHOW") == 0 || strcmp(blx2,"GIVE") == 0 || strcmp(blx2,"SET") == 0 || strcmp(blx2,"LET") == 0 || strcmp(blx2,"IF") == 0 || strcmp(blx2,"SEASON") == 0 || strcmp(blx2,"REAP") == 0 || strcmp(blx2,"PUT") == 0 || strcmp(blx2,"BREAK") == 0 || strcmp(blx2,"CONTINUE") == 0 || strcmp(blx2,"SORT") == 0 || strcmp(blx2,"SHAKE") == 0) {
             body_kind = "block";
             bp = consume(tokens, p5);
             p6 = _second(bp);
@@ -2353,6 +2355,90 @@ tx_t parse_put_stmt(PlantArray* tokens, long pos) {
     dot_pair = consume(tokens, p5);
     p6 = _second(dot_pair);
     return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "put_stmt" , "item" , item , "target" , target ) , p6 );
+}
+tx_t parse_sort_stmt(PlantArray* tokens, long pos) {
+  tx_t pair = "";
+  tx_t p2 = "";
+  tx_t tok = "";
+  tx_t lx = "";
+  tx_t drop = "";
+  tx_t lx2 = "";
+  tx_t dot_pair = "";
+  tx_t p3 = "";
+    pair = consume(tokens, pos);
+    p2 = _second(pair);
+    tx_t target = "";
+    tx_t gdir = "";
+    while (1) {
+        tok = peek(tokens, p2);
+        lx = tok_lex(tok);
+        if (strcmp(lx,"BY") == 0 || strcmp(lx,"ASC") == 0 || strcmp(lx,"DESC") == 0 || strcmp(lx,".") == 0 || strcmp(lx,"") == 0) {
+            break;
+        }
+        target = _cat(target, lx);
+        drop = consume(tokens, p2);
+        p2 = _second(drop);
+    }
+    tok = peek(tokens, p2);
+    lx = tok_lex(tok);
+    if (strcmp(lx,"ASC") == 0 || strcmp(lx,"DESC") == 0) {
+        gdir = lx;
+        drop = consume(tokens, p2);
+        p2 = _second(drop);
+    }
+    PlantArray* fields = plant_list_make ( 0 );
+    PlantArray* dirs = plant_list_make ( 0 );
+    tok = peek(tokens, p2);
+    lx = tok_lex(tok);
+    if (strcmp(lx,"BY") == 0) {
+        drop = consume(tokens, p2);
+        p2 = _second(drop);
+        while (1) {
+            tok = peek(tokens, p2);
+            lx = tok_lex(tok);
+            if (strcmp(lx,",") == 0) {
+                drop = consume(tokens, p2);
+                p2 = _second(drop);
+            }
+            tok = peek(tokens, p2);
+            lx = tok_lex(tok);
+            if (strcmp(lx,".") == 0 || strcmp(lx,"") == 0 || strcmp(lx,",") == 0) {
+                break;
+            }
+            fields = plant_list_push ( fields , lx );
+            drop = consume(tokens, p2);
+            p2 = _second(drop);
+            tok = peek(tokens, p2);
+            lx2 = tok_lex(tok);
+            if (strcmp(lx2,"ASC") == 0 || strcmp(lx2,"DESC") == 0) {
+                dirs = plant_list_push ( dirs , lx2 );
+                drop = consume(tokens, p2);
+                p2 = _second(drop);
+            }
+            if (strcmp(lx2,"ASC") != 0 && strcmp(lx2,"DESC") != 0) {
+                dirs = plant_list_push ( dirs , "" );
+            }
+        }
+    }
+    dot_pair = consume(tokens, p2);
+    p3 = _second(dot_pair);
+    return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "sort_stmt" , "target" , target , "gdir" , gdir , "fields" , fields , "dirs" , dirs ) , p3 );
+}
+tx_t parse_shake_stmt(PlantArray* tokens, long pos) {
+  tx_t pair = "";
+  tx_t p2 = "";
+  tx_t tpair = "";
+  tx_t p3 = "";
+  tx_t dot_pair = "";
+  tx_t p4 = "";
+    pair = consume(tokens, pos);
+    p2 = _second(pair);
+    tpair = collect_until(tokens, p2, ".");
+    tx_t target = plant_list_get(tpair,  0 );
+    p3 = _second(tpair);
+    dot_pair = consume(tokens, p3);
+    p4 = _second(dot_pair);
+    return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "shake_stmt" , "target" , target ) , p4 );
 }
 tx_t parse_break_stmt(PlantArray* tokens, long pos) {
   tx_t pair = "";
@@ -2990,6 +3076,14 @@ tx_t parse_statement(PlantArray* tokens, long pos) {
     }
     if (strcmp(lx,"TRACE") == 0) {
         r = parse_trace_stmt(tokens, pos);
+        return r;
+    }
+    if (strcmp(lx,"SORT") == 0) {
+        r = parse_sort_stmt(tokens, pos);
+        return r;
+    }
+    if (strcmp(lx,"SHAKE") == 0) {
+        r = parse_shake_stmt(tokens, pos);
         return r;
     }
     nx = peek(tokens, pos+1);
@@ -5623,6 +5717,11 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t in3 = "";
   tx_t item = "";
   tx_t citem = "";
+  tx_t gdir = "";
+  tx_t fields = "";
+  tx_t dirs = "";
+  tx_t fn = "";
+  tx_t fd = "";
   tx_t act = "";
   tx_t ctx_n = "";
   tx_t kind_s = "";
@@ -5919,6 +6018,43 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         citem = _handle_cat(citem, nums, evars);
         isel = indent_str(indent);
         return _cat(_cat(_cat(_cat(_cat(_cat(_cat(isel, "  "), target), " = plant_list_push("), target), ", "), citem), ");\n");
+    }
+    if (strcmp(ntype,"sort_stmt") == 0) {
+        target = _map_get(node, "target");
+        gdir = _map_get(node, "gdir");
+        fields = _map_get(node, "fields");
+        dirs = _map_get(node, "dirs");
+        tx_t spec = "";
+        isel = indent_str(indent);
+        if (plant_array_length(fields) == 0) {
+            if (strcmp(gdir,"DESC") == 0) {
+                spec = "DESC";
+            }
+        }
+        if (plant_array_length(fields) > 0) {
+            long fi = 0;
+            while (fi < plant_array_length(fields)) {
+                fn = plant_list_get(fields, fi);
+                fd = plant_list_get(dirs, fi);
+                if (fi > 0) {
+                    spec = _cat(spec, ",");
+                }
+                spec = _cat(_cat(spec, fn), ":");
+                if (strcmp(fd,"DESC") == 0) {
+                    spec = _cat(spec, "DESC");
+                }
+                if (strcmp(fd,"DESC") != 0) {
+                    spec = _cat(spec, "ASC");
+                }
+                fi = fi+1;
+            }
+        }
+        return _cat(_cat(_cat(_cat(_cat(_cat(_cat(isel, "  "), target), " = plant_sort("), target), ", \""), spec), "\");\n");
+    }
+    if (strcmp(ntype,"shake_stmt") == 0) {
+        target = _map_get(node, "target");
+        isel = indent_str(indent);
+        return _cat(_cat(_cat(_cat(_cat(isel, "  "), target), " = plant_shuffle("), target), ");\n");
     }
     if (strcmp(ntype,"await_stmt") == 0) {
         return "#error AWAIT must be a top-level statement of an ASYNC ACTION body\n";
@@ -9214,7 +9350,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.28 (pure native)");
+      plant_print("Chloroplast 0.48.29 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

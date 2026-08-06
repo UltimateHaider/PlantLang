@@ -85,7 +85,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `REAP … FLOW f1 f2` pipelines | S | M | |
 | `PUT val INTO list.` | S | **S** | |
 | `TAKE val FROM list.` | S | M | |
-| `SORT list [BY f ASC/DESC].` / `SHAKE` / `BRAID` | S | M | |
+| `SORT list [BY f ASC/DESC].` / `SHAKE` / `BRAID` | S | **S** | v0.48.29 (SORT + ASC/DESC + BY multi-field; SHAKE Fisher-Yates) |
 | `LINK "k" WITH v IN map.` | S | M | map ops via `_map_get`/`plant_map_get` only |
 | `WEATHER … SHELTER storm AS e … CALM.` | S | **S** | v0.48.25; THROW + 13 kinds + ANY_STORM catch-all, STOP IF, plant_calm finalization |
 | `MATCH expr { Variant(b) -> … }` / `MATCH … IS … YIELD` | S | M | |
@@ -247,7 +247,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `x[i]` / slices | `plant_list_get(x, i)` / `plant_array_slice` |
 | `PUT v INTO l.` | `CALL plant_list_push(l, v).` (or `CALL ffi_…`) |
 | Map access `m:"k"` | `_map_get(m, "k")` |
-| `SORT l.` / `SHAKE l.` | none (sort via `plant_iterator_*` + custom loop, or runtime helpers) |
+| `SORT l.` / `SHAKE l.` | `l = plant_sort(l, spec)` / `l = plant_shuffle(l)` (v0.48.29) |
 | `math:SQRT(x)` | declare `ACTION sqrt_(v(SCL)) -> external.` against `math_sqrt`, or call `std/math` externals |
 | `strings:UPPER(s)` | none — implement with loop + `char_at` |
 | `fs:READ(p)` | `REAP r FROM fs:READ, p.` (works) |
@@ -274,7 +274,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 7. **`CONST`/`ROOT` immutables** (compile-time locking).
 
 **Low effort / niche**
-8. **SPLIT/JOIN/SORT/SHAKE/BRAID statement forms**, `PICK`, `STOP IF`, `WAIT n.` statement, `ANY/ALL/HAS/IS_A` conditions, `LOCATE`/`NOTE` comments, brace-form ACTION bodies, TYPE aliases, single-quoted strings.
+8. **SPLIT/JOIN/BRAID statement forms** (SORT/SHAKE shipped v0.48.29), `PICK`, `STOP IF` (shipped v0.48.25), `WAIT n.` statement, `ANY/ALL/HAS/IS_A` conditions, `LOCATE`/`NOTE` comments, brace-form ACTION bodies, TYPE aliases, single-quoted strings.
 9. **Legacy `N\` depth-prefixed syntax** (tokenized already; only needs codegen acceptance) for drop-in legacy source compatibility.
 
 **Intentionally out of scope (D)**

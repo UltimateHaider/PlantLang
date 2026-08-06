@@ -1,5 +1,50 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.29 — 2026 (SORT and SHAKE List Operations)
+
+### New Features
+- **`SORT` statement** (parser.plant + codegen_c.plant):
+  - `SORT l.` — base form, ascending by default.
+  - `SORT l ASC.` / `SORT l DESC.` — explicit directional qualifiers.
+  - `SORT l BY field.` — sort pair-list MAP elements by a named
+    field, ascending by default.
+  - `SORT l BY f1 DESC, f2 ASC.` — multi-field compound ordering with
+    per-field directional binding; each field without a qualifier
+    inherits the global direction (default ASC). The AST stores the
+    target, global direction, and parallel field/direction lists.
+  - Codegen emits `l = plant_sort(l, "<spec>")` with the spec encoded
+    as `""` (plain ASC), `"DESC"` (plain DESC), or
+    `"f1:DESC,f2:ASC"` for field sorts.
+- **`SHAKE` statement** — `SHAKE l.` reorders a list in place, emitted
+  as `l = plant_shuffle(l)`.
+- **Runtime** (`plant_runtime.c` + declarations in `plant_runtime.h`):
+  - `plant_sort` — `qsort` over list items with a spec-driven
+    comparator. Comparisons are numeric-aware (values that fully parse
+    as doubles compare numerically and sort before non-numbers,
+    otherwise `strcmp`); multi-field evaluation walks the spec keys in
+    order, using the first decisive field. Elements that are not maps
+    contribute `""` for any field. NULL/non-list/short lists pass
+    through untouched.
+  - `plant_shuffle` — Fisher-Yates in place over a `rand()` source
+    seeded once from `time ^ pid`, uniform over all `n!`
+    permutations; empty and single-element lists pass through.
+- Parser integration notes: `SORT`/`SHAKE` join the statement dispatch
+  and the block-body keyword list (statements inside `IF`/`SEASON`
+  bodies).
+
+### Regression Tests
+- `sort`: default-ASC string sort, explicit ASC/DESC, numeric-aware
+  sort of numeric strings, duplicate values, single-element and empty
+  lists, `BY name` ascending, `BY age DESC`, multi-field
+  `BY dept ASC, age DESC` (tie-breaking), and `BY dept, age` with
+  default per-field directions. Maps are built with bare
+  `plant_list_make` pair-list calls.
+- `shuffle`: multiset preservation (element sum before/after), the
+  canonical sorted order after shaking (permutation verification),
+  and a two-shuffle order-difference check (1/40320 false-positive
+  chance at n=8) for randomization; single-element and empty lists
+  survive shaking unchanged.
+
 ## v0.48.28 — 2026 (IO and File System Extensions)
 
 ### New Features

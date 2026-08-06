@@ -111,6 +111,8 @@ void*       plant_list_get(PlantArray* list, int64_t index);
 void        plant_list_set(PlantArray* list, int64_t index, void* value);
 PlantArray* plant_list_push(PlantArray* list, void* value);
 PlantArray* plant_list_make(int64_t count, ...);
+void*       plant_sort(void* list, void* spec);    /* qsort; spec ""|"DESC"|"f:ASC,g:DESC" */
+void*       plant_shuffle(void* list);             /* Fisher-Yates (in place) */
 
 /* ── v0.44.0: Option/Result Tagged Union Helpers ── */
 typedef struct PlantTagged {

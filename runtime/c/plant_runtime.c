@@ -637,6 +637,103 @@ PlantArray* plant_list_make(int64_t count, ...) {
     return list;
 }
 
+/* ── v0.48.29 — SORT / SHAKE ──────────────────────────────────
+   plant_sort: qsort over the list's items. spec is one of
+     ""            plain element sort, ascending
+     "DESC"        plain element sort, descending
+     "f:ASC,g:DESC"  multi-field sort: each comma-separated entry
+                     is a field name (for pair-list MAP elements)
+                     followed by ":" and ASC or DESC.
+   Comparison is numeric-aware: values that fully parse as doubles
+   compare numerically (numbers sort before non-numbers), otherwise
+   strcmp. Elements that are not maps contribute "" for any field.
+   plant_shuffle: Fisher-Yates with rand(), uniform over the
+   n! permutations (seeded once from time ^ pid). */
+
+typedef struct SortKey { char field[64]; int desc; } SortKey;
+static SortKey g_sort_keys[16];
+static int     g_sort_nkeys = 0;
+static int     g_sort_desc  = 0;
+
+static int _sort_cmp_vals(const char* a, const char* b) {
+    const char* x = a ? a : "", *y = b ? b : "";
+    char* ex = NULL, *ey = NULL;
+    double dx = strtod(x, &ex), dy = strtod(y, &ey);
+    int nx = (ex != x && *ex == '\0'), ny = (ey != y && *ey == '\0');
+    if (nx && ny) return dx < dy ? -1 : (dx > dy ? 1 : 0);
+    if (nx) return -1;
+    if (ny) return 1;
+    return strcmp(x, y);
+}
+
+static const char* _sort_field_of(tx_t el, const char* key) {
+    PlantArray* m = (PlantArray*)el;
+    if (!el || m->magic != PLANT_ARRAY_MAGIC) return NULL;
+    for (int64_t i = 0; i + 1 < m->count; i += 2) {
+        const char* k = (const char*)plant_list_get(m, i);
+        if (k && strcmp(k, key) == 0)
+            return (const char*)plant_list_get(m, i + 1);
+    }
+    return NULL;
+}
+
+static int _sort_cmp(const void* pa, const void* pb) {
+    tx_t a = *(const tx_t*)pa, b = *(const tx_t*)pb;
+    if (g_sort_nkeys == 0) {
+        int r = _sort_cmp_vals(_S(a), _S(b));
+        return g_sort_desc ? -r : r;
+    }
+    for (int i = 0; i < g_sort_nkeys; i++) {
+        const char* va = _sort_field_of(a, g_sort_keys[i].field);
+        const char* vb = _sort_field_of(b, g_sort_keys[i].field);
+        int r = _sort_cmp_vals(va, vb);
+        if (r != 0) return g_sort_keys[i].desc ? -r : r;
+    }
+    return 0;
+}
+
+tx_t plant_sort(tx_t list, tx_t spec) {
+    PlantArray* a = (PlantArray*)list;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC || a->count < 2) return list;
+    const char* s = spec ? _S(spec) : "";
+    g_sort_nkeys = 0;
+    g_sort_desc = 0;
+    if (strcmp(s, "DESC") == 0) {
+        g_sort_desc = 1;
+    } else if (s[0]) {
+        const char* p = s;
+        while (*p && g_sort_nkeys < 16) {
+            const char* colon = strchr(p, ':');
+            if (!colon) break;
+            size_t flen = (size_t)(colon - p);
+            if (flen > 63) flen = 63;
+            memcpy(g_sort_keys[g_sort_nkeys].field, p, flen);
+            g_sort_keys[g_sort_nkeys].field[flen] = '\0';
+            g_sort_keys[g_sort_nkeys].desc = strncmp(colon + 1, "DESC", 4) == 0;
+            g_sort_nkeys++;
+            const char* comma = strchr(colon + 1, ',');
+            if (!comma) break;
+            p = comma + 1;
+        }
+    }
+    qsort(a->items, (size_t)a->count, sizeof(tx_t), _sort_cmp);
+    return list;
+}
+
+tx_t plant_shuffle(tx_t list) {
+    PlantArray* a = (PlantArray*)list;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC || a->count < 2) return list;
+    static int seeded = 0;
+    if (!seeded) { srand((unsigned)(time(NULL) ^ (long)getpid())); seeded = 1; }
+    for (int64_t i = a->count - 1; i > 0; i--) {
+        int64_t j = rand() % (i + 1);
+        tx_t tmp = a->items[i];
+        a->items[i] = a->items[j];
+        a->items[j] = tmp;
+    }
+    return list;
+}
+
 char* plant_string_trim(const char* str) {
     if (!str) return plant_str_concat("", "");
     const char* start = str;

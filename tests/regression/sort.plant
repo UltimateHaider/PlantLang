@@ -1,0 +1,126 @@
+# sort: SORT statement (v0.48.29).
+# Base form sorts ascending by default; explicit ASC/DESC set the
+# direction; BY clauses sort pair-list MAP elements by named fields
+# with per-field ASC/DESC granularity. Numeric-aware comparison sorts
+# numeric strings numerically. Edge cases: empty list, single element,
+# duplicates, multi-field tie-breaking.
+ACTION main(),
+  CREATE fruits(LIST) TO plant_list_make(0).
+  PUT "banana" INTO fruits.
+  PUT "apple" INTO fruits.
+  PUT "mango" INTO fruits.
+  PUT "cherry" INTO fruits.
+  SORT fruits.
+  CREATE out1(TX) TO "".
+  CYCLE f, i IN fruits,
+    SET out1 TO out1 + f + " ".
+  /CYCLE.
+  SHOW "sort default asc = " + out1.
+
+  SORT fruits DESC.
+  CREATE out2(TX) TO "".
+  CYCLE f, i IN fruits,
+    SET out2 TO out2 + f + " ".
+  /CYCLE.
+  SHOW "sort explicit desc = " + out2.
+
+  SORT fruits ASC.
+  CREATE out3(TX) TO "".
+  CYCLE f, i IN fruits,
+    SET out3 TO out3 + f + " ".
+  /CYCLE.
+  SHOW "sort explicit asc = " + out3.
+
+  CREATE nums(LIST) TO plant_list_make(0).
+  PUT "5" INTO nums.
+  PUT "3" INTO nums.
+  PUT "8" INTO nums.
+  PUT "1" INTO nums.
+  PUT "9" INTO nums.
+  PUT "2" INTO nums.
+  SORT nums.
+  CREATE out4(TX) TO "".
+  CYCLE n, i IN nums,
+    SET out4 TO out4 + n + " ".
+  /CYCLE.
+  SHOW "numeric sort asc = " + out4.
+
+  SORT nums DESC.
+  CREATE out5(TX) TO "".
+  CYCLE n, i IN nums,
+    SET out5 TO out5 + n + " ".
+  /CYCLE.
+  SHOW "numeric sort desc = " + out5.
+
+  CREATE dup(LIST) TO plant_list_make(0).
+  PUT "3" INTO dup.
+  PUT "3" INTO dup.
+  PUT "1" INTO dup.
+  PUT "3" INTO dup.
+  PUT "2" INTO dup.
+  SORT dup.
+  CREATE out6(TX) TO "".
+  CYCLE n, i IN dup,
+    SET out6 TO out6 + n + " ".
+  /CYCLE.
+  SHOW "duplicates = " + out6.
+
+  CREATE one(LIST) TO plant_list_make(0).
+  PUT "solo" INTO one.
+  SORT one DESC.
+  CREATE out7(TX) TO "".
+  CYCLE n, i IN one,
+    SET out7 TO out7 + n + " ".
+  /CYCLE.
+  SHOW "single element = " + out7.
+
+  CREATE empty(LIST) TO plant_list_make(0).
+  SORT empty.
+  SORT empty DESC.
+  SHOW "empty list sorted = ok".
+
+  REAP p1 FROM plant_list_make, 6, "name", "alpha", "dept", "eng", "age", "10".
+  REAP p2 FROM plant_list_make, 6, "name", "beta", "dept", "eng", "age", "30".
+  REAP p3 FROM plant_list_make, 6, "name", "gamma", "dept", "ops", "age", "20".
+  REAP p4 FROM plant_list_make, 6, "name", "delta", "dept", "ops", "age", "5".
+  CREATE people(LIST) TO plant_list_make(0).
+  PUT p1 INTO people.
+  PUT p2 INTO people.
+  PUT p3 INTO people.
+  PUT p4 INTO people.
+
+  SORT people BY name.
+  CREATE out8(TX) TO "".
+  CYCLE p, i IN people,
+    REAP nm FROM _map_get, p, "name".
+    SET out8 TO out8 + nm + " ".
+  /CYCLE.
+  SHOW "by name asc = " + out8.
+
+  SORT people BY age DESC.
+  CREATE out9(TX) TO "".
+  CYCLE p, i IN people,
+    REAP nm FROM _map_get, p, "name".
+    SET out9 TO out9 + nm + " ".
+  /CYCLE.
+  SHOW "by age desc = " + out9.
+
+  SORT people BY dept ASC, age DESC.
+  CREATE out10(TX) TO "".
+  CYCLE p, i IN people,
+    REAP nm FROM _map_get, p, "name".
+    REAP ag FROM _map_get, p, "age".
+    SET out10 TO out10 + nm + ":" + ag + " ".
+  /CYCLE.
+  SHOW "by dept asc, age desc = " + out10.
+
+  SORT people BY dept, age.
+  CREATE out11(TX) TO "".
+  CYCLE p, i IN people,
+    REAP nm FROM _map_get, p, "name".
+    REAP ag FROM _map_get, p, "age".
+    SET out11 TO out11 + nm + ":" + ag + " ".
+  /CYCLE.
+  SHOW "by dept, age default asc = " + out11.
+  GIVE 0.
+/GIVE main.

@@ -795,7 +795,7 @@ ACTION parse_closure(tokens(LIST), pos(NUM)),
   IF blx IS "(",
     REAP btok2 FROM peek, tokens, p5 + 1.
     REAP blx2 FROM tok_lex, btok2.
-    IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE",
+    IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE" OR blx2 IS "SORT" OR blx2 IS "SHAKE",
       SET body_kind TO "block".
       REAP bp FROM consume, tokens, p5.
       REAP p6 FROM _second, bp.
@@ -1115,6 +1115,82 @@ ACTION parse_put_stmt(tokens(LIST), pos(NUM)),  REAP pair FROM consume, tokens, 
   REAP dot_pair FROM consume, tokens, p5.
   REAP p6 FROM _second, dot_pair.
   GIVE plant_list_make(2, plant_list_make(6, "type", "put_stmt", "item", item, "target", target), p6).
+/ACTION.
+
+# v0.48.29 — SORT l [ASC|DESC] [BY f [ASC|DESC] {, g [ASC|DESC]}].
+#   no BY   → plain element sort, direction gdir (default ASC)
+#   BY list → per-field directions, each defaulting to gdir (ASC)
+ACTION parse_sort_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  CREATE target(TX) TO "".
+  CREATE gdir(TX) TO "".
+  SEASON TRUE,
+    REAP tok FROM peek, tokens, p2.
+    REAP lx FROM tok_lex, tok.
+    IF lx IS "BY" OR lx IS "ASC" OR lx IS "DESC" OR lx IS "." OR lx IS "",
+      BREAK 0.
+    /IF.
+    SET target TO target + lx.
+    REAP drop FROM consume, tokens, p2.
+    REAP p2 FROM _second, drop.
+  /SEASON.
+  REAP tok FROM peek, tokens, p2.
+  REAP lx FROM tok_lex, tok.
+  IF lx IS "ASC" OR lx IS "DESC",
+    SET gdir TO lx.
+    REAP drop FROM consume, tokens, p2.
+    REAP p2 FROM _second, drop.
+  /IF.
+  CREATE fields(LIST) TO plant_list_make(0).
+  CREATE dirs(LIST) TO plant_list_make(0).
+  REAP tok FROM peek, tokens, p2.
+  REAP lx FROM tok_lex, tok.
+  IF lx IS "BY",
+    REAP drop FROM consume, tokens, p2.
+    REAP p2 FROM _second, drop.
+    SEASON TRUE,
+      REAP tok FROM peek, tokens, p2.
+      REAP lx FROM tok_lex, tok.
+      IF lx IS ",",
+        REAP drop FROM consume, tokens, p2.
+        REAP p2 FROM _second, drop.
+      /IF.
+      REAP tok FROM peek, tokens, p2.
+      REAP lx FROM tok_lex, tok.
+      IF lx IS "." OR lx IS "" OR lx IS ",",
+        BREAK 0.
+      /IF.
+      SET fields TO plant_list_push(fields, lx).
+      REAP drop FROM consume, tokens, p2.
+      REAP p2 FROM _second, drop.
+      REAP tok FROM peek, tokens, p2.
+      REAP lx2 FROM tok_lex, tok.
+      IF lx2 IS "ASC" OR lx2 IS "DESC",
+        SET dirs TO plant_list_push(dirs, lx2).
+        REAP drop FROM consume, tokens, p2.
+        REAP p2 FROM _second, drop.
+      /IF.
+      IF lx2 ISNT "ASC" AND lx2 ISNT "DESC",
+        SET dirs TO plant_list_push(dirs, "").
+      /IF.
+    /SEASON.
+  /IF.
+  REAP dot_pair FROM consume, tokens, p2.
+  REAP p3 FROM _second, dot_pair.
+  GIVE plant_list_make(2, plant_list_make(10, "type", "sort_stmt", "target", target, "gdir", gdir, "fields", fields, "dirs", dirs), p3).
+/ACTION.
+
+# v0.48.29 — SHAKE l. (Fisher-Yates random reordering)
+ACTION parse_shake_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP tpair FROM collect_until, tokens, p2, ".".
+  CREATE target TO tpair[0].
+  REAP p3 FROM _second, tpair.
+  REAP dot_pair FROM consume, tokens, p3.
+  REAP p4 FROM _second, dot_pair.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "shake_stmt", "target", target), p4).
 /ACTION.
 
 ACTION parse_break_stmt(tokens(LIST), pos(NUM)),
@@ -1659,6 +1735,14 @@ ACTION parse_statement(tokens(LIST), pos(NUM)),
   /IF.
   IF lx IS "TRACE",
     REAP r FROM parse_trace_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "SORT",
+    REAP r FROM parse_sort_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "SHAKE",
+    REAP r FROM parse_shake_stmt, tokens, pos.
     GIVE r.
   /IF.
   # bare call: IDENT( or module:IDENT( → call_stmt (void FFI calls)

@@ -1,0 +1,67 @@
+# shuffle: SHAKE statement (v0.48.29).
+# SHAKE reorders a list with Fisher-Yates over a uniform random
+# source. Output is deterministic: we print the element sum before
+# and after (multiset preservation), the canonical sorted order after
+# shaking (permutation verification), and whether two successive
+# shuffles produced different orders (randomization — for n=8 the
+# chance of two identical permutations is 1/40320). Edge cases: empty
+# and single-element lists are left untouched.
+ACTION main(),
+  CREATE nums(LIST) TO plant_list_make(0).
+  PUT "1" INTO nums.
+  PUT "2" INTO nums.
+  PUT "3" INTO nums.
+  PUT "4" INTO nums.
+  PUT "5" INTO nums.
+  PUT "6" INTO nums.
+  PUT "7" INTO nums.
+  PUT "8" INTO nums.
+  CREATE before(NUM) TO 0.
+  CYCLE n, i IN nums,
+    SET before TO before + _to_long(n).
+  /CYCLE.
+  SHAKE nums.
+  CREATE after(NUM) TO 0.
+  CYCLE n, i IN nums,
+    SET after TO after + _to_long(n).
+  /CYCLE.
+  SORT nums.
+  CREATE sorted(TX) TO "".
+  CYCLE n, i IN nums,
+    SET sorted TO sorted + n + " ".
+  /CYCLE.
+  SHOW "sum before shake = " + _from_long(before).
+  SHOW "sum after shake = " + _from_long(after).
+  SHOW "sorted after shake = " + sorted.
+
+  SHAKE nums.
+  CREATE o1(TX) TO "".
+  CYCLE n, i IN nums,
+    SET o1 TO o1 + n + ",".
+  /CYCLE.
+  SHAKE nums.
+  CREATE o2(TX) TO "".
+  CYCLE n, i IN nums,
+    SET o2 TO o2 + n + ",".
+  /CYCLE.
+  IF o1 IS o2,
+    SHOW "orders differ = 0".
+  /IF.
+  IF o1 ISNT o2,
+    SHOW "orders differ = 1".
+  /IF.
+
+  CREATE one(LIST) TO plant_list_make(0).
+  PUT "solo" INTO one.
+  SHAKE one.
+  CREATE out1(TX) TO "".
+  CYCLE n, i IN one,
+    SET out1 TO out1 + n.
+  /CYCLE.
+  SHOW "single element after shake = " + out1.
+
+  CREATE empty(LIST) TO plant_list_make(0).
+  SHAKE empty.
+  SHOW "empty list shaken = ok".
+  GIVE 0.
+/GIVE main.

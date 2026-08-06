@@ -1,0 +1,12 @@
+sort default asc = apple banana cherry mango 
+sort explicit desc = mango cherry banana apple 
+sort explicit asc = apple banana cherry mango 
+numeric sort asc = 1 2 3 5 8 9 
+numeric sort desc = 9 8 5 3 2 1 
+duplicates = 1 2 3 3 3 
+single element = solo 
+empty list sorted = ok
+by name asc = alpha beta delta gamma 
+by age desc = beta gamma alpha delta 
+by dept asc, age desc = beta:30 alpha:10 gamma:20 delta:5 
+by dept, age default asc = alpha:10 beta:30 delta:5 gamma:20 

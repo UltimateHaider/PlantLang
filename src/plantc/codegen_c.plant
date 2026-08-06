@@ -2224,6 +2224,44 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         GIVE isel + "  " + target + " = plant_list_push(" + target + ", " + citem + ");\n".
     /IF.
 
+    # ── sort_stmt: SORT l [ASC|DESC] [BY f…]. → l = plant_sort(l, spec); ─
+    #    spec: "" = plain ASC | "DESC" = plain DESC | "f1:DESC,f2:ASC"
+    IF ntype IS "sort_stmt",
+        REAP target FROM _map_get, node, "target".
+        REAP gdir FROM _map_get, node, "gdir".
+        REAP fields FROM _map_get, node, "fields".
+        REAP dirs FROM _map_get, node, "dirs".
+        CREATE spec(TX) TO "".
+        REAP isel FROM indent_str, indent.
+        IF COUNT fields IS 0,
+            IF gdir IS "DESC", SET spec TO "DESC". /IF.
+        /IF.
+        IF COUNT fields > 0,
+            CREATE fi(NUM) TO 0.
+            SEASON fi < COUNT fields,
+                REAP fn FROM plant_list_get, fields, fi.
+                REAP fd FROM plant_list_get, dirs, fi.
+                IF fi > 0, SET spec TO spec + ",". /IF.
+                SET spec TO spec + fn + ":".
+                IF fd IS "DESC",
+                    SET spec TO spec + "DESC".
+                /IF.
+                IF fd ISNT "DESC",
+                    SET spec TO spec + "ASC".
+                /IF.
+                SET fi TO fi + 1.
+            /SEASON.
+        /IF.
+        GIVE isel + "  " + target + " = plant_sort(" + target + ", \"" + spec + "\");\n".
+    /IF.
+
+    # ── shake_stmt: SHAKE l. → l = plant_shuffle(l); ─
+    IF ntype IS "shake_stmt",
+        REAP target FROM _map_get, node, "target".
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  " + target + " = plant_shuffle(" + target + ");\n".
+    /IF.
+
     # ── await_stmt: only valid as the final statement of an async
     #    step phase; async_emit_step handles those directly. Any
     #    AWAIT reaching generate_node (normal action body, closure
