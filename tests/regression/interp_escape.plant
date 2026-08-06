@@ -1,0 +1,9 @@
+ACTION main(),
+  CREATE n(NUM) TO 42.
+  SHOW "lit \${x}".
+  SHOW "mix \${x} and ${1 + 2}".
+  SHOW "only \${a} \${b}".
+  SHOW "tail ${n} \${y}".
+  SHOW "a\\b ${n}".
+  GIVE 0.
+/GIVE main.

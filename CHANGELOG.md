@@ -132,6 +132,40 @@ gap 3.2):
   `cycle_zero_step` / `cycle_zero_expr` with `.invalid` markers): 74
   regression / 106 total. Self-host converged 289912 B; DISTCHECK OK.
 
+### Patch (v0.48.22-patch4)
+Faster string concatenation and escaped interpolation markers:
+- **Flattened concatenation.** The codegen previously emitted
+  left-deep `_cat(_cat(a, b), c)` chains — one malloc per pair. New
+  runtime helpers `_cat3`/`_cat4` (plant_compat.h) concatenate 3-4
+  segments with a single allocation and copy. The codegen helper
+  `_emit_cat_chain` groups segments into `_cat4` calls (the chain is
+  argument 1, so each subsequent group carries 3 new parts) with
+  `_cat3` for 3-part chains and `_cat` for pairs — applied both to
+  `_handle_cat`'s `"a" + "b" + …` emission and to
+  `_interp_expand`'s interpolation chain, so interpolation-heavy
+  strings flatten too. Output text is unchanged; only the C shape
+  and allocation count differ.
+- **Single-digit numeric fast path.** `_from_digit` uses a static
+  0-9 lookup table; `_from_long` funnels through it, and the codegen
+  emits `_from_digit(...)` directly at both `_from_long` wrap sites
+  when the segment is exactly one literal digit (`${0}`…`${9}`,
+  `"d=" + 5`). Returns are static strings, safe because the runtime
+  never writes into `tx_t`.
+- **Escaped interpolation markers.** `\${` in a string is now a
+  literal marker: the lexer (`match_string_i`) preserves the
+  backslash and does not open a `${...}` region, and the codegen
+  (`_interp_expand`'s first-`${` scan, `_expand_bare`) treats a `${`
+  preceded by a backslash in the content as literal text. `"\${x}"`
+  prints `\${x}`; `"a \${x} and ${1 + 2}"` prints `a \${x} and 3`.
+  Note the escape is consumed at the lexer, so `\\${x}` (a literal
+  backslash followed by a real interpolation) also renders as the
+  literal `\${x}` — a source `\${` always wins.
+- Three regression tests (`interp_flatten` — 10-part and 6-segment
+  chains; `interp_fastnum` — all ten single digits plus `5 + 4`,
+  `10`, and a variable; `interp_escape` — literal, mixed, doubled
+  markers and `\\` before a real interpolation): 77 regression /
+  109 total. Self-host converged 289982 B; DISTCHECK OK.
+
 ## v0.48.21 — 2026 (Numeric Range CYCLE)
 
 ### New Features

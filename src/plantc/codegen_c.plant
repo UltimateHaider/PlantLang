@@ -266,6 +266,83 @@ ACTION _unescape(s(TX)),
   GIVE rr.
 /ACTION.
 
+# v0.48.22-patch4 — _is_digit_lit: 1 when s is exactly one of 0..9.
+# Used at the _from_long wrap sites to select the _from_digit fast
+# path for single-digit literal segments.
+ACTION _is_digit_lit(s(TX)),
+  CREATE dn(NUM) TO 0.
+  CREATE dc(TX) TO "".
+  IF LEN(s) ISNT 1, GIVE 0. /IF.
+  REAP dc FROM char_at, s, 0.
+  IF dc GREATER THAN OR EQUAL "0" AND dc LESS THAN OR EQUAL "9", GIVE 1. /IF.
+  GIVE 0.
+/ACTION.
+
+# v0.48.22-patch4 — _emit_cat_chain: flatten a list of emission-ready
+# segments into _cat4/_cat3/_cat calls. Left-deep _cat(_cat(a,b),c)
+# chains allocate once per pair; grouping 3-4 segments per call cuts
+# allocations and memcpys on interpolation-heavy expressions. A 2-part
+# chain keeps the plain _cat form (identical emission to before).
+ACTION _emit_cat_chain(parts(LIST)),
+  CREATE cn(NUM) TO COUNT parts.
+  CREATE co(TX) TO "".
+  CREATE a0(TX) TO "".
+  CREATE a1(TX) TO "".
+  CREATE a2(TX) TO "".
+  CREATE a3(TX) TO "".
+  IF cn IS 1,
+    REAP co FROM plant_list_get, parts, 0.
+  /IF.
+  IF cn IS 2,
+    REAP a0 FROM plant_list_get, parts, 0.
+    REAP a1 FROM plant_list_get, parts, 1.
+    SET co TO "_cat(" + a0 + ", " + a1 + ")".
+  /IF.
+  IF cn IS 3,
+    REAP a0 FROM plant_list_get, parts, 0.
+    REAP a1 FROM plant_list_get, parts, 1.
+    REAP a2 FROM plant_list_get, parts, 2.
+    SET co TO "_cat3(" + a0 + ", " + a1 + ", " + a2 + ")".
+  /IF.
+  IF cn IS 4,
+    REAP a0 FROM plant_list_get, parts, 0.
+    REAP a1 FROM plant_list_get, parts, 1.
+    REAP a2 FROM plant_list_get, parts, 2.
+    REAP a3 FROM plant_list_get, parts, 3.
+    SET co TO "_cat4(" + a0 + ", " + a1 + ", " + a2 + ", " + a3 + ")".
+  /IF.
+  IF cn > 4,
+    CREATE cix(NUM) TO 0.
+    CREATE cres(TX) TO "".
+    CREATE rem(NUM) TO 0.
+    REAP a0 FROM plant_list_get, parts, 0.
+    REAP a1 FROM plant_list_get, parts, 1.
+    REAP a2 FROM plant_list_get, parts, 2.
+    REAP a3 FROM plant_list_get, parts, 3.
+    SET cres TO "_cat4(" + a0 + ", " + a1 + ", " + a2 + ", " + a3 + ")".
+    SET cix TO 4.
+    SEASON cix <= cn - 3,
+      REAP a0 FROM plant_list_get, parts, cix.
+      REAP a1 FROM plant_list_get, parts, cix + 1.
+      REAP a2 FROM plant_list_get, parts, cix + 2.
+      SET cres TO "_cat4(" + cres + ", " + a0 + ", " + a1 + ", " + a2 + ")".
+      SET cix TO cix + 3.
+    /SEASON.
+    SET rem TO cn - cix.
+    IF rem IS 1,
+      REAP a0 FROM plant_list_get, parts, cix.
+      SET cres TO "_cat(" + cres + ", " + a0 + ")".
+    /IF.
+    IF rem IS 2,
+      REAP a0 FROM plant_list_get, parts, cix.
+      REAP a1 FROM plant_list_get, parts, cix + 1.
+      SET cres TO "_cat3(" + cres + ", " + a0 + ", " + a1 + ")".
+    /IF.
+    SET co TO cres.
+  /IF.
+  GIVE co.
+/ACTION.
+
 # _interp_to_cat — scan expr text; expand any quoted string that
 # contains ${...}; copy everything else unchanged
 ACTION _interp_to_cat(expr(TX), nums(LIST), evars(LIST)),
@@ -337,6 +414,13 @@ ACTION _expand_bare(t(TX), nums(LIST), evars(LIST)),
       /IF.
       CONTINUE.
     /IF.
+    # v0.48.22-patch4 — escaped marker inside an embedded expression:
+    # a `${` preceded by a backslash (post-_unescape text) is literal.
+    IF instr IS 0 AND c IS "$" AND i + 1 < n AND char_at(t, i + 1) IS "{" AND i > 0 AND char_at(t, i - 1) IS "\\",
+      SET res TO res + c + "".
+      SET i TO i + 1.
+      CONTINUE.
+    /IF.
     IF instr IS 0 AND c IS "$" AND i + 1 < n AND char_at(t, i + 1) IS "{",
       CREATE d(NUM) TO 1.
       CREATE j(NUM) TO i + 2.
@@ -386,6 +470,13 @@ ACTION _interp_expand(raw(TX), nums(LIST), evars(LIST)),
     CREATE k(NUM) TO i.
     SEASON k < n,
       REAP ck FROM char_at, content, k.
+      # v0.48.22-patch4 — escaped marker: a `${` preceded by a
+      # backslash in the content (from a source `\${`) is literal
+      # text, not an interpolation start.
+      IF ck IS "$" AND k + 1 < n AND char_at(content, k + 1) IS "{" AND k > 0 AND char_at(content, k - 1) IS "\\",
+        SET k TO k + 1.
+        CONTINUE.
+      /IF.
       IF ck IS "$" AND k + 1 < n AND char_at(content, k + 1) IS "{",
         SET fnd TO k.
         BREAK 0.
@@ -434,21 +525,20 @@ ACTION _interp_expand(raw(TX), nums(LIST), evars(LIST)),
       GIVE "\n#error unterminated string interpolation: missing }\n".
     /IF.
   /SEASON.
-  CREATE out(TX) TO "".
+  CREATE fparts(LIST) TO plant_list_make(0).
   CREATE si2(NUM) TO 0.
   CREATE is_lit(NUM) TO 1.
   CREATE seg(TX) TO "".
+  CREATE ws(TX) TO "".
+  CREATE seg2(TX) TO "".
   SEASON si2 < COUNT segs,
     REAP seg FROM plant_list_get, segs, si2.
     IF is_lit IS 1,
-      CREATE ws(TX) TO "\"" + seg + "\"".
-      IF out ISNT "",
-        SET ws TO "_cat(" + out + ", \"" + seg + "\")".
-      /IF.
-      SET out TO ws.
+      SET ws TO "\"" + seg + "\"".
+      PUT ws INTO fparts.
     /IF.
     IF is_lit IS 0,
-      CREATE seg2(TX) TO "".
+      SET seg2 TO "".
       IF seg IS "__PLANT_EMPTY_INTERP__",
         SET seg2 TO "\"" + "\"".
       /IF.
@@ -460,7 +550,13 @@ ACTION _interp_expand(raw(TX), nums(LIST), evars(LIST)),
         REAP seg2 FROM _handle_cat, seg2, nums, evars.
         REAP sg2n FROM seg_is_numeric, seg2, nums.
         IF sg2n IS 1,
-          SET seg2 TO "_from_long(" + seg2 + ")".
+          REAP dgl FROM _is_digit_lit, seg2.
+          IF dgl IS 1,
+            SET seg2 TO "_from_digit(" + seg2 + ")".
+          /IF.
+          IF dgl ISNT 1,
+            SET seg2 TO "_from_long(" + seg2 + ")".
+          /IF.
         /IF.
         IF sg2n IS 0,
           REAP snm2 FROM enum_expr_of, evars, seg2.
@@ -469,15 +565,13 @@ ACTION _interp_expand(raw(TX), nums(LIST), evars(LIST)),
           /IF.
         /IF.
       /IF.
-      CREATE ws(TX) TO seg2.
-      IF out ISNT "",
-        SET ws TO "_cat(" + out + ", " + seg2 + ")".
-      /IF.
-      SET out TO ws.
+      SET ws TO seg2.
+      PUT ws INTO fparts.
     /IF.
     SET is_lit TO 1 - is_lit.
     SET si2 TO si2 + 1.
   /SEASON.
+  REAP out FROM _emit_cat_chain, fparts.
   GIVE out.
 /ACTION.
 
@@ -560,11 +654,18 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
     CREATE nparts(LIST) TO plant_list_make(0).
     CREATE ni(NUM) TO 0.
     CREATE pel2(TX) TO "".
+    CREATE dgl(NUM) TO 0.
     SEASON ni < COUNT parts,
         REAP pel2 FROM plant_list_get, parts, ni.
         REAP sgn FROM seg_is_numeric, pel2, nums.
         IF sgn IS 1,
-            SET pel2 TO "_from_long(" + pel2 + ")".
+            REAP dgl FROM _is_digit_lit, pel2.
+            IF dgl IS 1,
+                SET pel2 TO "_from_digit(" + pel2 + ")".
+            /IF.
+            IF dgl ISNT 1,
+                SET pel2 TO "_from_long(" + pel2 + ")".
+            /IF.
         /IF.
         REAP snm FROM enum_expr_of, evars, pel2.
         IF sgn IS 0 AND snm ISNT "",
@@ -573,13 +674,7 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
         PUT pel2 INTO nparts.
         SET ni TO ni + 1.
     /SEASON.
-    SET res TO nparts[0].
-    SET pi TO 1.
-    SEASON pi < COUNT nparts,
-        REAP pel FROM plant_list_get, nparts, pi.
-        SET res TO "_cat(" + res + ", " + pel + ")".
-        SET pi TO pi + 1.
-    /SEASON.
+    REAP res FROM _emit_cat_chain, nparts.
     GIVE res.
 /ACTION.
 

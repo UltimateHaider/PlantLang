@@ -61,6 +61,8 @@ tx_t expr_is_numeric(tx_t e, PlantArray* nums);
 tx_t is_numeric_type(tx_t t);
 tx_t _find_interp(tx_t t);
 tx_t _unescape(tx_t s);
+tx_t _is_digit_lit(tx_t s);
+tx_t _emit_cat_chain(PlantArray* parts);
 tx_t _interp_to_cat(tx_t expr, PlantArray* nums, PlantArray* evars);
 tx_t _expand_bare(tx_t t, PlantArray* nums, PlantArray* evars);
 tx_t _interp_expand(tx_t raw, PlantArray* nums, PlantArray* evars);
@@ -674,6 +676,11 @@ tx_t match_string_i(tx_t src, long i, long n) {
             idepth = 1;
             hasi = 1;
             si = si+2;
+            continue;
+        }
+        if (idepth == 0 && instr == 0 && strcmp(ch,"\\") == 0 && si + 1 < n && strcmp(char_at ( src , si + 1 ),"$") == 0 && si + 2 < n && strcmp(char_at ( src , si + 2 ),"{") == 0) {
+            val = _cat(_cat(_cat(val, "\\"), "$"), "{");
+            si = si+3;
             continue;
         }
         if (idepth == 0 && instr == 0 && strcmp(ch,"\\") == 0) {
@@ -3606,6 +3613,77 @@ tx_t _unescape(tx_t s) {
     }
     return rr;
 }
+tx_t _is_digit_lit(tx_t s) {
+    long dn = 0;
+    tx_t dc = "";
+    if (strlen( s ) != 1) {
+        return 0;
+    }
+    dc = char_at(s, 0);
+    if (strcmp(dc,"0") >= 0 && strcmp(dc,"9") <= 0) {
+        return 1;
+    }
+    return 0;
+}
+tx_t _emit_cat_chain(PlantArray* parts) {
+    long cn = plant_array_length(parts);
+    tx_t co = "";
+    tx_t a0 = "";
+    tx_t a1 = "";
+    tx_t a2 = "";
+    tx_t a3 = "";
+    if (cn == 1) {
+        co = plant_list_get(parts, 0);
+    }
+    if (cn == 2) {
+        a0 = plant_list_get(parts, 0);
+        a1 = plant_list_get(parts, 1);
+        co = _cat(_cat(_cat(_cat("_cat(", a0), ", "), a1), ")");
+    }
+    if (cn == 3) {
+        a0 = plant_list_get(parts, 0);
+        a1 = plant_list_get(parts, 1);
+        a2 = plant_list_get(parts, 2);
+        co = _cat(_cat(_cat(_cat(_cat(_cat("_cat3(", a0), ", "), a1), ", "), a2), ")");
+    }
+    if (cn == 4) {
+        a0 = plant_list_get(parts, 0);
+        a1 = plant_list_get(parts, 1);
+        a2 = plant_list_get(parts, 2);
+        a3 = plant_list_get(parts, 3);
+        co = _cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat("_cat4(", a0), ", "), a1), ", "), a2), ", "), a3), ")");
+    }
+    if (cn > 4) {
+        long cix = 0;
+        tx_t cres = "";
+        long rem = 0;
+        a0 = plant_list_get(parts, 0);
+        a1 = plant_list_get(parts, 1);
+        a2 = plant_list_get(parts, 2);
+        a3 = plant_list_get(parts, 3);
+        cres = _cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat("_cat4(", a0), ", "), a1), ", "), a2), ", "), a3), ")");
+        cix = 4;
+        while (cix <= cn - 3) {
+            a0 = plant_list_get(parts, cix);
+            a1 = plant_list_get(parts, cix+1);
+            a2 = plant_list_get(parts, cix+2);
+            cres = _cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat("_cat4(", cres), ", "), a0), ", "), a1), ", "), a2), ")");
+            cix = cix+3;
+        }
+        rem = cn - cix;
+        if (rem == 1) {
+            a0 = plant_list_get(parts, cix);
+            cres = _cat(_cat(_cat(_cat("_cat(", cres), ", "), a0), ")");
+        }
+        if (rem == 2) {
+            a0 = plant_list_get(parts, cix);
+            a1 = plant_list_get(parts, cix+1);
+            cres = _cat(_cat(_cat(_cat(_cat(_cat("_cat3(", cres), ", "), a0), ", "), a1), ")");
+        }
+        co = cres;
+    }
+    return co;
+}
 tx_t _interp_to_cat(tx_t expr, PlantArray* nums, PlantArray* evars) {
   tx_t cj = "";
   tx_t raw = "";
@@ -3676,6 +3754,11 @@ tx_t _expand_bare(tx_t t, PlantArray* nums, PlantArray* evars) {
             }
             continue;
         }
+        if (instr == 0 && strcmp(c,"$") == 0 && i + 1 < n && strcmp(char_at ( t , i + 1 ),"{") == 0 && i > 0 && strcmp(char_at ( t , i - 1 ),"\\") == 0) {
+            res = _cat(_cat(res, c), "");
+            i = i+1;
+            continue;
+        }
         if (instr == 0 && strcmp(c,"$") == 0 && i + 1 < n && strcmp(char_at ( t , i + 1 ),"{") == 0) {
             long d = 1;
             long j = i+2;
@@ -3718,7 +3801,9 @@ tx_t _interp_expand(tx_t raw, PlantArray* nums, PlantArray* evars) {
   tx_t lit = "";
   tx_t cj2 = "";
   tx_t sg2n = "";
+  tx_t dgl = "";
   tx_t snm2 = "";
+  tx_t out = "";
     tx_t content = substring ( raw , 1 , strlen( raw ) - 1 );
     PlantArray* segs = plant_list_make ( 0 );
     long i = 0;
@@ -3728,6 +3813,10 @@ tx_t _interp_expand(tx_t raw, PlantArray* nums, PlantArray* evars) {
         long k = i;
         while (k < n) {
             ck = char_at(content, k);
+            if (strcmp(ck,"$") == 0 && k + 1 < n && strcmp(char_at ( content , k + 1 ),"{") == 0 && k > 0 && strcmp(char_at ( content , k - 1 ),"\\") == 0) {
+                k = k+1;
+                continue;
+            }
             if (strcmp(ck,"$") == 0 && k + 1 < n && strcmp(char_at ( content , k + 1 ),"{") == 0) {
                 fnd = k;
                 break;
@@ -3776,21 +3865,20 @@ tx_t _interp_expand(tx_t raw, PlantArray* nums, PlantArray* evars) {
             return "\n#error unterminated string interpolation: missing }\n";
         }
     }
-    tx_t out = "";
+    PlantArray* fparts = plant_list_make ( 0 );
     long si2 = 0;
     long is_lit = 1;
     tx_t seg = "";
+    tx_t ws = "";
+    tx_t seg2 = "";
     while (si2 < plant_array_length(segs)) {
         seg = plant_list_get(segs, si2);
         if (is_lit == 1) {
-            tx_t ws = _cat(_cat("\"", seg), "\"");
-            if (strcmp(out,"") != 0) {
-                ws = _cat(_cat(_cat(_cat("_cat(", out), ", \""), seg), "\")");
-            }
-            out = ws;
+            ws = _cat(_cat("\"", seg), "\"");
+            fparts = plant_list_push(fparts, ws);
         }
         if (is_lit == 0) {
-            tx_t seg2 = "";
+            seg2 = "";
             if (strcmp(seg,"__PLANT_EMPTY_INTERP__") == 0) {
                 seg2 = _cat("\"", "\"");
             }
@@ -3802,7 +3890,13 @@ tx_t _interp_expand(tx_t raw, PlantArray* nums, PlantArray* evars) {
                 seg2 = _handle_cat(seg2, nums, evars);
                 sg2n = seg_is_numeric(seg2, nums);
                 if (sg2n == 1) {
-                    seg2 = _cat(_cat("_from_long(", seg2), ")");
+                    dgl = _is_digit_lit(seg2);
+                    if (dgl == 1) {
+                        seg2 = _cat(_cat("_from_digit(", seg2), ")");
+                    }
+                    if (dgl != 1) {
+                        seg2 = _cat(_cat("_from_long(", seg2), ")");
+                    }
                 }
                 if (sg2n == 0) {
                     snm2 = enum_expr_of(evars, seg2);
@@ -3811,15 +3905,13 @@ tx_t _interp_expand(tx_t raw, PlantArray* nums, PlantArray* evars) {
                     }
                 }
             }
-            tx_t ws = seg2;
-            if (strcmp(out,"") != 0) {
-                ws = _cat(_cat(_cat(_cat("_cat(", out), ", "), seg2), ")");
-            }
-            out = ws;
+            ws = seg2;
+            fparts = plant_list_push(fparts, ws);
         }
         is_lit = 1 - is_lit;
         si2 = si2+1;
     }
+    out = _emit_cat_chain(fparts);
     return out;
 }
 tx_t _handle_cat(tx_t expr, PlantArray* nums, PlantArray* evars) {
@@ -3913,11 +4005,18 @@ tx_t _handle_cat(tx_t expr, PlantArray* nums, PlantArray* evars) {
     PlantArray* nparts = plant_list_make ( 0 );
     long ni = 0;
     tx_t pel2 = "";
+    long dgl = 0;
     while (ni < plant_array_length(parts)) {
         pel2 = plant_list_get(parts, ni);
         sgn = seg_is_numeric(pel2, nums);
         if (sgn == 1) {
-            pel2 = _cat(_cat("_from_long(", pel2), ")");
+            dgl = _is_digit_lit(pel2);
+            if (dgl == 1) {
+                pel2 = _cat(_cat("_from_digit(", pel2), ")");
+            }
+            if (dgl != 1) {
+                pel2 = _cat(_cat("_from_long(", pel2), ")");
+            }
         }
         snm = enum_expr_of(evars, pel2);
         if (sgn == 0 && strcmp(snm,"") != 0) {
@@ -3926,13 +4025,7 @@ tx_t _handle_cat(tx_t expr, PlantArray* nums, PlantArray* evars) {
         nparts = plant_list_push(nparts, pel2);
         ni = ni+1;
     }
-    res = plant_list_get(nparts,  0 );
-    pi = 1;
-    while (pi < plant_array_length(nparts)) {
-        pel = plant_list_get(nparts, pi);
-        res = _cat(_cat(_cat(_cat("_cat(", res), ", "), pel), ")");
-        pi = pi+1;
-    }
+    res = _emit_cat_chain(nparts);
     return res;
 }
 tx_t _if_bodies(tx_t nd) {

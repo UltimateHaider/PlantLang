@@ -15,8 +15,19 @@ typedef void* tx_t;
 static void plant_print(tx_t s) { printf("%s\n", _S(s)); }
 static void* plant_env_alloc(size_t size) { return malloc(size); }
 static tx_t _cat(tx_t a, tx_t b) { const char* sa=_S(a), *sb=_S(b); if(!sa) sa=""; if(!sb) sb=""; size_t al=strlen(sa), bl=strlen(sb); char *r=malloc(al+bl+1); if(r){memcpy(r,sa,al);memcpy(r+al,sb,bl+1);} return r?r:a; }
+/* v0.48.22-patch4 — flattened concatenation: one malloc per group of
+   3/4 segments instead of one per pair. _cat3/_cat4 mirror _cat's
+   NULL-to-"" coercion and fall back to the first argument on OOM. */
+static tx_t _cat3(tx_t a, tx_t b, tx_t c) { const char* sa=_S(a), *sb=_S(b), *sc=_S(c); if(!sa) sa=""; if(!sb) sb=""; if(!sc) sc=""; size_t al=strlen(sa), bl=strlen(sb), cl=strlen(sc); char *r=malloc(al+bl+cl+1); if(r){memcpy(r,sa,al);memcpy(r+al,sb,bl);memcpy(r+al+bl,sc,cl+1);} return r?r:a; }
+static tx_t _cat4(tx_t a, tx_t b, tx_t c, tx_t d) { const char* sa=_S(a), *sb=_S(b), *sc=_S(c), *sd=_S(d); if(!sa) sa=""; if(!sb) sb=""; if(!sc) sc=""; if(!sd) sd=""; size_t al=strlen(sa), bl=strlen(sb), cl=strlen(sc), dl=strlen(sd); char *r=malloc(al+bl+cl+dl+1); if(r){memcpy(r,sa,al);memcpy(r+al,sb,bl);memcpy(r+al+bl,sc,cl);memcpy(r+al+bl+cl,sd,dl+1);} return r?r:a; }
 static long _to_long(tx_t s) { const char* _s=_S(s); return _s ? atol(_s) : 0; }
-static tx_t _from_long(long n) { char buf[64]; snprintf(buf,64,"%ld",n); return strdup(buf); }
+/* v0.48.22-patch4 — single-digit (0-9) fast path: static table instead
+   of snprintf. _from_long funnels through _from_digit so every numeric
+   string conversion benefits; the compiler additionally emits
+   _from_digit(...) directly for known single-digit literal segments.
+   Static return is safe: the runtime never writes into tx_t strings. */
+static tx_t _from_digit(long n) { static const char* _dg[10] = {"0","1","2","3","4","5","6","7","8","9"}; if (n >= 0 && n <= 9) return (tx_t)_dg[n]; char buf[64]; snprintf(buf,64,"%ld",n); return strdup(buf); }
+static tx_t _from_long(long n) { return _from_digit(n); }
 /* v0.48.5 — FFI numeric results: C functions returning `long` hand
    raw integer bits back in tx_t. On this runtime intptr_t == void*,
    so the conversion is identical to _from_long; this single choke

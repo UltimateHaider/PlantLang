@@ -1,0 +1,10 @@
+ACTION main(),
+  CREATE n(NUM) TO 9.
+  CREATE s(TX) TO "x".
+  SHOW "a" + "b" + "c" + "d" + "e" + "f" + "g" + "h" + "i" + "j".
+  SHOW "p" + s + "q" + s + "r".
+  SHOW "${n}${n}${n}${n}${n}${n}".
+  SHOW "1" + "2" + "3" + "4" + "5" + "6".
+  SHOW "n=" + n.
+  GIVE 0.
+/GIVE main.

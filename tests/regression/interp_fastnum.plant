@@ -1,0 +1,18 @@
+ACTION main(),
+  CREATE n(NUM) TO 42.
+  SHOW "d=${0}".
+  SHOW "d=${1}".
+  SHOW "d=${2}".
+  SHOW "d=${3}".
+  SHOW "d=${4}".
+  SHOW "d=${5}".
+  SHOW "d=${6}".
+  SHOW "d=${7}".
+  SHOW "d=${8}".
+  SHOW "d=${9}".
+  SHOW "d=${5 + 4}".
+  SHOW "d=${10}".
+  SHOW "d=${n}".
+  SHOW "d=" + 5.
+  GIVE 0.
+/GIVE main.

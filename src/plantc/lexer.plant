@@ -249,6 +249,15 @@ ACTION match_string_i(src(TX), i(NUM), n(NUM)),
       SET si TO si + 2.
       CONTINUE.
     /IF.
+    # v0.48.22-patch4 — escaped interpolation marker: "\${" stays
+    # literal (backslash preserved, no ${...} region opened). The
+    # generic escape branch below would otherwise drop the backslash
+    # and treat ${ as an interpolation start.
+    IF idepth IS 0 AND instr IS 0 AND ch IS "\\" AND si + 1 < n AND char_at(src, si + 1) IS "$" AND si + 2 < n AND char_at(src, si + 2) IS "{",
+      SET val TO val + "\\" + "$" + "{".
+      SET si TO si + 3.
+      CONTINUE.
+    /IF.
     IF idepth IS 0 AND instr IS 0 AND ch IS "\\",
       SET si TO si + 1.
       IF si < n,
