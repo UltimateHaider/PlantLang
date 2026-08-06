@@ -1,5 +1,52 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.23 — 2026 (WEATHER/SHELTER/CALM Storm Exceptions)
+
+### New Features
+- **Storm exceptions.** `THROW storm "msg".` raises a typed storm from
+  any statement position (functions, actions, handlers, missions);
+  `WEATHER, <body> SHELTER <storm> AS err, <handler> CALM, <final>
+  /WEATHER.` installs exception handling. Mandatory `CALM` runs on both
+  the normal and the exceptional exit path (syntax error if omitted).
+- **Shelter matching.** Shelters match by string on the storm name
+  (`ZERO_STORM`, `LOCK_STORM`, `MISSING_STORM`, `NETWORK_STORM`,
+  `LOST_STORM`, `ANY_STORM` — the six core legacy kinds; other names are
+  free-form identifiers). `SHELTER ANY_STORM` is the catch-all, and an
+  untyped shelter is treated as `ANY_STORM`. `AS err` binds the storm
+  message to a text variable in the handler.
+- **Unmatched propagation.** If no shelter matches, `CALM` still runs,
+  then the storm is re-raised so an enclosing `WEATHER` can catch it;
+  a handler that itself `THROW`s escalates the storm past its own
+  `CALM`. A storm that reaches the top level prints
+  `[WEATHER] unhandled storm: <TYPE> <msg>` and aborts.
+- **Non-local exits.** `GIVE`, `BREAK`, and `CONTINUE` inside a
+  `WEATHER` pop the weathering frame via threaded exit lists, so no
+  stale frame leaks to an enclosing scope.
+
+### Runtime
+- `runtime/c/plant_runtime.h/.c` gain `plant_weather_enter`,
+  `plant_weather_leave`, `plant_throw`, `plant_exc_type`,
+  `plant_exc_msg` over an internal storm-frame stack; `WEATHER` bodies
+  compile to `setjmp`/`longjmp` regions guarded by volatile frame
+  state, and shelter dispatch emits an ordered `if`/`else if` chain.
+
+### Regression Tests
+- `weather_basic`: typed shelter with `AS err`, `ANY_STORM` catch-all,
+  calm, and post-`WEATHER` continuation.
+- `weather_nested`: inner `WEATHER` catches its own storm; the outer
+  `WEATHER` never sees it.
+- `weather_unmatched`: inner block's `CALM` runs, then the storm
+  re-propagates to the outer shelter.
+- `weather_multi`: two `WEATHER` blocks with typed + catch-all
+  shelters and distinct `CALM`s.
+- `weather_empty_calm`: empty `CALM` bodies (plain `CALM, /WEATHER.`).
+- `weather_missing_calm`: missing `CALM` is a compile-time error
+  (`.invalid` negative test).
+
+### Notes
+- Six legacy storm kinds are recognized; the `storm()` factory, the
+  remaining kinds, and location backfill remain future work.
+
 ## v0.48.22 — 2026 (List Iteration CYCLE)
 
 ### New Features

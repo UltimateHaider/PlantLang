@@ -1,0 +1,8 @@
+ACTION main(),
+  WEATHER,
+    THROW ZERO_STORM "x".
+  SHELTER ZERO_STORM,
+    SHOW "handler".
+  /WEATHER.
+  GIVE 0.
+/GIVE main.

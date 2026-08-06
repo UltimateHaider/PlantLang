@@ -1,0 +1,14 @@
+ACTION main(),
+  WEATHER,
+  SHELTER ZERO_STORM,
+  CALM,
+  /WEATHER.
+  SHOW "empty ok".
+  WEATHER,
+    THROW ZERO_STORM "e".
+  SHELTER ANY_STORM,
+  CALM,
+  /WEATHER.
+  SHOW "caught silently".
+  GIVE 0.
+/GIVE main.

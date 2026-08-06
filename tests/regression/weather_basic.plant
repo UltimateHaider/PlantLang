@@ -1,0 +1,22 @@
+ACTION main(),
+  WEATHER,
+    SHOW "protecting".
+    THROW ZERO_STORM "division by zero".
+    SHOW "unreached".
+  SHELTER ZERO_STORM AS err,
+    SHOW "caught: " + err.
+  SHELTER ANY_STORM,
+    SHOW "any handler".
+  CALM,
+    SHOW "calm ran".
+  /WEATHER.
+  SHOW "after weather".
+  WEATHER,
+    THROW LOCK_STORM "lock".
+  SHELTER ANY_STORM AS msg,
+    SHOW "catchall: " + msg.
+  CALM,
+    SHOW "catchall calm".
+  /WEATHER.
+  GIVE 0.
+/GIVE main.

@@ -1,0 +1,20 @@
+ACTION main(),
+  WEATHER,
+    SHOW "outer body".
+    WEATHER,
+      SHOW "inner body".
+      THROW ZERO_STORM "inner msg".
+    SHELTER ZERO_STORM AS err,
+      SHOW "inner caught: " + err.
+    CALM,
+      SHOW "inner calm".
+    /WEATHER.
+    SHOW "inner survived".
+  SHELTER ANY_STORM,
+    SHOW "outer any".
+  CALM,
+    SHOW "outer calm".
+  /WEATHER.
+  SHOW "main continues".
+  GIVE 0.
+/GIVE main.

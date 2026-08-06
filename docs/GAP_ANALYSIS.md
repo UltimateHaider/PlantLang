@@ -16,7 +16,7 @@ The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 
 | Innate/std library functions | ~60 (41 innate + 19 std/.plnt + 5 FFI stubs) | ~20 reachable builtins + ~50 declared runtime helpers | ~40 missing |
 | Runtime features | ~90 capabilities | ~70 capabilities | roughly balanced, different sets |
 | Network | HTTP client + server (HARVEST/LISTEN) | vestigial POSIX sockets in runtime, **not reachable** | high |
-| Error handling | Storm exceptions (WEATHER/SHELTER, 12 storm types) | none as language feature (errno/Result only) | high |
+| Error handling | Storm exceptions (WEATHER/SHELTER, 12 storm types) | WEATHER/SHELTER/CALM + THROW (6 core kinds, v0.48.23); no `storm()` factory | medium |
 | Object model | SPECIES classes, BLOOM instantiation, SELF methods, inheritance | none | high |
 
 **Key architectural differences that explain the gaps:**
@@ -87,7 +87,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `TAKE val FROM list.` | S | M | |
 | `SORT list [BY f ASC/DESC].` / `SHAKE` / `BRAID` | S | M | |
 | `LINK "k" WITH v IN map.` | S | M | map ops via `_map_get`/`plant_map_get` only |
-| `WEATHER … SHELTER storm AS e … CALM.` | S | M | no exception handling |
+| `WEATHER … SHELTER storm AS e … CALM.` | S | **S** | v0.48.23; THROW + 6 core storm kinds + ANY_STORM catch-all |
 | `MATCH expr { Variant(b) -> … }` / `MATCH … IS … YIELD` | S | M | |
 | `TAP/ABSORB/INFUSE/SEAL` (VEIN files) | S | M | INFUSE/ABSORB/SEAL were parse stubs in legacy too |
 | `HARVEST "url" [METHOD:][BODY:][HEADERS:][TIMEOUT:]` | S | M | sockets exist in C runtime, unwired |
@@ -204,7 +204,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | File IO | Node fs + VeinFS | POSIX `plant_file_*` + `fs:READ/WRITE/EXISTS` |
 
 ### 6.2 Legacy-only runtime features (M in current)
-- **Storms**: 12 typed exceptions (`ZERO_STORM` … `ANY_STORM`), `WEATHER/SHELTER/CALM`, `storm()` factory, location backfill. Current error model: `plant_ffi_errno`/`ffi_last_error` + `Result<T,E>` — **no exception handling**.
+- **Storms**: 12 typed exceptions (`ZERO_STORM` … `ANY_STORM`), `WEATHER/SHELTER/CALM`, `storm()` factory, location backfill. **v0.48.23 ships `THROW` + `WEATHER/SHELTER/CALM`** with the six core kinds (`ZERO_STORM`, `LOCK_STORM`, `MISSING_STORM`, `NETWORK_STORM`, `LOST_STORM`, `ANY_STORM`), `AS e` message binding, mandatory `CALM`, unmatched re-propagation, and non-local exit popping; still missing: the `storm()` factory, the remaining kinds, and location backfill.
 - **Soil scope chain**: locked vars (`LOCK_STORM`), PULSE flags, `WHENEVER … CHANGES` watchers.
 - **HTTP server** (LISTEN, request MAPs, JSON bodies, `GIVE … AS RESPONSE`, SIGINT/SIGTERM lifecycle) — the C runtime's `plant_net_listen_open/accept/read/write/close` (v0.41-era POSIX sockets) are **not wired into the compiler**.
 - **HTTP client** (HARVEST via worker threads, NETWORK_STORM, `{ok,status,body,headers}` result) — `plant_net_harvest` exists in the C runtime but is also **unwired**.
@@ -263,7 +263,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 ## 9. Roadmap Priorities
 
 **High effort / high value**
-1. **Storms / exception handling** (WEATHER/SHELTER/CALM + `LOST_STORM`/`ZERO_STORM`): the largest semantic gap; needs an unwinding strategy in generated C.
+1. **Storms / exception handling** (WEATHER/SHELTER/CALM + `LOST_STORM`/`ZERO_STORM`): **shipped in v0.48.23** — `THROW` + `WEATHER/SHELTER/CALM` with the six core storm kinds, `AS e` binding, mandatory `CALM`, unmatched re-propagation, and `GIVE`/`BREAK`/`CONTINUE` frame popping, via `setjmp`/`longjmp` frames in the C runtime. Remaining (lower priority): the `storm()` factory, the six non-core kinds, and location backfill.
 2. **List/map/std library surface**: array & map literals, slices, `FIRST/LAST/SUM/AVERAGE/MEDIAN/UNIQUE/REVERSE/FLATTEN/CHUNK/ZIP/RANGE`, string `UPPER/LOWER/TRIM/INCLUDES/STARTS_WITH/ENDS_WITH/FIND/COUNT_OF/JOIN/REPLACE/SPLIT/SLICE/REPEAT/PAD_*`, `math` extras (`LOG PI E SIGN CLAMP`), `fs:APPEND`.
 3. **String interpolation** — shipped as `"str ${expr}"` (v0.48.22-patch2); ORIF/ELSE (v0.48.20), CYCLE 3 forms (v0.48.21-22) and INCREASE/DECREASE (v0.48.22-patch) are shipped; numeric CYCLE hardened with static STEP evaluation in v0.48.22-patch3 (zero-step compile error, direction-aware expression steps, runtime nonzero guard); v0.48.22-patch4 adds literal `\${` escape markers, `_cat3`/`_cat4` chain flattening, and the single-digit `_from_digit` fast path.
 

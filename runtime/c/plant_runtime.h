@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <setjmp.h>
 
 void plnt_print_int(int64_t val);
 void plnt_print_decimal(double val);
@@ -68,6 +69,27 @@ void        plant_sys_action(const char* action_name, void* payload);
 void        plant_env_set_weather(const char* weather_type);
 const char* plant_env_get_weather(void);
 void        plant_entity_set_species(void* entity, const char* species_name);
+
+/* ── v0.48.23: WEATHER/SHELTER/CALM Exception Management ──
+   A PlantWeather checkpoint is a setjmp frame pushed on a thread-level
+   stack by plant_weather_enter. plant_throw transfers control to the
+   innermost frame (raised=1) so the generated shelter dispatch runs;
+   unmatched storms are rethrown after the CALM body executes, bubbling
+   up frame by frame. The volatile members are written before longjmp
+   and read after it, so they stay determined across the transfer. */
+typedef struct PlantWeather {
+    struct PlantWeather* volatile next;
+    jmp_buf buf;
+    volatile int raised;
+    volatile char* exc_type;
+    volatile char* exc_msg;
+} PlantWeather;
+
+void        plant_weather_enter(PlantWeather* w);
+void        plant_weather_leave(PlantWeather* w);
+void        plant_throw(const char* type, const char* msg);
+const char* plant_exc_type(void);
+const char* plant_exc_msg(void);
 
 /* ── v0.43.0: PlantArray type (dynamic string array for split results) ── */
 #define PLANT_ARRAY_MAGIC 0x504C4152 /* "PLAR" */

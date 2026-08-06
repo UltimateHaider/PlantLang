@@ -1383,6 +1383,162 @@ ACTION parse_cycle_stmt(tokens(LIST), pos(NUM)),
   /SEASON.
 /ACTION.
 
+# ── THROW <stormtype> ["msg".] → throw_stmt AST node ────────
+#    v0.48.23 — raises a storm through the innermost WEATHER
+#    checkpoint; the message is an optional expression collected
+#    until the terminating ".".
+ACTION parse_throw_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP t_pair FROM consume, tokens, p2.
+  REAP p3 FROM _second, t_pair.
+  REAP stype FROM tok_lex, t_pair[0].
+  CREATE msg(TX) TO "".
+  REAP tok FROM peek, tokens, p3.
+  REAP lx FROM tok_lex, tok.
+  IF lx ISNT ".",
+    REAP dot2 FROM collect_until, tokens, p3, ".".
+    REAP msg FROM _first, dot2.
+    REAP p3 FROM _second, dot2.
+  /IF.
+  REAP dot FROM consume, tokens, p3.
+  REAP p4 FROM _second, dot.
+  GIVE plant_list_make(2, plant_list_make(8, "type", "throw_stmt", "storm", stype, "msg", msg), p4).
+/ACTION.
+
+# ── WEATHER … SHELTER [type [AS err]] … CALM … /WEATHER. ────
+#    v0.48.23 — WEATHER opens a protected block; every SHELTER
+#    clause (optionally typed by a storm identifier, optionally
+#    binding the storm message to `AS err`) is a recovery handler;
+#    the mandatory terminal CALM clause is the unconditional
+#    finalization body. AST node:
+#      weather_stmt { body, shelters, calm }
+#    shelters is a flat [type, bind, body, …] triple list; an
+#    untyped SHELTER is stored as the ANY_STORM catch-all.
+ACTION parse_weather_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP tok FROM peek, tokens, p2.
+  REAP lx FROM tok_lex, tok.
+  IF lx IS ",",
+    REAP c_pair FROM consume, tokens, p2.
+    REAP p2 FROM _second, c_pair.
+  /IF.
+  CREATE body(LIST) TO plant_list_make(0).
+  CREATE shelters(LIST) TO plant_list_make(0).
+  CREATE calm_body(LIST) TO plant_list_make(0).
+  CREATE cur_type(TX) TO "ANY_STORM".
+  CREATE cur_bind(TX) TO "".
+  CREATE cur_body(LIST) TO plant_list_make(0).
+  CREATE phase(TX) TO "body".
+  SEASON TRUE,
+    REAP is_eof_flag FROM is_eof, tokens, p2.
+    IF is_eof_flag,
+      GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "Unterminated WEATHER block (missing /WEATHER.)"), p2).
+    /IF.
+    REAP tok FROM peek, tokens, p2.
+    REAP lx FROM tok_lex, tok.
+    IF lx IS "/",
+      REAP slash FROM consume, tokens, p2.
+      REAP p3 FROM _second, slash.
+      REAP cclose FROM consume, tokens, p3.
+      REAP p4 FROM _second, cclose.
+      REAP clx FROM tok_lex, cclose[0].
+      IF clx ISNT "WEATHER",
+        GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "Expected /WEATHER. to close WEATHER block"), p2).
+      /IF.
+      REAP dot FROM consume, tokens, p4.
+      REAP p5 FROM _second, dot.
+      IF phase IS "calm",
+        GIVE plant_list_make(2, plant_list_make(8, "type", "weather_stmt", "body", body, "shelters", shelters, "calm", calm_body), p5).
+      /IF.
+      GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "WEATHER block missing CALM clause (mandatory finalization)"), p2).
+    /IF.
+    IF lx IS "SHELTER",
+      IF phase IS "shelter",
+        PUT cur_type INTO shelters.
+        PUT cur_bind INTO shelters.
+        PUT cur_body INTO shelters.
+      /IF.
+      IF phase IS "calm",
+        GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "SHELTER after CALM in WEATHER block"), p2).
+      /IF.
+      REAP s_pair FROM consume, tokens, p2.
+      REAP p3 FROM _second, s_pair.
+      CREATE stype(TX) TO "ANY_STORM".
+      CREATE sbind(TX) TO "".
+      REAP tok2 FROM peek, tokens, p3.
+      REAP lx2 FROM tok_lex, tok2.
+      IF lx2 ISNT ",",
+        REAP t_pair FROM consume, tokens, p3.
+        REAP p3 FROM _second, t_pair.
+        REAP stype FROM tok_lex, t_pair[0].
+        REAP tok3 FROM peek, tokens, p3.
+        REAP lx3 FROM tok_lex, tok3.
+        IF lx3 IS "AS",
+          REAP a_pair FROM consume, tokens, p3.
+          REAP p3 FROM _second, a_pair.
+          REAP b_pair FROM consume, tokens, p3.
+          REAP p3 FROM _second, b_pair.
+          REAP sbind FROM tok_lex, b_pair[0].
+        /IF.
+      /IF.
+      REAP tok4 FROM peek, tokens, p3.
+      REAP lx4 FROM tok_lex, tok4.
+      IF lx4 IS ",",
+        REAP cm_pair FROM consume, tokens, p3.
+        REAP p3 FROM _second, cm_pair.
+      /IF.
+      SET cur_type TO stype.
+      SET cur_bind TO sbind.
+      SET cur_body TO plant_list_make(0).
+      SET phase TO "shelter".
+      SET p2 TO p3.
+      CONTINUE 0.
+    /IF.
+    IF lx IS "CALM",
+      IF phase IS "shelter",
+        PUT cur_type INTO shelters.
+        PUT cur_bind INTO shelters.
+        PUT cur_body INTO shelters.
+      /IF.
+      IF phase IS "calm",
+        GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "Multiple CALM clauses in WEATHER block"), p2).
+      /IF.
+      REAP c_pair FROM consume, tokens, p2.
+      REAP p3 FROM _second, c_pair.
+      REAP tok2 FROM peek, tokens, p3.
+      REAP lx2 FROM tok_lex, tok2.
+      IF lx2 IS ",",
+        REAP cm_pair FROM consume, tokens, p3.
+        REAP p3 FROM _second, cm_pair.
+      /IF.
+      SET calm_body TO plant_list_make(0).
+      SET phase TO "calm".
+      SET p2 TO p3.
+      CONTINUE 0.
+    /IF.
+    REAP stmt_pair FROM parse_statement, tokens, p2.
+    CREATE stmt TO stmt_pair[0].
+    REAP p2 FROM _second, stmt_pair.
+    IF stmt > "",
+      REAP sty FROM _map_get, stmt, "type".
+      IF sty IS "syntax_error",
+        GIVE stmt_pair.
+      /IF.
+      IF phase IS "shelter",
+        PUT stmt INTO cur_body.
+      /IF.
+      IF phase IS "body",
+        PUT stmt INTO body.
+      /IF.
+      IF phase IS "calm",
+        PUT stmt INTO calm_body.
+      /IF.
+    /IF.
+  /SEASON.
+/ACTION.
+
 ACTION parse_statement(tokens(LIST), pos(NUM)),
   SEASON TRUE,
     REAP tok FROM peek, tokens, pos.
@@ -1431,6 +1587,14 @@ ACTION parse_statement(tokens(LIST), pos(NUM)),
   /IF.
   IF lx IS "CYCLE",
     REAP r FROM parse_cycle_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "WEATHER",
+    REAP r FROM parse_weather_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "THROW",
+    REAP r FROM parse_throw_stmt, tokens, pos.
     GIVE r.
   /IF.
   IF lx IS "REAP",

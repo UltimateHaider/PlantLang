@@ -1,0 +1,21 @@
+ACTION main(),
+  WEATHER,
+    THROW ZERO_STORM "z".
+  SHELTER ZERO_STORM,
+    SHOW "zero".
+  SHELTER LOCK_STORM,
+    SHOW "lock".
+  CALM,
+    SHOW "calm 1".
+  /WEATHER.
+  WEATHER,
+    THROW LOCK_STORM "l".
+  SHELTER ZERO_STORM,
+    SHOW "zero".
+  SHELTER LOCK_STORM AS err,
+    SHOW "locked: " + err.
+  CALM,
+    SHOW "calm 2".
+  /WEATHER.
+  GIVE 0.
+/GIVE main.

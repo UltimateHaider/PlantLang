@@ -379,6 +379,54 @@ const char* plant_env_get_weather(void) {
     return _plant_weather_buf[0] ? _plant_weather_buf : "clear";
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   v0.48.23 — WEATHER/SHELTER/CALM Exception Management
+   ═══════════════════════════════════════════════════════════════ */
+
+static PlantWeather* _plant_weather_head = NULL;
+
+void plant_weather_enter(PlantWeather* w) {
+    if (!w) return;
+    w->next = _plant_weather_head;
+    w->raised = 0;
+    w->exc_type = NULL;
+    w->exc_msg = NULL;
+    _plant_weather_head = w;
+}
+
+void plant_weather_leave(PlantWeather* w) {
+    if (!w) return;
+    if (_plant_weather_head == w) {
+        _plant_weather_head = w->next;
+    }
+}
+
+void plant_throw(const char* type, const char* msg) {
+    PlantWeather* w = _plant_weather_head;
+    if (w == NULL) {
+        fprintf(stderr, "[WEATHER] unhandled storm: %s %s\n",
+                type ? type : "(none)", msg ? msg : "");
+        fflush(stderr);
+        abort();
+    }
+    w->raised = 1;
+    w->exc_type = (char*)type;
+    w->exc_msg = (char*)msg;
+    longjmp(w->buf, 1);
+}
+
+const char* plant_exc_type(void) {
+    PlantWeather* w = _plant_weather_head;
+    if (w && w->exc_type) return (const char*)w->exc_type;
+    return "";
+}
+
+const char* plant_exc_msg(void) {
+    PlantWeather* w = _plant_weather_head;
+    if (w && w->exc_msg) return (const char*)w->exc_msg;
+    return "";
+}
+
 void plant_entity_set_species(void* entity, const char* species_name) {
     (void)entity;
     fprintf(stdout, "[SPECIES] entity set to %s\n", species_name ? species_name : "unknown");

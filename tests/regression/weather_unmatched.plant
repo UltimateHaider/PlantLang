@@ -1,0 +1,18 @@
+ACTION main(),
+  WEATHER,
+    WEATHER,
+      THROW LOCK_STORM "outer only handles".
+    SHELTER ZERO_STORM,
+      SHOW "wrong shelter".
+    CALM,
+      SHOW "inner calm (unmatched)".
+    /WEATHER.
+    SHOW "inner returned normally - BUG".
+  SHELTER LOCK_STORM AS err,
+    SHOW "outer locked: " + err.
+  CALM,
+    SHOW "outer calm".
+  /WEATHER.
+  SHOW "done".
+  GIVE 0.
+/GIVE main.

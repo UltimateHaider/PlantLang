@@ -704,6 +704,31 @@ ACTION _if_bodies(nd),
   GIVE out.
 /ACTION.
 
+# ──────────────────────────────────────────────────────────────
+#  _weather_bodies — flatten a weather_stmt's protected body,
+#  every SHELTER handler body, and the CALM body into one list so
+#  every statement-walking pass treats all three uniformly
+#  (v0.48.23). The shelters table is a flat [type, bind, body, …]
+#  triple list, so handler bodies sit at indices 2, 5, 8, …
+# ──────────────────────────────────────────────────────────────
+ACTION _weather_bodies(nd),
+  CREATE out(LIST) TO plant_list_make(0).
+  REAP wb FROM _map_get, nd, "body".
+  PUT wb INTO out.
+  REAP sh FROM _map_get, nd, "shelters".
+  CREATE si(NUM) TO 2.
+  SEASON si < COUNT sh,
+    REAP sb FROM plant_list_get, sh, si.
+    PUT sb INTO out.
+    SET si TO si + 3.
+  /SEASON.
+  REAP cb FROM _map_get, nd, "calm".
+  IF COUNT cb > 0,
+    PUT cb INTO out.
+  /IF.
+  GIVE out.
+/ACTION.
+
 ACTION collect_declared_walk(bd(LIST), declared(LIST)),
   CREATE wi(NUM) TO 0.
   CREATE nd(TX) TO "".
@@ -731,6 +756,15 @@ ACTION collect_declared_walk(bd(LIST), declared(LIST)),
     IF ty IS "cycle_stmt",
       REAP sub_bd FROM _map_get, nd, "body".
       REAP sub_ret FROM collect_declared_walk, sub_bd, declared.
+    /IF.
+    IF ty IS "weather_stmt",
+      REAP wbd2 FROM _weather_bodies, nd.
+      CREATE wbi2(NUM) TO 0.
+      SEASON wbi2 < COUNT wbd2,
+        REAP wbel2 FROM plant_list_get, wbd2, wbi2.
+        REAP sub_ret FROM collect_declared_walk, wbel2, declared.
+        SET wbi2 TO wbi2 + 1.
+      /SEASON.
     /IF.
     SET wi TO wi + 1.
   /SEASON.
@@ -780,6 +814,15 @@ ACTION collect_used_walk(bd(LIST), used(LIST), declared(LIST)),
     IF ty IS "cycle_stmt",
       REAP sub_bd FROM _map_get, nd, "body".
       REAP sub_ret FROM collect_used_walk, sub_bd, used, declared.
+    /IF.
+    IF ty IS "weather_stmt",
+      REAP wbd3 FROM _weather_bodies, nd.
+      CREATE wbi3(NUM) TO 0.
+      SEASON wbi3 < COUNT wbd3,
+        REAP wbel3 FROM plant_list_get, wbd3, wbi3.
+        REAP sub_ret FROM collect_used_walk, wbel3, used, declared.
+        SET wbi3 TO wbi3 + 1.
+      /SEASON.
     /IF.
     SET wi TO wi + 1.
   /SEASON.
@@ -1033,6 +1076,15 @@ ACTION collect_enums_walk(bd, subst, reg, sigs, res),
       CREATE sbl(LIST) TO _map_get(wnd, "body").
       REAP wret FROM collect_enums_walk, sbl, subst, reg, sigs, res.
     /IF.
+    IF wty IS "weather_stmt",
+      REAP wbl4 FROM _weather_bodies, wnd.
+      CREATE wbi4(NUM) TO 0.
+      SEASON wbi4 < COUNT wbl4,
+        REAP wbel4 FROM plant_list_get, wbl4, wbi4.
+        REAP wret FROM collect_enums_walk, wbel4, subst, reg, sigs, res.
+        SET wbi4 TO wbi4 + 1.
+      /SEASON.
+    /IF.
     SET wi TO wi + 1.
   /SEASON.
   GIVE res.
@@ -1205,6 +1257,15 @@ ACTION collect_nums_walk(bd(LIST), subst(LIST), res(LIST)),
     IF wty IS "season_stmt" OR wty IS "cycle_stmt" OR wty IS "match_stmt",
       REAP wbd2 FROM _map_get, wnd, "body".
       REAP wret2 FROM collect_nums_walk, wbd2, subst, res.
+    /IF.
+    IF wty IS "weather_stmt",
+      REAP wbl5 FROM _weather_bodies, wnd.
+      CREATE wbi5(NUM) TO 0.
+      SEASON wbi5 < COUNT wbl5,
+        REAP wbel5 FROM plant_list_get, wbl5, wbi5.
+        REAP wret2 FROM collect_nums_walk, wbel5, subst, res.
+        SET wbi5 TO wbi5 + 1.
+      /SEASON.
     /IF.
     IF wty IS "cycle_stmt",
       REAP wle2 FROM _map_get, wnd, "listExpr".
@@ -1464,6 +1525,15 @@ ACTION async_walk_decl(bd(LIST), acc(LIST)),
         SET ci TO ci + 1.
       /SEASON.
     /IF.
+    IF ty IS "weather_stmt",
+      REAP wbl6 FROM _weather_bodies, nd.
+      CREATE wbi6(NUM) TO 0.
+      SEASON wbi6 < COUNT wbl6,
+        REAP wbel6 FROM plant_list_get, wbl6, wbi6.
+        REAP acc FROM async_walk_decl, wbel6, acc.
+        SET wbi6 TO wbi6 + 1.
+      /SEASON.
+    /IF.
     SET wi TO wi + 1.
   /SEASON.
   GIVE acc.
@@ -1614,7 +1684,7 @@ ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIS
         PUT ls INTO lead.
         SET lj TO lj + 1.
       /SEASON.
-      REAP lcode FROM generate_body, lead, 1, sigs, subst, clmap, "a", nums_s, stvars, evars, "", "".
+      REAP lcode FROM generate_body, lead, 1, sigs, subst, clmap, "a", nums_s, stvars, evars, "", "", "".
       SET code TO code + lcode.
       CREATE aw_last(NUM) TO nst - 1.
       REAP awnd FROM plant_list_get, phd, aw_last.
@@ -1646,7 +1716,7 @@ ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIS
       /IF.
     /IF.
     IF nxt IS nph,
-      REAP tcode FROM generate_body, phd, 1, sigs, subst, clmap, "a", nums_s, stvars, evars, "", "".
+      REAP tcode FROM generate_body, phd, 1, sigs, subst, clmap, "a", nums_s, stvars, evars, "", "", "".
       SET code TO code + tcode.
     /IF.
     SET ph2 TO ph2 + 1.
@@ -1722,13 +1792,13 @@ ACTION indent_str(level(NUM)),
 #  for implicit returns / async steps / closures); gen_give_stmt
 #  uses it to wrap NUM-typed returns in _from_long (v0.48.13).
 # ──────────────────────────────────────────────────────────────
-ACTION generate_body(bd(LIST), indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST), rty(TX), mexit(TX)),
+ACTION generate_body(bd(LIST), indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST), rty(TX), mexit(TX), wexit(TX)),
   CREATE res(TX) TO "".
   CREATE i(NUM) TO 0.
   CREATE node_el(TX) TO "".
   SEASON i < COUNT bd,
     REAP node_el FROM plant_list_get, bd, i.
-    REAP node_code FROM generate_node, node_el, indent, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit.
+    REAP node_code FROM generate_node, node_el, indent, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
     IF node_code > "",
       SET res TO res + node_code.
     /IF.
@@ -1900,7 +1970,7 @@ ACTION _step_sign(e(TX)),
   GIVE "0".
 /ACTION.
 
-ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST), rty(TX), mexit(TX)),
+ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST), rty(TX), mexit(TX), wexit(TX)),
     REAP ntype FROM _map_get, node, "type".
     IF clmap IS "",
         SET clmap TO plant_list_make(0).
@@ -2131,15 +2201,17 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     /IF.
   
     # ── break_stmt → break; ───────────────────────────────────
+    #    v0.48.23: WEATHER frames enclosing the loop are popped by
+    #    wexit lines before the jump so no checkpoint goes stale.
     IF ntype IS "break_stmt",
         REAP isel FROM indent_str, indent.
-        GIVE isel + "  break;\n".
+        GIVE isel + wexit + isel + "  break;\n".
     /IF.
-  
+   
     # ── continue_stmt → continue; ─────────────────────────────
     IF ntype IS "continue_stmt",
         REAP isel FROM indent_str, indent.
-        GIVE isel + "  continue;\n".
+        GIVE isel + wexit + isel + "  continue;\n".
     /IF.
   
     # ── put_stmt: PUT item INTO target. → plant_array_push(…) ─
@@ -2250,7 +2322,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             SET ccl2 TO plant_list_make(0).
         /IF.
         CREATE cnode2(LIST) TO plant_list_make(10, "type", "reap_stmt", "target", "_", "action", ca2, "args", cargs2, "clargs", ccl2).
-        REAP ccode3 FROM generate_node, cnode2, indent, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit.
+        REAP ccode3 FROM generate_node, cnode2, indent, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
         GIVE ccode3.
     /IF.
 
@@ -2497,7 +2569,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP ccond FROM handle_strcmp, ccond.
         REAP isel FROM indent_str, indent.
         CREATE ccode(TX) TO isel + "  if (" + ccond + ") \{\n".
-        REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit.
+        REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
         SET ccode TO ccode + bcode.
         REAP elif FROM _map_get, node, "elif".
         IF COUNT elif > 0,
@@ -2508,7 +2580,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
                 REAP ecc FROM translate_expr, econd.
                 REAP ecc FROM handle_strcmp, ecc.
                 SET ccode TO ccode + isel + "  \} else if (" + ecc + ") \{\n".
-                REAP ebc FROM generate_body, ebd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit.
+                REAP ebc FROM generate_body, ebd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
                 SET ccode TO ccode + ebc.
                 SET ei2 TO ei2 + 2.
             /SEASON.
@@ -2516,7 +2588,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP ebody FROM _map_get, node, "else".
         IF COUNT ebody > 0,
             SET ccode TO ccode + isel + "  \} else \{\n".
-            REAP ebod FROM generate_body, ebody, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit.
+            REAP ebod FROM generate_body, ebody, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
             SET ccode TO ccode + ebod.
         /IF.
         SET ccode TO ccode + isel + "  \}\n".
@@ -2531,7 +2603,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP ccond FROM handle_strcmp, ccond.
         REAP isel FROM indent_str, indent.
         CREATE ccode(TX) TO isel + "  while (" + ccond + ") \{\n".
-        REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit.
+        REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
         SET ccode TO ccode + bcode + isel + "  \}\n".
         GIVE ccode.
     /IF.
@@ -2580,7 +2652,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
                 SET bound TO "((" + stepstr + " != 0) && (((" + stepstr + " > 0) && (" + ivar + " <= " + cto + ")) || ((" + stepstr + " <= 0) && (" + ivar + " >= " + cto + "))))".
             /IF.
             SET ccode TO isel + "  for (long " + ivar + " = " + cfrom + "; " + bound + "; " + ivar + " += " + stepstr + ") \{\n".
-            REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit.
+            REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
             SET ccode TO ccode + bcode + isel + "  \}\n".
             GIVE ccode.
         /IF.
@@ -2596,12 +2668,105 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             REAP clist FROM translate_expr, listExpr.
             SET ccode TO isel + "  for (long " + idxvar + " = 0; " + idxvar + " < plant_array_length(" + clist + "); " + idxvar + "++) \{\n".
             SET ccode TO ccode + isel + "    tx_t " + ivar + " = plant_list_get(" + clist + ", " + idxvar + ");\n".
-            REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit.
+            REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
             SET ccode TO ccode + bcode + isel + "  \}\n".
             GIVE ccode.
         /IF.
     
         GIVE "".
+    /IF.
+  
+    # ── weather_stmt: WEATHER … SHELTER … CALM … /WEATHER. ──
+    #    v0.48.23 — WEATHER/SHELTER/CALM exception management.
+    #    Emits a setjmp/longjmp checkpoint frame: the protected body
+    #    runs with the checkpoint pushed; a storm transfers control
+    #    to the else branch, where the captured exception is matched
+    #    against each SHELTER type (ANY_STORM is the catch-all "if
+    #    (1)"), the message is optionally bound via `AS err`, and the
+    #    frame is popped so a handler THROW propagates outward. The
+    #    CALM body always runs; unmatched storms are rethrown after
+    #    it, bubbling up to the enclosing WEATHER. The frame variable
+    #    is named from the indent level so nested WEATHER blocks each
+    #    address their own checkpoint even through the mexit/wexit
+    #    threading below.
+    IF ntype IS "weather_stmt",
+        REAP bd FROM _map_get, node, "body".
+        REAP sh FROM _map_get, node, "shelters".
+        REAP cb FROM _map_get, node, "calm".
+        REAP isel FROM indent_str, indent.
+        CREATE wnm(TX) TO "__w" + _from_long(indent).
+        CREATE wfm(TX) TO "__wm" + _from_long(indent).
+        CREATE ccode(TX) TO isel + "  \{\n".
+        SET ccode TO ccode + isel + "    PlantWeather " + wnm + " = \{0\};\n".
+        SET ccode TO ccode + isel + "    int " + wfm + " = 0;\n".
+        SET ccode TO ccode + isel + "    plant_weather_enter(&" + wnm + ");\n".
+        SET ccode TO ccode + isel + "    if (setjmp(" + wnm + ".buf) == 0) \{\n".
+        # GIVE/BREAK/CONTINUE escaping the block pop the checkpoint
+        # via the threaded exit lines before leaving the scope.
+        CREATE wx(TX) TO wexit + "  plant_weather_leave(&" + wnm + ");\n".
+        CREATE mx2(TX) TO mexit + "  plant_weather_leave(&" + wnm + ");\n".
+        REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx.
+        SET ccode TO ccode + bcode + isel + "    \} else \{\n".
+        SET ccode TO ccode + isel + "      const char* __et = plant_exc_type();\n".
+        SET ccode TO ccode + isel + "      const char* __em = plant_exc_msg();\n".
+        SET ccode TO ccode + isel + "      plant_weather_leave(&" + wnm + ");\n".
+        CREATE si2(NUM) TO 0.
+        CREATE wty2(TX) TO "".
+        CREATE wbd2(TX) TO "".
+        CREATE wbind2(TX) TO "".
+        SEASON si2 < COUNT sh,
+            REAP wty2 FROM plant_list_get, sh, si2.
+            REAP wbind2 FROM plant_list_get, sh, si2 + 1.
+            REAP wbd2 FROM plant_list_get, sh, si2 + 2.
+            IF si2 IS 0,
+                IF wty2 IS "ANY_STORM",
+                    SET ccode TO ccode + isel + "      if (1) \{\n".
+                /IF.
+                IF wty2 ISNT "ANY_STORM",
+                    SET ccode TO ccode + isel + "      if (strcmp(__et, \"" + wty2 + "\") == 0) \{\n".
+                /IF.
+            /IF.
+            IF si2 > 0,
+                IF wty2 IS "ANY_STORM",
+                    SET ccode TO ccode + isel + "      \} else if (1) \{\n".
+                /IF.
+                IF wty2 ISNT "ANY_STORM",
+                    SET ccode TO ccode + isel + "      \} else if (strcmp(__et, \"" + wty2 + "\") == 0) \{\n".
+                /IF.
+            /IF.
+            SET ccode TO ccode + isel + "        " + wfm + " = 1;\n".
+            IF wbind2 ISNT "" AND wbind2 ISNT "null",
+                SET ccode TO ccode + isel + "        tx_t " + wbind2 + " = (tx_t)__em;\n".
+            /IF.
+            REAP hcode FROM generate_body, wbd2, indent + 3, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx.
+            SET ccode TO ccode + hcode.
+            SET si2 TO si2 + 3.
+        /SEASON.
+        IF COUNT sh > 0,
+            SET ccode TO ccode + isel + "      \}\n".
+        /IF.
+        SET ccode TO ccode + isel + "    \}\n".
+        REAP cbcode FROM generate_body, cb, indent + 1, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx.
+        SET ccode TO ccode + cbcode.
+        SET ccode TO ccode + isel + "    if (" + wfm + " == 0 && " + wnm + ".raised) \{\n".
+        SET ccode TO ccode + isel + "      plant_throw((tx_t)" + wnm + ".exc_type, (tx_t)" + wnm + ".exc_msg);\n".
+        SET ccode TO ccode + isel + "    \}\n".
+        SET ccode TO ccode + isel + "    plant_weather_leave(&" + wnm + ");\n".
+        SET ccode TO ccode + isel + "  \}\n".
+        GIVE ccode.
+    /IF.
+  
+    # ── throw_stmt: THROW <storm> "msg". → plant_throw(type, msg) ─
+    IF ntype IS "throw_stmt",
+        REAP wtype2 FROM _map_get, node, "storm".
+        REAP wmsg2 FROM _map_get, node, "msg".
+        REAP isel FROM indent_str, indent.
+        CREATE cmsg(TX) TO "null".
+        IF wmsg2 > "",
+            REAP cmsg FROM translate_expr, wmsg2.
+            REAP cmsg FROM _handle_cat, cmsg, nums, evars.
+        /IF.
+        GIVE isel + "  plant_throw(\"" + wtype2 + "\", " + cmsg + ");\n".
     /IF.
   
     # ── match_stmt: MATCH expr { Variant -> { stmts } } → switch ─
@@ -2622,11 +2787,11 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             IF binding > "" AND binding ISNT "null",
                 SET ccode TO ccode + isel + "      \{\n".
                 SET ccode TO ccode + isel + "        tx_t " + binding + " = " + csubj + ";\n".
-                REAP bcode FROM generate_body, cbody, indent + 4, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit.
+                REAP bcode FROM generate_body, cbody, indent + 4, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
                 SET ccode TO ccode + bcode + isel + "      \}\n".
             /IF.
             IF binding IS "" OR binding IS "null",
-                REAP bcode FROM generate_body, cbody, indent + 4, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit.
+                REAP bcode FROM generate_body, cbody, indent + 4, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
                 SET ccode TO ccode + bcode.
             /IF.
             SET ccode TO ccode + isel + "      break;\n".
@@ -2712,7 +2877,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF mmode IS "SAFE", SET mexit TO "  plant_safe_exit();\n". /IF.
         IF mmode IS "SMART", SET mexit TO "  plant_smart_exit(\"" + aname + "\");\n". /IF.
         IF mmode IS "PERSISTENT", SET mexit TO "  plant_persist_exit();\n". /IF.
-        REAP bcode FROM generate_body, bd, 1, sigs, subst, clmap, actx, nums_a, stvars_a, evars_a, rty_a, mexit.
+        REAP bcode FROM generate_body, bd, 1, sigs, subst, clmap, actx, nums_a, stvars_a, evars_a, rty_a, mexit, "".
         # v0.48.15: Mission Mode binding — FAST actions bind the bump
         # heap (plant_fast_enter resets it at every scope enter);
         # SAFE actions carry the Boundary Handshake guard so FAST
@@ -2960,6 +3125,15 @@ ACTION collect_stvars_walk(bd(LIST), subst(LIST), res(LIST)),
       REAP wbd2 FROM _map_get, wnd, "body".
       REAP wret2 FROM collect_stvars_walk, wbd2, subst, res.
     /IF.
+    IF wty IS "weather_stmt",
+      REAP wbl7 FROM _weather_bodies, wnd.
+      CREATE wbi7(NUM) TO 0.
+      SEASON wbi7 < COUNT wbl7,
+        REAP wbel7 FROM plant_list_get, wbl7, wbi7.
+        REAP wret2 FROM collect_stvars_walk, wbel7, subst, res.
+        SET wbi7 TO wbi7 + 1.
+      /SEASON.
+    /IF.
     SET wi TO wi + 1.
   /SEASON.
   GIVE res.
@@ -3127,6 +3301,15 @@ ACTION collect_cb_uses(bd(LIST), sigs(LIST), acc(LIST)),
         REAP cb9 FROM _map_get, cl2, "bodyStatements".
         REAP acc FROM collect_cb_uses, cb9, sigs, acc.
         SET ci9 TO ci9 + 1.
+      /SEASON.
+    /IF.
+    IF ty IS "weather_stmt",
+      REAP wbl8 FROM _weather_bodies, nd.
+      CREATE wbi8(NUM) TO 0.
+      SEASON wbi8 < COUNT wbl8,
+        REAP wbel8 FROM plant_list_get, wbl8, wbi8.
+        REAP acc FROM collect_cb_uses, wbel8, sigs, acc.
+        SET wbi8 TO wbi8 + 1.
       /SEASON.
     /IF.
     SET wi TO wi + 1.
@@ -3617,6 +3800,15 @@ ACTION collect_struct_insts(bd(LIST), subst(LIST), structs(LIST), acc(LIST)),
             REAP sub_bd FROM _map_get, nd, "body".
             REAP acc FROM collect_struct_insts, sub_bd, subst, structs, acc.
         /IF.
+        IF ty IS "weather_stmt",
+            REAP wbl9 FROM _weather_bodies, nd.
+            CREATE wbi9(NUM) TO 0.
+            SEASON wbi9 < COUNT wbl9,
+                REAP wbel9 FROM plant_list_get, wbl9, wbi9.
+                REAP acc FROM collect_struct_insts, wbel9, subst, structs, acc.
+                SET wbi9 TO wbi9 + 1.
+            /SEASON.
+        /IF.
         SET ci TO ci + 1.
     /SEASON.
     GIVE acc.
@@ -3754,6 +3946,15 @@ ACTION collect_insts(bd(LIST), subst(LIST), templates(LIST), acc(LIST)),
             REAP sub_bd FROM _map_get, nd, "body".
             REAP acc FROM collect_insts, sub_bd, subst, templates, acc.
         /IF.
+        IF ty IS "weather_stmt",
+            REAP wbl10 FROM _weather_bodies, nd.
+            CREATE wbi10(NUM) TO 0.
+            SEASON wbi10 < COUNT wbl10,
+                REAP wbel10 FROM plant_list_get, wbl10, wbi10.
+                REAP acc FROM collect_insts, wbel10, subst, templates, acc.
+                SET wbi10 TO wbi10 + 1.
+            /SEASON.
+        /IF.
         SET ci TO ci + 1.
     /SEASON.
     GIVE acc.
@@ -3834,7 +4035,7 @@ ACTION emit_inst(inst(TX), templates(LIST), sigs(LIST), reg(LIST)),
         SET dcode TO dcode + "  tx_t " + dv + " = \"\";\n".
         SET di TO di + 1.
     /SEASON.
-    REAP bcode FROM generate_body, bd, 1, sigs, subst, plant_list_make(0), "", nums_m, stvars_m, evars_m, rty_m, "".
+    REAP bcode FROM generate_body, bd, 1, sigs, subst, plant_list_make(0), "", nums_m, stvars_m, evars_m, rty_m, "", "".
     IF (COUNT bd) IS 0,
         SET bcode TO "  return " + mname + ";\n".
     /IF.
@@ -4046,6 +4247,22 @@ ACTION callees_of(bd(LIST)),
         REAP cje FROM plant_list_get, cret2, cj.
         REAP acc FROM callee_add, acc, cje.
         SET cj TO cj + 1.
+      /SEASON.
+    /IF.
+    IF cty IS "weather_stmt",
+      REAP wbl11 FROM _weather_bodies, cnd.
+      CREATE wbi11(NUM) TO 0.
+      SEASON wbi11 < COUNT wbl11,
+        REAP wbel11 FROM plant_list_get, wbl11, wbi11.
+        REAP cret2 FROM callees_of, wbel11.
+        CREATE cj2(NUM) TO 0.
+        CREATE cje2(TX) TO "".
+        SEASON cj2 < COUNT cret2,
+          REAP cje2 FROM plant_list_get, cret2, cj2.
+          REAP acc FROM callee_add, acc, cje2.
+          SET cj2 TO cj2 + 1.
+        /SEASON.
+        SET wbi11 TO wbi11 + 1.
       /SEASON.
     /IF.
     SET ci TO ci + 1.
@@ -4277,7 +4494,7 @@ ACTION generate_c(ast(LIST)),
         REAP node_el FROM plant_list_get, ast, i.
         REAP ntype FROM _map_get, node_el, "type".
         IF ntype IS "enum_decl",
-            REAP nd_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "", "". "".
+            REAP nd_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "", "", "". "".
             SET struct_code TO struct_code + nd_code.
         /IF.
         SET i TO i + 1.
@@ -4628,7 +4845,7 @@ ACTION generate_c(ast(LIST)),
                     REAP node_el2 FROM map_add, node_el2, "main_rename", "1".
                 /IF.
                 REAP cmact FROM _cl_map_get, clmaps, aname.
-                REAP nd_code FROM generate_node, node_el2, 0, sigs, esub, cmact, "", plant_list_make(0), plant_list_make(0), eregs, "", "".
+                REAP nd_code FROM generate_node, node_el2, 0, sigs, esub, cmact, "", plant_list_make(0), plant_list_make(0), eregs, "", "", "".
                 SET decl_code TO decl_code + nd_code.
                 SET has_decl TO 1.
             /IF.
@@ -4637,7 +4854,7 @@ ACTION generate_c(ast(LIST)),
             SET has_decl TO 1.
         /IF.
         IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl",
-            REAP ns_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "", "". "".
+            REAP ns_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "", "", "". "".
             SET stmt_code TO stmt_code + ns_code.
             SET has_stmt TO 1.
         /IF.
@@ -4855,6 +5072,18 @@ ACTION _cl_scopes(bd(LIST), scopes(LIST), sigs(LIST)),
                 SET mn2 TO mn2 + 1.
             /SEASON.
         /IF.
+        IF sty IS "weather_stmt",
+            REAP wsh FROM _map_get, st, "shelters".
+            CREATE wni(NUM) TO 1.
+            SEASON wni < COUNT wsh,
+                REAP wbe FROM plant_list_get, wsh, wni.
+                IF wbe > "" AND wbe ISNT "null",
+                    PUT wbe INTO res.
+                    PUT "tx_t" INTO res.
+                /IF.
+                SET wni TO wni + 3.
+            /SEASON.
+        /IF.
         SET n2 TO n2 + 1.
     /SEASON.
     GIVE res.
@@ -4993,8 +5222,9 @@ ACTION _cl_walk(bd(LIST), scopes(LIST), clseq(LIST), clmap(LIST), cid(NUM), sigs
             /IF.
         /IF.
         # recurse into nested bodies (same scope + their own locals);
-        # if_stmt branches are walked uniformly via _if_bodies (v0.48.20)
-        IF sty3 ISNT "if_stmt",
+        # if_stmt branches are walked uniformly via _if_bodies and
+        # weather_stmt bodies via _weather_bodies (v0.48.20/.48.23)
+        IF sty3 ISNT "if_stmt" AND sty3 ISNT "weather_stmt",
             REAP bd3 FROM _map_get, st3, "body".
             IF bd3 > "",
                 REAP scn FROM _cl_scopes, bd3, sc3, sigs.
@@ -5015,6 +5245,19 @@ ACTION _cl_walk(bd(LIST), scopes(LIST), clseq(LIST), clmap(LIST), cid(NUM), sigs
                 REAP rmap FROM plant_list_get, cres, 1.
                 REAP cc FROM plant_list_get, cres, 2.
                 SET ibi3 TO ibi3 + 1.
+            /SEASON.
+        /IF.
+        IF sty3 IS "weather_stmt",
+            REAP wbl13 FROM _weather_bodies, st3.
+            CREATE wbi13(NUM) TO 0.
+            SEASON wbi13 < COUNT wbl13,
+                REAP wbel13 FROM plant_list_get, wbl13, wbi13.
+                REAP scn FROM _cl_scopes, wbel13, sc3, sigs.
+                REAP cres FROM _cl_walk, wbel13, scn, res, rmap, cc, sigs.
+                REAP res FROM plant_list_get, cres, 0.
+                REAP rmap FROM plant_list_get, cres, 1.
+                REAP cc FROM plant_list_get, cres, 2.
+                SET wbi13 TO wbi13 + 1.
             /SEASON.
         /IF.
         IF sty3 IS "match_stmt",
@@ -5219,7 +5462,7 @@ ACTION _cl_emit_fn(cnode(LIST), sigs(LIST), subst(LIST), reg(LIST)),
             SET di6 TO di6 + 1.
         /SEASON.
         CREATE evars_c(LIST) TO collect_enums(bb, cbpars2, subst, reg, sigs).
-        REAP bc3 FROM generate_body, bb, 1, sigs, subst, cm2, "", nums_c, stvars_c, evars_c, "", "".
+        REAP bc3 FROM generate_body, bb, 1, sigs, subst, cm2, "", nums_c, stvars_c, evars_c, "", "", "".
         SET fnc TO fnc + bc3 + "".
     /IF.
     SET fnc TO fnc + "\}\n".
