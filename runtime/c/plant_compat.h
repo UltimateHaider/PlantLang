@@ -339,6 +339,11 @@ static tx_t strings_PAD_LEFT(tx_t s, long n, tx_t c) { return string_pad_left(s,
 tx_t file_copy(tx_t src, tx_t dest);   /* "1" ok | "0" error */
 tx_t file_move(tx_t src, tx_t dest);   /* "1" ok | "0" error (rename, copy+unlink fallback) */
 tx_t file_stat(tx_t path);             /* PlantArray* pair-list MAP (size/mtime/mode) | NULL error */
+tx_t fs_append(tx_t path, tx_t content); /* "1" ok | "0" error ("ab": creates if missing) */
+
+/* ── std/io (v0.48.28) ── */
+tx_t io_showln(tx_t s);   /* prints text + trailing newline; NULL/"" → bare newline */
+tx_t io_flush(void);      /* fflush(stdout); → "1" */
 
 /* ── std/math (decimal TX args/returns) ── */
 tx_t math_sin(tx_t x);
@@ -363,6 +368,13 @@ static tx_t math_SIGN(tx_t x)          { return math_sign(x); }
 static tx_t math_CLAMP(tx_t x, tx_t lo, tx_t hi) { return math_clamp(x, lo, hi); }
 static tx_t math_PI(void)              { return math_pi(); }
 static tx_t math_E(void)               { return math_e(); }
+
+/* ── std/io FFI bindings (v0.48.28) ── */
+static tx_t io_SHOWLN(tx_t s)          { return io_showln(s); }
+static tx_t io_FLUSH(void)             { return io_flush(); }
+
+/* ── std/fs FFI bindings (v0.48.28) ── */
+static tx_t fs_APPEND(tx_t p, tx_t c)  { return fs_append(p, c); }
 
 /* ── std/time ── */
 tx_t time_now(void);                       /* epoch seconds as decimal TX */

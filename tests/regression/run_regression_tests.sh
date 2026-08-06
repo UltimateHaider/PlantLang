@@ -10,6 +10,9 @@ ROOT=$(cd "$DIR/../.." && pwd)
 BUILD=${TMPDIR:-/tmp}/plantlang_regression_tests
 rm -rf "$BUILD"
 mkdir -p "$BUILD"
+# stale scratch files from the fs_append regression test (appends must
+# start from an empty target each run)
+rm -f /tmp/plantlang_fs_append_*.txt
 pass=0
 fail=0
 

@@ -1,0 +1,10 @@
+append new file = 1
+exists after append = 1
+content1 = first line
+append existing file = 1
+content2 = first linesecond line
+append empty text = 1
+content3 = first linesecond line
+append second file = 1
+content4 = b-one
+append bad path = 0

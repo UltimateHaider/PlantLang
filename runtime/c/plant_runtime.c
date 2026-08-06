@@ -1314,6 +1314,42 @@ tx_t file_stat(tx_t path) {
     return (tx_t)m;
 }
 
+/* ── v0.48.28 — fs:APPEND ──
+   Appends text to an existing file, or creates the file when the
+   target path does not exist ("ab": append mode auto-creates).
+   Returns "1" on success, "0" on failure (NULL path, open error,
+   close error). */
+tx_t fs_append(tx_t path, tx_t content) {
+    const char* p = _S(path);
+    if (!p) return "0";
+    FILE* f = fopen(p, "ab");
+    if (!f) return "0";
+    if (content) {
+        const char* c = _S(content);
+        if (c && c[0]) fwrite(c, 1, strlen(c), f);
+    }
+    if (fclose(f) != 0) return "0";
+    return "1";
+}
+
+/* ── std/io (v0.48.28) ───────────────────────────────────────── */
+
+/* io_showln: text output followed by a trailing newline; NULL or
+   empty input degrades to a bare newline (no pointer faults). */
+tx_t io_showln(tx_t s) {
+    const char* t = _S(s);
+    if (t) printf("%s\n", t);
+    else printf("\n");
+    return "1";
+}
+
+/* io_flush: force stdout buffer clearance so printed data appears
+   without buffering delays (useful when stdout is piped). */
+tx_t io_flush(void) {
+    fflush(stdout);
+    return "1";
+}
+
 /* ── std/math ────────────────────────────────────────────────── */
 
 static double _num(const char* s) { return s ? atof(s) : 0.0; }

@@ -1,0 +1,31 @@
+# fs_append: fs:APPEND (v0.48.28).
+# APPEND opens the target in append mode ("ab"): a non-existent
+# target is created, an existing target keeps its prior content and
+# receives the new text after it. READ-back verifies absolute
+# content persistence and integrity; an unwritable path must fail
+# with "0". Files live under /tmp and the regression runner removes
+# stale ones before each run so appends start from empty.
+  REAP n1 FROM fs:APPEND, "/tmp/plantlang_fs_append_a.txt", "first line".
+  REAP e1 FROM fs:EXISTS, "/tmp/plantlang_fs_append_a.txt".
+  REAP c1 FROM fs:READ, "/tmp/plantlang_fs_append_a.txt".
+  SHOW "append new file = " + n1.
+  SHOW "exists after append = " + e1.
+  SHOW "content1 = " + c1.
+
+  REAP n2 FROM fs:APPEND, "/tmp/plantlang_fs_append_a.txt", "second line".
+  REAP c2 FROM fs:READ, "/tmp/plantlang_fs_append_a.txt".
+  SHOW "append existing file = " + n2.
+  SHOW "content2 = " + c2.
+
+  REAP n3 FROM fs:APPEND, "/tmp/plantlang_fs_append_a.txt", "".
+  REAP c3 FROM fs:READ, "/tmp/plantlang_fs_append_a.txt".
+  SHOW "append empty text = " + n3.
+  SHOW "content3 = " + c3.
+
+  REAP n4 FROM fs:APPEND, "/tmp/plantlang_fs_append_b.txt", "b-one".
+  REAP c4 FROM fs:READ, "/tmp/plantlang_fs_append_b.txt".
+  SHOW "append second file = " + n4.
+  SHOW "content4 = " + c4.
+
+  REAP n5 FROM fs:APPEND, "/tmp/plantlang_no_such_dir_plantlang/x.txt", "x".
+  SHOW "append bad path = " + n5.

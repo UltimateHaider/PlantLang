@@ -1,0 +1,15 @@
+# io_full: io:SHOWLN and io:FLUSH (v0.48.28).
+# SHOWLN prints the given text followed by a trailing newline;
+# empty and NULL inputs degrade to a bare newline. Multi-line
+# strings carry literal newlines from the source. FLUSH forces the
+# stdout buffer out so ordering is observable even when piped.
+  REAP a FROM io:SHOWLN, "hello io".
+  REAP b FROM io:SHOWLN, "".
+  REAP c FROM io:SHOWLN, "alpha
+beta
+gamma".
+  REAP d FROM io:SHOWLN, "   padded   ".
+  REAP f FROM io:FLUSH.
+  REAP e1 FROM io:SHOWLN, "after flush".
+  SHOW "flush rc = " + f.
+  REAP e2 FROM io:SHOWLN, "tail".

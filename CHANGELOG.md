@@ -1,5 +1,41 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.28 — 2026 (IO and File System Extensions)
+
+### New Features
+- **`io:` FFI module.** Two bindings expose runtime output control to
+  scripts: `io:SHOWLN` and `io:FLUSH` (thin static wrappers in
+  `plant_compat.h`, same `module:FUNC` → `module_FUNC` rewrite as the
+  `strings:`/`math:` bindings; zero-argument REAP for `FLUSH`).
+- **Runtime implementations** (`plant_runtime.c`):
+  - `io_showln` — prints the text followed by a trailing newline.
+    NULL and empty inputs degrade to a bare newline (no pointer or
+    formatting faults). Returns `"1"`.
+  - `io_flush` — forces immediate stdout buffer clearance via
+    `fflush(stdout)` so printed data is observable without buffering
+    delays when stdout is piped. Returns `"1"`.
+  - `fs_append` — appends text content to a target path opened in
+    `"ab"` (append mode): a pre-existing file keeps its prior content
+    and receives the new text after it, and a non-existent target is
+    dynamically created. NULL paths, open errors, and close errors
+    return `"0"`; empty content is a no-op. Reliable `fclose` on all
+    paths prevents resource leaks.
+- **`fs:APPEND` FFI binding** — closes the last gap in the legacy
+  `fs` module (`READ WRITE APPEND EXISTS` now all callable from
+  scripts).
+
+### Regression Tests
+- `io_full`: `SHOWLN` across plain text, empty input (bare newline),
+  a multi-line string (literal newlines from the source), and
+  whitespace-padded text; `FLUSH` between outputs with return-code
+  verification.
+- `fs_append`: append to a non-existent target (created), append to a
+  pre-existing target (prior content preserved, exact concatenation
+  verified by `fs:READ`-back), empty-content append (no-op), a second
+  independent file, and an unwritable path (`"0"`). The regression
+  runner removes stale `/tmp/plantlang_fs_append_*.txt` scratch files
+  before each run so appends always start from empty.
+
 ## v0.48.27 — 2026 (Mathematical Library)
 
 ### New Features
