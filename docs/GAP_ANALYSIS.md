@@ -71,11 +71,11 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `CREATE x(LIST) TO a, b, c.` comma init | S | M | aggregates built via `plant_list_make` |
 | `LET x = expr.` | S | **S** | |
 | `SET t TO e.` | S | **S** | `SELF:prop`/`obj:field` member targets M |
-| `INCREASE` / `DECREASE … BY` | S | M | |
+| `INCREASE` / `DECREASE … BY` | S | **S** | `INCREASE x BY n.` / `DECREASE x BY n.` shipped in v0.48.22-patch (numeric targets only, compound C assignment) |
 | `EVAPORATE` / `LOCK` / `EMPTY` | S | M | EMPTY was already a parse stub in legacy |
 | `IF cond, body [ORIF][ELSE]` | S | **S** | Shipped in v0.48.20 (multi-branch chains) |
 | `SEASON cond, body` | S | **S** | |
-| `CYCLE x IN list` / `CYCLE i, idx IN` / `CYCLE i FROM lo TO hi` | S | P | All three CYCLE forms shipped in v0.48.22 (FROM/TO in v0.48.21) |
+| `CYCLE x IN list` / `CYCLE i, idx IN` / `CYCLE i FROM lo TO hi` | S | **S** | All three CYCLE forms shipped in v0.48.22 (FROM/TO in v0.48.21) |
 | `FOR item IN coll` | S | M | |
 | `BREAK` / `CONTINUE` | S | **S** | |
 | `STOP IF cond` | S | M | |
@@ -265,7 +265,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 **High effort / high value**
 1. **Storms / exception handling** (WEATHER/SHELTER/CALM + `LOST_STORM`/`ZERO_STORM`): the largest semantic gap; needs an unwinding strategy in generated C.
 2. **List/map/std library surface**: array & map literals, slices, `FIRST/LAST/SUM/AVERAGE/MEDIAN/UNIQUE/REVERSE/FLATTEN/CHUNK/ZIP/RANGE`, string `UPPER/LOWER/TRIM/INCLUDES/STARTS_WITH/ENDS_WITH/FIND/COUNT_OF/JOIN/REPLACE/SPLIT/SLICE/REPEAT/PAD_*`, `math` extras (`LOG PI E SIGN CLAMP`), `fs:APPEND`.
-3. **ORIF/ELSE, CYCLE (3 forms), INCREASE/DECREASE, string interpolation** — parser/codegen work with existing runtime support.
+3. **String interpolation** — remaining legacy syntax gap; ORIF/ELSE (v0.48.20), CYCLE 3 forms (v0.48.21-22) and INCREASE/DECREASE (v0.48.22-patch) are shipped.
 
 **Medium effort**
 4. **Re-wire the dormant POSIX sockets**: `HARVEST` (HTTP GET/POST via `plant_net_harvest`) and a minimal `LISTEN` server (or defer).

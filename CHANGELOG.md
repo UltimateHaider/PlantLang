@@ -34,6 +34,25 @@
 - Element variables are text (`tx_t`): numeric list payloads convert
   with `_to_long(item)` (or `_from_long` for output).
 
+### Patch (v0.48.22-patch)
+Shipped `INCREASE x BY n.` and `DECREASE x BY n.` (legacy gap 3.2):
+- Parser: `parse_incdec_stmt` consumes the keyword, target identifier,
+  and a mandatory `BY` clause (missing `BY` is a syntax error) and
+  builds a dedicated `increase_stmt`/`decrease_stmt` node carrying the
+  target name and evaluated expression; dispatched from
+  `parse_statement`.
+- Codegen: compound C assignment `x += expr;` / `x -= expr;`. The RHS
+  goes through `_handle_cat` so numeric literals, negative offsets,
+  zero values, and composite arithmetic (`a * 2`, `idx + 1`) keep raw
+  numeric C operators. Targets must be registered numeric variables
+  (in `nums` — NUM/FACT CREATE/LET targets, CYCLE FROM/TO counters,
+  and list-iteration index vars); a non-numeric target is rejected
+  with a compile-time `#error` line, preserving type invariants.
+- Loops: works inside CYCLE bodies alongside BREAK/CONTINUE, with
+  negative STEP ranges, and against list-iteration index variables.
+- Two regression tests (`incdec_basic`, `incdec_loop`): 69 regression
+  / 101 total. Self-host converged 274255 B; DISTCHECK OK.
+
 ## v0.48.21 — 2026 (Numeric Range CYCLE)
 
 ### New Features

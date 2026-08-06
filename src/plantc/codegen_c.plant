@@ -1491,6 +1491,28 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         GIVE isel + "  " + target + " = " + cval + ";\n".
     /IF.
   
+    # ── increase_stmt / decrease_stmt: INCREASE x BY n. → x += n; ─
+    #    compound C assignment for numeric targets; a non-numeric
+    #    target is rejected at compile time with a #error line
+    #    (v0.48.22-patch). The RHS goes through _handle_cat so
+    #    numeric literals/vars keep raw arithmetic and text
+    #    expressions degrade to concatenation as usual.
+    IF ntype IS "increase_stmt" OR ntype IS "decrease_stmt",
+        REAP target FROM _map_get, node, "target".
+        REAP val FROM _map_get, node, "value".
+        REAP cval FROM translate_expr, val.
+        REAP cval FROM _handle_cat, cval, nums, evars.
+        REAP isel FROM indent_str, indent.
+        REAP isnc FROM list_contains, nums, target.
+        IF isnc IS 0,
+            GIVE "#error " + target + " is not a numeric variable; INCREASE/DECREASE require a NUM variable\n".
+        /IF.
+        IF ntype IS "increase_stmt",
+            GIVE isel + "  " + target + " += " + cval + ";\n".
+        /IF.
+        GIVE isel + "  " + target + " -= " + cval + ";\n".
+    /IF.
+  
     # ── let_stmt: LET var AS TYPE IS val. → type var = val; ──
     #    async step phases: assignment into the state-backed local.
     IF ntype IS "let_stmt",

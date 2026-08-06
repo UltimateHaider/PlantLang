@@ -32,6 +32,7 @@ tx_t parse_create_stmt(PlantArray* tokens, long pos);
 tx_t parse_show_stmt(PlantArray* tokens, long pos);
 tx_t parse_give_stmt(PlantArray* tokens, long pos);
 tx_t parse_set_stmt(PlantArray* tokens, long pos);
+tx_t parse_incdec_stmt(PlantArray* tokens, long pos, tx_t op);
 tx_t parse_let_stmt(PlantArray* tokens, long pos);
 tx_t parse_closure(PlantArray* tokens, long pos);
 tx_t parse_reap_stmt(PlantArray* tokens, long pos);
@@ -1434,6 +1435,35 @@ tx_t parse_set_stmt(PlantArray* tokens, long pos) {
     p5 = _second(vpair);
     return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "set_stmt" , "target" , id_name , "value" , expr ) , p5 );
 }
+tx_t parse_incdec_stmt(PlantArray* tokens, long pos, tx_t op) {
+  tx_t pair = "";
+  tx_t p2 = "";
+  tx_t id_pair = "";
+  tx_t id_name = "";
+  tx_t p3 = "";
+  tx_t by_pair = "";
+  tx_t by_lx = "";
+  tx_t p4 = "";
+  tx_t vpair = "";
+  tx_t p5 = "";
+    pair = consume(tokens, pos);
+    p2 = _second(pair);
+    id_pair = consume(tokens, p2);
+    id_name = tok_lex(plant_list_get(id_pair,  0 ));
+    p3 = _second(id_pair);
+    by_pair = consume(tokens, p3);
+    by_lx = tok_lex(plant_list_get(by_pair,  0 ));
+    p4 = _second(by_pair);
+    if (strcmp(by_lx,"BY") != 0) {
+        tx_t dmsg = _cat(_cat("Expected BY in ", op), " statement");
+        return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , dmsg ) , p3 );
+    }
+    vpair = collect_value(tokens, p4);
+    tx_t expr = plant_list_get(vpair,  0 );
+    p5 = _second(vpair);
+    tx_t nty = _cat(op, "_stmt");
+    return plant_list_make ( 2 , plant_list_make ( 6 , "type" , nty , "target" , id_name , "value" , expr ) , p5 );
+}
 tx_t parse_let_stmt(PlantArray* tokens, long pos) {
   tx_t pair = "";
   tx_t p2 = "";
@@ -2547,6 +2577,14 @@ tx_t parse_statement(PlantArray* tokens, long pos) {
     }
     if (strcmp(lx,"SET") == 0) {
         r = parse_set_stmt(tokens, pos);
+        return r;
+    }
+    if (strcmp(lx,"INCREASE") == 0) {
+        r = parse_incdec_stmt(tokens, pos, "increase");
+        return r;
+    }
+    if (strcmp(lx,"DECREASE") == 0) {
+        r = parse_incdec_stmt(tokens, pos, "decrease");
         return r;
     }
     if (strcmp(lx,"LET") == 0) {
@@ -4629,6 +4667,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t vst2 = "";
   tx_t vct2 = "";
   tx_t vst3 = "";
+  tx_t isnc = "";
   tx_t vst4 = "";
   tx_t vct4 = "";
   tx_t vst5 = "";
@@ -4808,6 +4847,21 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         cval = _handle_cat(cval, nums, evars);
         isel = indent_str(indent);
         return _cat(_cat(_cat(_cat(_cat(isel, "  "), target), " = "), cval), ";\n");
+    }
+    if (strcmp(ntype,"increase_stmt") == 0 || strcmp(ntype,"decrease_stmt") == 0) {
+        target = _map_get(node, "target");
+        val = _map_get(node, "value");
+        cval = translate_expr(val);
+        cval = _handle_cat(cval, nums, evars);
+        isel = indent_str(indent);
+        isnc = list_contains(nums, target);
+        if (isnc == 0) {
+            return _cat(_cat("#error ", target), " is not a numeric variable; INCREASE/DECREASE require a NUM variable\n");
+        }
+        if (strcmp(ntype,"increase_stmt") == 0) {
+            return _cat(_cat(_cat(_cat(_cat(isel, "  "), target), " += "), cval), ";\n");
+        }
+        return _cat(_cat(_cat(_cat(_cat(isel, "  "), target), " -= "), cval), ";\n");
     }
     if (strcmp(ntype,"let_stmt") == 0) {
         target = _map_get(node, "target");

@@ -1,0 +1,20 @@
+ACTION main(),
+  CREATE a(NUM) TO 10.
+  INCREASE a BY 5.
+  SHOW "a=" + a.
+  DECREASE a BY 3.
+  SHOW "a=" + a.
+  INCREASE a BY -2.
+  SHOW "a=" + a.
+  DECREASE a BY -4.
+  SHOW "a=" + a.
+  INCREASE a BY 0.
+  SHOW "a=" + a.
+  INCREASE a BY a - 2.
+  SHOW "a=" + a.
+  INCREASE a BY a * 2.
+  SHOW "a=" + a.
+  DECREASE a BY 2 * a.
+  SHOW "a=" + a.
+  GIVE 0.
+/GIVE main.

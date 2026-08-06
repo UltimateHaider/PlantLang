@@ -519,6 +519,31 @@ ACTION parse_set_stmt(tokens(LIST), pos(NUM)),
   GIVE plant_list_make(2, plant_list_make(6, "type", "set_stmt", "target", id_name, "value", expr), p5).
 /ACTION.
 
+#── INCREASE / DECREASE ─────────────────────────────────────────
+# INCREASE target BY expr.  →  target += expr;
+# DECREASE target BY expr.  →  target -= expr;
+# op is "increase" or "decrease" (legacy PlantLang, gap 3.2).
+# Returns [node, pos]; a missing "BY" is a syntax error.
+ACTION parse_incdec_stmt(tokens(LIST), pos(NUM), op(TX)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP id_pair FROM consume, tokens, p2.
+  REAP id_name FROM tok_lex, id_pair[0].
+  REAP p3 FROM _second, id_pair.
+  REAP by_pair FROM consume, tokens, p3.
+  REAP by_lx FROM tok_lex, by_pair[0].
+  REAP p4 FROM _second, by_pair.
+  IF by_lx ISNT "BY",
+    CREATE dmsg(TX) TO "Expected BY in " + op + " statement".
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", dmsg), p3).
+  /IF.
+  REAP vpair FROM collect_value, tokens, p4.
+  CREATE expr TO vpair[0].
+  REAP p5 FROM _second, vpair.
+  CREATE nty(TX) TO op + "_stmt".
+  GIVE plant_list_make(2, plant_list_make(6, "type", nty, "target", id_name, "value", expr), p5).
+/ACTION.
+
 ACTION parse_let_stmt(tokens(LIST), pos(NUM)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -1374,6 +1399,14 @@ ACTION parse_statement(tokens(LIST), pos(NUM)),
   /IF.
   IF lx IS "SET",
     REAP r FROM parse_set_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "INCREASE",
+    REAP r FROM parse_incdec_stmt, tokens, pos, "increase".
+    GIVE r.
+  /IF.
+  IF lx IS "DECREASE",
+    REAP r FROM parse_incdec_stmt, tokens, pos, "decrease".
     GIVE r.
   /IF.
   IF lx IS "LET",

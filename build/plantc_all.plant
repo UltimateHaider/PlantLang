@@ -860,6 +860,31 @@ ACTION parse_set_stmt(tokens(LIST), pos(NUM)),
   GIVE plant_list_make(2, plant_list_make(6, "type", "set_stmt", "target", id_name, "value", expr), p5).
 /ACTION.
 
+#── INCREASE / DECREASE ─────────────────────────────────────────
+# INCREASE target BY expr.  →  target += expr;
+# DECREASE target BY expr.  →  target -= expr;
+# op is "increase" or "decrease" (legacy PlantLang, gap 3.2).
+# Returns [node, pos]; a missing "BY" is a syntax error.
+ACTION parse_incdec_stmt(tokens(LIST), pos(NUM), op(TX)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP id_pair FROM consume, tokens, p2.
+  REAP id_name FROM tok_lex, id_pair[0].
+  REAP p3 FROM _second, id_pair.
+  REAP by_pair FROM consume, tokens, p3.
+  REAP by_lx FROM tok_lex, by_pair[0].
+  REAP p4 FROM _second, by_pair.
+  IF by_lx ISNT "BY",
+    CREATE dmsg(TX) TO "Expected BY in " + op + " statement".
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", dmsg), p3).
+  /IF.
+  REAP vpair FROM collect_value, tokens, p4.
+  CREATE expr TO vpair[0].
+  REAP p5 FROM _second, vpair.
+  CREATE nty(TX) TO op + "_stmt".
+  GIVE plant_list_make(2, plant_list_make(6, "type", nty, "target", id_name, "value", expr), p5).
+/ACTION.
+
 ACTION parse_let_stmt(tokens(LIST), pos(NUM)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -1715,6 +1740,14 @@ ACTION parse_statement(tokens(LIST), pos(NUM)),
   /IF.
   IF lx IS "SET",
     REAP r FROM parse_set_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "INCREASE",
+    REAP r FROM parse_incdec_stmt, tokens, pos, "increase".
+    GIVE r.
+  /IF.
+  IF lx IS "DECREASE",
+    REAP r FROM parse_incdec_stmt, tokens, pos, "decrease".
     GIVE r.
   /IF.
   IF lx IS "LET",
@@ -3732,6 +3765,28 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP cval FROM _handle_cat, cval, nums, evars.
         REAP isel FROM indent_str, indent.
         GIVE isel + "  " + target + " = " + cval + ";\n".
+    /IF.
+  
+    # ── increase_stmt / decrease_stmt: INCREASE x BY n. → x += n; ─
+    #    compound C assignment for numeric targets; a non-numeric
+    #    target is rejected at compile time with a #error line
+    #    (v0.48.22-patch). The RHS goes through _handle_cat so
+    #    numeric literals/vars keep raw arithmetic and text
+    #    expressions degrade to concatenation as usual.
+    IF ntype IS "increase_stmt" OR ntype IS "decrease_stmt",
+        REAP target FROM _map_get, node, "target".
+        REAP val FROM _map_get, node, "value".
+        REAP cval FROM translate_expr, val.
+        REAP cval FROM _handle_cat, cval, nums, evars.
+        REAP isel FROM indent_str, indent.
+        REAP isnc FROM list_contains, nums, target.
+        IF isnc IS 0,
+            GIVE "#error " + target + " is not a numeric variable; INCREASE/DECREASE require a NUM variable\n".
+        /IF.
+        IF ntype IS "increase_stmt",
+            GIVE isel + "  " + target + " += " + cval + ";\n".
+        /IF.
+        GIVE isel + "  " + target + " -= " + cval + ";\n".
     /IF.
   
     # ── let_stmt: LET var AS TYPE IS val. → type var = val; ──
