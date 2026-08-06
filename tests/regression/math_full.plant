@@ -1,0 +1,48 @@
+# math_full: std/math FFI bindings LOG/PI/E/SIGN/CLAMP (v0.48.27).
+# Values are passed as quoted strings so the FFI sees decimal TX
+# inputs. Edge cases: log of 0 and negatives (error messaging),
+# exhaustive sign states (-1/0/1 incl. -0.0 and decimals), clamping
+# below/inside/above the bounds plus inclusive boundary hits.
+  SHOW "math_full: LOG/PI/E/SIGN/CLAMP".
+
+  REAP l1 FROM math:LOG, "1".
+  REAP le FROM math:LOG, "2.718281828459045".
+  REAP l10 FROM math:LOG, "10".
+  REAP lhalf FROM math:LOG, "0.5".
+  REAP l0 FROM math:LOG, "0".
+  REAP lneg FROM math:LOG, "-5".
+  SHOW "LOG 1 = " + l1.
+  SHOW "LOG e = " + le.
+  SHOW "LOG 10 = " + l10.
+  SHOW "LOG 0.5 = " + lhalf.
+  SHOW "LOG 0 = " + l0.
+  SHOW "LOG -5 = " + lneg.
+
+  REAP pi FROM math:PI.
+  REAP e FROM math:E.
+  SHOW "PI = " + pi.
+  SHOW "E = " + e.
+
+  REAP sneg FROM math:SIGN, "-7.5".
+  REAP szero FROM math:SIGN, "0".
+  REAP spos FROM math:SIGN, "42".
+  REAP snegz FROM math:SIGN, "-0.0".
+  REAP spdec FROM math:SIGN, "3.99".
+  SHOW "SIGN -7.5 = " + sneg.
+  SHOW "SIGN 0 = " + szero.
+  SHOW "SIGN 42 = " + spos.
+  SHOW "SIGN -0.0 = " + snegz.
+  SHOW "SIGN 3.99 = " + spdec.
+
+  REAP clow FROM math:CLAMP, "-10", "-2", "5".
+  REAP cmid FROM math:CLAMP, "3", "-2", "5".
+  REAP chigh FROM math:CLAMP, "99", "-2", "5".
+  REAP cloed FROM math:CLAMP, "-2", "-2", "5".
+  REAP chied FROM math:CLAMP, "5", "-2", "5".
+  REAP cdec FROM math:CLAMP, "1.75", "-2", "5".
+  SHOW "CLAMP -10 to -2..5 = " + clow.
+  SHOW "CLAMP 3 to -2..5 = " + cmid.
+  SHOW "CLAMP 99 to -2..5 = " + chigh.
+  SHOW "CLAMP -2 to -2..5 = " + cloed.
+  SHOW "CLAMP 5 to -2..5 = " + chied.
+  SHOW "CLAMP 1.75 to -2..5 = " + cdec.

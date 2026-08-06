@@ -1336,6 +1336,44 @@ tx_t math_random(void) {
     return strdup(b);
 }
 
+/* ── v0.48.27 — std/math library (LOG/PI/E/SIGN/CLAMP) ──
+   Constants fall back to explicit definitions when libc does not
+   expose M_PI / M_E (e.g. strict ANSI/feature-test builds). */
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+#ifndef M_E
+#define M_E 2.71828182845904523536
+#endif
+
+tx_t math_log(tx_t x) {
+    double v = _num(_S(x));
+    if (v <= 0) {
+        char e[96];
+        snprintf(e, 96, "ERR: math_log(x): x must be > 0 (x = %.10g)", v);
+        return strdup(e);
+    }
+    char b[64];
+    snprintf(b, 64, "%.10g", log(v));
+    return strdup(b);
+}
+tx_t math_sign(tx_t x) {
+    double v = _num(_S(x));
+    if (v < 0) return strdup("-1");
+    if (v > 0) return strdup("1");
+    return strdup("0");
+}
+tx_t math_clamp(tx_t x, tx_t lo, tx_t hi) {
+    double v = _num(_S(x)), a = _num(_S(lo)), b = _num(_S(hi));
+    if (v < a) v = a;
+    if (v > b) v = b;
+    char buf[64];
+    snprintf(buf, 64, "%.10g", v);
+    return strdup(buf);
+}
+tx_t math_pi(void) { char b[64]; snprintf(b, 64, "%.15g", M_PI); return strdup(b); }
+tx_t math_e(void)  { char b[64]; snprintf(b, 64, "%.15g", M_E);  return strdup(b); }
+
 /* ── std/time ────────────────────────────────────────────────── */
 
 tx_t time_now(void) {

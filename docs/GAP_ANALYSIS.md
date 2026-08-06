@@ -147,7 +147,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 ### 4.1 Legacy innate `PLANT` libraries (innate.js) — status in current compiler
 
 **`math` (14):** `SQRT ABS CEIL FLOOR ROUND RANDOM POW LOG SIN COS PI E SIGN CLAMP`
-→ current: runtime has `math_sqrt cos sin tan floor ceil round abs pow min max random` (compat.h `std/math`), reachable via externals, **not** as `PLANT math` module calls. Missing by name: `LOG PI E SIGN CLAMP RANDOM` present? `math_random` exists ✓; `LOG/PI/E/SIGN/CLAMP` M.
+→ current: runtime has `math_sqrt cos sin tan floor ceil round abs pow min max random` plus v0.48.27 `math_log sign clamp pi e` (compat.h `std/math`), reachable via externals or the new `math:LOG/PI/E/SIGN/CLAMP` FFI bindings. Still missing by name: `math:ABS ROUND POW CEIL FLOOR RANDOM SIN COS SQRT` module calls (runtime `math_*` exists for most — bindings only).
 
 **`strings` (17):** `UPPER LOWER TRIM LENGTH REVERSE REPEAT PAD_LEFT PAD_RIGHT INCLUDES STARTS_WITH ENDS_WITH SPLIT REPLACE SLICE FIND COUNT_OF JOIN`
 → current: `strings:LENGTH REPLACE SPLIT` only (compiler + compat.h). `string_repeat/reverse/pad` exist in runtime (compat.h `std/string`) — reachable via externals. Missing: `UPPER LOWER TRIM INCLUDES STARTS_WITH ENDS_WITH SLICE FIND COUNT_OF JOIN`.

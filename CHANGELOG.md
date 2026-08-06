@@ -1,5 +1,36 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.27 — 2026 (Mathematical Library)
+
+### New Features
+- **`math:` FFI module.** Five bindings expose the std/math library
+  to scripts: `math:LOG`, `math:PI`, `math:E`, `math:SIGN`, and
+  `math:CLAMP` (thin static wrappers in `plant_compat.h` over the
+  runtime, same `module:FUNC` → `module_FUNC` codegen rewrite as the
+  `strings:` bindings).
+- **Runtime implementations** (`plant_runtime.c`, std/math):
+  - `math_log` — natural logarithm via `log()`; non-positive inputs
+    (≤ 0) return an explicit error message
+    (`ERR: math_log(x): x must be > 0 (x = …)`) instead of NaN.
+  - `math_sign` — sign determination returning `"-1"` for negative
+    values, `"0"` for zero (including `-0.0`), `"1"` for positive.
+  - `math_clamp` — boundary restriction of `x` into `[lo, hi]`;
+    both bounds are inclusive, and values already inside pass through
+    unchanged (decimal formatting via `%.10g`).
+  - `math_pi` / `math_e` — constant accessors formatted to 15
+    significant digits, with explicit `M_PI` / `M_E` fallback
+    definitions when the standard library macros are unavailable
+    (strict feature-test builds), guarded by `#ifndef`.
+- **Zero-argument REAP.** `REAP r FROM math:PI.` (no argument list)
+  emits `r = math_PI();`, following the `math_random` precedent.
+
+### Regression Tests
+- `math_full`: all five bindings with edge cases — `LOG` of `1`, `e`,
+  `10`, `0.5`, `0` (error message) and `-5` (error message); `PI`/`E`
+  constants; exhaustive `SIGN` states (`-7.5 → -1`, `0 → 0`,
+  `-0.0 → 0`, `42/3.99 → 1`); `CLAMP` below, inside, and above the
+  bounds, inclusive boundary hits, and a fractional in-range value.
+
 ## v0.48.26 — 2026 (Complete String Library)
 
 ### New Features

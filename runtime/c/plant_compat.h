@@ -351,6 +351,18 @@ tx_t math_round(tx_t x);
 tx_t math_min(tx_t a, tx_t b);
 tx_t math_max(tx_t a, tx_t b);
 tx_t math_random(void);   /* uniform [0,1) */
+tx_t math_log(tx_t x);    /* x <= 0 → "ERR: math_log(x): …" */
+tx_t math_sign(tx_t x);   /* "-1" | "0" | "1" */
+tx_t math_clamp(tx_t x, tx_t lo, tx_t hi);
+tx_t math_pi(void);
+tx_t math_e(void);
+
+/* ── std/math FFI bindings (v0.48.27) ── */
+static tx_t math_LOG(tx_t x)           { return math_log(x); }
+static tx_t math_SIGN(tx_t x)          { return math_sign(x); }
+static tx_t math_CLAMP(tx_t x, tx_t lo, tx_t hi) { return math_clamp(x, lo, hi); }
+static tx_t math_PI(void)              { return math_pi(); }
+static tx_t math_E(void)               { return math_e(); }
 
 /* ── std/time ── */
 tx_t time_now(void);                       /* epoch seconds as decimal TX */

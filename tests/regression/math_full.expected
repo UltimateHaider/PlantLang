@@ -1,0 +1,20 @@
+math_full: LOG/PI/E/SIGN/CLAMP
+LOG 1 = 0
+LOG e = 1
+LOG 10 = 2.302585093
+LOG 0.5 = -0.6931471806
+LOG 0 = ERR: math_log(x): x must be > 0 (x = 0)
+LOG -5 = ERR: math_log(x): x must be > 0 (x = -5)
+PI = 3.14159265358979
+E = 2.71828182845905
+SIGN -7.5 = -1
+SIGN 0 = 0
+SIGN 42 = 1
+SIGN -0.0 = 0
+SIGN 3.99 = 1
+CLAMP -10 to -2..5 = -2
+CLAMP 3 to -2..5 = 3
+CLAMP 99 to -2..5 = 5
+CLAMP -2 to -2..5 = -2
+CLAMP 5 to -2..5 = 5
+CLAMP 1.75 to -2..5 = 1.75
