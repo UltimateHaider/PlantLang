@@ -8,6 +8,7 @@ tx_t is_alpha_start(tx_t ch);
 tx_t match_ident_or_keyword(tx_t src, long i, long n);
 tx_t match_number(tx_t src, long i, long n);
 tx_t match_string(tx_t src, long i, long n);
+tx_t match_string_i(tx_t src, long i, long n);
 tx_t skip_comment(tx_t src, long i, long n);
 tx_t scan_tokens(tx_t src);
 tx_t tok_lex(PlantArray* tok);
@@ -58,6 +59,11 @@ tx_t seg_has_literal_digit(tx_t seg);
 tx_t seg_is_numeric(tx_t seg, PlantArray* nums);
 tx_t expr_is_numeric(tx_t e, PlantArray* nums);
 tx_t is_numeric_type(tx_t t);
+tx_t _find_interp(tx_t t);
+tx_t _unescape(tx_t s);
+tx_t _interp_to_cat(tx_t expr, PlantArray* nums, PlantArray* evars);
+tx_t _expand_bare(tx_t t, PlantArray* nums, PlantArray* evars);
+tx_t _interp_expand(tx_t raw, PlantArray* nums, PlantArray* evars);
 tx_t _handle_cat(tx_t expr, PlantArray* nums, PlantArray* evars);
 tx_t _if_bodies(tx_t nd);
 tx_t collect_declared_walk(PlantArray* bd, PlantArray* declared);
@@ -640,6 +646,94 @@ tx_t match_string(tx_t src, long i, long n) {
     }
     return plant_list_make ( 2 , val , si );
 }
+tx_t match_string_i(tx_t src, long i, long n) {
+    tx_t val = "";
+    long si = i;
+    int done = 0;
+    tx_t ch = "";
+    long idepth = 0;
+    long instr = 0;
+    long hasi = 0;
+    if (si < n && strcmp(char_at ( src , si ),"\"") == 0) {
+        si = si+1;
+    }
+    while (!done && si < n) {
+        ch = char_at(src, si);
+        if (idepth == 0 && instr == 0 && strcmp(ch,"\"") == 0) {
+            done = 1;
+            continue;
+        }
+        if (idepth == 0 && instr == 0 && strcmp(ch,"$") == 0 && si + 1 < n && strcmp(char_at ( src , si + 1 ),"{") == 0) {
+            val = _cat(_cat(val, "$"), "{");
+            idepth = 1;
+            hasi = 1;
+            si = si+2;
+            continue;
+        }
+        if (idepth == 0 && instr == 0 && strcmp(ch,"\\") == 0) {
+            si = si+1;
+            if (si < n) {
+                ch = char_at(src, si);
+                if (strcmp(ch,"n") == 0) {
+                    ch = "\n";
+                }
+                if (strcmp(ch,"t") == 0) {
+                    ch = "\t";
+                }
+                if (strcmp(ch,"r") == 0) {
+                    ch = "\r";
+                }
+            }
+        }
+        if (idepth > 0 && instr == 0 && strcmp(ch,"$") == 0 && si + 1 < n && strcmp(char_at ( src , si + 1 ),"{") == 0) {
+            val = _cat(_cat(val, "$"), "{");
+            idepth = idepth+1;
+            si = si+2;
+            continue;
+        }
+        if (idepth > 0 && instr == 0 && strcmp(ch,"}") == 0) {
+            val = _cat(val, "}");
+            idepth = idepth - 1;
+            si = si+1;
+            continue;
+        }
+        if (idepth > 0 && instr == 0 && strcmp(ch,"\"") == 0) {
+            val = _cat(val, "\"");
+            instr = 1;
+            si = si+1;
+            continue;
+        }
+        if (idepth > 0 && instr == 1 && strcmp(ch,"\\") == 0) {
+            si = si+1;
+            if (si < n) {
+                ch = char_at(src, si);
+                if (strcmp(ch,"n") == 0) {
+                    ch = "\n";
+                }
+                if (strcmp(ch,"t") == 0) {
+                    ch = "\t";
+                }
+                if (strcmp(ch,"r") == 0) {
+                    ch = "\r";
+                }
+            }
+        }
+        if (idepth > 0 && instr == 1 && strcmp(ch,"\"") == 0) {
+            val = _cat(val, "\"");
+            instr = 0;
+            si = si+1;
+            continue;
+        }
+        if (si < n) {
+            val = _cat(val, ch);
+            si = si+1;
+        }
+    }
+    if (done && si < n && strcmp(char_at ( src , si ),"\"") == 0) {
+        si = si+1;
+    }
+    return plant_list_make ( 3 , val , si , hasi );
+}
 tx_t skip_comment(tx_t src, long i, long n) {
     while (i < n && strcmp(char_at ( src , i ),"\n") != 0) {
         i = i+1;
@@ -678,10 +772,17 @@ tx_t scan_tokens(tx_t src) {
             continue;
         }
         if (strcmp(ch,"\"") == 0) {
-            si = match_string(src, i, n);
+            si = match_string_i(src, i, n);
         }
         if (strcmp(ch,"\"") == 0) {
-            tokens = plant_list_push(tokens, plant_list_make ( 2 , "STRING" , plant_list_get(si,  0 ) ));
+            if (plant_list_get(si,  2 ) == 1) {
+                tokens = plant_list_push(tokens, plant_list_make ( 2 , "INTERP" , plant_list_get(si,  0 ) ));
+            }
+        }
+        if (strcmp(ch,"\"") == 0) {
+            if (plant_list_get(si,  2 ) != 1) {
+                tokens = plant_list_push(tokens, plant_list_make ( 2 , "STRING" , plant_list_get(si,  0 ) ));
+            }
         }
         if (strcmp(ch,"\"") == 0) {
             i = plant_list_get(si,  1 );
@@ -863,7 +964,7 @@ tx_t collect_value(PlantArray* tokens, long start) {
         tok = peek(tokens, p2);
         lx = tok_lex(tok);
         tt = tok_type(tok);
-        if (strcmp(tt,"STRING") == 0) {
+        if (strcmp(tt,"STRING") == 0 || strcmp(tt,"INTERP") == 0) {
             lx = escape_string(lx);
             lx = _cat(_cat("\"", lx), "\"");
         }
@@ -910,7 +1011,7 @@ tx_t collect_until(PlantArray* tokens, long start, tx_t delim) {
         tok = peek(tokens, p2);
         lx = tok_lex(tok);
         tt = tok_type(tok);
-        if (strcmp(tt,"STRING") == 0) {
+        if (strcmp(tt,"STRING") == 0 || strcmp(tt,"INTERP") == 0) {
             lx = escape_string(lx);
             lx = _cat(_cat("\"", lx), "\"");
         }
@@ -1019,7 +1120,7 @@ tx_t collect_args(PlantArray* tokens, long pos) {
             atok = peek(tokens, p5);
             alx = tok_lex(atok);
             atype = tok_type(atok);
-            if (strcmp(atype,"STRING") == 0) {
+            if (strcmp(atype,"STRING") == 0 || strcmp(atype,"INTERP") == 0) {
                 alx = escape_string(alx);
                 alx = _cat(_cat("\"", alx), "\"");
             }
@@ -2005,7 +2106,7 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos) {
             atok = peek(tokens, p5);
             alx = tok_lex(atok);
             atype = tok_type(atok);
-            if (strcmp(atype,"STRING") == 0) {
+            if (strcmp(atype,"STRING") == 0 || strcmp(atype,"INTERP") == 0) {
                 alx = escape_string(alx);
                 alx = _cat(_cat("\"", alx), "\"");
             }
@@ -2166,7 +2267,7 @@ tx_t parse_call_stmt(PlantArray* tokens, long pos) {
             atok = peek(tokens, p5);
             alx = tok_lex(atok);
             atype = tok_type(atok);
-            if (strcmp(atype,"STRING") == 0) {
+            if (strcmp(atype,"STRING") == 0 || strcmp(atype,"INTERP") == 0) {
                 alx = escape_string(alx);
                 alx = _cat(_cat("\"", alx), "\"");
             }
@@ -3460,11 +3561,262 @@ tx_t is_numeric_type(tx_t t) {
     }
     return 0;
 }
+tx_t _find_interp(tx_t t) {
+  tx_t c = "";
+    long i = 0;
+    long n = strlen( t );
+    while (i < n - 1) {
+        c = char_at(t, i);
+        if (strcmp(c,"$") == 0 && strcmp(char_at ( t , i + 1 ),"{") == 0) {
+            return 1;
+        }
+        i = i+1;
+    }
+    return 0;
+}
+tx_t _unescape(tx_t s) {
+  tx_t cc = "";
+  tx_t nx = "";
+    tx_t rr = "";
+    long ii = 0;
+    long nn = strlen( s );
+    while (ii < nn) {
+        cc = char_at(s, ii);
+        if (strcmp(cc,"\\") == 0 && ii + 1 < nn) {
+            nx = char_at(s, ii+1);
+            if (strcmp(nx,"\"") == 0 || strcmp(nx,"\\") == 0) {
+                rr = _cat(rr, nx);
+                ii = ii+2;
+                continue;
+            }
+        }
+        rr = _cat(rr, cc);
+        ii = ii+1;
+    }
+    return rr;
+}
+tx_t _interp_to_cat(tx_t expr, PlantArray* nums, PlantArray* evars) {
+  tx_t cj = "";
+  tx_t raw = "";
+  tx_t hp = "";
+  tx_t chain = "";
+    tx_t res = "";
+    long i = 0;
+    long n = strlen( expr );
+    tx_t ch = "";
+    while (i < n) {
+        ch = char_at(expr, i);
+        if (strcmp(ch,"\"") != 0) {
+            res = _cat(res, ch);
+            i = i+1;
+            continue;
+        }
+        long j = i+1;
+        long dn = 0;
+        while (dn == 0 && j < n) {
+            cj = char_at(expr, j);
+            if (strcmp(cj,"\\") == 0) {
+                j = j+2;
+                continue;
+            }
+            if (strcmp(cj,"\"") == 0) {
+                dn = 1;
+                j = j+1;
+                continue;
+            }
+            j = j+1;
+        }
+        raw = substring(expr, i, j);
+        hp = _find_interp(raw);
+        if (hp == 0) {
+            res = _cat(res, raw);
+            i = j;
+            continue;
+        }
+        chain = _interp_expand(raw, nums, evars);
+        res = _cat(res, chain);
+        i = j;
+    }
+    return res;
+}
+tx_t _expand_bare(tx_t t, PlantArray* nums, PlantArray* evars) {
+  tx_t c = "";
+  tx_t c2 = "";
+  tx_t inner = "";
+    tx_t res = "";
+    long i = 0;
+    long n = strlen( t );
+    long instr = 0;
+    while (i < n) {
+        c = char_at(t, i);
+        if (strcmp(c,"\"") == 0) {
+            instr = 1 - instr;
+            res = _cat(res, c);
+            i = i+1;
+            continue;
+        }
+        if (strcmp(c,"\\") == 0 && instr == 1) {
+            res = _cat(_cat(res, c), "");
+            i = i+1;
+            if (i < n) {
+                c2 = char_at(t, i);
+                res = _cat(_cat(res, c2), "");
+                i = i+1;
+            }
+            continue;
+        }
+        if (instr == 0 && strcmp(c,"$") == 0 && i + 1 < n && strcmp(char_at ( t , i + 1 ),"{") == 0) {
+            long d = 1;
+            long j = i+2;
+            while (d > 0 && j < n) {
+                c2 = char_at(t, j);
+                if (strcmp(c2,"\\") == 0) {
+                    j = j+2;
+                    continue;
+                }
+                if (strcmp(c2,"$") == 0 && j + 1 < n && strcmp(char_at ( t , j + 1 ),"{") == 0) {
+                    d = d+1;
+                    j = j+2;
+                    continue;
+                }
+                if (strcmp(c2,"}") == 0) {
+                    d = d - 1;
+                    if (d == 0) {
+                        j = j+1;
+                        continue;
+                    }
+                }
+                j = j+1;
+            }
+            inner = substring(t, i+2, j - 1);
+            inner = _expand_bare(inner, nums, evars);
+            inner = translate_expr(inner);
+            inner = _handle_cat(inner, nums, evars);
+            res = _cat(res, inner);
+            i = j;
+            continue;
+        }
+        res = _cat(res, c);
+        i = i+1;
+    }
+    return res;
+}
+tx_t _interp_expand(tx_t raw, PlantArray* nums, PlantArray* evars) {
+  tx_t ck = "";
+  tx_t last = "";
+  tx_t lit = "";
+  tx_t cj2 = "";
+  tx_t sg2n = "";
+  tx_t snm2 = "";
+    tx_t content = substring ( raw , 1 , strlen( raw ) - 1 );
+    PlantArray* segs = plant_list_make ( 0 );
+    long i = 0;
+    long n = strlen( content );
+    while (1) {
+        long fnd = - 1;
+        long k = i;
+        while (k < n) {
+            ck = char_at(content, k);
+            if (strcmp(ck,"$") == 0 && k + 1 < n && strcmp(char_at ( content , k + 1 ),"{") == 0) {
+                fnd = k;
+                break;
+            }
+            k = k+1;
+        }
+        if (fnd == - 1) {
+            last = substring(content, i, n);
+            segs = plant_list_push(segs, last);
+            break;
+        }
+        lit = substring(content, i, fnd);
+        segs = plant_list_push(segs, lit);
+        long d2 = 1;
+        long j2 = fnd+2;
+        tx_t inner = "";
+        while (d2 > 0 && j2 < n) {
+            cj2 = char_at(content, j2);
+            if (strcmp(cj2,"\\") == 0) {
+                j2 = j2+2;
+                continue;
+            }
+            if (strcmp(cj2,"$") == 0 && j2 + 1 < n && strcmp(char_at ( content , j2 + 1 ),"{") == 0) {
+                d2 = d2+1;
+                j2 = j2+2;
+                continue;
+            }
+            if (strcmp(cj2,"}") == 0) {
+                d2 = d2 - 1;
+                if (d2 == 0) {
+                    inner = substring ( content , fnd + 2 , j2 );
+                    j2 = j2+1;
+                    continue;
+                }
+            }
+            j2 = j2+1;
+        }
+        if (strcmp(inner,"") == 0) {
+            segs = plant_list_push(segs, "__PLANT_EMPTY_INTERP__");
+        }
+        if (strcmp(inner,"") != 0) {
+            segs = plant_list_push(segs, inner);
+        }
+        i = j2;
+        if (d2 > 0) {
+            return "\n#error unterminated string interpolation: missing }\n";
+        }
+    }
+    tx_t out = "";
+    long si2 = 0;
+    long is_lit = 1;
+    tx_t seg = "";
+    while (si2 < plant_array_length(segs)) {
+        seg = plant_list_get(segs, si2);
+        if (is_lit == 1) {
+            tx_t ws = _cat(_cat("\"", seg), "\"");
+            if (strcmp(out,"") != 0) {
+                ws = _cat(_cat(_cat(_cat("_cat(", out), ", \""), seg), "\")");
+            }
+            out = ws;
+        }
+        if (is_lit == 0) {
+            tx_t seg2 = "";
+            if (strcmp(seg,"__PLANT_EMPTY_INTERP__") == 0) {
+                seg2 = _cat("\"", "\"");
+            }
+            if (strcmp(seg,"__PLANT_EMPTY_INTERP__") != 0) {
+                seg2 = _unescape(seg);
+                seg2 = _expand_bare(seg2, nums, evars);
+                seg2 = _interp_to_cat(seg2, nums, evars);
+                seg2 = translate_expr(seg2);
+                seg2 = _handle_cat(seg2, nums, evars);
+                sg2n = seg_is_numeric(seg2, nums);
+                if (sg2n == 1) {
+                    seg2 = _cat(_cat("_from_long(", seg2), ")");
+                }
+                if (sg2n == 0) {
+                    snm2 = enum_expr_of(evars, seg2);
+                    if (strcmp(snm2,"") != 0) {
+                        seg2 = _cat(_cat(_cat(_cat("_from_enum(", seg2), ", \""), snm2), "\")");
+                    }
+                }
+            }
+            tx_t ws = seg2;
+            if (strcmp(out,"") != 0) {
+                ws = _cat(_cat(_cat(_cat("_cat(", out), ", "), seg2), ")");
+            }
+            out = ws;
+        }
+        is_lit = 1 - is_lit;
+        si2 = si2+1;
+    }
+    return out;
+}
 tx_t _handle_cat(tx_t expr, PlantArray* nums, PlantArray* evars) {
   tx_t hl9 = "";
   tx_t sg0 = "";
   tx_t sgn = "";
   tx_t snm = "";
+    expr = _interp_to_cat(expr, nums, evars);
     PlantArray* parts = plant_list_make ( 0 );
     long depth = 0;
     long instr = 0;

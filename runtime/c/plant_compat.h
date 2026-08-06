@@ -14,7 +14,7 @@ typedef void* tx_t;
 #define _POS(x) _to_long(x)
 static void plant_print(tx_t s) { printf("%s\n", _S(s)); }
 static void* plant_env_alloc(size_t size) { return malloc(size); }
-static tx_t _cat(tx_t a, tx_t b) { const char* sa=_S(a), *sb=_S(b); size_t al=strlen(sa), bl=strlen(sb); char *r=malloc(al+bl+1); if(r){memcpy(r,sa,al);memcpy(r+al,sb,bl+1);} return r?r:a; }
+static tx_t _cat(tx_t a, tx_t b) { const char* sa=_S(a), *sb=_S(b); if(!sa) sa=""; if(!sb) sb=""; size_t al=strlen(sa), bl=strlen(sb); char *r=malloc(al+bl+1); if(r){memcpy(r,sa,al);memcpy(r+al,sb,bl+1);} return r?r:a; }
 static long _to_long(tx_t s) { const char* _s=_S(s); return _s ? atol(_s) : 0; }
 static tx_t _from_long(long n) { char buf[64]; snprintf(buf,64,"%ld",n); return strdup(buf); }
 /* v0.48.5 — FFI numeric results: C functions returning `long` hand

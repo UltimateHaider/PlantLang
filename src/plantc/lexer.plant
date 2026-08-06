@@ -221,6 +221,85 @@ ACTION match_string(src(TX), i(NUM), n(NUM)),
   GIVE plant_list_make(2, val, si).
 /ACTION.
 
+# match_string_i: scan "..." with ${...} interpolation awareness
+# (v0.48.22-patch2). `${` opens an expression region that ends at the
+# matching `}`; nested `${` increments the depth and quoted strings
+# inside the region do not close it. Returns [value, endpos, hasi].
+# Escape rules match match_string (\n \t \r), applied only outside
+# expression regions so embedded expressions stay raw.
+ACTION match_string_i(src(TX), i(NUM), n(NUM)),
+  CREATE val(TX) TO "".
+  CREATE si(NUM) TO i.
+  CREATE done(FACT) TO FALSE.
+  CREATE ch(TX) TO "".
+  CREATE idepth(NUM) TO 0.
+  CREATE instr(NUM) TO 0.
+  CREATE hasi(NUM) TO 0.
+  IF si < n AND char_at(src, si) IS "\"", SET si TO si + 1. /IF.
+  SEASON NOT done AND si < n,
+    REAP ch FROM char_at, src, si.
+    IF idepth IS 0 AND instr IS 0 AND ch IS "\"",
+      SET done TO TRUE.
+      CONTINUE.
+    /IF.
+    IF idepth IS 0 AND instr IS 0 AND ch IS "$" AND si + 1 < n AND char_at(src, si + 1) IS "{",
+      SET val TO val + "$" + "{".
+      SET idepth TO 1.
+      SET hasi TO 1.
+      SET si TO si + 2.
+      CONTINUE.
+    /IF.
+    IF idepth IS 0 AND instr IS 0 AND ch IS "\\",
+      SET si TO si + 1.
+      IF si < n,
+        REAP ch FROM char_at, src, si.
+        IF ch IS "n", SET ch TO "\n". /IF.
+        IF ch IS "t", SET ch TO "\t". /IF.
+        IF ch IS "r", SET ch TO "\r". /IF.
+      /IF.
+    /IF.
+    IF idepth > 0 AND instr IS 0 AND ch IS "$" AND si + 1 < n AND char_at(src, si + 1) IS "{",
+      SET val TO val + "$" + "{".
+      SET idepth TO idepth + 1.
+      SET si TO si + 2.
+      CONTINUE.
+    /IF.
+    IF idepth > 0 AND instr IS 0 AND ch IS "}",
+      SET val TO val + "}".
+      SET idepth TO idepth - 1.
+      SET si TO si + 1.
+      CONTINUE.
+    /IF.
+    IF idepth > 0 AND instr IS 0 AND ch IS "\"",
+      SET val TO val + "\"".
+      SET instr TO 1.
+      SET si TO si + 1.
+      CONTINUE.
+    /IF.
+    IF idepth > 0 AND instr IS 1 AND ch IS "\\",
+      SET si TO si + 1.
+      IF si < n,
+        REAP ch FROM char_at, src, si.
+        IF ch IS "n", SET ch TO "\n". /IF.
+        IF ch IS "t", SET ch TO "\t". /IF.
+        IF ch IS "r", SET ch TO "\r". /IF.
+      /IF.
+    /IF.
+    IF idepth > 0 AND instr IS 1 AND ch IS "\"",
+      SET val TO val + "\"".
+      SET instr TO 0.
+      SET si TO si + 1.
+      CONTINUE.
+    /IF.
+    IF si < n,
+      SET val TO val + ch.
+      SET si TO si + 1.
+    /IF.
+  /SEASON.
+  IF done AND si < n AND char_at(src, si) IS "\"", SET si TO si + 1. /IF.
+  GIVE plant_list_make(3, val, si, hasi).
+/ACTION.
+
 # ── skip_comment(src, i, n) ───────────────────────────────
 ACTION skip_comment(src(TX), i(NUM), n(NUM)),
   SEASON i < n AND char_at(src, i) ISNT "\n",
@@ -252,9 +331,10 @@ ACTION scan_tokens(src(TX)),
     IF ch IS "#", SET i TO si. /IF.
     IF ch IS "#", CONTINUE. /IF.
 
-    # String literal
-    IF ch IS "\"", REAP si FROM match_string, src, i, n. /IF.
-    IF ch IS "\"", PUT plant_list_make(2, "STRING", si[0]) INTO tokens. /IF.
+    # String literal (with ${...} interpolation, v0.48.22-patch2)
+    IF ch IS "\"", REAP si FROM match_string_i, src, i, n. /IF.
+    IF ch IS "\"", IF si[2] IS 1, PUT plant_list_make(2, "INTERP", si[0]) INTO tokens. /IF. /IF.
+    IF ch IS "\"", IF si[2] ISNT 1, PUT plant_list_make(2, "STRING", si[0]) INTO tokens. /IF. /IF.
     IF ch IS "\"", SET i TO si[1]. /IF.
     IF ch IS "\"", CONTINUE. /IF.
 

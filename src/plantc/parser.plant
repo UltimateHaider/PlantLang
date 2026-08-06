@@ -85,7 +85,7 @@ ACTION collect_value(tokens(LIST), start(NUM)),
     REAP tok FROM peek, tokens, p2.
     REAP lx FROM tok_lex, tok.
     REAP tt FROM tok_type, tok.
-    IF tt IS "STRING",
+    IF tt IS "STRING" OR tt IS "INTERP",
       REAP lx FROM escape_string, lx.
       SET lx TO "\"" + lx + "\"".
     /IF.
@@ -132,7 +132,7 @@ ACTION collect_until(tokens(LIST), start(NUM), delim(TX)),
     REAP tok FROM peek, tokens, p2.
     REAP lx FROM tok_lex, tok.
     REAP tt FROM tok_type, tok.
-    IF tt IS "STRING",
+    IF tt IS "STRING" OR tt IS "INTERP",
       REAP lx FROM escape_string, lx.
       SET lx TO "\"" + lx + "\"".
     /IF.
@@ -226,7 +226,7 @@ ACTION collect_args(tokens(LIST), pos(NUM)),
       REAP atok FROM peek, tokens, p5.
       REAP alx FROM tok_lex, atok.
       REAP atype FROM tok_type, atok.
-      IF atype IS "STRING",
+      IF atype IS "STRING" OR atype IS "INTERP",
         REAP alx FROM escape_string, alx.
         SET alx TO "\"" + alx + "\"".
       /IF.
@@ -964,7 +964,7 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM)),
       REAP atok FROM peek, tokens, p5.
       REAP alx FROM tok_lex, atok.
       REAP atype FROM tok_type, atok.
-      IF atype IS "STRING",
+      IF atype IS "STRING" OR atype IS "INTERP",
         REAP alx FROM escape_string, alx.
         SET alx TO "\"" + alx + "\"".
       /IF.
@@ -1079,7 +1079,7 @@ ACTION parse_call_stmt(tokens(LIST), pos(NUM)),
       REAP atok FROM peek, tokens, p5.
       REAP alx FROM tok_lex, atok.
       REAP atype FROM tok_type, atok.
-      IF atype IS "STRING",
+      IF atype IS "STRING" OR atype IS "INTERP",
         REAP alx FROM escape_string, alx.
         SET alx TO "\"" + alx + "\"".
       /IF.

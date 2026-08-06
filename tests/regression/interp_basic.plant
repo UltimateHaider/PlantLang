@@ -1,0 +1,19 @@
+ACTION main(),
+  CREATE n(NUM) TO 42.
+  CREATE s(TX) TO "world".
+  CREATE eb2(NUM) TO 7.
+  SHOW "hello ${n}".
+  SHOW "n=${n}".
+  SHOW "s=${s}".
+  SHOW "eb2=${eb2}".
+  SHOW "a${s}b".
+  SHOW "mixed ${n} and ${s}".
+  SHOW "empty=${} done".
+  SHOW "neg=${-n}".
+  SHOW "zero=${0}".
+  SHOW "pos=${n + 1}".
+  SHOW "arith=${n + eb2 - 1}".
+  SHOW "len=${LEN(s)}".
+  SHOW "nested=${n + ${n}}".
+  GIVE 0.
+/GIVE main.

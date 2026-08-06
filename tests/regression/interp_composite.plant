@@ -1,0 +1,17 @@
+ACTION main(),
+  CREATE n(NUM) TO 5.
+  CREATE s(TX) TO "B".
+  CREATE r(TX) TO "".
+  SHOW "x=" + "a${n}b".
+  SHOW "esc=\"${s}\"".
+  SHOW "nl=a\nb".
+  SHOW "quo=\"q\"".
+  SET r TO "r=${n}".
+  SHOW r.
+  SET r TO "pre ${s} post".
+  SHOW r.
+  SHOW "multi=${n}x${n}".
+  SHOW "cond=${n + 2 * n}".
+  SHOW "quoted=${s + "${s}"}".
+  GIVE 0.
+/GIVE main.

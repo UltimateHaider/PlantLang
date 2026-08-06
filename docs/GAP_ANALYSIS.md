@@ -108,7 +108,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 |---|---|---|
 | Integer/decimal literals, negative numbers | **S** | |
 | `"str"` with `\n \t \r \" \' \\` escapes | **S** | |
-| `"str {expr}"` string interpolation | M | legacy nested-brace interpolation not ported |
+| `"str {expr}"` string interpolation | **S** | shipped as `"str ${expr}"` (v0.48.22-patch2) with nesting, escapes, numeric/enum wrapping |
 | `'str'` single-quoted | M | regex-path only in legacy too |
 | `TRUE`/`FALSE`/`NULL`/`VOID` | **P** | TRUE/FALSE/NULL; VOID M |
 | `[a, b, c]` array literal | M | use `plant_list_make(n, …)` |
@@ -265,7 +265,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 **High effort / high value**
 1. **Storms / exception handling** (WEATHER/SHELTER/CALM + `LOST_STORM`/`ZERO_STORM`): the largest semantic gap; needs an unwinding strategy in generated C.
 2. **List/map/std library surface**: array & map literals, slices, `FIRST/LAST/SUM/AVERAGE/MEDIAN/UNIQUE/REVERSE/FLATTEN/CHUNK/ZIP/RANGE`, string `UPPER/LOWER/TRIM/INCLUDES/STARTS_WITH/ENDS_WITH/FIND/COUNT_OF/JOIN/REPLACE/SPLIT/SLICE/REPEAT/PAD_*`, `math` extras (`LOG PI E SIGN CLAMP`), `fs:APPEND`.
-3. **String interpolation** — remaining legacy syntax gap; ORIF/ELSE (v0.48.20), CYCLE 3 forms (v0.48.21-22) and INCREASE/DECREASE (v0.48.22-patch) are shipped.
+3. **String interpolation** — shipped as `"str ${expr}"` (v0.48.22-patch2); ORIF/ELSE (v0.48.20), CYCLE 3 forms (v0.48.21-22) and INCREASE/DECREASE (v0.48.22-patch) are shipped.
 
 **Medium effort**
 4. **Re-wire the dormant POSIX sockets**: `HARVEST` (HTTP GET/POST via `plant_net_harvest`) and a minimal `LISTEN` server (or defer).

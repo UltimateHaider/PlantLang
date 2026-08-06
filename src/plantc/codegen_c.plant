@@ -217,7 +217,273 @@ ACTION is_numeric_type(t(TX)),
 #  so it should only be called on show_stmt values which rarely
 #  contain string literals with + as delimiter arguments
 # ──────────────────────────────────────────────────────────────
+# ──────────────────────────────────────────────────────────────
+#  String interpolation ("...${expr}...") — v0.48.22-patch2
+#
+#  The lexer tags interpolated strings as INTERP tokens; the parser
+#  quote-wraps them like plain strings. At codegen, _interp_to_cat
+#  (invoked at the top of _handle_cat, so every value position
+#  inherits it) rebuilds each quoted string that contains ${...}
+#  into a nested _cat(...) chain: literal segments stay C string
+#  literals, embedded expressions go through unescape → nested
+#  interpolation → translate_expr → _handle_cat, and numerically
+#  typed results are wrapped in _from_long (enum refs in _from_enum).
+# ──────────────────────────────────────────────────────────────
+
+# _find_interp — 1 when t contains "${"
+ACTION _find_interp(t(TX)),
+  CREATE i(NUM) TO 0.
+  CREATE n(NUM) TO LEN(t).
+  SEASON i < n - 1,
+    REAP c FROM char_at, t, i.
+    IF c IS "$" AND char_at(t, i + 1) IS "{", GIVE 1. /IF.
+    SET i TO i + 1.
+  /SEASON.
+  GIVE 0.
+/ACTION.
+
+# _unescape — undo escape_string's \" and \\ inside embedded
+# expressions (the embedded text is C-escaped inside the value).
+# NOTE: variables kept digit-free so the (stale) bootstrap compiler
+# doesn't take its has_digit raw-+ shortcut on pure var+var concats.
+ACTION _unescape(s(TX)),
+  CREATE rr(TX) TO "".
+  CREATE ii(NUM) TO 0.
+  CREATE nn(NUM) TO LEN(s).
+  SEASON ii < nn,
+    REAP cc FROM char_at, s, ii.
+    IF cc IS "\\" AND ii + 1 < nn,
+      REAP nx FROM char_at, s, ii + 1.
+      IF nx IS "\"" OR nx IS "\\",
+        SET rr TO rr + nx.
+        SET ii TO ii + 2.
+        CONTINUE.
+      /IF.
+    /IF.
+    SET rr TO rr + cc.
+    SET ii TO ii + 1.
+  /SEASON.
+  GIVE rr.
+/ACTION.
+
+# _interp_to_cat — scan expr text; expand any quoted string that
+# contains ${...}; copy everything else unchanged
+ACTION _interp_to_cat(expr(TX), nums(LIST), evars(LIST)),
+  CREATE res(TX) TO "".
+  CREATE i(NUM) TO 0.
+  CREATE n(NUM) TO LEN(expr).
+  CREATE ch(TX) TO "".
+  SEASON i < n,
+    REAP ch FROM char_at, expr, i.
+    IF ch ISNT "\"",
+      SET res TO res + ch.
+      SET i TO i + 1.
+      CONTINUE.
+    /IF.
+    CREATE j(NUM) TO i + 1.
+    CREATE dn(NUM) TO 0.
+    SEASON dn IS 0 AND j < n,
+      REAP cj FROM char_at, expr, j.
+      IF cj IS "\\",
+        SET j TO j + 2.
+        CONTINUE.
+      /IF.
+      IF cj IS "\"",
+        SET dn TO 1.
+        SET j TO j + 1.
+        CONTINUE.
+      /IF.
+      SET j TO j + 1.
+    /SEASON.
+    REAP raw FROM substring, expr, i, j.
+    REAP hp FROM _find_interp, raw.
+    IF hp IS 0,
+      SET res TO res + raw.
+      SET i TO j.
+      CONTINUE.
+    /IF.
+    REAP chain FROM _interp_expand, raw, nums, evars.
+    SET res TO res + chain.
+    SET i TO j.
+  /SEASON.
+  GIVE res.
+/ACTION.
+
+# _expand_bare — replace unquoted ${...} inside an embedded
+# expression with the raw C of the inner expression (e.g.
+# "${n + ${n}}" → "n + n"); recursion covers deeper nesting.
+# The inner C is deliberately NOT _from_long-wrapped here — the
+# surrounding expression supplies the type.
+ACTION _expand_bare(t(TX), nums(LIST), evars(LIST)),
+  CREATE res(TX) TO "".
+  CREATE i(NUM) TO 0.
+  CREATE n(NUM) TO LEN(t).
+  CREATE instr(NUM) TO 0.
+  SEASON i < n,
+    REAP c FROM char_at, t, i.
+    IF c IS "\"",
+      SET instr TO 1 - instr.
+      SET res TO res + c.
+      SET i TO i + 1.
+      CONTINUE.
+    /IF.
+    IF c IS "\\" AND instr IS 1,
+      SET res TO res + c + "".
+      SET i TO i + 1.
+      IF i < n,
+        REAP c2 FROM char_at, t, i.
+        SET res TO res + c2 + "".
+        SET i TO i + 1.
+      /IF.
+      CONTINUE.
+    /IF.
+    IF instr IS 0 AND c IS "$" AND i + 1 < n AND char_at(t, i + 1) IS "{",
+      CREATE d(NUM) TO 1.
+      CREATE j(NUM) TO i + 2.
+      SEASON d > 0 AND j < n,
+        REAP c2 FROM char_at, t, j.
+        IF c2 IS "\\",
+          SET j TO j + 2.
+          CONTINUE.
+        /IF.
+        IF c2 IS "$" AND j + 1 < n AND char_at(t, j + 1) IS "{",
+          SET d TO d + 1.
+          SET j TO j + 2.
+          CONTINUE.
+        /IF.
+        IF c2 IS "}",
+          SET d TO d - 1.
+          IF d IS 0,
+            SET j TO j + 1.
+            CONTINUE.
+          /IF.
+        /IF.
+        SET j TO j + 1.
+      /SEASON.
+      REAP inner FROM substring, t, i + 2, j - 1.
+      REAP inner FROM _expand_bare, inner, nums, evars.
+      REAP inner FROM translate_expr, inner.
+      REAP inner FROM _handle_cat, inner, nums, evars.
+      SET res TO res + inner.
+      SET i TO j.
+      CONTINUE.
+    /IF.
+    SET res TO res + c.
+    SET i TO i + 1.
+  /SEASON.
+  GIVE res.
+/ACTION.
+
+# _interp_expand — decompose one quoted interpolated string (raw
+# includes the outer quotes) into a nested _cat(...) chain
+ACTION _interp_expand(raw(TX), nums(LIST), evars(LIST)),
+  CREATE content(TX) TO substring(raw, 1, LEN(raw) - 1).
+  CREATE segs(LIST) TO plant_list_make(0).
+  CREATE i(NUM) TO 0.
+  CREATE n(NUM) TO LEN(content).
+  SEASON TRUE,
+    CREATE fnd(NUM) TO -1.
+    CREATE k(NUM) TO i.
+    SEASON k < n,
+      REAP ck FROM char_at, content, k.
+      IF ck IS "$" AND k + 1 < n AND char_at(content, k + 1) IS "{",
+        SET fnd TO k.
+        BREAK 0.
+      /IF.
+      SET k TO k + 1.
+    /SEASON.
+    IF fnd IS -1,
+      REAP last FROM substring, content, i, n.
+      PUT last INTO segs.
+      BREAK 0.
+    /IF.
+    REAP lit FROM substring, content, i, fnd.
+    PUT lit INTO segs.
+    CREATE d2(NUM) TO 1.
+    CREATE j2(NUM) TO fnd + 2.
+    CREATE inner(TX) TO "".
+    SEASON d2 > 0 AND j2 < n,
+      REAP cj2 FROM char_at, content, j2.
+      IF cj2 IS "\\",
+        SET j2 TO j2 + 2.
+        CONTINUE.
+      /IF.
+      IF cj2 IS "$" AND j2 + 1 < n AND char_at(content, j2 + 1) IS "{",
+        SET d2 TO d2 + 1.
+        SET j2 TO j2 + 2.
+        CONTINUE.
+      /IF.
+      IF cj2 IS "}",
+        SET d2 TO d2 - 1.
+        IF d2 IS 0,
+          SET inner TO substring(content, fnd + 2, j2).
+          SET j2 TO j2 + 1.
+          CONTINUE.
+        /IF.
+      /IF.
+      SET j2 TO j2 + 1.
+    /SEASON.
+    IF inner IS "",
+      PUT "__PLANT_EMPTY_INTERP__" INTO segs.
+    /IF.
+    IF inner ISNT "",
+      PUT inner INTO segs.
+    /IF.
+    SET i TO j2.
+    IF d2 > 0,
+      GIVE "\n#error unterminated string interpolation: missing }\n".
+    /IF.
+  /SEASON.
+  CREATE out(TX) TO "".
+  CREATE si2(NUM) TO 0.
+  CREATE is_lit(NUM) TO 1.
+  CREATE seg(TX) TO "".
+  SEASON si2 < COUNT segs,
+    REAP seg FROM plant_list_get, segs, si2.
+    IF is_lit IS 1,
+      CREATE ws(TX) TO "\"" + seg + "\"".
+      IF out ISNT "",
+        SET ws TO "_cat(" + out + ", \"" + seg + "\")".
+      /IF.
+      SET out TO ws.
+    /IF.
+    IF is_lit IS 0,
+      CREATE seg2(TX) TO "".
+      IF seg IS "__PLANT_EMPTY_INTERP__",
+        SET seg2 TO "\"" + "\"".
+      /IF.
+      IF seg ISNT "__PLANT_EMPTY_INTERP__",
+        REAP seg2 FROM _unescape, seg.
+        REAP seg2 FROM _expand_bare, seg2, nums, evars.
+        REAP seg2 FROM _interp_to_cat, seg2, nums, evars.
+        REAP seg2 FROM translate_expr, seg2.
+        REAP seg2 FROM _handle_cat, seg2, nums, evars.
+        REAP sg2n FROM seg_is_numeric, seg2, nums.
+        IF sg2n IS 1,
+          SET seg2 TO "_from_long(" + seg2 + ")".
+        /IF.
+        IF sg2n IS 0,
+          REAP snm2 FROM enum_expr_of, evars, seg2.
+          IF snm2 ISNT "",
+            SET seg2 TO "_from_enum(" + seg2 + ", \"" + snm2 + "\")".
+          /IF.
+        /IF.
+      /IF.
+      CREATE ws(TX) TO seg2.
+      IF out ISNT "",
+        SET ws TO "_cat(" + out + ", " + seg2 + ")".
+      /IF.
+      SET out TO ws.
+    /IF.
+    SET is_lit TO 1 - is_lit.
+    SET si2 TO si2 + 1.
+  /SEASON.
+  GIVE out.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
 ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
+    REAP expr FROM _interp_to_cat, expr, nums, evars.
     CREATE parts(LIST) TO plant_list_make(0).
     CREATE depth(NUM) TO 0.
     CREATE instr(NUM) TO 0.

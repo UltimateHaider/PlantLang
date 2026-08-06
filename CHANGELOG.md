@@ -53,6 +53,50 @@ Shipped `INCREASE x BY n.` and `DECREASE x BY n.` (legacy gap 3.2):
 - Two regression tests (`incdec_basic`, `incdec_loop`): 69 regression
   / 101 total. Self-host converged 274255 B; DISTCHECK OK.
 
+### Patch (v0.48.22-patch2)
+Shipped native string interpolation `"Hello ${name}"` (legacy gap 3.2,
+roadmap item 3):
+- Lexer: `match_string_i` supersedes `match_string` in `scan_tokens`.
+  It returns a triple `[value, endpos, has_interp]` and tracks two
+  states: `idepth` counts `${...}` nesting and `instr` marks quoted
+  regions inside embedded expressions, so `${a + "${b}"}` and nested
+  `${n + ${n}}` scan correctly. Escaped quotes and backslashes skip
+  the closing-quote scan; `\n \t \r` sequences are normalized. The
+  string branch now pushes `INTERP` tokens (value carries the full
+  raw text including `${...}` delimiters) alongside `STRING`, and the
+  plain-string push condition was fixed to `si[2] ISNT 1` — the
+  runtime maps a stored `0` to `""`, so the original `== 0` test
+  never fired and silently dropped every plain string literal
+  (found by building the self-host chain: `v2` stripped strings,
+  which corrupted the `v2→v3` stage).
+- Parser: `collect_value` and `collect_until` treat `INTERP` like
+  `STRING` (escape + quote-wrap); three `atype IS "STRING"` sites in
+  `collect_args`/create/await argument handling accept both.
+- Codegen: `_handle_cat` now first runs `_interp_to_cat`, which
+  rebuilds each quoted string containing `${...}` into a nested
+  `_cat(...)` chain. `_interp_expand` splits the string into literal
+  and expression segments; expressions go through unescape → bare-
+  `${}` expansion (`_expand_bare`, quote-aware) → nested interpolation
+  → `translate_expr` → `_handle_cat`. Numerically typed results wrap
+  in `_from_long(...)` (via `seg_is_numeric`), enum variables in
+  `_from_enum(...)` (via `enum_expr_of`); pure-numeric expressions
+  such as `${a + b}` emit `_from_long(a + b)` with raw C arithmetic.
+- Error safeguards: an unterminated `${` (no closing `}`) raises a
+  compile-time `#error unterminated string interpolation: missing }`
+  line in the generated C, rejecting the program at compile time.
+- Self-host discipline: with the stale `dist/Chloroplast` bootstrap,
+  pure var+var `+` concatenation of digit-bearing identifiers emits
+  raw `tx_t + tx_t` C, so new helpers use digit-free names
+  (`_unescape`: `rr/ii/nn/cc/nx`; `_expand_bare`: `res/i/n/c/c2`)
+  and quote a literal on concatenations (`res + c2 + ""`). Runtime
+  `_cat` hardened with `if(!sa) sa=""; if(!sb) sb="";`.
+- Two regression tests (`interp_basic`, `interp_composite`) covering
+  foundational interpolation, numeric positive/negative/zero,
+  embedded-digit identifiers (`eb2`), empty `${}`, mixed vars,
+  composite arithmetic, nested expressions, `LEN`, escapes, and
+  interpolation inside `SET`. 71 regression / 103 total. Self-host
+  converged 284951 B; DISTCHECK OK.
+
 ## v0.48.21 — 2026 (Numeric Range CYCLE)
 
 ### New Features
