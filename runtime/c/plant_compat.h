@@ -312,6 +312,28 @@ tx_t json_val(tx_t val);            /* scalar value text ("true"/number/string);
 tx_t string_repeat(tx_t str, long count);   /* str repeated count times (count<=0 → "") */
 tx_t string_reverse(tx_t str);              /* reversed character order */
 tx_t string_pad(tx_t str, long length, tx_t pad_char); /* right-pad to length */
+/* v0.48.26 — complete string library */
+tx_t string_upper(tx_t str);                /* fully uppercase */
+tx_t string_lower(tx_t str);                /* fully lowercase */
+tx_t string_trim(tx_t str);                 /* strip leading/trailing whitespace */
+tx_t string_includes(tx_t str, tx_t sub);   /* "1" if str contains sub */
+tx_t string_starts_with(tx_t str, tx_t pre); /* "1" if str starts with pre */
+tx_t string_ends_with(tx_t str, tx_t suf);  /* "1" if str ends with suf */
+tx_t string_pad_left(tx_t str, long length, tx_t pad_char); /* left-pad to length */
+
+/* ── v0.48.26: strings: FFI module bindings ───────────────────────
+   Thin wrappers over the std/string runtime (plant_runtime.c); the
+   compiler rewrites `module:FUNC` calls to `module_FUNC`. */
+static tx_t strings_UPPER(tx_t s)        { return string_upper(s); }
+static tx_t strings_LOWER(tx_t s)        { return string_lower(s); }
+static tx_t strings_TRIM(tx_t s)         { return string_trim(s); }
+static tx_t strings_INCLUDES(tx_t s, tx_t t)    { return string_includes(s, t); }
+static tx_t strings_STARTS_WITH(tx_t s, tx_t t) { return string_starts_with(s, t); }
+static tx_t strings_ENDS_WITH(tx_t s, tx_t t)   { return string_ends_with(s, t); }
+static tx_t strings_REVERSE(tx_t s)      { return string_reverse(s); }
+static tx_t strings_REPEAT(tx_t s, long n)      { return string_repeat(s, n); }
+static tx_t strings_PAD(tx_t s, long n, tx_t c) { return string_pad(s, n, c); }
+static tx_t strings_PAD_LEFT(tx_t s, long n, tx_t c) { return string_pad_left(s, n, c); }
 
 /* ── std/fs ── */
 tx_t file_copy(tx_t src, tx_t dest);   /* "1" ok | "0" error */

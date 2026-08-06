@@ -1,0 +1,105 @@
+# v0.48.26 — complete string library via the strings: FFI module:
+# UPPER, LOWER, TRIM, INCLUDES, STARTS_WITH, ENDS_WITH, REVERSE,
+# REPEAT, PAD (right), PAD_LEFT. Edge cases: empty strings, single
+# characters, extended text, zero-iteration repetition, and padding
+# where the target length is below the input length.
+ACTION main(),
+  SHOW "== upper ==".
+  REAP u1 FROM strings:UPPER, "hello world".
+  SHOW u1.
+  REAP u2 FROM strings:UPPER, "Hello123!".
+  SHOW u2.
+  REAP u3 FROM strings:UPPER, "".
+  SHOW "[" + u3 + "]".
+  REAP u4 FROM strings:UPPER, "X".
+  SHOW u4.
+  SHOW "== lower ==".
+  REAP l1 FROM strings:LOWER, "HELLO WORLD".
+  SHOW l1.
+  REAP l2 FROM strings:LOWER, "MiXeD 42!".
+  SHOW l2.
+  REAP l3 FROM strings:LOWER, "".
+  SHOW "[" + l3 + "]".
+  SHOW "== trim ==".
+  REAP t1 FROM strings:TRIM, "  hi  ".
+  SHOW "[" + t1 + "]".
+  REAP t2 FROM strings:TRIM, "no space".
+  SHOW "[" + t2 + "]".
+  REAP t3 FROM strings:TRIM, "   ".
+  SHOW "[" + t3 + "]".
+  REAP t4 FROM strings:TRIM, "".
+  SHOW "[" + t4 + "]".
+  REAP t5 FROM strings:TRIM, "  lead".
+  SHOW "[" + t5 + "]".
+  REAP t6 FROM strings:TRIM, "trail  ".
+  SHOW "[" + t6 + "]".
+  SHOW "== includes ==".
+  REAP i1 FROM strings:INCLUDES, "hello world", "lo wo".
+  SHOW i1.
+  REAP i2 FROM strings:INCLUDES, "hello", "xyz".
+  SHOW i2.
+  REAP i3 FROM strings:INCLUDES, "hello", "".
+  SHOW i3.
+  REAP i4 FROM strings:INCLUDES, "", "x".
+  SHOW i4.
+  REAP i5 FROM strings:INCLUDES, "a", "a".
+  SHOW i5.
+  SHOW "== starts_with ==".
+  REAP s1 FROM strings:STARTS_WITH, "hello", "he".
+  SHOW s1.
+  REAP s2 FROM strings:STARTS_WITH, "hello", "lo".
+  SHOW s2.
+  REAP s3 FROM strings:STARTS_WITH, "hello", "".
+  SHOW s3.
+  REAP s4 FROM strings:STARTS_WITH, "", "h".
+  SHOW s4.
+  SHOW "== ends_with ==".
+  REAP e1 FROM strings:ENDS_WITH, "hello", "llo".
+  SHOW e1.
+  REAP e2 FROM strings:ENDS_WITH, "hello", "hel".
+  SHOW e2.
+  REAP e3 FROM strings:ENDS_WITH, "hello", "".
+  SHOW e3.
+  REAP e4 FROM strings:ENDS_WITH, "", "o".
+  SHOW e4.
+  SHOW "== reverse ==".
+  REAP r1 FROM strings:REVERSE, "abc".
+  SHOW r1.
+  REAP r2 FROM strings:REVERSE, "".
+  SHOW "[" + r2 + "]".
+  REAP r3 FROM strings:REVERSE, "a".
+  SHOW r3.
+  REAP r4 FROM strings:REVERSE, "a b c".
+  SHOW r4.
+  REAP r5 FROM strings:REVERSE, "racecar".
+  SHOW r5.
+  SHOW "== repeat ==".
+  REAP x1 FROM strings:REPEAT, "ab", 3.
+  SHOW x1.
+  REAP x2 FROM strings:REPEAT, "x", 0.
+  SHOW "[" + x2 + "]".
+  REAP x3 FROM strings:REPEAT, "x", 1.
+  SHOW x3.
+  REAP x4 FROM strings:REPEAT, "", 5.
+  SHOW "[" + x4 + "]".
+  REAP x5 FROM strings:REPEAT, "12", 4.
+  SHOW x5.
+  SHOW "== pad (right) ==".
+  REAP p1 FROM strings:PAD, "x", 5, ".".
+  SHOW p1.
+  REAP p2 FROM strings:PAD, "hello", 3, ".".
+  SHOW p2.
+  REAP p3 FROM strings:PAD, "ab", 4, "-".
+  SHOW p3.
+  REAP p4 FROM strings:PAD, "ok", 2, ".".
+  SHOW p4.
+  SHOW "== pad_left ==".
+  REAP q1 FROM strings:PAD_LEFT, "x", 5, ".".
+  SHOW q1.
+  REAP q2 FROM strings:PAD_LEFT, "hello", 3, ".".
+  SHOW q2.
+  REAP q3 FROM strings:PAD_LEFT, "ab", 4, "-".
+  SHOW q3.
+  SHOW "done".
+  GIVE 0.
+/GIVE main.

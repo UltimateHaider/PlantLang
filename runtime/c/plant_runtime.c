@@ -1181,6 +1181,92 @@ tx_t string_pad(tx_t str, long length, tx_t pad_char) {
     return out;
 }
 
+/* ── v0.48.26 — complete string library (std/string) ──────────────
+   Case conversion, whitespace management, substring search and
+   boundary validation, reversal, repetition, and both left/right
+   padding. All follow the tx_t malloc/strdup contract of the
+   std/string section; boolean results use the "1"/"0" convention. */
+
+tx_t string_upper(tx_t str) {
+    const char* s = _S(str);
+    if (!s) return strdup("");
+    size_t len = strlen(s);
+    char* out = (char*)malloc(len + 1);
+    if (!out) return strdup("");
+    for (size_t i = 0; i < len; i++) {
+        char c = s[i];
+        out[i] = (c >= 'a' && c <= 'z') ? (char)(c - 32) : c;
+    }
+    out[len] = 0;
+    return out;
+}
+
+tx_t string_lower(tx_t str) {
+    const char* s = _S(str);
+    if (!s) return strdup("");
+    size_t len = strlen(s);
+    char* out = (char*)malloc(len + 1);
+    if (!out) return strdup("");
+    for (size_t i = 0; i < len; i++) {
+        char c = s[i];
+        out[i] = (c >= 'A' && c <= 'Z') ? (char)(c + 32) : c;
+    }
+    out[len] = 0;
+    return out;
+}
+
+tx_t string_trim(tx_t str) {
+    const char* s = _S(str);
+    if (!s) return strdup("");
+    const char* start = s;
+    while (*start && (unsigned char)*start <= ' ') start++;
+    if (*start == '\0') return strdup("");
+    const char* end = start + strlen(start) - 1;
+    while (end > start && (unsigned char)*end <= ' ') end--;
+    size_t len = (size_t)(end - start + 1);
+    char* out = (char*)malloc(len + 1);
+    if (!out) return strdup("");
+    memcpy(out, start, len);
+    out[len] = 0;
+    return out;
+}
+
+tx_t string_includes(tx_t str, tx_t sub) {
+    const char* s = _S(str), *t = _S(sub);
+    if (!s || !t) return "0";
+    return strstr(s, t) ? "1" : "0";
+}
+
+tx_t string_starts_with(tx_t str, tx_t pre) {
+    const char* s = _S(str), *p = _S(pre);
+    if (!s || !p) return "0";
+    return strncmp(s, p, strlen(p)) == 0 ? "1" : "0";
+}
+
+tx_t string_ends_with(tx_t str, tx_t suf) {
+    const char* s = _S(str), *f = _S(suf);
+    if (!s || !f) return "0";
+    size_t sl = strlen(s), fl = strlen(f);
+    if (fl > sl) return "0";
+    return strcmp(s + sl - fl, f) == 0 ? "1" : "0";
+}
+
+tx_t string_pad_left(tx_t str, long length, tx_t pad_char) {
+    const char* s = _S(str);
+    if (!s) return strdup("");
+    size_t sl = strlen(s);
+    if (length <= (long)sl) return strdup(s);
+    const char* pc = _S(pad_char);
+    if (!pc || !*pc) pc = " ";
+    size_t n = (size_t)length - sl;
+    char* out = (char*)malloc((size_t)length + 1);
+    if (!out) return strdup(s);
+    for (size_t i = 0; i < n; i++) out[i] = pc[0];
+    memcpy(out + n, s, sl);
+    out[(size_t)length] = 0;
+    return out;
+}
+
 /* ── std/fs ──────────────────────────────────────────────────── */
 
 tx_t file_copy(tx_t src, tx_t dest) {

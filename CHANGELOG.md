@@ -1,5 +1,47 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.26 — 2026 (Complete String Library)
+
+### New Features
+- **`strings:` FFI module.** Ten bindings expose the std/string
+  library to scripts: `strings:UPPER`, `strings:LOWER`,
+  `strings:TRIM`, `strings:INCLUDES`, `strings:STARTS_WITH`,
+  `strings:ENDS_WITH`, `strings:REVERSE`, `strings:REPEAT`,
+  `strings:PAD` (right-aligned), and `strings:PAD_LEFT`.
+  `module:FUNC` calls rewrite to `module_FUNC` at codegen, so the
+  bindings are thin static wrappers over the runtime.
+- **Runtime implementations** (`plant_runtime.c`, std/string):
+  - `string_upper` / `string_lower` — character-level case
+    conversion (ASCII a–z / A–Z).
+  - `string_trim` — strips leading and trailing whitespace
+    (`<= ' '`), sharing `plant_string_trim` semantics.
+  - `string_includes` — substring containment via `strstr`; the
+    empty substring is contained.
+  - `string_starts_with` / `string_ends_with` — prefix/suffix
+    boundary checks; the empty prefix/suffix matches.
+  - `string_reverse` — symmetric character inversion (already
+    shipped, now also exposed as `strings:REVERSE`).
+  - `string_repeat` — duplicates a string `count` times
+    (`count <= 0` or empty input → `""`).
+  - `string_pad` / `string_pad_left` — pad to a target length with
+    the first character of the pad string; lengths at or below the
+    input length return the input unchanged.
+- **Boolean convention.** Containment/boundary functions return
+  `"1"`/`"0"` strings, matching `str_eq` and the FFI truthiness
+  convention.
+
+### Regression Tests
+- `string_full`: all ten `strings:` bindings with edge cases — empty
+  strings and single characters, mixed-case and punctuation, all-
+  whitespace and already-trimmed inputs, absent and empty
+  substrings/prefixes/suffixes, zero- and one-count repetitions,
+  palindromes, and padding where the target length falls below the
+  input length.
+
+### Notes
+- The compiler's `--version` string (previously stuck at 0.48.22)
+  now reports 0.48.26; the native suite's version check follows.
+
 ## v0.48.25 — 2026 (STOP IF + plant_calm Finalization)
 
 ### New Features

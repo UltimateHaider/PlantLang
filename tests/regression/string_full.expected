@@ -1,0 +1,54 @@
+== upper ==
+HELLO WORLD
+HELLO123!
+[]
+X
+== lower ==
+hello world
+mixed 42!
+[]
+== trim ==
+[hi]
+[no space]
+[]
+[]
+[lead]
+[trail]
+== includes ==
+1
+0
+1
+0
+1
+== starts_with ==
+1
+0
+1
+0
+== ends_with ==
+1
+0
+1
+0
+== reverse ==
+cba
+[]
+a
+c b a
+racecar
+== repeat ==
+ababab
+[]
+x
+[]
+12121212
+== pad (right) ==
+x....
+hello
+ab--
+ok
+== pad_left ==
+....x
+hello
+--ab
+done
