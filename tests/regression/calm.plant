@@ -1,0 +1,52 @@
+# v0.48.25 — plant_calm unconditional finalization.
+# CALM runs on every exit path: normal completion, handled storms,
+# and GIVE/BREAK/CONTINUE interruptions via the threaded exit lists.
+ACTION main(),
+  SHOW "a".
+  WEATHER,
+    SHOW "body".
+  CALM,
+    SHOW "calm normal".
+  /WEATHER.
+  SHOW "b".
+  WEATHER,
+    THROW ZERO_STORM "z".
+  SHELTER ZERO_STORM,
+    SHOW "caught".
+  CALM,
+    SHOW "calm caught".
+  /WEATHER.
+  SHOW "c".
+  WEATHER,
+    WEATHER,
+      THROW LOCK_STORM "l".
+    SHELTER ZERO_STORM,
+      SHOW "wrong".
+    CALM,
+      SHOW "calm unmatched".
+    /WEATHER.
+  SHELTER LOCK_STORM,
+    SHOW "outer caught".
+  CALM,
+    SHOW "calm outer".
+  /WEATHER.
+  SHOW "d".
+  CYCLE i FROM 1 TO 3,
+    SHOW "iter " + i.
+    WEATHER,
+      IF i > 1, BREAK 0. /IF.
+      SHOW "body " + i.
+    CALM,
+      SHOW "calm break".
+    /WEATHER.
+    SHOW "tail " + i.
+  /CYCLE.
+  SHOW "loop done".
+  WEATHER,
+    GIVE 0.
+  CALM,
+    SHOW "calm give".
+  /WEATHER.
+  SHOW "after give - BUG".
+  GIVE 0.
+/GIVE main.

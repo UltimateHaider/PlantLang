@@ -385,16 +385,17 @@ const char* plant_env_get_weather(void) {
 
 static PlantWeather* _plant_weather_head = NULL;
 
-/* v0.48.23-patch — the cumulative 12-kind storm registry. The six
+/* v0.48.23-patch / v0.48.25 — the cumulative storm registry. The six
    legacy core kinds (ZERO/LOCK/MISSING/NETWORK/LOST/ANY) are joined
    by six additive classifications (RANGE/TYPE/PARSE/HANDLE/HARVEST/
-   FALL). Every entry carries the default message plant_throw uses
-   when a THROW carries no explicit message; free-form identifiers
-   (neither the registry nor ANY_STORM) fall back to the generic
-   message below. */
+   FALL) and, since v0.48.25, STOP_STORM (the STOP IF classification).
+   Every entry carries the default message plant_throw uses when a
+   THROW carries no explicit message; free-form identifiers (neither
+   the registry nor ANY_STORM) fall back to the generic message
+   below. */
 typedef struct { const char* name; const char* message; } PlantStormInfo;
 
-static const PlantStormInfo _plant_storm_registry[12] = {
+static const PlantStormInfo _plant_storm_registry[13] = {
     { "ZERO_STORM",    "division by zero"                },
     { "LOCK_STORM",    "operation locked or forbidden"   },
     { "MISSING_STORM", "missing symbol, file, or value"  },
@@ -406,6 +407,7 @@ static const PlantStormInfo _plant_storm_registry[12] = {
     { "HANDLE_STORM",  "invalid or closed resource handle" },
     { "HARVEST_STORM", "HTTP harvest failed"             },
     { "FALL_STORM",    "requested abort or termination"  },
+    { "STOP_STORM",    "conditional stop requested"      },
     { "ANY_STORM",     "unclassified storm"              },
 };
 
@@ -440,6 +442,7 @@ void plant_weather_enter(PlantWeather* w) {
     if (!w) return;
     w->next = _plant_weather_head;
     w->raised = 0;
+    w->handled = 0;
     w->exc_type = NULL;
     w->exc_msg = NULL;
     _plant_weather_head = w;
@@ -450,6 +453,20 @@ void plant_weather_leave(PlantWeather* w) {
     if (_plant_weather_head == w) {
         _plant_weather_head = w->next;
     }
+}
+
+/* v0.48.25 — unconditional finalization. Called after a WEATHER
+   block's CALM body on every exit path (normal completion, handled
+   storm, unmatched storm, and the threaded GIVE/BREAK/CONTINUE exit
+   chains). Pops the frame, then re-raises any storm the shelters did
+   not handle so it propagates to the enclosing WEATHER. */
+void plant_calm(PlantWeather* w) {
+    if (!w) return;
+    int pending = w->raised && !w->handled;
+    const char* t = pending ? (const char*)w->exc_type : NULL;
+    const char* m = pending ? (const char*)w->exc_msg : NULL;
+    plant_weather_leave(w);
+    if (pending) plant_throw(t, m);
 }
 
 void plant_throw(const char* type, const char* msg) {

@@ -45,6 +45,7 @@ tx_t parse_if_stmt(PlantArray* tokens, long pos);
 tx_t parse_season_stmt(PlantArray* tokens, long pos);
 tx_t parse_cycle_stmt(PlantArray* tokens, long pos);
 tx_t parse_throw_stmt(PlantArray* tokens, long pos);
+tx_t parse_stop_if_stmt(PlantArray* tokens, long pos);
 tx_t parse_weather_stmt(PlantArray* tokens, long pos);
 tx_t parse_statement(PlantArray* tokens, long pos);
 tx_t parse_enum_decl(PlantArray* tokens, long pos);
@@ -323,6 +324,9 @@ tx_t is_keyword(tx_t wrd) {
     if (strcmp(wrd,"THROW") == 0) {
         return 1;
     }
+    if (strcmp(wrd,"STOP") == 0) {
+        return 1;
+    }
     if (strcmp(wrd,"INTO") == 0) {
         return 1;
     }
@@ -484,6 +488,9 @@ tx_t keyword_to_type(tx_t wrd) {
     }
     if (strcmp(wrd,"THROW") == 0) {
         return "THROW";
+    }
+    if (strcmp(wrd,"STOP") == 0) {
+        return "STOP";
     }
     if (strcmp(wrd,"INTO") == 0) {
         return "INTO";
@@ -2696,6 +2703,34 @@ tx_t parse_throw_stmt(PlantArray* tokens, long pos) {
     p4 = _second(dot);
     return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "throw_stmt" , "storm" , stype , "msg" , msg ) , p4 );
 }
+tx_t parse_stop_if_stmt(PlantArray* tokens, long pos) {
+  tx_t pair = "";
+  tx_t p2 = "";
+  tx_t if_pair = "";
+  tx_t if_lx = "";
+  tx_t p3 = "";
+  tx_t cond_pair = "";
+  tx_t p4 = "";
+  tx_t dot = "";
+  tx_t p5 = "";
+    pair = consume(tokens, pos);
+    p2 = _second(pair);
+    if_pair = consume(tokens, p2);
+    if_lx = tok_lex(plant_list_get(if_pair,  0 ));
+    p3 = _second(if_pair);
+    if (strcmp(if_lx,"IF") != 0) {
+        return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "Expected IF after STOP" ) , p2 );
+    }
+    cond_pair = collect_until(tokens, p3, ".");
+    tx_t cond = plant_list_get(cond_pair,  0 );
+    p4 = _second(cond_pair);
+    if (strcmp(cond,"") == 0 || cond == NULL) {
+        return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "STOP IF requires a condition expression" ) , p3 );
+    }
+    dot = consume(tokens, p4);
+    p5 = _second(dot);
+    return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "stop_if_stmt" , "cond" , cond ) , p5 );
+}
 tx_t parse_weather_stmt(PlantArray* tokens, long pos) {
   tx_t pair = "";
   tx_t p2 = "";
@@ -2915,6 +2950,10 @@ tx_t parse_statement(PlantArray* tokens, long pos) {
     }
     if (strcmp(lx,"THROW") == 0) {
         r = parse_throw_stmt(tokens, pos);
+        return r;
+    }
+    if (strcmp(lx,"STOP") == 0) {
+        r = parse_stop_if_stmt(tokens, pos);
         return r;
     }
     if (strcmp(lx,"REAP") == 0) {
@@ -5646,10 +5685,12 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t clist = "";
   tx_t sh = "";
   tx_t cb = "";
-  tx_t hcode = "";
   tx_t cbcode = "";
+  tx_t hcode = "";
   tx_t wtype2 = "";
   tx_t wmsg2 = "";
+  tx_t scond = "";
+  tx_t scc = "";
   tx_t subj = "";
   tx_t csubj = "";
   tx_t vname = "";
@@ -6291,14 +6332,15 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         cb = _map_get(node, "calm");
         isel = indent_str(indent);
         tx_t wnm = _cat("__w", _from_long ( indent ));
-        tx_t wfm = _cat("__wm", _from_long ( indent ));
+        tx_t wx0 = _cat(_cat(_cat(wexit, "  plant_calm(&"), wnm), ");\n");
+        tx_t mx0 = _cat(_cat(_cat(mexit, "  plant_calm(&"), wnm), ");\n");
+        cbcode = generate_body(cb, indent+1, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx0, wx0);
+        tx_t wx = _cat(_cat(_cat(_cat(wexit, cbcode), "  plant_calm(&"), wnm), ");\n");
+        tx_t mx2 = _cat(_cat(_cat(_cat(mexit, cbcode), "  plant_calm(&"), wnm), ");\n");
         tx_t ccode = _cat(isel, "  {\n");
         ccode = _cat(_cat(_cat(_cat(ccode, isel), "    PlantWeather "), wnm), " = {0};\n");
-        ccode = _cat(_cat(_cat(_cat(ccode, isel), "    int "), wfm), " = 0;\n");
         ccode = _cat(_cat(_cat(_cat(ccode, isel), "    plant_weather_enter(&"), wnm), ");\n");
         ccode = _cat(_cat(_cat(_cat(ccode, isel), "    if (setjmp("), wnm), ".buf) == 0) {\n");
-        tx_t wx = _cat(_cat(_cat(wexit, "  plant_weather_leave(&"), wnm), ");\n");
-        tx_t mx2 = _cat(_cat(_cat(mexit, "  plant_weather_leave(&"), wnm), ");\n");
         bcode = generate_body(bd, indent+2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx);
         ccode = _cat(_cat(_cat(ccode, bcode), isel), "    } else {\n");
         ccode = _cat(_cat(ccode, isel), "      const char* __et = plant_exc_type();\n");
@@ -6318,7 +6360,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
             if (si2 > 0) {
                 ccode = _cat(_cat(_cat(_cat(ccode, isel), "      } else if (plant_storm_match(__et, \""), wty2), "\")) {\n");
             }
-            ccode = _cat(_cat(_cat(_cat(ccode, isel), "        "), wfm), " = 1;\n");
+            ccode = _cat(_cat(_cat(_cat(ccode, isel), "        "), wnm), ".handled = 1;\n");
             if (strcmp(wbind2,"") != 0 && strcmp(wbind2,"null") != 0) {
                 ccode = _cat(_cat(_cat(_cat(ccode, isel), "        tx_t "), wbind2), " = (tx_t)__em;\n");
             }
@@ -6330,12 +6372,8 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
             ccode = _cat(_cat(ccode, isel), "      }\n");
         }
         ccode = _cat(_cat(ccode, isel), "    }\n");
-        cbcode = generate_body(cb, indent+1, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx);
         ccode = _cat(ccode, cbcode);
-        ccode = _cat(_cat(_cat(_cat(_cat(_cat(ccode, isel), "    if ("), wfm), " == 0 && "), wnm), ".raised) {\n");
-        ccode = _cat(_cat(_cat(_cat(_cat(_cat(ccode, isel), "      plant_throw((tx_t)"), wnm), ".exc_type, (tx_t)"), wnm), ".exc_msg);\n");
-        ccode = _cat(_cat(ccode, isel), "    }\n");
-        ccode = _cat(_cat(_cat(_cat(ccode, isel), "    plant_weather_leave(&"), wnm), ");\n");
+        ccode = _cat(_cat(_cat(_cat(ccode, isel), "    plant_calm(&"), wnm), ");\n");
         ccode = _cat(_cat(ccode, isel), "  }\n");
         return ccode;
     }
@@ -6349,6 +6387,13 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
             cmsg = _handle_cat(cmsg, nums, evars);
         }
         return _cat(_cat(_cat(_cat(_cat(isel, "  plant_throw(\""), wtype2), "\", "), cmsg), ");\n");
+    }
+    if (strcmp(ntype,"stop_if_stmt") == 0) {
+        scond = _map_get(node, "cond");
+        scc = translate_expr(scond);
+        scc = handle_strcmp(scc);
+        isel = indent_str(indent);
+        return _cat(_cat(_cat(_cat(_cat(_cat(_cat(isel, "  if ("), scc), ") {\n"), isel), "    plant_throw(\"STOP_STORM\", NULL);\n"), isel), "  }\n");
     }
     if (strcmp(ntype,"match_stmt") == 0) {
         subj = _map_get(node, "subjectExpr");

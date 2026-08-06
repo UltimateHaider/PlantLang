@@ -1406,6 +1406,30 @@ ACTION parse_throw_stmt(tokens(LIST), pos(NUM)),
   GIVE plant_list_make(2, plant_list_make(8, "type", "throw_stmt", "storm", stype, "msg", msg), p4).
 /ACTION.
 
+# ── STOP IF <condition>. ────────────────────────────────────────
+# v0.48.25 — conditional execution halting. The condition is the
+# token list up to the terminating "."; a missing or empty condition
+# is a syntax error. AST node: stop_if_stmt { cond }.
+ACTION parse_stop_if_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP if_pair FROM consume, tokens, p2.
+  REAP if_lx FROM tok_lex, if_pair[0].
+  REAP p3 FROM _second, if_pair.
+  IF if_lx ISNT "IF",
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "Expected IF after STOP"), p2).
+  /IF.
+  REAP cond_pair FROM collect_until, tokens, p3, ".".
+  CREATE cond TO cond_pair[0].
+  REAP p4 FROM _second, cond_pair.
+  IF cond IS "" OR cond IS null,
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "STOP IF requires a condition expression"), p3).
+  /IF.
+  REAP dot FROM consume, tokens, p4.
+  REAP p5 FROM _second, dot.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "stop_if_stmt", "cond", cond), p5).
+/ACTION.
+
 # ── WEATHER … SHELTER [type [AS err]] … CALM … /WEATHER. ────
 #    v0.48.23 — WEATHER opens a protected block; every SHELTER
 #    clause (optionally typed by a storm identifier, optionally
@@ -1595,6 +1619,10 @@ ACTION parse_statement(tokens(LIST), pos(NUM)),
   /IF.
   IF lx IS "THROW",
     REAP r FROM parse_throw_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "STOP",
+    REAP r FROM parse_stop_if_stmt, tokens, pos.
     GIVE r.
   /IF.
   IF lx IS "REAP",

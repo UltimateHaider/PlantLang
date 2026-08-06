@@ -1,5 +1,44 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.25 — 2026 (STOP IF + plant_calm Finalization)
+
+### New Features
+- **Conditional execution halting.** `STOP IF cond.` evaluates the
+  condition exactly like an `IF` header and raises the `STOP_STORM`
+  classification through the standard exception pipeline when it is
+  true; a false condition passes through. A missing or empty
+  condition after the directive keywords is a compile-time
+  `syntax_error`. `STOP_STORM` joins the storm registry (13th kind)
+  with the default message `conditional stop requested`, so a
+  message-less halt is descriptive in handlers and at the top level.
+- **`plant_calm` runtime finalization.** `runtime/c/plant_runtime.c`
+  gains `plant_calm(w)`: the unconditional finalization point called
+  after every `CALM` body. It pops the weather frame and re-raises
+  any storm the shelters did not handle (`raised && !handled`),
+  centralizing the unmatched-storm propagation that was previously
+  emitted as generated guards. The `handled` flag moved from a C
+  local (`__wmN`) into the `PlantWeather` frame struct.
+- **CALM on every exit path.** The `CALM` body is now embedded in the
+  threaded `mexit`/`wexit` exit lists, so `GIVE`, `BREAK`, and
+  `CONTINUE` inside a protected body or a shelter still run the
+  finalizer before leaving the frame (generated once with clean
+  frame-pop exits to prevent re-entry, then shared by the inline
+  path and the exit chains). Nested `WEATHER` hierarchies finalize
+  frame by frame through the same lists.
+
+### Regression Tests
+- `stop_if`: true/false conditions, numeric conditions (`n >= 7`),
+  and `STOP IF` inside `WEATHER` blocks, verifying the registry
+  default message via `SHELTER STOP_STORM AS err`.
+- `calm`: `CALM` runs unconditionally — normal completion, caught
+  storms, unmatched storms re-propagating to an enclosing shelter —
+  plus `BREAK` and `GIVE` inside `WEATHER` blocks still finalizing.
+- `calm_nested`: three-level nested `WEATHER` hierarchies with
+  multi-level `CALM` handlers and an empty finalization block.
+
+### Notes
+- `STOP` is now a reserved keyword; `STOP IF` is the only form.
+
 ## v0.48.23 — 2026 (WEATHER/SHELTER/CALM Storm Exceptions)
 
 ### New Features

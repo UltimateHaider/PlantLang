@@ -81,12 +81,14 @@ typedef struct PlantWeather {
     struct PlantWeather* volatile next;
     jmp_buf buf;
     volatile int raised;
+    volatile int handled;
     volatile char* exc_type;
     volatile char* exc_msg;
 } PlantWeather;
 
 void        plant_weather_enter(PlantWeather* w);
 void        plant_weather_leave(PlantWeather* w);
+void        plant_calm(PlantWeather* w);
 void        plant_throw(const char* type, const char* msg);
 const char* plant_exc_type(void);
 const char* plant_exc_msg(void);

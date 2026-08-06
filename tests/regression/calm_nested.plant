@@ -1,0 +1,36 @@
+# v0.48.25 — deeply nested WEATHER hierarchies with multi-level
+# CALM finalizers and an empty finalization block.
+ACTION main(),
+  SHOW "top".
+  WEATHER,
+    SHOW "w1 body".
+    WEATHER,
+      SHOW "w2 body".
+      WEATHER,
+        THROW ZERO_STORM "deep".
+      SHELTER ANY_STORM,
+        SHOW "w3 caught".
+      CALM,
+        SHOW "w3 calm".
+      /WEATHER.
+      SHOW "w2 after inner".
+    SHELTER ANY_STORM,
+      SHOW "w2 catchall - BUG".
+    CALM,
+      SHOW "w2 calm".
+    /WEATHER.
+    SHOW "w1 after w2".
+  SHELTER ANY_STORM,
+    SHOW "w1 catchall - BUG".
+  CALM,
+    SHOW "w1 calm".
+  /WEATHER.
+  SHOW "done".
+  WEATHER,
+    SHOW "empty calm block".
+  SHELTER ZERO_STORM,
+  CALM,
+  /WEATHER.
+  SHOW "empty ok".
+  GIVE 0.
+/GIVE main.

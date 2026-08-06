@@ -57,6 +57,7 @@ ACTION is_keyword(wrd(TX)),
   IF wrd IS "BREAK", GIVE TRUE. /IF.
   IF wrd IS "CONTINUE", GIVE TRUE. /IF.
   IF wrd IS "THROW", GIVE TRUE. /IF.
+  IF wrd IS "STOP", GIVE TRUE. /IF.
   IF wrd IS "INTO", GIVE TRUE. /IF.
   GIVE FALSE.
 /ACTION.
@@ -115,6 +116,7 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "BREAK", GIVE "BREAK". /IF.
   IF wrd IS "CONTINUE", GIVE "CONTINUE". /IF.
   IF wrd IS "THROW", GIVE "THROW". /IF.
+  IF wrd IS "STOP", GIVE "STOP". /IF.
   IF wrd IS "INTO", GIVE "INTO". /IF.
   GIVE "IDENT".
 /ACTION.

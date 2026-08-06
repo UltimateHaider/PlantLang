@@ -2684,30 +2684,42 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    against each SHELTER type via plant_storm_match (name
     #    equality, with ANY_STORM catching everything as the
     #    catch-all — v0.48.23-patch centralizes matching in the
-    #    runtime so all 12 registered storm kinds route here), the
+    #    runtime so all 13 registered storm kinds route here), the
     #    message is optionally bound via `AS err`, and the frame is
-    #    popped so a handler THROW propagates outward. The
-    #    CALM body always runs; unmatched storms are rethrown after
-    #    it, bubbling up to the enclosing WEATHER. The frame variable
-    #    is named from the indent level so nested WEATHER blocks each
-    #    address their own checkpoint even through the mexit/wexit
-    #    threading below.
+    #    popped so a handler THROW propagates outward.
+    #    v0.48.25 — the CALM body runs through plant_calm: it is
+    #    embedded in the threaded mexit/wexit exit lists so
+    #    GIVE/BREAK/CONTINUE interruptions still finalize, and the
+    #    unmatched-storm rethrow moved from generated guards into
+    #    plant_calm (raised && !handled), which pops the frame and
+    #    re-raises so the storm bubbles to the enclosing WEATHER.
+    #    The frame variable is named from the indent level so nested
+    #    WEATHER blocks each address their own checkpoint even
+    #    through the mexit/wexit threading below.
     IF ntype IS "weather_stmt",
         REAP bd FROM _map_get, node, "body".
         REAP sh FROM _map_get, node, "shelters".
         REAP cb FROM _map_get, node, "calm".
         REAP isel FROM indent_str, indent.
         CREATE wnm(TX) TO "__w" + _from_long(indent).
-        CREATE wfm(TX) TO "__wm" + _from_long(indent).
+        # v0.48.25 — plant_calm finalization wiring. The CALM body is
+        # the block's finalizer and is generated exactly once with
+        # "clean" exit lines (wx0/mx0: frame-pop only, no finalizer
+        # re-entry), then embedded three ways: (1) in the wx/mx2 exit
+        # chains so BREAK/CONTINUE/GIVE inside the protected body or
+        # a shelter still run the finalizer; (2) inline after the
+        # setjmp dispatch for the normal and handled paths. The
+        # unmatched-storm rethrow is delegated to plant_calm, which
+        # pops the frame and re-raises when raised && !handled.
+        CREATE wx0(TX) TO wexit + "  plant_calm(&" + wnm + ");\n".
+        CREATE mx0(TX) TO mexit + "  plant_calm(&" + wnm + ");\n".
+        REAP cbcode FROM generate_body, cb, indent + 1, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx0, wx0.
+        CREATE wx(TX) TO wexit + cbcode + "  plant_calm(&" + wnm + ");\n".
+        CREATE mx2(TX) TO mexit + cbcode + "  plant_calm(&" + wnm + ");\n".
         CREATE ccode(TX) TO isel + "  \{\n".
         SET ccode TO ccode + isel + "    PlantWeather " + wnm + " = \{0\};\n".
-        SET ccode TO ccode + isel + "    int " + wfm + " = 0;\n".
         SET ccode TO ccode + isel + "    plant_weather_enter(&" + wnm + ");\n".
         SET ccode TO ccode + isel + "    if (setjmp(" + wnm + ".buf) == 0) \{\n".
-        # GIVE/BREAK/CONTINUE escaping the block pop the checkpoint
-        # via the threaded exit lines before leaving the scope.
-        CREATE wx(TX) TO wexit + "  plant_weather_leave(&" + wnm + ");\n".
-        CREATE mx2(TX) TO mexit + "  plant_weather_leave(&" + wnm + ");\n".
         REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx.
         SET ccode TO ccode + bcode + isel + "    \} else \{\n".
         SET ccode TO ccode + isel + "      const char* __et = plant_exc_type();\n".
@@ -2727,7 +2739,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             IF si2 > 0,
                 SET ccode TO ccode + isel + "      \} else if (plant_storm_match(__et, \"" + wty2 + "\")) \{\n".
             /IF.
-            SET ccode TO ccode + isel + "        " + wfm + " = 1;\n".
+            SET ccode TO ccode + isel + "        " + wnm + ".handled = 1;\n".
             IF wbind2 ISNT "" AND wbind2 ISNT "null",
                 SET ccode TO ccode + isel + "        tx_t " + wbind2 + " = (tx_t)__em;\n".
             /IF.
@@ -2739,12 +2751,8 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             SET ccode TO ccode + isel + "      \}\n".
         /IF.
         SET ccode TO ccode + isel + "    \}\n".
-        REAP cbcode FROM generate_body, cb, indent + 1, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx.
         SET ccode TO ccode + cbcode.
-        SET ccode TO ccode + isel + "    if (" + wfm + " == 0 && " + wnm + ".raised) \{\n".
-        SET ccode TO ccode + isel + "      plant_throw((tx_t)" + wnm + ".exc_type, (tx_t)" + wnm + ".exc_msg);\n".
-        SET ccode TO ccode + isel + "    \}\n".
-        SET ccode TO ccode + isel + "    plant_weather_leave(&" + wnm + ");\n".
+        SET ccode TO ccode + isel + "    plant_calm(&" + wnm + ");\n".
         SET ccode TO ccode + isel + "  \}\n".
         GIVE ccode.
     /IF.
@@ -2760,6 +2768,20 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             REAP cmsg FROM _handle_cat, cmsg, nums, evars.
         /IF.
         GIVE isel + "  plant_throw(\"" + wtype2 + "\", " + cmsg + ");\n".
+    /IF.
+  
+    # ── stop_if_stmt: STOP IF cond. → if(cond) STOP_STORM ──
+    #    v0.48.25 — conditional execution halting: evaluates the
+    #    condition like an IF header and raises the STOP_STORM
+    #    classification through the standard exception pipeline when
+    #    it is true. A NULL message lets the runtime registry supply
+    #    the descriptive default ("conditional stop requested").
+    IF ntype IS "stop_if_stmt",
+        REAP scond FROM _map_get, node, "cond".
+        REAP scc FROM translate_expr, scond.
+        REAP scc FROM handle_strcmp, scc.
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  if (" + scc + ") \{\n" + isel + "    plant_throw(\"STOP_STORM\", NULL);\n" + isel + "  \}\n".
     /IF.
   
     # ── match_stmt: MATCH expr { Variant -> { stmts } } → switch ─

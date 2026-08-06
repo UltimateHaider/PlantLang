@@ -16,7 +16,7 @@ The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 
 | Innate/std library functions | ~60 (41 innate + 19 std/.plnt + 5 FFI stubs) | ~20 reachable builtins + ~50 declared runtime helpers | ~40 missing |
 | Runtime features | ~90 capabilities | ~70 capabilities | roughly balanced, different sets |
 | Network | HTTP client + server (HARVEST/LISTEN) | vestigial POSIX sockets in runtime, **not reachable** | high |
-| Error handling | Storm exceptions (WEATHER/SHELTER, 12 storm types) | all 12 kinds + registry defaults (v0.48.23-patch); no `storm()` factory | low |
+| Error handling | Storm exceptions (WEATHER/SHELTER, 12 storm types) | 13 kinds (v0.48.25: +STOP_STORM), STOP IF, plant_calm finalization; no `storm()` factory | low |
 | Object model | SPECIES classes, BLOOM instantiation, SELF methods, inheritance | none | high |
 
 **Key architectural differences that explain the gaps:**
@@ -87,7 +87,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `TAKE val FROM list.` | S | M | |
 | `SORT list [BY f ASC/DESC].` / `SHAKE` / `BRAID` | S | M | |
 | `LINK "k" WITH v IN map.` | S | M | map ops via `_map_get`/`plant_map_get` only |
-| `WEATHER … SHELTER storm AS e … CALM.` | S | **S** | v0.48.23-patch; THROW + all 12 kinds + ANY_STORM catch-all |
+| `WEATHER … SHELTER storm AS e … CALM.` | S | **S** | v0.48.25; THROW + 13 kinds + ANY_STORM catch-all, STOP IF, plant_calm finalization |
 | `MATCH expr { Variant(b) -> … }` / `MATCH … IS … YIELD` | S | M | |
 | `TAP/ABSORB/INFUSE/SEAL` (VEIN files) | S | M | INFUSE/ABSORB/SEAL were parse stubs in legacy too |
 | `HARVEST "url" [METHOD:][BODY:][HEADERS:][TIMEOUT:]` | S | M | sockets exist in C runtime, unwired |
@@ -204,7 +204,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | File IO | Node fs + VeinFS | POSIX `plant_file_*` + `fs:READ/WRITE/EXISTS` |
 
 ### 6.2 Legacy-only runtime features (M in current)
-- **Storms**: 12 typed exceptions (`ZERO_STORM` … `ANY_STORM`), `WEATHER/SHELTER/CALM`, `storm()` factory, location backfill. **v0.48.23-patch ships all 12 kinds**: the six core kinds (`ZERO_STORM`, `LOCK_STORM`, `MISSING_STORM`, `NETWORK_STORM`, `LOST_STORM`, `ANY_STORM`) plus the six additive classifications (`RANGE_STORM`, `TYPE_STORM`, `PARSE_STORM`, `HANDLE_STORM`, `HARVEST_STORM`, `FALL_STORM`), routed by the runtime's `plant_storm_match` against `AS e`-bound shelters with per-kind default messages for message-less `THROW`s; still missing: the `storm()` factory and location backfill.
+- **Storms**: 13 typed exceptions (`ZERO_STORM` … `ANY_STORM`), `WEATHER/SHELTER/CALM`, `storm()` factory, location backfill. **v0.48.25 ships all 13 kinds**: the six core kinds (`ZERO_STORM`, `LOCK_STORM`, `MISSING_STORM`, `NETWORK_STORM`, `LOST_STORM`, `ANY_STORM`) plus the six additive classifications (`RANGE_STORM`, `TYPE_STORM`, `PARSE_STORM`, `HANDLE_STORM`, `HARVEST_STORM`, `FALL_STORM`) and `STOP_STORM` (the `STOP IF` classification), routed by the runtime's `plant_storm_match` against `AS e`-bound shelters with per-kind default messages, plus the `plant_calm` finalization pipeline (CALM runs on normal, caught, unmatched, and `GIVE`/`BREAK`/`CONTINUE` exits); still missing: the `storm()` factory and location backfill.
 - **Soil scope chain**: locked vars (`LOCK_STORM`), PULSE flags, `WHENEVER … CHANGES` watchers.
 - **HTTP server** (LISTEN, request MAPs, JSON bodies, `GIVE … AS RESPONSE`, SIGINT/SIGTERM lifecycle) — the C runtime's `plant_net_listen_open/accept/read/write/close` (v0.41-era POSIX sockets) are **not wired into the compiler**.
 - **HTTP client** (HARVEST via worker threads, NETWORK_STORM, `{ok,status,body,headers}` result) — `plant_net_harvest` exists in the C runtime but is also **unwired**.
@@ -263,7 +263,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 ## 9. Roadmap Priorities
 
 **High effort / high value**
-1. **Storms / exception handling** (WEATHER/SHELTER/CALM + `LOST_STORM`/`ZERO_STORM`): **shipped** — v0.48.23 added `THROW` + `WEATHER/SHELTER/CALM` with mandatory `CALM`, unmatched re-propagation, and `GIVE`/`BREAK`/`CONTINUE` frame popping via `setjmp`/`longjmp` frames; v0.48.23-patch completes the 12-kind registry (`RANGE`/`TYPE`/`PARSE`/`HANDLE`/`HARVEST`/`FALL` join the six core kinds) with per-kind default messages and the runtime `plant_storm_match` catch-all matcher. Remaining (low priority): the `storm()` factory and location backfill.
+1. **Storms / exception handling** (WEATHER/SHELTER/CALM + `LOST_STORM`/`ZERO_STORM`): **shipped** — v0.48.23 added `THROW` + `WEATHER/SHELTER/CALM` with mandatory `CALM`, unmatched re-propagation, and `GIVE`/`BREAK`/`CONTINUE` frame popping via `setjmp`/`longjmp` frames; v0.48.23-patch completed the 12-kind registry (with per-kind default messages) and the runtime `plant_storm_match` catch-all matcher; v0.48.25 adds `STOP IF` (raises `STOP_STORM`, the 13th kind) and the `plant_calm` finalization pipeline that runs `CALM` on every exit path, including `GIVE`/`BREAK`/`CONTINUE` interruptions. Remaining (low priority): the `storm()` factory and location backfill.
 2. **List/map/std library surface**: array & map literals, slices, `FIRST/LAST/SUM/AVERAGE/MEDIAN/UNIQUE/REVERSE/FLATTEN/CHUNK/ZIP/RANGE`, string `UPPER/LOWER/TRIM/INCLUDES/STARTS_WITH/ENDS_WITH/FIND/COUNT_OF/JOIN/REPLACE/SPLIT/SLICE/REPEAT/PAD_*`, `math` extras (`LOG PI E SIGN CLAMP`), `fs:APPEND`.
 3. **String interpolation** — shipped as `"str ${expr}"` (v0.48.22-patch2); ORIF/ELSE (v0.48.20), CYCLE 3 forms (v0.48.21-22) and INCREASE/DECREASE (v0.48.22-patch) are shipped; numeric CYCLE hardened with static STEP evaluation in v0.48.22-patch3 (zero-step compile error, direction-aware expression steps, runtime nonzero guard); v0.48.22-patch4 adds literal `\${` escape markers, `_cat3`/`_cat4` chain flattening, and the single-digit `_from_digit` fast path.
 

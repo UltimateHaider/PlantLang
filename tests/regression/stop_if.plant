@@ -1,0 +1,36 @@
+# v0.48.25 — STOP IF conditional execution halting.
+# STOP IF cond. evaluates cond like an IF header and raises
+# STOP_STORM through the exception pipeline when true; a false
+# condition passes through. The default message comes from the
+# runtime registry.
+ACTION main(),
+  SHOW "a".
+  WEATHER,
+    STOP IF 5 > 3.
+    SHOW "never".
+  SHELTER STOP_STORM AS err,
+    SHOW "stopped: " + err.
+  CALM,
+    SHOW "calm ran".
+  /WEATHER.
+  SHOW "b".
+  WEATHER,
+    STOP IF 3 > 5.
+    SHOW "not stopped".
+  SHELTER STOP_STORM,
+    SHOW "bad".
+  CALM,
+  /WEATHER.
+  SHOW "c".
+  CREATE n(NUM) TO 7.
+  WEATHER,
+    STOP IF n >= 7.
+    SHOW "never2".
+  SHELTER STOP_STORM AS err,
+    SHOW "num stop: " + err.
+  CALM,
+    SHOW "calm2".
+  /WEATHER.
+  SHOW "done".
+  GIVE 0.
+/GIVE main.
