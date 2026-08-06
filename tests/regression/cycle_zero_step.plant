@@ -1,0 +1,9 @@
+# v0.48.22-patch3: negative test — a literal zero STEP is rejected at
+# compile time with "#error STEP cannot be 0". It must never compile
+# into a for loop that would spin forever.
+ACTION main(),
+  CYCLE i FROM 1 TO 3 STEP 0,
+    SHOW "unreachable".
+  /CYCLE.
+  GIVE 0.
+/GIVE main.

@@ -1,0 +1,9 @@
+# v0.48.22-patch3: negative test — a STEP expression that constant-
+# folds to zero ("2 - 2") is also a compile-time error, proving the
+# static evaluator runs before code emission.
+ACTION main(),
+  CYCLE i FROM 1 TO 9 STEP 2 - 2,
+    SHOW "unreachable".
+  /CYCLE.
+  GIVE 0.
+/GIVE main.

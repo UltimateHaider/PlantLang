@@ -1650,6 +1650,161 @@ ACTION generate_body(bd(LIST), indent(NUM), sigs(LIST), subst(LIST), clmap(LIST)
 #  nums: names of numeric scalar vars in scope (_handle_cat).
 #  rty: enclosing action's substituted return type ("" if implicit).
 # ──────────────────────────────────────────────────────────────
+
+# ──────────────────────────────────────────────────────────────
+#  v0.48.22-patch3: static STEP evaluation. _step_sign folds a
+#  pure-literal integer expression (spaces stripped, + - * / and
+#  parens allowed) to its sign: "-" negative, "0" zero, "+"
+#  positive, "?" when the step is a runtime expression. A zero
+#  step is a compile-time error (parser intercepts it; the codegen
+#  re-checks as a backstop), and the bound operator follows the
+#  folded sign so "STEP 0 - 2" descends and "STEP 1 + 1" ascends.
+# ──────────────────────────────────────────────────────────────
+ACTION _is_digit(c(TX)),
+  IF c IS "0" OR c IS "1" OR c IS "2" OR c IS "3" OR c IS "4" OR c IS "5" OR c IS "6" OR c IS "7" OR c IS "8" OR c IS "9",
+    GIVE 1.
+  /IF.
+  GIVE 0.
+/ACTION.
+
+ACTION _st_num(s(TX), p(NUM)),
+  CREATE v(NUM) TO 0.
+  SEASON p < LEN(s),
+    REAP c FROM char_at, s, p.
+    IF _is_digit(c) IS 1,
+      SET v TO v * 10 + _to_long(c).
+      SET p TO p + 1.
+    /IF.
+    IF _is_digit(c) ISNT 1, BREAK 0. /IF.
+  /SEASON.
+  GIVE plant_list_make(2, _from_long(v), _from_long(p)).
+/ACTION.
+
+ACTION _st_factor(s(TX), p(NUM)),
+  REAP c FROM char_at, s, p.
+  IF c IS "-",
+    REAP q FROM _st_factor, s, p + 1.
+    CREATE v(NUM) TO 0.
+    SET v TO _to_long(_first(q)).
+    CREATE p2(NUM) TO 0.
+    SET p2 TO _to_long(_second(q)).
+    IF p2 IS -1, GIVE q. /IF.
+    CREATE nv(NUM) TO 0.
+    SET nv TO 0 - v.
+    GIVE plant_list_make(2, _from_long(nv), _from_long(p2)).
+  /IF.
+  IF c IS "(",
+    REAP q FROM _st_expr, s, p + 1.
+    CREATE v(NUM) TO 0.
+    SET v TO _to_long(_first(q)).
+    CREATE p2(NUM) TO 0.
+    SET p2 TO _to_long(_second(q)).
+    IF p2 IS -1, GIVE q. /IF.
+    REAP c2 FROM char_at, s, p2.
+    IF c2 ISNT ")",
+      GIVE plant_list_make(2, _from_long(0), _from_long(-1)).
+    /IF.
+    GIVE plant_list_make(2, _from_long(v), _from_long(p2 + 1)).
+  /IF.
+  GIVE _st_num(s, p).
+/ACTION.
+
+ACTION _st_term(s(TX), p(NUM)),
+  REAP q FROM _st_factor, s, p.
+  CREATE v(NUM) TO 0.
+  SET v TO _to_long(_first(q)).
+  CREATE p2(NUM) TO 0.
+  SET p2 TO _to_long(_second(q)).
+  SEASON TRUE,
+    IF p2 IS -1, BREAK 0. /IF.
+    REAP c FROM char_at, s, p2.
+    IF c IS "*",
+      REAP q2 FROM _st_factor, s, p2 + 1.
+      CREATE v2(NUM) TO 0.
+      SET v2 TO _to_long(_first(q2)).
+      CREATE p3(NUM) TO 0.
+      SET p3 TO _to_long(_second(q2)).
+      IF p3 IS -1, SET p2 TO -1. /IF.
+      IF p3 ISNT -1,
+        SET v TO v * v2.
+        SET p2 TO p3.
+      /IF.
+      CONTINUE 0.
+    /IF.
+    IF c IS "/",
+      REAP q2 FROM _st_factor, s, p2 + 1.
+      CREATE v2(NUM) TO 0.
+      SET v2 TO _to_long(_first(q2)).
+      CREATE p3(NUM) TO 0.
+      SET p3 TO _to_long(_second(q2)).
+      IF p3 IS -1, SET p2 TO -1. /IF.
+      IF p3 ISNT -1 AND v2 ISNT 0,
+        SET v TO v / v2.
+        SET p2 TO p3.
+      /IF.
+      IF p3 ISNT -1 AND v2 IS 0, SET p2 TO -1. /IF.
+      CONTINUE 0.
+    /IF.
+    BREAK 0.
+  /SEASON.
+  GIVE plant_list_make(2, _from_long(v), _from_long(p2)).
+/ACTION.
+
+ACTION _st_expr(s(TX), p(NUM)),
+  REAP q FROM _st_term, s, p.
+  CREATE v(NUM) TO 0.
+  SET v TO _to_long(_first(q)).
+  CREATE p2(NUM) TO 0.
+  SET p2 TO _to_long(_second(q)).
+  SEASON TRUE,
+    IF p2 IS -1, BREAK 0. /IF.
+    REAP c FROM char_at, s, p2.
+    IF c IS "+",
+      REAP q2 FROM _st_term, s, p2 + 1.
+      CREATE v2(NUM) TO 0.
+      SET v2 TO _to_long(_first(q2)).
+      CREATE p3(NUM) TO 0.
+      SET p3 TO _to_long(_second(q2)).
+      IF p3 IS -1, SET p2 TO -1. /IF.
+      IF p3 ISNT -1,
+        SET v TO v + v2.
+        SET p2 TO p3.
+      /IF.
+      CONTINUE 0.
+    /IF.
+    IF c IS "-",
+      REAP q2 FROM _st_term, s, p2 + 1.
+      CREATE v2(NUM) TO 0.
+      SET v2 TO _to_long(_first(q2)).
+      CREATE p3(NUM) TO 0.
+      SET p3 TO _to_long(_second(q2)).
+      IF p3 IS -1, SET p2 TO -1. /IF.
+      IF p3 ISNT -1,
+        SET v TO v - v2.
+        SET p2 TO p3.
+      /IF.
+      CONTINUE 0.
+    /IF.
+    BREAK 0.
+  /SEASON.
+  GIVE plant_list_make(2, _from_long(v), _from_long(p2)).
+/ACTION.
+
+ACTION _step_sign(e(TX)),
+  REAP ne FROM strings:REPLACE, e, " ", "".
+  IF ne IS "", GIVE "+". /IF.
+  REAP q FROM _st_expr, ne, 0.
+  CREATE v(NUM) TO 0.
+  SET v TO _to_long(_first(q)).
+  CREATE p2(NUM) TO 0.
+  SET p2 TO _to_long(_second(q)).
+  IF p2 IS -1, GIVE "?". /IF.
+  IF p2 < LEN(ne), GIVE "?". /IF.
+  IF v > 0, GIVE "+". /IF.
+  IF v < 0, GIVE "-". /IF.
+  GIVE "0".
+/ACTION.
+
 ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST), rty(TX), mexit(TX)),
     REAP ntype FROM _map_get, node, "type".
     IF clmap IS "",
@@ -2310,15 +2465,24 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
                 REAP cstep FROM translate_expr, stepExpr.
                 SET stepstr TO cstep.
             /IF.
+            # v0.48.22-patch3: fold the resolved step to its sign. A
+            # zero step is a compile-time error (backstop for the
+            # parser-level intercept), and the bound operator follows
+            # the folded sign instead of the first character, so
+            # expression steps like "0 - 2" or "1 + 1" pick the right
+            # direction. Runtime steps get a sign-aware bound plus a
+            # != 0 guard so a zero-valued runtime step cannot spin
+            # forever.
+            REAP sgn FROM _step_sign, stepstr.
+            IF sgn IS "0",
+                GIVE "#error STEP cannot be 0\n".
+            /IF.
             CREATE bound(TX) TO ivar + " <= " + cto.
-            REAP step0 FROM substring, stepstr, 0, 1.
-            IF step0 IS "-",
+            IF sgn IS "-",
                 SET bound TO ivar + " >= " + cto.
             /IF.
-            IF step0 ISNT "-" AND step0 ISNT "0" AND step0 ISNT "1" AND step0 ISNT "2" AND step0 ISNT "3" AND step0 ISNT "4" AND step0 ISNT "5" AND step0 ISNT "6" AND step0 ISNT "7" AND step0 ISNT "8" AND step0 ISNT "9",
-                # runtime step: sign-aware bound without a " : " literal
-                # (translate_expr rewrites " : " to "_", legacy dialect)
-                SET bound TO "((" + stepstr + " > 0) && (" + ivar + " <= " + cto + ")) || ((" + stepstr + " <= 0) && (" + ivar + " >= " + cto + "))".
+            IF sgn IS "?",
+                SET bound TO "((" + stepstr + " != 0) && (((" + stepstr + " > 0) && (" + ivar + " <= " + cto + ")) || ((" + stepstr + " <= 0) && (" + ivar + " >= " + cto + "))))".
             /IF.
             SET ccode TO isel + "  for (long " + ivar + " = " + cfrom + "; " + bound + "; " + ivar + " += " + stepstr + ") \{\n".
             REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit.
@@ -3659,6 +3823,8 @@ ACTION find_any(s(TX), delims(TX)) -> external.
 ACTION handle_brackets(expr(TX)) -> external.
 ACTION handle_strcmp(expr(TX)) -> external.
 ACTION str_eq(a(TX), b(TX)) -> external.
+ACTION _to_long(s(TX)) -> external.
+ACTION _from_long(n(NUM)) -> external.
 
 # ──────────────────────────────────────────────────────────────
 #  find_node — AST action_decl node by name ("" if none)

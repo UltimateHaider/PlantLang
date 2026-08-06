@@ -1,0 +1,9 @@
+down5-1=5 4 3 2 1 
+eq-negstep=3 
+mismatch-neg=none
+mismatch-pos=none
+fold-neg=10 8 6 4 2 
+fold-pos=1 3 
+runtime-zero=none
+neg-cont=6 2 
+neg-nested=6,1 6,3 5,1 5,3 4,1 4,3 

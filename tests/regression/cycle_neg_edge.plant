@@ -1,0 +1,60 @@
+# v0.48.22-patch3: numeric CYCLE negative-step edge coverage — lo == hi
+# with a negative step (single iteration), mismatched range/step
+# directions (zero iterations), STEP expressions that constant-fold to
+# negative/positive values ("0 - 2", "1 + 1"), a zero-valued runtime
+# step variable (guarded, zero iterations), and nested BREAK/CONTINUE
+# inside descending loops.
+ACTION main(),
+  CREATE s1(TX) TO "".
+  CYCLE i FROM 5 TO 1 STEP -1,
+    SET s1 TO s1 + _from_long(i) + " ".
+  /CYCLE.
+  SHOW "down5-1=" + s1.
+  CREATE s2(TX) TO "".
+  CYCLE i FROM 3 TO 3 STEP -1,
+    SET s2 TO s2 + _from_long(i) + " ".
+  /CYCLE.
+  SHOW "eq-negstep=" + s2.
+  CREATE hit1(TX) TO "none".
+  CYCLE i FROM 1 TO 5 STEP -1,
+    SET hit1 TO "ran".
+  /CYCLE.
+  SHOW "mismatch-neg=" + hit1.
+  CREATE hit2(TX) TO "none".
+  CYCLE i FROM 5 TO 1 STEP 1,
+    SET hit2 TO "ran".
+  /CYCLE.
+  SHOW "mismatch-pos=" + hit2.
+  CREATE s3(TX) TO "".
+  CYCLE i FROM 10 TO 1 STEP 0 - 2,
+    SET s3 TO s3 + _from_long(i) + " ".
+  /CYCLE.
+  SHOW "fold-neg=" + s3.
+  CREATE s4(TX) TO "".
+  CYCLE i FROM 1 TO 4 STEP 1 + 1,
+    SET s4 TO s4 + _from_long(i) + " ".
+  /CYCLE.
+  SHOW "fold-pos=" + s4.
+  CREATE z(NUM) TO 0.
+  CREATE hit3(TX) TO "none".
+  CYCLE i FROM 1 TO 3 STEP z,
+    SET hit3 TO "ran".
+  /CYCLE.
+  SHOW "runtime-zero=" + hit3.
+  CREATE s5(TX) TO "".
+  CYCLE i FROM 6 TO 1 STEP -2,
+    IF i IS 4, CONTINUE 0. /IF.
+    SET s5 TO s5 + _from_long(i) + " ".
+  /CYCLE.
+  SHOW "neg-cont=" + s5.
+  CREATE s6(TX) TO "".
+  CYCLE i FROM 6 TO 1 STEP -1,
+    CYCLE j FROM 1 TO 3,
+      IF j IS 2, CONTINUE 0. /IF.
+      SET s6 TO s6 + _from_long(i) + "," + _from_long(j) + " ".
+    /CYCLE.
+    IF i IS 4, BREAK 0. /IF.
+  /CYCLE.
+  SHOW "neg-nested=" + s6.
+  GIVE 0.
+/GIVE main.

@@ -1309,6 +1309,14 @@ ACTION parse_cycle_stmt(tokens(LIST), pos(NUM)),
     IF COUNT sparts IS 2,
       REAP toExpr FROM plant_list_get, sparts, 0.
       REAP stepExpr FROM plant_list_get, sparts, 1.
+      # v0.48.22-patch3: a statically-zero STEP (literal "0" or a
+      # constant expression such as "2 - 2") is a compile-time error,
+      # intercepted here prior to code emission so it can never
+      # compile into a for loop that spins forever.
+      REAP sgn FROM _step_sign, stepExpr.
+      IF sgn IS "0",
+        GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "#error STEP cannot be 0"), p4).
+      /IF.
     /IF.
     REAP cpair FROM consume, tokens, p4.
     REAP p4 FROM _second, cpair.

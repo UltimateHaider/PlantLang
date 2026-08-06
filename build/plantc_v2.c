@@ -93,6 +93,12 @@ tx_t async_emit_step(tx_t name, PlantArray* phases, PlantArray* vars, PlantArray
 tx_t translate_expr(tx_t expr);
 tx_t indent_str(long level);
 tx_t generate_body(PlantArray* bd, long indent, PlantArray* sigs, PlantArray* subst, PlantArray* clmap, tx_t actx, PlantArray* nums, PlantArray* stvars, PlantArray* evars, tx_t rty, tx_t mexit);
+tx_t _is_digit(tx_t c);
+tx_t _st_num(tx_t s, long p);
+tx_t _st_factor(tx_t s, long p);
+tx_t _st_term(tx_t s, long p);
+tx_t _st_expr(tx_t s, long p);
+tx_t _step_sign(tx_t e);
 tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, PlantArray* clmap, tx_t actx, PlantArray* nums, PlantArray* stvars, PlantArray* evars, tx_t rty, tx_t mexit);
 tx_t type_base(tx_t ptype);
 tx_t plant_ctype(tx_t ptype);
@@ -2537,6 +2543,7 @@ tx_t parse_cycle_stmt(PlantArray* tokens, long pos) {
   tx_t p3 = "";
   tx_t p4 = "";
   tx_t sparts = "";
+  tx_t sgn = "";
   tx_t lx2 = "";
   tx_t is_eof_flag = "";
   tx_t slash = "";
@@ -2575,6 +2582,10 @@ tx_t parse_cycle_stmt(PlantArray* tokens, long pos) {
         if (plant_array_length(sparts) == 2) {
             toExpr = plant_list_get(sparts, 0);
             stepExpr = plant_list_get(sparts, 1);
+            sgn = _step_sign(stepExpr);
+            if (strcmp(sgn,"0") == 0) {
+                return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "#error STEP cannot be 0" ) , p4 );
+            }
         }
         cpair = consume(tokens, p4);
         p4 = _second(cpair);
@@ -5002,6 +5013,187 @@ tx_t generate_body(PlantArray* bd, long indent, PlantArray* sigs, PlantArray* su
     }
     return res;
 }
+tx_t _is_digit(tx_t c) {
+    if (strcmp(c,"0") == 0 || strcmp(c,"1") == 0 || strcmp(c,"2") == 0 || strcmp(c,"3") == 0 || strcmp(c,"4") == 0 || strcmp(c,"5") == 0 || strcmp(c,"6") == 0 || strcmp(c,"7") == 0 || strcmp(c,"8") == 0 || strcmp(c,"9") == 0) {
+        return 1;
+    }
+    return 0;
+}
+tx_t _st_num(tx_t s, long p) {
+  tx_t c = "";
+    long v = 0;
+    while (p < strlen( s )) {
+        c = char_at(s, p);
+        if (_is_digit ( c ) == 1) {
+            v = v * 10+_to_long ( c );
+            p = p+1;
+        }
+        if (_is_digit ( c ) != 1) {
+            break;
+        }
+    }
+    return plant_list_make ( 2 , _from_long ( v ) , _from_long ( p ) );
+}
+tx_t _st_factor(tx_t s, long p) {
+  tx_t c = "";
+  tx_t q = "";
+  tx_t c2 = "";
+    c = char_at(s, p);
+    if (strcmp(c,"-") == 0) {
+        q = _st_factor(s, p+1);
+        long v = 0;
+        v = _to_long ( _first ( q ) );
+        long p2 = 0;
+        p2 = _to_long ( _second ( q ) );
+        if (p2 == - 1) {
+            return q;
+        }
+        long nv = 0;
+        nv = 0 - v;
+        return plant_list_make ( 2 , _from_long ( nv ) , _from_long ( p2 ) );
+    }
+    if (strcmp(c,"(") == 0) {
+        q = _st_expr(s, p+1);
+        long v = 0;
+        v = _to_long ( _first ( q ) );
+        long p2 = 0;
+        p2 = _to_long ( _second ( q ) );
+        if (p2 == - 1) {
+            return q;
+        }
+        c2 = char_at(s, p2);
+        if (strcmp(c2,")") != 0) {
+            return plant_list_make ( 2 , _from_long ( 0 ) , _from_long ( - 1 ) );
+        }
+        return plant_list_make ( 2 , _from_long ( v ) , _from_long ( p2 + 1 ) );
+    }
+    return _st_num ( s , p );
+}
+tx_t _st_term(tx_t s, long p) {
+  tx_t q = "";
+  tx_t c = "";
+  tx_t q2 = "";
+    q = _st_factor(s, p);
+    long v = 0;
+    v = _to_long ( _first ( q ) );
+    long p2 = 0;
+    p2 = _to_long ( _second ( q ) );
+    while (1) {
+        if (p2 == - 1) {
+            break;
+        }
+        c = char_at(s, p2);
+        if (strcmp(c,"*") == 0) {
+            q2 = _st_factor(s, p2+1);
+            long v2 = 0;
+            v2 = _to_long ( _first ( q2 ) );
+            long p3 = 0;
+            p3 = _to_long ( _second ( q2 ) );
+            if (p3 == - 1) {
+                p2 = - 1;
+            }
+            if (p3 != - 1) {
+                v = v * v2;
+                p2 = p3;
+            }
+            continue;
+        }
+        if (strcmp(c,"/") == 0) {
+            q2 = _st_factor(s, p2+1);
+            long v2 = 0;
+            v2 = _to_long ( _first ( q2 ) );
+            long p3 = 0;
+            p3 = _to_long ( _second ( q2 ) );
+            if (p3 == - 1) {
+                p2 = - 1;
+            }
+            if (p3 != - 1 && v2 != 0) {
+                v = v / v2;
+                p2 = p3;
+            }
+            if (p3 != - 1 && v2 == 0) {
+                p2 = - 1;
+            }
+            continue;
+        }
+        break;
+    }
+    return plant_list_make ( 2 , _from_long ( v ) , _from_long ( p2 ) );
+}
+tx_t _st_expr(tx_t s, long p) {
+  tx_t q = "";
+  tx_t c = "";
+  tx_t q2 = "";
+    q = _st_term(s, p);
+    long v = 0;
+    v = _to_long ( _first ( q ) );
+    long p2 = 0;
+    p2 = _to_long ( _second ( q ) );
+    while (1) {
+        if (p2 == - 1) {
+            break;
+        }
+        c = char_at(s, p2);
+        if (strcmp(c,"+") == 0) {
+            q2 = _st_term(s, p2+1);
+            long v2 = 0;
+            v2 = _to_long ( _first ( q2 ) );
+            long p3 = 0;
+            p3 = _to_long ( _second ( q2 ) );
+            if (p3 == - 1) {
+                p2 = - 1;
+            }
+            if (p3 != - 1) {
+                v = v+v2;
+                p2 = p3;
+            }
+            continue;
+        }
+        if (strcmp(c,"-") == 0) {
+            q2 = _st_term(s, p2+1);
+            long v2 = 0;
+            v2 = _to_long ( _first ( q2 ) );
+            long p3 = 0;
+            p3 = _to_long ( _second ( q2 ) );
+            if (p3 == - 1) {
+                p2 = - 1;
+            }
+            if (p3 != - 1) {
+                v = v - v2;
+                p2 = p3;
+            }
+            continue;
+        }
+        break;
+    }
+    return plant_list_make ( 2 , _from_long ( v ) , _from_long ( p2 ) );
+}
+tx_t _step_sign(tx_t e) {
+  tx_t ne = "";
+  tx_t q = "";
+    ne = strings_REPLACE(e, " ", "");
+    if (strcmp(ne,"") == 0) {
+        return "+";
+    }
+    q = _st_expr(ne, 0);
+    long v = 0;
+    v = _to_long ( _first ( q ) );
+    long p2 = 0;
+    p2 = _to_long ( _second ( q ) );
+    if (p2 == - 1) {
+        return "?";
+    }
+    if (p2 < strlen( ne )) {
+        return "?";
+    }
+    if (v > 0) {
+        return "+";
+    }
+    if (v < 0) {
+        return "-";
+    }
+    return "0";
+}
 tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, PlantArray* clmap, tx_t actx, PlantArray* nums, PlantArray* stvars, PlantArray* evars, tx_t rty, tx_t mexit) {
   tx_t ntype = "";
   tx_t val = "";
@@ -5086,7 +5278,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t cfrom = "";
   tx_t cto = "";
   tx_t cstep = "";
-  tx_t step0 = "";
+  tx_t sgn = "";
   tx_t clist = "";
   tx_t subj = "";
   tx_t csubj = "";
@@ -5693,13 +5885,16 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
                 cstep = translate_expr(stepExpr);
                 stepstr = cstep;
             }
+            sgn = _step_sign(stepstr);
+            if (strcmp(sgn,"0") == 0) {
+                return "#error STEP cannot be 0\n";
+            }
             tx_t bound = _cat(_cat(ivar, " <= "), cto);
-            step0 = substring(stepstr, 0, 1);
-            if (strcmp(step0,"-") == 0) {
+            if (strcmp(sgn,"-") == 0) {
                 bound = _cat(_cat(ivar, " >= "), cto);
             }
-            if (strcmp(step0,"-") != 0 && strcmp(step0,"0") != 0 && strcmp(step0,"1") != 0 && strcmp(step0,"2") != 0 && strcmp(step0,"3") != 0 && strcmp(step0,"4") != 0 && strcmp(step0,"5") != 0 && strcmp(step0,"6") != 0 && strcmp(step0,"7") != 0 && strcmp(step0,"8") != 0 && strcmp(step0,"9") != 0) {
-                bound = _cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat("((", stepstr), " > 0) && ("), ivar), " <= "), cto), ")) || (("), stepstr), " <= 0) && ("), ivar), " >= "), cto), "))");
+            if (strcmp(sgn,"?") == 0) {
+                bound = _cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat("((", stepstr), " != 0) && ((("), stepstr), " > 0) && ("), ivar), " <= "), cto), ")) || (("), stepstr), " <= 0) && ("), ivar), " >= "), cto), "))))");
             }
             ccode = _cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(_cat(isel, "  for (long "), ivar), " = "), cfrom), "; "), bound), "; "), ivar), " += "), stepstr), ") {\n");
             bcode = generate_body(bd, indent+2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit);

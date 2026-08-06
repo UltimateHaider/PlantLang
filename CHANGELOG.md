@@ -97,6 +97,41 @@ roadmap item 3):
   interpolation inside `SET`. 71 regression / 103 total. Self-host
   converged 284951 B; DISTCHECK OK.
 
+### Patch (v0.48.22-patch3)
+Hardened numeric `CYCLE` loops with static `STEP` evaluation (legacy
+gap 3.2):
+- **Static STEP evaluator.** New codegen helpers (`_is_digit`,
+  `_st_num`, `_st_factor`, `_st_term`, `_st_expr`, `_step_sign`)
+  constant-fold a pure-literal integer expression (`+ - * /`, parens,
+  unary minus, spaces stripped) down to its sign: `+`, `-`, `0`, or
+  `?` when the step is a runtime expression. The parser
+  (`parse_cycle_stmt`) and the codegen both classify the resolved
+  step, so interception happens before any code is emitted.
+- **Zero-step compile-time error.** A statically-zero `STEP` — literal
+  `STEP 0` or a folding expression like `STEP 2 - 2` / `STEP 1 * 0` —
+  is rejected at parse time with `Error: #error STEP cannot be 0.`
+  (exit 1); the codegen carries the same guard (`#error STEP cannot
+  be 0`) as a backstop. A zero step can never compile into a `for`
+  loop that spins forever.
+- **Direction-aware bounds by folded sign.** The bound operator is
+  chosen from the *evaluated* step sign instead of the first
+  character: `STEP 0 - 2` now descends (`i >= hi`) and `STEP 1 + 1`
+  ascends (`i <= hi`); plain literals behave exactly as before
+  (`STEP -1` descends, `STEP 2` ascends). Previously the first-char
+  heuristic sent `STEP 0 - 2` up a wrong-direction loop and `STEP
+  2 * k` into a fixed ascending bound.
+- **Runtime-step nonzero guard.** A runtime step expression compiles
+  to a sign-aware middle clause plus a `(step != 0)` guard, so a
+  zero-valued step variable skips the loop body instead of iterating
+  forever; nonzero runtime steps behave identically to before.
+- **Edge semantics verified.** `lo == hi` executes exactly once under
+  both positive and negative steps; mismatched range/step directions
+  (`1 TO 5 STEP -1`, `5 TO 1 STEP 1`) run zero times; nested
+  BREAK/CONTINUE work inside descending loops.
+- Three regression tests (`cycle_neg_edge`, and the negative
+  `cycle_zero_step` / `cycle_zero_expr` with `.invalid` markers): 74
+  regression / 106 total. Self-host converged 289912 B; DISTCHECK OK.
+
 ## v0.48.21 — 2026 (Numeric Range CYCLE)
 
 ### New Features
