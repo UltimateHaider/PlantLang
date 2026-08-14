@@ -1,0 +1,6 @@
+after take = banana mango 
+count after take = 2
+take missing value = banana mango 
+take from empty = ok 0
+take from null = ok
+take first duplicate only = 2 1 3 

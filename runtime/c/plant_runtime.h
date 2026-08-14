@@ -112,6 +112,8 @@ void*       plant_list_get(PlantArray* list, int64_t index);
 void        plant_list_set(PlantArray* list, int64_t index, void* value);
 PlantArray* plant_list_push(PlantArray* list, void* value);
 PlantArray* plant_list_make(int64_t count, ...);
+tx_t        plant_list_add(tx_t list, tx_t value);    /* NULL-safe: instantiate when list is NULL */
+tx_t        plant_list_remove(tx_t list, tx_t value); /* first matching occurrence; NULL/empty no-op */
 tx_t        plant_sort(tx_t list, tx_t spec);    /* qsort; spec ""|"DESC"|"f:ASC,g:DESC" */
 tx_t        plant_shuffle(tx_t list);            /* Fisher-Yates (in place) */
 

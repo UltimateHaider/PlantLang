@@ -1,0 +1,4 @@
+append to existing = a b c 
+instantiate null target = first second 
+duplicate appended = first second first 
+after take one duplicate = second first 

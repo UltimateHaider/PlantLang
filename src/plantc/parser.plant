@@ -795,7 +795,7 @@ ACTION parse_closure(tokens(LIST), pos(NUM)),
   IF blx IS "(",
     REAP btok2 FROM peek, tokens, p5 + 1.
     REAP blx2 FROM tok_lex, btok2.
-    IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE" OR blx2 IS "SORT" OR blx2 IS "SHAKE",
+    IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "TAKE" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE" OR blx2 IS "SORT" OR blx2 IS "SHAKE",
       SET body_kind TO "block".
       REAP bp FROM consume, tokens, p5.
       REAP p6 FROM _second, bp.
@@ -1115,6 +1115,23 @@ ACTION parse_put_stmt(tokens(LIST), pos(NUM)),  REAP pair FROM consume, tokens, 
   REAP dot_pair FROM consume, tokens, p5.
   REAP p6 FROM _second, dot_pair.
   GIVE plant_list_make(2, plant_list_make(6, "type", "put_stmt", "item", item, "target", target), p6).
+/ACTION.
+
+# v0.48.30 — TAKE val FROM list. (removes the first matching item)
+ACTION parse_take_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP vpair FROM collect_until, tokens, p2, "FROM".
+  CREATE item TO vpair[0].
+  REAP p3 FROM _second, vpair.
+  REAP from_pair FROM consume, tokens, p3.
+  REAP p4 FROM _second, from_pair.
+  REAP tpair FROM collect_until, tokens, p4, ".".
+  CREATE target TO tpair[0].
+  REAP p5 FROM _second, tpair.
+  REAP dot_pair FROM consume, tokens, p5.
+  REAP p6 FROM _second, dot_pair.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "take_stmt", "item", item, "target", target), p6).
 /ACTION.
 
 # v0.48.29 — SORT l [ASC|DESC] [BY f [ASC|DESC] {, g [ASC|DESC]}].
@@ -1707,6 +1724,10 @@ ACTION parse_statement(tokens(LIST), pos(NUM)),
   /IF.
   IF lx IS "PUT",
     REAP r FROM parse_put_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "TAKE",
+    REAP r FROM parse_take_stmt, tokens, pos.
     GIVE r.
   /IF.
   IF lx IS "BREAK",

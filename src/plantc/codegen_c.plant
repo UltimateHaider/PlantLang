@@ -2214,14 +2214,26 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         GIVE isel + wexit + isel + "  continue;\n".
     /IF.
   
-    # ── put_stmt: PUT item INTO target. → plant_array_push(…) ─
+    # ── put_stmt: PUT item INTO target. → plant_list_add(…) ──
+    #    v0.48.30: NULL-safe plant_list_add instantiates the list
+    #    when the target is null/uninitialized.
     IF ntype IS "put_stmt",
         REAP item FROM _map_get, node, "item".
         REAP target FROM _map_get, node, "target".
         REAP citem FROM translate_expr, item.
         REAP citem FROM _handle_cat, citem, nums, evars.
         REAP isel FROM indent_str, indent.
-        GIVE isel + "  " + target + " = plant_list_push(" + target + ", " + citem + ");\n".
+        GIVE isel + "  " + target + " = plant_list_add(" + target + ", " + citem + ");\n".
+    /IF.
+
+    # ── take_stmt: TAKE item FROM target. → plant_list_remove(…) ─
+    IF ntype IS "take_stmt",
+        REAP item FROM _map_get, node, "item".
+        REAP target FROM _map_get, node, "target".
+        REAP citem FROM translate_expr, item.
+        REAP citem FROM _handle_cat, citem, nums, evars.
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  " + target + " = plant_list_remove(" + target + ", " + citem + ");\n".
     /IF.
 
     # ── sort_stmt: SORT l [ASC|DESC] [BY f…]. → l = plant_sort(l, spec); ─

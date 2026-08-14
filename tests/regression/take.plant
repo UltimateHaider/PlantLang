@@ -1,0 +1,46 @@
+# take: TAKE val FROM list (v0.48.30).
+# Removes only the FIRST matching occurrence (string elements match
+# by value, containers by identity). Non-existent values, empty
+# collections, and NULL targets are safe no-ops that leave the list
+# untouched.
+ACTION main(),
+  CREATE fruits(LIST) TO plant_list_make(0).
+  PUT "banana" INTO fruits.
+  PUT "apple" INTO fruits.
+  PUT "mango" INTO fruits.
+  TAKE "apple" FROM fruits.
+  CREATE out1(TX) TO "".
+  CYCLE f, i IN fruits,
+    SET out1 TO out1 + f + " ".
+  /CYCLE.
+  SHOW "after take = " + out1.
+  SHOW "count after take = " + _from_long(COUNT fruits).
+
+  TAKE "apple" FROM fruits.
+  CREATE out2(TX) TO "".
+  CYCLE f, i IN fruits,
+    SET out2 TO out2 + f + " ".
+  /CYCLE.
+  SHOW "take missing value = " + out2.
+
+  CREATE empty(LIST) TO plant_list_make(0).
+  TAKE "x" FROM empty.
+  SHOW "take from empty = ok " + _from_long(COUNT empty).
+
+  CREATE nils(LIST) TO NULL.
+  TAKE "a" FROM nils.
+  SHOW "take from null = ok".
+
+  CREATE dup(LIST) TO plant_list_make(0).
+  PUT "1" INTO dup.
+  PUT "2" INTO dup.
+  PUT "1" INTO dup.
+  PUT "3" INTO dup.
+  TAKE "1" FROM dup.
+  CREATE out3(TX) TO "".
+  CYCLE n, i IN dup,
+    SET out3 TO out3 + n + " ".
+  /CYCLE.
+  SHOW "take first duplicate only = " + out3.
+  GIVE 0.
+/GIVE main.

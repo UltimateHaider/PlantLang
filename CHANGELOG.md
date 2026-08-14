@@ -1,5 +1,37 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.30 — 2026 (TAKE and PUT List Operations)
+
+### New Features
+- **`TAKE val FROM list.` statement** (parser.plant + codegen_c.plant):
+  new `take_stmt` AST node capturing the operand and target list;
+  joins the statement dispatch and the block-body keyword list.
+  Codegen emits `list = plant_list_remove(list, val);` (same
+  translate path as `PUT`, so literals, variables, and expressions
+  work as operands).
+- **`PUT val INTO list.` hardening**: the emitter now calls
+  `plant_list_add` instead of the raw `plant_list_push`, making the
+  insertion NULL-safe.
+- **Runtime** (`plant_runtime.c` + `plant_runtime.h`):
+  - `plant_list_add` — appends the value at the end of the
+    collection; a NULL (or invalid) list reference is instantiated
+    on the fly, so PUT works against uninitialized targets.
+  - `plant_list_remove` — locates and removes only the FIRST matching
+    occurrence: string elements match by `strcmp`, container
+    elements (PlantArray magic) by pointer identity. NULL lists,
+    empty collections, and absent values are safe no-ops that return
+    the list unchanged (defensive checks before any access).
+
+### Regression Tests
+- `take`: standard removal with count verification, removal of a
+  non-existent value (no-op), TAKE on an empty list and on a NULL
+  target, and duplicate handling — only the first matching
+  occurrence is removed (`1 2 1 3` → take "1" → `2 1 3`).
+- `put_full`: appending into an existing list, instantiating a fresh
+  collection from a NULL target (`CREATE x(LIST) TO NULL.` + PUT),
+  appending duplicate values, and TAKE/PUT integration where removal
+  of a duplicated value leaves the later copy intact.
+
 ## v0.48.29 — Type Header Decoupling (Refactor)
 
 ### Architecture

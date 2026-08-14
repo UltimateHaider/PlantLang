@@ -39,6 +39,7 @@ tx_t parse_closure(PlantArray* tokens, long pos);
 tx_t parse_reap_stmt(PlantArray* tokens, long pos);
 tx_t parse_call_stmt(PlantArray* tokens, long pos);
 tx_t parse_put_stmt(PlantArray* tokens, long pos);
+tx_t parse_take_stmt(PlantArray* tokens, long pos);
 tx_t parse_sort_stmt(PlantArray* tokens, long pos);
 tx_t parse_shake_stmt(PlantArray* tokens, long pos);
 tx_t parse_break_stmt(PlantArray* tokens, long pos);
@@ -1904,7 +1905,7 @@ tx_t parse_closure(PlantArray* tokens, long pos) {
     if (strcmp(blx,"(") == 0) {
         btok2 = peek(tokens, p5+1);
         blx2 = tok_lex(btok2);
-        if (strcmp(blx2,"CREATE") == 0 || strcmp(blx2,"SHOW") == 0 || strcmp(blx2,"GIVE") == 0 || strcmp(blx2,"SET") == 0 || strcmp(blx2,"LET") == 0 || strcmp(blx2,"IF") == 0 || strcmp(blx2,"SEASON") == 0 || strcmp(blx2,"REAP") == 0 || strcmp(blx2,"PUT") == 0 || strcmp(blx2,"BREAK") == 0 || strcmp(blx2,"CONTINUE") == 0 || strcmp(blx2,"SORT") == 0 || strcmp(blx2,"SHAKE") == 0) {
+        if (strcmp(blx2,"CREATE") == 0 || strcmp(blx2,"SHOW") == 0 || strcmp(blx2,"GIVE") == 0 || strcmp(blx2,"SET") == 0 || strcmp(blx2,"LET") == 0 || strcmp(blx2,"IF") == 0 || strcmp(blx2,"SEASON") == 0 || strcmp(blx2,"REAP") == 0 || strcmp(blx2,"PUT") == 0 || strcmp(blx2,"TAKE") == 0 || strcmp(blx2,"BREAK") == 0 || strcmp(blx2,"CONTINUE") == 0 || strcmp(blx2,"SORT") == 0 || strcmp(blx2,"SHAKE") == 0) {
             body_kind = "block";
             bp = consume(tokens, p5);
             p6 = _second(bp);
@@ -2355,6 +2356,31 @@ tx_t parse_put_stmt(PlantArray* tokens, long pos) {
     dot_pair = consume(tokens, p5);
     p6 = _second(dot_pair);
     return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "put_stmt" , "item" , item , "target" , target ) , p6 );
+}
+tx_t parse_take_stmt(PlantArray* tokens, long pos) {
+  tx_t pair = "";
+  tx_t p2 = "";
+  tx_t vpair = "";
+  tx_t p3 = "";
+  tx_t from_pair = "";
+  tx_t p4 = "";
+  tx_t tpair = "";
+  tx_t p5 = "";
+  tx_t dot_pair = "";
+  tx_t p6 = "";
+    pair = consume(tokens, pos);
+    p2 = _second(pair);
+    vpair = collect_until(tokens, p2, "FROM");
+    tx_t item = plant_list_get(vpair,  0 );
+    p3 = _second(vpair);
+    from_pair = consume(tokens, p3);
+    p4 = _second(from_pair);
+    tpair = collect_until(tokens, p4, ".");
+    tx_t target = plant_list_get(tpair,  0 );
+    p5 = _second(tpair);
+    dot_pair = consume(tokens, p5);
+    p6 = _second(dot_pair);
+    return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "take_stmt" , "item" , item , "target" , target ) , p6 );
 }
 tx_t parse_sort_stmt(PlantArray* tokens, long pos) {
   tx_t pair = "";
@@ -3048,6 +3074,10 @@ tx_t parse_statement(PlantArray* tokens, long pos) {
     }
     if (strcmp(lx,"PUT") == 0) {
         r = parse_put_stmt(tokens, pos);
+        return r;
+    }
+    if (strcmp(lx,"TAKE") == 0) {
+        r = parse_take_stmt(tokens, pos);
         return r;
     }
     if (strcmp(lx,"BREAK") == 0) {
@@ -6017,7 +6047,15 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         citem = translate_expr(item);
         citem = _handle_cat(citem, nums, evars);
         isel = indent_str(indent);
-        return _cat(_cat(_cat(_cat(_cat(_cat(_cat(isel, "  "), target), " = plant_list_push("), target), ", "), citem), ");\n");
+        return _cat(_cat(_cat(_cat(_cat(_cat(_cat(isel, "  "), target), " = plant_list_add("), target), ", "), citem), ");\n");
+    }
+    if (strcmp(ntype,"take_stmt") == 0) {
+        item = _map_get(node, "item");
+        target = _map_get(node, "target");
+        citem = translate_expr(item);
+        citem = _handle_cat(citem, nums, evars);
+        isel = indent_str(indent);
+        return _cat(_cat(_cat(_cat(_cat(_cat(_cat(isel, "  "), target), " = plant_list_remove("), target), ", "), citem), ");\n");
     }
     if (strcmp(ntype,"sort_stmt") == 0) {
         target = _map_get(node, "target");
@@ -9350,7 +9388,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.29 (pure native)");
+      plant_print("Chloroplast 0.48.30 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

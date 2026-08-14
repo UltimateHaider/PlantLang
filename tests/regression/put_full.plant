@@ -1,0 +1,39 @@
+# put_full: PUT val INTO list (v0.48.30).
+# Appends at the end of existing collections, instantiates a fresh
+# collection when the target is NULL/uninitialized, and integrates
+# with TAKE for duplicate handling (removal only hits the first).
+ACTION main(),
+  CREATE items(LIST) TO plant_list_make(0).
+  PUT "a" INTO items.
+  PUT "b" INTO items.
+  PUT "c" INTO items.
+  CREATE out1(TX) TO "".
+  CYCLE it, i IN items,
+    SET out1 TO out1 + it + " ".
+  /CYCLE.
+  SHOW "append to existing = " + out1.
+
+  CREATE fresh(LIST) TO NULL.
+  PUT "first" INTO fresh.
+  PUT "second" INTO fresh.
+  CREATE out2(TX) TO "".
+  CYCLE it, i IN fresh,
+    SET out2 TO out2 + it + " ".
+  /CYCLE.
+  SHOW "instantiate null target = " + out2.
+
+  PUT "first" INTO fresh.
+  CREATE out3(TX) TO "".
+  CYCLE it, i IN fresh,
+    SET out3 TO out3 + it + " ".
+  /CYCLE.
+  SHOW "duplicate appended = " + out3.
+
+  TAKE "first" FROM fresh.
+  CREATE out4(TX) TO "".
+  CYCLE it, i IN fresh,
+    SET out4 TO out4 + it + " ".
+  /CYCLE.
+  SHOW "after take one duplicate = " + out4.
+  GIVE 0.
+/GIVE main.

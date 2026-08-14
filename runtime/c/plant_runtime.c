@@ -637,6 +637,46 @@ PlantArray* plant_list_make(int64_t count, ...) {
     return list;
 }
 
+/* ── v0.48.30 — NULL-safe list mutation ───────────────────────
+   plant_list_add appends value at the end of the collection; a NULL
+   (or otherwise invalid) list reference is instantiated on the fly
+   so PUT works against uninitialized targets. plant_list_remove
+   locates and removes only the FIRST matching occurrence: string
+   elements match by strcmp, container elements (PlantArray magic)
+   by pointer identity. NULL lists, empty collections, and absent
+   values are safe no-ops returning the list unchanged. */
+
+tx_t plant_list_add(tx_t list, tx_t value) {
+    PlantArray* a = (PlantArray*)list;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC)
+        a = plant_list_create(0);
+    return (tx_t)plant_list_push(a, value);
+}
+
+tx_t plant_list_remove(tx_t list, tx_t value) {
+    PlantArray* a = (PlantArray*)list;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC || a->count == 0) return list;
+    for (int64_t i = 0; i < a->count; i++) {
+        void* el = a->items[i];
+        int eq = 0;
+        if (el && ((PlantArray*)el)->magic == PLANT_ARRAY_MAGIC) {
+            eq = (el == value);
+        } else {
+            const char* s = (const char*)el;
+            const char* v = (const char*)value;
+            if (s && v) eq = strcmp(s, v) == 0;
+            else if (!s && !v) eq = 1;
+        }
+        if (eq) {
+            memmove(&a->items[i], &a->items[i + 1],
+                    (size_t)(a->count - i - 1) * sizeof(void*));
+            a->count--;
+            break;
+        }
+    }
+    return list;
+}
+
 /* ── v0.48.29 — SORT / SHAKE ──────────────────────────────────
    plant_sort: qsort over the list's items. spec is one of
      ""            plain element sort, ascending

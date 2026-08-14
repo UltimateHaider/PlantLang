@@ -84,7 +84,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `REAP v FROM src, args.` | S | **S** | only action calls; `NOW`, `TYPEOF`, string/expr sources M |
 | `REAP … FLOW f1 f2` pipelines | S | M | |
 | `PUT val INTO list.` | S | **S** | |
-| `TAKE val FROM list.` | S | M | |
+| `TAKE val FROM list.` | S | **S** | v0.48.30 (`plant_list_remove`, first match only) |
 | `SORT list [BY f ASC/DESC].` / `SHAKE` / `BRAID` | S | **S** | v0.48.29 (SORT + ASC/DESC + BY multi-field; SHAKE Fisher-Yates) |
 | `LINK "k" WITH v IN map.` | S | M | map ops via `_map_get`/`plant_map_get` only |
 | `WEATHER … SHELTER storm AS e … CALM.` | S | **S** | v0.48.25; THROW + 13 kinds + ANY_STORM catch-all, STOP IF, plant_calm finalization |
