@@ -56,7 +56,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `STRUCT` / `SHAPE` | S | **P** | STRUCT with typed fields only (map-backed); no SHAPE |
 | `CHOICE Variant(TYPE)` + `Option`/`Result` | S | **P** | no CHOICE; `Option`/`Result`/`is_some` etc. exist only as runtime helpers |
 | `ENUM` | S | **S** | members as `NAME.MEMBER`, `_to_enum`/`_from_enum` |
-| `CONST`, `ROOT`, `ROOT_SCOPE` | S | M | no immutable declaration |
+| `CONST`, `ROOT`, `ROOT_SCOPE` | S | **S** | v0.48.35 (block-scoped/global string constants; ROOT_SCOPE auto-elevates CONST to ROOT; values must be quoted literals) |
 | `TYPE alias = target.` | S | M | |
 | `MISSION : mode.` (set mode) | S | **P** | `MISSION CONFIG KEY = VALUE.` only |
 | `PLANT lib [AS alias].` | S | M | replaced by direct `module:func` calls |
@@ -271,7 +271,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 4. **Re-wire the dormant POSIX sockets**: `HARVEST` (HTTP GET/POST via `plant_net_harvest`) and a minimal `LISTEN` server (or defer).
 5. **VEIN file handles** (TAP/ABSORB/INFUSE/SEAL) over `plant_file_*`.
 6. **`NOW`/`ANALYZE`/`TYPEOF` statements** over `std/time` + type tags.
-7. **`CONST`/`ROOT` immutables** (compile-time locking).
+7. **`CONST`/`ROOT` immutables** — shipped v0.48.35 (`CONST`/`ROOT`/`ROOT_SCOPE`).
 
 **Low effort / niche**
 8. **SPLIT/JOIN statement forms** (SORT/SHAKE shipped v0.48.29; BRAID/LINK shipped v0.48.31), `PICK`, `STOP IF` (shipped v0.48.25), `WAIT n.` statement, `ANY/ALL/HAS/IS_A` conditions, `LOCATE`/`NOTE` comments, brace-form ACTION bodies, TYPE aliases, single-quoted strings.

@@ -1,0 +1,7 @@
+# negative: local CONST used before its definition must fail
+# (ROOT constants are hoisted, local ones are not)
+ACTION main(),
+  SHOW too_soon.
+  CONST too_soon TO "late".
+  GIVE 0.
+/ACTION.

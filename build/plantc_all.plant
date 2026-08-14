@@ -40,6 +40,8 @@ ACTION is_keyword(wrd(TX)),
   IF wrd IS "JOIN", GIVE TRUE. /IF.
   IF wrd IS "ENUM", GIVE TRUE. /IF.
   IF wrd IS "CONST", GIVE TRUE. /IF.
+  IF wrd IS "ROOT", GIVE TRUE. /IF.
+  IF wrd IS "ROOT_SCOPE", GIVE TRUE. /IF.
   IF wrd IS "FUNCTION", GIVE TRUE. /IF.
   IF wrd IS "IMPORT", GIVE TRUE. /IF.
   IF wrd IS "OPTION", GIVE TRUE. /IF.
@@ -99,6 +101,8 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "JOIN", GIVE "JOIN". /IF.
   IF wrd IS "ENUM", GIVE "ENUM". /IF.
   IF wrd IS "CONST", GIVE "CONST". /IF.
+  IF wrd IS "ROOT", GIVE "ROOT". /IF.
+  IF wrd IS "ROOT_SCOPE", GIVE "ROOT_SCOPE". /IF.
   IF wrd IS "FUNCTION", GIVE "FUNCTION". /IF.
   IF wrd IS "IMPORT", GIVE "IMPORT". /IF.
   IF wrd IS "OPTION", GIVE "OPTION". /IF.
@@ -845,7 +849,7 @@ ACTION parse_mission_stmt(tokens(LIST), pos(NUM)),
   GIVE plant_list_make(2, plant_list_make(6, "type", "config_stmt", "key", cfg_key, "value", cfg_val), p6).
 /ACTION.
 
-ACTION parse_create_stmt(tokens(LIST), pos(NUM)),
+ACTION parse_create_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
   REAP id_pair FROM consume, tokens, p2.
@@ -873,7 +877,7 @@ ACTION parse_create_stmt(tokens(LIST), pos(NUM)),
     REAP cb_tok FROM peek, tokens, p4.
     REAP cb_lx FROM tok_lex, cb_tok.
     IF cb_lx IS "[",
-      REAP clp FROM parse_closure, tokens, p4.
+      REAP clp FROM parse_closure, tokens, p4, rtab, emode.
       REAP cnode FROM _first, clp.
       REAP p5 FROM _second, clp.
       REAP cn_ty FROM _map_get, cnode, "type".
@@ -897,7 +901,7 @@ ACTION parse_create_stmt(tokens(LIST), pos(NUM)),
     REAP cb_tok FROM peek, tokens, p4.
     REAP cb_lx FROM tok_lex, cb_tok.
     IF cb_lx IS "[",
-      REAP clp FROM parse_closure, tokens, p4.
+      REAP clp FROM parse_closure, tokens, p4, rtab, emode.
       REAP cnode FROM _first, clp.
       REAP p5 FROM _second, clp.
       REAP cn_ty FROM _map_get, cnode, "type".
@@ -998,7 +1002,7 @@ ACTION parse_incdec_stmt(tokens(LIST), pos(NUM), op(TX)),
   GIVE plant_list_make(2, plant_list_make(6, "type", nty, "target", id_name, "value", expr), p5).
 /ACTION.
 
-ACTION parse_let_stmt(tokens(LIST), pos(NUM)),
+ACTION parse_let_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
   REAP id_pair FROM consume, tokens, p2.
@@ -1026,7 +1030,7 @@ ACTION parse_let_stmt(tokens(LIST), pos(NUM)),
     REAP cb_tok FROM peek, tokens, p4.
     REAP cb_lx FROM tok_lex, cb_tok.
     IF cb_lx IS "[",
-      REAP clp FROM parse_closure, tokens, p4.
+      REAP clp FROM parse_closure, tokens, p4, rtab, emode.
       REAP cnode FROM _first, clp.
       REAP p5 FROM _second, clp.
       REAP cn_ty FROM _map_get, cnode, "type".
@@ -1050,7 +1054,7 @@ ACTION parse_let_stmt(tokens(LIST), pos(NUM)),
     REAP cb_tok FROM peek, tokens, p4.
     REAP cb_lx FROM tok_lex, cb_tok.
     IF cb_lx IS "[",
-      REAP clp FROM parse_closure, tokens, p4.
+      REAP clp FROM parse_closure, tokens, p4, rtab, emode.
       REAP cnode FROM _first, clp.
       REAP p5 FROM _second, clp.
       REAP cn_ty FROM _map_get, cnode, "type".
@@ -1086,7 +1090,7 @@ ACTION parse_let_stmt(tokens(LIST), pos(NUM)),
 # on mixed/invalid syntax [syntax_error_node, pos].
 # The terminating "," or "." is NOT consumed (the caller handles it).
 
-ACTION parse_closure(tokens(LIST), pos(NUM)),
+ACTION parse_closure(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
   CREATE start_pos(NUM) TO pos.
   REAP lb FROM consume, tokens, pos.
   REAP p2 FROM _second, lb.
@@ -1249,9 +1253,12 @@ ACTION parse_closure(tokens(LIST), pos(NUM)),
   IF blx IS "(",
     REAP btok2 FROM peek, tokens, p5 + 1.
     REAP blx2 FROM tok_lex, btok2.
-    IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "TAKE" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE" OR blx2 IS "SORT" OR blx2 IS "SHAKE" OR blx2 IS "BRAID" OR blx2 IS "LINK" OR blx2 IS "HARVEST" OR blx2 IS "LISTEN",
+    IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "TAKE" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE" OR blx2 IS "SORT" OR blx2 IS "SHAKE" OR blx2 IS "BRAID" OR blx2 IS "LINK" OR blx2 IS "HARVEST" OR blx2 IS "LISTEN" OR blx2 IS "CONST" OR blx2 IS "ROOT" OR blx2 IS "ROOT_SCOPE",
       SET body_kind TO "block".
       CREATE clv(TX) TO "".
+      # v0.48.35: the closure block is its own C scope → own table
+      CREATE ctab7(LIST) TO plant_list_make(0).
+      CREATE bstart7(NUM) TO p6.
       REAP bp FROM consume, tokens, p5.
       REAP p6 FROM _second, bp.
       CREATE stmts(LIST) TO plant_list_make(0).
@@ -1265,7 +1272,7 @@ ACTION parse_closure(tokens(LIST), pos(NUM)),
           REAP p6 FROM _second, brp.
           BREAK 0.
         /IF.
-        REAP d_pair FROM parse_statement, tokens, p6, clv.
+        REAP d_pair FROM parse_statement, tokens, p6, clv, ctab7, rtab, bstart7, emode.
         CREATE decl TO d_pair[0].
         REAP p6 FROM _second, d_pair.
         IF decl > "",
@@ -1313,11 +1320,11 @@ ACTION parse_closure(tokens(LIST), pos(NUM)),
     /SEASON.
     SET body TO text.
   /IF.
-  CREATE cnode(LIST) TO plant_list_make(12, "type", "closure", "params", params, "captures", captures, "body", body, "bkind", body_kind).
+  CREATE cnode(LIST) TO plant_list_make(10, "type", "closure", "params", params, "captures", captures, "body", body, "bkind", body_kind).
   GIVE plant_list_make(2, cnode, p5).
 /ACTION.
 
-ACTION parse_reap_stmt(tokens(LIST), pos(NUM)),
+ACTION parse_reap_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
   REAP var_pair FROM consume, tokens, p2.
@@ -1368,7 +1375,7 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM)),
     REAP ctok FROM peek, tokens, p5.
     REAP clx FROM tok_lex, ctok.
     IF clx IS "[",
-      REAP clp FROM parse_closure, tokens, p5.
+      REAP clp FROM parse_closure, tokens, p5, rtab, emode.
       REAP cnode FROM _first, clp.
       REAP p6 FROM _second, clp.
       REAP cn_ty FROM _map_get, cnode, "type".
@@ -1462,7 +1469,7 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM)),
 # parse_call_stmt — bare call: name(args). → call_stmt node.
 # (void FFI calls like plant_map_set / ffi_swap_ref; the codegen
 #  reuses the reap_stmt discard path with target "_")
-ACTION parse_call_stmt(tokens(LIST), pos(NUM)),
+ACTION parse_call_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
   REAP act_pair FROM consume, tokens, pos.
   REAP act_name FROM tok_lex, act_pair[0].
   REAP p5 FROM _second, act_pair.
@@ -1504,7 +1511,7 @@ ACTION parse_call_stmt(tokens(LIST), pos(NUM)),
     REAP ctok FROM peek, tokens, p5.
     REAP clx FROM tok_lex, ctok.
     IF clx IS "[",
-      REAP clp FROM parse_closure, tokens, p5.
+      REAP clp FROM parse_closure, tokens, p5, rtab, emode.
       REAP cnode FROM _first, clp.
       REAP p6 FROM _second, clp.
       REAP cn_ty FROM _map_get, cnode, "type".
@@ -1530,7 +1537,7 @@ ACTION parse_call_stmt(tokens(LIST), pos(NUM)),
       REAP p5 FROM _second, rp.
       REAP dot FROM consume, tokens, p5.
       REAP p6 FROM _second, dot.
-      GIVE plant_list_make(2, plant_list_make(10, "type", "call_stmt", "action", act_name, "args", args, "clargs", clargs), p6).
+      GIVE plant_list_make(2, plant_list_make(8, "type", "call_stmt", "action", act_name, "args", args, "clargs", clargs), p6).
     /IF.
     CREATE arg_text(TX) TO "".
     CREATE adepth(NUM) TO 0.
@@ -1732,7 +1739,7 @@ ACTION parse_shake_stmt(tokens(LIST), pos(NUM)),
   REAP p3 FROM _second, tpair.
   REAP dot_pair FROM consume, tokens, p3.
   REAP p4 FROM _second, dot_pair.
-  GIVE plant_list_make(2, plant_list_make(6, "type", "shake_stmt", "target", target), p4).
+  GIVE plant_list_make(2, plant_list_make(4, "type", "shake_stmt", "target", target), p4).
 /ACTION.
 
 ACTION parse_break_stmt(tokens(LIST), pos(NUM)),
@@ -1759,7 +1766,7 @@ ACTION parse_continue_stmt(tokens(LIST), pos(NUM)),
   GIVE plant_list_make(2, plant_list_make(2, "type", "continue_stmt"), p3).
 /ACTION.
 
-ACTION parse_if_stmt(tokens(LIST), pos(NUM), clv(TX)),
+ACTION parse_if_stmt(tokens(LIST), pos(NUM), clv(TX), rtab(LIST), emode(TX)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
   REAP cpair FROM collect_until, tokens, p2, ",".
@@ -1767,6 +1774,9 @@ ACTION parse_if_stmt(tokens(LIST), pos(NUM), clv(TX)),
   REAP p3 FROM _second, cpair.
   REAP com FROM consume, tokens, p3.
   REAP p4 FROM _second, com.
+  # v0.48.35: each branch is its own C block → its own CONST table
+  CREATE ctab(LIST) TO plant_list_make(0).
+  CREATE bstart(NUM) TO p4.
   CREATE body(LIST) TO plant_list_make(0).
   CREATE cur_cond(TX) TO "".
   CREATE cur_body(LIST) TO plant_list_make(0).
@@ -1781,7 +1791,7 @@ ACTION parse_if_stmt(tokens(LIST), pos(NUM), clv(TX)),
         PUT cur_cond INTO elif.
         PUT cur_body INTO elif.
       /IF.
-      GIVE plant_list_make(2, plant_list_make(12, "type", "if_stmt", "cond", cond, "body", body, "elif", elif, "else", else_body), p4).
+      GIVE plant_list_make(2, plant_list_make(10, "type", "if_stmt", "cond", cond, "body", body, "elif", elif, "else", else_body), p4).
     /IF.
     REAP tok FROM peek, tokens, p4.
     REAP lx FROM tok_lex, tok.
@@ -1796,7 +1806,7 @@ ACTION parse_if_stmt(tokens(LIST), pos(NUM), clv(TX)),
         PUT cur_cond INTO elif.
         PUT cur_body INTO elif.
       /IF.
-      GIVE plant_list_make(2, plant_list_make(12, "type", "if_stmt", "cond", cond, "body", body, "elif", elif, "else", else_body), p7).
+      GIVE plant_list_make(2, plant_list_make(10, "type", "if_stmt", "cond", cond, "body", body, "elif", elif, "else", else_body), p7).
     /IF.
     IF lx IS "ORIF",
       IF in_elif IS "1",
@@ -1815,6 +1825,8 @@ ACTION parse_if_stmt(tokens(LIST), pos(NUM), clv(TX)),
       SET in_elif TO "1".
       SET in_else TO "0".
       SET p4 TO p7.
+      SET ctab TO plant_list_make(0).
+      SET bstart TO p7.
       CONTINUE 0.
     /IF.
     IF lx IS "ELSE",
@@ -1826,9 +1838,11 @@ ACTION parse_if_stmt(tokens(LIST), pos(NUM), clv(TX)),
       REAP p5 FROM _second, e_pair.
       SET in_else TO "1".
       SET p4 TO p5.
+      SET ctab TO plant_list_make(0).
+      SET bstart TO p5.
       CONTINUE 0.
     /IF.
-    REAP stmt_pair FROM parse_statement, tokens, p4, clv.
+    REAP stmt_pair FROM parse_statement, tokens, p4, clv, ctab, rtab, bstart, emode.
     CREATE stmt TO stmt_pair[0].
     REAP p4 FROM _second, stmt_pair.
     IF stmt > "",
@@ -1851,7 +1865,7 @@ ACTION parse_if_stmt(tokens(LIST), pos(NUM), clv(TX)),
   /SEASON.
 /ACTION.
 
-ACTION parse_season_stmt(tokens(LIST), pos(NUM), clv(TX)),
+ACTION parse_season_stmt(tokens(LIST), pos(NUM), clv(TX), rtab(LIST), emode(TX)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
   REAP cpair FROM collect_until, tokens, p2, ",".
@@ -1859,6 +1873,9 @@ ACTION parse_season_stmt(tokens(LIST), pos(NUM), clv(TX)),
   REAP p3 FROM _second, cpair.
   REAP com FROM consume, tokens, p3.
   REAP p4 FROM _second, com.
+  # v0.48.35: the SEASON body is its own C block → own CONST table
+  CREATE ctab(LIST) TO plant_list_make(0).
+  CREATE bstart(NUM) TO p4.
   CREATE body(LIST) TO plant_list_make(0).
   SEASON TRUE,
     REAP is_eof_flag FROM is_eof, tokens, p4.
@@ -1876,7 +1893,7 @@ ACTION parse_season_stmt(tokens(LIST), pos(NUM), clv(TX)),
       REAP p7 FROM _second, dot.
       GIVE plant_list_make(2, plant_list_make(6, "type", "season_stmt", "cond", cond, "body", body), p7).
     /IF.
-    REAP stmt_pair FROM parse_statement, tokens, p4, clv.
+    REAP stmt_pair FROM parse_statement, tokens, p4, clv, ctab, rtab, bstart, emode.
     CREATE stmt TO stmt_pair[0].
     REAP p4 FROM _second, stmt_pair.
     IF stmt > "",
@@ -1898,7 +1915,7 @@ ACTION parse_season_stmt(tokens(LIST), pos(NUM), clv(TX)),
 # STEP defaults to 1; the STEP clause is detected in the collected
 # to-expression text (split on " STEP "); keywords are consumed
 # token-wise so nested parens and commas inside expressions survive.
-ACTION parse_cycle_stmt(tokens(LIST), pos(NUM), clv(TX)),
+ACTION parse_cycle_stmt(tokens(LIST), pos(NUM), clv(TX), rtab(LIST), emode(TX)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
   REAP tok FROM peek, tokens, p2.
@@ -1971,6 +1988,9 @@ ACTION parse_cycle_stmt(tokens(LIST), pos(NUM), clv(TX)),
   IF lx ISNT "FROM" AND lx ISNT "IN" AND lx ISNT ",",
     GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "Expected FROM or IN in CYCLE header"), p2).
   /IF.
+  # v0.48.35: the CYCLE body is its own C block → own CONST table
+  CREATE ctab(LIST) TO plant_list_make(0).
+  CREATE bstart(NUM) TO p4.
   CREATE body(LIST) TO plant_list_make(0).
   SEASON TRUE,
     REAP is_eof_flag FROM is_eof, tokens, p4.
@@ -1988,7 +2008,7 @@ ACTION parse_cycle_stmt(tokens(LIST), pos(NUM), clv(TX)),
       REAP p7 FROM _second, dot.
       GIVE plant_list_make(2, plant_list_make(16, "type", "cycle_stmt", "iterVar", ivar, "fromExpr", fromExpr, "toExpr", toExpr, "stepExpr", stepExpr, "listExpr", listExpr, "indexVar", indexVar, "body", body), p7).
     /IF.
-    REAP stmt_pair FROM parse_statement, tokens, p4, clv.
+    REAP stmt_pair FROM parse_statement, tokens, p4, clv, ctab, rtab, bstart, emode.
     CREATE stmt TO stmt_pair[0].
     REAP p4 FROM _second, stmt_pair.
     IF stmt > "",
@@ -2021,7 +2041,7 @@ ACTION parse_throw_stmt(tokens(LIST), pos(NUM)),
   /IF.
   REAP dot FROM consume, tokens, p3.
   REAP p4 FROM _second, dot.
-  GIVE plant_list_make(2, plant_list_make(8, "type", "throw_stmt", "storm", stype, "msg", msg), p4).
+  GIVE plant_list_make(2, plant_list_make(6, "type", "throw_stmt", "storm", stype, "msg", msg), p4).
 /ACTION.
 
 # ── STOP IF <condition>. ────────────────────────────────────────
@@ -2045,7 +2065,7 @@ ACTION parse_stop_if_stmt(tokens(LIST), pos(NUM)),
   /IF.
   REAP dot FROM consume, tokens, p4.
   REAP p5 FROM _second, dot.
-  GIVE plant_list_make(2, plant_list_make(6, "type", "stop_if_stmt", "cond", cond), p5).
+  GIVE plant_list_make(2, plant_list_make(4, "type", "stop_if_stmt", "cond", cond), p5).
 /ACTION.
 
 # ── WEATHER … SHELTER [type [AS err]] … CALM … /WEATHER. ────
@@ -2057,9 +2077,13 @@ ACTION parse_stop_if_stmt(tokens(LIST), pos(NUM)),
 #      weather_stmt { body, shelters, calm }
 #    shelters is a flat [type, bind, body, …] triple list; an
 #    untyped SHELTER is stored as the ANY_STORM catch-all.
-ACTION parse_weather_stmt(tokens(LIST), pos(NUM), clv(TX)),
+ACTION parse_weather_stmt(tokens(LIST), pos(NUM), clv(TX), rtab(LIST), emode(TX)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
+  # v0.48.35: one CONST table + scan range for the whole protected
+  # block (phases share a single lexical wrapper)
+  CREATE ctab(LIST) TO plant_list_make(0).
+  CREATE bstart(NUM) TO p2.
   REAP tok FROM peek, tokens, p2.
   REAP lx FROM tok_lex, tok.
   IF lx IS ",",
@@ -2160,7 +2184,7 @@ ACTION parse_weather_stmt(tokens(LIST), pos(NUM), clv(TX)),
       SET p2 TO p3.
       CONTINUE 0.
     /IF.
-    REAP stmt_pair FROM parse_statement, tokens, p2, clv.
+    REAP stmt_pair FROM parse_statement, tokens, p2, clv, ctab, rtab, bstart, emode.
     CREATE stmt TO stmt_pair[0].
     REAP p2 FROM _second, stmt_pair.
     IF stmt > "",
@@ -2183,7 +2207,12 @@ ACTION parse_weather_stmt(tokens(LIST), pos(NUM), clv(TX)),
 
 # v0.48.33 — clv threads the active LISTEN request variable through
 #   the statement loops so GIVE ... AS RESPONSE. can bind to it.
-ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX)),
+# v0.48.35 — ctab (current block's CONST table), rtab (module ROOT
+#   table), bstart (token position where the current block's body
+#   begins — the use-before-definition scan range) and emode
+#   ("1" inside ROOT_SCOPE: CONST is elevated to ROOT) join the
+#   threading.
+ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), bstart(NUM), emode(TX)),
   SEASON TRUE,
     REAP tok FROM peek, tokens, pos.
     REAP tp FROM tok_type, tok.
@@ -2193,8 +2222,20 @@ ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX)),
   /SEASON.
   REAP tok FROM peek, tokens, pos.
   REAP lx FROM tok_lex, tok.
+  IF lx IS "CONST",
+    REAP r FROM parse_const_like, tokens, pos, ctab, rtab, bstart, emode, "const_stmt".
+    GIVE r.
+  /IF.
+  IF lx IS "ROOT",
+    REAP r FROM parse_const_like, tokens, pos, ctab, rtab, bstart, "1", "root_stmt".
+    GIVE r.
+  /IF.
+  IF lx IS "ROOT_SCOPE",
+    REAP r FROM parse_root_scope_stmt, tokens, pos, clv, rtab.
+    GIVE r.
+  /IF.
   IF lx IS "CREATE",
-    REAP r FROM parse_create_stmt, tokens, pos.
+    REAP r FROM parse_create_stmt, tokens, pos, rtab, emode.
     GIVE r.
   /IF.
   IF lx IS "SHOW",
@@ -2218,23 +2259,23 @@ ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX)),
     GIVE r.
   /IF.
   IF lx IS "LET",
-    REAP r FROM parse_let_stmt, tokens, pos.
+    REAP r FROM parse_let_stmt, tokens, pos, rtab, emode.
     GIVE r.
   /IF.
   IF lx IS "IF",
-    REAP r FROM parse_if_stmt, tokens, pos, clv.
+    REAP r FROM parse_if_stmt, tokens, pos, clv, rtab, emode.
     GIVE r.
   /IF.
   IF lx IS "SEASON",
-    REAP r FROM parse_season_stmt, tokens, pos, clv.
+    REAP r FROM parse_season_stmt, tokens, pos, clv, rtab, emode.
     GIVE r.
   /IF.
   IF lx IS "CYCLE",
-    REAP r FROM parse_cycle_stmt, tokens, pos, clv.
+    REAP r FROM parse_cycle_stmt, tokens, pos, clv, rtab, emode.
     GIVE r.
   /IF.
   IF lx IS "WEATHER",
-    REAP r FROM parse_weather_stmt, tokens, pos, clv.
+    REAP r FROM parse_weather_stmt, tokens, pos, clv, rtab, emode.
     GIVE r.
   /IF.
   IF lx IS "THROW",
@@ -2246,7 +2287,7 @@ ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX)),
     GIVE r.
   /IF.
   IF lx IS "REAP",
-    REAP r FROM parse_reap_stmt, tokens, pos.
+    REAP r FROM parse_reap_stmt, tokens, pos, rtab, emode.
     GIVE r.
   /IF.
   IF lx IS "PUT",
@@ -2313,7 +2354,7 @@ ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX)),
   REAP nx FROM peek, tokens, pos + 1.
   REAP nx_ty FROM tok_type, nx.
   IF nx_ty IS "LPAREN",
-    REAP r FROM parse_call_stmt, tokens, pos.
+    REAP r FROM parse_call_stmt, tokens, pos, rtab, emode.
     GIVE r.
   /IF.
   REAP nx2 FROM peek, tokens, pos + 1.
@@ -2322,7 +2363,7 @@ ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX)),
     REAP nx3 FROM peek, tokens, pos + 2.
     REAP nx3_ty FROM tok_type, nx3.
     IF nx3_ty IS "LPAREN",
-      REAP r FROM parse_call_stmt, tokens, pos.
+      REAP r FROM parse_call_stmt, tokens, pos, rtab, emode.
       GIVE r.
     /IF.
   /IF.
@@ -2558,7 +2599,7 @@ ACTION parse_struct_decl(tokens(LIST), pos(NUM)),
   /SEASON.
 /ACTION.
 
-ACTION parse_action_decl(tokens(LIST), pos(NUM)),
+ACTION parse_action_decl(tokens(LIST), pos(NUM), rtab(LIST)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
   REAP name_pair FROM consume, tokens, p2.
@@ -2799,6 +2840,9 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
       /IF.
       GIVE plant_list_make(2, plant_list_make(16, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", plant_list_make(0), "prio", prio, "ret", ret, "mission_mode", mission_mode), p5).
     /IF.
+  # v0.48.35: each action body has its own CONST table
+  CREATE ctab(LIST) TO plant_list_make(0).
+  CREATE bstart(NUM) TO p5.
   CREATE body(LIST) TO plant_list_make(0).
   SEASON TRUE,
     REAP is_eof_flag FROM is_eof, tokens, p5.
@@ -2816,7 +2860,7 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
       REAP p8 FROM _second, dot.
       GIVE plant_list_make(2, plant_list_make(16, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", body, "prio", prio, "ret", ret, "mission_mode", mission_mode), p8).
     /IF.
-    REAP stmt_pair FROM parse_statement, tokens, p5, clv.
+    REAP stmt_pair FROM parse_statement, tokens, p5, clv, ctab, rtab, bstart, "0".
     CREATE stmt TO stmt_pair[0].
     REAP p5 FROM _second, stmt_pair.
     IF stmt > "",
@@ -2833,7 +2877,7 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
   /SEASON.
 /ACTION.
 
-ACTION parse_declaration(tokens(LIST), pos(NUM), clv(TX)),
+ACTION parse_declaration(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), bstart(NUM)),
   REAP tok FROM peek, tokens, pos.
   REAP lx FROM tok_lex, tok.
   IF lx IS "ENUM",
@@ -2845,7 +2889,7 @@ ACTION parse_declaration(tokens(LIST), pos(NUM), clv(TX)),
     GIVE r.
   /IF.
   IF lx IS "ACTION",
-    REAP r FROM parse_action_decl, tokens, pos.
+    REAP r FROM parse_action_decl, tokens, pos, rtab.
     GIVE r.
   /IF.
   IF lx IS "ASYNC",
@@ -2855,7 +2899,7 @@ ACTION parse_declaration(tokens(LIST), pos(NUM), clv(TX)),
       REAP r FROM parse_async_in_stmt, tokens, pos.
       GIVE r.
     /IF.
-    REAP r FROM parse_action_decl, tokens, pos + 1.
+    REAP r FROM parse_action_decl, tokens, pos + 1, rtab.
     REAP nd FROM _first, r.
     REAP np FROM _second, r.
     REAP nt FROM _map_get, nd, "type".
@@ -2869,7 +2913,7 @@ ACTION parse_declaration(tokens(LIST), pos(NUM), clv(TX)),
     REAP r FROM parse_mission_stmt, tokens, pos.
     GIVE r.
   /IF.
-  REAP r FROM parse_statement, tokens, pos, clv.
+  REAP r FROM parse_statement, tokens, pos, clv, ctab, rtab, bstart, "0".
   GIVE r.
 /ACTION.
 
@@ -2887,18 +2931,200 @@ ACTION map_add(m(LIST), k(TX), v(TX)),
   GIVE out.
 /ACTION.
 
+# ── Constant symbol tables (v0.48.35) ─────────────────────────
+#   Two flat pairs-list tables live in the parser:
+#     ctab — the CURRENT block's local CONST names+values
+#     rtab — the module-wide ROOT table (ROOT + ROOT_SCOPE consts)
+#   Lookup follows the language rule: a block's own table shadows
+#   the global root table (local-first), which the emitted C
+#   reproduces naturally (block-scoped static const over file-scope
+#   static const). Tables are used at parse time for redeclaration
+#   rejection and use-before-definition detection only; the codegen
+#   performs its own first-pass collection for the actual ROOT
+#   emission.
+
+# tab_has: "1" when a flat pairs-list table contains key (step 2 so
+# values can never be mistaken for names)
+ACTION tab_has(tab(LIST), key(TX)),
+  CREATE ti4(NUM) TO 0.
+  CREATE te4(TX) TO "".
+  SEASON ti4 < COUNT tab,
+    REAP te4 FROM plant_list_get, tab, ti4.
+    IF str_eq(te4, key) IS "1",
+      GIVE "1".
+    /IF.
+    SET ti4 TO ti4 + 2.
+  /SEASON.
+  GIVE "0".
+/ACTION.
+
+# scan_ident_used: "1" when an IDENT token equal to name appears in
+# tokens[start, end). Used to reject local-const use-before-definition
+# in the enclosing block. String tokens are never IDENT so quoted
+# text cannot false-positive; keyword lexemes compare unequal to
+# identifiers, so CONST names (which must be plain identifiers) are
+# matched exactly.
+ACTION scan_ident_used(tokens(LIST), start(NUM), end(NUM), name(TX)),
+  CREATE si3(NUM) TO start.
+  CREATE stk3(TX) TO "".
+  CREATE stt3(TX) TO "".
+  SEASON si3 < end,
+    REAP stk3 FROM peek, tokens, si3.
+    REAP stt3 FROM tok_type, stk3.
+    IF stt3 IS "IDENT",
+      REAP slx3 FROM tok_lex, stk3.
+      IF str_eq(slx3, name) IS "1",
+        GIVE "1".
+      /IF.
+    /IF.
+    SET si3 TO si3 + 1.
+  /SEASON.
+  GIVE "0".
+/ACTION.
+
+# v0.48.35 — CONST name TO "literal". / ROOT name TO "literal".
+# Shared kernel. ntype is "const_stmt" (local constant; or elevated
+# to a root constant when elevate="1", e.g. inside ROOT_SCOPE) or
+# "root_stmt" (always a global). The value MUST be a single quoted
+# string literal — constants become C string initializers, so raw
+# expressions are rejected up front with a clean parse error.
+# Registration: elevate="1" → rtab (with redeclaration check, no
+# use-before-definition scan — ROOT constants are hoisted); else →
+# ctab (with same-block redeclaration + use-before-definition
+# checks). Returns syntax_error nodes for every violation.
+ACTION parse_const_like(tokens(LIST), pos(NUM), ctab(LIST), rtab(LIST), bstart(NUM), elevate(TX), ntype(TX)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP nt FROM peek, tokens, p2.
+  REAP nty FROM tok_type, nt.
+  IF nty ISNT "IDENT",
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "CONST/ROOT requires an identifier name"), p2).
+  /IF.
+  REAP npr FROM consume, tokens, p2.
+  REAP cname FROM tok_lex, npr[0].
+  REAP p3 FROM _second, npr.
+  REAP ttok FROM peek, tokens, p3.
+  REAP tlx FROM tok_lex, ttok.
+  IF tlx ISNT "TO",
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "CONST/ROOT requires TO after the constant name"), p3).
+  /IF.
+  REAP tp FROM consume, tokens, p3.
+  REAP p4 FROM _second, tp.
+  REAP vt FROM peek, tokens, p4.
+  REAP vty FROM tok_type, vt.
+  IF vty ISNT "STRING",
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "CONST/ROOT value must be a quoted string literal"), p4).
+  /IF.
+  REAP vp FROM consume, tokens, p4.
+  REAP vraw FROM tok_lex, vp[0].
+  REAP p5 FROM _second, vp.
+  REAP esc FROM escape_string, vraw.
+  CREATE cval TO "\"" + esc + "\"".
+  REAP dt FROM peek, tokens, p5.
+  REAP dlx FROM tok_lex, dt.
+  IF dlx ISNT ".",
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "CONST/ROOT expects '.' after the value"), p5).
+  /IF.
+  REAP dp FROM consume, tokens, p5.
+  REAP p6 FROM _second, dp.
+  IF elevate IS "1",
+    IF tab_has(rtab, cname) IS "1",
+      CREATE rmsg(TX) TO "ROOT constant already declared: " + cname.
+      GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", rmsg), p6).
+    /IF.
+    PUT cname INTO rtab.
+    PUT cval INTO rtab.
+    IF ntype IS "const_stmt",
+      REAP nd2 FROM map_add, plant_list_make(6, "type", "const_stmt", "name", cname, "value", cval), "root", "1".
+      GIVE plant_list_make(2, nd2, p6).
+    /IF.
+    GIVE plant_list_make(2, plant_list_make(6, "type", "root_stmt", "name", cname, "value", cval), p6).
+  /IF.
+  # local constant: same-block redeclaration and use-before-definition
+  # are both rejected (use-before-definition of a ROOT is legal — the
+  # first pass hoists it; a block-scoped CONST is only visible after
+  # its declaration point).
+  IF tab_has(ctab, cname) IS "1",
+    CREATE dmsg(TX) TO "CONST '" + cname + "' is already declared in this block".
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", dmsg), p6).
+  /IF.
+  IF scan_ident_used(tokens, bstart, pos, cname) IS "1",
+    CREATE umsg(TX) TO "CONST '" + cname + "' is used before its definition in this block".
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", umsg), p6).
+  /IF.
+  PUT cname INTO ctab.
+  PUT cval INTO ctab.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "const_stmt", "name", cname, "value", cval), p6).
+/ACTION.
+
+# v0.48.35 — ROOT_SCOPE /ROOT_SCOPE. block: every CONST declared
+# inside is automatically elevated to a ROOT constant (the const
+# parser runs in elevation mode via emode="1", so it registers in
+# rtab and skips the use-before-definition scan — hoisted constants
+# are order-independent). ROOT directives nested inside are parsed
+# as-is and also land in rtab. The wrapper node keeps its body so
+# the codegen first pass can walk it and non-constant statements
+# (rare) still generate inline.
+ACTION parse_root_scope_stmt(tokens(LIST), pos(NUM), clv(TX), rtab(LIST)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  CREATE ctab5(LIST) TO plant_list_make(0).
+  CREATE body5(LIST) TO plant_list_make(0).
+  CREATE bstart5(NUM) TO p2.
+  SEASON TRUE,
+    REAP is_eof_flag FROM is_eof, tokens, p2.
+    IF is_eof_flag,
+      GIVE plant_list_make(2, plant_list_make(4, "type", "root_scope", "body", body5), p2).
+    /IF.
+    REAP tok FROM peek, tokens, p2.
+    REAP lx FROM tok_lex, tok.
+    IF lx IS "/",
+      REAP slash FROM consume, tokens, p2.
+      REAP p3 FROM _second, slash.
+      REAP kp FROM consume, tokens, p3.
+      REAP klx FROM tok_lex, kp[0].
+      REAP p4 FROM _second, kp.
+      IF klx ISNT "ROOT_SCOPE",
+        GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "expected /ROOT_SCOPE. to close ROOT_SCOPE block"), p4).
+      /IF.
+      REAP dp FROM consume, tokens, p4.
+      REAP p5 FROM _second, dp.
+      GIVE plant_list_make(2, plant_list_make(4, "type", "root_scope", "body", body5), p5).
+    /IF.
+    REAP stmt_pair FROM parse_statement, tokens, p2, clv, ctab5, rtab, bstart5, "1".
+    CREATE stmt TO stmt_pair[0].
+    REAP p2 FROM _second, stmt_pair.
+    IF stmt > "",
+      REAP sty FROM _map_get, stmt, "type".
+      IF sty IS "syntax_error",
+        GIVE stmt_pair.
+      /IF.
+      PUT stmt INTO body5.
+    /IF.
+  /SEASON.
+/ACTION.
+
 #── Top-level ──────────────────────────────────────────────────
 
 ACTION parse_program(tokens(LIST)),
   CREATE pos(NUM) TO 0.
   CREATE clv(TX) TO "".
+  # v0.48.35: module-wide ROOT table + top-level CONST table. The
+  # top-level scan range for use-before-definition starts where the
+  # current top-level statement begins (bstart is re-armed each
+  # iteration below so ACTION/ENUM/STRUCT token spans never pollute
+  # the scan range).
+  CREATE rtab(LIST) TO plant_list_make(0).
+  CREATE ctab(LIST) TO plant_list_make(0).
+  CREATE bstart(NUM) TO 0.
   CREATE nodes(LIST) TO plant_list_make(0).
   SEASON TRUE,
     REAP is_eof_flag FROM is_eof, tokens, pos.
     IF is_eof_flag,
       GIVE plant_list_make(4, "type", "program", "body", nodes).
     /IF.
-    REAP d_pair FROM parse_declaration, tokens, pos, clv.
+    SET bstart TO pos.
+    REAP d_pair FROM parse_declaration, tokens, pos, clv, ctab, rtab, bstart.
     CREATE decl TO d_pair[0].
     REAP pos2 FROM _second, d_pair.
     IF decl > "",
@@ -5662,6 +5888,47 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         /IF.
     /IF.
   
+    # ── const_stmt: CONST name TO "lit". → static const char *name ─
+    #    = "lit"; (v0.48.35). Root-elevated constants ("root":"1")
+    #    emit nothing at their position — the first-pass collector
+    #    hoists them to file scope, so the block-scoped decl would
+    #    only duplicate them. "static" keeps the binding scoped to
+    #    the enclosing C block; a same-named ROOT constant at file
+    #    scope is shadowed (local-first lookup), and a same-named
+    #    local const in a sibling/nested block shadows again — the
+    #    exact lexical hierarchy the tables at parse time enforce.
+    IF ntype IS "const_stmt",
+        REAP cname FROM _map_get, node, "name".
+        REAP cval FROM _map_get, node, "value".
+        REAP croot FROM _map_get, node, "root".
+        IF croot IS "1",
+            GIVE "".
+        /IF.
+        REAP isel FROM indent_str, indent.
+        REAP cpre FROM substring, cval, 0, 1.
+        IF cpre ISNT "\"",
+            GIVE "#error " + cname + " CONST value must be a quoted string literal\n".
+        /IF.
+        GIVE isel + "  static const char *" + cname + " = " + cval + ";\n".
+    /IF.
+
+    # ── root_stmt: ROOT name TO "lit". → no inline code ───────────
+    #    (file-scope static const emitted at the top by the first
+    #    pass). The statement position is a no-op.
+    IF ntype IS "root_stmt",
+        GIVE "".
+    /IF.
+
+    # ── root_scope: ROOT_SCOPE … /ROOT_SCOPE. wrapper ─────────────
+    #    Its constants are hoisted; any non-constant statements still
+    #    generate inline, so the body can be walked with generate_body
+    #    (elevated const_stmt/root_stmt nodes are no-ops there).
+    IF ntype IS "root_scope",
+        REAP bd8 FROM _map_get, node, "body".
+        REAP bcode8 FROM generate_body, bd8, indent, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
+        GIVE bcode8.
+    /IF.
+
     # ── if_stmt: IF cond, body [ORIF cond2, body2]* [ELSE, bodyE] /IF. ─
     #    → if (c) { … } else if (c2) { … } else { … }  (v0.48.20)
     IF ntype IS "if_stmt",
@@ -7428,6 +7695,73 @@ ACTION async_reachable(ast(LIST)),
 # ──────────────────────────────────────────────────────────────
 #  generate_c — main entry point
 # ──────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════
+#  v0.48.35 — collect_roots: first-pass global ROOT registration
+#
+#  Runs in generate_c BEFORE any emission. Walks the entire module
+#  (action bodies, every nested block, ROOT_SCOPE wrappers) in
+#  declaration order and appends [name, cValue] pairs for every
+#  root_stmt plus every root-flagged const_stmt (CONST elevated by
+#  ROOT_SCOPE) to acc. generate_c splices them as file-scope
+#  `static const char *` definitions right after the include header,
+#  so ROOT constants are visible across all blocks regardless of
+#  where (or in what order) they were declared — the hoisting pass.
+#  The parser's own tables have already rejected redeclarations, so
+#  the table here is duplicate-free.
+# ═══════════════════════════════════════════════════════════════
+ACTION collect_roots(bd(LIST), acc(LIST)),
+  CREATE j2(NUM) TO 0.
+  CREATE n2(TX) TO "".
+  CREATE t2(TX) TO "".
+  SEASON j2 < COUNT bd,
+    REAP n2 FROM plant_list_get, bd, j2.
+    REAP t2 FROM _map_get, n2, "type".
+    IF t2 IS "root_stmt",
+      REAP rnm FROM _map_get, n2, "name".
+      REAP rvl FROM _map_get, n2, "value".
+      PUT rnm INTO acc.
+      PUT rvl INTO acc.
+    /IF.
+    IF t2 IS "const_stmt",
+      REAP crf FROM _map_get, n2, "root".
+      IF crf IS "1",
+        REAP rnm FROM _map_get, n2, "name".
+        REAP rvl FROM _map_get, n2, "value".
+        PUT rnm INTO acc.
+        PUT rvl INTO acc.
+      /IF.
+    /IF.
+    IF t2 IS "if_stmt",
+      REAP ifb FROM _if_bodies, n2.
+      CREATE jj2(NUM) TO 0.
+      SEASON jj2 < COUNT ifb,
+        REAP ibd2 FROM plant_list_get, ifb, jj2.
+        REAP acc FROM collect_roots, ibd2, acc.
+        SET jj2 TO jj2 + 1.
+      /SEASON.
+    /IF.
+    IF t2 IS "season_stmt" OR t2 IS "cycle_stmt" OR t2 IS "root_scope",
+      REAP sbd2 FROM _map_get, n2, "body".
+      REAP acc FROM collect_roots, sbd2, acc.
+    /IF.
+    IF t2 IS "weather_stmt",
+      REAP wf2 FROM _weather_bodies, n2.
+      CREATE wj2(NUM) TO 0.
+      SEASON wj2 < COUNT wf2,
+        REAP wbd2 FROM plant_list_get, wf2, wj2.
+        REAP acc FROM collect_roots, wbd2, acc.
+        SET wj2 TO wj2 + 1.
+      /SEASON.
+    /IF.
+    IF t2 IS "action_decl",
+      REAP abd2 FROM _map_get, n2, "body".
+      REAP acc FROM collect_roots, abd2, acc.
+    /IF.
+    SET j2 TO j2 + 1.
+  /SEASON.
+  GIVE acc.
+/ACTION.
+
 ACTION generate_c(ast(LIST)),
     CREATE header(TX) TO "#include <plant_compat.h>\n\n".
     CREATE decl_code(TX) TO "".
@@ -7450,6 +7784,27 @@ ACTION generate_c(ast(LIST)),
     CREATE templates(LIST) TO plant_list_make(0).
     CREATE structs(LIST) TO plant_list_make(0).
     CREATE eregs(LIST) TO build_enum_registry(ast).
+    # pass 0r: first-pass ROOT constant collection (v0.48.35). The
+    # whole module is walked BEFORE any emission so every ROOT /
+    # ROOT_SCOPE constant lands in the file-scope tier, visible
+    # across all blocks regardless of declaration order.
+    CREATE roots(LIST) TO collect_roots(ast, plant_list_make(0)).
+    CREATE roots_code(TX) TO "".
+    CREATE ri5(NUM) TO 0.
+    CREATE rn5(TX) TO "".
+    CREATE rv5(TX) TO "".
+    SEASON ri5 + 1 < COUNT roots,
+        REAP rn5 FROM plant_list_get, roots, ri5.
+        REAP rv5 FROM plant_list_get, roots, ri5 + 1.
+        REAP rp55 FROM substring, rv5, 0, 1.
+        IF rp55 ISNT "\"",
+            SET roots_code TO roots_code + "#error " + rn5 + " ROOT value must be a quoted string literal\n".
+        /IF.
+        IF rp55 IS "\"",
+            SET roots_code TO roots_code + "static const char *" + rn5 + " = " + rv5 + ";\n".
+        /IF.
+        SET ri5 TO ri5 + 2.
+    /SEASON.
     SET i TO 0.
     SEASON i < COUNT ast,
         REAP node_el FROM plant_list_get, ast, i.
@@ -7992,7 +8347,7 @@ ACTION generate_c(ast(LIST)),
         /IF.
         SET stmt_code TO "int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n" + dcode + stmt_code + "  plant_async_drain();\n  return 0;\n}\n".
     /IF.
-    GIVE header + struct_code + ffi_topo + cltype_code + pro_code + cb_code + clfwd_code + "\n" + cldef_code + "\n" + decl_code + stmt_code.
+    GIVE header + roots_code + struct_code + ffi_topo + cltype_code + pro_code + cb_code + clfwd_code + "\n" + cldef_code + "\n" + decl_code + stmt_code.
 /ACTION.
 
 # ═══════════════════════════════════════════════════════════════
@@ -8608,7 +8963,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.48.34 (pure native)".
+  SHOW "Chloroplast 0.48.35 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

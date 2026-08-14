@@ -1,0 +1,27 @@
+# const: local CONST scoping constraints (v0.48.35).
+# Declaration, in-block use, isolated-block scoping (an inner const
+# never leaks out), and the local-first lookup hierarchy (a block's
+# own CONST shadows a same-named constant at any outer level).
+ACTION main(),
+  SHOW "const start".
+  CONST city TO "atlantis".
+  SHOW city.
+  # nested block: its own const table shadows the outer const while
+  # outer consts remain visible after the block ends
+  IF TRUE,
+    CONST city TO "inner-city".
+    CONST depth TO "deep".
+    SHOW city.
+    SHOW city + "-" + depth.
+  /IF.
+  SHOW city.
+  SEASON FALSE,
+    CONST never TO "nope".
+    SHOW city + "-loop".
+  /SEASON.
+  CYCLE i FROM 1 TO 2,
+    SHOW city.
+  /CYCLE.
+  SHOW "const done".
+  GIVE 0.
+/ACTION.

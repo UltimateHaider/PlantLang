@@ -40,6 +40,8 @@ ACTION is_keyword(wrd(TX)),
   IF wrd IS "JOIN", GIVE TRUE. /IF.
   IF wrd IS "ENUM", GIVE TRUE. /IF.
   IF wrd IS "CONST", GIVE TRUE. /IF.
+  IF wrd IS "ROOT", GIVE TRUE. /IF.
+  IF wrd IS "ROOT_SCOPE", GIVE TRUE. /IF.
   IF wrd IS "FUNCTION", GIVE TRUE. /IF.
   IF wrd IS "IMPORT", GIVE TRUE. /IF.
   IF wrd IS "OPTION", GIVE TRUE. /IF.
@@ -99,6 +101,8 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "JOIN", GIVE "JOIN". /IF.
   IF wrd IS "ENUM", GIVE "ENUM". /IF.
   IF wrd IS "CONST", GIVE "CONST". /IF.
+  IF wrd IS "ROOT", GIVE "ROOT". /IF.
+  IF wrd IS "ROOT_SCOPE", GIVE "ROOT_SCOPE". /IF.
   IF wrd IS "FUNCTION", GIVE "FUNCTION". /IF.
   IF wrd IS "IMPORT", GIVE "IMPORT". /IF.
   IF wrd IS "OPTION", GIVE "OPTION". /IF.

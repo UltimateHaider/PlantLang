@@ -1,6 +1,66 @@
 # Changelog — PlantLang / Chloroplast
 
-## v0.48.34 — 2026 (Networking Enhancements: Read/Write/Close + HARVEST MAP)
+## v0.48.35 — 2026 (Immutables: CONST / ROOT / ROOT_SCOPE)
+
+### New Features
+- **`CONST name TO "value".`** (parser.plant + codegen_c.plant): declares a
+  block-scoped immutable constant. Values must be a single quoted string
+  literal (rejected otherwise at parse time); the compiler emits
+  `static const char *name = "value";` inside the enclosing C block, so a
+  CONST declared inside an IF/SEASON/CYCLE/WEATHER branch or closure block
+  is scoped to exactly that block. CONSTs shadow outer CONSTs of the same
+  name (local-first lookup matching C block scoping), and a use of a CONST
+  before its definition within the same block is a compile error (the
+  parser scans the block body from its start position).
+- **`ROOT name TO "value".`** (parser.plant + codegen_c.plant): declares a
+  module-wide global constant. ROOTs are hoisted by a first-pass
+  `collect_roots` walk in `generate_c` and emitted once at file scope right
+  after the `#include <plant_compat.h>` header, so using a ROOT before its
+  textual declaration (even at the top level) is legal. Redeclaring a ROOT
+  is rejected at parse time via the module-wide `rtab` table.
+- **`ROOT_SCOPE` blocks** (parser.plant): `ROOT_SCOPE … /ROOT_SCOPE.`
+  establishes a scope in which every inner `CONST` is automatically
+  elevated to a `ROOT` (the `const_stmt` node is flagged and codegen skips
+  the block-local emission), making it easy to batch-promote a set of
+  shared constants. Nested ROOTs inside the block work as usual.
+- **Multi-tier constant tables** (parser.plant): every statement-block
+  parser (`parse_program`, `parse_action_decl`, `parse_closure`,
+  `parse_if_stmt` with fresh tables per ORIF/ELSE branch, `parse_season_stmt`,
+  `parse_cycle_stmt`, `parse_weather_stmt`, `parse_root_scope_stmt`) threads
+  a per-block `ctab`, the module `rtab`, and a `bstart` token position used
+  for use-before-definition detection. ROOT_SCOPE blocks get their own
+  table; `emode` flags elevation.
+
+### Bug Fixes
+- **Latent `plant_list_make` count/arg mismatch (compile-stage segfault)**:
+  seven AST-node constructions (closure, call_stmt, shake_stmt, if_stmt ×2,
+  throw_stmt, stop_if_stmt) passed a count two larger than the actual
+  argument list, so `plant_list_make` pulled two garbage values off the
+  stack into the node map. `_map_get` walkers (`_cl_walk` calling
+  `_map_get(node, "closure")` on every statement) then `strcmp`'d those
+  slots — undefined behavior that happened to survive on old stack layouts,
+  but deterministically crashed the compiler (NULL strcmp in
+  `runtime/c/plant_compat.h:292`) after the new parser signatures shifted
+  caller frames. The counts now match the argument lists
+  (`stop_if_stmt`/`shake_stmt` 6→4, `throw_stmt` 8→6, `call_stmt` 10→8,
+  `closure`/`if_stmt` 12→10), un-breaking `stop_if.plant` and
+  `shuffle.plant` compilation.
+
+### Tests
+- `tests/regression/const.plant` — local shadowing (inner IF block CONST
+  shadows the outer constant; outer visible again after the block),
+  SEASON/CYCLE containment.
+- `tests/regression/root.plant` — top-level use-before-declaration
+  (`SHOW` of a ROOT before its `ROOT` line), `ROOT_SCOPE` elevation with a
+  nested ROOT, and an action-local CONST shadowing an elevated constant.
+- Negative pairs: `const_redecl.invalid` (same-block redeclaration),
+  `const_usebeforedef.invalid` (use before definition),
+  `root_redecl.invalid` (duplicate ROOT), `const_nonliteral.invalid`
+  (non-string-literal value).
+- Full suite green: native 20, generics 7, closures 6, regression 106
+  (including the previously-crashing `stop_if`/`shuffle`).
+
+
 
 ### New Features
 - **`HARVEST url AS resp MAP.`** (parser.plant + codegen_c.plant): the
@@ -55,6 +115,8 @@
   (`TRUE`/`TRUE`), and the defensive edges: read after close (empty),
   write after close (`FALSE`), and read on a bogus descriptor
   (empty).
+
+## v0.48.34 — 2026 (Networking Enhancements: Read/Write/Close + HARVEST MAP)
 
 ## v0.48.33 — 2026 (LISTEN / RESPONSE HTTP Server)
 

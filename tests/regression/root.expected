@@ -1,0 +1,5 @@
+hoisted
+hoisted|local-shadow|nested-root
+ok-from-action
+hoisted|scoped-root|nested-root
+root done

@@ -1,0 +1,20 @@
+# root: ROOT hoisting, ROOT_SCOPE automatic elevation, cross-block
+# accessibility, and the local-first shadowing rule (v0.48.35).
+# Top-level statements drive the program (no ACTION main() — the
+# generated C wraps top-level code in the real main entry, so the
+# action below proves cross-block visibility from a separate call).
+SHOW g_early.
+ROOT g_early TO "hoisted".
+ROOT_SCOPE
+  CONST scoped_g TO "scoped-root".
+  ROOT nested_g TO "nested-root".
+/ROOT_SCOPE.
+ACTION show_root(),
+  CONST scoped_g TO "local-shadow".
+  SHOW g_early + "|" + scoped_g + "|" + nested_g.
+  GIVE "ok-from-action".
+/ACTION.
+REAP r1 FROM show_root.
+SHOW r1.
+SHOW g_early + "|" + scoped_g + "|" + nested_g.
+SHOW "root done".

@@ -2741,6 +2741,47 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         /IF.
     /IF.
   
+    # ── const_stmt: CONST name TO "lit". → static const char *name ─
+    #    = "lit"; (v0.48.35). Root-elevated constants ("root":"1")
+    #    emit nothing at their position — the first-pass collector
+    #    hoists them to file scope, so the block-scoped decl would
+    #    only duplicate them. "static" keeps the binding scoped to
+    #    the enclosing C block; a same-named ROOT constant at file
+    #    scope is shadowed (local-first lookup), and a same-named
+    #    local const in a sibling/nested block shadows again — the
+    #    exact lexical hierarchy the tables at parse time enforce.
+    IF ntype IS "const_stmt",
+        REAP cname FROM _map_get, node, "name".
+        REAP cval FROM _map_get, node, "value".
+        REAP croot FROM _map_get, node, "root".
+        IF croot IS "1",
+            GIVE "".
+        /IF.
+        REAP isel FROM indent_str, indent.
+        REAP cpre FROM substring, cval, 0, 1.
+        IF cpre ISNT "\"",
+            GIVE "#error " + cname + " CONST value must be a quoted string literal\n".
+        /IF.
+        GIVE isel + "  static const char *" + cname + " = " + cval + ";\n".
+    /IF.
+
+    # ── root_stmt: ROOT name TO "lit". → no inline code ───────────
+    #    (file-scope static const emitted at the top by the first
+    #    pass). The statement position is a no-op.
+    IF ntype IS "root_stmt",
+        GIVE "".
+    /IF.
+
+    # ── root_scope: ROOT_SCOPE … /ROOT_SCOPE. wrapper ─────────────
+    #    Its constants are hoisted; any non-constant statements still
+    #    generate inline, so the body can be walked with generate_body
+    #    (elevated const_stmt/root_stmt nodes are no-ops there).
+    IF ntype IS "root_scope",
+        REAP bd8 FROM _map_get, node, "body".
+        REAP bcode8 FROM generate_body, bd8, indent, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
+        GIVE bcode8.
+    /IF.
+
     # ── if_stmt: IF cond, body [ORIF cond2, body2]* [ELSE, bodyE] /IF. ─
     #    → if (c) { … } else if (c2) { … } else { … }  (v0.48.20)
     IF ntype IS "if_stmt",
@@ -4507,6 +4548,73 @@ ACTION async_reachable(ast(LIST)),
 # ──────────────────────────────────────────────────────────────
 #  generate_c — main entry point
 # ──────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════
+#  v0.48.35 — collect_roots: first-pass global ROOT registration
+#
+#  Runs in generate_c BEFORE any emission. Walks the entire module
+#  (action bodies, every nested block, ROOT_SCOPE wrappers) in
+#  declaration order and appends [name, cValue] pairs for every
+#  root_stmt plus every root-flagged const_stmt (CONST elevated by
+#  ROOT_SCOPE) to acc. generate_c splices them as file-scope
+#  `static const char *` definitions right after the include header,
+#  so ROOT constants are visible across all blocks regardless of
+#  where (or in what order) they were declared — the hoisting pass.
+#  The parser's own tables have already rejected redeclarations, so
+#  the table here is duplicate-free.
+# ═══════════════════════════════════════════════════════════════
+ACTION collect_roots(bd(LIST), acc(LIST)),
+  CREATE j2(NUM) TO 0.
+  CREATE n2(TX) TO "".
+  CREATE t2(TX) TO "".
+  SEASON j2 < COUNT bd,
+    REAP n2 FROM plant_list_get, bd, j2.
+    REAP t2 FROM _map_get, n2, "type".
+    IF t2 IS "root_stmt",
+      REAP rnm FROM _map_get, n2, "name".
+      REAP rvl FROM _map_get, n2, "value".
+      PUT rnm INTO acc.
+      PUT rvl INTO acc.
+    /IF.
+    IF t2 IS "const_stmt",
+      REAP crf FROM _map_get, n2, "root".
+      IF crf IS "1",
+        REAP rnm FROM _map_get, n2, "name".
+        REAP rvl FROM _map_get, n2, "value".
+        PUT rnm INTO acc.
+        PUT rvl INTO acc.
+      /IF.
+    /IF.
+    IF t2 IS "if_stmt",
+      REAP ifb FROM _if_bodies, n2.
+      CREATE jj2(NUM) TO 0.
+      SEASON jj2 < COUNT ifb,
+        REAP ibd2 FROM plant_list_get, ifb, jj2.
+        REAP acc FROM collect_roots, ibd2, acc.
+        SET jj2 TO jj2 + 1.
+      /SEASON.
+    /IF.
+    IF t2 IS "season_stmt" OR t2 IS "cycle_stmt" OR t2 IS "root_scope",
+      REAP sbd2 FROM _map_get, n2, "body".
+      REAP acc FROM collect_roots, sbd2, acc.
+    /IF.
+    IF t2 IS "weather_stmt",
+      REAP wf2 FROM _weather_bodies, n2.
+      CREATE wj2(NUM) TO 0.
+      SEASON wj2 < COUNT wf2,
+        REAP wbd2 FROM plant_list_get, wf2, wj2.
+        REAP acc FROM collect_roots, wbd2, acc.
+        SET wj2 TO wj2 + 1.
+      /SEASON.
+    /IF.
+    IF t2 IS "action_decl",
+      REAP abd2 FROM _map_get, n2, "body".
+      REAP acc FROM collect_roots, abd2, acc.
+    /IF.
+    SET j2 TO j2 + 1.
+  /SEASON.
+  GIVE acc.
+/ACTION.
+
 ACTION generate_c(ast(LIST)),
     CREATE header(TX) TO "#include <plant_compat.h>\n\n".
     CREATE decl_code(TX) TO "".
@@ -4529,6 +4637,27 @@ ACTION generate_c(ast(LIST)),
     CREATE templates(LIST) TO plant_list_make(0).
     CREATE structs(LIST) TO plant_list_make(0).
     CREATE eregs(LIST) TO build_enum_registry(ast).
+    # pass 0r: first-pass ROOT constant collection (v0.48.35). The
+    # whole module is walked BEFORE any emission so every ROOT /
+    # ROOT_SCOPE constant lands in the file-scope tier, visible
+    # across all blocks regardless of declaration order.
+    CREATE roots(LIST) TO collect_roots(ast, plant_list_make(0)).
+    CREATE roots_code(TX) TO "".
+    CREATE ri5(NUM) TO 0.
+    CREATE rn5(TX) TO "".
+    CREATE rv5(TX) TO "".
+    SEASON ri5 + 1 < COUNT roots,
+        REAP rn5 FROM plant_list_get, roots, ri5.
+        REAP rv5 FROM plant_list_get, roots, ri5 + 1.
+        REAP rp55 FROM substring, rv5, 0, 1.
+        IF rp55 ISNT "\"",
+            SET roots_code TO roots_code + "#error " + rn5 + " ROOT value must be a quoted string literal\n".
+        /IF.
+        IF rp55 IS "\"",
+            SET roots_code TO roots_code + "static const char *" + rn5 + " = " + rv5 + ";\n".
+        /IF.
+        SET ri5 TO ri5 + 2.
+    /SEASON.
     SET i TO 0.
     SEASON i < COUNT ast,
         REAP node_el FROM plant_list_get, ast, i.
@@ -5071,7 +5200,7 @@ ACTION generate_c(ast(LIST)),
         /IF.
         SET stmt_code TO "int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n" + dcode + stmt_code + "  plant_async_drain();\n  return 0;\n}\n".
     /IF.
-    GIVE header + struct_code + ffi_topo + cltype_code + pro_code + cb_code + clfwd_code + "\n" + cldef_code + "\n" + decl_code + stmt_code.
+    GIVE header + roots_code + struct_code + ffi_topo + cltype_code + pro_code + cb_code + clfwd_code + "\n" + cldef_code + "\n" + decl_code + stmt_code.
 /ACTION.
 
 # ═══════════════════════════════════════════════════════════════

@@ -1,0 +1,7 @@
+# negative: same-block CONST redeclaration must fail at compile time
+ACTION main(),
+  CONST dup TO "first".
+  CONST dup TO "second".
+  SHOW dup.
+  GIVE 0.
+/ACTION.

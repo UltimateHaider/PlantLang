@@ -1,0 +1,7 @@
+# negative: a ROOT constant may only be declared once
+ROOT same_name TO "one".
+ROOT same_name TO "two".
+ACTION main(),
+  SHOW same_name.
+  GIVE 0.
+/ACTION.

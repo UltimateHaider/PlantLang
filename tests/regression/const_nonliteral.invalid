@@ -1,0 +1,6 @@
+# negative: constant values must be quoted string literals
+ACTION main(),
+  CONST raw TO 42.
+  SHOW raw.
+  GIVE 0.
+/ACTION.
