@@ -50,10 +50,13 @@ int64_t plnt_pow_i64(int64_t a, int64_t b) {
     return r;
 }
 
+long g_bal_bytes = 0;   /* v0.48.37: BALANCED allocation counter */
+
 /* Heap allocation wrapper */
 void* plant_alloc(size_t size) {
     void* ptr = malloc(size);
     if (!ptr) { fprintf(stderr, "plant_alloc: out of memory\n"); exit(1); }
+    g_bal_bytes += (long)size;   /* v0.48.37: BALANCED counter */
     return ptr;
 }
 
@@ -2766,6 +2769,7 @@ static plant_seg* g_seg_cache = NULL;
 static size_t g_seg_size = 1024;
 static size_t g_cache_max = 64;
 static long g_arena_hits = 0, g_arena_misses = 0;
+static long g_arena_live_bytes = 0;   /* v0.48.37 */
 static int g_inited = 0;
 static plant_task* g_running = NULL;  /* task currently mid-step */
 
@@ -2787,6 +2791,7 @@ static void* plant_arena_alloc(plant_arena* a, size_t n) {
         if (s->used + n <= s->cap) {
             void* p = (char*)(s + 1) + s->used;
             s->used += n; a->hits++; g_arena_hits++;
+            g_arena_live_bytes += (long)n;   /* v0.48.37: live arena bytes */
             return p;
         }
         s = s->next;
@@ -2852,6 +2857,7 @@ static void plant_arena_free(plant_arena* a) {
     while (s) {
         plant_seg* nx = s->next;
         if (--s->refs <= 0) {
+            g_arena_live_bytes -= (long)s->used;   /* v0.48.37 */
             if (g_cache_max > 0) {
                 g_cache_max--;
                 s->next = g_seg_cache;
@@ -3613,7 +3619,11 @@ typedef struct {
 static plant_fast_heap g_fast = { 0 };
 #define PLANT_FAST_ESC_MAX 256
 static void* g_fast_esc[PLANT_FAST_ESC_MAX];
+static size_t g_fast_esc_sz[PLANT_FAST_ESC_MAX];   /* v0.48.37: per-block size */
 static long g_fast_esc_n = 0;
+static long g_fast_esc_bytes = 0;                  /* v0.48.37 */
+static long g_fast_shrinks = 0;                    /* v0.48.37 */
+static long g_fast_shrink_cycles = 0;              /* v0.48.37: consecutive low-pressure scopes */
 
 static void plant_fast_init(void) {
     if (g_fast.inited) return;
@@ -3653,7 +3663,12 @@ static void* plant_fast_alloc_raw(size_t n) {
         plant_audit_log("FAST_ESCALATE", "WARN: Fast heap capacity exceeded");
     }
     void* p = malloc(need);
-    if (p && g_fast_esc_n < PLANT_FAST_ESC_MAX) g_fast_esc[g_fast_esc_n++] = p;
+    if (p && g_fast_esc_n < PLANT_FAST_ESC_MAX) {
+        g_fast_esc[g_fast_esc_n] = p;
+        g_fast_esc_sz[g_fast_esc_n] = need;
+        g_fast_esc_n++;
+        g_fast_esc_bytes += (long)need;
+    }
     return p;
 }
 
@@ -3678,8 +3693,27 @@ tx_t plant_fast_alloc(tx_t n) {
 tx_t plant_fast_reset(void) {
     plant_fast_init();
     if (g_fast.used > g_fast.peak) g_fast.peak = g_fast.used;
+    /* v0.48.37: adaptive shrink — after 4 consecutive low-pressure
+       scopes (used < size/4) halve the heap down to the base cap */
+    size_t base_cap = g_fast_cfg_cap ? g_fast_cfg_cap : (8u << 20);
+    if (g_fast.used * 4 < g_fast.size && g_fast.size > base_cap) {
+        if (++g_fast_shrink_cycles >= 4) {
+            size_t ns = g_fast.size / 2;
+            char* nb = (char*)realloc(g_fast.base, ns);
+            if (nb) {
+                g_fast.base = nb; g_fast.size = ns;
+                g_fast_shrink_cycles = 0; g_fast_shrinks++;
+                plant_audit_log("FAST_SHRINK", "heap halved on low pressure");
+            }
+        }
+    } else {
+        g_fast_shrink_cycles = 0;
+    }
     g_fast.used = 0;
-    for (long i = 0; i < g_fast_esc_n; i++) free(g_fast_esc[i]);
+    for (long i = 0; i < g_fast_esc_n; i++) {
+        free(g_fast_esc[i]);
+        g_fast_esc_bytes -= (long)g_fast_esc_sz[i];
+    }
     g_fast_esc_n = 0;
     return (tx_t)"0";
 }
@@ -4072,6 +4106,21 @@ tx_t plant_async_stats(void) {
     return buf;
 }
 
+/* v0.48.37 — DistributedHeap forward declarations (used by the
+   MISSION CONFIG handler above; bodies in the v0.48.37 section) */
+#define PLANT_DIST_MAX_NODES 64
+#define PLANT_DIST_VPTS      64
+static long     g_dist_nodes = 4;
+static long     g_dist_vpts = PLANT_DIST_VPTS;
+static uint64_t g_dist_ring[PLANT_DIST_MAX_NODES * PLANT_DIST_VPTS];
+static long     g_dist_ring_node[PLANT_DIST_MAX_NODES * PLANT_DIST_VPTS];
+static long     g_dist_ring_n = 0;
+static long     g_dist_node_bytes[PLANT_DIST_MAX_NODES];
+static long     g_dist_node_cap[PLANT_DIST_MAX_NODES];
+static long     g_dist_allocs = 0;
+static long     g_dist_evicts = 0;
+static void     plant_dist_ring_build(void);
+
 void plant_async_config(tx_t keyv, tx_t valv) {
     plant_async_init();
     const char* key = _S(keyv);
@@ -4121,6 +4170,12 @@ void plant_async_config(tx_t keyv, tx_t valv) {
     } else if (strcmp(key, "SAFE_CHANNEL_THRESHOLD") == 0) {
         long v = atol(val);
         if (v >= 1) g_safe_channel_threshold = v;
+    } else if (strcmp(key, "DIST_NODES") == 0) {          /* v0.48.37 */
+        long v = atol(val);
+        if (v >= 1 && v <= PLANT_DIST_MAX_NODES) { g_dist_nodes = v; plant_dist_ring_build(); }
+    } else if (strcmp(key, "DIST_NODE_CAP") == 0) {       /* v0.48.37 */
+        long v = atol(val);
+        if (v >= 1) for (long i = 0; i < PLANT_DIST_MAX_NODES; i++) g_dist_node_cap[i] = v;
     } else if (strcmp(key, "SMART_SCALAR_LIMIT") == 0) {
         long v = atol(val);
         if (v >= 1) g_smart_cfg_scalar_limit = v;
@@ -4375,6 +4430,7 @@ struct plant_arc_obj {
     int  tainted;           /* allocated inside SAFE (untrusted) */
     char finalizer[PLANT_ARC_FINALIZER_NAME];
     plant_arc_link_edge* edges;   /* outgoing reference edges */
+    long node;              /* v0.48.37: DistributedHeap node (-1 = local) */
     plant_arc_obj* next;    /* heap list */
 };
 
@@ -4387,6 +4443,7 @@ static long g_arc_finalizes = 0;
 static long g_arc_leased = 0;
 static long g_arc_gc_runs = 0;
 static long g_arc_reclaimed = 0;
+static long g_arc_live_bytes = 0;   /* v0.48.37 */
 
 /* finalizer callbacks: registered by name so PlantLang tests can bind
    them without C function pointers; invoked on destruction */
@@ -4429,6 +4486,7 @@ static void plant_arc_destroy(plant_arc_obj* o, int reclaimed) {
     snprintf(msg, sizeof(msg), "seq=%ld %s", o->alloc_seq,
              reclaimed ? "reclaimed" : "refs=0");
     plant_audit_log("ARC_FREE", msg);
+    g_arc_live_bytes -= (long)o->size;   /* v0.48.37 */
     free(o->data);
     free(o);
 }
@@ -4460,6 +4518,8 @@ tx_t plant_arc_alloc(tx_t sizev) {
     o->refs = 1;
     o->alloc_seq = g_arc_seq++;
     o->tainted = plant_arc_in_safe();
+    o->node = -1;
+    g_arc_live_bytes += sz;   /* v0.48.37 */
     o->next = g_arc_head;
     g_arc_head = o;
     g_arc_live++;
@@ -4650,4 +4710,280 @@ tx_t plant_arc_finalize_count(void) {
     static char buf[32];
     snprintf(buf, sizeof(buf), "%ld", g_arc_finalizes);
     return buf;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.48.37 — Memory Safety Layer (EVAPORATE)
+   Fixed-size string slabs (the _cat family allocates from a 64-byte
+   block pool when the result fits), explicit deallocation (the FREE
+   statement maps to plant_mem_free), allocator byte accounting for
+   plant_mem_report, the audit scanner (plant_mem_scan), the
+   DistributedHeap with a consistent-hash ring over ARC segments, and
+   SAFE boundary copy/transfer enforcement.
+   ═══════════════════════════════════════════════════════════════ */
+#define PLANT_SLAB_BLOCK   64
+#define PLANT_SLAB_BLOCKS  1024
+static char* g_slab_region = NULL;
+static void* g_slab_free = NULL;      /* singly-linked free-block list */
+static long  g_slab_live = 0;
+static long  g_slab_blocks = PLANT_SLAB_BLOCKS;
+
+static void plant_slab_init(void) {
+    if (g_slab_region) return;
+    g_slab_region = (char*)malloc((size_t)PLANT_SLAB_BLOCK * (size_t)g_slab_blocks);
+    if (!g_slab_region) { g_slab_blocks = 0; return; }
+    char* head = NULL;
+    for (long i = 0; i < g_slab_blocks; i++) {
+        char* b = g_slab_region + (size_t)i * PLANT_SLAB_BLOCK;
+        *(char**)b = head;             /* free-list next pointer */
+        head = b;
+    }
+    g_slab_free = head;                /* last block next = NULL (terminates) */
+}
+
+/* pop a block; returns NULL when the pool is empty (caller falls
+   back to malloc). Blocks are 64 bytes — enough for small strings. */
+char* plant_str_slab_alloc(size_t n) {
+    if (n == 0 || n > (size_t)PLANT_SLAB_BLOCK) return NULL;
+    plant_slab_init();
+    if (!g_slab_free) return NULL;
+    void* p = g_slab_free;
+    g_slab_free = *(void**)p;
+    g_slab_live++;
+    return (char*)p;
+}
+
+static int plant_in_slab(const void* p) {
+    return g_slab_region &&
+           (const char*)p >= g_slab_region &&
+           (const char*)p < g_slab_region + (size_t)PLANT_SLAB_BLOCK * (size_t)g_slab_blocks;
+}
+
+static void plant_slab_free(void* p) {
+    *(void**)p = g_slab_free;
+    g_slab_free = p;
+    g_slab_live--;
+}
+
+/* FREE statement target: returns NULL after deallocating so the
+   codegen can write the variable to NULL (double-free safe). Small
+   integers / static digit strings (< 64KB) are refused; PlantArray
+   containers are freed shallowly (the element strings remain the
+   caller's). String literals are NOT detectable — freeing one is a
+   user error, as in C. */
+tx_t plant_mem_free(tx_t v) {
+    if (!v) return NULL;
+    if ((uintptr_t)v < 65536) return v;          /* small int / static table */
+    if (plant_in_slab(v)) {
+        plant_slab_free(v);
+        g_bal_bytes -= PLANT_SLAB_BLOCK;
+        return NULL;
+    }
+    PlantArray* p = (PlantArray*)v;
+    if (p->magic == PLANT_ARRAY_MAGIC) {
+        if (p->items) free(p->items);
+        g_bal_bytes -= (long)sizeof(PlantArray) + p->capacity * (long)sizeof(char*);
+        free(p);
+        return NULL;
+    }
+    free(v);
+    return NULL;
+}
+
+/* unified MAP of live bytes by allocator owner:
+   arena / fast / arc / balanced / slab */
+tx_t plant_mem_report(void) {
+    plant_fast_init();
+    plant_slab_init();
+    return (tx_t)plant_list_make(10,
+        "arena", _from_long(g_arena_live_bytes),
+        "fast", _from_long((long)(g_fast.used + g_fast_esc_bytes)),
+        "arc", _from_long(g_arc_live_bytes),
+        "balanced", _from_long(g_bal_bytes),
+        "slab", _from_long(g_slab_live * PLANT_SLAB_BLOCK));
+}
+
+/* audit scanner: flags recurrent FAST_ESCALATE events, ARC churn
+   (allocations without matching frees), slab exhaustion and the
+   arena miss ratio. Returns a MAP with counters + warnings string. */
+tx_t plant_mem_scan(void) {
+    plant_fast_init();
+    long escal = 0;
+    long n = g_audit_count;
+    if (n > PLANT_AUDIT_CAP) n = PLANT_AUDIT_CAP;
+    long base = g_audit_head - n;
+    if (base < 0) base += PLANT_AUDIT_CAP;
+    for (long i = 0; i < n; i++) {
+        plant_audit_ev* e = &g_audit[(base + i) % PLANT_AUDIT_CAP];
+        if (strcmp(e->kind, "FAST_ESCALATE") == 0) escal++;
+    }
+    long miss = 0;
+    if (g_arena_hits + g_arena_misses > 0)
+        miss = g_arena_misses * 100 / (g_arena_hits + g_arena_misses);
+    char warn[160] = "";
+    long wl = 0;
+    if (escal > 0) wl += (long)snprintf(warn + wl, sizeof(warn) - (size_t)wl, "fast_escalations=%ld", escal);
+    if (g_arc_allocs > 100 && g_arc_allocs - g_arc_frees > g_arc_allocs / 10) {
+        wl += (long)snprintf(warn + wl, sizeof(warn) - (size_t)wl, "%sarc_churn:allocs=%ld,frees=%ld", wl ? "," : "", g_arc_allocs, g_arc_frees);
+    }
+    if (g_slab_live >= g_slab_blocks)
+        wl += (long)snprintf(warn + wl, sizeof(warn) - (size_t)wl, "%sslab_exhausted", wl ? "," : "");
+    if (!wl) snprintf(warn, sizeof(warn), "clean");
+    return (tx_t)plant_list_make(12,
+        "fast_escalations", _from_long(escal),
+        "arc_allocs", _from_long(g_arc_allocs),
+        "arc_frees", _from_long(g_arc_frees),
+        "arc_live", _from_long(g_arc_live),
+        "arena_miss_pct", _from_long(miss),
+        "slab_blocks", _from_long(g_slab_live),
+        "warnings", warn);
+}
+
+/* ── DistributedHeap: consistent-hash ring over ARC segments ──── */
+static uint64_t plant_dist_hash(const char* s) {
+    uint64_t h = 14695981039346656037ULL;
+    if (!s) return h;
+    while (*s) { h ^= (unsigned char)*s++; h *= 1099511628211ULL; }
+    return h;
+}
+
+void plant_dist_ring_build(void) {
+    long nn = g_dist_nodes;
+    if (nn < 1) nn = 1;
+    if (nn > PLANT_DIST_MAX_NODES) nn = PLANT_DIST_MAX_NODES;
+    g_dist_nodes = nn;
+    long k = 0;
+    for (long i = 0; i < nn; i++) {
+        for (long v = 0; v < g_dist_vpts; v++) {
+            char buf[32];
+            snprintf(buf, sizeof(buf), "%ld:%ld", i, v);
+            g_dist_ring[k] = plant_dist_hash(buf);
+            g_dist_ring_node[k] = i;
+            k++;
+        }
+    }
+    /* insertion sort over the (hash, node) pairs */
+    for (long i = 1; i < k; i++) {
+        uint64_t t = g_dist_ring[i];
+        long tn = g_dist_ring_node[i];
+        long j = i - 1;
+        while (j >= 0 && g_dist_ring[j] > t) {
+            g_dist_ring[j + 1] = g_dist_ring[j];
+            g_dist_ring_node[j + 1] = g_dist_ring_node[j];
+            j--;
+        }
+        g_dist_ring[j + 1] = t;
+        g_dist_ring_node[j + 1] = tn;
+    }
+    g_dist_ring_n = k;
+}
+
+/* deterministic placement: first ring point >= hash(key), wrapping
+   around the ring — consistent hashing gives stable placement */
+static long plant_dist_place(const char* key) {
+    if (!g_dist_ring_n) plant_dist_ring_build();
+    uint64_t h = plant_dist_hash(key);
+    long lo = 0, hi = g_dist_ring_n;
+    while (lo < hi) {
+        long mid = (lo + hi) / 2;
+        if (g_dist_ring[mid] < h) lo = mid + 1;
+        else hi = mid;
+    }
+    if (lo >= g_dist_ring_n) lo = 0;
+    return g_dist_ring_node[lo];
+}
+
+/* lease-based eviction: node over its byte cap reclaims objects with
+   zero refs or an expired lease */
+static long plant_dist_evict(long node) {
+    long now = plant_ms();
+    long reclaimed = 0;
+    plant_arc_obj* o = g_arc_head;
+    while (o) {
+        plant_arc_obj* nx = o->next;
+        if (o->node == node &&
+            (o->refs <= 0 || (o->leased_until_ms > 0 && o->leased_until_ms <= now))) {
+            g_dist_node_bytes[node] -= (long)o->size;
+            plant_arc_destroy(o, 1);
+            reclaimed++;
+        }
+        o = nx;
+    }
+    return reclaimed;
+}
+
+tx_t plant_dist_init(tx_t nodesv) {
+    long n = (long)nodesv;
+    if (n >= 1 && n <= PLANT_DIST_MAX_NODES) g_dist_nodes = n;
+    memset(g_dist_node_bytes, 0, sizeof(g_dist_node_bytes));
+    plant_dist_ring_build();
+    static char msg[96];
+    snprintf(msg, sizeof(msg), "nodes=%ld points=%ld", g_dist_nodes, g_dist_ring_n);
+    plant_audit_log("DIST_INIT", msg);
+    return (tx_t)"1";
+}
+
+tx_t plant_dist_alloc(tx_t sizev, tx_t keyv) {
+    const char* key = _S(keyv);
+    if (!key || !*key) key = "default";
+    long node = plant_dist_place(key);
+    tx_t obj = plant_arc_alloc(sizev);
+    if (!obj) return NULL;
+    plant_arc_obj* o = (plant_arc_obj*)obj;
+    o->node = node;
+    g_dist_node_bytes[node] += (long)o->size;
+    g_dist_allocs++;
+    static char msg[96];
+    snprintf(msg, sizeof(msg), "seq=%ld node=%ld size=%ld key=%s", o->alloc_seq, node, (long)o->size, key);
+    plant_audit_log("DIST_ALLOC", msg);
+    if (g_dist_node_cap[node] > 0 && g_dist_node_bytes[node] > g_dist_node_cap[node]) {
+        long ev = plant_dist_evict(node);
+        if (ev > 0) {
+            g_dist_evicts += ev;
+            snprintf(msg, sizeof(msg), "node=%ld reclaimed=%ld", node, ev);
+            plant_audit_log("DIST_EVICT", msg);
+        }
+    }
+    return obj;
+}
+
+tx_t plant_dist_node(tx_t objv) {
+    if (!objv) return _from_long(-1);
+    return _from_long(((plant_arc_obj*)objv)->node);
+}
+
+tx_t plant_dist_release(tx_t objv) {
+    plant_arc_obj* o = (plant_arc_obj*)objv;
+    if (!o) return (tx_t)"0";
+    if (o->node >= 0 && o->node < g_dist_nodes)
+        g_dist_node_bytes[o->node] -= (long)o->size;
+    return plant_arc_release(objv);
+}
+
+tx_t plant_dist_status(void) {
+    static char buf[256];
+    long used = 0;
+    for (long i = 0; i < g_dist_nodes; i++) used += g_dist_node_bytes[i];
+    snprintf(buf, sizeof(buf), "nodes=%ld points=%ld allocs=%ld evicts=%ld live_bytes=%ld",
+             g_dist_nodes, g_dist_ring_n, g_dist_allocs, g_dist_evicts, used);
+    return buf;
+}
+
+/* SAFE boundary enforcement: payloads at or below the channel
+   threshold must cross as copies (no shared buffers); larger payloads
+   may transfer zero-copy. Verifies the channel chose correctly and
+   flags violations in the audit ring. */
+tx_t plant_safe_boundary_copy(tx_t chanv, tx_t payload) {
+    plant_channel* ch = (plant_channel*)chanv;
+    if (!ch || !payload) return (tx_t)"0";
+    const char* p = _S(payload);
+    size_t n = strlen(p);
+    if (n <= (size_t)ch->threshold) {
+        if (ch->buf == payload) {
+            plant_audit_log("BOUNDARY_COPY", "copy required, shared buffer observed");
+            return (tx_t)"0";
+        }
+        return (tx_t)"1";
+    }
+    return (tx_t)"1";   /* zero-copy transfer allowed above threshold */
 }

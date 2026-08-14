@@ -19,12 +19,15 @@
 static void plant_print(tx_t s) { printf("%s\n", _S(s)); }
 static void* plant_env_alloc(size_t size) { void* p = malloc(size); if (p) plant_env_register(p); return p; }
 void plant_env_register(void* p); /* v0.48.36: closure env registry for TYPEOF/ANALYZE */
-static tx_t _cat(tx_t a, tx_t b) { const char* sa=_S(a), *sb=_S(b); if(!sa) sa=""; if(!sb) sb=""; size_t al=strlen(sa), bl=strlen(sb); char *r=malloc(al+bl+1); if(r){memcpy(r,sa,al);memcpy(r+al,sb,bl+1);} return r?r:a; }
+/* v0.48.37: the _cat family allocates from the fixed-size (64B) string
+   slab pool when the result fits, else from the heap; g_bal_bytes is
+   the BALANCED allocation counter reported by plant_mem_report. */
+static tx_t _cat(tx_t a, tx_t b) { const char* sa=_S(a), *sb=_S(b); if(!sa) sa=""; if(!sb) sb=""; size_t al=strlen(sa), bl=strlen(sb); size_t tot=al+bl+1; char *r=plant_str_slab_alloc(tot); if(!r)r=malloc(tot); if(r){memcpy(r,sa,al);memcpy(r+al,sb,bl+1);g_bal_bytes+=(long)tot;} return r?r:a; }
 /* v0.48.22-patch4 — flattened concatenation: one malloc per group of
    3/4 segments instead of one per pair. _cat3/_cat4 mirror _cat's
    NULL-to-"" coercion and fall back to the first argument on OOM. */
-static tx_t _cat3(tx_t a, tx_t b, tx_t c) { const char* sa=_S(a), *sb=_S(b), *sc=_S(c); if(!sa) sa=""; if(!sb) sb=""; if(!sc) sc=""; size_t al=strlen(sa), bl=strlen(sb), cl=strlen(sc); char *r=malloc(al+bl+cl+1); if(r){memcpy(r,sa,al);memcpy(r+al,sb,bl);memcpy(r+al+bl,sc,cl+1);} return r?r:a; }
-static tx_t _cat4(tx_t a, tx_t b, tx_t c, tx_t d) { const char* sa=_S(a), *sb=_S(b), *sc=_S(c), *sd=_S(d); if(!sa) sa=""; if(!sb) sb=""; if(!sc) sc=""; if(!sd) sd=""; size_t al=strlen(sa), bl=strlen(sb), cl=strlen(sc), dl=strlen(sd); char *r=malloc(al+bl+cl+dl+1); if(r){memcpy(r,sa,al);memcpy(r+al,sb,bl);memcpy(r+al+bl,sc,cl);memcpy(r+al+bl+cl,sd,dl+1);} return r?r:a; }
+static tx_t _cat3(tx_t a, tx_t b, tx_t c) { const char* sa=_S(a), *sb=_S(b), *sc=_S(c); if(!sa) sa=""; if(!sb) sb=""; if(!sc) sc=""; size_t al=strlen(sa), bl=strlen(sb), cl=strlen(sc); size_t tot=al+bl+cl+1; char *r=plant_str_slab_alloc(tot); if(!r)r=malloc(tot); if(r){memcpy(r,sa,al);memcpy(r+al,sb,bl);memcpy(r+al+bl,sc,cl+1);g_bal_bytes+=(long)tot;} return r?r:a; }
+static tx_t _cat4(tx_t a, tx_t b, tx_t c, tx_t d) { const char* sa=_S(a), *sb=_S(b), *sc=_S(c), *sd=_S(d); if(!sa) sa=""; if(!sb) sb=""; if(!sc) sc=""; if(!sd) sd=""; size_t al=strlen(sa), bl=strlen(sb), cl=strlen(sc), dl=strlen(sd); size_t tot=al+bl+cl+dl+1; char *r=plant_str_slab_alloc(tot); if(!r)r=malloc(tot); if(r){memcpy(r,sa,al);memcpy(r+al,sb,bl);memcpy(r+al+bl,sc,cl);memcpy(r+al+bl+cl,sd,dl+1);g_bal_bytes+=(long)tot;} return r?r:a; }
 static long _to_long(tx_t s) { const char* _s=_S(s); return _s ? atol(_s) : 0; }
 /* v0.48.22-patch4 — single-digit (0-9) fast path: static table instead
    of snprintf. _from_long funnels through _from_digit so every numeric

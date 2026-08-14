@@ -2944,6 +2944,41 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         GIVE isel + "  plant_print(plant_typeof(" + cval2 + "));\n".
     /IF.
 
+    # ── free_stmt: FREE x. → x = plant_mem_free((tx_t)x); ────
+    IF ntype IS "free_stmt",
+        REAP ftgt FROM _map_get, node, "target".
+        REAP fcv FROM translate_expr, ftgt.
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  " + fcv + " = plant_mem_free((tx_t)" + fcv + ");\n".
+    /IF.
+
+    # ── arc_link_stmt / arc_unlink_stmt: ARC LINK a TO b. ──
+    IF ntype IS "arc_link_stmt" OR ntype IS "arc_unlink_stmt",
+        REAP ap FROM _map_get, node, "parent".
+        REAP ac FROM _map_get, node, "child".
+        REAP avp FROM translate_expr, ap.
+        REAP avc FROM translate_expr, ac.
+        REAP isnp FROM expr_is_numeric, avp, nums.
+        IF isnp IS 1,
+            SET avp TO "_from_long(" + avp + ")".
+        /IF.
+        REAP isnc FROM expr_is_numeric, avc, nums.
+        IF isnc IS 1,
+            SET avc TO "_from_long(" + avc + ")".
+        /IF.
+        REAP isel FROM indent_str, indent.
+        IF ntype IS "arc_link_stmt",
+            GIVE isel + "  plant_arc_link((tx_t)" + avp + ", (tx_t)" + avc + ");\n".
+        /IF.
+        GIVE isel + "  plant_arc_unlink((tx_t)" + avp + ", (tx_t)" + avc + ");\n".
+    /IF.
+
+    # ── fast_reset_stmt: FAST RESET. → plant_fast_reset(); ──
+    IF ntype IS "fast_reset_stmt",
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  plant_fast_reset();\n".
+    /IF.
+
     # ── if_stmt: IF cond, body [ORIF cond2, body2]* [ELSE, bodyE] /IF. ─
     #    → if (c) { … } else if (c2) { … } else { … }  (v0.48.20)
     IF ntype IS "if_stmt",
@@ -3272,7 +3307,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         # after the body (see below).
         CREATE mmode(TX) TO _map_get(node, "mission_mode").
         CREATE mexit(TX) TO "".
-        IF mmode IS "FAST", SET mexit TO "  plant_fast_exit();\n". /IF.
+        IF mmode IS "FAST", SET mexit TO "  plant_fast_reset();\n  plant_fast_exit();\n". /IF.
         IF mmode IS "SAFE", SET mexit TO "  plant_safe_exit();\n". /IF.
         IF mmode IS "SMART", SET mexit TO "  plant_smart_exit(\"" + aname + "\");\n". /IF.
         IF mmode IS "PERSISTENT", SET mexit TO "  plant_persist_exit();\n". /IF.

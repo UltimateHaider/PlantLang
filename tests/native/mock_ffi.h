@@ -76,4 +76,14 @@ tx_t ffi_arc_finalized(void);
 tx_t ffi_persist_status(void);
 tx_t ffi_sleep(tx_t ms);
 
+/* v0.48.37 Memory Safety Layer (slabs, FREE, DistributedHeap) */
+tx_t ffi_mem_free(tx_t v);
+tx_t ffi_mem_report(void);
+tx_t ffi_mem_scan(void);
+tx_t ffi_dist_init(tx_t nodes);
+tx_t ffi_dist_alloc(tx_t size, tx_t key);
+tx_t ffi_dist_node(tx_t obj);
+tx_t ffi_dist_release(tx_t obj);
+tx_t ffi_dist_status(void);
+
 #endif

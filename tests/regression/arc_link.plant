@@ -1,0 +1,13 @@
+# arc_link — ARC LINK / ARC UNLINK statements add and drop strong
+# edges; a finalizer-bearing object with no refs finalizes (v0.48.37).
+ACTION main(),
+  CREATE a(TX) TO ffi_arc_alloc(16).
+  CREATE b(TX) TO ffi_arc_alloc(16).
+  CREATE f1(TX) TO ffi_arc_set_finalizer(a, "free_data").
+  CREATE f2(TX) TO ffi_arc_set_finalizer(b, "free_data").
+  ARC LINK a TO b.
+  ARC UNLINK a FROM b.
+  CREATE r1(TX) TO ffi_arc_release(a).
+  CREATE r2(TX) TO ffi_arc_release(b).
+  SHOW "finalized=" + ffi_arc_finalized().
+/ACTION.

@@ -1,0 +1,4 @@
+o1_node=3
+o2_node=3
+o3_node=1
+nodes=4 points=256 allocs=3 evicts=0 live_bytes=0

@@ -1,6 +1,68 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.37a — 2026 (Memory Safety Layer)
+
+### New Features
+- **`FREE x.`** (parser.plant + codegen_c.plant + plant_runtime.c): the
+  explicit-deallocation statement. `x` is passed to `plant_mem_free`,
+  which releases the storage through the correct allocator and writes
+  NULL back to the variable, so a double `FREE` is a no-op. The parser
+  requires an identifier target (`Error: FREE requires an identifier
+  target.`).
+- **`ARC LINK parent TO child.` / `ARC UNLINK parent FROM child.`**
+  (parser.plant + codegen_c.plant): statement forms of the v0.48.31
+  ARC edge API — the parent keeps the child alive (strong edge); UNLINK
+  drops it. A released object with zero references finalizes.
+- **`FAST RESET.`** (parser.plant + codegen_c.plant): releases the bump
+  heap mid-scope. In addition, every `WITH MISSION FAST` action now
+  emits `plant_fast_reset()` before `plant_fast_exit()` (RAII), so the
+  heap is empty when a FAST callee returns.
+- **Fixed-size string slab pool** (plant_runtime.c + plant_compat.h):
+  64-byte blocks over a single 1024-block region; the `_cat`/`_cat3`/
+  `_cat4` families allocate from the pool when the result fits and fall
+  back to `malloc`. `plant_mem_free` range-checks the pool before
+  freeing. The pool also grows the BALANCED allocation counter
+  (`g_bal_bytes`).
+- **`plant_mem_report`** (plant_runtime.c): a MAP of live bytes by
+  allocator owner — `arena` / `fast` / `arc` / `balanced` / `slab` —
+  backed by new per-allocator byte counters.
+- **`plant_mem_scan`** (plant_runtime.c): audit-ring scanner returning
+  a MAP with `fast_escalations`, `arc_allocs` / `arc_frees` /
+  `arc_live`, `arena_miss_pct`, `slab_blocks` and a `warnings` string
+  (`arc_churn`, `slab_exhausted`, `clean`).
+- **DistributedHeap** (plant_runtime.c): a consistent-hash ring (FNV-1a
+  over 64 virtual points per node) places ARC allocations onto
+  per-node segments; `plant_dist_alloc(node, key)` /
+  `plant_dist_node` / `plant_dist_release` / `plant_dist_status`, plus
+  lease-based per-node eviction when `MISSION CONFIG DIST_NODE_CAP` is
+  set. `MISSION CONFIG DIST_NODES` (1-64) rebuilds the ring.
+- **SAFE boundary verification** (plant_runtime.c): `plant_safe_boundary_copy`
+  checks that payloads at or below the channel threshold crossed as
+  copies and flags shared-buffer violations in the audit ring.
+
+### Fixes
+- Fixed a free-list construction bug in the slab pool where the first
+  block self-looped, so the pool could re-issue the same block after
+  1024 allocations (double-allocation corruption; this crashed the
+  self-hosting chain on some inputs).
+- `plant_dist_status` returned a dangling stack buffer; it now uses a
+  static buffer.
+
+### Tests
+- New regression tests: `mem_free` (double-free safety), `arc_link`
+  (LINK/UNLINK + finalizer counting), `fast_reset` (mid-scope reset),
+  `mem_report`, `mem_scan`, `fast_scope` (RAII reset on FAST exit),
+  `dist` (ring placement + status) and the negative `free_invalid`.
+- New mock_ffi wrappers: `ffi_mem_free`, `ffi_mem_report`,
+  `ffi_mem_scan`, `ffi_dist_init`, `ffi_dist_alloc`, `ffi_dist_node`,
+  `ffi_dist_release`, `ffi_dist_status`.
+
+### Documentation
+- `docs/EVAPORATE.md` documents the memory-safety architecture and the
+  verified state of each component against the runtime sources.
+
 ## v0.48.36 — 2026 (Now / Analyze / Typeof)
+ — 2026 (Now / Analyze / Typeof)
 
 ### New Features
 - **`NOW FORMAT : NAME.`** (lexer.plant + parser.plant + codegen_c.plant +

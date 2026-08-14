@@ -161,4 +161,17 @@ PlantArray* plant_string_split(const char* str, const char* delimiter);
 char*       plant_string_trim(const char* str);
 int64_t     plant_string_index_of(const char* str, const char* substr);
 
+/* ── v0.48.37: Memory Safety Layer (EVAPORATE) ── */
+extern long g_bal_bytes;                       /* BALANCED allocation counter */
+char*       plant_str_slab_alloc(size_t n);    /* fixed-size (64B) string slab */
+tx_t        plant_mem_free(tx_t v);            /* FREE statement: safe dealloc */
+tx_t        plant_mem_report(void);            /* MAP: live bytes by allocator owner */
+tx_t        plant_mem_scan(void);              /* audit scanner: anomalous patterns */
+tx_t        plant_dist_init(tx_t nodes);
+tx_t        plant_dist_alloc(tx_t size, tx_t key);
+tx_t        plant_dist_node(tx_t obj);
+tx_t        plant_dist_release(tx_t obj);
+tx_t        plant_dist_status(void);
+tx_t        plant_safe_boundary_copy(tx_t chan, tx_t payload); /* copy/transfer enforcement */
+
 #endif

@@ -1,0 +1,4 @@
+# mem_scan — audit scanner with warning flags (v0.48.37).
+ACTION main(),
+  SHOW plant_map_to_string(ffi_mem_scan()).
+/ACTION.

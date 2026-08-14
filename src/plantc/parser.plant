@@ -568,6 +568,73 @@ ACTION parse_typeof_stmt(tokens(LIST), pos(NUM)),
   GIVE plant_list_make(2, plant_list_make(4, "type", "typeof_stmt", "target", expr), p3).
 /ACTION.
 
+# v0.48.37 — FREE x. deallocates x via the slab-aware plant_mem_free
+#   and sets the variable to NULL (double-free safe). The target must
+#   be a plain identifier.
+ACTION parse_free_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP id_pair FROM consume, tokens, p2.
+  REAP id_name FROM tok_lex, id_pair[0].
+  REAP id_type FROM tok_type, id_pair[0].
+  REAP p3 FROM _second, id_pair.
+  IF id_type ISNT "IDENT",
+    CREATE dmsg(TX) TO "FREE requires an identifier target".
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", dmsg), p3).
+  /IF.
+  REAP dot_pair FROM consume, tokens, p3.
+  REAP p4 FROM _second, dot_pair.
+  GIVE plant_list_make(2, plant_list_make(4, "type", "free_stmt", "target", id_name), p4).
+/ACTION.
+
+# v0.48.37 — ARC LINK parent TO child. adds a strong edge (the parent
+#   keeps the child alive); ARC UNLINK parent FROM child. drops it.
+ACTION parse_arc_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP k_pair FROM consume, tokens, p2.
+  REAP k_lx FROM tok_lex, k_pair[0].
+  REAP p3 FROM _second, k_pair.
+  REAP a_pair FROM consume, tokens, p3.
+  REAP a_name FROM tok_lex, a_pair[0].
+  REAP p4 FROM _second, a_pair.
+  IF k_lx IS "LINK",
+    REAP t_pair FROM consume, tokens, p4.
+    REAP p5 FROM _second, t_pair.
+    REAP c_pair FROM consume, tokens, p5.
+    REAP c_name FROM tok_lex, c_pair[0].
+    REAP p6 FROM _second, c_pair.
+    REAP dot_pair FROM consume, tokens, p6.
+    REAP p7 FROM _second, dot_pair.
+    GIVE plant_list_make(2, plant_list_make(6, "type", "arc_link_stmt", "parent", a_name, "child", c_name), p7).
+  /IF.
+  REAP f_pair FROM consume, tokens, p4.
+  REAP p5 FROM _second, f_pair.
+  REAP c_pair FROM consume, tokens, p5.
+  REAP c_name FROM tok_lex, c_pair[0].
+  REAP p6 FROM _second, c_pair.
+  REAP dot_pair FROM consume, tokens, p6.
+  REAP p7 FROM _second, dot_pair.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "arc_unlink_stmt", "parent", a_name, "child", c_name), p7).
+/ACTION.
+
+# v0.48.37 — FAST RESET. releases the bump heap and closes the FAST
+#   scope (RAII counterpart of WITH MISSION FAST).
+ACTION parse_fast_reset_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP r_pair FROM consume, tokens, p2.
+  REAP r_lx FROM tok_lex, r_pair[0].
+  REAP p3 FROM _second, r_pair.
+  IF r_lx ISNT "RESET",
+    CREATE dmsg(TX) TO "FAST requires RESET".
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", dmsg), p3).
+  /IF.
+  REAP dot_pair FROM consume, tokens, p3.
+  REAP p4 FROM _second, dot_pair.
+  GIVE plant_list_make(2, plant_list_make(2, "type", "fast_reset_stmt"), p4).
+/ACTION.
+
 # v0.48.33 — GIVE val. returns val (give_stmt); GIVE val AS RESPONSE.
 #   replies on the active LISTEN request (respond_stmt node; the req
 #   slot is filled with the request variable tracked by the statement
@@ -887,7 +954,7 @@ ACTION parse_closure(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
   IF blx IS "(",
     REAP btok2 FROM peek, tokens, p5 + 1.
     REAP blx2 FROM tok_lex, btok2.
-    IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "TAKE" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE" OR blx2 IS "SORT" OR blx2 IS "SHAKE" OR blx2 IS "BRAID" OR blx2 IS "LINK" OR blx2 IS "HARVEST" OR blx2 IS "LISTEN" OR blx2 IS "CONST" OR blx2 IS "ROOT" OR blx2 IS "ROOT_SCOPE" OR blx2 IS "NOW" OR blx2 IS "ANALYZE" OR blx2 IS "TYPEOF",
+    IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "TAKE" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE" OR blx2 IS "SORT" OR blx2 IS "SHAKE" OR blx2 IS "BRAID" OR blx2 IS "LINK" OR blx2 IS "HARVEST" OR blx2 IS "LISTEN" OR blx2 IS "CONST" OR blx2 IS "ROOT" OR blx2 IS "ROOT_SCOPE" OR blx2 IS "NOW" OR blx2 IS "ANALYZE" OR blx2 IS "TYPEOF" OR blx2 IS "FREE" OR blx2 IS "ARC" OR blx2 IS "FAST",
       SET body_kind TO "block".
       CREATE clv(TX) TO "".
       # v0.48.35: the closure block is its own C scope → own table
@@ -1886,6 +1953,18 @@ ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), 
   /IF.
   IF lx IS "TYPEOF",
     REAP r FROM parse_typeof_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "FREE",
+    REAP r FROM parse_free_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "ARC",
+    REAP r FROM parse_arc_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "FAST",
+    REAP r FROM parse_fast_reset_stmt, tokens, pos.
     GIVE r.
   /IF.
   IF lx IS "GIVE",

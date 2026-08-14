@@ -453,4 +453,30 @@ tx_t ffi_sleep(tx_t ms) {
     return (tx_t)"0";
 }
 
+/* ── v0.48.37 Memory Safety Layer wrappers (slabs, FREE, DIST) ── */
+tx_t ffi_mem_free(tx_t v) {
+    return plant_mem_free(v);
+}
+tx_t ffi_mem_report(void) {
+    return plant_mem_report();
+}
+tx_t ffi_mem_scan(void) {
+    return plant_mem_scan();
+}
+tx_t ffi_dist_init(tx_t nodes) {
+    return plant_dist_init(nodes);
+}
+tx_t ffi_dist_alloc(tx_t size, tx_t key) {
+    return plant_dist_alloc(size, key);
+}
+tx_t ffi_dist_node(tx_t obj) {
+    return plant_dist_node(obj);
+}
+tx_t ffi_dist_release(tx_t obj) {
+    return plant_dist_release(obj);
+}
+tx_t ffi_dist_status(void) {
+    return plant_dist_status();
+}
+
 #endif /* MOCK_FFI_EXT_H */

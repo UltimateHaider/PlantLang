@@ -1,0 +1,10 @@
+# fast_scope — FAST action exit runs plant_fast_reset (RAII); the
+# heap is empty when the callee returns (v0.48.37).
+ACTION fast_work() WITH MISSION FAST,
+  CREATE h(TX) TO plant_fast_alloc(64).
+  GIVE h.
+/ACTION.
+ACTION main(),
+  CREATE h(TX) TO fast_work().
+  SHOW "used_after_scope=" + ffi_fast_used().
+/ACTION.

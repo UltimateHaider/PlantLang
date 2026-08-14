@@ -1,0 +1,15 @@
+# dist — DistributedHeap: consistent-hash ring placement, per-node
+# reporting, and lease-based eviction config (v0.48.37).
+ACTION main(),
+  CREATE r0(TX) TO ffi_dist_init(4).
+  CREATE o1(TX) TO ffi_dist_alloc(32, "alpha").
+  CREATE o2(TX) TO ffi_dist_alloc(16, "beta").
+  CREATE o3(TX) TO ffi_dist_alloc(8, "gamma").
+  SHOW "o1_node=" + ffi_dist_node(o1).
+  SHOW "o2_node=" + ffi_dist_node(o2).
+  SHOW "o3_node=" + ffi_dist_node(o3).
+  CREATE r1(TX) TO ffi_dist_release(o1).
+  CREATE r2(TX) TO ffi_dist_release(o2).
+  CREATE r3(TX) TO ffi_dist_release(o3).
+  SHOW ffi_dist_status().
+/ACTION.

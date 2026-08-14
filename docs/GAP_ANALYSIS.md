@@ -94,6 +94,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `LISTEN BRANCH ON port … LISTEN/.` + `GIVE … AS RESPONSE` | S | **S** | v0.48.33 (LISTEN ON port AS req. one-shot server, request MAP ok/method/path/headers/body, GIVE … AS RESPONSE replies 200 + Content-Length; bind failure → ok FALSE) |
 | `WAIT n.` (sync sleep) | S | **P** | only `plant_msleep` via external; no statement |
 | `ANALYZE x.` / `NOW FORMAT:*` / `TYPEOF x.` | S | **S** | v0.48.36 (structural runtime classifier `_plant_val_kind`, uniform `{type = …, size = …, keys = […]}` report, `bad-format:<NAME>` fallback, implicit null for undeclared targets) |
+| `FREE` / `ARC LINK|UNLINK` / `FAST RESET.` | S | **S** | v0.48.37a (slab-aware `plant_mem_free` with NULL-back write, ARC edge statements over `plant_arc_link`/`plant_arc_unlink`, mid-scope bump release; `FREE` of a literal is a user error as in C) |
 | `VERIFY "label", assertion.` / `SUITE … SUITE/.` / `STORMS`/`GIVES` | S | M | replaced by test-script harnesses |
 | `SHOW_VERIFY_SUMMARY` | S | M | |
 | `AWAIT` / `START` / `ASYNC IN` / `CANCEL` / `TRACE` | M (legacy had none) | **S** | new async engine, v0.48.3+ |
@@ -271,7 +272,15 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 4. **Re-wire the dormant POSIX sockets**: `HARVEST` (HTTP GET/POST via `plant_net_harvest`) and a minimal `LISTEN` server (or defer).
 5. **VEIN file handles** (TAP/ABSORB/INFUSE/SEAL) over `plant_file_*`.
 6. **`NOW`/`ANALYZE`/`TYPEOF` statements** over `std/time` + type tags — shipped v0.48.36 (statement + expression forms).
-7. **`CONST`/`ROOT` immutables** — shipped v0.48.35 (`CONST`/`ROOT`/`ROOT_SCOPE`).
+7. **Memory safety layer (EVAPORATE)** — shipped v0.48.37a: `FREE x.` /
+   `ARC LINK/UNLINK` / `FAST RESET.` statements, fixed-size string slabs
+   for `_cat` reuse, `plant_mem_report` / `plant_mem_scan` accounting,
+   DistributedHeap with a consistent-hash ring over ARC segments and
+   lease-based eviction (`MISSION CONFIG DIST_NODES`/`DIST_NODE_CAP`),
+   and RAII `plant_fast_reset` on FAST action exit. Architecture in
+   `docs/EVAPORATE.md`; true fork-based SAFE isolation remains an
+   architectural constraint (inline C bodies).
+8. **`CONST`/`ROOT` immutables** — shipped v0.48.35 (`CONST`/`ROOT`/`ROOT_SCOPE`).
 
 **Low effort / niche**
 8. **SPLIT/JOIN statement forms** (SORT/SHAKE shipped v0.48.29; BRAID/LINK shipped v0.48.31), `PICK`, `STOP IF` (shipped v0.48.25), `WAIT n.` statement, `ANY/ALL/HAS/IS_A` conditions, `LOCATE`/`NOTE` comments, brace-form ACTION bodies, TYPE aliases, single-quoted strings.

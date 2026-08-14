@@ -1,0 +1,6 @@
+# mem_report — allocator byte accounting by owner (v0.48.37).
+ACTION main(),
+  CREATE s(TX) TO "abc" + "def".
+  SHOW plant_map_to_string(ffi_mem_report()).
+  FREE s.
+/ACTION.

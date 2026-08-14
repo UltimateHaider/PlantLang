@@ -1,0 +1,11 @@
+# mem_free — FREE statement: deallocates a _cat string from the slab
+# pool, nulls the variable (double-free safe), and stays alive for
+# other strings (v0.48.37).
+ACTION main(),
+  CREATE s(TX) TO "abc" + "def".
+  CREATE t(TX) TO "xyz".
+  FREE s.
+  FREE s.
+  SHOW "after_free=" + s + "!".
+  SHOW "t_alive=" + t.
+/ACTION.

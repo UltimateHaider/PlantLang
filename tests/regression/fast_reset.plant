@@ -1,0 +1,7 @@
+# fast_reset — FAST RESET. releases the bump heap mid-scope (v0.48.37).
+ACTION main() WITH MISSION FAST,
+  CREATE h(TX) TO plant_fast_alloc(64).
+  SHOW "used_before=" + ffi_fast_used().
+  FAST RESET.
+  SHOW "used_after=" + ffi_fast_used().
+/ACTION.
