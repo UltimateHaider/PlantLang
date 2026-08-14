@@ -930,12 +930,32 @@ ACTION parse_show_stmt(tokens(LIST), pos(NUM)),
   GIVE plant_list_make(2, plant_list_make(4, "type", "show_stmt", "value", expr), p3).
 /ACTION.
 
-ACTION parse_give_stmt(tokens(LIST), pos(NUM)),
+# v0.48.33 — GIVE val. returns val (give_stmt); GIVE val AS RESPONSE.
+#   replies on the active LISTEN request (respond_stmt node; the req
+#   slot is filled with the request variable tracked by the statement
+#   loops, or stays empty when no LISTEN is bound in the block).
+ACTION parse_give_stmt(tokens(LIST), pos(NUM), clv(TX)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
-  REAP vpair FROM collect_value, tokens, p2.
+  CREATE gkws(LIST) TO plant_list_make(3, "AS", ")", ".").
+  REAP vpair FROM collect_until_keyword, tokens, p2, gkws.
   CREATE expr TO vpair[0].
   REAP p3 FROM _second, vpair.
+  REAP gtok FROM peek, tokens, p3.
+  REAP glx FROM tok_lex, gtok.
+  IF glx IS "AS",
+    REAP gtok2 FROM peek, tokens, p3 + 1.
+    REAP glx2 FROM tok_lex, gtok2.
+    IF glx2 IS "RESPONSE",
+      REAP as_pair FROM consume, tokens, p3.
+      REAP p4 FROM _second, as_pair.
+      REAP rs_pair FROM consume, tokens, p4.
+      REAP p5 FROM _second, rs_pair.
+      REAP dot_pair FROM consume, tokens, p5.
+      REAP p6 FROM _second, dot_pair.
+      GIVE plant_list_make(2, plant_list_make(6, "type", "respond_stmt", "content", expr, "req", clv), p6).
+    /IF.
+  /IF.
   GIVE plant_list_make(2, plant_list_make(4, "type", "give_stmt", "value", expr), p3).
 /ACTION.
 
@@ -1229,8 +1249,9 @@ ACTION parse_closure(tokens(LIST), pos(NUM)),
   IF blx IS "(",
     REAP btok2 FROM peek, tokens, p5 + 1.
     REAP blx2 FROM tok_lex, btok2.
-    IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "TAKE" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE" OR blx2 IS "SORT" OR blx2 IS "SHAKE" OR blx2 IS "BRAID" OR blx2 IS "LINK" OR blx2 IS "HARVEST",
+    IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "TAKE" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE" OR blx2 IS "SORT" OR blx2 IS "SHAKE" OR blx2 IS "BRAID" OR blx2 IS "LINK" OR blx2 IS "HARVEST" OR blx2 IS "LISTEN",
       SET body_kind TO "block".
+      CREATE clv(TX) TO "".
       REAP bp FROM consume, tokens, p5.
       REAP p6 FROM _second, bp.
       CREATE stmts(LIST) TO plant_list_make(0).
@@ -1244,13 +1265,17 @@ ACTION parse_closure(tokens(LIST), pos(NUM)),
           REAP p6 FROM _second, brp.
           BREAK 0.
         /IF.
-        REAP d_pair FROM parse_statement, tokens, p6.
+        REAP d_pair FROM parse_statement, tokens, p6, clv.
         CREATE decl TO d_pair[0].
         REAP p6 FROM _second, d_pair.
         IF decl > "",
           REAP dty FROM _map_get, decl, "type".
           IF dty IS "syntax_error",
             GIVE d_pair.
+          /IF.
+          IF dty IS "listen_stmt",
+            REAP dlv FROM _map_get, decl, "resp".
+            SET clv TO dlv.
           /IF.
           PUT decl INTO stmts.
         /IF.
@@ -1734,7 +1759,7 @@ ACTION parse_continue_stmt(tokens(LIST), pos(NUM)),
   GIVE plant_list_make(2, plant_list_make(2, "type", "continue_stmt"), p3).
 /ACTION.
 
-ACTION parse_if_stmt(tokens(LIST), pos(NUM)),
+ACTION parse_if_stmt(tokens(LIST), pos(NUM), clv(TX)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
   REAP cpair FROM collect_until, tokens, p2, ",".
@@ -1803,7 +1828,7 @@ ACTION parse_if_stmt(tokens(LIST), pos(NUM)),
       SET p4 TO p5.
       CONTINUE 0.
     /IF.
-    REAP stmt_pair FROM parse_statement, tokens, p4.
+    REAP stmt_pair FROM parse_statement, tokens, p4, clv.
     CREATE stmt TO stmt_pair[0].
     REAP p4 FROM _second, stmt_pair.
     IF stmt > "",
@@ -1826,7 +1851,7 @@ ACTION parse_if_stmt(tokens(LIST), pos(NUM)),
   /SEASON.
 /ACTION.
 
-ACTION parse_season_stmt(tokens(LIST), pos(NUM)),
+ACTION parse_season_stmt(tokens(LIST), pos(NUM), clv(TX)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
   REAP cpair FROM collect_until, tokens, p2, ",".
@@ -1851,7 +1876,7 @@ ACTION parse_season_stmt(tokens(LIST), pos(NUM)),
       REAP p7 FROM _second, dot.
       GIVE plant_list_make(2, plant_list_make(6, "type", "season_stmt", "cond", cond, "body", body), p7).
     /IF.
-    REAP stmt_pair FROM parse_statement, tokens, p4.
+    REAP stmt_pair FROM parse_statement, tokens, p4, clv.
     CREATE stmt TO stmt_pair[0].
     REAP p4 FROM _second, stmt_pair.
     IF stmt > "",
@@ -1873,7 +1898,7 @@ ACTION parse_season_stmt(tokens(LIST), pos(NUM)),
 # STEP defaults to 1; the STEP clause is detected in the collected
 # to-expression text (split on " STEP "); keywords are consumed
 # token-wise so nested parens and commas inside expressions survive.
-ACTION parse_cycle_stmt(tokens(LIST), pos(NUM)),
+ACTION parse_cycle_stmt(tokens(LIST), pos(NUM), clv(TX)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
   REAP tok FROM peek, tokens, p2.
@@ -1963,7 +1988,7 @@ ACTION parse_cycle_stmt(tokens(LIST), pos(NUM)),
       REAP p7 FROM _second, dot.
       GIVE plant_list_make(2, plant_list_make(16, "type", "cycle_stmt", "iterVar", ivar, "fromExpr", fromExpr, "toExpr", toExpr, "stepExpr", stepExpr, "listExpr", listExpr, "indexVar", indexVar, "body", body), p7).
     /IF.
-    REAP stmt_pair FROM parse_statement, tokens, p4.
+    REAP stmt_pair FROM parse_statement, tokens, p4, clv.
     CREATE stmt TO stmt_pair[0].
     REAP p4 FROM _second, stmt_pair.
     IF stmt > "",
@@ -2032,7 +2057,7 @@ ACTION parse_stop_if_stmt(tokens(LIST), pos(NUM)),
 #      weather_stmt { body, shelters, calm }
 #    shelters is a flat [type, bind, body, …] triple list; an
 #    untyped SHELTER is stored as the ANY_STORM catch-all.
-ACTION parse_weather_stmt(tokens(LIST), pos(NUM)),
+ACTION parse_weather_stmt(tokens(LIST), pos(NUM), clv(TX)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
   REAP tok FROM peek, tokens, p2.
@@ -2135,7 +2160,7 @@ ACTION parse_weather_stmt(tokens(LIST), pos(NUM)),
       SET p2 TO p3.
       CONTINUE 0.
     /IF.
-    REAP stmt_pair FROM parse_statement, tokens, p2.
+    REAP stmt_pair FROM parse_statement, tokens, p2, clv.
     CREATE stmt TO stmt_pair[0].
     REAP p2 FROM _second, stmt_pair.
     IF stmt > "",
@@ -2156,7 +2181,9 @@ ACTION parse_weather_stmt(tokens(LIST), pos(NUM)),
   /SEASON.
 /ACTION.
 
-ACTION parse_statement(tokens(LIST), pos(NUM)),
+# v0.48.33 — clv threads the active LISTEN request variable through
+#   the statement loops so GIVE ... AS RESPONSE. can bind to it.
+ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX)),
   SEASON TRUE,
     REAP tok FROM peek, tokens, pos.
     REAP tp FROM tok_type, tok.
@@ -2175,7 +2202,7 @@ ACTION parse_statement(tokens(LIST), pos(NUM)),
     GIVE r.
   /IF.
   IF lx IS "GIVE",
-    REAP r FROM parse_give_stmt, tokens, pos.
+    REAP r FROM parse_give_stmt, tokens, pos, clv.
     GIVE r.
   /IF.
   IF lx IS "SET",
@@ -2195,19 +2222,19 @@ ACTION parse_statement(tokens(LIST), pos(NUM)),
     GIVE r.
   /IF.
   IF lx IS "IF",
-    REAP r FROM parse_if_stmt, tokens, pos.
+    REAP r FROM parse_if_stmt, tokens, pos, clv.
     GIVE r.
   /IF.
   IF lx IS "SEASON",
-    REAP r FROM parse_season_stmt, tokens, pos.
+    REAP r FROM parse_season_stmt, tokens, pos, clv.
     GIVE r.
   /IF.
   IF lx IS "CYCLE",
-    REAP r FROM parse_cycle_stmt, tokens, pos.
+    REAP r FROM parse_cycle_stmt, tokens, pos, clv.
     GIVE r.
   /IF.
   IF lx IS "WEATHER",
-    REAP r FROM parse_weather_stmt, tokens, pos.
+    REAP r FROM parse_weather_stmt, tokens, pos, clv.
     GIVE r.
   /IF.
   IF lx IS "THROW",
@@ -2276,6 +2303,10 @@ ACTION parse_statement(tokens(LIST), pos(NUM)),
   /IF.
   IF lx IS "HARVEST",
     REAP r FROM parse_harvest_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "LISTEN",
+    REAP r FROM parse_listen_stmt, tokens, pos.
     GIVE r.
   /IF.
   # bare call: IDENT( or module:IDENT( → call_stmt (void FFI calls)
@@ -2392,6 +2423,32 @@ ACTION parse_harvest_stmt(tokens(LIST), pos(NUM)),
   GIVE plant_list_make(2, plant_list_make(14, "type", "harvest_stmt", "url", url, "resp", resp, "method", method, "payload", body, "headers", headers, "timeout", timeout), p5).
 /ACTION.
 
+# v0.48.33 — LISTEN ON port AS req. opens an HTTP server socket on
+#   the given port, waits for ONE client connection, reads and parses
+#   the HTTP request into a request MAP stored in req (keys:
+#   ok/method/path/headers/body plus an internal sock used by
+#   GIVE ... AS RESPONSE.). Binding: the GIVE ... AS RESPONSE.
+#   statement replies on the most recent LISTEN in the same block.
+#   AST: listen_stmt with port and resp.
+ACTION parse_listen_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP on_pair FROM consume, tokens, p2.
+  REAP p3 FROM _second, on_pair.
+  CREATE okws2(LIST) TO plant_list_make(3, "AS", ")", ".").
+  REAP opair FROM collect_until_keyword, tokens, p3, okws2.
+  CREATE port TO opair[0].
+  REAP p4 FROM _second, opair.
+  REAP as_pair FROM consume, tokens, p4.
+  REAP p5 FROM _second, as_pair.
+  REAP id_pair FROM consume, tokens, p5.
+  REAP reqname FROM tok_lex, id_pair[0].
+  REAP p6 FROM _second, id_pair.
+  REAP dot_pair FROM consume, tokens, p6.
+  REAP p7 FROM _second, dot_pair.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "listen_stmt", "port", port, "resp", reqname), p7).
+/ACTION.
+
 #── Declaration parsing ────────────────────────────────────────
 
 ACTION parse_enum_decl(tokens(LIST), pos(NUM)),
@@ -2500,6 +2557,8 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
   REAP name_pair FROM consume, tokens, p2.
   REAP aname FROM tok_lex, name_pair[0].
   REAP p3 FROM _second, name_pair.
+  # v0.48.33: active LISTEN request variable for GIVE ... AS RESPONSE.
+  CREATE clv(TX) TO "".
   # async priority modifier (default NORMAL=1)
   CREATE prio(TX) TO "1".
   # v0.48.15: mission mode (default BALANCED; WITH MISSION FAST/SAFE)
@@ -2750,7 +2809,7 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
       REAP p8 FROM _second, dot.
       GIVE plant_list_make(2, plant_list_make(16, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", body, "prio", prio, "ret", ret, "mission_mode", mission_mode), p8).
     /IF.
-    REAP stmt_pair FROM parse_statement, tokens, p5.
+    REAP stmt_pair FROM parse_statement, tokens, p5, clv.
     CREATE stmt TO stmt_pair[0].
     REAP p5 FROM _second, stmt_pair.
     IF stmt > "",
@@ -2758,12 +2817,16 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM)),
       IF sty IS "syntax_error",
         GIVE stmt_pair.
       /IF.
+      IF sty IS "listen_stmt",
+        REAP slv FROM _map_get, stmt, "resp".
+        SET clv TO slv.
+      /IF.
       PUT stmt INTO body.
     /IF.
   /SEASON.
 /ACTION.
 
-ACTION parse_declaration(tokens(LIST), pos(NUM)),
+ACTION parse_declaration(tokens(LIST), pos(NUM), clv(TX)),
   REAP tok FROM peek, tokens, pos.
   REAP lx FROM tok_lex, tok.
   IF lx IS "ENUM",
@@ -2799,7 +2862,7 @@ ACTION parse_declaration(tokens(LIST), pos(NUM)),
     REAP r FROM parse_mission_stmt, tokens, pos.
     GIVE r.
   /IF.
-  REAP r FROM parse_statement, tokens, pos.
+  REAP r FROM parse_statement, tokens, pos, clv.
   GIVE r.
 /ACTION.
 
@@ -2821,13 +2884,14 @@ ACTION map_add(m(LIST), k(TX), v(TX)),
 
 ACTION parse_program(tokens(LIST)),
   CREATE pos(NUM) TO 0.
+  CREATE clv(TX) TO "".
   CREATE nodes(LIST) TO plant_list_make(0).
   SEASON TRUE,
     REAP is_eof_flag FROM is_eof, tokens, pos.
     IF is_eof_flag,
       GIVE plant_list_make(4, "type", "program", "body", nodes).
     /IF.
-    REAP d_pair FROM parse_declaration, tokens, pos.
+    REAP d_pair FROM parse_declaration, tokens, pos, clv.
     CREATE decl TO d_pair[0].
     REAP pos2 FROM _second, d_pair.
     IF decl > "",
@@ -2835,6 +2899,10 @@ ACTION parse_program(tokens(LIST)),
       IF dty IS "syntax_error",
         REAP dmsg FROM _map_get, decl, "msg".
         GIVE plant_list_make(6, "type", "program", "body", nodes, "error", dmsg).
+      /IF.
+      IF dty IS "listen_stmt",
+        REAP plv FROM _map_get, decl, "resp".
+        SET clv TO plv.
       /IF.
     /IF.
     IF pos2 <= pos,
@@ -5160,6 +5228,50 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         /IF.
         IF htmo IS "", SET htmo TO "0". /IF.
         GIVE isel + "  tx_t " + hresp + " = plant_net_harvest(" + hcurl + ", " + hmethod + ", " + hcbody + ", " + hhdr + ", " + htmo + ");\n".
+    /IF.
+
+    # ── listen_stmt: LISTEN ON port AS req. ───────────────────
+    #    tx_t req = plant_net_listen(port);   (v0.48.33)
+    #    req is a NEW variable → declare. port is a numeric literal
+    #    or a raw expression translated as-is.
+    IF ntype IS "listen_stmt",
+        REAP ls_port FROM _map_get, node, "port".
+        REAP ls_resp FROM _map_get, node, "resp".
+        REAP isel FROM indent_str, indent.
+        CREATE lsp(TX) TO ls_port.
+        IF lsp > "",
+            REAP lsp0 FROM substring, lsp, 0, 1.
+            IF lsp0 ISNT "\"",
+                REAP lsp1 FROM translate_expr, lsp.
+                SET lsp TO lsp1.
+            /IF.
+        /IF.
+        GIVE isel + "  tx_t " + ls_resp + " = plant_net_listen(" + lsp + ");\n".
+    /IF.
+
+    # ── respond_stmt: GIVE body AS RESPONSE. ──────────────────
+    #    plant_net_respond(req, body);   (v0.48.33)
+    #    req names the request MAP from the nearest LISTEN in the
+    #    same block (resolved by the parser); an unbound statement
+    #    (no LISTEN in scope) is dropped silently.
+    IF ntype IS "respond_stmt",
+        REAP rs_body FROM _map_get, node, "content".
+        REAP rs_req FROM _map_get, node, "req".
+        IF rs_req IS "",
+            GIVE "".
+        /IF.
+        REAP isel FROM indent_str, indent.
+        CREATE rsb(TX) TO rs_body.
+        IF rsb > "",
+            REAP rsb0 FROM substring, rsb, 0, 1.
+            IF rsb0 ISNT "\"",
+                REAP rsb1 FROM translate_expr, rsb.
+                REAP rsb1 FROM _handle_cat, rsb1, nums, evars.
+                SET rsb TO rsb1.
+            /IF.
+        /IF.
+        IF rsb IS "", SET rsb TO "\"\"". /IF.
+        GIVE isel + "  plant_net_respond(" + rs_req + ", " + rsb + ");\n".
     /IF.
 
     # ── sort_stmt: SORT l [ASC|DESC] [BY f…]. → l = plant_sort(l, spec); ─
@@ -8482,7 +8594,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.48.32 (pure native)".
+  SHOW "Chloroplast 0.48.33 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

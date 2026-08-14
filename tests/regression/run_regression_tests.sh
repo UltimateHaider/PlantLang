@@ -14,9 +14,11 @@ mkdir -p "$BUILD"
 # start from an empty target each run)
 rm -f /tmp/plantlang_fs_append_*.txt
 # v0.48.32: local mock HTTP server for the HARVEST tests (started
-# only when such tests exist; python3 required, else tests fail)
+# only when such tests exist; python3 required, else tests fail).
+# v0.48.33: also started when LISTEN tests exist (listen_busy binds
+# the mock server's port to provoke a bind failure).
 MOCK_PID=
-if ls "$DIR"/harvest_*.plant >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+if { ls "$DIR"/harvest_*.plant >/dev/null 2>&1 || ls "$DIR"/listen_*.plant >/dev/null 2>&1; } && command -v python3 >/dev/null 2>&1; then
   python3 "$DIR/mock_http_server.py" >"$BUILD/mock_http_server.log" 2>&1 &
   MOCK_PID=$!
   sleep 1
@@ -60,6 +62,30 @@ for src in "$DIR"/*.plant; do
         -lm -ldl -o "$BUILD/$name" \
         >>"$BUILD/$name.compile.log" 2>&1; then
     echo "FAIL  $name (gcc)"; fail=$((fail+1)); continue
+  fi
+  # v0.48.33: LISTEN tests are one-shot servers — the .plant binary
+  # blocks on accept until a python client drives it. The client's
+  # reply report is appended after the server's stdout so one
+  # .expected file covers both sides. listen_busy needs no client
+  # (the mock server already holds its port).
+  if [ "${name#listen_}" != "$name" ] && [ "$name" != "listen_busy" ]; then
+    "$BUILD/$name" >"$BUILD/$name.out" 2>&1 &
+    spid=$!
+    case "$name" in
+      listen_malformed)
+        python3 "$DIR/listen_client.py" malformed 41237 >"$BUILD/$name.client" 2>&1
+        ;;
+      *)
+        python3 "$DIR/listen_client.py" request 41235 /hello?q=1 ping abc123 >"$BUILD/$name.client" 2>&1
+        ;;
+    esac
+    wait "$spid" 2>/dev/null
+    if cat "$BUILD/$name.out" "$BUILD/$name.client" 2>/dev/null | diff - "$DIR/$name.expected" >/dev/null; then
+      echo "PASS  $name"; pass=$((pass+1))
+    else
+      echo "FAIL  $name (output)"; fail=$((fail+1))
+    fi
+    continue
   fi
   if "$BUILD/$name" 2>&1 | diff - "$DIR/$name.expected" >/dev/null; then
     echo "PASS  $name"; pass=$((pass+1))

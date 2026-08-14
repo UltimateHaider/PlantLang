@@ -27,6 +27,10 @@ char* plant_net_read(int64_t fd);
 int64_t plant_net_write(int64_t fd, const char* data);
 void plant_net_close(int64_t fd);
 
+/* ── v0.48.33: HTTP Server ── */
+tx_t        plant_net_listen(int64_t port);                 /* request MAP: ok/method/path/headers/body (+ internal sock) */
+tx_t        plant_net_respond(tx_t req, tx_t body);         /* sends HTTP/1.1 200 OK + Content-Length, closes the connection */
+
 /* ── v0.42.0: Map Data Structure ── */
 
 typedef struct PlantMapEntry {

@@ -1,0 +1,11 @@
+# listen_busy: LISTEN failing on an occupied port (v0.48.33).
+# The mock server holds 41234, so the bind must fail immediately and
+# the request MAP must report ok FALSE without blocking.
+ACTION main(),
+  SHOW "busy start".
+  LISTEN ON 41234 AS req.
+  REAP bok FROM _map_get, req, "ok".
+  SHOW "busy ok = " + bok.
+  SHOW "busy done".
+  GIVE 0.
+/GIVE main.

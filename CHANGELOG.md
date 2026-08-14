@@ -1,5 +1,57 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.33 — 2026 (LISTEN / RESPONSE HTTP Server)
+
+### New Features
+- **`LISTEN ON port AS req.` statement** (parser.plant +
+  codegen_c.plant): `listen_stmt` AST node storing the port
+  expression and the request identifier; codegen declares the fresh
+  variable and emits `tx_t req = plant_net_listen(port);`. LISTEN
+  joins the statement dispatch and the block-body keyword list.
+- **`GIVE body AS RESPONSE.` statement**: `respond_stmt` AST node
+  (distinct from the `GIVE value.` return statement) storing the
+  response expression and the request variable it replies on; codegen
+  emits `plant_net_respond(req, body);`. Quoted literals pass
+  through, raw expressions go through the normal translation path.
+- **Response binding** (`parser.plant`): each statement-list loop
+  (program body, action bodies, closure block bodies) tracks the
+  most recent `listen_stmt` in the block as the *active request
+  context*; the binding threads through IF/SEASON/CYCLE/WEATHER
+  bodies via the new `clv` parameter (nested blocks inherit the
+  outer binding; a LISTEN inside a nested block binds only its own
+  block). A `GIVE ... AS RESPONSE.` with no LISTEN in scope is
+  dropped silently at codegen.
+- **`plant_net_listen(int64_t port)` runtime** (`plant_runtime.c` +
+  `plant_runtime.h`): opens a TCP socket (`SO_REUSEADDR`), binds,
+  listens with a backlog, accepts ONE client connection, closes the
+  listening socket, and reads the request (5s receive timeout, cap
+  of 1 MiB) into a request MAP with keys `ok` (`"TRUE"` once
+  accepted, `"FALSE"` when the port is unavailable), `method`,
+  `path`, `headers` (nested pair-list MAP), `body` (per
+  Content-Length), and an internal `sock` handle consumed by the
+  responder. Malformed/empty requests are accepted cleanly with
+  empty method/path/body strings.
+- **`plant_net_respond(req, body)` runtime**: builds an
+  `HTTP/1.1 200 OK` response with `Content-Type: text/plain` and
+  `Content-Length`, sends it on the request's socket, closes the
+  connection, and frees the boxed handle; NULL/sock-less requests
+  are safe no-ops.
+
+### Regression Tests
+- `listen_basic`: one-shot server on 41235 driven by the new
+  `listen_client.py` (request mode sends a POST with an X-Probe
+  header and payload); verifies request MAP parsing (ok/method/path/
+  body/header) and that the client receives `HTTP/1.1 200 OK` with
+  the `GIVE ... AS RESPONSE.` payload.
+- `listen_malformed`: client sends a non-HTTP line; the server stays
+  healthy, reports empty method/path, and still responds 200.
+- `listen_busy`: LISTEN on 41234 — the port held by the mock HTTP
+  server — fails fast with `ok = FALSE`.
+- `run_regression_tests.sh` starts the mock server whenever `listen_*`
+  tests exist and runs client-driven LISTEN tests (binary in the
+  background, client output appended after the server's stdout so one
+  `.expected` file covers both sides).
+
 ## v0.48.32 — 2026 (HARVEST HTTP Client)
 
 ### New Features

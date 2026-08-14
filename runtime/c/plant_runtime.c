@@ -272,6 +272,180 @@ tx_t plant_net_harvest(tx_t url, tx_t method, tx_t body, tx_t headers, int64_t t
     return (tx_t)out;
 }
 
+/* ── v0.48.33: plant_net_listen / plant_net_respond — HTTP server ─
+   LISTEN opens a listening socket on the port, waits for ONE client
+   connection, reads (5s receive timeout) and parses the HTTP request
+   into a request MAP:
+     ok      "TRUE" once a connection was accepted, else "FALSE"
+     method  HTTP method ("GET", "POST", ...; "" if malformed)
+     path    request target ("/foo"; "" if malformed)
+     headers nested MAP (pair list) of request headers
+     body    request payload (per Content-Length, "" if none)
+     sock    internal boxed socket fd consumed by plant_net_respond
+   The listening socket is closed right after the accept (single-request
+   server). plant_net_respond sends an HTTP/1.1 200 OK response with
+   Content-Type: text/plain and Content-Length, then closes the
+   connection; a NULL or sock-less request is a safe no-op. */
+tx_t plant_net_listen(int64_t port) {
+    PlantArray* req = plant_list_create(10);
+    req = plant_list_push(req, strdup("ok"));
+    req = plant_list_push(req, strdup("FALSE"));
+    req = plant_list_push(req, strdup("method"));
+    req = plant_list_push(req, strdup(""));
+    req = plant_list_push(req, strdup("path"));
+    req = plant_list_push(req, strdup(""));
+    req = plant_list_push(req, strdup("headers"));
+    req = plant_list_push(req, (void*)plant_list_create(0));
+    req = plant_list_push(req, strdup("body"));
+    req = plant_list_push(req, strdup(""));
+    int fd = plant_net_listen_open((int)port);
+    if (fd < 0) return (tx_t)req;
+    int cfd = plant_net_accept(fd);
+    plant_net_close(fd);
+    if (cfd < 0) return (tx_t)req;
+    long tv_sec = 5L;
+    struct timeval tv = { .tv_sec = tv_sec, .tv_usec = 0 };
+    setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+
+    char buf[8192];
+    char* raw = plant_alloc(1);
+    raw[0] = '\0';
+    int64_t need = -1;
+    for (;;) {
+        ssize_t r = recv(cfd, buf, sizeof(buf) - 1, 0);
+        if (r <= 0) break;
+        buf[r] = '\0';
+        char* old = raw;
+        size_t ol = strlen(old);
+        raw = plant_alloc(ol + (size_t)r + 1);
+        memcpy(raw, old, ol);
+        memcpy(raw + ol, buf, (size_t)r);
+        raw[ol + (size_t)r] = '\0';
+        plant_free(old);
+        if (ol + (size_t)r > 1048576) break;
+        const char* sep = strstr(raw, "\r\n\r\n");
+        if (sep) {
+            if (need < 0) {
+                const char* cl = strstr(raw, "Content-Length:");
+                if (cl && cl < sep) {
+                    need = strtoll(cl + 15, NULL, 10);
+                    if (need < 0) need = 0;
+                } else {
+                    need = 0;
+                }
+            }
+            size_t got = (size_t)(raw + strlen(raw) - (sep + 4));
+            if (got >= (size_t)need) break;
+        }
+    }
+
+    const char* sep = strstr(raw, "\r\n\r\n");
+    const char* resp_body = sep ? sep + 4 : raw + strlen(raw);
+    size_t body_len = (size_t)(raw + strlen(raw) - resp_body);
+    char* body_copy = plant_alloc(body_len + 1);
+    memcpy(body_copy, resp_body, body_len);
+    body_copy[body_len] = '\0';
+
+    char* method = plant_alloc(1);
+    char* path = plant_alloc(1);
+    method[0] = '\0';
+    path[0] = '\0';
+    const char* line_end = raw + strlen(raw);
+    const char* nl = memchr(raw, '\r', strlen(raw));
+    if (nl) line_end = nl;
+    size_t ll = (size_t)(line_end - raw);
+    if (ll > 0 && ll < 2048) {
+        char line[2048];
+        memcpy(line, raw, ll);
+        line[ll] = '\0';
+        char* sp1 = strchr(line, ' ');
+        char* sp2 = sp1 ? strchr(sp1 + 1, ' ') : NULL;
+        if (sp1 && sp2) {
+            size_t ml = (size_t)(sp1 - line);
+            size_t pl = (size_t)(sp2 - sp1 - 1);
+            if (ml > 0 && ml < 64) {
+                method = plant_alloc(ml + 1);
+                memcpy(method, line, ml);
+                method[ml] = '\0';
+            }
+            if (pl > 0 && pl < 1024) {
+                path = plant_alloc(pl + 1);
+                memcpy(path, sp1 + 1, pl);
+                path[pl] = '\0';
+            }
+        }
+    }
+
+    PlantArray* hdrs = plant_list_create(4);
+    const char* lp = raw;
+    const char* hend = sep ? sep : raw + strlen(raw);
+    while (lp < hend) {
+        const char* le = memchr(lp, '\r', (size_t)(hend - lp));
+        if (!le) break;
+        if (le == lp) break;
+        size_t ln = (size_t)(le - lp);
+        if (ln > 0 && ln < 512) {
+            const char* cc = memchr(lp, ':', ln);
+            if (cc) {
+                char hn[256], hv[512];
+                size_t kn = (size_t)(cc - lp);
+                if (kn > 255) kn = 255;
+                memcpy(hn, lp, kn); hn[kn] = '\0';
+                const char* vp = cc + 1;
+                while (vp < le && (*vp == ' ' || *vp == '\t')) vp++;
+                size_t vn = (size_t)(le - vp);
+                if (vn > 511) vn = 511;
+                memcpy(hv, vp, vn); hv[vn] = '\0';
+                if (kn > 0) {
+                    hdrs = plant_list_push(hdrs, strdup(hn));
+                    hdrs = plant_list_push(hdrs, strdup(hv));
+                }
+            }
+        }
+        lp = le + 2;
+        if (lp > hend) break;
+    }
+
+    int* boxed = (int*)plant_alloc(sizeof(int));
+    *boxed = cfd;
+    req = plant_list_push(req, strdup("sock"));
+    req = plant_list_push(req, (void*)boxed);
+    plant_list_set(req, 1, strdup("TRUE"));
+    plant_list_set(req, 3, strdup(method));
+    plant_list_set(req, 5, strdup(path));
+    plant_list_set(req, 7, (void*)hdrs);
+    plant_list_set(req, 9, strdup(body_copy));
+    plant_free(raw);
+    plant_free(method);
+    plant_free(path);
+    plant_free(body_copy);
+    return (tx_t)req;
+}
+
+tx_t plant_net_respond(tx_t req, tx_t body) {
+    PlantArray* m = (PlantArray*)req;
+    if (!m || m->magic != PLANT_ARRAY_MAGIC) return 0;
+    int64_t svi = -1;
+    for (int64_t i = 0; i + 1 < m->count; i += 2) {
+        if (m->items[i] && strcmp((const char*)m->items[i], "sock") == 0) {
+            svi = i + 1;
+            break;
+        }
+    }
+    if (svi < 0) return 0;
+    int fd = *(int*)m->items[svi];
+    const char* b = body ? (const char*)body : "";
+    char hdr[256];
+    int n = snprintf(hdr, sizeof(hdr),
+        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n",
+        strlen(b));
+    if (n > 0) plant_net_write(fd, hdr);
+    if (b[0]) plant_net_write(fd, b);
+    plant_net_close(fd);
+    plant_free(m->items[svi]);
+    return 0;
+}
+
 /* ── v0.41.0: plant_net_listen_open — TCP listener ── */
 int64_t plant_net_listen_open(int64_t port) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);

@@ -1,0 +1,22 @@
+# listen_basic: LISTEN + GIVE ... AS RESPONSE (v0.48.33).
+# Spins up a one-shot HTTP server on 41235, accepts a POST request,
+# prints the parsed request MAP fields, and replies with a fixed
+# payload via GIVE ... AS RESPONSE. Driven by listen_client.py.
+ACTION main(),
+  SHOW "listen start".
+  LISTEN ON 41235 AS req.
+  REAP lok FROM _map_get, req, "ok".
+  REAP lm FROM _map_get, req, "method".
+  REAP lp FROM _map_get, req, "path".
+  REAP lb FROM _map_get, req, "body".
+  SHOW "listen ok = " + lok.
+  SHOW "listen method = " + lm.
+  SHOW "listen path = " + lp.
+  SHOW "listen body = " + lb.
+  REAP hd2 FROM _map_get, req, "headers".
+  REAP probe FROM _map_get, hd2, "X-Probe".
+  SHOW "listen header = " + probe.
+  GIVE "hello from chloroplast" AS RESPONSE.
+  SHOW "listen responded".
+  GIVE 0.
+/GIVE main.

@@ -1,0 +1,17 @@
+# listen_malformed: LISTEN with a garbage request (v0.48.33).
+# The client connects and sends a non-HTTP line; the server must not
+# crash, must report empty method/path/body, and must still respond
+# with 200 so the client can read the reply.
+ACTION main(),
+  SHOW "malformed start".
+  LISTEN ON 41237 AS req.
+  REAP mok FROM _map_get, req, "ok".
+  REAP mm FROM _map_get, req, "method".
+  REAP mp FROM _map_get, req, "path".
+  SHOW "malformed ok = " + mok.
+  SHOW "malformed method = " + mm.
+  SHOW "malformed path = " + mp.
+  GIVE "" AS RESPONSE.
+  SHOW "malformed responded".
+  GIVE 0.
+/GIVE main.

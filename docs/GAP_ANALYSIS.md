@@ -91,7 +91,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `MATCH expr { Variant(b) -> … }` / `MATCH … IS … YIELD` | S | M | |
 | `TAP/ABSORB/INFUSE/SEAL` (VEIN files) | S | M | INFUSE/ABSORB/SEAL were parse stubs in legacy too |
 | `HARVEST "url" [METHOD:][BODY:][HEADERS:][TIMEOUT:]` | S | **S** | v0.48.32 (HTTP/1.1 client, response MAP ok/status/body/headers; timeout 0 → 5s; no TLS) |
-| `LISTEN BRANCH ON port … LISTEN/.` + `GIVE … AS RESPONSE` | S | M | |
+| `LISTEN BRANCH ON port … LISTEN/.` + `GIVE … AS RESPONSE` | S | **S** | v0.48.33 (LISTEN ON port AS req. one-shot server, request MAP ok/method/path/headers/body, GIVE … AS RESPONSE replies 200 + Content-Length; bind failure → ok FALSE) |
 | `WAIT n.` (sync sleep) | S | **P** | only `plant_msleep` via external; no statement |
 | `ANALYZE x.` | S | M | |
 | `VERIFY "label", assertion.` / `SUITE … SUITE/.` / `STORMS`/`GIVES` | S | M | replaced by test-script harnesses |
@@ -206,7 +206,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 ### 6.2 Legacy-only runtime features (M in current)
 - **Storms**: 13 typed exceptions (`ZERO_STORM` … `ANY_STORM`), `WEATHER/SHELTER/CALM`, `storm()` factory, location backfill. **v0.48.25 ships all 13 kinds**: the six core kinds (`ZERO_STORM`, `LOCK_STORM`, `MISSING_STORM`, `NETWORK_STORM`, `LOST_STORM`, `ANY_STORM`) plus the six additive classifications (`RANGE_STORM`, `TYPE_STORM`, `PARSE_STORM`, `HANDLE_STORM`, `HARVEST_STORM`, `FALL_STORM`) and `STOP_STORM` (the `STOP IF` classification), routed by the runtime's `plant_storm_match` against `AS e`-bound shelters with per-kind default messages, plus the `plant_calm` finalization pipeline (CALM runs on normal, caught, unmatched, and `GIVE`/`BREAK`/`CONTINUE` exits); still missing: the `storm()` factory and location backfill.
 - **Soil scope chain**: locked vars (`LOCK_STORM`), PULSE flags, `WHENEVER … CHANGES` watchers.
-- **HTTP server** (LISTEN, request MAPs, JSON bodies, `GIVE … AS RESPONSE`, SIGINT/SIGTERM lifecycle) — the C runtime's `plant_net_listen_open/accept/read/write/close` (v0.41-era POSIX sockets) are **not wired into the compiler**.
+- **HTTP server** (LISTEN, request MAPs, JSON bodies, `GIVE … AS RESPONSE`, SIGINT/SIGTERM lifecycle) — `LISTEN ON port AS req.` + `GIVE … AS RESPONSE` shipped in v0.48.33 (one-shot server, plain-text bodies); still missing: JSON bodies and a signal-driven request loop.
 - **HTTP client** (HARVEST via worker threads, NETWORK_STORM, `{ok,status,body,headers}` result) — `plant_net_harvest` exists in the C runtime but is also **unwired**.
 - **VEIN file handles** (TAP/ABSORB/INFUSE/SEAL) — partially stub-inherited from legacy itself.
 - **VERIFY/SUITE** test framework + `SHOW_VERIFY_SUMMARY` (replaced by shell harnesses).

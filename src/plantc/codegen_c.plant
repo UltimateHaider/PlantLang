@@ -2316,6 +2316,50 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         GIVE isel + "  tx_t " + hresp + " = plant_net_harvest(" + hcurl + ", " + hmethod + ", " + hcbody + ", " + hhdr + ", " + htmo + ");\n".
     /IF.
 
+    # ── listen_stmt: LISTEN ON port AS req. ───────────────────
+    #    tx_t req = plant_net_listen(port);   (v0.48.33)
+    #    req is a NEW variable → declare. port is a numeric literal
+    #    or a raw expression translated as-is.
+    IF ntype IS "listen_stmt",
+        REAP ls_port FROM _map_get, node, "port".
+        REAP ls_resp FROM _map_get, node, "resp".
+        REAP isel FROM indent_str, indent.
+        CREATE lsp(TX) TO ls_port.
+        IF lsp > "",
+            REAP lsp0 FROM substring, lsp, 0, 1.
+            IF lsp0 ISNT "\"",
+                REAP lsp1 FROM translate_expr, lsp.
+                SET lsp TO lsp1.
+            /IF.
+        /IF.
+        GIVE isel + "  tx_t " + ls_resp + " = plant_net_listen(" + lsp + ");\n".
+    /IF.
+
+    # ── respond_stmt: GIVE body AS RESPONSE. ──────────────────
+    #    plant_net_respond(req, body);   (v0.48.33)
+    #    req names the request MAP from the nearest LISTEN in the
+    #    same block (resolved by the parser); an unbound statement
+    #    (no LISTEN in scope) is dropped silently.
+    IF ntype IS "respond_stmt",
+        REAP rs_body FROM _map_get, node, "content".
+        REAP rs_req FROM _map_get, node, "req".
+        IF rs_req IS "",
+            GIVE "".
+        /IF.
+        REAP isel FROM indent_str, indent.
+        CREATE rsb(TX) TO rs_body.
+        IF rsb > "",
+            REAP rsb0 FROM substring, rsb, 0, 1.
+            IF rsb0 ISNT "\"",
+                REAP rsb1 FROM translate_expr, rsb.
+                REAP rsb1 FROM _handle_cat, rsb1, nums, evars.
+                SET rsb TO rsb1.
+            /IF.
+        /IF.
+        IF rsb IS "", SET rsb TO "\"\"". /IF.
+        GIVE isel + "  plant_net_respond(" + rs_req + ", " + rsb + ");\n".
+    /IF.
+
     # ── sort_stmt: SORT l [ASC|DESC] [BY f…]. → l = plant_sort(l, spec); ─
     #    spec: "" = plain ASC | "DESC" = plain DESC | "f1:DESC,f2:ASC"
     IF ntype IS "sort_stmt",
