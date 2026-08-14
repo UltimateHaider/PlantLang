@@ -798,6 +798,35 @@ ACTION collect_used_walk(bd(LIST), used(LIST), declared(LIST)),
         PUT tgt INTO used.
       /IF.
     /IF.
+    # v0.48.36 — TYPEOF/ANALYZE on a bare identifier that is never
+    # declared (params, CREATE/LET) or REAP'd: auto-declare it as
+    # tx_t "" so the query runs against an empty (null) value instead
+    # of producing undeclared-identifier C. Expression targets
+    # (calls, concats) are left to the declared set.
+    IF ty IS "typeof_stmt" OR ty IS "analyze_stmt",
+      REAP tgt FROM _map_get, nd, "target".
+      REAP tid FROM is_identifier, tgt.
+      # NULL/TRUE/FALSE are C-side constants, never implicit vars
+      IF tid IS 1 AND tgt ISNT "NULL" AND tgt ISNT "TRUE" AND tgt ISNT "FALSE",
+        CREATE found(NUM) TO 0.
+        CREATE fi(NUM) TO 0.
+        CREATE fe(TX) TO "".
+        SEASON fi < COUNT declared,
+          REAP fe FROM plant_list_get, declared, fi.
+          IF str_eq(fe, tgt) IS "1", SET found TO 1. /IF.
+          SET fi TO fi + 1.
+        /SEASON.
+        SET fi TO 0.
+        SEASON fi < COUNT used,
+          REAP fe FROM plant_list_get, used, fi.
+          IF str_eq(fe, tgt) IS "1", SET found TO 1. /IF.
+          SET fi TO fi + 1.
+        /SEASON.
+        IF NOT found,
+          PUT tgt INTO used.
+        /IF.
+      /IF.
+    /IF.
     IF ty IS "if_stmt",
       REAP ib FROM _if_bodies, nd.
       CREATE ii2(NUM) TO 0.
@@ -1730,8 +1759,108 @@ ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIS
 # ──────────────────────────────────────────────────────────────
 #  translate_expr — PlantLang → C expression translation
 # ──────────────────────────────────────────────────────────────
+ACTION _ni_replace(e(TX)),
+    CREATE out(TX) TO "".
+    CREATE i(NUM) TO 0.
+    CREATE ins(TX) TO "0".
+    SEASON i < LEN(e),
+        REAP ch FROM char_at, e, i.
+        IF ins IS "0",
+            REAP pre1 FROM substring, e, i, i + 11.
+            IF pre1 IS "NOW FORMAT ",
+                REAP c1 FROM char_at, e, i + 11.
+                REAP c2 FROM char_at, e, i + 12.
+                IF c1 IS ":" AND c2 IS " ",
+                    CREATE nm(TX) TO "".
+                    CREATE j(NUM) TO i + 13.
+                    SEASON j < LEN(e),
+                        REAP jch FROM char_at, e, j.
+                        IF jch IS " " OR jch IS "\"" OR jch IS "(" OR jch IS ")" OR jch IS ".",
+                            BREAK 0.
+                        /IF.
+                        SET nm TO nm + jch.
+                        SET j TO j + 1.
+                    /SEASON.
+                    SET out TO out + "plant_now(" + "\"" + nm + "\"" + ")".
+                    SET i TO j.
+                    CONTINUE 0.
+                /IF.
+            /IF.
+            REAP pre2 FROM substring, e, i, i + 8.
+            IF pre2 IS "ANALYZE ",
+                CREATE dep(NUM) TO 0.
+                CREATE qs(TX) TO "0".
+                CREATE opr(TX) TO "".
+                CREATE j2(NUM) TO i + 8.
+                SEASON j2 < LEN(e),
+                    REAP jch FROM char_at, e, j2.
+                    IF jch IS "(", SET dep TO dep + 1. /IF.
+                    IF jch IS ")", SET dep TO dep - 1. /IF.
+                    IF jch IS "\"",
+                        SET qs TO _from_long(1 - _to_long(qs)).
+                    /IF.
+                    IF dep IS 0 AND qs IS "0",
+                        REAP p3 FROM substring, e, j2, j2 + 3.
+                        IF p3 IS " + ",
+                            BREAK 0.
+                        /IF.
+                    /IF.
+                    SET opr TO opr + jch.
+                    SET j2 TO j2 + 1.
+                /SEASON.
+                REAP opr FROM _ni_replace, opr.
+                SET out TO out + "plant_map_to_string(plant_analyze(" + opr + "))".
+                SET i TO j2.
+                CONTINUE 0.
+            /IF.
+            REAP pre3 FROM substring, e, i, i + 7.
+            IF pre3 IS "TYPEOF ",
+                CREATE dep2(NUM) TO 0.
+                CREATE qs2(TX) TO "0".
+                CREATE oprb(TX) TO "".
+                CREATE j3(NUM) TO i + 7.
+                SEASON j3 < LEN(e),
+                    REAP jch FROM char_at, e, j3.
+                    IF jch IS "(", SET dep2 TO dep2 + 1. /IF.
+                    IF jch IS ")", SET dep2 TO dep2 - 1. /IF.
+                    IF jch IS "\"",
+                        SET qs2 TO _from_long(1 - _to_long(qs2)).
+                    /IF.
+                    IF dep2 IS 0 AND qs2 IS "0",
+                        REAP p4 FROM substring, e, j3, j3 + 3.
+                        IF p4 IS " + ",
+                            BREAK 0.
+                        /IF.
+                    /IF.
+                    SET oprb TO oprb + jch.
+                    SET j3 TO j3 + 1.
+                /SEASON.
+                REAP oprb FROM _ni_replace, oprb.
+                SET out TO out + "plant_typeof(" + oprb + ")".
+                SET i TO j3.
+                CONTINUE 0.
+            /IF.
+        /IF.
+        IF ch IS "\"",
+            SET ins TO _from_long(1 - _to_long(ins)).
+        /IF.
+        SET out TO out + ch.
+        SET i TO i + 1.
+    /SEASON.
+    GIVE out.
+/ACTION.
+
 ACTION translate_expr(expr(TX)),
     CREATE e(TX) TO expr.
+    # ── v0.48.36 — temporal queries / introspection in expression
+    #    position: NOW [FORMAT : x] → plant_now("x"), ANALYZE x →
+    #    plant_analyze(x), TYPEOF x → plant_typeof(x). _ni_replace
+    #    walks the text quote-aware so string literals ("NOW", "… +
+    #    TYPEOF …") are never rewritten.
+    REAP e FROM _ni_replace, e.
+    IF e IS "NOW",
+        GIVE "plant_now(\"\")".
+    /IF.
     # ── START foo, args. in expression position: spawn and keep the
     #    task handle (tx_t) for later CANCEL / AWAIT on the child. ─
     REAP e0 FROM substring, e, 0, 6.
@@ -2780,6 +2909,39 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP bd8 FROM _map_get, node, "body".
         REAP bcode8 FROM generate_body, bd8, indent, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
         GIVE bcode8.
+    /IF.
+
+    # ── now_stmt: NOW [FORMAT:x]. → plant_print(plant_now(fmt)); ──
+    IF ntype IS "now_stmt",
+        REAP fmt0 FROM _map_get, node, "fmt".
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  plant_print(plant_now(\"" + fmt0 + "\"));\n".
+    /IF.
+
+    # ── analyze_stmt: ANALYZE x. → plant_print(plant_map_to_string(plant_analyze(x))); ─
+    IF ntype IS "analyze_stmt",
+        REAP tgt FROM _map_get, node, "target".
+        REAP cval FROM translate_expr, tgt.
+        REAP cval FROM _handle_cat, cval, nums, evars.
+        REAP isn2 FROM expr_is_numeric, cval, nums.
+        IF isn2 IS 1,
+            SET cval TO "_from_long(" + cval + ")".
+        /IF.
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  plant_print(plant_map_to_string(plant_analyze(" + cval + ")));\n".
+    /IF.
+
+    # ── typeof_stmt: TYPEOF x. → plant_print(plant_typeof(x)); ────
+    IF ntype IS "typeof_stmt",
+        REAP tgt2 FROM _map_get, node, "target".
+        REAP cval2 FROM translate_expr, tgt2.
+        REAP cval2 FROM _handle_cat, cval2, nums, evars.
+        REAP isn3 FROM expr_is_numeric, cval2, nums.
+        IF isn3 IS 1,
+            SET cval2 TO "_from_long(" + cval2 + ")".
+        /IF.
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  plant_print(plant_typeof(" + cval2 + "));\n".
     /IF.
 
     # ── if_stmt: IF cond, body [ORIF cond2, body2]* [ELSE, bodyE] /IF. ─

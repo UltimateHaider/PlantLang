@@ -50,6 +50,9 @@ ACTION is_keyword(wrd(TX)),
   IF wrd IS "LESS", GIVE TRUE. /IF.
   IF wrd IS "THAN", GIVE TRUE. /IF.
   IF wrd IS "COUNT", GIVE TRUE. /IF.
+  IF wrd IS "NOW", GIVE TRUE. /IF.
+  IF wrd IS "ANALYZE", GIVE TRUE. /IF.
+  IF wrd IS "TYPEOF", GIVE TRUE. /IF.
   IF wrd IS "FIRST", GIVE TRUE. /IF.
   IF wrd IS "LAST", GIVE TRUE. /IF.
   IF wrd IS "SUM", GIVE TRUE. /IF.
@@ -111,6 +114,9 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "LESS", GIVE "LESS". /IF.
   IF wrd IS "THAN", GIVE "THAN". /IF.
   IF wrd IS "COUNT", GIVE "COUNT". /IF.
+  IF wrd IS "NOW", GIVE "NOW". /IF.
+  IF wrd IS "ANALYZE", GIVE "ANALYZE". /IF.
+  IF wrd IS "TYPEOF", GIVE "TYPEOF". /IF.
   IF wrd IS "FIRST", GIVE "FIRST". /IF.
   IF wrd IS "LAST", GIVE "LAST". /IF.
   IF wrd IS "SUM", GIVE "SUM". /IF.
@@ -934,6 +940,78 @@ ACTION parse_show_stmt(tokens(LIST), pos(NUM)),
   GIVE plant_list_make(2, plant_list_make(4, "type", "show_stmt", "value", expr), p3).
 /ACTION.
 
+# v0.48.36 — NOW [FORMAT:x]. — temporal query statement. The format
+#   qualifier is optional (bare NOW. → default stamp); when present
+#   it must be written FORMAT:NAME (FORMAT, colon, identifier). The
+#   runtime routes the name to a formatting branch; unknown names are
+#   reported by plant_now itself (bad-format:<name>), so the parser
+#   accepts any identifier. AST node: now_stmt { fmt }.
+ACTION parse_now_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  CREATE fmt(TX) TO "".
+  REAP ntok FROM peek, tokens, p2.
+  REAP nlx FROM tok_lex, ntok.
+  IF nlx IS "FORMAT",
+    REAP fpair FROM consume, tokens, p2.
+    REAP p2 FROM _second, fpair.
+    REAP ctok FROM peek, tokens, p2.
+    REAP cty FROM tok_type, ctok.
+    IF cty ISNT "COLON",
+      GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "NOW FORMAT requires ':' before the format name"), p2).
+    /IF.
+    REAP cpair FROM consume, tokens, p2.
+    REAP p2 FROM _second, cpair.
+    REAP qpair FROM consume, tokens, p2.
+    REAP qlx FROM tok_lex, qpair[0].
+    REAP qty FROM tok_type, qpair[0].
+    REAP p2 FROM _second, qpair.
+    IF qty ISNT "IDENT",
+      GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "NOW FORMAT expects a format name after ':'"), p2).
+    /IF.
+    SET fmt TO qlx.
+  /IF.
+  REAP dpair FROM consume, tokens, p2.
+  REAP dlx FROM tok_lex, dpair[0].
+  REAP p3 FROM _second, dpair.
+  IF dlx ISNT ".",
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "NOW expects '.' after the format"), p2).
+  /IF.
+  GIVE plant_list_make(2, plant_list_make(4, "type", "now_stmt", "fmt", fmt), p3).
+/ACTION.
+
+# v0.48.36 — ANALYZE x. — structural introspection statement. The
+#   target is any expression; the runtime inspects the value and the
+#   statement prints the unified metadata MAP. AST node:
+#   analyze_stmt { target }.
+ACTION parse_analyze_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP vpair FROM collect_value, tokens, p2.
+  CREATE expr TO vpair[0].
+  REAP p3 FROM _second, vpair.
+  IF expr IS "" OR expr IS null,
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "ANALYZE requires a target expression"), p2).
+  /IF.
+  GIVE plant_list_make(2, plant_list_make(4, "type", "analyze_stmt", "target", expr), p3).
+/ACTION.
+
+# v0.48.36 — TYPEOF x. — type query statement. The target is any
+#   expression; the runtime resolves its type string ("int",
+#   "string", "map", "list", "closure", "null") and the statement
+#   prints it. AST node: typeof_stmt { target }.
+ACTION parse_typeof_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP vpair FROM collect_value, tokens, p2.
+  CREATE expr TO vpair[0].
+  REAP p3 FROM _second, vpair.
+  IF expr IS "" OR expr IS null,
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "TYPEOF requires a target expression"), p2).
+  /IF.
+  GIVE plant_list_make(2, plant_list_make(4, "type", "typeof_stmt", "target", expr), p3).
+/ACTION.
+
 # v0.48.33 — GIVE val. returns val (give_stmt); GIVE val AS RESPONSE.
 #   replies on the active LISTEN request (respond_stmt node; the req
 #   slot is filled with the request variable tracked by the statement
@@ -1253,7 +1331,7 @@ ACTION parse_closure(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
   IF blx IS "(",
     REAP btok2 FROM peek, tokens, p5 + 1.
     REAP blx2 FROM tok_lex, btok2.
-    IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "TAKE" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE" OR blx2 IS "SORT" OR blx2 IS "SHAKE" OR blx2 IS "BRAID" OR blx2 IS "LINK" OR blx2 IS "HARVEST" OR blx2 IS "LISTEN" OR blx2 IS "CONST" OR blx2 IS "ROOT" OR blx2 IS "ROOT_SCOPE",
+    IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "TAKE" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE" OR blx2 IS "SORT" OR blx2 IS "SHAKE" OR blx2 IS "BRAID" OR blx2 IS "LINK" OR blx2 IS "HARVEST" OR blx2 IS "LISTEN" OR blx2 IS "CONST" OR blx2 IS "ROOT" OR blx2 IS "ROOT_SCOPE" OR blx2 IS "NOW" OR blx2 IS "ANALYZE" OR blx2 IS "TYPEOF",
       SET body_kind TO "block".
       CREATE clv(TX) TO "".
       # v0.48.35: the closure block is its own C scope → own table
@@ -2240,6 +2318,18 @@ ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), 
   /IF.
   IF lx IS "SHOW",
     REAP r FROM parse_show_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "NOW",
+    REAP r FROM parse_now_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "ANALYZE",
+    REAP r FROM parse_analyze_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "TYPEOF",
+    REAP r FROM parse_typeof_stmt, tokens, pos.
     GIVE r.
   /IF.
   IF lx IS "GIVE",
@@ -3945,6 +4035,35 @@ ACTION collect_used_walk(bd(LIST), used(LIST), declared(LIST)),
         PUT tgt INTO used.
       /IF.
     /IF.
+    # v0.48.36 — TYPEOF/ANALYZE on a bare identifier that is never
+    # declared (params, CREATE/LET) or REAP'd: auto-declare it as
+    # tx_t "" so the query runs against an empty (null) value instead
+    # of producing undeclared-identifier C. Expression targets
+    # (calls, concats) are left to the declared set.
+    IF ty IS "typeof_stmt" OR ty IS "analyze_stmt",
+      REAP tgt FROM _map_get, nd, "target".
+      REAP tid FROM is_identifier, tgt.
+      # NULL/TRUE/FALSE are C-side constants, never implicit vars
+      IF tid IS 1 AND tgt ISNT "NULL" AND tgt ISNT "TRUE" AND tgt ISNT "FALSE",
+        CREATE found(NUM) TO 0.
+        CREATE fi(NUM) TO 0.
+        CREATE fe(TX) TO "".
+        SEASON fi < COUNT declared,
+          REAP fe FROM plant_list_get, declared, fi.
+          IF str_eq(fe, tgt) IS "1", SET found TO 1. /IF.
+          SET fi TO fi + 1.
+        /SEASON.
+        SET fi TO 0.
+        SEASON fi < COUNT used,
+          REAP fe FROM plant_list_get, used, fi.
+          IF str_eq(fe, tgt) IS "1", SET found TO 1. /IF.
+          SET fi TO fi + 1.
+        /SEASON.
+        IF NOT found,
+          PUT tgt INTO used.
+        /IF.
+      /IF.
+    /IF.
     IF ty IS "if_stmt",
       REAP ib FROM _if_bodies, nd.
       CREATE ii2(NUM) TO 0.
@@ -4877,8 +4996,108 @@ ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIS
 # ──────────────────────────────────────────────────────────────
 #  translate_expr — PlantLang → C expression translation
 # ──────────────────────────────────────────────────────────────
+ACTION _ni_replace(e(TX)),
+    CREATE out(TX) TO "".
+    CREATE i(NUM) TO 0.
+    CREATE ins(TX) TO "0".
+    SEASON i < LEN(e),
+        REAP ch FROM char_at, e, i.
+        IF ins IS "0",
+            REAP pre1 FROM substring, e, i, i + 11.
+            IF pre1 IS "NOW FORMAT ",
+                REAP c1 FROM char_at, e, i + 11.
+                REAP c2 FROM char_at, e, i + 12.
+                IF c1 IS ":" AND c2 IS " ",
+                    CREATE nm(TX) TO "".
+                    CREATE j(NUM) TO i + 13.
+                    SEASON j < LEN(e),
+                        REAP jch FROM char_at, e, j.
+                        IF jch IS " " OR jch IS "\"" OR jch IS "(" OR jch IS ")" OR jch IS ".",
+                            BREAK 0.
+                        /IF.
+                        SET nm TO nm + jch.
+                        SET j TO j + 1.
+                    /SEASON.
+                    SET out TO out + "plant_now(" + "\"" + nm + "\"" + ")".
+                    SET i TO j.
+                    CONTINUE 0.
+                /IF.
+            /IF.
+            REAP pre2 FROM substring, e, i, i + 8.
+            IF pre2 IS "ANALYZE ",
+                CREATE dep(NUM) TO 0.
+                CREATE qs(TX) TO "0".
+                CREATE opr(TX) TO "".
+                CREATE j2(NUM) TO i + 8.
+                SEASON j2 < LEN(e),
+                    REAP jch FROM char_at, e, j2.
+                    IF jch IS "(", SET dep TO dep + 1. /IF.
+                    IF jch IS ")", SET dep TO dep - 1. /IF.
+                    IF jch IS "\"",
+                        SET qs TO _from_long(1 - _to_long(qs)).
+                    /IF.
+                    IF dep IS 0 AND qs IS "0",
+                        REAP p3 FROM substring, e, j2, j2 + 3.
+                        IF p3 IS " + ",
+                            BREAK 0.
+                        /IF.
+                    /IF.
+                    SET opr TO opr + jch.
+                    SET j2 TO j2 + 1.
+                /SEASON.
+                REAP opr FROM _ni_replace, opr.
+                SET out TO out + "plant_map_to_string(plant_analyze(" + opr + "))".
+                SET i TO j2.
+                CONTINUE 0.
+            /IF.
+            REAP pre3 FROM substring, e, i, i + 7.
+            IF pre3 IS "TYPEOF ",
+                CREATE dep2(NUM) TO 0.
+                CREATE qs2(TX) TO "0".
+                CREATE oprb(TX) TO "".
+                CREATE j3(NUM) TO i + 7.
+                SEASON j3 < LEN(e),
+                    REAP jch FROM char_at, e, j3.
+                    IF jch IS "(", SET dep2 TO dep2 + 1. /IF.
+                    IF jch IS ")", SET dep2 TO dep2 - 1. /IF.
+                    IF jch IS "\"",
+                        SET qs2 TO _from_long(1 - _to_long(qs2)).
+                    /IF.
+                    IF dep2 IS 0 AND qs2 IS "0",
+                        REAP p4 FROM substring, e, j3, j3 + 3.
+                        IF p4 IS " + ",
+                            BREAK 0.
+                        /IF.
+                    /IF.
+                    SET oprb TO oprb + jch.
+                    SET j3 TO j3 + 1.
+                /SEASON.
+                REAP oprb FROM _ni_replace, oprb.
+                SET out TO out + "plant_typeof(" + oprb + ")".
+                SET i TO j3.
+                CONTINUE 0.
+            /IF.
+        /IF.
+        IF ch IS "\"",
+            SET ins TO _from_long(1 - _to_long(ins)).
+        /IF.
+        SET out TO out + ch.
+        SET i TO i + 1.
+    /SEASON.
+    GIVE out.
+/ACTION.
+
 ACTION translate_expr(expr(TX)),
     CREATE e(TX) TO expr.
+    # ── v0.48.36 — temporal queries / introspection in expression
+    #    position: NOW [FORMAT : x] → plant_now("x"), ANALYZE x →
+    #    plant_analyze(x), TYPEOF x → plant_typeof(x). _ni_replace
+    #    walks the text quote-aware so string literals ("NOW", "… +
+    #    TYPEOF …") are never rewritten.
+    REAP e FROM _ni_replace, e.
+    IF e IS "NOW",
+        GIVE "plant_now(\"\")".
+    /IF.
     # ── START foo, args. in expression position: spawn and keep the
     #    task handle (tx_t) for later CANCEL / AWAIT on the child. ─
     REAP e0 FROM substring, e, 0, 6.
@@ -5927,6 +6146,39 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP bd8 FROM _map_get, node, "body".
         REAP bcode8 FROM generate_body, bd8, indent, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
         GIVE bcode8.
+    /IF.
+
+    # ── now_stmt: NOW [FORMAT:x]. → plant_print(plant_now(fmt)); ──
+    IF ntype IS "now_stmt",
+        REAP fmt0 FROM _map_get, node, "fmt".
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  plant_print(plant_now(\"" + fmt0 + "\"));\n".
+    /IF.
+
+    # ── analyze_stmt: ANALYZE x. → plant_print(plant_map_to_string(plant_analyze(x))); ─
+    IF ntype IS "analyze_stmt",
+        REAP tgt FROM _map_get, node, "target".
+        REAP cval FROM translate_expr, tgt.
+        REAP cval FROM _handle_cat, cval, nums, evars.
+        REAP isn2 FROM expr_is_numeric, cval, nums.
+        IF isn2 IS 1,
+            SET cval TO "_from_long(" + cval + ")".
+        /IF.
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  plant_print(plant_map_to_string(plant_analyze(" + cval + ")));\n".
+    /IF.
+
+    # ── typeof_stmt: TYPEOF x. → plant_print(plant_typeof(x)); ────
+    IF ntype IS "typeof_stmt",
+        REAP tgt2 FROM _map_get, node, "target".
+        REAP cval2 FROM translate_expr, tgt2.
+        REAP cval2 FROM _handle_cat, cval2, nums, evars.
+        REAP isn3 FROM expr_is_numeric, cval2, nums.
+        IF isn3 IS 1,
+            SET cval2 TO "_from_long(" + cval2 + ")".
+        /IF.
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  plant_print(plant_typeof(" + cval2 + "));\n".
     /IF.
 
     # ── if_stmt: IF cond, body [ORIF cond2, body2]* [ELSE, bodyE] /IF. ─
@@ -8963,7 +9215,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.48.35 (pure native)".
+  SHOW "Chloroplast 0.48.36 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

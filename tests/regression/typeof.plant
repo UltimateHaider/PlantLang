@@ -1,0 +1,19 @@
+ACTION main(),
+  TYPEOF 42.
+  TYPEOF "abc".
+  CREATE n(NUM) TO 5.
+  TYPEOF n.
+  CREATE s(STRING) TO "hello".
+  TYPEOF s.
+  TYPEOF NULL.
+  TYPEOF undefined_var.
+  CREATE l(LIST) TO plant_list_make(3, "a", "b", "c").
+  TYPEOF l.
+  CREATE m(LIST) TO plant_list_make(2, "k", "v").
+  TYPEOF m.
+  CREATE f TO [MOVE x] -> x + 1.
+  TYPEOF f.
+  SHOW "t" + TYPEOF n.
+  SHOW "u" + TYPEOF NULL.
+  GIVE 0.
+/ACTION.

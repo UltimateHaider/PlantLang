@@ -2154,6 +2154,155 @@ tx_t time_sleep(tx_t seconds) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   v0.48.36 — NOW / ANALYZE / TYPEOF introspection & time utils
+   Implementations; signatures in plant_compat.h
+   ═══════════════════════════════════════════════════════════════ */
+
+/* _plant_val_kind: unified runtime value classification shared by
+   plant_typeof and plant_analyze. PlantLang values are untagged
+   C pointers, so the kind is inferred structurally: NULL pointers
+   and empty strings → "null"; small integer literals (raw long
+   bits from numeric expressions, e.g. 42 or a loop counter) →
+   "int"; PlantArray* with a "type"/"closure" header → "closure";
+   even-length pair lists → "map"; odd-length lists → "list";
+   pointers registered by plant_env_alloc → "closure" (boxed
+   closure environments); numeric text → "int"; anything else →
+   "string". */
+static PlantArray* _env_registry = NULL;
+
+void plant_env_register(void* p) {
+    if (!p) return;
+    if (!_env_registry) _env_registry = plant_list_create(64);
+    _env_registry = plant_list_add(_env_registry, (tx_t)p);
+}
+
+static int _is_env_ptr(void* p) {
+    if (!_env_registry) return 0;
+    for (int64_t i = 0; i < _env_registry->count; i++)
+        if (_env_registry->items[i] == p) return 1;
+    return 0;
+}
+
+static tx_t _plant_val_kind(tx_t v) {
+    if (!v) return strdup("null");
+    if ((uintptr_t)v < 4096) return strdup("int");
+    PlantArray* p = (PlantArray*)v;
+    if (p->magic == PLANT_ARRAY_MAGIC) {
+        if (p->count >= 2 && p->items[0] && strcmp(_S(p->items[0]), "type") == 0
+            && p->items[1] && strcmp(_S(p->items[1]), "closure") == 0)
+            return strdup("closure");
+        if (p->count % 2 == 0) return strdup("map");
+        return strdup("list");
+    }
+    if (_is_env_ptr(v)) return strdup("closure");
+    const char* s = _S(v);
+    if (!s || s[0] == 0) return strdup("null");
+    const char* q = s;
+    if (*q == '-') q++;
+    if (*q == 0) return strdup("string");
+    int dot = 0;
+    for (; *q; q++) {
+        if (*q == '.') { if (dot) return strdup("string"); dot = 1; continue; }
+        if (*q < '0' || *q > '9') return strdup("string");
+    }
+    return strdup("int");
+}
+
+/* plant_now: temporal query router. "DATE" → YYYY-MM-DD, "TIME" →
+   HH:MM:SS, "YEAR" → YYYY, "STAMP" (and the bare "" default) →
+   epoch seconds; any other format name is reported verbatim as
+   "bad-format:<name>" so unsupported formats stay deterministic. */
+tx_t plant_now(tx_t format) {
+    const char* fmt = _S(format);
+    if (!fmt) fmt = "";
+    if (strcmp(fmt, "DATE") == 0) return time_format(time_now(), "%Y-%m-%d");
+    if (strcmp(fmt, "TIME") == 0) return time_format(time_now(), "%H:%M:%S");
+    if (strcmp(fmt, "YEAR") == 0) return time_format(time_now(), "%Y");
+    if (strcmp(fmt, "STAMP") == 0 || strcmp(fmt, "") == 0) return time_now();
+    char b[64];
+    snprintf(b, sizeof(b), "bad-format:%s", fmt);
+    return strdup(b);
+}
+
+/* plant_analyze: structural introspection returning a uniform MAP
+   {type, size, keys}: type from _plant_val_kind; size is the byte
+   length for scalars, the pair count for maps, the element count
+   for lists (and the node entry count for closures); keys is the
+   flat key list for maps, the element list for lists, and an empty
+   list for scalars/closures. NULL/empty targets → type null, size
+   0, keys []. */
+tx_t plant_analyze(tx_t v) {
+    tx_t kind = _plant_val_kind(v);
+    char sb[64];
+    PlantArray* keys = plant_list_make(0);
+    if (strcmp(_S(kind), "null") == 0) {
+        snprintf(sb, sizeof(sb), "0");
+    } else if (strcmp(_S(kind), "int") == 0 || strcmp(_S(kind), "string") == 0) {
+        const char* s = _S(v);
+        snprintf(sb, sizeof(sb), "%zu", strlen(s ? s : ""));
+    } else {
+        PlantArray* p = (PlantArray*)v;
+        if (p && p->magic == PLANT_ARRAY_MAGIC) {
+            if (strcmp(_S(kind), "map") == 0) {
+                snprintf(sb, sizeof(sb), "%lld", (long long)(p->count / 2));
+                for (int64_t i = 0; i + 1 < p->count; i += 2)
+                    keys = plant_list_add(keys, p->items[i] ? _S(p->items[i]) : "");
+            } else if (strcmp(_S(kind), "closure") == 0) {
+                snprintf(sb, sizeof(sb), "%lld", (long long)p->count);
+            } else {
+                snprintf(sb, sizeof(sb), "%lld", (long long)p->count);
+                for (int64_t i = 0; i < p->count; i++)
+                    keys = plant_list_add(keys, p->items[i] ? _S(p->items[i]) : "");
+            }
+        } else {
+            /* boxed closure environment: opaque, no element count */
+            snprintf(sb, sizeof(sb), "0");
+        }
+    }
+    return (tx_t)plant_list_make(6, "type", _S(kind), "size", strdup(sb), "keys", keys);
+}
+
+/* plant_typeof: type string only — thin wrapper over the shared
+   classification. */
+tx_t plant_typeof(tx_t v) {
+    return _plant_val_kind(v);
+}
+
+/* _plant_ser: recursive map/list serializer used by
+   plant_map_to_string. Maps render "{k=v, k2=v2}", lists render
+   "[e1, e2]" and nested containers recurse; a depth cap of 8 keeps
+   accidental cycles from hanging the program. */
+static tx_t _plant_ser(tx_t v, int depth) {
+    if (depth > 8) return strdup("...");
+    if (!v) return strdup("null");
+    PlantArray* p = (PlantArray*)v;
+    if (p->magic != PLANT_ARRAY_MAGIC) {
+        const char* s = _S(v);
+        return strdup(s ? s : "");
+    }
+    if (p->count == 0) return strdup("[]");
+    int is_map = (p->count % 2 == 0);
+    tx_t res = strdup(is_map ? "{" : "[");
+    for (int64_t i = 0; i < p->count; i++) {
+        if (is_map && i % 2 == 0) {
+            if (i > 0) res = _cat(res, ", ");
+            res = _cat(res, p->items[i] ? _S(p->items[i]) : "null");
+            res = _cat(res, " = ");
+        } else {
+            if (!is_map && i > 0) res = _cat(res, ", ");
+            tx_t sv = p->items[i] ? _plant_ser(p->items[i], depth + 1) : strdup("null");
+            res = _cat(res, _S(sv));
+        }
+    }
+    res = _cat(res, is_map ? "}" : "]");
+    return res;
+}
+
+tx_t plant_map_to_string(tx_t v) {
+    return _plant_ser(v, 0);
+}
+
+/* ═══════════════════════════════════════════════════════════════
    v0.47.2 — Native Data Structures (Set / Queue / Stack)
    Implementations; signatures in plant_compat.h
    ═══════════════════════════════════════════════════════════════ */

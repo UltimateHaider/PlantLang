@@ -17,7 +17,8 @@
 #define _L(x) ((long)(x))
 #define _POS(x) _to_long(x)
 static void plant_print(tx_t s) { printf("%s\n", _S(s)); }
-static void* plant_env_alloc(size_t size) { return malloc(size); }
+static void* plant_env_alloc(size_t size) { void* p = malloc(size); if (p) plant_env_register(p); return p; }
+void plant_env_register(void* p); /* v0.48.36: closure env registry for TYPEOF/ANALYZE */
 static tx_t _cat(tx_t a, tx_t b) { const char* sa=_S(a), *sb=_S(b); if(!sa) sa=""; if(!sb) sb=""; size_t al=strlen(sa), bl=strlen(sb); char *r=malloc(al+bl+1); if(r){memcpy(r,sa,al);memcpy(r+al,sb,bl+1);} return r?r:a; }
 /* v0.48.22-patch4 — flattened concatenation: one malloc per group of
    3/4 segments instead of one per pair. _cat3/_cat4 mirror _cat's
@@ -385,6 +386,12 @@ tx_t time_now(void);                       /* epoch seconds as decimal TX */
 tx_t time_format(tx_t t, tx_t format);     /* strftime ("" on failure) */
 tx_t time_parse(tx_t str, tx_t format);    /* strptime → epoch seconds TX ("" on failure) */
 tx_t time_sleep(tx_t seconds);             /* fractional seconds supported; → "1" */
+
+/* ── v0.48.36 — NOW / ANALYZE / TYPEOF introspection ── */
+tx_t plant_now(tx_t format);       /* NOW FORMAT:x — DATE/TIME/STAMP/YEAR; "" → epoch; unknown → "bad-format:<x>" */
+tx_t plant_analyze(tx_t v);        /* introspection MAP {type, size, keys} (null-safe) */
+tx_t plant_typeof(tx_t v);         /* type string: "int"/"string"/"map"/"list"/"closure"/"null" */
+tx_t plant_map_to_string(tx_t v);  /* recursive "{k=v, ...}" / "[e1, ...]" serializer */
 
 /* ═══════════════════════════════════════════════════════════════
    v0.47.2 — Native Data Structures (Set / Queue / Stack)

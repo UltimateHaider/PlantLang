@@ -1,0 +1,4 @@
+ACTION main(),
+  NOW FORMAT DATE.
+  GIVE 0.
+/ACTION.

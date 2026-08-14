@@ -1,0 +1,7 @@
+{type = list, size = 3, keys = [red, green, blue]}
+{type = map, size = 3, keys = [name, kind, year]}
+{type = null, size = 0, keys = []}
+{type = int, size = 1, keys = []}
+{type = string, size = 3, keys = []}
+{type = string, size = 11, keys = []}
+s{type = int, size = 4, keys = []}

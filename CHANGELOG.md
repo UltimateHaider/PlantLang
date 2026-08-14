@@ -1,5 +1,54 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.36 — 2026 (Now / Analyze / Typeof)
+
+### New Features
+- **`NOW FORMAT : NAME.`** (lexer.plant + parser.plant + codegen_c.plant +
+  plant_runtime.c): the current date/time as a string. Supported format
+  names: `DATE` (`%Y-%m-%d`), `TIME` (`%H:%M:%S`), `YEAR` (`%Y`),
+  `STAMP` (Unix epoch). A bare `NOW.` (no FORMAT clause) also yields the
+  epoch. Unknown format names print the deterministic
+  `bad-format:<NAME>` string instead of failing, and the parser rejects a
+  FORMAT clause without `:` or without a name (`Error: NOW FORMAT requires
+  ':' before the format name.`).
+- **`TYPEOF x.`** (parser.plant + codegen_c.plant + plant_runtime.c):
+  prints the runtime type of `x` as one of `int` / `string` / `map` /
+  `list` / `closure` / `null`. Values are untagged at runtime, so the
+  shared `_plant_val_kind` classifier resolves them structurally: numeric
+  text (and C small integers) classify as `int`, `PlantArray` containers
+  with the even/odd heuristic as `map`/`list` (closure-shaped arrays and
+  registered closure environments as `closure`), and NULL as `null`. A
+  bare identifier target that is otherwise undeclared is implicitly
+  declared (like REAP targets) and therefore classifies as `null`.
+- **`ANALYZE x.`** (parser.plant + codegen_c.plant + plant_runtime.c):
+  prints a structural report as a uniform map
+  `{type = ..., size = ..., keys = [...]}` — `size` is the element/pair
+  count for list/map, the string length for strings/ints, 0 for
+  null/opaque closures; `keys` lists the elements (list), the key strings
+  (map), or is empty (scalars). Strings render via the new recursive
+  `plant_map_to_string`/`_plant_ser` serializer (depth-capped at 8,
+  maps as `{k = v, ...}`, lists as `[e1, ...]`, empty containers as `[]`).
+- **Expression forms** (codegen_c.plant): `NOW FORMAT : NAME`, `TYPEOF x`
+  and `ANALYZE x` are also usable inside expressions (e.g.
+  `SHOW "t" + TYPEOF n.`). The codegen's new quote-aware `_ni_replace`
+  text transformer rewrites these constructs at the token level in
+  `translate_expr`, recursing so nested forms
+  (e.g. `ANALYZE NOW FORMAT : YEAR`) compose, and the ANALYZE expression
+  form self-renders through `plant_map_to_string`.
+
+### Tests
+- `tests/regression/now.plant` — deterministic structural checks of all
+  four formats (string lengths via `ANALYZE`), the bad-format fallback,
+  bare-NOW typing, and concatenated expression forms.
+- `tests/regression/analyze.plant` — list/map/null/int/string reports
+  with element and key lists, plus `ANALYZE NOW FORMAT : YEAR` nesting.
+- `tests/regression/typeof.plant` — literals, NUM/STRING variables,
+  NULL, an implicitly-declared undefined variable, list/map/closure
+  values, and expression forms.
+- Negative pairs: `now_invalid.invalid` (missing `:`),
+  `typeof_invalid.invalid` (missing target).
+- Full suite green: native 20, generics 7, closures 6, regression 111.
+
 ## v0.48.35 — 2026 (Immutables: CONST / ROOT / ROOT_SCOPE)
 
 ### New Features

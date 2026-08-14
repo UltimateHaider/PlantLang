@@ -1,0 +1,4 @@
+ACTION main(),
+  TYPEOF.
+  GIVE 0.
+/ACTION.

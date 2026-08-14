@@ -50,6 +50,9 @@ ACTION is_keyword(wrd(TX)),
   IF wrd IS "LESS", GIVE TRUE. /IF.
   IF wrd IS "THAN", GIVE TRUE. /IF.
   IF wrd IS "COUNT", GIVE TRUE. /IF.
+  IF wrd IS "NOW", GIVE TRUE. /IF.
+  IF wrd IS "ANALYZE", GIVE TRUE. /IF.
+  IF wrd IS "TYPEOF", GIVE TRUE. /IF.
   IF wrd IS "FIRST", GIVE TRUE. /IF.
   IF wrd IS "LAST", GIVE TRUE. /IF.
   IF wrd IS "SUM", GIVE TRUE. /IF.
@@ -111,6 +114,9 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "LESS", GIVE "LESS". /IF.
   IF wrd IS "THAN", GIVE "THAN". /IF.
   IF wrd IS "COUNT", GIVE "COUNT". /IF.
+  IF wrd IS "NOW", GIVE "NOW". /IF.
+  IF wrd IS "ANALYZE", GIVE "ANALYZE". /IF.
+  IF wrd IS "TYPEOF", GIVE "TYPEOF". /IF.
   IF wrd IS "FIRST", GIVE "FIRST". /IF.
   IF wrd IS "LAST", GIVE "LAST". /IF.
   IF wrd IS "SUM", GIVE "SUM". /IF.

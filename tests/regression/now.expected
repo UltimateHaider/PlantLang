@@ -1,0 +1,8 @@
+{type = string, size = 10, keys = []}
+{type = string, size = 8, keys = []}
+{type = int, size = 4, keys = []}
+{type = int, size = 10, keys = []}
+bad-format:BOGUS
+int
+dstring
+tstring

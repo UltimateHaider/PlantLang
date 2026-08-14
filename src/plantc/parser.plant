@@ -496,6 +496,78 @@ ACTION parse_show_stmt(tokens(LIST), pos(NUM)),
   GIVE plant_list_make(2, plant_list_make(4, "type", "show_stmt", "value", expr), p3).
 /ACTION.
 
+# v0.48.36 — NOW [FORMAT:x]. — temporal query statement. The format
+#   qualifier is optional (bare NOW. → default stamp); when present
+#   it must be written FORMAT:NAME (FORMAT, colon, identifier). The
+#   runtime routes the name to a formatting branch; unknown names are
+#   reported by plant_now itself (bad-format:<name>), so the parser
+#   accepts any identifier. AST node: now_stmt { fmt }.
+ACTION parse_now_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  CREATE fmt(TX) TO "".
+  REAP ntok FROM peek, tokens, p2.
+  REAP nlx FROM tok_lex, ntok.
+  IF nlx IS "FORMAT",
+    REAP fpair FROM consume, tokens, p2.
+    REAP p2 FROM _second, fpair.
+    REAP ctok FROM peek, tokens, p2.
+    REAP cty FROM tok_type, ctok.
+    IF cty ISNT "COLON",
+      GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "NOW FORMAT requires ':' before the format name"), p2).
+    /IF.
+    REAP cpair FROM consume, tokens, p2.
+    REAP p2 FROM _second, cpair.
+    REAP qpair FROM consume, tokens, p2.
+    REAP qlx FROM tok_lex, qpair[0].
+    REAP qty FROM tok_type, qpair[0].
+    REAP p2 FROM _second, qpair.
+    IF qty ISNT "IDENT",
+      GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "NOW FORMAT expects a format name after ':'"), p2).
+    /IF.
+    SET fmt TO qlx.
+  /IF.
+  REAP dpair FROM consume, tokens, p2.
+  REAP dlx FROM tok_lex, dpair[0].
+  REAP p3 FROM _second, dpair.
+  IF dlx ISNT ".",
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "NOW expects '.' after the format"), p2).
+  /IF.
+  GIVE plant_list_make(2, plant_list_make(4, "type", "now_stmt", "fmt", fmt), p3).
+/ACTION.
+
+# v0.48.36 — ANALYZE x. — structural introspection statement. The
+#   target is any expression; the runtime inspects the value and the
+#   statement prints the unified metadata MAP. AST node:
+#   analyze_stmt { target }.
+ACTION parse_analyze_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP vpair FROM collect_value, tokens, p2.
+  CREATE expr TO vpair[0].
+  REAP p3 FROM _second, vpair.
+  IF expr IS "" OR expr IS null,
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "ANALYZE requires a target expression"), p2).
+  /IF.
+  GIVE plant_list_make(2, plant_list_make(4, "type", "analyze_stmt", "target", expr), p3).
+/ACTION.
+
+# v0.48.36 — TYPEOF x. — type query statement. The target is any
+#   expression; the runtime resolves its type string ("int",
+#   "string", "map", "list", "closure", "null") and the statement
+#   prints it. AST node: typeof_stmt { target }.
+ACTION parse_typeof_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP vpair FROM collect_value, tokens, p2.
+  CREATE expr TO vpair[0].
+  REAP p3 FROM _second, vpair.
+  IF expr IS "" OR expr IS null,
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "TYPEOF requires a target expression"), p2).
+  /IF.
+  GIVE plant_list_make(2, plant_list_make(4, "type", "typeof_stmt", "target", expr), p3).
+/ACTION.
+
 # v0.48.33 — GIVE val. returns val (give_stmt); GIVE val AS RESPONSE.
 #   replies on the active LISTEN request (respond_stmt node; the req
 #   slot is filled with the request variable tracked by the statement
@@ -815,7 +887,7 @@ ACTION parse_closure(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
   IF blx IS "(",
     REAP btok2 FROM peek, tokens, p5 + 1.
     REAP blx2 FROM tok_lex, btok2.
-    IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "TAKE" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE" OR blx2 IS "SORT" OR blx2 IS "SHAKE" OR blx2 IS "BRAID" OR blx2 IS "LINK" OR blx2 IS "HARVEST" OR blx2 IS "LISTEN" OR blx2 IS "CONST" OR blx2 IS "ROOT" OR blx2 IS "ROOT_SCOPE",
+    IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "TAKE" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE" OR blx2 IS "SORT" OR blx2 IS "SHAKE" OR blx2 IS "BRAID" OR blx2 IS "LINK" OR blx2 IS "HARVEST" OR blx2 IS "LISTEN" OR blx2 IS "CONST" OR blx2 IS "ROOT" OR blx2 IS "ROOT_SCOPE" OR blx2 IS "NOW" OR blx2 IS "ANALYZE" OR blx2 IS "TYPEOF",
       SET body_kind TO "block".
       CREATE clv(TX) TO "".
       # v0.48.35: the closure block is its own C scope → own table
@@ -1802,6 +1874,18 @@ ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), 
   /IF.
   IF lx IS "SHOW",
     REAP r FROM parse_show_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "NOW",
+    REAP r FROM parse_now_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "ANALYZE",
+    REAP r FROM parse_analyze_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "TYPEOF",
+    REAP r FROM parse_typeof_stmt, tokens, pos.
     GIVE r.
   /IF.
   IF lx IS "GIVE",
