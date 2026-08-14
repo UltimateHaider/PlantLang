@@ -15,8 +15,8 @@ ACTION main()
   SHOW "retain=" + ffi_arc_retain(o).
   SHOW "release1=" + ffi_arc_release(o).
   SHOW "release2=" + ffi_arc_release(o).
-  SHOW "cached=" + ffi_persist_status().
+  SHOW "cached=" + plant_map_to_string(ffi_persist_status()).
   CALL ffi_sleep(50).
   SHOW "gc=" + ffi_arc_gc().
-  SHOW "after=" + ffi_persist_status().
+  SHOW "after=" + plant_map_to_string(ffi_persist_status()).
 /ACTION.

@@ -167,6 +167,8 @@ char*       plant_str_slab_alloc(size_t n);    /* fixed-size (64B) string slab *
 tx_t        plant_mem_free(tx_t v);            /* FREE statement: safe dealloc */
 tx_t        plant_mem_report(void);            /* MAP: live bytes by allocator owner */
 tx_t        plant_mem_scan(void);              /* audit scanner: anomalous patterns */
+long        plant_lease_evict(void);              /* v0.48.37b: pressure-driven lease reclamation */
+long        plant_persist_pressure(void);         /* v0.48.37b: memory pressure % (0-100+) */
 tx_t        plant_dist_init(tx_t nodes);
 tx_t        plant_dist_alloc(tx_t size, tx_t key);
 tx_t        plant_dist_node(tx_t obj);

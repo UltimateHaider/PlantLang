@@ -3559,6 +3559,7 @@ static int  g_persist_active = 0;
 static long g_persist_cap_mask = 0;
 static long g_persist_cfg_gc_interval = 1000;
 static long g_persist_cfg_lease_ms = 0;
+static long g_persist_cfg_pressure = 0;   /* v0.48.37b: forced pressure (0 = auto) */
 
 /* Zero-Trust capability registry — default grants only */
 static int g_zt_inited = 0;
@@ -4194,6 +4195,9 @@ void plant_async_config(tx_t keyv, tx_t valv) {
     } else if (strcmp(key, "PERSIST_LEASE_MS") == 0) {
         long v = atol(val);
         if (v >= 0) g_persist_cfg_lease_ms = v;
+    } else if (strcmp(key, "PERSIST_PRESSURE") == 0) {
+        long v = atol(val);
+        if (v >= 0 && v <= 100) g_persist_cfg_pressure = v;
     }
 }
 
@@ -4431,6 +4435,7 @@ struct plant_arc_obj {
     char finalizer[PLANT_ARC_FINALIZER_NAME];
     plant_arc_link_edge* edges;   /* outgoing reference edges */
     long node;              /* v0.48.37: DistributedHeap node (-1 = local) */
+    char deferred;          /* v0.48.37b: queued for early lease eviction */
     plant_arc_obj* next;    /* heap list */
 };
 
@@ -4444,6 +4449,10 @@ static long g_arc_leased = 0;
 static long g_arc_gc_runs = 0;
 static long g_arc_reclaimed = 0;
 static long g_arc_live_bytes = 0;   /* v0.48.37 */
+#define PLANT_ARC_DEFERRED_MAX 512
+static plant_arc_obj* g_arc_deferred[PLANT_ARC_DEFERRED_MAX];
+static long g_pending_frees = 0;    /* deferred deallocations queued */
+static long g_persist_evicts = 0;   /* objects reclaimed by lease_evict */
 
 /* finalizer callbacks: registered by name so PlantLang tests can bind
    them without C function pointers; invoked on destruction */
@@ -4492,6 +4501,8 @@ static void plant_arc_destroy(plant_arc_obj* o, int reclaimed) {
 }
 
 static void plant_arc_destroy(plant_arc_obj* o, int reclaimed);
+long plant_persist_pressure(void);          /* v0.48.37b */
+long plant_lease_evict(void);               /* v0.48.37b */
 
 /* refs hit zero: a live lease keeps the object in the heap (the
    persistent cache path); otherwise it is finalized and freed */
@@ -4529,6 +4540,8 @@ tx_t plant_arc_alloc(tx_t sizev) {
     plant_audit_log("ARC_ALLOC", msg);
     /* automatic cycle detection every PERSIST_GC_INTERVAL allocations */
     if (g_arc_allocs % g_persist_cfg_gc_interval == 0) plant_arc_gc();
+    /* v0.48.37b: proactive lease eviction under memory pressure */
+    if (plant_persist_pressure() >= 80) plant_lease_evict();
     return (tx_t)o;
 }
 
@@ -4655,7 +4668,10 @@ static void plant_arc_mark(plant_arc_obj* o) {
    references (refs beyond their incoming edges); everything else is
    part of a reference cycle (or an expired zero-ref lease) and is
    reclaimed with its finalizers. Ultra-low overhead: the mark pass is
-   linear in live objects and runs every 1000 allocations. */
+   linear in live objects and runs every PERSIST_GC_INTERVAL allocations
+   (default 1000; MISSION CONFIG PERSIST_GC_INTERVAL = N adjusts the
+   schedule). The scan also drains the v0.48.37b deferred-eviction
+   queue as queued leases expire. */
 long plant_arc_gc(void) {
     g_arc_gc_runs++;
     long reclaimed = 0;
@@ -4667,11 +4683,23 @@ long plant_arc_gc(void) {
     while (o) {
         plant_arc_obj* nx = o->next;
         int lease_dead = o->refs == 0 && o->leased_until_ms > 0 && o->leased_until_ms <= now;
-        if (o->mark != 1 || lease_dead) {
+        if ((o->mark != 1 || lease_dead) && !o->deferred) {
             plant_arc_destroy(o, 1);
             reclaimed++;
         }
         o = nx;
+    }
+    /* v0.48.37b: drain the deferred-eviction queue as leases expire */
+    for (long i = 0; i < g_pending_frees; ) {
+        plant_arc_obj* d = g_arc_deferred[i];
+        if (d->leased_until_ms <= now) {
+            plant_arc_destroy(d, 1);
+            reclaimed++;
+            g_pending_frees--;
+            g_arc_deferred[i] = g_arc_deferred[g_pending_frees];
+        } else {
+            i++;
+        }
     }
     if (reclaimed > 0) {
         static char msg[96];
@@ -4697,13 +4725,83 @@ void plant_persist_exit(void) {
     plant_mode_pop();
 }
 
+/* v0.48.37b — memory pressure: % of the FAST bump heap in use
+   (secondary: ARC live bytes vs a 64MB soft cap). PERSIST_PRESSURE
+   overrides the computed value when configured (> 0). */
+long plant_persist_pressure(void) {
+    if (g_persist_cfg_pressure > 0) return g_persist_cfg_pressure;
+    plant_fast_init();
+    long p = 0;
+    if (g_fast.size > 0) p = (long)(g_fast.used * 100 / g_fast.size);
+    long arc_pct = (long)(g_arc_live_bytes * 100 / (64L * 1024 * 1024));
+    if (arc_pct > p) p = arc_pct;
+    return p;
+}
+
+/* v0.48.37b — proactive lease eviction. Under memory pressure:
+   - < 80% : leases run to natural expiry (no action).
+   - 80-89%: zero-ref leased objects that are expired or within the
+     PERSIST_LEASE_MS margin are QUEUED for reclamation (deferred);
+     the queue drains as the leases expire.
+   - >= 90%: every zero-ref leased object is released early (before
+     expiry) and the deferred queue is drained immediately.
+   Returns the number of objects reclaimed. */
+long plant_lease_evict(void) {
+    long p = plant_persist_pressure();
+    if (p < 80) return 0;
+    long now = plant_ms();
+    long margin = g_persist_cfg_lease_ms;
+    int critical = p >= 90;
+    long reclaimed = 0;
+    plant_arc_obj* o = g_arc_head;
+    while (o) {
+        plant_arc_obj* nx = o->next;
+        if (o->refs == 0 && o->leased_until_ms > 0 && !o->deferred) {
+            int expired = o->leased_until_ms <= now;
+            int near = margin > 0 && o->leased_until_ms - now <= margin;
+            if (expired || near || critical) {
+                if (critical || expired) {
+                    plant_arc_destroy(o, 1);
+                    reclaimed++;
+                } else if (g_pending_frees < PLANT_ARC_DEFERRED_MAX) {
+                    g_arc_deferred[g_pending_frees++] = o;
+                    o->deferred = 1;
+                    static char msg[96];
+                    snprintf(msg, sizeof(msg), "seq=%ld queued margin=%ld", o->alloc_seq, margin);
+                    plant_audit_log("LEASE_EVICT", msg);
+                }
+            }
+        }
+        o = nx;
+    }
+    if (critical && g_pending_frees > 0) {
+        while (g_pending_frees > 0) {
+            plant_arc_destroy(g_arc_deferred[--g_pending_frees], 1);
+            reclaimed++;
+        }
+    }
+    if (reclaimed > 0) {
+        static char msg[96];
+        snprintf(msg, sizeof(msg), "pressure=%ld reclaimed=%ld", p, reclaimed);
+        plant_audit_log("LEASE_EVICT", msg);
+        g_persist_evicts += reclaimed;
+    }
+    return reclaimed;
+}
+
+/* v0.48.37b — persistent heap diagnostics: a structured MAP with
+   live_objects (active allocations), gc_runs (cumulative GC cycles),
+   leased_count (objects under an active lease) and pending_frees
+   (deferred deallocations queued for reclamation). */
 tx_t plant_persist_status(void) {
-    static char buf[192];
-    snprintf(buf, sizeof(buf),
-             "live=%ld allocs=%ld frees=%ld finalizes=%ld leased=%ld gc_runs=%ld reclaimed=%ld",
-             g_arc_live, g_arc_allocs, g_arc_frees, g_arc_finalizes,
-             g_arc_leased, g_arc_gc_runs, g_arc_reclaimed);
-    return buf;
+    long leased = 0;
+    for (plant_arc_obj* o = g_arc_head; o; o = o->next)
+        if (o->leased_until_ms > 0) leased++;
+    return (tx_t)plant_list_make(8,
+        "live_objects", _from_long(g_arc_live),
+        "gc_runs", _from_long(g_arc_gc_runs),
+        "leased_count", _from_long(leased),
+        "pending_frees", _from_long(g_pending_frees));
 }
 
 tx_t plant_arc_finalize_count(void) {
@@ -4901,7 +4999,7 @@ static long plant_dist_evict(long node) {
     plant_arc_obj* o = g_arc_head;
     while (o) {
         plant_arc_obj* nx = o->next;
-        if (o->node == node &&
+        if (o->node == node && !o->deferred &&
             (o->refs <= 0 || (o->leased_until_ms > 0 && o->leased_until_ms <= now))) {
             g_dist_node_bytes[node] -= (long)o->size;
             plant_arc_destroy(o, 1);

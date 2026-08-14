@@ -3,4 +3,4 @@ link2=1
 relA=1
 relB=1
 manual=2
-auto=live=2500 allocs=2502 frees=2 finalizes=0 leased=0 gc_runs=3 reclaimed=2
+auto={live_objects = 2500, gc_runs = 3, leased_count = 0, pending_frees = 0}

@@ -1,0 +1,12 @@
+# persistent_gc_interval — GC scheduling adapts to a customized
+# PERSIST_GC_INTERVAL: with an interval of 3, ten automatic cycles
+# fire across thirty allocations (v0.48.37b).
+MISSION CONFIG PERSIST_GC_INTERVAL = 3.
+ACTION main()
+  CREATE k(NUM) TO 0.
+  SEASON k < 30,
+    CREATE h(NUM) TO ffi_arc_alloc(16).
+    SET k TO k + 1.
+  /SEASON.
+  SHOW plant_map_to_string(ffi_persist_status()).
+/ACTION.

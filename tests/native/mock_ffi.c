@@ -448,6 +448,12 @@ tx_t ffi_arc_finalized(void) {
 tx_t ffi_persist_status(void) {
     return plant_persist_status();
 }
+tx_t ffi_lease_evict(void) {
+    return _from_long(plant_lease_evict());
+}
+tx_t ffi_persist_pressure(void) {
+    return _from_long(plant_persist_pressure());
+}
 tx_t ffi_sleep(tx_t ms) {
     plant_msleep((long)ms);
     return (tx_t)"0";

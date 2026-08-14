@@ -1,0 +1,15 @@
+# persistent_lease_evict — PERSIST_PRESSURE simulates critical memory
+# pressure: lease_evict releases zero-ref leased objects BEFORE their
+# lease expires (v0.48.37b).
+MISSION CONFIG PERSIST_PRESSURE = 95.
+ACTION main()
+  CREATE o1(NUM) TO ffi_arc_alloc(64).
+  CREATE o2(NUM) TO ffi_arc_alloc(64).
+  SHOW "lease1=" + ffi_arc_lease(o1, 60000).
+  SHOW "lease2=" + ffi_arc_lease(o2, 60000).
+  SHOW "rel1=" + ffi_arc_release(o1).
+  SHOW "rel2=" + ffi_arc_release(o2).
+  SHOW "pressure=" + ffi_persist_pressure().
+  SHOW "evict=" + ffi_lease_evict().
+  SHOW plant_map_to_string(ffi_persist_status()).
+/ACTION.

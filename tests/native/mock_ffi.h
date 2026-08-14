@@ -74,6 +74,8 @@ tx_t ffi_arc_persist(tx_t obj);
 tx_t ffi_arc_gc(void);
 tx_t ffi_arc_finalized(void);
 tx_t ffi_persist_status(void);
+tx_t ffi_lease_evict(void);          /* v0.48.37b */
+tx_t ffi_persist_pressure(void);     /* v0.48.37b */
 tx_t ffi_sleep(tx_t ms);
 
 /* v0.48.37 Memory Safety Layer (slabs, FREE, DistributedHeap) */

@@ -18,5 +18,5 @@ ACTION main()
     CREATE h TO ffi_arc_alloc(16).
     SET k TO k + 1.
   /SEASON.
-  SHOW "auto=" + ffi_persist_status().
+  SHOW "auto=" + plant_map_to_string(ffi_persist_status()).
 /ACTION.

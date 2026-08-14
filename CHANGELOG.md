@@ -1,6 +1,47 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.37b — 2026 (PERSISTENT GC and Lease Enhancements)
+
+### New Features
+- **Dynamic GC intervals (`MISSION CONFIG PERSIST_GC_INTERVAL = N`)**:
+  automatic ARC cycle detection already read the configured interval
+  from the mission config handler; the scheduling path is now covered
+  by a targeted test (interval 3 fires exactly 10 cycles across 30
+  allocations) and the runtime comment no longer claims a fixed 1000.
+- **Proactive lease eviction (`lease_evict()`)** (plant_runtime.c):
+  new memory-pressure tracking (`plant_persist_pressure`: FAST bump
+  ratio primary, ARC live bytes vs a 64MB soft cap secondary, with
+  `MISSION CONFIG PERSIST_PRESSURE = N` forcing a simulated level).
+  Under pressure: below 80% leases run to expiry; 80-89% zero-ref
+  leased objects that are expired or within the `PERSIST_LEASE_MS`
+  margin are queued for reclamation; 90%+ destroys every zero-ref
+  leased object BEFORE its lease expires and drains the queue. The
+  allocator path triggers the check automatically each allocation.
+- **Deferred-free queue** (plant_runtime.c): `g_arc_deferred` holds
+  objects scheduled for early eviction; `plant_arc_gc` drains the
+  queue as the queued leases expire (objects are marked `deferred` so
+  GC and the DistributedHeap evictor skip them until the drain).
+- **`plant_persist_status()` now returns a structured MAP** with
+  `live_objects` / `gc_runs` / `leased_count` / `pending_frees`
+  (`leased_count` counts objects under an active lease, and
+  `pending_frees` is the deferred-queue length).
+
+### Changes
+- `ffi_persist_status` now returns a MAP; `persistent_cache.plant`
+  and `persistent_cycle.plant` render it with `plant_map_to_string`.
+- New mock_ffi wrappers: `ffi_lease_evict`, `ffi_persist_pressure`.
+
+### Tests
+- `persistent_gc_interval`: customized interval changes the GC
+  schedule (10 cycles at interval 3 over 30 allocations).
+- `persistent_lease_evict`: simulated critical pressure (95%) evicts
+  leased objects before a 60s lease expires.
+- `persistent_status`: moderate pressure (85%, 30ms margin) queues
+  20ms leases as `pending_frees = 2`, then a manual GC drains them
+  after expiry (live 2 → 0, gc_runs 0 → 1).
+
 ## v0.48.37a — 2026 (Memory Safety Layer)
+ — 2026 (Memory Safety Layer)
 
 ### New Features
 - **`FREE x.`** (parser.plant + codegen_c.plant + plant_runtime.c): the

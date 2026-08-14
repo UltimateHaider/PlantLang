@@ -1,0 +1,7 @@
+lease1=1
+lease2=1
+rel1=2
+rel2=2
+pressure=95
+evict=2
+{live_objects = 0, gc_runs = 0, leased_count = 0, pending_frees = 0}

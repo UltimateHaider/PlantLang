@@ -10578,7 +10578,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.37a (pure native)");
+      plant_print("Chloroplast 0.48.37b (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

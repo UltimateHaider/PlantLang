@@ -95,6 +95,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `WAIT n.` (sync sleep) | S | **P** | only `plant_msleep` via external; no statement |
 | `ANALYZE x.` / `NOW FORMAT:*` / `TYPEOF x.` | S | **S** | v0.48.36 (structural runtime classifier `_plant_val_kind`, uniform `{type = …, size = …, keys = […]}` report, `bad-format:<NAME>` fallback, implicit null for undeclared targets) |
 | `FREE` / `ARC LINK|UNLINK` / `FAST RESET.` | S | **S** | v0.48.37a (slab-aware `plant_mem_free` with NULL-back write, ARC edge statements over `plant_arc_link`/`plant_arc_unlink`, mid-scope bump release; `FREE` of a literal is a user error as in C) |
+| PERSISTENT GC/lease tuning | S | **S** | v0.48.37b (`PERSIST_GC_INTERVAL` dynamic scheduling, `lease_evict()` pressure-driven reclamation with `PERSIST_PRESSURE`/`PERSIST_LEASE_MS`, deferred-free queue, `plant_persist_status` MAP with `live_objects`/`gc_runs`/`leased_count`/`pending_frees`) |
 | `VERIFY "label", assertion.` / `SUITE … SUITE/.` / `STORMS`/`GIVES` | S | M | replaced by test-script harnesses |
 | `SHOW_VERIFY_SUMMARY` | S | M | |
 | `AWAIT` / `START` / `ASYNC IN` / `CANCEL` / `TRACE` | M (legacy had none) | **S** | new async engine, v0.48.3+ |
