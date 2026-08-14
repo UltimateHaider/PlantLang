@@ -1,0 +1,17 @@
+braid a = 1
+braid b = 2
+braid c = 3
+braid missing d = 
+shorter values a = 1
+shorter values b = 2
+shorter values c (excess key ignored) = 
+shorter keys x = 1
+shorter keys y = 2
+shorter keys value as key = 
+map braid a = 1
+map braid b = 2
+map braid c (absent, excess key dropped) = 
+dup key p (last wins) = 9
+dup key q = 2
+empty braid = done 
+empty map braid = done 

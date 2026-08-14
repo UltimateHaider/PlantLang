@@ -1,0 +1,78 @@
+# braid: BRAID l1 WITH l2 AS name [MAP] (v0.48.31).
+# Plain form zips two lists into a pair list; MAP form builds a map
+# treating list1 as keys and list2 as values with duplicate keys
+# collapsed (last value wins). Length mismatches ignore the excess
+# of the longer list; empty/NULL inputs yield an empty result.
+ACTION main(),
+  CREATE keys(LIST) TO plant_list_make(0).
+  PUT "a" INTO keys.
+  PUT "b" INTO keys.
+  PUT "c" INTO keys.
+  CREATE vals(LIST) TO plant_list_make(0).
+  PUT "1" INTO vals.
+  PUT "2" INTO vals.
+  PUT "3" INTO vals.
+
+  BRAID keys WITH vals AS pairs.
+  REAP va FROM _map_get, pairs, "a".
+  REAP vb FROM _map_get, pairs, "b".
+  REAP vc FROM _map_get, pairs, "c".
+  REAP vd FROM _map_get, pairs, "d".
+  SHOW "braid a = " + va.
+  SHOW "braid b = " + vb.
+  SHOW "braid c = " + vc.
+  SHOW "braid missing d = " + vd.
+
+  CREATE shortVals(LIST) TO plant_list_make(0).
+  PUT "1" INTO shortVals.
+  PUT "2" INTO shortVals.
+  BRAID keys WITH shortVals AS pairs2.
+  REAP sa FROM _map_get, pairs2, "a".
+  REAP sb FROM _map_get, pairs2, "b".
+  REAP sc FROM _map_get, pairs2, "c".
+  SHOW "shorter values a = " + sa.
+  SHOW "shorter values b = " + sb.
+  SHOW "shorter values c (excess key ignored) = " + sc.
+
+  CREATE shortKeys(LIST) TO plant_list_make(0).
+  PUT "x" INTO shortKeys.
+  PUT "y" INTO shortKeys.
+  BRAID shortKeys WITH vals AS pairs3.
+  REAP px FROM _map_get, pairs3, "x".
+  REAP py FROM _map_get, pairs3, "y".
+  REAP p1 FROM _map_get, pairs3, "1".
+  SHOW "shorter keys x = " + px.
+  SHOW "shorter keys y = " + py.
+  SHOW "shorter keys value as key = " + p1.
+
+  BRAID keys WITH shortVals AS m MAP.
+  REAP ma FROM _map_get, m, "a".
+  REAP mb FROM _map_get, m, "b".
+  REAP mc FROM _map_get, m, "c".
+  SHOW "map braid a = " + ma.
+  SHOW "map braid b = " + mb.
+  SHOW "map braid c (absent, excess key dropped) = " + mc.
+
+  CREATE dk(LIST) TO plant_list_make(0).
+  PUT "p" INTO dk.
+  PUT "q" INTO dk.
+  PUT "p" INTO dk.
+  CREATE dv(LIST) TO plant_list_make(0).
+  PUT "1" INTO dv.
+  PUT "2" INTO dv.
+  PUT "9" INTO dv.
+  BRAID dk WITH dv AS dm MAP.
+  REAP dp FROM _map_get, dm, "p".
+  REAP dq FROM _map_get, dm, "q".
+  SHOW "dup key p (last wins) = " + dp.
+  SHOW "dup key q = " + dq.
+
+  CREATE empty(LIST) TO plant_list_make(0).
+  BRAID empty WITH vals AS pe.
+  REAP e1 FROM _map_get, pe, "a".
+  SHOW "empty braid = done " + e1.
+  BRAID empty WITH empty AS me MAP.
+  REAP e2 FROM _map_get, me, "a".
+  SHOW "empty map braid = done " + e2.
+  GIVE 0.
+/GIVE main.

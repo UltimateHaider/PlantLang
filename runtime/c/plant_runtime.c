@@ -677,6 +677,75 @@ tx_t plant_list_remove(tx_t list, tx_t value) {
     return list;
 }
 
+/* ── v0.48.31 — BRAID / LINK ─────────────────────────────────
+   plant_braid zips two lists into a fresh pair list
+   [k0, v0, k1, v1, …]: when the inputs differ in length only the
+   min(countL, countR) leading pairs are produced and excess
+   elements of the longer list are safely ignored. NULL/invalid
+   inputs yield an empty pair list.
+   plant_braid_map builds a map from the same parallel lists: keys
+   are the first list, values the second; duplicate keys collapse
+   to a single entry with the LAST value (updated in place).
+   plant_link upserts into an existing map (pair list): an existing
+   key's value is replaced in place, otherwise a new key/value pair
+   is appended; a NULL/uninitialized target is instantiated. */
+
+tx_t plant_braid(tx_t left, tx_t right) {
+    PlantArray* a = (PlantArray*)left;
+    PlantArray* b = (PlantArray*)right;
+    PlantArray* out = plant_list_create(0);
+    if (!a || a->magic != PLANT_ARRAY_MAGIC || !b || b->magic != PLANT_ARRAY_MAGIC)
+        return (tx_t)out;
+    int64_t n = a->count < b->count ? a->count : b->count;
+    for (int64_t i = 0; i < n; i++) {
+        out = plant_list_push(out, a->items[i]);
+        out = plant_list_push(out, b->items[i]);
+    }
+    return (tx_t)out;
+}
+
+tx_t plant_braid_map(tx_t left, tx_t right) {
+    PlantArray* a = (PlantArray*)left;
+    PlantArray* b = (PlantArray*)right;
+    PlantArray* out = plant_list_create(0);
+    if (!a || a->magic != PLANT_ARRAY_MAGIC || !b || b->magic != PLANT_ARRAY_MAGIC)
+        return (tx_t)out;
+    int64_t n = a->count < b->count ? a->count : b->count;
+    for (int64_t i = 0; i < n; i++) {
+        const char* k = (const char*)a->items[i];
+        if (!k) continue;
+        int64_t j = 0;
+        int found = 0;
+        for (; j + 1 < out->count; j += 2) {
+            const char* ok = (const char*)out->items[j];
+            if (ok && strcmp(ok, k) == 0) { found = 1; break; }
+        }
+        if (found) out->items[j + 1] = b->items[i];
+        else {
+            out = plant_list_push(out, (void*)k);
+            out = plant_list_push(out, b->items[i]);
+        }
+    }
+    return (tx_t)out;
+}
+
+tx_t plant_link(tx_t map, tx_t key, tx_t value) {
+    PlantArray* m = (PlantArray*)map;
+    if (!m || m->magic != PLANT_ARRAY_MAGIC) m = plant_list_create(0);
+    const char* k = key ? (const char*)key : "";
+    int64_t i = 0;
+    for (; i + 1 < m->count; i += 2) {
+        const char* ok = (const char*)m->items[i];
+        if (ok && strcmp(ok, k) == 0) break;
+    }
+    if (i + 1 < m->count) m->items[i + 1] = value;
+    else {
+        m = plant_list_push(m, (void*)k);
+        m = plant_list_push(m, value);
+    }
+    return (tx_t)m;
+}
+
 /* ── v0.48.29 — SORT / SHAKE ──────────────────────────────────
    plant_sort: qsort over the list's items. spec is one of
      ""            plain element sort, ascending

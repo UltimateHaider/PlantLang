@@ -1,0 +1,11 @@
+first link k1 = v1
+first link k2 = v2
+pair count after 2 links = 4
+updated k1 = updated
+k2 unchanged = v2
+pair count after update = 4
+dup link k3 = v3b
+pair count after dup link = 6
+null target instantiated = beta
+null target second link = delta
+null target pair count = 4

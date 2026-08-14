@@ -1,0 +1,38 @@
+# link: LINK key WITH value IN map (v0.48.31).
+# Upsert semantics: an existing key's value is updated IN PLACE
+# (pair count unchanged), a new key appends a pair; duplicate LINKs
+# of the same key collapse to one entry; a NULL/uninitialized target
+# map is instantiated on first use.
+ACTION main(),
+  CREATE m(LIST) TO plant_list_make(0).
+  LINK "k1" WITH "v1" IN m.
+  LINK "k2" WITH "v2" IN m.
+  REAP g1 FROM _map_get, m, "k1".
+  REAP g2 FROM _map_get, m, "k2".
+  SHOW "first link k1 = " + g1.
+  SHOW "first link k2 = " + g2.
+  SHOW "pair count after 2 links = " + _from_long(COUNT m).
+
+  LINK "k1" WITH "updated" IN m.
+  REAP g3 FROM _map_get, m, "k1".
+  REAP g4 FROM _map_get, m, "k2".
+  SHOW "updated k1 = " + g3.
+  SHOW "k2 unchanged = " + g4.
+  SHOW "pair count after update = " + _from_long(COUNT m).
+
+  LINK "k3" WITH "v3" IN m.
+  LINK "k3" WITH "v3b" IN m.
+  REAP g5 FROM _map_get, m, "k3".
+  SHOW "dup link k3 = " + g5.
+  SHOW "pair count after dup link = " + _from_long(COUNT m).
+
+  CREATE fresh(LIST) TO NULL.
+  LINK "alpha" WITH "beta" IN fresh.
+  REAP g6 FROM _map_get, fresh, "alpha".
+  SHOW "null target instantiated = " + g6.
+  LINK "gamma" WITH "delta" IN fresh.
+  REAP g7 FROM _map_get, fresh, "gamma".
+  SHOW "null target second link = " + g7.
+  SHOW "null target pair count = " + _from_long(COUNT fresh).
+  GIVE 0.
+/GIVE main.

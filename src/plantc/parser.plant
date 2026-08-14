@@ -795,7 +795,7 @@ ACTION parse_closure(tokens(LIST), pos(NUM)),
   IF blx IS "(",
     REAP btok2 FROM peek, tokens, p5 + 1.
     REAP blx2 FROM tok_lex, btok2.
-    IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "TAKE" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE" OR blx2 IS "SORT" OR blx2 IS "SHAKE",
+    IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "TAKE" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE" OR blx2 IS "SORT" OR blx2 IS "SHAKE" OR blx2 IS "BRAID" OR blx2 IS "LINK",
       SET body_kind TO "block".
       REAP bp FROM consume, tokens, p5.
       REAP p6 FROM _second, bp.
@@ -1132,6 +1132,72 @@ ACTION parse_take_stmt(tokens(LIST), pos(NUM)),
   REAP dot_pair FROM consume, tokens, p5.
   REAP p6 FROM _second, dot_pair.
   GIVE plant_list_make(2, plant_list_make(6, "type", "take_stmt", "item", item, "target", target), p6).
+/ACTION.
+
+# v0.48.31 — BRAID l1 WITH l2 AS name [MAP].
+#   no MAP  → pair-list zip (plant_braid)
+#   with MAP → map build with unique keys (plant_braid_map)
+ACTION parse_braid_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP lpair FROM collect_until, tokens, p2, "WITH".
+  CREATE left TO lpair[0].
+  REAP p3 FROM _second, lpair.
+  REAP with_pair FROM consume, tokens, p3.
+  REAP p4 FROM _second, with_pair.
+  REAP rpair FROM collect_until, tokens, p4, "AS".
+  CREATE right TO rpair[0].
+  REAP p5 FROM _second, rpair.
+  REAP as_pair FROM consume, tokens, p5.
+  REAP p6 FROM _second, as_pair.
+  CREATE target(TX) TO "".
+  SEASON TRUE,
+    REAP tok FROM peek, tokens, p6.
+    REAP lx FROM tok_lex, tok.
+    IF lx IS "MAP" OR lx IS "." OR lx IS "",
+      BREAK 0.
+    /IF.
+    SET target TO target + lx.
+    REAP drop FROM consume, tokens, p6.
+    REAP p6 FROM _second, drop.
+  /SEASON.
+  CREATE is_map(TX) TO "0".
+  REAP tok FROM peek, tokens, p6.
+  REAP lx FROM tok_lex, tok.
+  IF lx IS "MAP",
+    SET is_map TO "1".
+    REAP drop FROM consume, tokens, p6.
+    REAP p6 FROM _second, drop.
+  /IF.
+  REAP dot_pair FROM consume, tokens, p6.
+  REAP p7 FROM _second, dot_pair.
+  IF is_map IS "1",
+    GIVE plant_list_make(2, plant_list_make(8, "type", "braid_map_stmt", "left", left, "right", right, "target", target), p7).
+  /IF.
+  GIVE plant_list_make(2, plant_list_make(8, "type", "braid_stmt", "left", left, "right", right, "target", target), p7).
+/ACTION.
+
+# v0.48.31 — LINK key WITH value IN map. (upsert: update in place
+#   when the key exists, append a new pair otherwise)
+ACTION parse_link_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP kpair FROM collect_until, tokens, p2, "WITH".
+  CREATE key TO kpair[0].
+  REAP p3 FROM _second, kpair.
+  REAP with_pair FROM consume, tokens, p3.
+  REAP p4 FROM _second, with_pair.
+  REAP vpair FROM collect_until, tokens, p4, "IN".
+  CREATE value TO vpair[0].
+  REAP p5 FROM _second, vpair.
+  REAP in_pair FROM consume, tokens, p5.
+  REAP p6 FROM _second, in_pair.
+  REAP mpair FROM collect_until, tokens, p6, ".".
+  CREATE target TO mpair[0].
+  REAP p7 FROM _second, mpair.
+  REAP dot_pair FROM consume, tokens, p7.
+  REAP p8 FROM _second, dot_pair.
+  GIVE plant_list_make(2, plant_list_make(8, "type", "link_stmt", "key", key, "value", value, "target", target), p8).
 /ACTION.
 
 # v0.48.29 — SORT l [ASC|DESC] [BY f [ASC|DESC] {, g [ASC|DESC]}].
@@ -1728,6 +1794,14 @@ ACTION parse_statement(tokens(LIST), pos(NUM)),
   /IF.
   IF lx IS "TAKE",
     REAP r FROM parse_take_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "BRAID",
+    REAP r FROM parse_braid_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "LINK",
+    REAP r FROM parse_link_stmt, tokens, pos.
     GIVE r.
   /IF.
   IF lx IS "BREAK",

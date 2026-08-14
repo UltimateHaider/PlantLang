@@ -114,6 +114,9 @@ PlantArray* plant_list_push(PlantArray* list, void* value);
 PlantArray* plant_list_make(int64_t count, ...);
 tx_t        plant_list_add(tx_t list, tx_t value);    /* NULL-safe: instantiate when list is NULL */
 tx_t        plant_list_remove(tx_t list, tx_t value); /* first matching occurrence; NULL/empty no-op */
+tx_t        plant_braid(tx_t left, tx_t right);       /* zip into pair list (min length) */
+tx_t        plant_braid_map(tx_t left, tx_t right);   /* pair list with unique keys (last wins) */
+tx_t        plant_link(tx_t map, tx_t key, tx_t value); /* upsert; NULL map instantiated */
 tx_t        plant_sort(tx_t list, tx_t spec);    /* qsort; spec ""|"DESC"|"f:ASC,g:DESC" */
 tx_t        plant_shuffle(tx_t list);            /* Fisher-Yates (in place) */
 

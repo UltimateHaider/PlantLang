@@ -1,5 +1,43 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.31 — 2026 (BRAID and LINK Collection Operations)
+
+### New Features
+- **`BRAID l1 WITH l2 AS name.` statement** (parser.plant +
+  codegen_c.plant): `braid_stmt` AST node storing both source lists
+  and the result identifier; codegen declares the fresh variable and
+  emits `PlantArray* name = plant_braid(l1, l2);`.
+- **`BRAID l1 WITH l2 AS name MAP.` statement**: `braid_map_stmt`
+  node; emits `plant_braid_map` (the `MAP` keyword is optional and
+  recognized after the result name).
+- **`LINK key WITH value IN map.` statement**: `link_stmt` node
+  capturing key operand, value operand, and target map reference;
+  emits `map = plant_link(map, key, value);` upsert.
+- All three keywords join the statement dispatch and the block-body
+  keyword list.
+- **Runtime** (`plant_runtime.c` + `plant_runtime.h`):
+  - `plant_braid` — zips two lists into a fresh pair list
+    `[k0, v0, k1, v1, …]`; mismatched lengths pair only the
+    `min(countL, countR)` leading elements and safely ignore the
+    excess; NULL/invalid inputs yield an empty pair list.
+  - `plant_braid_map` — builds a map from the same parallel lists
+    (first list = keys, second = values); duplicate keys collapse to
+    a single entry with the LAST value, updated in place.
+  - `plant_link` — upsert: an existing key's value is replaced in
+    place (pair count unchanged), otherwise a new key/value pair is
+    appended; a NULL/uninitialized map target is instantiated
+    automatically.
+
+### Regression Tests
+- `braid`: pair-list generation with `_map_get` lookups, shorter-
+  values and shorter-keys mismatches (excess ignored), MAP-form
+  braiding, duplicate-key collapse (last value wins), and empty
+  inputs.
+- `link`: key insertion, in-place value update on a pre-existing key
+  (pair count stays constant), duplicate-key collapse, and NULL
+  target instantiation — all verified through `_map_get` and element
+  counts.
+
 ## v0.48.30 — 2026 (TAKE and PUT List Operations)
 
 ### New Features

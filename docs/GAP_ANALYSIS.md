@@ -85,8 +85,8 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `REAP … FLOW f1 f2` pipelines | S | M | |
 | `PUT val INTO list.` | S | **S** | |
 | `TAKE val FROM list.` | S | **S** | v0.48.30 (`plant_list_remove`, first match only) |
-| `SORT list [BY f ASC/DESC].` / `SHAKE` / `BRAID` | S | **S** | v0.48.29 (SORT + ASC/DESC + BY multi-field; SHAKE Fisher-Yates) |
-| `LINK "k" WITH v IN map.` | S | M | map ops via `_map_get`/`plant_map_get` only |
+| `SORT list [BY f ASC/DESC].` / `SHAKE` / `BRAID` | S | **S** | v0.48.29 (SORT + ASC/DESC + BY multi-field; SHAKE Fisher-Yates); v0.48.31 (BRAID zip + BRAID … AS … MAP) |
+| `LINK "k" WITH v IN map.` | S | **S** | v0.48.31 upsert (update in place / append; NULL target instantiated) |
 | `WEATHER … SHELTER storm AS e … CALM.` | S | **S** | v0.48.25; THROW + 13 kinds + ANY_STORM catch-all, STOP IF, plant_calm finalization |
 | `MATCH expr { Variant(b) -> … }` / `MATCH … IS … YIELD` | S | M | |
 | `TAP/ABSORB/INFUSE/SEAL` (VEIN files) | S | M | INFUSE/ABSORB/SEAL were parse stubs in legacy too |
@@ -274,7 +274,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 7. **`CONST`/`ROOT` immutables** (compile-time locking).
 
 **Low effort / niche**
-8. **SPLIT/JOIN/BRAID statement forms** (SORT/SHAKE shipped v0.48.29), `PICK`, `STOP IF` (shipped v0.48.25), `WAIT n.` statement, `ANY/ALL/HAS/IS_A` conditions, `LOCATE`/`NOTE` comments, brace-form ACTION bodies, TYPE aliases, single-quoted strings.
+8. **SPLIT/JOIN statement forms** (SORT/SHAKE shipped v0.48.29; BRAID/LINK shipped v0.48.31), `PICK`, `STOP IF` (shipped v0.48.25), `WAIT n.` statement, `ANY/ALL/HAS/IS_A` conditions, `LOCATE`/`NOTE` comments, brace-form ACTION bodies, TYPE aliases, single-quoted strings.
 9. **Legacy `N\` depth-prefixed syntax** (tokenized already; only needs codegen acceptance) for drop-in legacy source compatibility.
 
 **Intentionally out of scope (D)**

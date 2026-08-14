@@ -2236,6 +2236,39 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         GIVE isel + "  " + target + " = plant_list_remove(" + target + ", " + citem + ");\n".
     /IF.
 
+    # ── braid_stmt: BRAID l1 WITH l2 AS name. ────────────────
+    #    zip l1/l2 into a fresh pair list; the target is a NEW
+    #    variable, so emit a declaration (v0.48.31).
+    IF ntype IS "braid_stmt",
+        REAP left FROM _map_get, node, "left".
+        REAP right FROM _map_get, node, "right".
+        REAP target FROM _map_get, node, "target".
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  PlantArray* " + target + " = plant_braid(" + left + ", " + right + ");\n".
+    /IF.
+
+    # ── braid_map_stmt: BRAID l1 WITH l2 AS name MAP. ────────
+    IF ntype IS "braid_map_stmt",
+        REAP left FROM _map_get, node, "left".
+        REAP right FROM _map_get, node, "right".
+        REAP target FROM _map_get, node, "target".
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  PlantArray* " + target + " = plant_braid_map(" + left + ", " + right + ");\n".
+    /IF.
+
+    # ── link_stmt: LINK key WITH value IN map. → upsert ──────
+    IF ntype IS "link_stmt",
+        REAP key FROM _map_get, node, "key".
+        REAP value FROM _map_get, node, "value".
+        REAP target FROM _map_get, node, "target".
+        REAP ckey FROM translate_expr, key.
+        REAP ckey FROM _handle_cat, ckey, nums, evars.
+        REAP cval FROM translate_expr, value.
+        REAP cval FROM _handle_cat, cval, nums, evars.
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  " + target + " = plant_link(" + target + ", " + ckey + ", " + cval + ");\n".
+    /IF.
+
     # ── sort_stmt: SORT l [ASC|DESC] [BY f…]. → l = plant_sort(l, spec); ─
     #    spec: "" = plain ASC | "DESC" = plain DESC | "f1:DESC,f2:ASC"
     IF ntype IS "sort_stmt",
