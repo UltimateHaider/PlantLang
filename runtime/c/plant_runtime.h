@@ -20,7 +20,7 @@ int64_t plant_array_get(int64_t* arr, int64_t index);
 void plant_array_set(int64_t* arr, int64_t index, int64_t value);
 
 /* ── v0.41.0: Network / Socket Helpers ── */
-char* plant_net_harvest(const char* url, const char* method, const char* body, const char* headers, int64_t timeout_sec);
+tx_t        plant_net_harvest(tx_t url, tx_t method, tx_t body, tx_t headers, int64_t timeout); /* response MAP: ok/status/body/headers */
 int64_t plant_net_listen_open(int64_t port);
 int64_t plant_net_accept(int64_t fd);
 char* plant_net_read(int64_t fd);

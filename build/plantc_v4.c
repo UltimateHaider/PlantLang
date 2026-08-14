@@ -59,6 +59,8 @@ tx_t parse_throw_stmt(PlantArray* tokens, long pos);
 tx_t parse_stop_if_stmt(PlantArray* tokens, long pos);
 tx_t parse_weather_stmt(PlantArray* tokens, long pos);
 tx_t parse_statement(PlantArray* tokens, long pos);
+tx_t collect_until_keyword(PlantArray* tokens, long start, PlantArray* kws);
+tx_t parse_harvest_stmt(PlantArray* tokens, long pos);
 tx_t parse_enum_decl(PlantArray* tokens, long pos);
 tx_t parse_struct_decl(PlantArray* tokens, long pos);
 tx_t parse_action_decl(PlantArray* tokens, long pos);
@@ -1914,7 +1916,7 @@ tx_t parse_closure(PlantArray* tokens, long pos) {
     if (strcmp(blx,"(") == 0) {
         btok2 = peek(tokens, p5+1);
         blx2 = tok_lex(btok2);
-        if (strcmp(blx2,"CREATE") == 0 || strcmp(blx2,"SHOW") == 0 || strcmp(blx2,"GIVE") == 0 || strcmp(blx2,"SET") == 0 || strcmp(blx2,"LET") == 0 || strcmp(blx2,"IF") == 0 || strcmp(blx2,"SEASON") == 0 || strcmp(blx2,"REAP") == 0 || strcmp(blx2,"PUT") == 0 || strcmp(blx2,"TAKE") == 0 || strcmp(blx2,"BREAK") == 0 || strcmp(blx2,"CONTINUE") == 0 || strcmp(blx2,"SORT") == 0 || strcmp(blx2,"SHAKE") == 0 || strcmp(blx2,"BRAID") == 0 || strcmp(blx2,"LINK") == 0) {
+        if (strcmp(blx2,"CREATE") == 0 || strcmp(blx2,"SHOW") == 0 || strcmp(blx2,"GIVE") == 0 || strcmp(blx2,"SET") == 0 || strcmp(blx2,"LET") == 0 || strcmp(blx2,"IF") == 0 || strcmp(blx2,"SEASON") == 0 || strcmp(blx2,"REAP") == 0 || strcmp(blx2,"PUT") == 0 || strcmp(blx2,"TAKE") == 0 || strcmp(blx2,"BREAK") == 0 || strcmp(blx2,"CONTINUE") == 0 || strcmp(blx2,"SORT") == 0 || strcmp(blx2,"SHAKE") == 0 || strcmp(blx2,"BRAID") == 0 || strcmp(blx2,"LINK") == 0 || strcmp(blx2,"HARVEST") == 0) {
             body_kind = "block";
             bp = consume(tokens, p5);
             p6 = _second(bp);
@@ -3221,6 +3223,10 @@ tx_t parse_statement(PlantArray* tokens, long pos) {
         r = parse_shake_stmt(tokens, pos);
         return r;
     }
+    if (strcmp(lx,"HARVEST") == 0) {
+        r = parse_harvest_stmt(tokens, pos);
+        return r;
+    }
     nx = peek(tokens, pos+1);
     nx_ty = tok_type(nx);
     if (strcmp(nx_ty,"LPAREN") == 0) {
@@ -3238,6 +3244,127 @@ tx_t parse_statement(PlantArray* tokens, long pos) {
         }
     }
     return plant_list_make ( 2 , NULL , pos + 1 );
+}
+tx_t collect_until_keyword(PlantArray* tokens, long start, PlantArray* kws) {
+  tx_t is_eof_flag = "";
+  tx_t tok = "";
+  tx_t lx = "";
+  tx_t tt = "";
+  tx_t kw = "";
+  tx_t drop = "";
+    tx_t text = "";
+    long p2 = start;
+    long depth = 0;
+    while (1) {
+        is_eof_flag = is_eof(tokens, p2);
+        if (is_eof_flag) {
+            return plant_list_make ( 2 , text , p2 );
+        }
+        tok = peek(tokens, p2);
+        lx = tok_lex(tok);
+        tt = tok_type(tok);
+        if (strcmp(tt,"STRING") == 0 || strcmp(tt,"INTERP") == 0) {
+            lx = escape_string(lx);
+            lx = _cat3("\"", lx, "\"");
+        }
+        tx_t kw_hit = "0";
+        long ki = 0;
+        while (ki < plant_array_length(kws)) {
+            kw = plant_list_get(kws, ki);
+            if (strcmp(_cat ( "" , lx ),_cat ( "" , kw )) == 0 && depth == 0) {
+                kw_hit = "1";
+            }
+            ki = ki+1;
+        }
+        if (strcmp(kw_hit,"1") == 0) {
+            return plant_list_make ( 2 , text , p2 );
+        }
+        if (strcmp(lx,"(") == 0) {
+            depth = depth+1;
+        }
+        if (strcmp(lx,")") == 0) {
+            depth = depth - 1;
+        }
+        if (strcmp(text,"") > 0) {
+            text = _cat(text, " ");
+        }
+        text = _cat(text, lx);
+        drop = consume(tokens, p2);
+        p2 = _second(drop);
+    }
+  return collect_until_keyword;
+}
+tx_t parse_harvest_stmt(PlantArray* tokens, long pos) {
+  tx_t pair = "";
+  tx_t p2 = "";
+  tx_t upair = "";
+  tx_t p3 = "";
+  tx_t as_pair = "";
+  tx_t p4 = "";
+  tx_t rpair = "";
+  tx_t tok = "";
+  tx_t lx = "";
+  tx_t drop = "";
+  tx_t opair = "";
+  tx_t tok2 = "";
+  tx_t lx2 = "";
+  tx_t drop2 = "";
+  tx_t dot_pair = "";
+  tx_t p5 = "";
+    pair = consume(tokens, pos);
+    p2 = _second(pair);
+    upair = collect_until(tokens, p2, "AS");
+    tx_t url = plant_list_get(upair,  0 );
+    p3 = _second(upair);
+    as_pair = consume(tokens, p3);
+    p4 = _second(as_pair);
+    tx_t resp = "";
+    tx_t method = "";
+    tx_t body = "";
+    tx_t headers = "";
+    tx_t timeout = "";
+    PlantArray* okws = plant_list_make ( 5 , "METHOD" , "BODY" , "HEADERS" , "TIMEOUT" , "." );
+    rpair = collect_until_keyword(tokens, p4, okws);
+    resp = plant_list_get(rpair,  0 );
+    p4 = _second(rpair);
+    while (1) {
+        tok = peek(tokens, p4);
+        lx = tok_lex(tok);
+        if (strcmp(lx,".") == 0 || strcmp(lx,"") == 0) {
+                      break;
+        }
+        if (strcmp(lx,"METHOD") == 0 || strcmp(lx,"BODY") == 0 || strcmp(lx,"HEADERS") == 0 || strcmp(lx,"TIMEOUT") == 0) {
+            drop = consume(tokens, p4);
+            p4 = _second(drop);
+            opair = collect_until_keyword(tokens, p4, okws);
+            tx_t oval = plant_list_get(opair,  0 );
+            p4 = _second(opair);
+            if (strcmp(lx,"METHOD") == 0) {
+                method = oval;
+            }
+            if (strcmp(lx,"BODY") == 0) {
+                body = oval;
+            }
+            if (strcmp(lx,"HEADERS") == 0) {
+                headers = oval;
+            }
+            if (strcmp(lx,"TIMEOUT") == 0) {
+                timeout = oval;
+            }
+            tok2 = peek(tokens, p4);
+            lx2 = tok_lex(tok2);
+            if (strcmp(lx2,",") == 0) {
+                drop2 = consume(tokens, p4);
+                p4 = _second(drop2);
+            }
+                      continue;
+        }
+        drop = consume(tokens, p4);
+        p4 = _second(drop);
+    }
+    dot_pair = consume(tokens, p4);
+    p5 = _second(dot_pair);
+    return plant_list_make ( 2 , plant_list_make ( 14 , "type" , "harvest_stmt" , "url" , url , "resp" , resp , "method" , method , "payload" , body , "headers" , headers , "timeout" , timeout ) , p5 );
 }
 tx_t parse_enum_decl(PlantArray* tokens, long pos) {
   tx_t pair = "";
@@ -5857,6 +5984,18 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t key = "";
   tx_t value = "";
   tx_t ckey = "";
+  tx_t hurl = "";
+  tx_t hresp = "";
+  tx_t hmeth = "";
+  tx_t hbody = "";
+  tx_t hhdrs = "";
+  tx_t htime = "";
+  tx_t hcurl = "";
+  tx_t hx0 = "";
+  tx_t hy0 = "";
+  tx_t hy1 = "";
+  tx_t hz0 = "";
+  tx_t hz1 = "";
   tx_t gdir = "";
   tx_t fields = "";
   tx_t dirs = "";
@@ -6190,6 +6329,54 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         cval = _handle_cat(cval, nums, evars);
         isel = indent_str(indent);
         return _cat4(_cat4(_cat4(isel, "  ", target, " = plant_link("), target, ", ", ckey), ", ", cval, ");\n");
+    }
+    if (strcmp(ntype,"harvest_stmt") == 0) {
+        hurl = _map_get(node, "url");
+        hresp = _map_get(node, "resp");
+        hmeth = _map_get(node, "method");
+        hbody = _map_get(node, "payload");
+        hhdrs = _map_get(node, "headers");
+        htime = _map_get(node, "timeout");
+        isel = indent_str(indent);
+        hcurl = translate_expr(hurl);
+        tx_t hmethod = hmeth;
+        if (strcmp(hmethod,"") > 0) {
+            hx0 = substring(hmethod, 0, 1);
+            if (strcmp(hx0,"\"") != 0) {
+                hmethod = _cat3("\"", hmethod, "\"");
+            }
+        }
+        if (strcmp(hmethod,"") == 0) {
+            hmethod = "\"GET\"";
+        }
+        tx_t hcbody = hbody;
+        if (strcmp(hcbody,"") > 0) {
+            hy0 = substring(hcbody, 0, 1);
+            if (strcmp(hy0,"\"") != 0) {
+                hy1 = translate_expr(hcbody);
+                hy1 = _handle_cat(hy1, nums, evars);
+                hcbody = hy1;
+            }
+        }
+        if (strcmp(hcbody,"") == 0) {
+            hcbody = "\"\"";
+        }
+        tx_t hhdr = hhdrs;
+        if (strcmp(hhdr,"") == 0) {
+            hhdr = "0";
+        }
+        tx_t htmo = htime;
+        if (strcmp(htmo,"") > 0) {
+            hz0 = substring(htmo, 0, 1);
+            if (strcmp(hz0,"\"") != 0) {
+                hz1 = translate_expr(htmo);
+                htmo = hz1;
+            }
+        }
+        if (strcmp(htmo,"") == 0) {
+            htmo = "0";
+        }
+        return _cat(_cat4(_cat4(_cat4(_cat4(isel, "  tx_t ", hresp, " = plant_net_harvest("), hcurl, ", ", hmethod), ", ", hcbody, ", "), hhdr, ", ", htmo), ");\n");
     }
     if (strcmp(ntype,"sort_stmt") == 0) {
         target = _map_get(node, "target");
@@ -9522,7 +9709,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.31 (pure native)");
+      plant_print("Chloroplast 0.48.32 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

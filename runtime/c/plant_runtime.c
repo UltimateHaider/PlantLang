@@ -93,48 +93,113 @@ void plant_array_set(int64_t* arr, int64_t index, int64_t value) {
     arr[index + 1] = value;
 }
 
-/* ── v0.41.0: plant_net_harvest — minimal HTTP GET via POSIX sockets ── */
-char* plant_net_harvest(const char* url, const char* method, const char* body, const char* headers, int64_t timeout_sec) {
-    (void)body; (void)headers; (void)timeout_sec;
-    if (!url) return plant_str_concat("", "");
+/* ── v0.48.32: plant_net_harvest — HARVEST HTTP client ────────
+   Low-level socket client (socket/connect/send/recv) targeting the
+   standard HTTP (80) / HTTPS (443) ports. Builds an HTTP/1.1
+   request with Host + Connection: close + Content-Length, optional
+   custom header MAP (pair list) and payload body. Timeout (seconds,
+   0 → 5s default) is enforced via SO_SNDTIMEO/SO_RCVTIMEO so a
+   dead peer cannot hang the caller. Returns a response MAP:
+     ok      "TRUE" for 2xx responses, else "FALSE"
+     status  HTTP status code (string)
+     body    response payload
+     headers nested MAP of response headers
+   Malformed responses and connection failures yield ok "FALSE"
+   with status "0" and whatever payload was readable. */
+tx_t plant_net_harvest(tx_t url, tx_t method, tx_t body, tx_t headers, int64_t timeout) {
+    const char* u = url ? (const char*)url : "";
+    PlantArray* out = plant_list_create(8);
+    out = plant_list_push(out, strdup("ok"));
+    out = plant_list_push(out, strdup("FALSE"));
+    out = plant_list_push(out, strdup("status"));
+    out = plant_list_push(out, strdup("0"));
+    out = plant_list_push(out, strdup("body"));
+    out = plant_list_push(out, strdup(""));
+    out = plant_list_push(out, strdup("headers"));
+    out = plant_list_push(out, (void*)plant_list_create(0));
+    if (!u[0]) return (tx_t)out;
+
     char host[256] = {0};
-    char path[1024] = {0};
-    const char* p = url;
-    if (strncmp(p, "http://", 7) == 0) p += 7;
-    else if (strncmp(p, "https://", 8) == 0) p += 8;
+    char path[2048] = {0};
+    int port = 80;
+    const char* p = u;
+    if (strncmp(p, "https://", 8) == 0) { p += 8; port = 443; }
+    else if (strncmp(p, "http://", 7) == 0) p += 7;
     const char* slash = strchr(p, '/');
-    if (slash) {
-        size_t hlen = (size_t)(slash - p);
-        if (hlen > 255) hlen = 255;
-        strncpy(host, p, hlen);
-        host[hlen] = '\0';
-        strncpy(path, slash, 1023);
-    } else {
-        strncpy(host, p, 255);
-        strncpy(path, "/", 1023);
+    const char* h_end = slash ? slash : p + strlen(p);
+    size_t hlen = (size_t)(h_end - p);
+    if (hlen > 255) hlen = 255;
+    memcpy(host, p, hlen);
+    host[hlen] = '\0';
+    const char* colon = strchr(host, ':');
+    if (colon) {
+        long cp = strtol(colon + 1, NULL, 10);
+        if (cp > 0 && cp < 65536) port = (int)cp;
+        host[colon - host] = '\0';
     }
-    struct addrinfo hints, *res;
+    if (slash) {
+        size_t plen = strlen(slash);
+        if (plen > 2047) plen = 2047;
+        memcpy(path, slash, plen);
+        path[plen] = '\0';
+    } else {
+        strcpy(path, "/");
+    }
+
+    char mbuf[16];
+    const char* m = method ? (const char*)method : "GET";
+    size_t ml = strlen(m);
+    if (ml > 15) ml = 15;
+    for (size_t i = 0; i < ml; i++) mbuf[i] = (char)toupper((unsigned char)m[i]);
+    mbuf[ml] = '\0';
+
+    struct addrinfo hints, *res = NULL;
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
-    int gai_err = getaddrinfo(host, "80", &hints, &res);
-    if (gai_err) return plant_str_concat("ERROR: DNS ", gai_strerror(gai_err));
+    char sport[8];
+    snprintf(sport, sizeof(sport), "%d", port);
+    if (getaddrinfo(host, sport, &hints, &res) != 0 || !res)
+        return (tx_t)out;
     int fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
-    if (fd < 0) { freeaddrinfo(res); return plant_str_concat("", "ERROR: socket"); }
-    struct timeval tv = { .tv_sec = 5, .tv_usec = 0 };
+    if (fd < 0) { freeaddrinfo(res); return (tx_t)out; }
+    long tv_sec = timeout > 0 ? (long)timeout : 5L;
+    struct timeval tv = { .tv_sec = tv_sec, .tv_usec = 0 };
+    setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
     setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     if (connect(fd, res->ai_addr, res->ai_addrlen) < 0) {
-        close(fd); freeaddrinfo(res);
-        return plant_str_concat("", "ERROR: connect");
+        close(fd); freeaddrinfo(res); return (tx_t)out;
     }
     freeaddrinfo(res);
-    char req[4096];
+
+    char hdr_map[4096];
+    hdr_map[0] = '\0';
+    if (headers) {
+        PlantArray* hm = (PlantArray*)headers;
+        if (hm->magic == PLANT_ARRAY_MAGIC) {
+            for (int64_t i = 0; i + 1 < hm->count; i += 2) {
+                const char* k = (const char*)hm->items[i];
+                const char* v = (const char*)hm->items[i + 1];
+                if (!k || !v) continue;
+                if (strlen(hdr_map) + strlen(k) + strlen(v) + 6 > sizeof(hdr_map) - 4) break;
+                strcat(hdr_map, k);
+                strcat(hdr_map, ": ");
+                strcat(hdr_map, v);
+                strcat(hdr_map, "\r\n");
+            }
+        }
+    }
+    const char* b = body ? (const char*)body : "";
+    char req[8192];
     int n = snprintf(req, sizeof(req),
-        "GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n",
-        path, host);
-    if (n < 0) { close(fd); return plant_str_concat("", "ERROR: req"); }
+        "%s %s HTTP/1.1\r\nHost: %s\r\n%sConnection: close\r\nContent-Length: %zu\r\n\r\n",
+        mbuf, path, host, hdr_map, strlen(b));
+    if (n < 0) { close(fd); return (tx_t)out; }
     send(fd, req, (size_t)n, 0);
-    char buf[4096];
+    if (b[0] && strcmp(mbuf, "POST") == 0)
+        send(fd, b, strlen(b), 0);
+
+    char buf[8192];
     char* response = plant_alloc(1);
     response[0] = '\0';
     ssize_t r;
@@ -149,14 +214,62 @@ char* plant_net_harvest(const char* url, const char* method, const char* body, c
         plant_free(old);
     }
     close(fd);
-    char* body_start = strstr(response, "\r\n\r\n");
-    if (body_start) {
-        body_start += 4;
-        char* result = plant_str_concat(body_start, "");
-        plant_free(response);
-        return result;
+
+    const char* sep = strstr(response, "\r\n\r\n");
+    const char* head_end = sep ? sep : response + strlen(response);
+    const char* resp_body = sep ? sep + 4 : response;
+
+    const char* nl = memchr(response, '\r', (size_t)(head_end - response));
+    const char* status_line = response;
+    size_t sl_len = nl ? (size_t)(nl - response) : (size_t)(head_end - response);
+    char sl[128];
+    if (sl_len > 127) sl_len = 127;
+    memcpy(sl, status_line, sl_len);
+    sl[sl_len] = '\0';
+    long status = 0;
+    const char* sp = strchr(sl, ' ');
+    if (sp) status = strtol(sp + 1, NULL, 10);
+    if (status <= 0 || strncmp(sl, "HTTP/", 5) != 0) status = 0;
+
+    char st[16];
+    snprintf(st, sizeof(st), "%ld", status);
+
+    PlantArray* hdrs = plant_list_create(4);
+    const char* lp = response;
+    const char* hend = head_end;
+    while (lp < hend) {
+        const char* le = memchr(lp, '\r', (size_t)(hend - lp));
+        if (!le) break;
+        if (le == lp) break;
+        size_t ln = (size_t)(le - lp);
+        if (ln > 0 && ln < 512) {
+            const char* cc = memchr(lp, ':', ln);
+            if (cc) {
+                char hn[256], hv[512];
+                size_t kn = (size_t)(cc - lp);
+                if (kn > 255) kn = 255;
+                memcpy(hn, lp, kn); hn[kn] = '\0';
+                const char* vp = cc + 1;
+                while (vp < le && (*vp == ' ' || *vp == '\t')) vp++;
+                size_t vn = (size_t)(le - vp);
+                if (vn > 511) vn = 511;
+                memcpy(hv, vp, vn); hv[vn] = '\0';
+                if (kn > 0) {
+                    hdrs = plant_list_push(hdrs, strdup(hn));
+                    hdrs = plant_list_push(hdrs, strdup(hv));
+                }
+            }
+        }
+        lp = le + 2;
+        if (lp > hend) break;
     }
-    return response;
+
+    plant_list_set(out, 1, strdup(status >= 200 && status <= 299 ? "TRUE" : "FALSE"));
+    plant_list_set(out, 3, strdup(st));
+    plant_list_set(out, 5, strdup(resp_body));
+    plant_list_set(out, 7, (void*)hdrs);
+    plant_free(response);
+    return (tx_t)out;
 }
 
 /* ── v0.41.0: plant_net_listen_open — TCP listener ── */

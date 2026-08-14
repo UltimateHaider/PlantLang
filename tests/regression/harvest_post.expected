@@ -1,0 +1,11 @@
+post ok = TRUE
+post status = 200
+post echo = POST:hello=world
+post empty body echo = POST:
+timeout 5 request ok = TRUE
+short timeout ok = FALSE
+short timeout status = 0
+malformed ok = FALSE
+malformed status = 0
+empty response ok = TRUE
+empty response body = 

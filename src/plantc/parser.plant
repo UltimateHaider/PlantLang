@@ -795,7 +795,7 @@ ACTION parse_closure(tokens(LIST), pos(NUM)),
   IF blx IS "(",
     REAP btok2 FROM peek, tokens, p5 + 1.
     REAP blx2 FROM tok_lex, btok2.
-    IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "TAKE" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE" OR blx2 IS "SORT" OR blx2 IS "SHAKE" OR blx2 IS "BRAID" OR blx2 IS "LINK",
+    IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "TAKE" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE" OR blx2 IS "SORT" OR blx2 IS "SHAKE" OR blx2 IS "BRAID" OR blx2 IS "LINK" OR blx2 IS "HARVEST",
       SET body_kind TO "block".
       REAP bp FROM consume, tokens, p5.
       REAP p6 FROM _second, bp.
@@ -1840,6 +1840,10 @@ ACTION parse_statement(tokens(LIST), pos(NUM)),
     REAP r FROM parse_shake_stmt, tokens, pos.
     GIVE r.
   /IF.
+  IF lx IS "HARVEST",
+    REAP r FROM parse_harvest_stmt, tokens, pos.
+    GIVE r.
+  /IF.
   # bare call: IDENT( or module:IDENT( → call_stmt (void FFI calls)
   REAP nx FROM peek, tokens, pos + 1.
   REAP nx_ty FROM tok_type, nx.
@@ -1858,6 +1862,100 @@ ACTION parse_statement(tokens(LIST), pos(NUM)),
     /IF.
   /IF.
   GIVE plant_list_make(2, null, pos + 1).
+/ACTION.
+
+# collect_until_keyword: collects text until ANY token in kws at
+# depth=0 (does NOT consume it); identical to collect_until but the
+# terminator is a list of keywords instead of a single delimiter
+# (v0.48.32, for HARVEST options).
+ACTION collect_until_keyword(tokens(LIST), start(NUM), kws(LIST)),
+  CREATE text(TX) TO "".
+  CREATE p2(NUM) TO start.
+  CREATE depth(NUM) TO 0.
+  SEASON TRUE,
+    REAP is_eof_flag FROM is_eof, tokens, p2.
+    IF is_eof_flag,
+      GIVE plant_list_make(2, text, p2).
+    /IF.
+    REAP tok FROM peek, tokens, p2.
+    REAP lx FROM tok_lex, tok.
+    REAP tt FROM tok_type, tok.
+    IF tt IS "STRING" OR tt IS "INTERP",
+      REAP lx FROM escape_string, lx.
+      SET lx TO "\"" + lx + "\"".
+    /IF.
+    CREATE kw_hit(TX) TO "0".
+    CREATE ki(NUM) TO 0.
+    SEASON ki < COUNT kws,
+      REAP kw FROM plant_list_get, kws, ki.
+      IF _cat("", lx) IS _cat("", kw) AND depth IS 0,
+        SET kw_hit TO "1".
+      /IF.
+      SET ki TO ki + 1.
+    /SEASON.
+    IF kw_hit IS "1",
+      GIVE plant_list_make(2, text, p2).
+    /IF.
+    IF lx IS "(", SET depth TO depth + 1. /IF.
+    IF lx IS ")", SET depth TO depth - 1. /IF.
+    IF text > "", SET text TO text + " ". /IF.
+    SET text TO text + lx.
+    REAP drop FROM consume, tokens, p2.
+    REAP p2 FROM _second, drop.
+  /SEASON.
+/ACTION.
+
+# v0.48.32 — HARVEST url AS resp [METHOD m] [BODY b] [HEADERS h]
+#   [TIMEOUT t]. Options may appear in any order after the result
+#   name; METHOD defaults to GET. AST: harvest_stmt with url, resp,
+#   and the option strings.
+ACTION parse_harvest_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP upair FROM collect_until, tokens, p2, "AS".
+  CREATE url TO upair[0].
+  REAP p3 FROM _second, upair.
+  REAP as_pair FROM consume, tokens, p3.
+  REAP p4 FROM _second, as_pair.
+  CREATE resp(TX) TO "".
+  CREATE method(TX) TO "".
+  CREATE body(TX) TO "".
+  CREATE headers(TX) TO "".
+  CREATE timeout(TX) TO "".
+  CREATE okws(LIST) TO plant_list_make(5, "METHOD", "BODY", "HEADERS", "TIMEOUT", ".").
+  REAP rpair FROM collect_until_keyword, tokens, p4, okws.
+  SET resp TO rpair[0].
+  REAP p4 FROM _second, rpair.
+  SEASON TRUE,
+    REAP tok FROM peek, tokens, p4.
+    REAP lx FROM tok_lex, tok.
+    IF lx IS "." OR lx IS "",
+      BREAK 0.
+    /IF.
+    IF lx IS "METHOD" OR lx IS "BODY" OR lx IS "HEADERS" OR lx IS "TIMEOUT",
+      REAP drop FROM consume, tokens, p4.
+      REAP p4 FROM _second, drop.
+      REAP opair FROM collect_until_keyword, tokens, p4, okws.
+      CREATE oval TO opair[0].
+      REAP p4 FROM _second, opair.
+      IF lx IS "METHOD", SET method TO oval. /IF.
+      IF lx IS "BODY", SET body TO oval. /IF.
+      IF lx IS "HEADERS", SET headers TO oval. /IF.
+      IF lx IS "TIMEOUT", SET timeout TO oval. /IF.
+      REAP tok2 FROM peek, tokens, p4.
+      REAP lx2 FROM tok_lex, tok2.
+      IF lx2 IS ",",
+        REAP drop2 FROM consume, tokens, p4.
+        REAP p4 FROM _second, drop2.
+      /IF.
+      CONTINUE 0.
+    /IF.
+    REAP drop FROM consume, tokens, p4.
+    REAP p4 FROM _second, drop.
+  /SEASON.
+  REAP dot_pair FROM consume, tokens, p4.
+  REAP p5 FROM _second, dot_pair.
+  GIVE plant_list_make(2, plant_list_make(14, "type", "harvest_stmt", "url", url, "resp", resp, "method", method, "payload", body, "headers", headers, "timeout", timeout), p5).
 /ACTION.
 
 #── Declaration parsing ────────────────────────────────────────

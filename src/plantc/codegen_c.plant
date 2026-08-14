@@ -2269,6 +2269,53 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         GIVE isel + "  " + target + " = plant_link(" + target + ", " + ckey + ", " + cval + ");\n".
     /IF.
 
+    # ── harvest_stmt: HARVEST url AS resp [options]. ─────────
+    #    resp = plant_net_harvest(url, method, payload, headers, timeout);
+    #    resp is a NEW variable → declare; method defaults to "GET",
+    #    missing payload/headers/timeout pass ""/0/NULL/0. The AST key
+    #    for the request body is "payload" (v0.48.32) — NOT "body",
+    #    which generic closure/scope walkers read as the statement
+    #    list of structured statements (a collision that crashed
+    #    _cl_walk when the payload was a long string).
+    IF ntype IS "harvest_stmt",
+        REAP hurl FROM _map_get, node, "url".
+        REAP hresp FROM _map_get, node, "resp".
+        REAP hmeth FROM _map_get, node, "method".
+        REAP hbody FROM _map_get, node, "payload".
+        REAP hhdrs FROM _map_get, node, "headers".
+        REAP htime FROM _map_get, node, "timeout".
+        REAP isel FROM indent_str, indent.
+        REAP hcurl FROM translate_expr, hurl.
+        CREATE hmethod(TX) TO hmeth.
+        IF hmethod > "",
+            REAP hx0 FROM substring, hmethod, 0, 1.
+            IF hx0 ISNT "\"", SET hmethod TO "\"" + hmethod + "\"". /IF.
+        /IF.
+        IF hmethod IS "", SET hmethod TO "\"GET\"". /IF.
+        CREATE hcbody(TX) TO hbody.
+        IF hcbody > "",
+            REAP hy0 FROM substring, hcbody, 0, 1.
+            IF hy0 ISNT "\"",
+                REAP hy1 FROM translate_expr, hcbody.
+                REAP hy1 FROM _handle_cat, hy1, nums, evars.
+                SET hcbody TO hy1.
+            /IF.
+        /IF.
+        IF hcbody IS "", SET hcbody TO "\"\"". /IF.
+        CREATE hhdr(TX) TO hhdrs.
+        IF hhdr IS "", SET hhdr TO "0". /IF.
+        CREATE htmo(TX) TO htime.
+        IF htmo > "",
+            REAP hz0 FROM substring, htmo, 0, 1.
+            IF hz0 ISNT "\"",
+                REAP hz1 FROM translate_expr, htmo.
+                SET htmo TO hz1.
+            /IF.
+        /IF.
+        IF htmo IS "", SET htmo TO "0". /IF.
+        GIVE isel + "  tx_t " + hresp + " = plant_net_harvest(" + hcurl + ", " + hmethod + ", " + hcbody + ", " + hhdr + ", " + htmo + ");\n".
+    /IF.
+
     # ── sort_stmt: SORT l [ASC|DESC] [BY f…]. → l = plant_sort(l, spec); ─
     #    spec: "" = plain ASC | "DESC" = plain DESC | "f1:DESC,f2:ASC"
     IF ntype IS "sort_stmt",

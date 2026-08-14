@@ -1,5 +1,49 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.32 — 2026 (HARVEST HTTP Client)
+
+### New Features
+- **`HARVEST url AS resp [METHOD m] [BODY b] [HEADERS h] [TIMEOUT t].`
+  statement** (parser.plant + codegen_c.plant): `harvest_stmt` AST
+  node capturing the URL expression, result identifier, and optional
+  method/payload/headers/timeout options in any order (comma-
+  separated option lists are accepted). Codegen emits
+  `tx_t resp = plant_net_harvest(url, method, payload, headers, timeout);`
+  with `"GET"` as the default method and `""`/`0`/`0` for the
+  unpopulated options; quoted string options pass through, raw
+  expressions are translated through the normal expression path.
+- **`collect_until_keyword`** parser helper: like `collect_until` but
+  terminates on the first of a keyword LIST at depth 0 (stops
+  BEFORE the keyword), with the same string escaping/quoting rules.
+- **Runtime rebuild of `plant_net_harvest`** (`plant_runtime.c` +
+  `plant_runtime.h`): the legacy v0.41 GET-only client (raw-body
+  string result) is replaced by a full tx_t response MAP:
+  - uniform 4-pair result with keys `ok` (`"TRUE"` for 2xx,
+    `"FALSE"` otherwise), `status` (status code as string), `body`
+    (response body text), `headers` (nested pair-list MAP of
+    response headers);
+  - HTTP/1.1 client with host[:port] parsing, optional custom
+    request headers (pair-list MAP), `Content-Length` + payload for
+    POST, `Connection: close`;
+  - `SO_SNDTIMEO`/`SO_RCVTIMEO` timeouts in seconds (0 → 5s
+    default); malformed responses yield `ok=FALSE`, `status=0`;
+    empty URL yields a clean `ok=FALSE` without touching the
+    network.
+- HARVEST joins the statement dispatch and the block-body keyword
+  list; the Makefile dist copy now includes `tests/regression/*.py`
+  so the mock HTTP server ships with the source distribution.
+
+### Regression Tests
+- `harvest_get`: GET baseline (ok/status/body/header-map parsing),
+  custom request header transmission (echoed by the mock), empty
+  header list, 404 status handling, and empty-URL rejection.
+- `harvest_post`: POST payload delivery (echoed), empty payload,
+  explicit `TIMEOUT` on a fast request, excessively short timeout
+  against a slow endpoint (clean failure, no hang), malformed server
+  response (`THIS IS NOT HTTP`), and empty-response parsing — all
+  against `tests/regression/mock_http_server.py` (127.0.0.1:41234),
+  which `run_regression_tests.sh` starts/stops around the suite.
+
 ## v0.48.31 — 2026 (BRAID and LINK Collection Operations)
 
 ### New Features

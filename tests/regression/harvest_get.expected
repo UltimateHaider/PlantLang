@@ -1,0 +1,12 @@
+get ok = TRUE
+get status = 200
+get body = hello mock:none
+get header X-Mock = yes
+custom header ok = TRUE
+custom header echo = hello mock:abc123
+empty headers body = hello mock:none
+404 ok = FALSE
+404 status = 404
+404 body = not found
+empty url ok = FALSE
+empty url status = 0

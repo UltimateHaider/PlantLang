@@ -13,6 +13,15 @@ mkdir -p "$BUILD"
 # stale scratch files from the fs_append regression test (appends must
 # start from an empty target each run)
 rm -f /tmp/plantlang_fs_append_*.txt
+# v0.48.32: local mock HTTP server for the HARVEST tests (started
+# only when such tests exist; python3 required, else tests fail)
+MOCK_PID=
+if ls "$DIR"/harvest_*.plant >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+  python3 "$DIR/mock_http_server.py" >"$BUILD/mock_http_server.log" 2>&1 &
+  MOCK_PID=$!
+  sleep 1
+  trap 'if [ -n "$MOCK_PID" ]; then kill "$MOCK_PID" 2>/dev/null; fi' EXIT
+fi
 pass=0
 fail=0
 

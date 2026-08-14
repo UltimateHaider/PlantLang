@@ -1,0 +1,45 @@
+# harvest_get: HARVEST GET (v0.48.32).
+# Baseline GET against the local mock server: response encapsulation
+# (ok/status/body/headers), custom request header transmission
+# (echoed back by the server), non-2xx status handling, and empty
+# URL rejection.
+ACTION main(),
+  HARVEST "http://127.0.0.1:41234/get" AS r.
+  REAP ok FROM _map_get, r, "ok".
+  REAP st FROM _map_get, r, "status".
+  REAP body FROM _map_get, r, "body".
+  SHOW "get ok = " + ok.
+  SHOW "get status = " + st.
+  SHOW "get body = " + body.
+  REAP hd FROM _map_get, r, "headers".
+  REAP xm FROM _map_get, hd, "X-Mock".
+  SHOW "get header X-Mock = " + xm.
+
+  CREATE hdrs(LIST) TO plant_list_make(0).
+  LINK "X-Test" WITH "abc123" IN hdrs.
+  HARVEST "http://127.0.0.1:41234/get" AS r2 HEADERS hdrs.
+  REAP ok2 FROM _map_get, r2, "ok".
+  REAP body2 FROM _map_get, r2, "body".
+  SHOW "custom header ok = " + ok2.
+  SHOW "custom header echo = " + body2.
+
+  CREATE emptyHdrs(LIST) TO plant_list_make(0).
+  HARVEST "http://127.0.0.1:41234/get" AS r3 HEADERS emptyHdrs.
+  REAP body3 FROM _map_get, r3, "body".
+  SHOW "empty headers body = " + body3.
+
+  HARVEST "http://127.0.0.1:41234/status404" AS r4.
+  REAP ok4 FROM _map_get, r4, "ok".
+  REAP st4 FROM _map_get, r4, "status".
+  REAP body4 FROM _map_get, r4, "body".
+  SHOW "404 ok = " + ok4.
+  SHOW "404 status = " + st4.
+  SHOW "404 body = " + body4.
+
+  HARVEST "" AS r5.
+  REAP ok5 FROM _map_get, r5, "ok".
+  REAP st5 FROM _map_get, r5, "status".
+  SHOW "empty url ok = " + ok5.
+  SHOW "empty url status = " + st5.
+  GIVE 0.
+/GIVE main.

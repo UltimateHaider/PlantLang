@@ -1,0 +1,41 @@
+# harvest_post: HARVEST POST (v0.48.32).
+# POST payload delivery (echoed by the server), explicit timeout
+# configuration on a fast request, an excessively short timeout
+# against a slow endpoint (must fail cleanly, not hang), malformed
+# server responses, and empty-response parsing.
+ACTION main(),
+  HARVEST "http://127.0.0.1:41234/post" AS p METHOD POST BODY "hello=world".
+  REAP ok FROM _map_get, p, "ok".
+  REAP st FROM _map_get, p, "status".
+  REAP body FROM _map_get, p, "body".
+  SHOW "post ok = " + ok.
+  SHOW "post status = " + st.
+  SHOW "post echo = " + body.
+
+  HARVEST "http://127.0.0.1:41234/post" AS p2 METHOD POST.
+  REAP body2 FROM _map_get, p2, "body".
+  SHOW "post empty body echo = " + body2.
+
+  HARVEST "http://127.0.0.1:41234/get" AS p3 TIMEOUT 5.
+  REAP ok3 FROM _map_get, p3, "ok".
+  SHOW "timeout 5 request ok = " + ok3.
+
+  HARVEST "http://127.0.0.1:41234/slow" AS p4 TIMEOUT 1.
+  REAP ok4 FROM _map_get, p4, "ok".
+  REAP st4 FROM _map_get, p4, "status".
+  SHOW "short timeout ok = " + ok4.
+  SHOW "short timeout status = " + st4.
+
+  HARVEST "http://127.0.0.1:41234/bad" AS p5.
+  REAP ok5 FROM _map_get, p5, "ok".
+  REAP st5 FROM _map_get, p5, "status".
+  SHOW "malformed ok = " + ok5.
+  SHOW "malformed status = " + st5.
+
+  HARVEST "http://127.0.0.1:41234/empty" AS p6.
+  REAP ok6 FROM _map_get, p6, "ok".
+  REAP body6 FROM _map_get, p6, "body".
+  SHOW "empty response ok = " + ok6.
+  SHOW "empty response body = " + body6.
+  GIVE 0.
+/GIVE main.
