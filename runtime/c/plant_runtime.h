@@ -23,13 +23,14 @@ void plant_array_set(int64_t* arr, int64_t index, int64_t value);
 tx_t        plant_net_harvest(tx_t url, tx_t method, tx_t body, tx_t headers, int64_t timeout); /* response MAP: ok/status/body/headers */
 int64_t plant_net_listen_open(int64_t port);
 int64_t plant_net_accept(int64_t fd);
-char* plant_net_read(int64_t fd);
-int64_t plant_net_write(int64_t fd, const char* data);
-void plant_net_close(int64_t fd);
 
-/* ── v0.48.33: HTTP Server ── */
-tx_t        plant_net_listen(int64_t port);                 /* request MAP: ok/method/path/headers/body (+ internal sock) */
+/* ── v0.48.34: HTTP Server + Socket Utilities ── */
+tx_t        plant_net_listen(int64_t port);                 /* request MAP: ok/method/path/headers/body/sock */
 tx_t        plant_net_respond(tx_t req, tx_t body);         /* sends HTTP/1.1 200 OK + Content-Length, closes the connection */
+tx_t        plant_net_harvest_map(tx_t url, tx_t method, tx_t body, tx_t headers, int64_t timeout); /* HARVEST ... AS MAP: response MAP with live sock key */
+tx_t        plant_net_read(tx_t fd);                        /* buffered read (500ms idle window); sock as decimal string */
+tx_t        plant_net_write(tx_t fd, tx_t data);            /* send-all; "TRUE" on success, "FALSE" on failure */
+tx_t        plant_net_close(tx_t fd);                       /* idempotent double-close-safe termination; "TRUE" */
 
 /* ── v0.42.0: Map Data Structure ── */
 

@@ -1,0 +1,40 @@
+# harvest_full: full network lifecycle with HARVEST ... AS MAP
+# (v0.48.34). Runs a MAP-mode HARVEST against the mock /readback
+# endpoint (which responds, pushes extra bytes, echoes a follow-up
+# payload, and answers with an ack), then exercises the low-level
+# socket utilities: plant_net_read (stream + ack), plant_net_write
+# (send-all boolean), plant_net_close (idempotent double close), and
+# the defensive edge cases (read/write on a closed socket, bogus
+# descriptor).
+ACTION main(),
+  SHOW "full start".
+  HARVEST "http://127.0.0.1:41234/readback" AS r MAP.
+  REAP ok1 FROM _map_get, r, "ok".
+  REAP st1 FROM _map_get, r, "status".
+  REAP bd1 FROM _map_get, r, "body".
+  SHOW "full ok = " + ok1.
+  SHOW "full status = " + st1.
+  SHOW "full body = " + bd1.
+  REAP hd1 FROM _map_get, r, "headers".
+  REAP cl1 FROM _map_get, hd1, "Content-Length".
+  SHOW "full clen = " + cl1.
+  REAP fd FROM _map_get, r, "sock".
+  REAP push FROM plant_net_read, fd.
+  SHOW "full read = " + push.
+  REAP w1 FROM plant_net_write, fd, "client-push".
+  SHOW "full write = " + w1.
+  REAP ack FROM plant_net_read, fd.
+  SHOW "full ack = " + ack.
+  REAP c1 FROM plant_net_close, fd.
+  REAP c2 FROM plant_net_close, fd.
+  SHOW "full close1 = " + c1.
+  SHOW "full close2 = " + c2.
+  REAP pr FROM plant_net_read, fd.
+  SHOW "full read-after-close = " + pr + " (empty)".
+  REAP pw FROM plant_net_write, fd, "zzz".
+  SHOW "full write-after-close = " + pw.
+  REAP bf FROM plant_net_read, "bogus".
+  SHOW "full read-bogus-fd = " + bf + " (empty)".
+  SHOW "full done".
+  GIVE 0.
+/GIVE main.

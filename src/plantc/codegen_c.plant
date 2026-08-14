@@ -2276,7 +2276,9 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    for the request body is "payload" (v0.48.32) — NOT "body",
     #    which generic closure/scope walkers read as the statement
     #    list of structured statements (a collision that crashed
-    #    _cl_walk when the payload was a long string).
+    #    _cl_walk when the payload was a long string). The optional
+    #    MAP option (v0.48.34) routes to plant_net_harvest_map, whose
+    #    response MAP also carries the live "sock" descriptor.
     IF ntype IS "harvest_stmt",
         REAP hurl FROM _map_get, node, "url".
         REAP hresp FROM _map_get, node, "resp".
@@ -2284,6 +2286,11 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP hbody FROM _map_get, node, "payload".
         REAP hhdrs FROM _map_get, node, "headers".
         REAP htime FROM _map_get, node, "timeout".
+        REAP hmap FROM _map_get, node, "map".
+        CREATE hfn(TX) TO "plant_net_harvest".
+        IF hmap IS "1",
+            SET hfn TO "plant_net_harvest_map".
+        /IF.
         REAP isel FROM indent_str, indent.
         REAP hcurl FROM translate_expr, hurl.
         CREATE hmethod(TX) TO hmeth.
@@ -2313,7 +2320,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             /IF.
         /IF.
         IF htmo IS "", SET htmo TO "0". /IF.
-        GIVE isel + "  tx_t " + hresp + " = plant_net_harvest(" + hcurl + ", " + hmethod + ", " + hcbody + ", " + hhdr + ", " + htmo + ");\n".
+        GIVE isel + "  tx_t " + hresp + " = " + hfn + "(" + hcurl + ", " + hmethod + ", " + hcbody + ", " + hhdr + ", " + htmo + ");\n".
     /IF.
 
     # ── listen_stmt: LISTEN ON port AS req. ───────────────────

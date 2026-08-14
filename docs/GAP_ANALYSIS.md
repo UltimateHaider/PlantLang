@@ -90,7 +90,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `WEATHER … SHELTER storm AS e … CALM.` | S | **S** | v0.48.25; THROW + 13 kinds + ANY_STORM catch-all, STOP IF, plant_calm finalization |
 | `MATCH expr { Variant(b) -> … }` / `MATCH … IS … YIELD` | S | M | |
 | `TAP/ABSORB/INFUSE/SEAL` (VEIN files) | S | M | INFUSE/ABSORB/SEAL were parse stubs in legacy too |
-| `HARVEST "url" [METHOD:][BODY:][HEADERS:][TIMEOUT:]` | S | **S** | v0.48.32 (HTTP/1.1 client, response MAP ok/status/body/headers; timeout 0 → 5s; no TLS) |
+| `HARVEST "url" [METHOD:][BODY:][HEADERS:][TIMEOUT:]` | S | **S** | v0.48.32 (HTTP/1.1 client, response MAP ok/status/body/headers; timeout 0 → 5s; no TLS); v0.48.34 (`… AS … MAP` keeps the connection live and exposes `sock` for plant_net_read/write/close) |
 | `LISTEN BRANCH ON port … LISTEN/.` + `GIVE … AS RESPONSE` | S | **S** | v0.48.33 (LISTEN ON port AS req. one-shot server, request MAP ok/method/path/headers/body, GIVE … AS RESPONSE replies 200 + Content-Length; bind failure → ok FALSE) |
 | `WAIT n.` (sync sleep) | S | **P** | only `plant_msleep` via external; no statement |
 | `ANALYZE x.` | S | M | |

@@ -1,0 +1,14 @@
+full start
+full ok = TRUE
+full status = 200
+full body = hello mock
+full clen = 10
+full read = server-push
+full write = TRUE
+full ack = push-ack:client-push
+full close1 = TRUE
+full close2 = TRUE
+full read-after-close =  (empty)
+full write-after-close = FALSE
+full read-bogus-fd =  (empty)
+full done

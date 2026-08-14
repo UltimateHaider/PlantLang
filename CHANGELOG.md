@@ -1,5 +1,61 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.34 — 2026 (Networking Enhancements: Read/Write/Close + HARVEST MAP)
+
+### New Features
+- **`HARVEST url AS resp MAP.`** (parser.plant + codegen_c.plant): the
+  optional trailing `MAP` specifier (usable in any option order) sets
+  a `map` flag on the `harvest_stmt` AST node; codegen routes the call
+  to the new `plant_net_harvest_map(url, method, payload, headers,
+  timeout)` runtime function. MAP mode keeps the connection alive
+  after the response and adds a `sock` key — the live descriptor as a
+  decimal string — to the response MAP alongside the uniform
+  `ok`/`status`/`body`/`headers` fields, enabling follow-up
+  reads/writes and explicit teardown.
+- **`plant_net_harvest_map` runtime** (`plant_runtime.c` +
+  `plant_runtime.h`): shared `_plant_net_harvest_ex` core with a
+  keep-alive flag. MAP mode sends the request without `Connection:
+  close`, reads exactly the `Content-Length` body, and stashes any
+  over-read bytes (same TCP segment as the body) in a per-fd pending
+  buffer so a later `plant_net_read` still sees the stream in order;
+  the body field is truncated to exactly the Content-Length bytes.
+  When the response lacks a header block or Content-Length the
+  connection drains to EOF/timeout, is closed, and `sock` reports
+  `-1`.
+- **`plant_net_read(fd)` runtime**: replaces the legacy one-shot recv.
+  Accepts a sock reference as a decimal string, drains the pending
+  buffer first, then accumulates `recv` data under a 500 ms
+  idle/SO_RCVTIMEO window (1 MiB cap) so slow peers cannot hang the
+  caller. Closed, negative, or non-numeric descriptors yield the
+  empty string safely.
+- **`plant_net_write(fd, data)` runtime**: replaces the legacy
+  byte-count return. Performs a send-all loop over the full payload
+  and returns the boolean `"TRUE"` on successful transmission,
+  `"FALSE"` on any send failure or closed/invalid descriptor.
+- **`plant_net_close(fd)` runtime**: replaces the legacy void close.
+  Releases the descriptor through a closed-fd registry, making
+  double-close attempts safe idempotent no-ops (an already-closed fd
+  is never re-closed, so a recycled descriptor cannot be corrupted);
+  entries are forgotten when the runtime opens a fresh socket with
+  the same number. Always reports `"TRUE"`.
+- **Unified sock representation**: the LISTEN request MAP's `sock`
+  key is now the same decimal-string form as HARVEST MAP mode, and
+  `plant_net_respond` resolves it the same way (internal `close` and
+  `send` paths use shared `_plant_close_raw`/`_plant_send_all`
+  helpers).
+
+### Regression Tests
+- `harvest_full`: complete network lifecycle against a new
+  `/readback` mock endpoint (200 "hello mock" with keep-alive, a
+  pushed "server-push" stream chunk, follow-up payload echo
+  "push-ack:<payload>"): MAP-mode HARVEST field extraction
+  (ok/status/body/Content-Length), `plant_net_read` on the live sock,
+  `plant_net_write` boolean result, `plant_net_read` of the pushed
+  stream and the ack, idempotent double `plant_net_close`
+  (`TRUE`/`TRUE`), and the defensive edges: read after close (empty),
+  write after close (`FALSE`), and read on a bogus descriptor
+  (empty).
+
 ## v0.48.33 — 2026 (LISTEN / RESPONSE HTTP Server)
 
 ### New Features

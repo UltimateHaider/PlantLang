@@ -1953,7 +1953,8 @@ ACTION parse_harvest_stmt(tokens(LIST), pos(NUM)),
   CREATE body(TX) TO "".
   CREATE headers(TX) TO "".
   CREATE timeout(TX) TO "".
-  CREATE okws(LIST) TO plant_list_make(5, "METHOD", "BODY", "HEADERS", "TIMEOUT", ".").
+  CREATE map(TX) TO "".
+  CREATE okws(LIST) TO plant_list_make(6, "METHOD", "BODY", "HEADERS", "TIMEOUT", "MAP", ".").
   REAP rpair FROM collect_until_keyword, tokens, p4, okws.
   SET resp TO rpair[0].
   REAP p4 FROM _second, rpair.
@@ -1962,6 +1963,12 @@ ACTION parse_harvest_stmt(tokens(LIST), pos(NUM)),
     REAP lx FROM tok_lex, tok.
     IF lx IS "." OR lx IS "",
       BREAK 0.
+    /IF.
+    IF lx IS "MAP",
+      REAP dropm FROM consume, tokens, p4.
+      REAP p4 FROM _second, dropm.
+      SET map TO "1".
+      CONTINUE 0.
     /IF.
     IF lx IS "METHOD" OR lx IS "BODY" OR lx IS "HEADERS" OR lx IS "TIMEOUT",
       REAP drop FROM consume, tokens, p4.
@@ -1986,7 +1993,7 @@ ACTION parse_harvest_stmt(tokens(LIST), pos(NUM)),
   /SEASON.
   REAP dot_pair FROM consume, tokens, p4.
   REAP p5 FROM _second, dot_pair.
-  GIVE plant_list_make(2, plant_list_make(14, "type", "harvest_stmt", "url", url, "resp", resp, "method", method, "payload", body, "headers", headers, "timeout", timeout), p5).
+  GIVE plant_list_make(2, plant_list_make(16, "type", "harvest_stmt", "url", url, "resp", resp, "method", method, "payload", body, "headers", headers, "timeout", timeout, "map", map), p5).
 /ACTION.
 
 # v0.48.33 — LISTEN ON port AS req. opens an HTTP server socket on

@@ -11,6 +11,9 @@ files stay deterministic:
   /empty    200, empty body
   /status404 404 "not found"
   /bad      malformed response: no HTTP status line
+  /readback keep-alive MAP-mode flow (v0.48.34): 200 "hello mock",
+            then pushes "server-push", reads the client's follow-up
+            payload, and answers "push-ack:<payload>"
   *         404, empty body
 
 Reads the request head plus Content-Length bytes of body, then
@@ -20,6 +23,11 @@ import socket
 import time
 
 PORT = 41234
+
+
+class _Done(Exception):
+    pass
+
 
 srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -60,7 +68,27 @@ while True:
                 xtest = ln.split(b":", 1)[1].strip().decode("latin-1")
                 break
 
-        if path == "/get":
+        if path == "/readback":
+            payload = b"hello mock"
+            conn.sendall(
+                b"HTTP/1.1 200 OK\r\n"
+                b"X-Mock: readback\r\n"
+                + ("Content-Length: %d\r\nConnection: keep-alive\r\n\r\n" % len(payload)).encode()
+                + payload
+            )
+            time.sleep(0.3)
+            conn.sendall(b"server-push")
+            conn.settimeout(3)
+            try:
+                follow = conn.recv(4096)
+            except socket.timeout:
+                follow = b""
+            conn.settimeout(None)
+            conn.sendall(b"push-ack:" + follow)
+            time.sleep(0.4)
+            conn.close()
+            raise _Done()
+        elif path == "/get":
             payload = ("hello mock:" + xtest).encode()
             resp = (
                 b"HTTP/1.1 200 OK\r\n"

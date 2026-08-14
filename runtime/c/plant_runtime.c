@@ -93,20 +93,121 @@ void plant_array_set(int64_t* arr, int64_t index, int64_t value) {
     arr[index + 1] = value;
 }
 
-/* ── v0.48.32: plant_net_harvest — HARVEST HTTP client ────────
+/* ── v0.48.34: shared socket utilities (fd registry, pending reads) ─
+   _plant_fd registry tracks fds closed through plant_net_close so a
+   double close is a safe no-op instead of re-closing a recycled
+   descriptor; entries are forgotten the moment the runtime creates a
+   new socket with the same number. _plant_pending holds bytes that
+   arrived in the same TCP segment as (but after) a HARVEST MAP-mode
+   body read, so a later plant_net_read still sees them in order. */
+static int _plant_closed_fds[128];
+static int _plant_closed_n = 0;
+
+static int _plant_fd_is_closed(int fd) {
+    for (int i = 0; i < _plant_closed_n; i++)
+        if (_plant_closed_fds[i] == fd) return 1;
+    return 0;
+}
+
+static void _plant_fd_remember(int fd) {
+    for (int i = 0; i < _plant_closed_n; i++)
+        if (_plant_closed_fds[i] == fd) return;
+    if (_plant_closed_n >= 128) _plant_closed_n = 127;
+    _plant_closed_fds[_plant_closed_n++] = fd;
+}
+
+static void _plant_fd_forget(int fd) {
+    for (int i = 0; i < _plant_closed_n; i++) {
+        if (_plant_closed_fds[i] == fd) {
+            for (int j = i; j + 1 < _plant_closed_n; j++)
+                _plant_closed_fds[j] = _plant_closed_fds[j + 1];
+            _plant_closed_n--;
+            return;
+        }
+    }
+}
+
+static void _plant_close_raw(int fd) {
+    if (fd < 0 || _plant_fd_is_closed(fd)) return;
+    if (close(fd) == 0) _plant_fd_remember(fd);
+}
+
+static int _plant_send_all(int fd, const char* data) {
+    if (!data) return 1;
+    size_t n = strlen(data);
+    size_t off = 0;
+    while (off < n) {
+        ssize_t s = send(fd, data + off, n - off, 0);
+        if (s <= 0) return 0;
+        off += (size_t)s;
+    }
+    return 1;
+}
+
+static char* _plant_pending_data[64];
+static int _plant_pending_fd[64];
+static int _plant_pending_n = 0;
+
+static void _plant_pending_store(int fd, const char* data) {
+    if (!data || !data[0]) return;
+    for (int i = 0; i < _plant_pending_n; i++) {
+        if (_plant_pending_fd[i] == fd) {
+            char* old = _plant_pending_data[i];
+            _plant_pending_data[i] = plant_str_concat(old, data);
+            plant_free(old);
+            return;
+        }
+    }
+    if (_plant_pending_n >= 64) { plant_free(_plant_pending_data[0]); _plant_pending_n = 0; }
+    _plant_pending_fd[_plant_pending_n] = fd;
+    _plant_pending_data[_plant_pending_n] = plant_str_concat(data, "");
+    _plant_pending_n++;
+}
+
+static char* _plant_pending_take(int fd) {
+    for (int i = 0; i < _plant_pending_n; i++) {
+        if (_plant_pending_fd[i] == fd) {
+            char* r = _plant_pending_data[i];
+            for (int j = i; j + 1 < _plant_pending_n; j++) {
+                _plant_pending_fd[j] = _plant_pending_fd[j + 1];
+                _plant_pending_data[j] = _plant_pending_data[j + 1];
+            }
+            _plant_pending_n--;
+            return r;
+        }
+    }
+    return NULL;
+}
+
+/* parse a tx_t sock reference (decimal string) into an fd; -2 = invalid */
+static int _plant_fd_of(tx_t s) {
+    if (!s) return -2;
+    const char* d = (const char*)s;
+    if (!(d[0] == '-' || (d[0] >= '0' && d[0] <= '9'))) return -2;
+    char* end = NULL;
+    long v = strtol(d, &end, 10);
+    if (end == d) return -2;
+    return (int)v;
+}
+
+/* ── v0.48.32/34: plant_net_harvest — HARVEST HTTP client ──────
    Low-level socket client (socket/connect/send/recv) targeting the
    standard HTTP (80) / HTTPS (443) ports. Builds an HTTP/1.1
-   request with Host + Connection: close + Content-Length, optional
-   custom header MAP (pair list) and payload body. Timeout (seconds,
-   0 → 5s default) is enforced via SO_SNDTIMEO/SO_RCVTIMEO so a
-   dead peer cannot hang the caller. Returns a response MAP:
+   request with Host + Content-Length, optional custom header MAP
+   (pair list) and payload body, plus a Connection: close header in
+   the default (non-MAP) mode. Timeout (seconds, 0 → 5s default) is
+   enforced via SO_SNDTIMEO/SO_RCVTIMEO so a dead peer cannot hang
+   the caller. Returns a response MAP:
      ok      "TRUE" for 2xx responses, else "FALSE"
      status  HTTP status code (string)
      body    response payload
      headers nested MAP of response headers
+     sock    (MAP mode only) the live connection's descriptor as a
+             decimal string, for plant_net_read/write/close; "-1"
+             when the connection could not be kept alive
    Malformed responses and connection failures yield ok "FALSE"
    with status "0" and whatever payload was readable. */
-tx_t plant_net_harvest(tx_t url, tx_t method, tx_t body, tx_t headers, int64_t timeout) {
+static tx_t _plant_net_harvest_ex(tx_t url, tx_t method, tx_t body, tx_t headers, int64_t timeout, int keep_sock) {
     const char* u = url ? (const char*)url : "";
     PlantArray* out = plant_list_create(8);
     out = plant_list_push(out, strdup("ok"));
@@ -163,6 +264,7 @@ tx_t plant_net_harvest(tx_t url, tx_t method, tx_t body, tx_t headers, int64_t t
         return (tx_t)out;
     int fd = socket(res->ai_family, res->ai_socktype, res->ai_protocol);
     if (fd < 0) { freeaddrinfo(res); return (tx_t)out; }
+    _plant_fd_forget(fd);
     long tv_sec = timeout > 0 ? (long)timeout : 5L;
     struct timeval tv = { .tv_sec = tv_sec, .tv_usec = 0 };
     setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &tv, sizeof(tv));
@@ -192,17 +294,21 @@ tx_t plant_net_harvest(tx_t url, tx_t method, tx_t body, tx_t headers, int64_t t
     const char* b = body ? (const char*)body : "";
     char req[8192];
     int n = snprintf(req, sizeof(req),
-        "%s %s HTTP/1.1\r\nHost: %s\r\n%sConnection: close\r\nContent-Length: %zu\r\n\r\n",
-        mbuf, path, host, hdr_map, strlen(b));
+        "%s %s HTTP/1.1\r\nHost: %s\r\n%s%sContent-Length: %zu\r\n\r\n",
+        mbuf, path, host, hdr_map,
+        keep_sock ? "" : "Connection: close\r\n",
+        strlen(b));
     if (n < 0) { close(fd); return (tx_t)out; }
-    send(fd, req, (size_t)n, 0);
+    _plant_send_all(fd, req);
     if (b[0] && strcmp(mbuf, "POST") == 0)
-        send(fd, b, strlen(b), 0);
+        _plant_send_all(fd, b);
 
     char buf[8192];
     char* response = plant_alloc(1);
     response[0] = '\0';
     ssize_t r;
+    long cl_need = -1;
+    int got_hdr = 0;
     while ((r = recv(fd, buf, sizeof(buf) - 1, 0)) > 0) {
         buf[r] = '\0';
         char* old = response;
@@ -212,8 +318,46 @@ tx_t plant_net_harvest(tx_t url, tx_t method, tx_t body, tx_t headers, int64_t t
         memcpy(response + old_len, buf, (size_t)r);
         response[old_len + (size_t)r] = '\0';
         plant_free(old);
+        if (keep_sock && !got_hdr) {
+            const char* sep0 = strstr(response, "\r\n\r\n");
+            if (sep0) {
+                got_hdr = 1;
+                const char* cl0 = strstr(response, "Content-Length:");
+                if (cl0 && cl0 < sep0) {
+                    cl_need = strtoll(cl0 + 15, NULL, 10);
+                    if (cl_need < 0) cl_need = 0;
+                } else {
+                    cl_need = -2;
+                }
+            }
+        }
+        if (keep_sock && got_hdr && cl_need >= 0) {
+            const char* sep1 = strstr(response, "\r\n\r\n");
+            size_t have = (size_t)(response + strlen(response) - (sep1 + 4));
+            if (have >= (size_t)cl_need) break;
+        }
+        if (strlen(response) > 1048576) break;
     }
-    close(fd);
+
+    /* MAP mode keeps the connection alive only when the header block
+       and a complete Content-Length body arrived; anything else drains
+       to EOF/timeout and is closed (sock reported as -1). */
+    int sock_report = -1;
+    if (keep_sock && got_hdr && cl_need >= 0) {
+        const char* sep2 = strstr(response, "\r\n\r\n");
+        size_t have = (size_t)(response + strlen(response) - (sep2 + 4));
+        if (have >= (size_t)cl_need) {
+            sock_report = fd;
+            size_t over_len = have - (size_t)cl_need;
+            char* over = plant_alloc(over_len + 1);
+            memcpy(over, sep2 + 4 + (size_t)cl_need, over_len);
+            over[over_len] = '\0';
+            if (over_len > 0) _plant_pending_store(fd, over);
+            plant_free(over);
+        }
+    }
+    if (!keep_sock || sock_report < 0)
+        close(fd);
 
     const char* sep = strstr(response, "\r\n\r\n");
     const char* head_end = sep ? sep : response + strlen(response);
@@ -264,12 +408,39 @@ tx_t plant_net_harvest(tx_t url, tx_t method, tx_t body, tx_t headers, int64_t t
         if (lp > hend) break;
     }
 
+    /* MAP mode: body is exactly the Content-Length bytes (anything
+       beyond has been stashed for plant_net_read). */
+    char* body_out = NULL;
+    if (sock_report >= 0 && cl_need > 0) {
+        body_out = plant_alloc((size_t)cl_need + 1);
+        memcpy(body_out, resp_body, (size_t)cl_need);
+        body_out[cl_need] = '\0';
+    }
     plant_list_set(out, 1, strdup(status >= 200 && status <= 299 ? "TRUE" : "FALSE"));
     plant_list_set(out, 3, strdup(st));
-    plant_list_set(out, 5, strdup(resp_body));
+    plant_list_set(out, 5, strdup(body_out ? body_out : resp_body));
     plant_list_set(out, 7, (void*)hdrs);
+    if (keep_sock) {
+        char sfd[16];
+        snprintf(sfd, sizeof(sfd), "%d", sock_report);
+        out = plant_list_push(out, strdup("sock"));
+        out = plant_list_push(out, strdup(sfd));
+    }
+    plant_free(body_out);
     plant_free(response);
     return (tx_t)out;
+}
+
+tx_t plant_net_harvest(tx_t url, tx_t method, tx_t body, tx_t headers, int64_t timeout) {
+    return _plant_net_harvest_ex(url, method, body, headers, timeout, 0);
+}
+
+/* v0.48.34 — HARVEST ... AS resp MAP.: same request/response handling
+   as plant_net_harvest but the connection is kept alive and its
+   descriptor is exposed in the response MAP under "sock" (decimal
+   string) for plant_net_read / plant_net_write / plant_net_close. */
+tx_t plant_net_harvest_map(tx_t url, tx_t method, tx_t body, tx_t headers, int64_t timeout) {
+    return _plant_net_harvest_ex(url, method, body, headers, timeout, 1);
 }
 
 /* ── v0.48.33: plant_net_listen / plant_net_respond — HTTP server ─
@@ -281,7 +452,7 @@ tx_t plant_net_harvest(tx_t url, tx_t method, tx_t body, tx_t headers, int64_t t
      path    request target ("/foo"; "" if malformed)
      headers nested MAP (pair list) of request headers
      body    request payload (per Content-Length, "" if none)
-     sock    internal boxed socket fd consumed by plant_net_respond
+     sock    decimal-string descriptor consumed by plant_net_respond
    The listening socket is closed right after the accept (single-request
    server). plant_net_respond sends an HTTP/1.1 200 OK response with
    Content-Type: text/plain and Content-Length, then closes the
@@ -301,8 +472,9 @@ tx_t plant_net_listen(int64_t port) {
     int fd = plant_net_listen_open((int)port);
     if (fd < 0) return (tx_t)req;
     int cfd = plant_net_accept(fd);
-    plant_net_close(fd);
+    _plant_close_raw(fd);
     if (cfd < 0) return (tx_t)req;
+    _plant_fd_forget(cfd);
     long tv_sec = 5L;
     struct timeval tv = { .tv_sec = tv_sec, .tv_usec = 0 };
     setsockopt(cfd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
@@ -406,10 +578,10 @@ tx_t plant_net_listen(int64_t port) {
         if (lp > hend) break;
     }
 
-    int* boxed = (int*)plant_alloc(sizeof(int));
-    *boxed = cfd;
+    char sfd[16];
+    snprintf(sfd, sizeof(sfd), "%d", cfd);
     req = plant_list_push(req, strdup("sock"));
-    req = plant_list_push(req, (void*)boxed);
+    req = plant_list_push(req, strdup(sfd));
     plant_list_set(req, 1, strdup("TRUE"));
     plant_list_set(req, 3, strdup(method));
     plant_list_set(req, 5, strdup(path));
@@ -433,16 +605,15 @@ tx_t plant_net_respond(tx_t req, tx_t body) {
         }
     }
     if (svi < 0) return 0;
-    int fd = *(int*)m->items[svi];
+    int fd = (int)strtol((const char*)m->items[svi], NULL, 10);
     const char* b = body ? (const char*)body : "";
     char hdr[256];
     int n = snprintf(hdr, sizeof(hdr),
         "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n",
         strlen(b));
-    if (n > 0) plant_net_write(fd, hdr);
-    if (b[0]) plant_net_write(fd, b);
-    plant_net_close(fd);
-    plant_free(m->items[svi]);
+    if (n > 0) _plant_send_all(fd, hdr);
+    if (b[0]) _plant_send_all(fd, b);
+    _plant_close_raw(fd);
     return 0;
 }
 
@@ -450,6 +621,7 @@ tx_t plant_net_respond(tx_t req, tx_t body) {
 int64_t plant_net_listen_open(int64_t port) {
     int fd = socket(AF_INET, SOCK_STREAM, 0);
     if (fd < 0) return -1;
+    _plant_fd_forget(fd);
     int opt = 1;
     setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
     struct sockaddr_in addr;
@@ -469,22 +641,57 @@ int64_t plant_net_accept(int64_t fd) {
     return (int64_t)cfd;
 }
 
-char* plant_net_read(int64_t fd) {
-    char buf[4096];
-    ssize_t r = recv((int)fd, buf, sizeof(buf) - 1, 0);
-    if (r <= 0) return plant_str_concat("", "");
-    buf[r] = '\0';
-    return plant_str_concat(buf, "");
+/* ── v0.48.34: plant_net_read / plant_net_write / plant_net_close ─
+   Low-level socket utilities callable from the language with a sock
+   reference (decimal string, e.g. the "sock" key of a HARVEST ...
+   AS MAP response or a LISTEN request). plant_net_read drains the
+   pending buffer (bytes that over-read past a Content-Length body),
+   then accumulates recv data under a 500ms idle/SO_RCVTIMEO window
+   so slow peers cannot hang the caller; closed/invalid/negative
+   descriptors yield the empty string. plant_net_write transmits the
+   full payload via a send-all loop and reports "TRUE"/"FALSE".
+   plant_net_close releases the descriptor through the closed-fd
+   registry so double closes are safe no-ops reporting "TRUE". */
+tx_t plant_net_read(tx_t fd) {
+    int fdx = _plant_fd_of(fd);
+    if (fdx < 0 || _plant_fd_is_closed(fdx)) return strdup("");
+    char* pend = _plant_pending_take(fdx);
+    if (pend) return pend;
+    struct timeval tv = { .tv_sec = 0, .tv_usec = 500000 };
+    setsockopt(fdx, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    char buf[8192];
+    char* data = plant_alloc(1);
+    data[0] = '\0';
+    for (;;) {
+        ssize_t r = recv(fdx, buf, sizeof(buf) - 1, 0);
+        if (r <= 0) break;
+        buf[r] = '\0';
+        char* old = data;
+        size_t ol = strlen(old);
+        data = plant_alloc(ol + (size_t)r + 1);
+        memcpy(data, old, ol);
+        memcpy(data + ol, buf, (size_t)r);
+        data[ol + (size_t)r] = '\0';
+        plant_free(old);
+        if (ol + (size_t)r > 1048576) break;
+    }
+    return data;
 }
 
-int64_t plant_net_write(int64_t fd, const char* data) {
-    if (!data) return -1;
-    ssize_t sent = send((int)fd, data, strlen(data), 0);
-    return (int64_t)sent;
+tx_t plant_net_write(tx_t fd, tx_t data) {
+    int fdx = _plant_fd_of(fd);
+    if (fdx < 0 || _plant_fd_is_closed(fdx)) return strdup("FALSE");
+    if (!_plant_send_all(fdx, data ? (const char*)data : ""))
+        return strdup("FALSE");
+    return strdup("TRUE");
 }
 
-void plant_net_close(int64_t fd) {
-    close((int)fd);
+tx_t plant_net_close(tx_t fd) {
+    int fdx = _plant_fd_of(fd);
+    if (fdx < 0) return strdup("TRUE");
+    if (_plant_fd_is_closed(fdx)) return strdup("TRUE");
+    if (close(fdx) == 0) _plant_fd_remember(fdx);
+    return strdup("TRUE");
 }
 
 /* ═══════════════════════════════════════════════════════════════

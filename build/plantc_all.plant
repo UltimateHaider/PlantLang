@@ -2387,7 +2387,8 @@ ACTION parse_harvest_stmt(tokens(LIST), pos(NUM)),
   CREATE body(TX) TO "".
   CREATE headers(TX) TO "".
   CREATE timeout(TX) TO "".
-  CREATE okws(LIST) TO plant_list_make(5, "METHOD", "BODY", "HEADERS", "TIMEOUT", ".").
+  CREATE map(TX) TO "".
+  CREATE okws(LIST) TO plant_list_make(6, "METHOD", "BODY", "HEADERS", "TIMEOUT", "MAP", ".").
   REAP rpair FROM collect_until_keyword, tokens, p4, okws.
   SET resp TO rpair[0].
   REAP p4 FROM _second, rpair.
@@ -2396,6 +2397,12 @@ ACTION parse_harvest_stmt(tokens(LIST), pos(NUM)),
     REAP lx FROM tok_lex, tok.
     IF lx IS "." OR lx IS "",
       BREAK 0.
+    /IF.
+    IF lx IS "MAP",
+      REAP dropm FROM consume, tokens, p4.
+      REAP p4 FROM _second, dropm.
+      SET map TO "1".
+      CONTINUE 0.
     /IF.
     IF lx IS "METHOD" OR lx IS "BODY" OR lx IS "HEADERS" OR lx IS "TIMEOUT",
       REAP drop FROM consume, tokens, p4.
@@ -2420,7 +2427,7 @@ ACTION parse_harvest_stmt(tokens(LIST), pos(NUM)),
   /SEASON.
   REAP dot_pair FROM consume, tokens, p4.
   REAP p5 FROM _second, dot_pair.
-  GIVE plant_list_make(2, plant_list_make(14, "type", "harvest_stmt", "url", url, "resp", resp, "method", method, "payload", body, "headers", headers, "timeout", timeout), p5).
+  GIVE plant_list_make(2, plant_list_make(16, "type", "harvest_stmt", "url", url, "resp", resp, "method", method, "payload", body, "headers", headers, "timeout", timeout, "map", map), p5).
 /ACTION.
 
 # v0.48.33 — LISTEN ON port AS req. opens an HTTP server socket on
@@ -5190,7 +5197,9 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    for the request body is "payload" (v0.48.32) — NOT "body",
     #    which generic closure/scope walkers read as the statement
     #    list of structured statements (a collision that crashed
-    #    _cl_walk when the payload was a long string).
+    #    _cl_walk when the payload was a long string). The optional
+    #    MAP option (v0.48.34) routes to plant_net_harvest_map, whose
+    #    response MAP also carries the live "sock" descriptor.
     IF ntype IS "harvest_stmt",
         REAP hurl FROM _map_get, node, "url".
         REAP hresp FROM _map_get, node, "resp".
@@ -5198,6 +5207,11 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP hbody FROM _map_get, node, "payload".
         REAP hhdrs FROM _map_get, node, "headers".
         REAP htime FROM _map_get, node, "timeout".
+        REAP hmap FROM _map_get, node, "map".
+        CREATE hfn(TX) TO "plant_net_harvest".
+        IF hmap IS "1",
+            SET hfn TO "plant_net_harvest_map".
+        /IF.
         REAP isel FROM indent_str, indent.
         REAP hcurl FROM translate_expr, hurl.
         CREATE hmethod(TX) TO hmeth.
@@ -5227,7 +5241,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             /IF.
         /IF.
         IF htmo IS "", SET htmo TO "0". /IF.
-        GIVE isel + "  tx_t " + hresp + " = plant_net_harvest(" + hcurl + ", " + hmethod + ", " + hcbody + ", " + hhdr + ", " + htmo + ");\n".
+        GIVE isel + "  tx_t " + hresp + " = " + hfn + "(" + hcurl + ", " + hmethod + ", " + hcbody + ", " + hhdr + ", " + htmo + ");\n".
     /IF.
 
     # ── listen_stmt: LISTEN ON port AS req. ───────────────────
@@ -8594,7 +8608,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.48.33 (pure native)".
+  SHOW "Chloroplast 0.48.34 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.
