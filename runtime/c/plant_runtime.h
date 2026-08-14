@@ -1,6 +1,7 @@
 #ifndef PLANT_RUNTIME_H
 #define PLANT_RUNTIME_H
 
+#include <plant_types.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <setjmp.h>
@@ -111,8 +112,8 @@ void*       plant_list_get(PlantArray* list, int64_t index);
 void        plant_list_set(PlantArray* list, int64_t index, void* value);
 PlantArray* plant_list_push(PlantArray* list, void* value);
 PlantArray* plant_list_make(int64_t count, ...);
-void*       plant_sort(void* list, void* spec);    /* qsort; spec ""|"DESC"|"f:ASC,g:DESC" */
-void*       plant_shuffle(void* list);             /* Fisher-Yates (in place) */
+tx_t        plant_sort(tx_t list, tx_t spec);    /* qsort; spec ""|"DESC"|"f:ASC,g:DESC" */
+tx_t        plant_shuffle(tx_t list);            /* Fisher-Yates (in place) */
 
 /* ── v0.44.0: Option/Result Tagged Union Helpers ── */
 typedef struct PlantTagged {

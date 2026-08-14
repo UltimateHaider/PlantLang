@@ -1,5 +1,39 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.29 — Type Header Decoupling (Refactor)
+
+### Architecture
+- **`plant_types.h` (new).** Single authoritative home for the
+  foundational type:
+  - `typedef void* tx_t;`
+  The opaque pointer type is now isolated from execution logic and
+  compatibility wrappers; `plant_runtime.h` (declarations) and
+  `plant_compat.h` (FFI bindings) both inherit it via
+  `#include <plant_types.h>`, with include guards for idempotency.
+- **`plant_compat.h`.** Local `typedef void* tx_t;` removed; the
+  header now consumes the type from `plant_types.h` and is scoped to
+  FFI bindings and compatibility wrappers only.
+- **`plant_runtime.h`.** Includes `plant_types.h` at the top; the
+  v0.48.29 `plant_sort` / `plant_shuffle` declarations use `tx_t`
+  consistently (reverting the interim `void*` form that existed only
+  because the typedef was previously unavailable at that point).
+- **`plant_runtime.c`.** Unchanged — `tx_t` arrives through its
+  existing `#include <plant_runtime.h>`.
+- **Distribution.** `make dist` stages `plant_types.h` alongside the
+  other runtime headers so distcheck builds resolve it.
+
+### Verification
+- `tx_types.c` native probe (new): includes `plant_runtime.h` then
+  `plant_compat.h` directly, and at compile time asserts
+  - `sizeof(tx_t) == sizeof(void*)` (opaque-pointer contract);
+  - `plant_sort` / `plant_shuffle` addresses assign to `tx_t`
+    function-pointer types (signatures use `tx_t`, not raw `void*`);
+  - FFI statics (`strings_UPPER`) accept/return `tx_t`.
+  Wired into `tests/native/run_native_tests.sh` as the
+  `tx_types header decoupling` case (links the real runtime).
+- Full suite re-run: all 127 cases green (native 20 + generics 7 +
+  closures 6 + regression 94), self-hosting converged, distcheck OK.
+
 ## v0.48.29 — 2026 (SORT and SHAKE List Operations)
 
 ### New Features

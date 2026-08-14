@@ -62,6 +62,22 @@ for src in "$DIR"/*.plant; do
   fi
 done
 
+echo "== type header (plant_types.h) =="
+
+# tx_t must be defined once, in plant_types.h, and be visible to both
+# plant_runtime.h (signatures use tx_t) and plant_compat.h (FFI
+# statics) with no conflicts; linking against the real runtime also
+# proves the runtime implementation resolves the same typedef.
+if gcc -w -O0 -I "$ROOT/runtime/c" "$DIR/tx_types.c" \
+      "$ROOT/runtime/c/plant_runtime.c" "$ROOT/tests/native/mock_ffi.c" \
+      -lm -ldl -o "$BUILD/tx_types" \
+      >"$BUILD/tx_types.compile.log" 2>&1 \
+   && "$BUILD/tx_types" >/dev/null 2>&1; then
+  echo "PASS  tx_types header decoupling"; pass=$((pass+1))
+else
+  echo "FAIL  tx_types header decoupling"; fail=$((fail+1))
+fi
+
 echo "----------------------------------------"
 echo "native tests: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

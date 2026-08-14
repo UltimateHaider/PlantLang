@@ -130,7 +130,7 @@ dist: all self test ## Build versioned tarball + unpack/build/test validation
 		release/plantlang-$(VERSION)/ 2>/dev/null || cp Makefile README.md LICENSE.txt CHANGELOG.md release/plantlang-$(VERSION)/
 	@cp src/plantc/lexer.plant src/plantc/parser.plant src/plantc/codegen_c.plant src/plantc/main.plant \
 		release/plantlang-$(VERSION)/src/plantc/
-	@cp $(RUNTIME) $(COMPAT) runtime/c/plant_runtime.h release/plantlang-$(VERSION)/runtime/c/
+	@cp $(RUNTIME) $(COMPAT) runtime/c/plant_runtime.h runtime/c/plant_types.h release/plantlang-$(VERSION)/runtime/c/
 	@cp tests/native/*.plant tests/native/*.expected tests/native/*.c tests/native/*.h tests/native/run_native_tests.sh \
 		release/plantlang-$(VERSION)/tests/native/
 	@mkdir -p release/plantlang-$(VERSION)/tests/generics

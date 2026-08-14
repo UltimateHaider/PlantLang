@@ -1,13 +1,17 @@
 #ifndef PLANT_COMPAT_H
 #define PLANT_COMPAT_H
 
+/* v0.48.29: tx_t lives in plant_types.h (pulled in via
+   plant_runtime.h below and explicitly for standalone inclusion);
+   plant_compat.h holds only FFI bindings and compatibility
+   wrappers. */
+#include <plant_types.h>
 #define _GNU_SOURCE
 #include <plant_runtime.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-typedef void* tx_t;
 #define _S(x) ((const char*)(x))
 #define _P(x) ((PlantArray*)(x))
 #define _L(x) ((long)(x))
