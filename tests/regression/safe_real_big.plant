@@ -1,0 +1,14 @@
+# safe_real_big — a SAFE worker returns a payload larger than the wire
+# threshold (1MB); the codec hands it over zero-copy via memfd +
+# SCM_RIGHTS ('F') and the parent recovers every byte, proving the big
+# payload path end-to-end across a real process (v0.48.37c).
+ACTION big(n(NUM)) WITH MISSION SAFE,
+  GIVE ffi_make_big(n).
+/ACTION.
+
+ACTION main()
+  REAP out FROM big(1572864).
+  SHOW "len=" + ffi_str_len(out).
+  SHOW "ok=" + ffi_big_ok(out, 1572864).
+  SHOW ffi_safe_status().
+/ACTION.

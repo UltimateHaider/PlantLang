@@ -1,0 +1,16 @@
+# safe_real_str — a SAFE worker returns a string payload over the wire
+# codec ('S'); the parent decodes exactly what the worker encoded,
+# proving string data crosses a real process boundary intact
+# (v0.48.37c).
+ACTION echo_str(s(TX)) WITH MISSION SAFE,
+  GIVE s.
+/ACTION.
+
+ACTION main()
+  REAP out FROM echo_str("real-worker-string").
+  SHOW "out=" + out.
+  SHOW "len=" + ffi_str_len(out).
+  SHOW "eq=" + ffi_str_eq(out, "real-worker-string").
+  SHOW ffi_safe_status().
+  SHOW ffi_audit_dump().
+/ACTION.

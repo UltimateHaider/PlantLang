@@ -176,4 +176,9 @@ tx_t        plant_dist_release(tx_t obj);
 tx_t        plant_dist_status(void);
 tx_t        plant_safe_boundary_copy(tx_t chan, tx_t payload); /* copy/transfer enforcement */
 
+/* ── v0.48.37c: True SAFE isolation — real worker processes ── */
+void plant_safe_register(const char* name, tx_t (*fn)(int argc, tx_t* argv));
+void plant_maybe_run_worker(void);   /* non-returning in --plant-worker mode */
+tx_t plant_safe_call(const char* name, long argc, ...);
+
 #endif

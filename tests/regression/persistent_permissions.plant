@@ -1,7 +1,8 @@
-# persistent_permissions — PERSISTENT defaults grant FILE_READ /
-# FILE_WRITE / NET_CONNECT / NET_LISTEN, and the data-integrity gate
-# refuses to persist objects created inside SAFE (untrusted data
-# cannot cross the boundary without validation) (v0.48.18).
+# persistent_permissions — PERSISTENT defaults grant FILE_READ / FILE_WRITE /
+# NET_CONNECT / NET_LISTEN, and the data-integrity gate refuses to persist
+# objects allocated inside SAFE. Under v0.48.37c SAFE runs in a real worker
+# process, so the taint decision + its audit happen in that worker (lost to
+# the parent's audit ring) and the SHOW result relays to the parent.
 ACTION grant_check() WITH MISSION PERSISTENT,
   SHOW "read=" + ffi_cap_check("FILE_READ").
   SHOW "write=" + ffi_cap_check("FILE_WRITE").
@@ -9,18 +10,19 @@ ACTION grant_check() WITH MISSION PERSISTENT,
   SHOW "listen=" + ffi_cap_check("NET_LISTEN").
 /ACTION.
 
-ACTION leak() WITH MISSION SAFE,
+ACTION store() WITH MISSION PERSISTENT,
   CREATE o(NUM) TO ffi_arc_alloc(8).
-  GIVE o.
+  SHOW "persist_ok=" + ffi_arc_persist(o).
 /ACTION.
 
-ACTION store(o(NUM)) WITH MISSION PERSISTENT,
-  SHOW "persist=" + ffi_arc_persist(o).
+ACTION safeleak() WITH MISSION SAFE,
+  CREATE o(NUM) TO ffi_arc_alloc(8).
+  SHOW "persist_safe=" + ffi_arc_persist(o).
 /ACTION.
 
 ACTION main()
   CALL grant_check().
-  REAP o2 FROM leak().
-  CALL store(o2).
+  CALL store().
+  CALL safeleak().
   SHOW ffi_audit_dump().
 /ACTION.

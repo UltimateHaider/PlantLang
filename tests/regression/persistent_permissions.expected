@@ -2,14 +2,15 @@ read=1
 write=1
 net=1
 listen=1
-persist=0
+persist_ok=1
+persist_safe=0
 0,MODE_ENTER,PERSISTENT grant_check
 1,CAP_CHECK,FILE_READ grant
 2,CAP_CHECK,FILE_WRITE grant
 3,CAP_CHECK,NET_CONNECT grant
 4,CAP_CHECK,NET_LISTEN grant
-5,MODE_ENTER,SAFE leak
+5,MODE_ENTER,PERSISTENT store
 6,ARC_ALLOC,seq=1 size=8
-7,MODE_ENTER,PERSISTENT store
-8,ARC_PERSIST,seq=1 blocked (untrusted SAFE data)
+7,ARC_PERSIST,seq=1 ok
+8,MODE_ENTER,SAFE safeleak
 

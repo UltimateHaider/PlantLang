@@ -278,9 +278,14 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
    for `_cat` reuse, `plant_mem_report` / `plant_mem_scan` accounting,
    DistributedHeap with a consistent-hash ring over ARC segments and
    lease-based eviction (`MISSION CONFIG DIST_NODES`/`DIST_NODE_CAP`),
-   and RAII `plant_fast_reset` on FAST action exit. Architecture in
-   `docs/EVAPORATE.md`; true fork-based SAFE isolation remains an
-   architectural constraint (inline C bodies).
+    and RAII `plant_fast_reset` on FAST action exit. Architecture in
+    `docs/EVAPORATE.md`. **True SAFE isolation across real worker
+    processes shipped v0.48.37c**: SAFE actions run in forked workers
+    with a typed wire codec (`'N'/'I'/'S'/'A'/'F'`; `'F'` = memfd +
+    SCM_RIGHTS for payloads > 1MB) and generated adapters; numeric
+    SAFE args cross the wire as TX strings (the `< 4096` small-int
+    heuristic would otherwise misread large raw literals as pointers)
+    and are parsed back via `plant_rw_arg_long`.
 8. **`CONST`/`ROOT` immutables** — shipped v0.48.35 (`CONST`/`ROOT`/`ROOT_SCOPE`).
 
 **Low effort / niche**

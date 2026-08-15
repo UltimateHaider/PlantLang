@@ -88,4 +88,12 @@ tx_t ffi_dist_node(tx_t obj);
 tx_t ffi_dist_release(tx_t obj);
 tx_t ffi_dist_status(void);
 
+/* v0.48.37c SAFE real-process isolation test helpers */
+tx_t ffi_make_big(tx_t n);
+tx_t ffi_big_ok(tx_t s, tx_t n);
+tx_t ffi_str_len(tx_t s);
+tx_t ffi_str_eq(tx_t a, tx_t b);
+tx_t ffi_list_count(tx_t l);
+tx_t ffi_list_get(tx_t l, tx_t i);
+
 #endif

@@ -1,5 +1,42 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.37c — 2026 (True SAFE Worker-Process Isolation)
+
+### New Features
+- **SAFE actions now execute in real worker processes** (plant_runtime.c,
+  codegen_c.plant): a SAFE call spawns/fork a worker, marshals args and
+  results through a typed wire codec (`'N'`/`'I'` raw numerics, `'S'`
+  strings, `'A'` arrays, `'F'` = memfd + `SCM_RIGHTS` zero-copy for
+  payloads above the 1MB threshold), and hands large payloads back to the
+  parent byte-for-byte. `safe_real_*` regression tests prove typed
+  arguments, string/list returns, and a 1.5MB payload across a real
+  process boundary.
+
+### Changes
+- **Wire codec numeric-arg hardening**: SAFE call arguments of numeric
+  type (`long`/`int`) are emitted as `_from_long(...)` strings at the
+  call site instead of raw C literals. The codec's small-int heuristic
+  (`(uintptr_t)v < 4096`) would otherwise misinterpret a raw literal
+  >= 4096 as a heap pointer and crash on dereference during encode
+  (`plant_runtime.c:5254`). The generated worker adapter parses the
+  string back with the new `plant_rw_arg_long()` helper, which accepts
+  both raw small ints and wire strings.
+- **Parser**: multi-arg `REAP ... FROM` actions consume their
+  parenthesized argument lists correctly.
+- **Wire decode**: `'S'`/`'A'` payloads are decoded with initialized
+  length/count variables.
+
+### Tests
+- `safe_real_arg`: SAFE worker receives NUM/FACT/TX args through the
+  generated adapter and combines them.
+- `safe_real_str`: SAFE worker returns a string verified by length and
+  equality in the parent.
+- `safe_real_list`: SAFE worker builds a `PlantArray` returned across
+  the process boundary and decoded element-by-element.
+- `safe_real_big`: SAFE worker returns a 1,572,864-byte payload (above
+  the 1MB threshold); the codec hands it over via memfd + `SCM_RIGHTS`
+  and the parent recovers every byte.
+
 ## v0.48.37b — 2026 (PERSISTENT GC and Lease Enhancements)
 
 ### New Features

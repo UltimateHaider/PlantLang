@@ -485,4 +485,50 @@ tx_t ffi_dist_status(void) {
     return plant_dist_status();
 }
 
+/* ── v0.48.37c SAFE real-process isolation test helpers ── */
+tx_t ffi_make_big(tx_t nv) {
+    long n = (long)nv;
+    if (n < 1) n = 1;
+    if (n > (1L << 24)) n = (1L << 24);
+    char* s = malloc((size_t)n + 1);
+    if (!s) return (tx_t)"";
+    for (long i = 0; i < n; i++) s[i] = (char)('a' + (i % 26));
+    s[n] = 0;
+    return s;
+}
+tx_t ffi_big_ok(tx_t sv, tx_t nv) {
+    const char* s = _S(sv);
+    long n = (long)nv;
+    if (!s || (long)strlen(s) != n) return (tx_t)"0";
+    for (long i = 0; i < n; i++)
+        if (s[i] != (char)('a' + (i % 26))) return (tx_t)"0";
+    return (tx_t)"1";
+}
+tx_t ffi_str_len(tx_t sv) {
+    const char* s = _S(sv);
+    static char buf[32];
+    snprintf(buf, sizeof(buf), "%ld", s ? (long)strlen(s) : 0);
+    return buf;
+}
+tx_t ffi_str_eq(tx_t a, tx_t b) {
+    const char* x = _S(a);
+    const char* y = _S(b);
+    if (!x || !y) return (x == y) ? (tx_t)"1" : (tx_t)"0";
+    return (strcmp(x, y) == 0) ? (tx_t)"1" : (tx_t)"0";
+}
+tx_t ffi_list_count(tx_t lv) {
+    PlantArray* p = (PlantArray*)lv;
+    static char buf[32];
+    snprintf(buf, sizeof(buf), "%ld",
+             (p && p->magic == PLANT_ARRAY_MAGIC) ? (long)p->count : 0);
+    return buf;
+}
+tx_t ffi_list_get(tx_t lv, tx_t iv) {
+    PlantArray* p = (PlantArray*)lv;
+    long i = (long)iv;
+    if (!p || p->magic != PLANT_ARRAY_MAGIC) return NULL;
+    if (i < 0 || i >= (long)p->count) return NULL;
+    return p->items[i];
+}
+
 #endif /* MOCK_FFI_EXT_H */

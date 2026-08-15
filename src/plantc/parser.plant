@@ -1062,6 +1062,18 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
     REAP p5 FROM _second, ga_rb.
     SET act_name TO act_name + "[" + gtext + "]".
   /IF.
+  # v0.48.37c: REAP r FROM f(a, b, c). — consume the call parens
+  # upfront so multi-arg calls split on "," at depth 0 instead of
+  # collapsing into a single "( a , b , c )" expression (previously
+  # only single-arg calls worked; f() and bare f. are still valid).
+  CREATE has_cparen(TX) TO "0".
+  REAP cp_tok FROM peek, tokens, p5.
+  REAP cp_lx FROM tok_lex, cp_tok.
+  IF cp_lx IS "(",
+    REAP cp_pair FROM consume, tokens, p5.
+    REAP p5 FROM _second, cp_pair.
+    SET has_cparen TO "1".
+  /IF.
   CREATE args(LIST) TO plant_list_make(0).
   CREATE clargs(LIST) TO plant_list_make(0).
   SEASON TRUE,
@@ -1123,6 +1135,29 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
       REAP dot FROM consume, tokens, p5.
       REAP p6 FROM _second, dot.
       GIVE plant_list_make(2, plant_list_make(12, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args, "clargs", clargs, "ctx", ""), p6).
+    /IF.
+    # v0.48.37c: closing call paren consumed by f(…). — end the arg
+    # list. Also covers the zero-arg f() form (empty args list).
+    # f() IN ctx. is handled too (ctx after the closing paren).
+    IF has_cparen IS "1" AND lx IS ")" AND ty ISNT "STRING",
+      REAP rp FROM consume, tokens, p5.
+      REAP p5r FROM _second, rp.
+      REAP in_tok FROM peek, tokens, p5r.
+      REAP in_lx FROM tok_lex, in_tok.
+      REAP in_ty FROM tok_type, in_tok.
+      IF in_lx IS "IN" AND in_ty ISNT "STRING",
+        REAP in_pair FROM consume, tokens, p5r.
+        REAP p5r FROM _second, in_pair.
+        REAP ctx_pair FROM consume, tokens, p5r.
+        REAP ctx_name FROM tok_lex, ctx_pair[0].
+        REAP p5r FROM _second, ctx_pair.
+        REAP dot3 FROM consume, tokens, p5r.
+        REAP p5r FROM _second, dot3.
+        GIVE plant_list_make(2, plant_list_make(12, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args, "clargs", clargs, "ctx", ctx_name), p5r).
+      /IF.
+      REAP dot3 FROM consume, tokens, p5r.
+      REAP p6r FROM _second, dot3.
+      GIVE plant_list_make(2, plant_list_make(12, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args, "clargs", clargs, "ctx", ""), p6r).
     /IF.
     # collect one argument until , or . at depth 0 (do NOT consume delimiter)
     CREATE arg_text(TX) TO "".

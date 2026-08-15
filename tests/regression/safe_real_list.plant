@@ -1,0 +1,20 @@
+# safe_real_list — a SAFE worker builds a PlantArray and returns it; the
+# codec serializes the children ('A') and the parent decodes + verifies
+# each element, proving structured data crosses a real process boundary
+# (v0.48.37c).
+ACTION build_list() WITH MISSION SAFE,
+  CREATE l(LIST) TO plant_list_make(0).
+  PUT "alpha" INTO l.
+  PUT "beta" INTO l.
+  PUT "gamma" INTO l.
+  GIVE l.
+/ACTION.
+
+ACTION main()
+  REAP out FROM build_list().
+  SHOW "count=" + ffi_list_count(out).
+  SHOW "a=" + ffi_list_get(out, 0).
+  SHOW "b=" + ffi_list_get(out, 1).
+  SHOW "c=" + ffi_list_get(out, 2).
+  SHOW ffi_safe_status().
+/ACTION.

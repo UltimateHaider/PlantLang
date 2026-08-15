@@ -29,6 +29,11 @@ static tx_t _cat(tx_t a, tx_t b) { const char* sa=_S(a), *sb=_S(b); if(!sa) sa="
 static tx_t _cat3(tx_t a, tx_t b, tx_t c) { const char* sa=_S(a), *sb=_S(b), *sc=_S(c); if(!sa) sa=""; if(!sb) sb=""; if(!sc) sc=""; size_t al=strlen(sa), bl=strlen(sb), cl=strlen(sc); size_t tot=al+bl+cl+1; char *r=plant_str_slab_alloc(tot); if(!r)r=malloc(tot); if(r){memcpy(r,sa,al);memcpy(r+al,sb,bl);memcpy(r+al+bl,sc,cl+1);g_bal_bytes+=(long)tot;} return r?r:a; }
 static tx_t _cat4(tx_t a, tx_t b, tx_t c, tx_t d) { const char* sa=_S(a), *sb=_S(b), *sc=_S(c), *sd=_S(d); if(!sa) sa=""; if(!sb) sb=""; if(!sc) sc=""; if(!sd) sd=""; size_t al=strlen(sa), bl=strlen(sb), cl=strlen(sc), dl=strlen(sd); size_t tot=al+bl+cl+dl+1; char *r=plant_str_slab_alloc(tot); if(!r)r=malloc(tot); if(r){memcpy(r,sa,al);memcpy(r+al,sb,bl);memcpy(r+al+bl,sc,cl);memcpy(r+al+bl+cl,sd,dl+1);g_bal_bytes+=(long)tot;} return r?r:a; }
 static long _to_long(tx_t s) { const char* _s=_S(s); return _s ? atol(_s) : 0; }
+/* v0.48.37c — SAFE worker adapter numeric args: the wire codec can
+   only carry small ints (raw in the pointer, < 4096) or strings, so
+   the codegen stringifies numeric SAFE args at the call site. This
+   helper unpacks either form back to a long. */
+static long plant_rw_arg_long(tx_t v) { if (!v) return 0; if ((uintptr_t)v < 4096) return (long)(intptr_t)v; return _to_long(v); }
 /* v0.48.22-patch4 — single-digit (0-9) fast path: static table instead
    of snprintf. _from_long funnels through _from_digit so every numeric
    string conversion benefits; the compiler additionally emits
@@ -109,7 +114,13 @@ static tx_t _to_enum(tx_t v, tx_t names) {
 }
 static tx_t _at(tx_t s, long i) { PlantArray*_p=_P(s); if(_p&&_p->magic==PLANT_ARRAY_MAGIC)return plant_list_get(_p,i); const char*_s=_S(s); if(!_s||i<0||i>=(long)strlen(_s))return""; char _b[2]; _b[0]=_s[i]; _b[1]=0; return strdup(_b); }
 static int _cli_argc; static char **_cli_argv;
-static void plant_init_cli(int c, char **v) { _cli_argc=c; _cli_argv=v; }
+extern char* g_cli_argv0;                  /* v0.48.37c: exec-self path for worker spawns (defined in plant_runtime.c; shared across TUs — plant_init_cli runs in the program TU, plant_rw_spawn here) */
+extern int g_cli_worker_mode;              /* v0.48.37c: true when running as --plant-worker (shared across TUs) */
+static void plant_init_cli(int c, char **v) {
+  _cli_argc=c; _cli_argv=v;
+  if (c > 0 && v && v[0]) g_cli_argv0 = v[0];
+  g_cli_worker_mode = (c > 1 && v && v[1] && strcmp(v[1], "--plant-worker") == 0);
+}
 static tx_t get_cli_arg(int i) { if(i+1<_cli_argc) return _cli_argv[i+1]; return ""; }
 static tx_t fs_EXISTS(tx_t p) { FILE*f=fopen(_S(p),"rb"); if(!f)return"0"; fclose(f);return"1"; }
 static tx_t fs_READ(tx_t p) { FILE*f=fopen(_S(p),"rb"); if(!f)return""; fseek(f,0,SEEK_END);long sz=ftell(f);rewind(f);char*b=malloc(sz+1);if(!b){fclose(f);return"";}fread(b,1,sz,f);b[sz]=0;fclose(f);return b; }

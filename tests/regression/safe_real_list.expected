@@ -1,0 +1,5 @@
+count=3
+a=alpha
+b=beta
+c=gamma
+workers=4 busy=0 spawns=4 restarts=0 fallback=0 served=1

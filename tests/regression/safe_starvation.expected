@@ -3,4 +3,4 @@ w
 workers=1 busy=0 spawns=1 restarts=0 fallback=0 served=1
 starve2=0
 w
-workers=2 busy=1 spawns=2 restarts=0 fallback=0 served=2
+workers=2 busy=0 spawns=2 restarts=0 fallback=0 served=2

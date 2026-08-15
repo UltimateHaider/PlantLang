@@ -1,0 +1,15 @@
+# safe_real_arg — a SAFE worker receives typed args (NUM/FACT/TX)
+# through the generated adapter, combines them, and returns the result;
+# proves arg encode/decode + adapter type dispatch across a real process
+# boundary (v0.48.37c).
+ACTION combine(a(NUM), b(FACT), tag(TX)) WITH MISSION SAFE,
+  SHOW "worker args: " + a + " " + b + " " + tag.
+  GIVE tag + ":" + a + ":" + b.
+/ACTION.
+
+ACTION main()
+  REAP out FROM combine(42, 7, "k").
+  SHOW "out=" + out.
+  SHOW ffi_safe_status().
+  SHOW ffi_audit_dump().
+/ACTION.

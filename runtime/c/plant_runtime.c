@@ -13,6 +13,13 @@
 #include <errno.h>
 #include <dlfcn.h>
 
+/* v0.48.37c: cross-TU CLI state — plant_init_cli() runs in the generated
+   program's own translation unit (via plant_compat.h), while
+   plant_rw_spawn()/plant_maybe_run_worker() live here, so these must be
+   real globals defined in this file, not per-TU statics in the header. */
+char* g_cli_argv0 = 0;
+int g_cli_worker_mode = 0;
+
 /* ── v0.42.0: djb2 hash for string keys ── */
 static size_t _plant_hash_str(const char* str) {
     size_t hash = 5381;
@@ -3804,6 +3811,7 @@ static void plant_worker_heartbeat(plant_worker* w) {
 /* monitor tick: workers past the heartbeat interval enter the
    response window; stalled workers past the response window are
    terminated and restarted. Returns restart count. */
+static long plant_rw_recover_sweep(void);   /* v0.48.37c: real-process recovery */
 long plant_pool_tick(void) {
     long now = plant_ms();
     long restarts = 0;
@@ -3827,6 +3835,7 @@ long plant_pool_tick(void) {
             w->busy_since_ms = 0;
         }
     }
+    restarts += plant_rw_recover_sweep();
     return restarts;
 }
 
@@ -3899,39 +3908,9 @@ void plant_safe_exit(void) {
     plant_mode_pop();
 }
 
-tx_t plant_safe_status(void) {
-    static char buf[192];
-    long busy = 0;
-    for (long i = 0; i < g_pool_count; i++)
-        if (g_pool[i].state == 1) busy++;
-    snprintf(buf, sizeof(buf),
-             "workers=%ld busy=%ld spawns=%ld restarts=%ld fallback=%ld served=%ld",
-             g_pool_count, busy, g_pool_spawns, g_pool_restarts,
-             g_pool_fallback, g_pool_served);
-    return buf;
-}
-
-/* deterministic fault injection for the heartbeat / starvation /
-   tamper suites: stall marks a worker unresponsive (heartbeat
-   backdated past the response window), starve simulates a queue wait
-   and occupies every worker, tamper flips a byte in the newest
-   audit event so the chain verification reports TAMPERED. */
-tx_t plant_safe_stall(tx_t namev) {
-    const char* want = _S(namev);
-    for (long i = 0; i < g_pool_count; i++)
-        if (strcmp(g_pool[i].name, want) == 0) {
-            g_pool[i].state = 2;
-            g_pool[i].last_heartbeat_ms = plant_ms() - 10000;
-            return (tx_t)"0";
-        }
-    return (tx_t)"-1";
-}
-
-tx_t plant_safe_starve(tx_t msv) {
-    g_pending_wait_ms = (long)msv;
-    for (long i = 0; i < g_pool_count; i++) g_pool[i].state = 1;
-    return (tx_t)"0";
-}
+/* NOTE: plant_safe_status / plant_safe_stall / plant_safe_starve are
+   defined in the v0.48.37c section below, once the real worker-pool
+   types (plant_rw, g_rw) are in scope. */
 
 tx_t plant_audit_tamper(void) {
     if (g_audit_count <= 0) return (tx_t)"0";
@@ -5084,4 +5063,766 @@ tx_t plant_safe_boundary_copy(tx_t chanv, tx_t payload) {
         return (tx_t)"1";
     }
     return (tx_t)"1";   /* zero-copy transfer allowed above threshold */
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.48.37c: True SAFE Isolation — real worker processes.
+
+   The WarmProcessPool emulation is replaced at the SAFE boundary by
+   genuine OS isolation: each SAFE action call dispatches to a
+   dedicated worker process (fork + exec of the same binary with
+   --plant-worker), talking IPC over a SOCK_SEQPACKET socketpair.
+   The program binary acts as both client and server: the parent
+   registers SAFE adapters in plant_safe_register, then
+   plant_maybe_run_worker() turns a worker instance into the server
+   loop. Data crosses the boundary through a versioned wire codec
+   (NULL/INT/STR/LIST); payloads above the 1MB channel threshold are
+   zero-copy transferred via memfd + SCM_RIGHTS instead of copies.
+   A per-job output pipe relays the worker's stdout/stderr into the
+   parent. Heartbeat recovery uses waitpid(WNOHANG|WUNTRACED):
+   stopped (SIGSTOP-injected) or dead workers are SIGKILLed, reaped
+   and respawned in place (restart counters preserved).
+   ═══════════════════════════════════════════════════════════════ */
+#include <sys/wait.h>
+#include <sys/uio.h>
+#include <sys/mman.h>
+#include <sys/syscall.h>
+#include <signal.h>
+#include <poll.h>
+#include <fcntl.h>
+
+/* memfd_create: glibc provides sys/memfd.h from 2.27 on; older
+   toolchains need the raw syscall instead. */
+#ifndef MFD_CLOEXEC
+#define MFD_CLOEXEC 0x0001U
+#endif
+#ifndef MFD_ALLOW_SEALING
+#define MFD_ALLOW_SEALING 0x0002U
+#endif
+#ifndef memfd_create
+static inline int plant_memfd_create(const char* name, unsigned int flags) {
+#if defined(__linux__) && defined(SYS_memfd_create)
+    return (int)syscall(SYS_memfd_create, name, flags);
+#else
+    (void)name; (void)flags; errno = ENOSYS; return -1;
+#endif
+}
+#define memfd_create plant_memfd_create
+#endif
+
+#define PLANT_RW_MAX         16
+#define PLANT_RW_WIRE_MAGIC  0x504C5346L            /* "PLSF" */
+#define PLANT_RW_JOB         0
+#define PLANT_RW_RESULT      1
+#define PLANT_RW_ERROR       2
+#define PLANT_RW_PING        3
+#define PLANT_RW_PONG        4
+#define PLANT_RW_READY       5
+#define PLANT_RW_MAXARG      64
+#define PLANT_RW_MAXFD       16
+#define PLANT_RW_BUFSZ       (2097152 + 48)
+#define PLANT_RW_READY_WAIT  250                    /* ms to wait for an in-flight spawn */
+
+typedef struct plant_rw_hdr {
+    long magic;
+    long kind;
+    long idx;
+    long argc;
+    long size;
+    long nfd;
+} plant_rw_hdr;                                    /* 48 bytes */
+
+typedef struct plant_rw {
+    pid_t pid;
+    int   sock;                                    /* parent end of the job socketpair */
+    long  state;                                   /* 0 idle, 1 busy, 2 stalled */
+    long  ready;                                   /* READY handshake received */
+    long  dead;                                    /* reaped / failed */
+    long  served;
+    char  job_name[64];
+    long  last_msg_ms;
+} plant_rw;
+
+static plant_rw g_rw[PLANT_RW_MAX];
+static long g_rw_count = 0;
+static long g_rw_spawns = 0;
+static long g_rw_fallback = 0;
+static long g_rw_served = 0;
+static int  g_rw_inited = 0;
+
+typedef tx_t (*plant_safe_adapter)(int argc, tx_t* argv);
+typedef struct { const char* name; plant_safe_adapter fn; } plant_safe_reg;
+static plant_safe_reg g_safe_regs[64];
+static long g_safe_reg_n = 0;
+
+void plant_safe_register(const char* name, plant_safe_adapter fn) {
+    if (!name || !fn || g_safe_reg_n >= 64) return;
+    for (long i = 0; i < g_safe_reg_n; i++)
+        if (strcmp(g_safe_regs[i].name, name) == 0) return;
+    g_safe_regs[g_safe_reg_n].name = name;
+    g_safe_regs[g_safe_reg_n].fn = fn;
+    g_safe_reg_n++;
+}
+
+static long plant_safe_index(const char* name) {
+    for (long i = 0; i < g_safe_reg_n; i++)
+        if (strcmp(g_safe_regs[i].name, name) == 0) return i;
+    return -1;
+}
+
+/* ffi-facing telemetry for the real worker pool (same format string as
+   v0.48.37b so the regression .expected files stay stable). */
+tx_t plant_safe_status(void) {
+    static char buf[192];
+    long workers = 0;
+    long busy = 0;
+    for (long i = 0; i < PLANT_RW_MAX; i++) {
+        plant_rw* w = &g_rw[i];
+        if (w->dead || w->pid <= 0) continue;
+        workers++;
+        if (w->state == 1) busy++;
+    }
+    snprintf(buf, sizeof(buf),
+             "workers=%ld busy=%ld spawns=%ld restarts=%ld fallback=%ld served=%ld",
+             workers, busy, g_rw_spawns, g_pool_restarts,
+             g_rw_fallback, g_rw_served);
+    return buf;
+}
+
+/* deterministic fault injection: stall SIGSTOPs the real worker that is
+   currently serving <name> and marks it stalled; the next heartbeat
+   sweep reaps it and respawns in place. starve SIGSTOPs every live
+   worker so a queue wait forms and the pool grows via starvation. */
+tx_t plant_safe_stall(tx_t namev) {
+    const char* want = _S(namev);
+    for (long i = 0; i < PLANT_RW_MAX; i++) {
+        plant_rw* w = &g_rw[i];
+        if (w->dead || w->pid <= 0) continue;
+        if (strcmp(w->job_name, want) == 0) {
+            kill(w->pid, SIGSTOP);
+            /* SIGSTOP delivery is asynchronous; peek (WNOWAIT, non-consuming)
+               until the stop is observable so the recovery sweep's
+               waitpid(WNOHANG|WUNTRACED) reliably sees it. */
+            siginfo_t si;
+            for (int t = 0; t < 500; t++) {
+                memset(&si, 0, sizeof(si));
+                if (waitid(P_PID, (id_t)w->pid, &si,
+                           WEXITED | WSTOPPED | WCONTINUED | WNOWAIT) == 0 &&
+                    si.si_pid == w->pid &&
+                    (si.si_code == CLD_STOPPED || si.si_code == CLD_EXITED ||
+                     si.si_code == CLD_KILLED || si.si_code == CLD_DUMPED)) break;
+                usleep(2000);
+            }
+            w->state = 2;
+            w->last_msg_ms = plant_ms() - 10000;
+            return (tx_t)"0";
+        }
+    }
+    return (tx_t)"-1";
+}
+
+tx_t plant_safe_starve(tx_t msv) {
+    g_pending_wait_ms = (long)msv;
+    for (long i = 0; i < PLANT_RW_MAX; i++) {
+        plant_rw* w = &g_rw[i];
+        if (w->dead || w->pid <= 0) continue;
+        kill(w->pid, SIGSTOP);
+        w->state = 2;
+    }
+    return (tx_t)"0";
+}
+
+/* ── wire codec ────────────────────────────────────────────────── */
+/* tags: 'N' null · 'I' int64 LE · 'S' len(4B)+bytes · 'A' count(4B)+children · 'F' len(8B)+memfd */
+static long plant_rw_strlen_safe(tx_t v) {
+    const char* s = _S(v);
+    return s ? (long)strlen(s) : 0;
+}
+
+/* encode one value; returns bytes written (or -1 when unserializable).
+   values at/above threshold become 'F' entries carried by fds[] via cmsg. */
+static long plant_rw_encode(char* buf, tx_t v, long depth,
+                            int* fds, long* nfd, long threshold) {
+    if (!v) { buf[0] = 'N'; return 1; }
+    if ((uintptr_t)v < 4096) {
+        buf[0] = 'I';
+        long n = (long)(intptr_t)v;
+        memcpy(buf + 1, &n, 8);
+        return 9;
+    }
+    PlantArray* p = (PlantArray*)v;
+    if (p->magic == PLANT_ARRAY_MAGIC && depth < 4) {
+        buf[0] = 'A';
+        long cnt = p->count;
+        memcpy(buf + 1, &cnt, 4);
+        long off = 5;
+        for (int64_t i = 0; i < p->count; i++) {
+            long sz = plant_rw_encode(buf + off, p->items[i], depth + 1, fds, nfd, threshold);
+            if (sz < 0) return -1;
+            off += sz;
+            if (off > PLANT_RW_BUFSZ - 64) return -1;
+        }
+        return off;
+    }
+    long len = plant_rw_strlen_safe(v);
+    if (len > threshold && *nfd < PLANT_RW_MAXFD) {
+        int fd = memfd_create("plsf", 0);
+        if (fd < 0) return -1;
+        const char* s = _S(v);
+        long left = len;
+        const char* wp = s;
+        while (left > 0) {
+            ssize_t wr = write(fd, wp, (size_t)left);
+            if (wr <= 0) { close(fd); return -1; }
+            wp += wr; left -= wr;
+        }
+        lseek(fd, 0, SEEK_SET);
+        buf[0] = 'F';
+        memcpy(buf + 1, &len, 8);
+        fds[*nfd] = fd;
+        (*nfd)++;
+        return 9;
+    }
+    if (len > PLANT_RW_BUFSZ - 64) return -1;
+    buf[0] = 'S';
+    memcpy(buf + 1, &len, 4);
+    memcpy(buf + 5, _S(v), (size_t)len);
+    return 5 + len;
+}
+
+/* decode one value from buf at *off; 'F' entries pull data from fds[*fidx] */
+static tx_t plant_rw_decode(const char* buf, long* off,
+                            int* fds, long nfd, long* fidx) {
+    char tag = buf[*off];
+    (*off)++;
+    if (tag == 'N') return NULL;
+    if (tag == 'I') {
+        long n;
+        memcpy(&n, buf + *off, 8);
+        *off += 8;
+        return (tx_t)(intptr_t)n;
+    }
+    if (tag == 'F') {
+        long len;
+        memcpy(&len, buf + *off, 8);
+        *off += 8;
+        char* out = malloc((size_t)len + 1);
+        if (!out) return NULL;
+        long got = 0;
+        int fd = (*fidx < nfd) ? fds[(*fidx)++] : -1;
+        if (fd >= 0) {
+            while (got < len) {
+                ssize_t r = read(fd, out + got, (size_t)(len - got));
+                if (r <= 0) break;
+                got += r;
+            }
+            close(fd);
+        }
+        out[len] = 0;
+        return out;
+    }
+    if (tag == 'S') {
+        long len = 0;
+        memcpy(&len, buf + *off, 4);
+        *off += 4;
+        char* out = malloc((size_t)len + 1);
+        if (!out) return NULL;
+        memcpy(out, buf + *off, (size_t)len);
+        *off += len;
+        out[len] = 0;
+        return out;
+    }
+    if (tag == 'A') {
+        long cnt = 0;
+        memcpy(&cnt, buf + *off, 4);
+        *off += 4;
+        PlantArray* arr = plant_list_create(16);
+        for (long i = 0; i < cnt; i++) {
+            tx_t el = plant_rw_decode(buf, off, fds, nfd, fidx);
+            arr = plant_list_add(arr, el);
+        }
+        return arr;
+    }
+    return NULL;
+}
+
+/* ── process spawning ─────────────────────────────────────────── */
+static long plant_rw_spawn(int slot) {
+    if (slot < 0) {
+        for (long i = 0; i < PLANT_RW_MAX; i++)
+            if (g_rw[i].dead) { slot = (int)i; break; }
+    }
+    if (slot < 0) {
+        for (long i = 0; i < PLANT_RW_MAX; i++)
+            if (g_rw[i].pid <= 0 && !g_rw[i].ready && g_rw[i].sock <= 0) { slot = (int)i; break; }
+    }
+    if (slot < 0) return -1;
+    plant_rw* w = &g_rw[slot];
+    if (w->sock > 0) close(w->sock);
+    w->sock = 0;
+    w->ready = 0;
+    w->dead = 0;
+    w->state = 0;
+    w->served = 0;
+    w->job_name[0] = 0;
+
+    int sv[2];
+    if (socketpair(AF_UNIX, SOCK_SEQPACKET, 0, sv) != 0) return -1;
+    int nullfd = open("/dev/null", O_WRONLY);
+    pid_t pid = fork();
+    if (pid < 0) {
+        close(sv[0]); close(sv[1]);
+        if (nullfd >= 0) close(nullfd);
+        return -1;
+    }
+    if (pid == 0) {
+        dup2(sv[1], 0);
+        if (nullfd >= 0) { dup2(nullfd, 1); dup2(nullfd, 2); }
+        close(sv[0]);
+        close(sv[1]);
+        if (nullfd >= 0) close(nullfd);
+        if (g_cli_argv0 && g_cli_argv0[0]) {
+            char* const av[] = { g_cli_argv0, (char*)"--plant-worker", NULL };
+            execv(g_cli_argv0, av);
+        }
+        _exit(127);
+    }
+    close(sv[1]);
+    if (nullfd >= 0) close(nullfd);
+    w->pid = pid;
+    w->sock = sv[0];
+    w->last_msg_ms = plant_ms();
+    g_rw_count++;
+    g_rw_spawns++;
+    return slot;
+}
+
+static void plant_rw_init(void) {
+    if (g_rw_inited) return;
+    g_rw_inited = 1;
+    if (g_pool_cap < 1) g_pool_cap = 1;
+    if (g_pool_cap > PLANT_SAFE_MAX_WORKERS) g_pool_cap = PLANT_SAFE_MAX_WORKERS;
+    if (g_pool_max < g_pool_cap) g_pool_max = g_pool_cap;
+    if (g_pool_max > PLANT_SAFE_MAX_WORKERS) g_pool_max = PLANT_SAFE_MAX_WORKERS;
+    for (long i = 0; i < g_pool_cap; i++) plant_rw_spawn(-1);
+}
+
+/* non-blocking drain of READY/PONG handshakes (a spawned worker's
+   first message) — marks workers ready so acquire() can reuse them */
+static void plant_rw_drain_readies(long max_ms) {
+    long deadline = plant_ms() + max_ms;
+    do {
+        int progressed = 0;
+        for (long i = 0; i < PLANT_RW_MAX; i++) {
+            plant_rw* w = &g_rw[i];
+            if (w->dead || w->pid <= 0 || w->sock <= 0) continue;
+            for (;;) {
+                char buf[512];
+                struct iovec iov = { buf, sizeof(buf) };
+                char cmsg_b[CMSG_SPACE(sizeof(int) * PLANT_RW_MAXFD)];
+                struct msghdr mh;
+                memset(&mh, 0, sizeof(mh));
+                mh.msg_iov = &iov;
+                mh.msg_iovlen = 1;
+                mh.msg_control = cmsg_b;
+                mh.msg_controllen = sizeof(cmsg_b);
+                ssize_t n = recvmsg(w->sock, &mh, MSG_DONTWAIT);
+                if (n < (ssize_t)sizeof(plant_rw_hdr)) break;
+                plant_rw_hdr* h = (plant_rw_hdr*)buf;
+                if (h->magic != PLANT_RW_WIRE_MAGIC) break;
+                if (h->kind == PLANT_RW_READY) { w->ready = 1; w->last_msg_ms = plant_ms(); progressed = 1; }
+                else if (h->kind == PLANT_RW_PONG) { w->last_msg_ms = plant_ms(); progressed = 1; }
+                else break;
+            }
+        }
+        if (progressed) return;
+        plant_msleep(2);
+    } while (plant_ms() < deadline);
+}
+
+/* acquire a ready idle worker; spawns when the pool is under max and
+   nothing is ready (starvation growth); returns -1 when starved at
+   max (caller falls back to inline execution) */
+static long plant_rw_acquire(const char* name) {
+    if (!g_rw_inited) plant_rw_init();
+    for (long i = 0; i < PLANT_RW_MAX; i++) {
+        plant_rw* w = &g_rw[i];
+        if (w->dead || w->pid <= 0) continue;
+        if (w->ready && w->state == 0) {
+            w->state = 1;
+            if (name) snprintf(w->job_name, sizeof(w->job_name), "%s", name);
+            w->last_msg_ms = plant_ms();
+            return i;
+        }
+    }
+    /* wait for an in-flight spawn/respawn to become ready */
+    plant_rw_drain_readies(PLANT_RW_READY_WAIT);
+    for (long i = 0; i < PLANT_RW_MAX; i++) {
+        plant_rw* w = &g_rw[i];
+        if (w->dead || w->pid <= 0) continue;
+        if (w->ready && w->state == 0) {
+            w->state = 1;
+            if (name) snprintf(w->job_name, sizeof(w->job_name), "%s", name);
+            w->last_msg_ms = plant_ms();
+            return i;
+        }
+    }
+    if (g_rw_count < g_pool_max) {
+        long i = plant_rw_spawn(-1);
+        if (i >= 0) {
+            g_rw[i].state = 1;
+            if (name) snprintf(g_rw[i].job_name, sizeof(g_rw[i].job_name), "%s", name);
+            return i;
+        }
+    }
+    return -1;
+}
+
+/* ── worker server loop (child side, never returns) ────────────── */
+static void plant_rw_send_simple(long kind) {
+    plant_rw_hdr h;
+    memset(&h, 0, sizeof(h));
+    h.magic = PLANT_RW_WIRE_MAGIC;
+    h.kind = kind;
+    struct iovec iov = { &h, sizeof(h) };
+    struct msghdr mh;
+    memset(&mh, 0, sizeof(mh));
+    mh.msg_iov = &iov;
+    mh.msg_iovlen = 1;
+    sendmsg(0, &mh, 0);
+}
+
+static void plant_rw_worker_loop(void) {
+    /* handshake: this worker is up and its registry is populated */
+    plant_rw_send_simple(PLANT_RW_READY);
+    char* buf = malloc(PLANT_RW_BUFSZ);
+    if (!buf) _exit(1);
+    for (;;) {
+        struct iovec iov = { buf, PLANT_RW_BUFSZ };
+        char cmsg_b[CMSG_SPACE(sizeof(int) * PLANT_RW_MAXFD)];
+        struct msghdr mh;
+        memset(&mh, 0, sizeof(mh));
+        mh.msg_iov = &iov;
+        mh.msg_iovlen = 1;
+        mh.msg_control = cmsg_b;
+        mh.msg_controllen = sizeof(cmsg_b);
+        ssize_t n = recvmsg(0, &mh, 0);
+        if (n < (ssize_t)sizeof(plant_rw_hdr)) {
+            if (n <= 0) _exit(0);
+            continue;
+        }
+        plant_rw_hdr* h = (plant_rw_hdr*)buf;
+        if (h->magic != PLANT_RW_WIRE_MAGIC) continue;
+        if (h->kind == PLANT_RW_PING) { plant_rw_send_simple(PLANT_RW_PONG); continue; }
+        if (h->kind != PLANT_RW_JOB) continue;
+
+        int fds[PLANT_RW_MAXFD];
+        long nfd = 0;
+        struct cmsghdr* cm;
+        for (cm = CMSG_FIRSTHDR(&mh); cm; cm = CMSG_NXTHDR(&mh, cm)) {
+            if (cm->cmsg_level == SOL_SOCKET && cm->cmsg_type == SCM_RIGHTS) {
+                size_t cnt = (cm->cmsg_len - CMSG_LEN(0)) / sizeof(int);
+                memcpy(fds + nfd, CMSG_DATA(cm), cnt * sizeof(int));
+                nfd += (long)cnt;
+            }
+        }
+        long fidx = 0;
+        if (nfd > 0 && fidx < nfd) {   /* fds[0] = per-job output pipe */
+            dup2(fds[0], 1);
+            dup2(fds[0], 2);
+            if (fds[0] > 2) close(fds[0]);  /* never close the pipe fd itself when it landed on 0/1/2 */
+            fidx = 1;
+        }
+        long idx = h->idx;
+        long argc = h->argc;
+        tx_t argv[PLANT_RW_MAXARG];
+        memset(argv, 0, sizeof(argv));
+        long off = sizeof(plant_rw_hdr);
+        for (long i = 0; i < argc && i < PLANT_RW_MAXARG; i++)
+            argv[i] = plant_rw_decode(buf, &off, fds, nfd, &fidx);
+
+        tx_t res = NULL;
+        if (idx >= 0 && idx < g_safe_reg_n && g_safe_regs[idx].fn)
+            res = g_safe_regs[idx].fn((int)argc, argv);
+        /* push any stdio-buffered worker output (plant_print uses printf)
+           into the out-pipe before the parent consumes the RESULT */
+        fflush(stdout);
+        fflush(stderr);
+
+        int rfds[PLANT_RW_MAXFD];
+        long rnfd = 0;
+        char* rbuf = malloc(PLANT_RW_BUFSZ);
+        if (!rbuf) { _exit(1); }
+        long rsz = plant_rw_encode(rbuf + sizeof(plant_rw_hdr), res, 0,
+                                   rfds, &rnfd, g_safe_channel_threshold);
+        plant_rw_hdr rh;
+        memset(&rh, 0, sizeof(rh));
+        rh.magic = PLANT_RW_WIRE_MAGIC;
+        rh.kind = (rsz < 0) ? PLANT_RW_ERROR : PLANT_RW_RESULT;
+        rh.size = (rsz < 0) ? 0 : rsz;
+        rh.nfd = rnfd;
+        memcpy(rbuf, &rh, sizeof(rh));
+        if (rsz < 0) rsz = 0;
+        struct iovec riov = { rbuf, sizeof(plant_rw_hdr) + (size_t)rsz };
+        char rcmsg_b[CMSG_SPACE(sizeof(int) * PLANT_RW_MAXFD)];
+        memset(rcmsg_b, 0, sizeof(rcmsg_b));
+        struct msghdr rmh;
+        memset(&rmh, 0, sizeof(rmh));
+        rmh.msg_iov = &riov;
+        rmh.msg_iovlen = 1;
+        if (rnfd > 0) {
+            rmh.msg_control = rcmsg_b;
+            rmh.msg_controllen = CMSG_SPACE(sizeof(int) * rnfd);
+            struct cmsghdr* rcm = (struct cmsghdr*)rcmsg_b;
+            rcm->cmsg_level = SOL_SOCKET;
+            rcm->cmsg_type = SCM_RIGHTS;
+            rcm->cmsg_len = CMSG_LEN(sizeof(int) * rnfd);
+            memcpy(CMSG_DATA(rcm), rfds, sizeof(int) * rnfd);
+        }
+        sendmsg(0, &rmh, 0);
+        free(rbuf);
+        /* free decoded string arguments (big memfd transfers included);
+           result encoding is already done, so nothing retains them */
+        for (long i = 0; i < argc && i < PLANT_RW_MAXARG; i++) {
+            tx_t av = argv[i];
+            if (!av || (uintptr_t)av < 4096) continue;
+            PlantArray* ap = (PlantArray*)av;
+            if (ap->magic == PLANT_ARRAY_MAGIC) continue;
+            free(av);
+        }
+        /* release this job's stdout/stderr so the parent's relay pipe
+           reaches EOF; the next job dup2()s a fresh pipe over them */
+        close(1);
+        close(2);
+    }
+}
+
+void plant_maybe_run_worker(void) {
+    if (!g_cli_worker_mode) return;
+    plant_rw_worker_loop();
+    _exit(0);
+}
+
+/* ── recovery: reaps stopped/dead workers, respawns them ───────── */
+static void plant_rw_respawn(long slot) {
+    if (slot < 0 || slot >= PLANT_RW_MAX) return;
+    g_rw[slot].dead = 1;
+    plant_rw_spawn((int)slot);
+}
+
+long plant_rw_recover_sweep(void) {
+    long restarts = 0;
+    for (long i = 0; i < PLANT_RW_MAX; i++) {
+        plant_rw* w = &g_rw[i];
+        if (w->dead || w->pid <= 0) continue;
+        int st = 0;
+        pid_t r = waitpid(w->pid, &st, WNOHANG | WUNTRACED);
+        if (r != w->pid) continue;
+        if (WIFSTOPPED(st)) {
+            kill(w->pid, SIGKILL);
+            waitpid(w->pid, &st, 0);
+            plant_rw_respawn(i);
+            g_pool_restarts++;
+            restarts++;
+        } else if (WIFEXITED(st) || WIFSIGNALED(st)) {
+            plant_rw_respawn(i);
+            g_pool_restarts++;
+            restarts++;
+        }
+    }
+    return restarts;
+}
+
+/* ── result receive with interleaved output relay ──────────────── */
+static void plant_rw_relay_append(char** acc, long* accn, long* acccap,
+                                  const char* data, long len) {
+    if (len <= 0) return;
+    if (*accn + len + 1 > *acccap) {
+        while (*accn + len + 1 > *acccap) *acccap *= 2;
+        *acc = realloc(*acc, (size_t)*acccap);
+    }
+    memcpy(*acc + *accn, data, (size_t)len);
+    *accn += len;
+    (*acc)[*accn] = 0;
+}
+
+/* returns the decoded result (or NULL for ERROR/refusal); *ok = 1 on
+   success, 0 on stall/death (caller recovers + retries). */
+static tx_t plant_rw_recv_result(plant_rw* w, int out_r, long* ok) {
+    *ok = 0;
+    long timeout = g_safe_cfg_response_ms < 2000 ? 2000 : g_safe_cfg_response_ms;
+    long deadline = plant_ms() + timeout;
+    char* rbuf = malloc(PLANT_RW_BUFSZ);
+    if (!rbuf) { if (out_r > 0) close(out_r); return NULL; }
+    char* acc = malloc(65536);
+    long accn = 0, acccap = 65536;
+    int out_open = (out_r > 0);
+    for (;;) {
+        long now = plant_ms();
+        if (now >= deadline) {
+            free(rbuf); free(acc);
+            if (out_open) close(out_r);
+            return NULL;
+        }
+        struct pollfd pf[2];
+        pf[0].fd = w->sock;
+        pf[0].events = POLLIN;
+        pf[0].revents = 0;
+        pf[1].fd = out_r;
+        pf[1].events = POLLIN;
+        pf[1].revents = 0;
+        int pr = poll(pf, out_open ? 2 : 1, (int)(deadline - now));
+        if (pr < 0) continue;
+        if (pr == 0) { free(rbuf); free(acc); if (out_open) close(out_r); return NULL; }
+        if (out_open && (pf[1].revents & (POLLIN | POLLHUP))) {
+            char tmp[65536];
+            ssize_t n = read(out_r, tmp, sizeof(tmp));
+            if (n > 0) plant_rw_relay_append(&acc, &accn, &acccap, tmp, (long)n);
+            else { close(out_r); out_open = 0; }
+        }
+        if (!(pf[0].revents & POLLIN)) continue;
+        char cbuf[CMSG_SPACE(sizeof(int) * PLANT_RW_MAXFD)];
+        struct iovec iov = { rbuf, PLANT_RW_BUFSZ };
+        struct msghdr mh;
+        memset(&mh, 0, sizeof(mh));
+        mh.msg_iov = &iov;
+        mh.msg_iovlen = 1;
+        mh.msg_control = cbuf;
+        mh.msg_controllen = sizeof(cbuf);
+        ssize_t n = recvmsg(w->sock, &mh, 0);
+        if (n < (ssize_t)sizeof(plant_rw_hdr)) continue;
+        plant_rw_hdr* h = (plant_rw_hdr*)rbuf;
+        if (h->magic != PLANT_RW_WIRE_MAGIC) continue;
+        if (h->kind == PLANT_RW_READY) { w->ready = 1; w->last_msg_ms = plant_ms(); continue; }
+        if (h->kind == PLANT_RW_PONG) { w->last_msg_ms = plant_ms(); continue; }
+        if (h->kind != PLANT_RW_RESULT && h->kind != PLANT_RW_ERROR) continue;
+
+        int fds[PLANT_RW_MAXFD];
+        long nfd = 0;
+        struct cmsghdr* cm;
+        for (cm = CMSG_FIRSTHDR(&mh); cm; cm = CMSG_NXTHDR(&mh, cm)) {
+            if (cm->cmsg_level == SOL_SOCKET && cm->cmsg_type == SCM_RIGHTS) {
+                size_t cnt = (cm->cmsg_len - CMSG_LEN(0)) / sizeof(int);
+                memcpy(fds + nfd, CMSG_DATA(cm), cnt * sizeof(int));
+                nfd += (long)cnt;
+            }
+        }
+        tx_t res = NULL;
+        if (h->kind == PLANT_RW_RESULT) {
+            long fidx = 0;
+            long off = sizeof(plant_rw_hdr);
+            res = plant_rw_decode(rbuf, &off, fds, nfd, &fidx);
+        }
+        w->last_msg_ms = plant_ms();
+        if (accn > 0) { fwrite(acc, 1, (size_t)accn, stdout); fflush(stdout); }
+        if (out_open) close(out_r);
+        free(rbuf);
+        free(acc);
+        *ok = 1;
+        return res;
+    }
+}
+
+/* ── the SAFE boundary (parent side) ───────────────────────────── */
+tx_t plant_safe_call(const char* name, long argc, ...) {
+    if (!name || !g_safe_reg_n) return NULL;
+    long idx = plant_safe_index(name);
+    if (idx < 0) return NULL;
+    /* v0.48.37c: the boundary handshake now runs at the dispatch site
+       (the callee prologue still runs inside the worker, where the mode
+       stack is empty). FAST and PERSISTENT callers are blocked before
+       any process is spawned — the blocked body never executes. */
+    if (plant_boundary_block(name, "SAFE")) return NULL;
+    {
+        static char msg[128];
+        snprintf(msg, sizeof(msg), "SAFE %s", name);
+        plant_audit_log("MODE_ENTER", msg);
+    }
+
+    tx_t args[PLANT_RW_MAXARG];
+    memset(args, 0, sizeof(args));
+    va_list va;
+    va_start(va, argc);
+    for (long i = 0; i < argc && i < PLANT_RW_MAXARG; i++) args[i] = va_arg(va, tx_t);
+    va_end(va);
+
+    if (!g_rw_inited) plant_rw_init();
+
+    int fds[PLANT_RW_MAXFD];
+    long nfd = 0;
+    char* pbuf = malloc(PLANT_RW_BUFSZ);
+    if (!pbuf) return NULL;
+    long psz = 0;
+    char* data = pbuf + sizeof(plant_rw_hdr);
+    for (long i = 0; i < argc; i++) {
+        long sz = plant_rw_encode(data + psz, args[i], 0, fds, &nfd, g_safe_channel_threshold);
+        if (sz < 0) { free(pbuf); return NULL; }
+        psz += sz;
+    }
+
+    /* attempt the dispatch; one retry after recovery, then inline */
+    tx_t result = NULL;
+    for (int attempt = 0; attempt < 2; attempt++) {
+        long wid = plant_rw_acquire(name);
+        if (wid < 0) {
+            g_rw_fallback++;
+            free(pbuf);
+            return g_safe_regs[idx].fn((int)argc, args);   /* BALANCED inline fallback */
+        }
+        plant_rw* w = &g_rw[wid];
+        int op[2];
+        if (pipe(op) != 0) {
+            g_rw_fallback++;
+            free(pbuf);
+            return g_safe_regs[idx].fn((int)argc, args);
+        }
+        plant_rw_hdr h;
+        memset(&h, 0, sizeof(h));
+        h.magic = PLANT_RW_WIRE_MAGIC;
+        h.kind = PLANT_RW_JOB;
+        h.idx = idx;
+        h.argc = argc;
+        h.size = psz;
+        h.nfd = nfd + 1;
+        memcpy(pbuf, &h, sizeof(h));
+
+        char cmsg_b[CMSG_SPACE(sizeof(int) * PLANT_RW_MAXFD)];
+        struct iovec iov = { pbuf, sizeof(plant_rw_hdr) + (size_t)psz };
+        struct msghdr mh;
+        memset(&mh, 0, sizeof(mh));
+        mh.msg_iov = &iov;
+        mh.msg_iovlen = 1;
+        mh.msg_control = cmsg_b;
+        mh.msg_controllen = sizeof(cmsg_b);
+        {
+            struct cmsghdr* cm = (struct cmsghdr*)cmsg_b;
+            cm->cmsg_level = SOL_SOCKET;
+            cm->cmsg_type = SCM_RIGHTS;
+            long tot = 1 + nfd;
+            cm->cmsg_len = CMSG_LEN(sizeof(int) * tot);
+            int* fp = (int*)CMSG_DATA(cm);
+            fp[0] = op[1];
+            for (long i = 0; i < nfd; i++) fp[1 + i] = fds[i];
+            mh.msg_controllen = CMSG_SPACE(sizeof(int) * tot);
+        }
+        ssize_t sn = sendmsg(w->sock, &mh, 0);
+        close(op[1]);
+        if (sn < 0) { close(op[0]); }
+        long ok = 0;
+        result = plant_rw_recv_result(w, op[0], &ok);
+        if (ok) {
+            w->state = 0;
+            w->served++;
+            g_rw_served++;
+            free(pbuf);
+            return result;
+        }
+        /* stall/death: recover this worker, then retry once */
+        if (w->state == 2) { kill(w->pid, SIGKILL); waitpid(w->pid, NULL, 0); }
+        plant_rw_respawn((int)wid);
+        g_pool_restarts++;
+    }
+    g_rw_fallback++;
+    free(pbuf);
+    return g_safe_regs[idx].fn((int)argc, args);
 }

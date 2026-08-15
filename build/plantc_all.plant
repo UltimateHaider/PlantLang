@@ -1506,6 +1506,18 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
     REAP p5 FROM _second, ga_rb.
     SET act_name TO act_name + "[" + gtext + "]".
   /IF.
+  # v0.48.37c: REAP r FROM f(a, b, c). — consume the call parens
+  # upfront so multi-arg calls split on "," at depth 0 instead of
+  # collapsing into a single "( a , b , c )" expression (previously
+  # only single-arg calls worked; f() and bare f. are still valid).
+  CREATE has_cparen(TX) TO "0".
+  REAP cp_tok FROM peek, tokens, p5.
+  REAP cp_lx FROM tok_lex, cp_tok.
+  IF cp_lx IS "(",
+    REAP cp_pair FROM consume, tokens, p5.
+    REAP p5 FROM _second, cp_pair.
+    SET has_cparen TO "1".
+  /IF.
   CREATE args(LIST) TO plant_list_make(0).
   CREATE clargs(LIST) TO plant_list_make(0).
   SEASON TRUE,
@@ -1567,6 +1579,29 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
       REAP dot FROM consume, tokens, p5.
       REAP p6 FROM _second, dot.
       GIVE plant_list_make(2, plant_list_make(12, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args, "clargs", clargs, "ctx", ""), p6).
+    /IF.
+    # v0.48.37c: closing call paren consumed by f(…). — end the arg
+    # list. Also covers the zero-arg f() form (empty args list).
+    # f() IN ctx. is handled too (ctx after the closing paren).
+    IF has_cparen IS "1" AND lx IS ")" AND ty ISNT "STRING",
+      REAP rp FROM consume, tokens, p5.
+      REAP p5r FROM _second, rp.
+      REAP in_tok FROM peek, tokens, p5r.
+      REAP in_lx FROM tok_lex, in_tok.
+      REAP in_ty FROM tok_type, in_tok.
+      IF in_lx IS "IN" AND in_ty ISNT "STRING",
+        REAP in_pair FROM consume, tokens, p5r.
+        REAP p5r FROM _second, in_pair.
+        REAP ctx_pair FROM consume, tokens, p5r.
+        REAP ctx_name FROM tok_lex, ctx_pair[0].
+        REAP p5r FROM _second, ctx_pair.
+        REAP dot3 FROM consume, tokens, p5r.
+        REAP p5r FROM _second, dot3.
+        GIVE plant_list_make(2, plant_list_make(12, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args, "clargs", clargs, "ctx", ctx_name), p5r).
+      /IF.
+      REAP dot3 FROM consume, tokens, p5r.
+      REAP p6r FROM _second, dot3.
+      GIVE plant_list_make(2, plant_list_make(12, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args, "clargs", clargs, "ctx", ""), p6r).
     /IF.
     # collect one argument until , or . at depth 0 (do NOT consume delimiter)
     CREATE arg_text(TX) TO "".
@@ -5994,6 +6029,21 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         CREATE ai(NUM) TO 0.
         CREATE arg_el(TX) TO "".
         REAP isel FROM indent_str, indent.
+        # v0.48.37c: SAFE callees are dispatched to a real worker
+        # process through plant_safe_call (the boundary handshake +
+        # MODE_ENTER audit happen parent-side at the call site). Only
+        # the raw translated values cross the wire — FFI marshalling
+        # (&, (void*), _to_enum, struct wrappers) is skipped for them.
+        CREATE safm(TX) TO "".
+        REAP sfz2 FROM find_sig, sigs, act.
+        IF COUNT sfz2 > 0,
+            REAP safm FROM _map_get, sfz2, "mission_mode".
+        /IF.
+        CREATE safe_call(TX) TO "0".
+        IF safm IS "SAFE", SET safe_call TO "1". /IF.
+        CREATE sargstr(TX) TO "".
+        CREATE sarg_el(TX) TO "".
+        CREATE sarcn(NUM) TO 0.
         SEASON ai < COUNT args,
             REAP arg_el FROM plant_list_get, args, ai.
             CREATE aexpr(TX) TO arg_el.
@@ -6041,14 +6091,29 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             # CALLBACK, varargs cast)
              IF cl_ok IS "0",
                  REAP arg0 FROM substring, arg_el, 0, 1.
-                IF arg0 ISNT "\"",
+                 IF arg0 ISNT "\"",
                     REAP aexpr FROM translate_expr, arg_el.
                     REAP aexpr FROM _handle_cat, aexpr, nums, evars.
+                /IF.
+                IF safe_call IS "1",
+                    SET sarg_el TO aexpr.
                 /IF.
                 CREATE fp_ty(TX) TO "".
                 IF ai < COUNT fparams,
                     REAP fp_el FROM plant_list_get, fparams, ai.
                     REAP fp_ty FROM _map_get, fp_el, "type".
+                /IF.
+                # v0.48.37c: SAFE call args of numeric type cross the
+                # wire as TX strings. A raw C literal >= 4096 would be
+                # misread by the wire codec as a pointer (its small-int
+                # heuristic is (uintptr_t)v < 4096) and crash the encode
+                # on dereference; the worker adapter parses the string
+                # back with _to_long.
+                IF safe_call IS "1" AND cl_ok IS "0",
+                    REAP sct2 FROM ffi_ctype, fp_ty.
+                    IF sct2 IS "long" OR sct2 IS "int",
+                        SET sarg_el TO "_from_long(" + sarg_el + ")".
+                    /IF.
                 /IF.
                 REAP fk2 FROM ffi_param_kind, fp_ty.
                 IF fk2 IS "struct_val",
@@ -6119,6 +6184,16 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
                     /IF.
                 /IF.
             /IF.
+            IF safe_call IS "1",
+                IF cl_ok IS "1",
+                    SET safe_call TO "0".
+                /IF.
+                IF cl_ok IS "0",
+                    IF sarcn > 0, SET sargstr TO sargstr + ", ". /IF.
+                    SET sargstr TO sargstr + sarg_el.
+                    SET sarcn TO sarcn + 1.
+                /IF.
+            /IF.
             IF ai > 0, SET argstr TO argstr + ", ". /IF.
             SET argstr TO argstr + aexpr.
             SET ai TO ai + 1.
@@ -6147,6 +6222,17 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             /IF.
             IF argstr IS "",
                 SET call_expr TO callname + "(0, " + reap_ctx + ")".
+            /IF.
+        /IF.
+        # v0.48.37c: SAFE callee → dispatch to a real worker process.
+        # The FFI return machinery below still applies (the worker's
+        # reply comes back as a plain tx_t).
+        IF safe_call IS "1",
+            IF sarcn > 0,
+                SET call_expr TO "plant_safe_call(\"" + act + "\", " + sarcn + ", " + sargstr + ")".
+            /IF.
+            IF sarcn IS 0,
+                SET call_expr TO "plant_safe_call(\"" + act + "\", 0)".
             /IF.
         /IF.
         CREATE ffi_pref(TX) TO "".
@@ -8149,6 +8235,7 @@ ACTION generate_c(ast(LIST)),
     CREATE sigs(LIST) TO plant_list_make(0).
     CREATE templates(LIST) TO plant_list_make(0).
     CREATE structs(LIST) TO plant_list_make(0).
+    CREATE safe_acts(LIST) TO plant_list_make(0).
     CREATE eregs(LIST) TO build_enum_registry(ast).
     # pass 0r: first-pass ROOT constant collection (v0.48.35). The
     # whole module is walked BEFORE any emission so every ROOT /
@@ -8181,7 +8268,11 @@ ACTION generate_c(ast(LIST)),
             CREATE rt2(TX) TO _map_get(node_el, "ret").
             CREATE vg2(TX) TO _map_get(node_el, "varargs").
             CREATE asy2(TX) TO _map_get(node_el, "async").
-            PUT plant_list_make(12, "name", aname, "type", ntype, "params", params2, "ret", rt2, "varargs", vg2, "async", asy2) INTO sigs.
+            CREATE mm2(TX) TO _map_get(node_el, "mission_mode").
+            PUT plant_list_make(14, "name", aname, "type", ntype, "params", params2, "ret", rt2, "varargs", vg2, "async", asy2, "mission_mode", mm2) INTO sigs.
+            IF ntype IS "action_decl" AND mm2 IS "SAFE",
+                PUT aname INTO safe_acts.
+            /IF.
         /IF.
         IF ntype IS "action_decl",
             REAP aname FROM _map_get, node_el, "name".
@@ -8566,6 +8657,12 @@ ACTION generate_c(ast(LIST)),
     # (avoids the int-main/tx_t-main type clash in the generated C).
     CREATE has_cfg(TX) TO "0".
     CREATE has_plain_main(TX) TO "0".
+    # v0.48.37c: SAFE actions force the int-main wrapper (registrations +
+    # plant_maybe_run_worker + plant_init_cli) even for action-only
+    # programs, so the real worker pool gets argv0/worker-mode and the
+    # ACTION main() is renamed plant_main() to avoid the C main clash.
+    CREATE has_safe_work(TX) TO "0".
+    IF COUNT safe_acts > 0, SET has_safe_work TO "1". /IF.
     SET i TO 0.
     SEASON i < COUNT ast,
         REAP ce_nd FROM plant_list_get, ast, i.
@@ -8607,10 +8704,15 @@ ACTION generate_c(ast(LIST)),
                     SET pro_code TO pro_code + ");\n".
                 /IF.
                 IF asymark ISNT "1",
-                    IF aname IS "main" AND has_cfg IS "1",
-                        SET pro_code TO pro_code + "tx_t plant_main(" + paramstr + ");\n".
+                    IF aname IS "main",
+                        IF has_cfg IS "1" OR has_safe_work IS "1",
+                            SET pro_code TO pro_code + "tx_t plant_main(" + paramstr + ");\n".
+                        /IF.
                     /IF.
-                    IF aname ISNT "main" OR has_cfg ISNT "1",
+                    IF aname ISNT "main",
+                        SET pro_code TO pro_code + "tx_t " + aname + "(" + paramstr + ");\n".
+                    /IF.
+                    IF aname IS "main" AND has_cfg ISNT "1" AND has_safe_work ISNT "1",
                         SET pro_code TO pro_code + "tx_t " + aname + "(" + paramstr + ");\n".
                     /IF.
                 /IF.
@@ -8679,8 +8781,10 @@ ACTION generate_c(ast(LIST)),
                 IF str_eq(aname, "main") IS "1" AND drn_main IS 1 AND asy4 ISNT "1",
                     REAP node_el2 FROM map_add, node_el, "drain_after", "1".
                 /IF.
-                IF str_eq(aname, "main") IS "1" AND has_cfg IS "1" AND asy4 ISNT "1",
-                    REAP node_el2 FROM map_add, node_el2, "main_rename", "1".
+                IF str_eq(aname, "main") IS "1" AND asy4 ISNT "1",
+                    IF has_cfg IS "1" OR has_safe_work IS "1",
+                        REAP node_el2 FROM map_add, node_el2, "main_rename", "1".
+                    /IF.
                 /IF.
                 REAP cmact FROM _cl_map_get, clmaps, aname.
                 REAP nd_code FROM generate_node, node_el2, 0, sigs, esub, cmact, "", plant_list_make(0), plant_list_make(0), eregs, "", "", "".
@@ -8707,13 +8811,70 @@ ACTION generate_c(ast(LIST)),
         SET has_decl TO 1.
         SET i TO i + 1.
     /SEASON.
-    IF has_stmt,
+    # v0.48.37c: one file-scope adapter per SAFE action, in registry
+    # order. The worker process dispatches to these by index; each
+    # unpacks the wire argv into the action's C parameter list.
+    CREATE adapter_code(TX) TO "".
+    SET i TO 0.
+    SEASON i < COUNT safe_acts,
+        REAP sae FROM plant_list_get, safe_acts, i.
+        REAP san FROM find_node, ast, sae.
+        CREATE sprm(LIST) TO _map_get(san, "params").
+        SET adapter_code TO adapter_code + "tx_t plant_safe_adapter_" + sae + "(int argc, tx_t* argv) {\n".
+        CREATE spi(NUM) TO 0.
+        CREATE spe(TX) TO "".
+        CREATE spn(TX) TO "".
+        CREATE spt(TX) TO "".
+        CREATE sct(TX) TO "".
+        SEASON spi < COUNT sprm,
+            REAP spe FROM plant_list_get, sprm, spi.
+            REAP spn FROM _map_get, spe, "name".
+            REAP spt FROM _map_get, spe, "type".
+            REAP sct FROM ffi_ctype, spt.
+            IF sct IS "long",
+                SET adapter_code TO adapter_code + "  long " + spn + " = (argc > " + spi + ") ? " + "plant_rw_arg_long" + "(" + "argv" + "[" + spi + "]" + ") :" + " 0;\n".
+            /IF.
+            IF sct IS "int",
+                SET adapter_code TO adapter_code + "  int " + spn + " = (argc > " + spi + ") ? " + "(int)plant_rw_arg_long" + "(" + "argv" + "[" + spi + "]" + ") :" + " 0;\n".
+            /IF.
+            IF sct ISNT "long" AND sct ISNT "int",
+                SET adapter_code TO adapter_code + "  tx_t " + spn + " = (argc > " + spi + ") ? " + "argv" + "[" + spi + "]" + " :" + " NULL;\n".
+            /IF.
+            SET spi TO spi + 1.
+        /SEASON.
+        SET adapter_code TO adapter_code + "  return (tx_t)" + sae + "(".
+        SET spi TO 0.
+        SEASON spi < COUNT sprm,
+            REAP spe FROM plant_list_get, sprm, spi.
+            REAP spn FROM _map_get, spe, "name".
+            IF spi > 0, SET adapter_code TO adapter_code + ", ". /IF.
+            SET adapter_code TO adapter_code + spn.
+            SET spi TO spi + 1.
+        /SEASON.
+        SET adapter_code TO adapter_code + ");\n}\n".
+        SET i TO i + 1.
+    /SEASON.
+    IF COUNT safe_acts > 0, SET adapter_code TO adapter_code + "\n". /IF.
+    IF has_stmt IS 1 OR has_safe_work IS "1",
+        # v0.48.37c: registrations must precede every SAFE call; they
+        # run in the worker process too (plant_maybe_run_worker never
+        # returns there, so the child only ever sees init + registry).
+        IF COUNT safe_acts > 0,
+            CREATE reg_code(TX) TO "".
+            SET i TO 0.
+            SEASON i < COUNT safe_acts,
+                REAP sae FROM plant_list_get, safe_acts, i.
+                SET reg_code TO reg_code + "  plant_safe_register(\"" + sae + "\", plant_safe_adapter_" + sae + ");\n".
+                SET i TO i + 1.
+            /SEASON.
+            SET stmt_code TO reg_code + "  plant_maybe_run_worker();\n" + stmt_code.
+        /IF.
         IF has_plain_main IS "1",
             SET stmt_code TO stmt_code + "  plant_main();\n".
         /IF.
         SET stmt_code TO "int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n" + dcode + stmt_code + "  plant_async_drain();\n  return 0;\n}\n".
     /IF.
-    GIVE header + roots_code + struct_code + ffi_topo + cltype_code + pro_code + cb_code + clfwd_code + "\n" + cldef_code + "\n" + decl_code + stmt_code.
+    GIVE header + roots_code + struct_code + ffi_topo + cltype_code + pro_code + cb_code + clfwd_code + "\n" + cldef_code + "\n" + decl_code + adapter_code + stmt_code.
 /ACTION.
 
 # ═══════════════════════════════════════════════════════════════
@@ -9329,7 +9490,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.48.37b (pure native)".
+  SHOW "Chloroplast 0.48.37c (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.
