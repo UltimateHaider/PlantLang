@@ -41,6 +41,8 @@ tx_t parse_now_stmt(PlantArray* tokens, long pos);
 tx_t parse_analyze_stmt(PlantArray* tokens, long pos);
 tx_t parse_typeof_stmt(PlantArray* tokens, long pos);
 tx_t parse_free_stmt(PlantArray* tokens, long pos);
+tx_t parse_wait_stmt(PlantArray* tokens, long pos);
+tx_t parse_lock_stmt(PlantArray* tokens, long pos);
 tx_t parse_arc_stmt(PlantArray* tokens, long pos);
 tx_t parse_fast_reset_stmt(PlantArray* tokens, long pos);
 tx_t parse_give_stmt(PlantArray* tokens, long pos, tx_t clv);
@@ -372,6 +374,12 @@ tx_t is_keyword(tx_t wrd) {
     if (strcmp(wrd,"INTO") == 0) {
         return 1;
     }
+    if (strcmp(wrd,"WAIT") == 0) {
+        return 1;
+    }
+    if (strcmp(wrd,"LOCK") == 0) {
+        return 1;
+    }
     return 0;
 }
 tx_t keyword_to_type(tx_t wrd) {
@@ -551,6 +559,12 @@ tx_t keyword_to_type(tx_t wrd) {
     }
     if (strcmp(wrd,"INTO") == 0) {
         return "INTO";
+    }
+    if (strcmp(wrd,"WAIT") == 0) {
+        return "WAIT";
+    }
+    if (strcmp(wrd,"LOCK") == 0) {
+        return "LOCK";
     }
     return "IDENT";
 }
@@ -1688,6 +1702,54 @@ tx_t parse_free_stmt(PlantArray* tokens, long pos) {
     p4 = _second(dot_pair);
     return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "free_stmt" , "target" , id_name ) , p4 );
 }
+tx_t parse_wait_stmt(PlantArray* tokens, long pos) {
+  tx_t pair = "";
+  tx_t p2 = "";
+  tx_t mpair = "";
+  tx_t p3 = "";
+  tx_t mtok = "";
+  tx_t mty = "";
+  tx_t dot_pair = "";
+  tx_t p4 = "";
+    pair = consume(tokens, pos);
+    p2 = _second(pair);
+    mpair = collect_until(tokens, p2, ".");
+    tx_t ms = plant_list_get(mpair,  0 );
+    p3 = _second(mpair);
+    if (strcmp(ms,"") > 0) {
+        mtok = peek(tokens, p2);
+        mty = tok_type(mtok);
+        if (strcmp(mty,"STRING") == 0) {
+            return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "WAIT expects a numeric duration in milliseconds" ) , p2 );
+        }
+    }
+    dot_pair = consume(tokens, p3);
+    p4 = _second(dot_pair);
+    return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "wait_stmt" , "ms" , ms ) , p4 );
+}
+tx_t parse_lock_stmt(PlantArray* tokens, long pos) {
+  tx_t pair = "";
+  tx_t p2 = "";
+  tx_t id_pair = "";
+  tx_t id_name = "";
+  tx_t id_type = "";
+  tx_t p3 = "";
+  tx_t dot_pair = "";
+  tx_t p4 = "";
+    pair = consume(tokens, pos);
+    p2 = _second(pair);
+    id_pair = consume(tokens, p2);
+    id_name = tok_lex(plant_list_get(id_pair,  0 ));
+    id_type = tok_type(plant_list_get(id_pair,  0 ));
+    p3 = _second(id_pair);
+    if (strcmp(id_type,"IDENT") != 0) {
+        tx_t dmsg = "LOCK requires an identifier target";
+        return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , dmsg ) , p3 );
+    }
+    dot_pair = consume(tokens, p3);
+    p4 = _second(dot_pair);
+    return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "lock_stmt" , "var" , id_name ) , p4 );
+}
 tx_t parse_arc_stmt(PlantArray* tokens, long pos) {
   tx_t pair = "";
   tx_t p2 = "";
@@ -2151,7 +2213,7 @@ tx_t parse_closure(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) {
     if (strcmp(blx,"(") == 0) {
         btok2 = peek(tokens, p5+1);
         blx2 = tok_lex(btok2);
-        if (strcmp(blx2,"CREATE") == 0 || strcmp(blx2,"SHOW") == 0 || strcmp(blx2,"GIVE") == 0 || strcmp(blx2,"SET") == 0 || strcmp(blx2,"LET") == 0 || strcmp(blx2,"IF") == 0 || strcmp(blx2,"SEASON") == 0 || strcmp(blx2,"REAP") == 0 || strcmp(blx2,"PUT") == 0 || strcmp(blx2,"TAKE") == 0 || strcmp(blx2,"BREAK") == 0 || strcmp(blx2,"CONTINUE") == 0 || strcmp(blx2,"SORT") == 0 || strcmp(blx2,"SHAKE") == 0 || strcmp(blx2,"BRAID") == 0 || strcmp(blx2,"LINK") == 0 || strcmp(blx2,"HARVEST") == 0 || strcmp(blx2,"LISTEN") == 0 || strcmp(blx2,"CONST") == 0 || strcmp(blx2,"ROOT") == 0 || strcmp(blx2,"ROOT_SCOPE") == 0 || strcmp(blx2,"NOW") == 0 || strcmp(blx2,"ANALYZE") == 0 || strcmp(blx2,"TYPEOF") == 0 || strcmp(blx2,"FREE") == 0 || strcmp(blx2,"ARC") == 0 || strcmp(blx2,"FAST") == 0) {
+        if (strcmp(blx2,"CREATE") == 0 || strcmp(blx2,"SHOW") == 0 || strcmp(blx2,"GIVE") == 0 || strcmp(blx2,"SET") == 0 || strcmp(blx2,"LET") == 0 || strcmp(blx2,"IF") == 0 || strcmp(blx2,"SEASON") == 0 || strcmp(blx2,"REAP") == 0 || strcmp(blx2,"PUT") == 0 || strcmp(blx2,"TAKE") == 0 || strcmp(blx2,"BREAK") == 0 || strcmp(blx2,"CONTINUE") == 0 || strcmp(blx2,"SORT") == 0 || strcmp(blx2,"SHAKE") == 0 || strcmp(blx2,"BRAID") == 0 || strcmp(blx2,"LINK") == 0 || strcmp(blx2,"HARVEST") == 0 || strcmp(blx2,"LISTEN") == 0 || strcmp(blx2,"CONST") == 0 || strcmp(blx2,"ROOT") == 0 || strcmp(blx2,"ROOT_SCOPE") == 0 || strcmp(blx2,"NOW") == 0 || strcmp(blx2,"ANALYZE") == 0 || strcmp(blx2,"TYPEOF") == 0 || strcmp(blx2,"FREE") == 0 || strcmp(blx2,"ARC") == 0 || strcmp(blx2,"FAST") == 0 || strcmp(blx2,"WAIT") == 0 || strcmp(blx2,"LOCK") == 0) {
             body_kind = "block";
             tx_t clv = "";
             PlantArray* ctab7 = plant_list_make ( 0 );
@@ -3441,6 +3503,14 @@ tx_t parse_statement(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab, P
     }
     if (strcmp(lx,"FREE") == 0) {
         r = parse_free_stmt(tokens, pos);
+        return r;
+    }
+    if (strcmp(lx,"WAIT") == 0) {
+        r = parse_wait_stmt(tokens, pos);
+        return r;
+    }
+    if (strcmp(lx,"LOCK") == 0) {
+        r = parse_lock_stmt(tokens, pos);
         return r;
     }
     if (strcmp(lx,"ARC") == 0) {
@@ -6757,6 +6827,11 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t avp = "";
   tx_t avc = "";
   tx_t isnp = "";
+  tx_t wms = "";
+  tx_t wc2 = "";
+  tx_t lv2 = "";
+  tx_t lcv2 = "";
+  tx_t isnl2 = "";
   tx_t cond = "";
   tx_t bd = "";
   tx_t ccond = "";
@@ -7607,6 +7682,26 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
     if (strcmp(ntype,"fast_reset_stmt") == 0) {
         isel = indent_str(indent);
         return _cat(isel, "  plant_fast_reset();\n");
+    }
+    if (strcmp(ntype,"wait_stmt") == 0) {
+        wms = _map_get(node, "ms");
+        isel = indent_str(indent);
+        tx_t wsleep = "0";
+        if (strcmp(wms,"") > 0) {
+            wc2 = translate_expr(wms);
+            wsleep = wc2;
+        }
+        return _cat4(isel, "  plant_msleep(", wsleep, ");\n");
+    }
+    if (strcmp(ntype,"lock_stmt") == 0) {
+        lv2 = _map_get(node, "var");
+        lcv2 = translate_expr(lv2);
+        isnl2 = expr_is_numeric(lcv2, nums);
+        if (isnl2 == 1) {
+            lcv2 = _cat3("_from_long(", lcv2, ")");
+        }
+        isel = indent_str(indent);
+        return _cat4(isel, "  plant_lock((tx_t)", lcv2, ");\n");
     }
     if (strcmp(ntype,"if_stmt") == 0) {
         cond = _map_get(node, "cond");
@@ -10743,7 +10838,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.37d (pure native)");
+      plant_print("Chloroplast 0.48.37e (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

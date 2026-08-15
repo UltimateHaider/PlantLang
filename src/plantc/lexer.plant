@@ -64,6 +64,8 @@ ACTION is_keyword(wrd(TX)),
   IF wrd IS "THROW", GIVE TRUE. /IF.
   IF wrd IS "STOP", GIVE TRUE. /IF.
   IF wrd IS "INTO", GIVE TRUE. /IF.
+  IF wrd IS "WAIT", GIVE TRUE. /IF.
+  IF wrd IS "LOCK", GIVE TRUE. /IF.
   GIVE FALSE.
 /ACTION.
 
@@ -128,6 +130,8 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "THROW", GIVE "THROW". /IF.
   IF wrd IS "STOP", GIVE "STOP". /IF.
   IF wrd IS "INTO", GIVE "INTO". /IF.
+  IF wrd IS "WAIT", GIVE "WAIT". /IF.
+  IF wrd IS "LOCK", GIVE "LOCK". /IF.
   GIVE "IDENT".
 /ACTION.
 

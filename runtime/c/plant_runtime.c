@@ -2803,8 +2803,16 @@ static long plant_ms(void) {
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return (long)(ts.tv_sec * 1000 + ts.tv_nsec / 1000000);
 }
+/* v0.48.37e — monotonic milliseconds for WAIT timing verification */
+long plant_now_ms(void) {
+    return plant_ms();
+}
+/* v0.48.37e — millisecond sleep via POSIX nanosleep: the requested
+   duration is split into whole seconds plus the nanosecond remainder
+   (ms % 1000 * 1000000). Zero and negative durations are invalid
+   timing arguments and return immediately (no-op). */
 void plant_msleep(long ms) {
-    if (ms <= 0) ms = 1;
+    if (ms <= 0) return;
     struct timespec ts = { ms / 1000, (long)(ms % 1000) * 1000000 };
     while (nanosleep(&ts, &ts) != 0 && errno == EINTR) {}
 }
@@ -4953,6 +4961,74 @@ tx_t plant_weather_status(void) {
         "live_objects", _from_long(live),
         "pending_frees", _from_long(pending),
         "storm_handlers", _from_long(handlers));
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.48.37e — WAIT and LOCK Synchronization Primitives
+   plant_msleep (above) implements execution throttling over POSIX
+   nanosleep; plant_lock manages a centralized Lock Table: a fixed-
+   capacity registry of locking flags keyed by variable value. A key
+   marked "locked" refuses further lock attempts (the concurrency
+   guard against concurrent access or modification), and can be
+   released or probed without disturbing other keys. plant_now_ms
+   exposes monotonic milliseconds for timing verification.
+   ═══════════════════════════════════════════════════════════════ */
+#define PLANT_LOCK_MAX 64
+
+typedef struct {
+    tx_t key;
+    int  locked;
+} PlantLockEntry;
+
+static PlantLockEntry g_lock_table[PLANT_LOCK_MAX];
+static long g_lock_count = 0;
+
+/* register a locking flag against the provided variable key. Returns
+   "1" on acquisition, "0" when the key is already locked (concurrent
+   access prevented), "ERR:undefined" for a null/empty key (undefined
+   or out-of-scope variable value) and "ERR:full" when the table is
+   exhausted. */
+tx_t plant_lock(tx_t key) {
+    if (!key || _S(key)[0] == '\0') return (tx_t)"ERR:undefined";
+    for (long i = 0; i < g_lock_count; i++) {
+        if (g_lock_table[i].locked && strcmp(_S(g_lock_table[i].key), _S(key)) == 0)
+            return (tx_t)"0";
+    }
+    if (g_lock_count >= PLANT_LOCK_MAX) return (tx_t)"ERR:full";
+    g_lock_table[g_lock_count].key = key;
+    g_lock_table[g_lock_count].locked = 1;
+    g_lock_count++;
+    return (tx_t)"1";
+}
+
+/* release a locked key. Returns "1" when released, "0" when the key
+   was not locked (release of an unheld lock is a no-op refusal). */
+tx_t plant_lock_release(tx_t key) {
+    if (!key || _S(key)[0] == '\0') return (tx_t)"0";
+    for (long i = 0; i < g_lock_count; i++) {
+        if (g_lock_table[i].locked && strcmp(_S(g_lock_table[i].key), _S(key)) == 0) {
+            g_lock_table[i] = g_lock_table[g_lock_count - 1];
+            g_lock_count--;
+            return (tx_t)"1";
+        }
+    }
+    return (tx_t)"0";
+}
+
+/* probe whether a key is currently locked (protected): "1" means any
+   access or modification attempt on the resource would be blocked. */
+tx_t plant_lock_held(tx_t key) {
+    if (!key || _S(key)[0] == '\0') return (tx_t)"0";
+    for (long i = 0; i < g_lock_count; i++) {
+        if (g_lock_table[i].locked && strcmp(_S(g_lock_table[i].key), _S(key)) == 0)
+            return (tx_t)"1";
+    }
+    return (tx_t)"0";
+}
+
+/* lock-table telemetry: a structured MAP with the count of held locks */
+tx_t plant_lock_status(void) {
+    return (tx_t)plant_list_make(2, "locked_count", _from_long(g_lock_count));
 }
 
 /* ═══════════════════════════════════════════════════════════════

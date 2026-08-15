@@ -3030,6 +3030,37 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         GIVE isel + "  plant_fast_reset();\n".
     /IF.
 
+    # ── wait_stmt: WAIT [n]. → plant_msleep(n); ─────────────
+    #    v0.48.37e — execution throttling. The millisecond operand
+    #    becomes a raw C long expression; a bare WAIT. (legacy async
+    #    phase spelling) and zero/negative durations are no-ops at
+    #    runtime (plant_msleep clamps ms <= 0).
+    IF ntype IS "wait_stmt",
+        REAP wms FROM _map_get, node, "ms".
+        REAP isel FROM indent_str, indent.
+        CREATE wsleep(TX) TO "0".
+        IF wms > "",
+            REAP wc2 FROM translate_expr, wms.
+            SET wsleep TO wc2.
+        /IF.
+        GIVE isel + "  plant_msleep(" + wsleep + ");\n".
+    /IF.
+
+    # ── lock_stmt: LOCK var. → plant_lock((tx_t)var); ───────
+    #    v0.48.37e — synchronization. The target variable's value is
+    #    registered as a locking key in the runtime lock table; numeric
+    #    targets are stringified so their value is the key.
+    IF ntype IS "lock_stmt",
+        REAP lv2 FROM _map_get, node, "var".
+        REAP lcv2 FROM translate_expr, lv2.
+        REAP isnl2 FROM expr_is_numeric, lcv2, nums.
+        IF isnl2 IS 1,
+            SET lcv2 TO "_from_long(" + lcv2 + ")".
+        /IF.
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  plant_lock((tx_t)" + lcv2 + ");\n".
+    /IF.
+
     # ── if_stmt: IF cond, body [ORIF cond2, body2]* [ELSE, bodyE] /IF. ─
     #    → if (c) { … } else if (c2) { … } else { … }  (v0.48.20)
     IF ntype IS "if_stmt",

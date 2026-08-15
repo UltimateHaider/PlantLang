@@ -1,0 +1,25 @@
+# lock — LOCK var. synchronization primitive (v0.48.37e). plant_lock
+# registers a locking flag against a variable's value: acquisition
+# returns "1", a concurrent re-lock of a held key is refused ("0"),
+# release ("1") and idle release ("0") behave symmetrically, and an
+# empty/undefined variable value is rejected with "ERR:undefined".
+# The LOCK statement and the ffi_lock_status telemetry are also
+# exercised.
+ACTION main()
+  CREATE x(TX) TO "shared-resource".
+  SHOW "acquire=" + plant_lock(x).
+  SHOW "held=" + plant_lock_held(x).
+  SHOW "double=" + plant_lock(x).
+  SHOW "held2=" + plant_lock_held(x).
+  SHOW "release=" + plant_lock_release(x).
+  SHOW "held3=" + plant_lock_held(x).
+  SHOW "release_idle=" + plant_lock_release(x).
+  LOCK x.
+  SHOW "stmt_status=" + plant_map_to_string(plant_lock_status()).
+  SHOW "rel_stmt=" + plant_lock_release(x).
+  SHOW "status_final=" + plant_map_to_string(plant_lock_status()).
+  CREATE e(TX) TO "".
+  SHOW "undef=" + plant_lock(e).
+  SHOW "undef_release=" + plant_lock_release(e).
+  GIVE 0.
+/GIVE main.

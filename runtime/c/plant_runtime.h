@@ -204,4 +204,11 @@ void plant_safe_register(const char* name, tx_t (*fn)(int argc, tx_t* argv));
 void plant_maybe_run_worker(void);   /* non-returning in --plant-worker mode */
 tx_t plant_safe_call(const char* name, long argc, ...);
 
+/* ── v0.48.37e: WAIT and LOCK Synchronization Primitives ── */
+long plant_now_ms(void);             /* monotonic milliseconds */
+tx_t plant_lock(tx_t key);           /* LOCK: register a locking flag */
+tx_t plant_lock_release(tx_t key);   /* release a held lock */
+tx_t plant_lock_held(tx_t key);      /* probe protection status */
+tx_t plant_lock_status(void);        /* MAP: locked_count telemetry */
+
 #endif

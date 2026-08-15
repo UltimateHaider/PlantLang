@@ -587,6 +587,51 @@ ACTION parse_free_stmt(tokens(LIST), pos(NUM)),
   GIVE plant_list_make(2, plant_list_make(4, "type", "free_stmt", "target", id_name), p4).
 /ACTION.
 
+# ── WAIT [n]. — execution pause / throttling (v0.48.37e) ──────
+#    WAIT n. pauses the program for n milliseconds; a bare WAIT. (the
+#    legacy async phase-boundary spelling) and zero/negative durations
+#    are no-ops at runtime. The duration is the token text up to the
+#    terminating "."; string operands are rejected as invalid timing
+#    arguments. AST node: wait_stmt { ms }.
+ACTION parse_wait_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP mpair FROM collect_until, tokens, p2, ".".
+  CREATE ms TO mpair[0].
+  REAP p3 FROM _second, mpair.
+  IF ms > "",
+    REAP mtok FROM peek, tokens, p2.
+    REAP mty FROM tok_type, mtok.
+    IF mty IS "STRING",
+      GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "WAIT expects a numeric duration in milliseconds"), p2).
+    /IF.
+  /IF.
+  REAP dot_pair FROM consume, tokens, p3.
+  REAP p4 FROM _second, dot_pair.
+  GIVE plant_list_make(2, plant_list_make(4, "type", "wait_stmt", "ms", ms), p4).
+/ACTION.
+
+# ── LOCK var. — synchronization primitive (v0.48.37e) ──────────
+#    LOCK var. registers a locking flag against the variable's value in
+#    the centralized lock table; concurrent re-lock of a locked key is
+#    refused by the runtime. The target must be a plain identifier.
+#    AST node: lock_stmt { var }.
+ACTION parse_lock_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP id_pair FROM consume, tokens, p2.
+  REAP id_name FROM tok_lex, id_pair[0].
+  REAP id_type FROM tok_type, id_pair[0].
+  REAP p3 FROM _second, id_pair.
+  IF id_type ISNT "IDENT",
+    CREATE dmsg(TX) TO "LOCK requires an identifier target".
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", dmsg), p3).
+  /IF.
+  REAP dot_pair FROM consume, tokens, p3.
+  REAP p4 FROM _second, dot_pair.
+  GIVE plant_list_make(2, plant_list_make(4, "type", "lock_stmt", "var", id_name), p4).
+/ACTION.
+
 # v0.48.37 — ARC LINK parent TO child. adds a strong edge (the parent
 #   keeps the child alive); ARC UNLINK parent FROM child. drops it.
 ACTION parse_arc_stmt(tokens(LIST), pos(NUM)),
@@ -954,7 +999,7 @@ ACTION parse_closure(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
   IF blx IS "(",
     REAP btok2 FROM peek, tokens, p5 + 1.
     REAP blx2 FROM tok_lex, btok2.
-    IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "TAKE" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE" OR blx2 IS "SORT" OR blx2 IS "SHAKE" OR blx2 IS "BRAID" OR blx2 IS "LINK" OR blx2 IS "HARVEST" OR blx2 IS "LISTEN" OR blx2 IS "CONST" OR blx2 IS "ROOT" OR blx2 IS "ROOT_SCOPE" OR blx2 IS "NOW" OR blx2 IS "ANALYZE" OR blx2 IS "TYPEOF" OR blx2 IS "FREE" OR blx2 IS "ARC" OR blx2 IS "FAST",
+    IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "TAKE" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE" OR blx2 IS "SORT" OR blx2 IS "SHAKE" OR blx2 IS "BRAID" OR blx2 IS "LINK" OR blx2 IS "HARVEST" OR blx2 IS "LISTEN" OR blx2 IS "CONST" OR blx2 IS "ROOT" OR blx2 IS "ROOT_SCOPE" OR blx2 IS "NOW" OR blx2 IS "ANALYZE" OR blx2 IS "TYPEOF" OR blx2 IS "FREE" OR blx2 IS "ARC" OR blx2 IS "FAST" OR blx2 IS "WAIT" OR blx2 IS "LOCK",
       SET body_kind TO "block".
       CREATE clv(TX) TO "".
       # v0.48.35: the closure block is its own C scope → own table
@@ -1997,6 +2042,14 @@ ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), 
   /IF.
   IF lx IS "FREE",
     REAP r FROM parse_free_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "WAIT",
+    REAP r FROM parse_wait_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "LOCK",
+    REAP r FROM parse_lock_stmt, tokens, pos.
     GIVE r.
   /IF.
   IF lx IS "ARC",

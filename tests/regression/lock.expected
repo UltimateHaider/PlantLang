@@ -1,0 +1,12 @@
+acquire=1
+held=1
+double=0
+held2=1
+release=1
+held3=0
+release_idle=0
+stmt_status={locked_count = 1}
+rel_stmt=1
+status_final={locked_count = 0}
+undef=ERR:undefined
+undef_release=0

@@ -1,0 +1,6 @@
+# lock_invalid — negative test: LOCK requires a plain identifier
+# target; a numeric literal is rejected at compile time (v0.48.37e).
+ACTION main()
+  LOCK 123.
+  GIVE 0.
+/GIVE main.

@@ -83,6 +83,13 @@ tx_t ffi_weather_register(tx_t handle);
 tx_t ffi_weather_defer(tx_t handle);
 tx_t ffi_weather_status(void);
 
+/* v0.48.37e WAIT and LOCK test helpers */
+tx_t ffi_now(void);
+tx_t ffi_lock(tx_t key);
+tx_t ffi_lock_release(tx_t key);
+tx_t ffi_lock_held(tx_t key);
+tx_t ffi_lock_status(void);
+
 /* v0.48.37 Memory Safety Layer (slabs, FREE, DistributedHeap) */
 tx_t ffi_mem_free(tx_t v);
 tx_t ffi_mem_report(void);

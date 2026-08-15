@@ -1,5 +1,52 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.37e — 2026 (WAIT and LOCK Synchronization Primitives)
+
+### New Features
+- **`WAIT [n].` execution throttling** (parser.plant, codegen_c.plant,
+  plant_runtime.c): a statement-level pause that blocks for `n`
+  milliseconds via POSIX `nanosleep` (`plant_msleep`). The duration is
+  any numeric expression (literal, `NUM` variable, arithmetic); zero and
+  negative durations are invalid timing arguments and return
+  immediately, and the bare `WAIT.` (the legacy async phase-boundary
+  spelling) is likewise a no-op.
+- **`LOCK var.` synchronization** (plant_runtime.c): a centralized Lock
+  Table (`PLANT_LOCK_MAX = 64`) registers a locking flag keyed by the
+  target variable's *value*. `plant_lock` returns `"1"` on acquisition,
+  `"0"` when the key is already locked (the concurrency guard against
+  concurrent access or modification), `"ERR:undefined"` for an empty
+  variable value (undefined or out-of-scope) and `"ERR:full"` when the
+  table is exhausted. `plant_lock_release`, `plant_lock_held` and the
+  `plant_lock_status` telemetry `MAP` (`locked_count`) complete the API.
+- **`plant_now_ms`** (plant_runtime.c): non-static monotonic
+  milliseconds (CLOCK_MONOTONIC) wrapper around `plant_ms`, exposed to
+  tests via `ffi_now` for timing verification.
+
+### Changes
+- **Lexer**: `WAIT` and `LOCK` added to the keyword tables
+  (`is_keyword`, `keyword_to_type`) and the TokenType ENUM.
+- **Parser**: new `parse_wait_stmt` / `parse_lock_stmt` actions. `WAIT`
+  collects the token text up to the terminating `.` (string operands are
+  rejected with a syntax error) and produces `wait_stmt { ms }`; `LOCK`
+  requires a plain identifier target (`lock_stmt { var }`) and rejects
+  non-identifiers with a syntax error. Both are dispatched in
+  `parse_statement` and whitelisted as block-form closure bodies.
+- **Codegen**: `wait_stmt` → `plant_msleep(<ms>);` (raw long
+  expression); `lock_stmt` → `plant_lock((tx_t)<var>);` with numeric
+  targets stringified via `_from_long`.
+- **Runtime**: `plant_msleep` now treats `ms <= 0` as a no-op (was a
+  1 ms clamp); the Lock Table section (`g_lock_table`) is added before
+  the Memory Safety Layer.
+- **Tests**: `wait` (timing bounds for `WAIT 120.`, no-op `WAIT 0.`,
+  negative and bare forms), `wait_invalid` (`WAIT "abc".`),
+  `lock` (double-lock refusal, held probe, release, idle release,
+  `LOCK` statement, status telemetry, `ERR:undefined` empty value),
+  `lock_invalid` (`LOCK 123.`). FFI wrappers `ffi_now`, `ffi_lock`,
+  `ffi_lock_release`, `ffi_lock_held`, `ffi_lock_status` in mock_ffi.
+
+### Notes
+- Regression suite 133/0, native suite 20/0, self-hosting converged.
+
 ## v0.48.37d — 2026 (Weather Memory Management and Exception Cleanup)
 
 ### New Features

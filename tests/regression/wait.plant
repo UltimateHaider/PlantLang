@@ -1,0 +1,27 @@
+# wait — WAIT n. execution throttling (v0.48.37e). Timing is verified
+# against monotonic milliseconds (ffi_now): a WAIT 120. must elapse at
+# least 100ms (and no more than 1s), while WAIT 0. and negative
+# durations are no-ops. A bare WAIT. is the legacy async phase-boundary
+# spelling and is also a no-op.
+ACTION main()
+  CREATE n(NUM) TO 120.
+  CREATE t0(NUM) TO _to_long(ffi_now()).
+  WAIT n.
+  CREATE t1(NUM) TO _to_long(ffi_now()).
+  CREATE dt(NUM) TO t1 - t0.
+  IF dt >= 100 AND dt <= 1000,
+    SHOW "timing-ok".
+  /IF.
+  CREATE s0(NUM) TO _to_long(ffi_now()).
+  WAIT 0.
+  CREATE s1(NUM) TO _to_long(ffi_now()).
+  CREATE dz(NUM) TO s1 - s0.
+  IF dz < 100,
+    SHOW "zero-ok".
+  /IF.
+  WAIT -5.
+  SHOW "neg-ok".
+  WAIT.
+  SHOW "bare-ok".
+  GIVE 0.
+/GIVE main.

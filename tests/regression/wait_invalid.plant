@@ -1,0 +1,6 @@
+# wait_invalid — negative test: WAIT with a string duration is an
+# invalid timing argument and must fail at compile time (v0.48.37e).
+ACTION main()
+  WAIT "abc".
+  GIVE 0.
+/GIVE main.

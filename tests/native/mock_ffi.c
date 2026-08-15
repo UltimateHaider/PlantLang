@@ -470,6 +470,23 @@ tx_t ffi_weather_status(void) {
     return plant_weather_status();
 }
 
+/* v0.48.37e WAIT and LOCK test helpers */
+tx_t ffi_now(void) {
+    return _from_long(plant_now_ms());
+}
+tx_t ffi_lock(tx_t key) {
+    return plant_lock(key);
+}
+tx_t ffi_lock_release(tx_t key) {
+    return plant_lock_release(key);
+}
+tx_t ffi_lock_held(tx_t key) {
+    return plant_lock_held(key);
+}
+tx_t ffi_lock_status(void) {
+    return plant_lock_status();
+}
+
 /* ── v0.48.37 Memory Safety Layer wrappers (slabs, FREE, DIST) ── */
 tx_t ffi_mem_free(tx_t v) {
     return plant_mem_free(v);

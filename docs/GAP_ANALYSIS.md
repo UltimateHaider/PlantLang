@@ -92,7 +92,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `TAP/ABSORB/INFUSE/SEAL` (VEIN files) | S | M | INFUSE/ABSORB/SEAL were parse stubs in legacy too |
 | `HARVEST "url" [METHOD:][BODY:][HEADERS:][TIMEOUT:]` | S | **S** | v0.48.32 (HTTP/1.1 client, response MAP ok/status/body/headers; timeout 0 → 5s; no TLS); v0.48.34 (`… AS … MAP` keeps the connection live and exposes `sock` for plant_net_read/write/close) |
 | `LISTEN BRANCH ON port … LISTEN/.` + `GIVE … AS RESPONSE` | S | **S** | v0.48.33 (LISTEN ON port AS req. one-shot server, request MAP ok/method/path/headers/body, GIVE … AS RESPONSE replies 200 + Content-Length; bind failure → ok FALSE) |
-| `WAIT n.` (sync sleep) | S | **P** | only `plant_msleep` via external; no statement |
+| `WAIT n.` (sync sleep) / `LOCK var.` (sync guard) | S | **S** | v0.48.37e (`WAIT` → `plant_msleep` statement; `LOCK` → centralized runtime Lock Table over variable values, `plant_lock`/`release`/`held`/`status`, `ERR:undefined`/`ERR:full`; zero/negative/bare durations are no-ops) |
 | `ANALYZE x.` / `NOW FORMAT:*` / `TYPEOF x.` | S | **S** | v0.48.36 (structural runtime classifier `_plant_val_kind`, uniform `{type = …, size = …, keys = […]}` report, `bad-format:<NAME>` fallback, implicit null for undeclared targets) |
 | `FREE` / `ARC LINK|UNLINK` / `FAST RESET.` | S | **S** | v0.48.37a (slab-aware `plant_mem_free` with NULL-back write, ARC edge statements over `plant_arc_link`/`plant_arc_unlink`, mid-scope bump release; `FREE` of a literal is a user error as in C) |
 | PERSISTENT GC/lease tuning | S | **S** | v0.48.37b (`PERSIST_GC_INTERVAL` dynamic scheduling, `lease_evict()` pressure-driven reclamation with `PERSIST_PRESSURE`/`PERSIST_LEASE_MS`, deferred-free queue, `plant_persist_status` MAP with `live_objects`/`gc_runs`/`leased_count`/`pending_frees`) |
@@ -212,7 +212,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 - **HTTP client** (HARVEST via worker threads, NETWORK_STORM, `{ok,status,body,headers}` result) — `plant_net_harvest` exists in the C runtime but is also **unwired**.
 - **VEIN file handles** (TAP/ABSORB/INFUSE/SEAL) — partially stub-inherited from legacy itself.
 - **VERIFY/SUITE** test framework + `SHOW_VERIFY_SUMMARY` (replaced by shell harnesses).
-- **WAIT** synchronous sleep statement (Atomics.wait capped at 10 s).
+- **WAIT** synchronous sleep statement (Atomics.wait capped at 10 s) — **shipped v0.48.37e** as `WAIT n.` over POSIX `nanosleep` (`plant_msleep`); bare/zero/negative durations are no-ops. The legacy `Atomics.wait`-style capped variant is N/A in the native runtime.
 - **ANALYZE**, `NOW FORMAT:*`, `TYPEOF`, `CONVERT` in-place coercion.
 - **JS escape hatch** (`new Function` expression evaluation), `inferType`, `coerce`, `_splitArgs` runtime helpers.
 - **Diagnostics**: ANSI "Atmospheric Storm Panic" panels with source carets.
@@ -255,7 +255,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `fs:READ(p)` | `REAP r FROM fs:READ, p.` (works) |
 | `WEATHER … SHELTER` | errno checks: `REAP e FROM ffi_last_error, ….` + `IF` |
 | `HARVEST "url" …` | none (C socket code unwired) |
-| `WAIT n.` | `CALL ffi_sleep(n).` (test FFI) / `plant_msleep` external |
+| `WAIT n.` | `WAIT n.` statement (v0.48.37e) / `CALL ffi_sleep(n).` (test FFI) / `plant_msleep` external |
 | `VERIFY`/`SUITE` | regression harness `.plant` + `.expected` files |
 | `IMPORT "std/io".` | direct `plant_print`/SHOW; externals for the rest |
 | `MISSION : SAFE.` | `ACTION x() WITH MISSION SAFE,` or `MISSION CONFIG` keys |
@@ -289,7 +289,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 8. **`CONST`/`ROOT` immutables** — shipped v0.48.35 (`CONST`/`ROOT`/`ROOT_SCOPE`).
 
 **Low effort / niche**
-8. **SPLIT/JOIN statement forms** (SORT/SHAKE shipped v0.48.29; BRAID/LINK shipped v0.48.31), `PICK`, `STOP IF` (shipped v0.48.25), `WAIT n.` statement, `ANY/ALL/HAS/IS_A` conditions, `LOCATE`/`NOTE` comments, brace-form ACTION bodies, TYPE aliases, single-quoted strings.
+8. **SPLIT/JOIN statement forms** (SORT/SHAKE shipped v0.48.29; BRAID/LINK shipped v0.48.31), `PICK`, `STOP IF` (shipped v0.48.25), `WAIT n.` statement (**shipped v0.48.37e**; `LOCK var.` synchronization also shipped v0.48.37e), `ANY/ALL/HAS/IS_A` conditions, `LOCATE`/`NOTE` comments, brace-form ACTION bodies, TYPE aliases, single-quoted strings.
 9. **Legacy `N\` depth-prefixed syntax** (tokenized already; only needs codegen acceptance) for drop-in legacy source compatibility.
 
 **Intentionally out of scope (D)**
