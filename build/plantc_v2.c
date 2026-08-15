@@ -3288,7 +3288,7 @@ tx_t parse_weather_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab
             dot = consume(tokens, p4);
             p5 = _second(dot);
             if (strcmp(phase,"calm") == 0) {
-                return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "weather_stmt" , "body" , body , "shelters" , shelters , "calm" , calm_body ) , p5 );
+                return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "weather_stmt" , "body" , body , "shelters" , shelters , "calm" , calm_body , "exit_list" , plant_list_make ( 0 ) ) , p5 );
             }
             return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "WEATHER block missing CALM clause (mandatory finalization)" ) , p2 );
         }
@@ -7705,13 +7705,14 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         tx_t mx2 = _cat(_cat(_cat(_cat(mexit, cbcode), "  plant_calm(&"), wnm), ");\n");
         tx_t ccode = _cat(isel, "  {\n");
         ccode = _cat(_cat(_cat(_cat(ccode, isel), "    PlantWeather "), wnm), " = {0};\n");
-        ccode = _cat(_cat(_cat(_cat(ccode, isel), "    plant_weather_enter(&"), wnm), ");\n");
+        ccode = _cat(_cat(_cat(_cat(_cat(_cat(ccode, isel), "    plant_weather_enter(&"), wnm), ", "), _from_long ( plant_array_length(sh) / 3 )), ");\n");
         ccode = _cat(_cat(_cat(_cat(ccode, isel), "    if (setjmp("), wnm), ".buf) == 0) {\n");
         bcode = generate_body(bd, indent+2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx);
         ccode = _cat(_cat(_cat(ccode, bcode), isel), "    } else {\n");
         ccode = _cat(_cat(ccode, isel), "      const char* __et = plant_exc_type();\n");
         ccode = _cat(_cat(ccode, isel), "      const char* __em = plant_exc_msg();\n");
         ccode = _cat(_cat(_cat(_cat(ccode, isel), "      plant_weather_leave(&"), wnm), ");\n");
+        ccode = _cat(_cat(_cat(_cat(ccode, isel), "      plant_weather_handling_begin(&"), wnm), ");\n");
         long si2 = 0;
         tx_t wty2 = "";
         tx_t wbd2 = "";
@@ -7726,17 +7727,20 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
             if (si2 > 0) {
                 ccode = _cat(_cat(_cat(_cat(ccode, isel), "      } else if (plant_storm_match(__et, \""), wty2), "\")) {\n");
             }
+            ccode = _cat(_cat(_cat(_cat(ccode, isel), "        plant_weather_shelter_enter(&"), wnm), ");\n");
             ccode = _cat(_cat(_cat(_cat(ccode, isel), "        "), wnm), ".handled = 1;\n");
             if (strcmp(wbind2,"") != 0 && strcmp(wbind2,"null") != 0) {
                 ccode = _cat(_cat(_cat(_cat(ccode, isel), "        tx_t "), wbind2), " = (tx_t)__em;\n");
             }
             hcode = generate_body(wbd2, indent+3, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx);
             ccode = _cat(ccode, hcode);
+            ccode = _cat(_cat(_cat(_cat(ccode, isel), "        plant_weather_shelter_leave(&"), wnm), ");\n");
             si2 = si2+3;
         }
         if (plant_array_length(sh) > 0) {
             ccode = _cat(_cat(ccode, isel), "      }\n");
         }
+        ccode = _cat(_cat(_cat(_cat(ccode, isel), "      plant_weather_handling_end(&"), wnm), ");\n");
         ccode = _cat(_cat(ccode, isel), "    }\n");
         ccode = _cat(ccode, cbcode);
         ccode = _cat(_cat(_cat(_cat(ccode, isel), "    plant_calm(&"), wnm), ");\n");
@@ -10732,7 +10736,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.37c (pure native)");
+      plant_print("Chloroplast 0.48.37d (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

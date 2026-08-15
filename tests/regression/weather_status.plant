@@ -1,0 +1,28 @@
+# weather_status — plant_weather_status telemetry (active_frames,
+# live_objects, pending_frees = deferred deallocations queued within
+# exit-lists, storm_handlers = registered handler hooks) across handle
+# deferral, an empty CALM block, and unmatched storm propagation through
+# nested WEATHER frames (v0.48.37d).
+ACTION main()
+  SHOW "s0=" + plant_map_to_string(ffi_weather_status()).
+  WEATHER,
+    CREATE p(NUM) TO ffi_arc_alloc(64).
+    SHOW "reg=" + ffi_weather_register(p).
+    SHOW "defer=" + ffi_weather_defer(p).
+    SHOW "sin=" + plant_map_to_string(ffi_weather_status()).
+  CALM,
+  /WEATHER.
+  SHOW "s_deferred=" + plant_map_to_string(ffi_weather_status()).
+  WEATHER,
+    WEATHER,
+      THROW NETWORK_STORM "inner unmatched".
+    CALM,
+    /WEATHER.
+    SHOW "BUG inner returned normally".
+  SHELTER NETWORK_STORM AS err,
+    SHOW "outer caught: " + err.
+  CALM,
+    SHOW "outer calm".
+  /WEATHER.
+  SHOW "final=" + plant_map_to_string(ffi_weather_status()).
+/ACTION.

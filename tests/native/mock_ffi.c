@@ -459,6 +459,17 @@ tx_t ffi_sleep(tx_t ms) {
     return (tx_t)"0";
 }
 
+/* v0.48.37d Weather memory management + diagnostics */
+tx_t ffi_weather_register(tx_t handle) {
+    return _from_long(plant_weather_register_handle(handle));
+}
+tx_t ffi_weather_defer(tx_t handle) {
+    return _from_long(plant_weather_defer_handle(handle));
+}
+tx_t ffi_weather_status(void) {
+    return plant_weather_status();
+}
+
 /* ── v0.48.37 Memory Safety Layer wrappers (slabs, FREE, DIST) ── */
 tx_t ffi_mem_free(tx_t v) {
     return plant_mem_free(v);

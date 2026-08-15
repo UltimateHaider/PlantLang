@@ -888,6 +888,13 @@ const char* plant_env_get_weather(void) {
    ═══════════════════════════════════════════════════════════════ */
 
 static PlantWeather* _plant_weather_head = NULL;
+/* v0.48.37d — the frame whose SHELTER dispatch is currently executing
+   (it is popped from the active stack before handlers run so a handler
+   THROW propagates outward). Weather-scoped registration targets this
+   frame while set, else the active head, so handler temporaries are
+   tracked and purged by the shelter cleanup hooks. */
+static PlantWeather* _plant_weather_handling = NULL;
+static void plant_weather_teardown(PlantWeather* w);
 
 /* v0.48.23-patch / v0.48.25 — the cumulative storm registry. The six
    legacy core kinds (ZERO/LOCK/MISSING/NETWORK/LOST/ANY) are joined
@@ -942,21 +949,32 @@ const char* plant_storm_default_message(const char* type) {
     return "(unclassified storm)";
 }
 
-void plant_weather_enter(PlantWeather* w) {
+void plant_weather_enter(PlantWeather* w, int storm_handlers) {
     if (!w) return;
     w->next = _plant_weather_head;
     w->raised = 0;
     w->handled = 0;
     w->exc_type = NULL;
     w->exc_msg = NULL;
+    w->exit_count = 0;
+    w->storm_handlers = storm_handlers;
+    w->shelter_mark = -1;
     _plant_weather_head = w;
 }
 
+/* v0.48.37d — deterministic teardown. Pops the frame and walks the
+   block's assigned exit-list, freeing every registered resource
+   handle (deferred deallocations first, then live objects; ARC
+   objects are destroyed with their edges and bookkeeping, plain
+   allocations go through plant_mem_free). The ARC heap's deferred
+   deallocation queue (pending_frees) is drained at the same time, so
+   protected scopes reclaim systemically on every exit path. */
 void plant_weather_leave(PlantWeather* w) {
     if (!w) return;
     if (_plant_weather_head == w) {
         _plant_weather_head = w->next;
     }
+    plant_weather_teardown(w);
 }
 
 /* v0.48.25 — unconditional finalization. Called after a WEATHER
@@ -4787,6 +4805,154 @@ tx_t plant_arc_finalize_count(void) {
     static char buf[32];
     snprintf(buf, sizeof(buf), "%ld", g_arc_finalizes);
     return buf;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.48.37d — Weather Memory Management and Exception Cleanup
+   Every PlantWeather frame carries an exit-list (exit_list[]) of
+   resource handles registered while its protected body ran.
+   plant_weather_leave walks the list on every exit path — normal
+   completion, handled storms, unmatched propagation and the threaded
+   GIVE/BREAK/CONTINUE chains — freeing each handle ARC-aware and
+   draining the ARC heap's deferred-deallocation queue. SHELTER bodies
+   additionally run under a shelter mark: plant_weather_shelter_leave
+   purges the temporaries they registered before the shelter scope is
+   exited. plant_weather_status aggregates frame, object and handler
+   telemetry into a structured MAP.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* ARC-aware handle release: ARC objects are destroyed with their edges
+   and heap bookkeeping; everything else falls through to plant_mem_free
+   (slab / PlantArray / heap strings). */
+static void plant_weather_free_handle(tx_t handle) {
+    if (!handle) return;
+    plant_arc_obj* o = (plant_arc_obj*)handle;
+    for (plant_arc_obj* h = g_arc_head; h; h = h->next) {
+        if (h == o) {
+            plant_arc_destroy(o, 0);
+            return;
+        }
+    }
+    plant_mem_free(handle);
+}
+
+/* walk the block's assigned exit-list and free every registered handle
+   (deferred deallocations first, then live objects), then drain the ARC
+   heap's deferred-deallocation queue. Idempotent: exit_count is reset so
+   a second teardown on the same frame is a no-op. */
+static void plant_weather_teardown(PlantWeather* w) {
+    if (!w) return;
+    for (int i = 0; i < w->exit_count; i++) {
+        if (w->exit_deferred[i]) plant_weather_free_handle(w->exit_list[i]);
+    }
+    for (int i = 0; i < w->exit_count; i++) {
+        if (!w->exit_deferred[i]) plant_weather_free_handle(w->exit_list[i]);
+    }
+    w->exit_count = 0;
+    w->shelter_mark = -1;
+    while (g_pending_frees > 0) {
+        plant_arc_destroy(g_arc_deferred[--g_pending_frees], 1);
+    }
+}
+
+/* register a resource handle on a frame's exit-list (deduped) */
+int plant_weather_register(PlantWeather* w, tx_t handle) {
+    if (!w || !handle) return 0;
+    for (int i = 0; i < w->exit_count; i++)
+        if (w->exit_list[i] == handle) return 1;
+    if (w->exit_count >= PLANT_WEATHER_EXIT_MAX) return 0;
+    w->exit_list[w->exit_count] = handle;
+    w->exit_deferred[w->exit_count] = 0;
+    w->exit_count++;
+    return 1;
+}
+
+/* register against the frame whose protected scope is currently active
+   (a running shelter dispatch wins, else the innermost active frame) */
+int plant_weather_register_handle(tx_t handle) {
+    PlantWeather* w = _plant_weather_handling ? _plant_weather_handling
+                                              : _plant_weather_head;
+    return plant_weather_register(w, handle);
+}
+
+/* queue a registered handle as a deferred deallocation within its
+   exit-list: it moves out of live_objects into pending_frees and is
+   reclaimed by teardown */
+int plant_weather_defer_handle(tx_t handle) {
+    PlantWeather* w = _plant_weather_handling ? _plant_weather_handling
+                                              : _plant_weather_head;
+    if (!w || !handle) return 0;
+    for (int i = 0; i < w->exit_count; i++) {
+        if (!w->exit_deferred[i] && w->exit_list[i] == handle) {
+            w->exit_deferred[i] = 1;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/* the shelter dispatch makes the (popped) frame the registration target
+   so handler temporaries are tracked for cleanup */
+void plant_weather_handling_begin(PlantWeather* w) {
+    if (!w) return;
+    _plant_weather_handling = w;
+}
+
+void plant_weather_handling_end(PlantWeather* w) {
+    if (w && _plant_weather_handling == w) _plant_weather_handling = NULL;
+}
+
+void plant_weather_shelter_enter(PlantWeather* w) {
+    if (!w) return;
+    w->shelter_mark = w->exit_count;
+}
+
+/* purge every handle registered since the shelter body began, so
+   handler temporaries, scratch buffers and ARC links are deallocated
+   before the shelter scope exits */
+void plant_weather_shelter_leave(PlantWeather* w) {
+    if (!w) return;
+    int mark = (w->shelter_mark < 0) ? 0 : w->shelter_mark;
+    if (mark > w->exit_count) mark = w->exit_count;
+    for (int i = mark; i < w->exit_count; i++) {
+        plant_weather_free_handle(w->exit_list[i]);
+    }
+    w->exit_count = mark;
+    w->shelter_mark = -1;
+}
+
+/* v0.48.37d — weather memory telemetry: a structured MAP with
+   active_frames (currently tracked execution frames), live_objects
+   (active allocations protected within weather scopes), pending_frees
+   (deferred deallocations queued within exit-lists) and storm_handlers
+   (registered active exception handler hooks). A frame currently
+   running a shelter dispatch is counted alongside the active stack. */
+tx_t plant_weather_status(void) {
+    long frames = 0, live = 0, pending = 0, handlers = 0;
+    int handling_in_chain = 0;
+    for (PlantWeather* w = _plant_weather_head; w; w = w->next) {
+        frames++;
+        handlers += w->storm_handlers;
+        if (w == _plant_weather_handling) handling_in_chain = 1;
+        for (int i = 0; i < w->exit_count; i++) {
+            if (w->exit_deferred[i]) pending++;
+            else live++;
+        }
+    }
+    if (_plant_weather_handling && !handling_in_chain) {
+        PlantWeather* w = _plant_weather_handling;
+        frames++;
+        handlers += w->storm_handlers;
+        for (int i = 0; i < w->exit_count; i++) {
+            if (w->exit_deferred[i]) pending++;
+            else live++;
+        }
+    }
+    return (tx_t)plant_list_make(8,
+        "active_frames", _from_long(frames),
+        "live_objects", _from_long(live),
+        "pending_frees", _from_long(pending),
+        "storm_handlers", _from_long(handlers));
 }
 
 /* ═══════════════════════════════════════════════════════════════

@@ -1810,9 +1810,14 @@ ACTION parse_stop_if_stmt(tokens(LIST), pos(NUM)),
 #    binding the storm message to `AS err`) is a recovery handler;
 #    the mandatory terminal CALM clause is the unconditional
 #    finalization body. AST node:
-#      weather_stmt { body, shelters, calm }
+#      weather_stmt { body, shelters, calm, exit_list }
 #    shelters is a flat [type, bind, body, …] triple list; an
 #    untyped SHELTER is stored as the ANY_STORM catch-all.
+#    v0.48.37d — every WEATHER node provisions a dedicated local
+#    exit-list (exit_list), binding the block to its resource-
+#    reclamation structure so the runtime teardown (plant_weather_leave
+#    walking the frame's exit-list) runs deterministically on normal
+#    completion and exceptional propagation alike.
 ACTION parse_weather_stmt(tokens(LIST), pos(NUM), clv(TX), rtab(LIST), emode(TX)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -1852,7 +1857,7 @@ ACTION parse_weather_stmt(tokens(LIST), pos(NUM), clv(TX), rtab(LIST), emode(TX)
       REAP dot FROM consume, tokens, p4.
       REAP p5 FROM _second, dot.
       IF phase IS "calm",
-        GIVE plant_list_make(2, plant_list_make(8, "type", "weather_stmt", "body", body, "shelters", shelters, "calm", calm_body), p5).
+        GIVE plant_list_make(2, plant_list_make(10, "type", "weather_stmt", "body", body, "shelters", shelters, "calm", calm_body, "exit_list", plant_list_make(0)), p5).
       /IF.
       GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "WEATHER block missing CALM clause (mandatory finalization)"), p2).
     /IF.

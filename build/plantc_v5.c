@@ -2259,6 +2259,9 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
   tx_t gv = "";
   tx_t gtext = "";
   tx_t ga_rb = "";
+  tx_t cp_tok = "";
+  tx_t cp_lx = "";
+  tx_t cp_pair = "";
   tx_t tok0 = "";
   tx_t lx0 = "";
   tx_t ty0 = "";
@@ -2285,6 +2288,13 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
   tx_t dot2 = "";
   tx_t p7b = "";
   tx_t dot = "";
+  tx_t rp = "";
+  tx_t p5r = "";
+  tx_t in_tok = "";
+  tx_t in_lx = "";
+  tx_t in_ty = "";
+  tx_t dot3 = "";
+  tx_t p6r = "";
   tx_t atok = "";
   tx_t alx = "";
   tx_t atype = "";
@@ -2325,6 +2335,14 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
         ga_rb = consume(tokens, p5);
         p5 = _second(ga_rb);
         act_name = _cat4(act_name, "[", gtext, "]");
+    }
+    tx_t has_cparen = "0";
+    cp_tok = peek(tokens, p5);
+    cp_lx = tok_lex(cp_tok);
+    if (strcmp(cp_lx,"(") == 0) {
+        cp_pair = consume(tokens, p5);
+        p5 = _second(cp_pair);
+        has_cparen = "1";
     }
     PlantArray* args = plant_list_make ( 0 );
     PlantArray* clargs = plant_list_make ( 0 );
@@ -2384,6 +2402,26 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
             dot = consume(tokens, p5);
             p6 = _second(dot);
             return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "reap_stmt" , "target" , var_name , "action" , act_name , "args" , args , "clargs" , clargs , "ctx" , "" ) , p6 );
+        }
+        if (strcmp(has_cparen,"1") == 0 && strcmp(lx,")") == 0 && strcmp(ty,"STRING") != 0) {
+            rp = consume(tokens, p5);
+            p5r = _second(rp);
+            in_tok = peek(tokens, p5r);
+            in_lx = tok_lex(in_tok);
+            in_ty = tok_type(in_tok);
+            if (strcmp(in_lx,"IN") == 0 && strcmp(in_ty,"STRING") != 0) {
+                in_pair = consume(tokens, p5r);
+                p5r = _second(in_pair);
+                ctx_pair = consume(tokens, p5r);
+                ctx_name = tok_lex(plant_list_get(ctx_pair,  0 ));
+                p5r = _second(ctx_pair);
+                dot3 = consume(tokens, p5r);
+                p5r = _second(dot3);
+                return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "reap_stmt" , "target" , var_name , "action" , act_name , "args" , args , "clargs" , clargs , "ctx" , ctx_name ) , p5r );
+            }
+            dot3 = consume(tokens, p5r);
+            p6r = _second(dot3);
+            return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "reap_stmt" , "target" , var_name , "action" , act_name , "args" , args , "clargs" , clargs , "ctx" , "" ) , p6r );
         }
         tx_t arg_text = "";
         long adepth = 0;
@@ -3257,7 +3295,7 @@ tx_t parse_weather_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab
             dot = consume(tokens, p4);
             p5 = _second(dot);
             if (strcmp(phase,"calm") == 0) {
-                return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "weather_stmt" , "body" , body , "shelters" , shelters , "calm" , calm_body ) , p5 );
+                return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "weather_stmt" , "body" , body , "shelters" , shelters , "calm" , calm_body , "exit_list" , plant_list_make ( 0 ) ) , p5 );
             }
             return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "WEATHER block missing CALM clause (mandatory finalization)" ) , p2 );
         }
@@ -6683,6 +6721,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t sfz2 = "";
   tx_t arg0 = "";
   tx_t fp_el = "";
+  tx_t sct2 = "";
   tx_t fk2 = "";
   tx_t fpx = "";
   tx_t fpk2 = "";
@@ -7325,6 +7364,12 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
                     fp_el = plant_list_get(fparams, ai);
                     fp_ty = _map_get(fp_el, "type");
                 }
+                if (strcmp(safe_call,"1") == 0 && strcmp(cl_ok,"0") == 0) {
+                    sct2 = ffi_ctype(fp_ty);
+                    if (strcmp(sct2,"long") == 0 || strcmp(sct2,"int") == 0) {
+                        sarg_el = _cat3("_from_long(", sarg_el, ")");
+                    }
+                }
                 fk2 = ffi_param_kind(fp_ty);
                 if (strcmp(fk2,"struct_val") == 0) {
                     fpx = is_bare_id(arg_el);
@@ -7667,13 +7712,14 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         tx_t mx2 = _cat(_cat4(mexit, cbcode, "  plant_calm(&", wnm), ");\n");
         tx_t ccode = _cat(isel, "  {\n");
         ccode = _cat(_cat4(ccode, isel, "    PlantWeather ", wnm), " = {0};\n");
-        ccode = _cat(_cat4(ccode, isel, "    plant_weather_enter(&", wnm), ");\n");
+        ccode = _cat4(_cat4(ccode, isel, "    plant_weather_enter(&", wnm), ", ", _from_long ( plant_array_length(sh) / 3 ), ");\n");
         ccode = _cat(_cat4(ccode, isel, "    if (setjmp(", wnm), ".buf) == 0) {\n");
         bcode = generate_body(bd, indent+2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx);
         ccode = _cat4(ccode, bcode, isel, "    } else {\n");
         ccode = _cat3(ccode, isel, "      const char* __et = plant_exc_type();\n");
         ccode = _cat3(ccode, isel, "      const char* __em = plant_exc_msg();\n");
         ccode = _cat(_cat4(ccode, isel, "      plant_weather_leave(&", wnm), ");\n");
+        ccode = _cat(_cat4(ccode, isel, "      plant_weather_handling_begin(&", wnm), ");\n");
         long si2 = 0;
         tx_t wty2 = "";
         tx_t wbd2 = "";
@@ -7688,17 +7734,20 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
             if (si2 > 0) {
                 ccode = _cat(_cat4(ccode, isel, "      } else if (plant_storm_match(__et, \"", wty2), "\")) {\n");
             }
+            ccode = _cat(_cat4(ccode, isel, "        plant_weather_shelter_enter(&", wnm), ");\n");
             ccode = _cat(_cat4(ccode, isel, "        ", wnm), ".handled = 1;\n");
             if (strcmp(wbind2,"") != 0 && strcmp(wbind2,"null") != 0) {
                 ccode = _cat(_cat4(ccode, isel, "        tx_t ", wbind2), " = (tx_t)__em;\n");
             }
             hcode = generate_body(wbd2, indent+3, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx);
             ccode = _cat(ccode, hcode);
+            ccode = _cat(_cat4(ccode, isel, "        plant_weather_shelter_leave(&", wnm), ");\n");
             si2 = si2+3;
         }
         if (plant_array_length(sh) > 0) {
             ccode = _cat3(ccode, isel, "      }\n");
         }
+        ccode = _cat(_cat4(ccode, isel, "      plant_weather_handling_end(&", wnm), ");\n");
         ccode = _cat3(ccode, isel, "    }\n");
         ccode = _cat(ccode, cbcode);
         ccode = _cat(_cat4(ccode, isel, "    plant_calm(&", wnm), ");\n");
@@ -10006,10 +10055,10 @@ tx_t generate_c(PlantArray* ast) {
             spt = _map_get(spe, "type");
             sct = ffi_ctype(spt);
             if (strcmp(sct,"long") == 0) {
-                adapter_code = _cat3(_cat4(_cat4(_cat4(adapter_code, "  long ", spn, " = (argc > "), _from_long(spi), ") ? (long)(intptr_t)", "argv"), "[", _from_long(spi), "]"), " :", " 0;\n");
+                adapter_code = _cat(_cat4(_cat4(_cat4(_cat4(adapter_code, "  long ", spn, " = (argc > "), _from_long(spi), ") ? ", "plant_rw_arg_long"), "(", "argv", "["), _from_long(spi), "]", ") :"), " 0;\n");
             }
             if (strcmp(sct,"int") == 0) {
-                adapter_code = _cat3(_cat4(_cat4(_cat4(adapter_code, "  int ", spn, " = (argc > "), _from_long(spi), ") ? (int)(intptr_t)", "argv"), "[", _from_long(spi), "]"), " :", " 0;\n");
+                adapter_code = _cat(_cat4(_cat4(_cat4(_cat4(adapter_code, "  int ", spn, " = (argc > "), _from_long(spi), ") ? ", "(int)plant_rw_arg_long"), "(", "argv", "["), _from_long(spi), "]", ") :"), " 0;\n");
             }
             if (strcmp(sct,"long") != 0 && strcmp(sct,"int") != 0) {
                 adapter_code = _cat3(_cat4(_cat4(_cat4(adapter_code, "  tx_t ", spn, " = (argc > "), _from_long(spi), ") ? ", "argv"), "[", _from_long(spi), "]"), " :", " NULL;\n");
@@ -10694,7 +10743,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.37b (pure native)");
+      plant_print("Chloroplast 0.48.37d (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

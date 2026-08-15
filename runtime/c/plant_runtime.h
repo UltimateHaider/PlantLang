@@ -83,6 +83,8 @@ void        plant_entity_set_species(void* entity, const char* species_name);
    unmatched storms are rethrown after the CALM body executes, bubbling
    up frame by frame. The volatile members are written before longjmp
    and read after it, so they stay determined across the transfer. */
+#define PLANT_WEATHER_EXIT_MAX 64
+
 typedef struct PlantWeather {
     struct PlantWeather* volatile next;
     jmp_buf buf;
@@ -90,9 +92,21 @@ typedef struct PlantWeather {
     volatile int handled;
     volatile char* exc_type;
     volatile char* exc_msg;
+    /* v0.48.37d — exit-list teardown. Every WEATHER frame provisions a
+       dedicated exit-list of protected resource handles. Handles are
+       freed by plant_weather_leave on every exit path (ARC-aware, then
+       plant_mem_free for plain allocations), deferred deallocations
+       queued within the list are drained, and temporary objects
+       registered while a SHELTER body runs are purged by
+       plant_weather_shelter_leave immediately on handler exit. */
+    tx_t  exit_list[PLANT_WEATHER_EXIT_MAX];
+    unsigned char exit_deferred[PLANT_WEATHER_EXIT_MAX];
+    int   exit_count;       /* registered handles in this frame */
+    int   storm_handlers;   /* SHELTER clauses bound to this frame */
+    int   shelter_mark;     /* exit_count snapshot at shelter entry; -1 outside */
 } PlantWeather;
 
-void        plant_weather_enter(PlantWeather* w);
+void        plant_weather_enter(PlantWeather* w, int storm_handlers);
 void        plant_weather_leave(PlantWeather* w);
 void        plant_calm(PlantWeather* w);
 void        plant_throw(const char* type, const char* msg);
@@ -101,6 +115,15 @@ const char* plant_exc_msg(void);
 int         plant_storm_match(const char* thrown_type, const char* shelter_type);
 int         plant_storm_is_known(const char* type);
 const char* plant_storm_default_message(const char* type);
+/* v0.48.37d — weather memory management and diagnostics */
+int         plant_weather_register(PlantWeather* w, tx_t handle);
+int         plant_weather_register_handle(tx_t handle); /* current frame */
+int         plant_weather_defer_handle(tx_t handle);    /* queue within exit-list */
+void        plant_weather_handling_begin(PlantWeather* w);
+void        plant_weather_handling_end(PlantWeather* w);
+void        plant_weather_shelter_enter(PlantWeather* w);
+void        plant_weather_shelter_leave(PlantWeather* w);
+tx_t        plant_weather_status(void);                 /* MAP telemetry */
 
 /* ── v0.43.0: PlantArray type (dynamic string array for split results) ── */
 #define PLANT_ARRAY_MAGIC 0x504C4152 /* "PLAR" */

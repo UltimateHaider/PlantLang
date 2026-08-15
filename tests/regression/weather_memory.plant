@@ -1,0 +1,17 @@
+# weather_memory — resources allocated inside a WEATHER-protected block
+# are registered on the block's exit-list and freed by plant_weather_leave
+# after the terminal CALM body runs; ARC objects are destroyed with their
+# heap bookkeeping, so persist_status confirms full reclamation (v0.48.37d).
+ACTION main()
+  SHOW "s0=" + plant_map_to_string(ffi_weather_status()).
+  WEATHER,
+    CREATE a(NUM) TO ffi_arc_alloc(128).
+    CREATE b(NUM) TO ffi_arc_alloc(256).
+    SHOW "reg=" + ffi_weather_register(a) + "," + ffi_weather_register(b).
+    SHOW "sin=" + plant_map_to_string(ffi_weather_status()).
+  CALM,
+    SHOW "calm".
+  /WEATHER.
+  SHOW "s_after=" + plant_map_to_string(ffi_weather_status()).
+  SHOW "heap_after=" + plant_map_to_string(ffi_persist_status()).
+/ACTION.

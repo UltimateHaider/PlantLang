@@ -3166,6 +3166,14 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    The frame variable is named from the indent level so nested
     #    WEATHER blocks each address their own checkpoint even
     #    through the mexit/wexit threading below.
+    #    v0.48.37d — weather memory management. Each frame registers
+    #    its SHELTER hook count at enter; the exceptional path pops
+    #    the frame (plant_weather_leave tears down its exit-list),
+    #    then plant_weather_handling_begin makes it the registration
+    #    target for handler temporaries, which the per-shelter
+    #    plant_weather_shelter_enter/leave pair purges immediately
+    #    after each handler body runs (prior to exiting the shelter
+    #    scope). plant_weather_handling_end closes the dispatch.
     IF ntype IS "weather_stmt",
         REAP bd FROM _map_get, node, "body".
         REAP sh FROM _map_get, node, "shelters".
@@ -3188,13 +3196,14 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         CREATE mx2(TX) TO mexit + cbcode + "  plant_calm(&" + wnm + ");\n".
         CREATE ccode(TX) TO isel + "  \{\n".
         SET ccode TO ccode + isel + "    PlantWeather " + wnm + " = \{0\};\n".
-        SET ccode TO ccode + isel + "    plant_weather_enter(&" + wnm + ");\n".
+        SET ccode TO ccode + isel + "    plant_weather_enter(&" + wnm + ", " + _from_long(COUNT sh / 3) + ");\n".
         SET ccode TO ccode + isel + "    if (setjmp(" + wnm + ".buf) == 0) \{\n".
         REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx.
         SET ccode TO ccode + bcode + isel + "    \} else \{\n".
         SET ccode TO ccode + isel + "      const char* __et = plant_exc_type();\n".
         SET ccode TO ccode + isel + "      const char* __em = plant_exc_msg();\n".
         SET ccode TO ccode + isel + "      plant_weather_leave(&" + wnm + ");\n".
+        SET ccode TO ccode + isel + "      plant_weather_handling_begin(&" + wnm + ");\n".
         CREATE si2(NUM) TO 0.
         CREATE wty2(TX) TO "".
         CREATE wbd2(TX) TO "".
@@ -3209,17 +3218,20 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             IF si2 > 0,
                 SET ccode TO ccode + isel + "      \} else if (plant_storm_match(__et, \"" + wty2 + "\")) \{\n".
             /IF.
+            SET ccode TO ccode + isel + "        plant_weather_shelter_enter(&" + wnm + ");\n".
             SET ccode TO ccode + isel + "        " + wnm + ".handled = 1;\n".
             IF wbind2 ISNT "" AND wbind2 ISNT "null",
                 SET ccode TO ccode + isel + "        tx_t " + wbind2 + " = (tx_t)__em;\n".
             /IF.
             REAP hcode FROM generate_body, wbd2, indent + 3, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx.
             SET ccode TO ccode + hcode.
+            SET ccode TO ccode + isel + "        plant_weather_shelter_leave(&" + wnm + ");\n".
             SET si2 TO si2 + 3.
         /SEASON.
         IF COUNT sh > 0,
             SET ccode TO ccode + isel + "      \}\n".
         /IF.
+        SET ccode TO ccode + isel + "      plant_weather_handling_end(&" + wnm + ");\n".
         SET ccode TO ccode + isel + "    \}\n".
         SET ccode TO ccode + cbcode.
         SET ccode TO ccode + isel + "    plant_calm(&" + wnm + ");\n".

@@ -1,0 +1,6 @@
+s0={active_frames = 0, live_objects = 0, pending_frees = 0, storm_handlers = 0}
+reg=1,1
+sin={active_frames = 1, live_objects = 2, pending_frees = 0, storm_handlers = 0}
+calm
+s_after={active_frames = 0, live_objects = 0, pending_frees = 0, storm_handlers = 0}
+heap_after={live_objects = 0, gc_runs = 0, leased_count = 0, pending_frees = 0}

@@ -78,6 +78,11 @@ tx_t ffi_lease_evict(void);          /* v0.48.37b */
 tx_t ffi_persist_pressure(void);     /* v0.48.37b */
 tx_t ffi_sleep(tx_t ms);
 
+/* v0.48.37d Weather memory management + diagnostics */
+tx_t ffi_weather_register(tx_t handle);
+tx_t ffi_weather_defer(tx_t handle);
+tx_t ffi_weather_status(void);
+
 /* v0.48.37 Memory Safety Layer (slabs, FREE, DistributedHeap) */
 tx_t ffi_mem_free(tx_t v);
 tx_t ffi_mem_report(void);

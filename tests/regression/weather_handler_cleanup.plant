@@ -1,0 +1,19 @@
+# weather_handler_cleanup — temporary allocations and variable references
+# created inside a SHELTER handler are registered while the storm dispatch
+# runs and purged by plant_weather_shelter_leave immediately after the
+# handler body, before the shelter scope exits (v0.48.37d). The SHELTER
+# clause is deliberately variable-free.
+ACTION main()
+  SHOW "s0=" + plant_map_to_string(ffi_weather_status()).
+  WEATHER,
+    THROW LOCK_STORM "lock".
+  SHELTER LOCK_STORM,
+    CREATE t1(NUM) TO ffi_arc_alloc(32).
+    CREATE t2(NUM) TO ffi_arc_alloc(48).
+    SHOW "reg_t=" + ffi_weather_register(t1) + "," + ffi_weather_register(t2).
+    SHOW "sin=" + plant_map_to_string(ffi_weather_status()).
+  CALM,
+    SHOW "calm_after_handler".
+  /WEATHER.
+  SHOW "s_after=" + plant_map_to_string(ffi_weather_status()).
+/ACTION.

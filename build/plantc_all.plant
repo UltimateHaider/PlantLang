@@ -2254,9 +2254,14 @@ ACTION parse_stop_if_stmt(tokens(LIST), pos(NUM)),
 #    binding the storm message to `AS err`) is a recovery handler;
 #    the mandatory terminal CALM clause is the unconditional
 #    finalization body. AST node:
-#      weather_stmt { body, shelters, calm }
+#      weather_stmt { body, shelters, calm, exit_list }
 #    shelters is a flat [type, bind, body, …] triple list; an
 #    untyped SHELTER is stored as the ANY_STORM catch-all.
+#    v0.48.37d — every WEATHER node provisions a dedicated local
+#    exit-list (exit_list), binding the block to its resource-
+#    reclamation structure so the runtime teardown (plant_weather_leave
+#    walking the frame's exit-list) runs deterministically on normal
+#    completion and exceptional propagation alike.
 ACTION parse_weather_stmt(tokens(LIST), pos(NUM), clv(TX), rtab(LIST), emode(TX)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -2296,7 +2301,7 @@ ACTION parse_weather_stmt(tokens(LIST), pos(NUM), clv(TX), rtab(LIST), emode(TX)
       REAP dot FROM consume, tokens, p4.
       REAP p5 FROM _second, dot.
       IF phase IS "calm",
-        GIVE plant_list_make(2, plant_list_make(8, "type", "weather_stmt", "body", body, "shelters", shelters, "calm", calm_body), p5).
+        GIVE plant_list_make(2, plant_list_make(10, "type", "weather_stmt", "body", body, "shelters", shelters, "calm", calm_body, "exit_list", plant_list_make(0)), p5).
       /IF.
       GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", "WEATHER block missing CALM clause (mandatory finalization)"), p2).
     /IF.
@@ -6517,6 +6522,14 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    The frame variable is named from the indent level so nested
     #    WEATHER blocks each address their own checkpoint even
     #    through the mexit/wexit threading below.
+    #    v0.48.37d — weather memory management. Each frame registers
+    #    its SHELTER hook count at enter; the exceptional path pops
+    #    the frame (plant_weather_leave tears down its exit-list),
+    #    then plant_weather_handling_begin makes it the registration
+    #    target for handler temporaries, which the per-shelter
+    #    plant_weather_shelter_enter/leave pair purges immediately
+    #    after each handler body runs (prior to exiting the shelter
+    #    scope). plant_weather_handling_end closes the dispatch.
     IF ntype IS "weather_stmt",
         REAP bd FROM _map_get, node, "body".
         REAP sh FROM _map_get, node, "shelters".
@@ -6539,13 +6552,14 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         CREATE mx2(TX) TO mexit + cbcode + "  plant_calm(&" + wnm + ");\n".
         CREATE ccode(TX) TO isel + "  \{\n".
         SET ccode TO ccode + isel + "    PlantWeather " + wnm + " = \{0\};\n".
-        SET ccode TO ccode + isel + "    plant_weather_enter(&" + wnm + ");\n".
+        SET ccode TO ccode + isel + "    plant_weather_enter(&" + wnm + ", " + _from_long(COUNT sh / 3) + ");\n".
         SET ccode TO ccode + isel + "    if (setjmp(" + wnm + ".buf) == 0) \{\n".
         REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx.
         SET ccode TO ccode + bcode + isel + "    \} else \{\n".
         SET ccode TO ccode + isel + "      const char* __et = plant_exc_type();\n".
         SET ccode TO ccode + isel + "      const char* __em = plant_exc_msg();\n".
         SET ccode TO ccode + isel + "      plant_weather_leave(&" + wnm + ");\n".
+        SET ccode TO ccode + isel + "      plant_weather_handling_begin(&" + wnm + ");\n".
         CREATE si2(NUM) TO 0.
         CREATE wty2(TX) TO "".
         CREATE wbd2(TX) TO "".
@@ -6560,17 +6574,20 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             IF si2 > 0,
                 SET ccode TO ccode + isel + "      \} else if (plant_storm_match(__et, \"" + wty2 + "\")) \{\n".
             /IF.
+            SET ccode TO ccode + isel + "        plant_weather_shelter_enter(&" + wnm + ");\n".
             SET ccode TO ccode + isel + "        " + wnm + ".handled = 1;\n".
             IF wbind2 ISNT "" AND wbind2 ISNT "null",
                 SET ccode TO ccode + isel + "        tx_t " + wbind2 + " = (tx_t)__em;\n".
             /IF.
             REAP hcode FROM generate_body, wbd2, indent + 3, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx.
             SET ccode TO ccode + hcode.
+            SET ccode TO ccode + isel + "        plant_weather_shelter_leave(&" + wnm + ");\n".
             SET si2 TO si2 + 3.
         /SEASON.
         IF COUNT sh > 0,
             SET ccode TO ccode + isel + "      \}\n".
         /IF.
+        SET ccode TO ccode + isel + "      plant_weather_handling_end(&" + wnm + ");\n".
         SET ccode TO ccode + isel + "    \}\n".
         SET ccode TO ccode + cbcode.
         SET ccode TO ccode + isel + "    plant_calm(&" + wnm + ");\n".
@@ -9490,7 +9507,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.48.37c (pure native)".
+  SHOW "Chloroplast 0.48.37d (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

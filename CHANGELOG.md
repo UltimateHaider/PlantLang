@@ -1,5 +1,54 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.37d — 2026 (Weather Memory Management and Exception Cleanup)
+
+### New Features
+- **WEATHER exit-lists** (parser.plant, plant_runtime.c): every `WEATHER`
+  AST node now provisions a dedicated local `exit_list`; at runtime each
+  `PlantWeather` frame carries a matching exit-list
+  (`PLANT_WEATHER_EXIT_MAX = 64`) of registered resource handles.
+  `plant_weather_leave` walks the list on every exit path — normal
+  completion, handled storms, unmatched propagation and the threaded
+  `GIVE`/`BREAK`/`CONTINUE` chains — freeing each handle ARC-aware
+  (edges + heap bookkeeping) or via `plant_mem_free`, and draining the
+  ARC heap's deferred-deallocation queue, so protected scopes reclaim
+  systemically.
+- **SHELTER handler cleanup**: the storm-routing engine now brackets
+  every handler body with `plant_weather_shelter_enter/leave`, purging
+  temporary objects, scratch buffers and ARC links registered while the
+  handler ran immediately before the shelter scope exits. The popped
+  frame becomes the registration target during dispatch
+  (`plant_weather_handling_begin/end`), so handler temporaries are
+  tracked without disturbing active-frame accounting.
+- **Weather memory telemetry** (`plant_weather_status`): a structured
+  `MAP` reporting `active_frames`, `live_objects` (protected
+  allocations in weather scopes), `pending_frees` (deferred
+  deallocations queued within exit-lists) and `storm_handlers`
+  (registered exception handler hooks); exposed to tests via
+  `ffi_weather_status`.
+
+### Changes
+- **Parser**: `weather_stmt` AST gains an `exit_list` field binding each
+  block to its resource-reclamation structure.
+- **Codegen**: `plant_weather_enter(&w, nhandlers)` records the frame's
+  SHELTER hook count; `plant_weather_handling_begin/end` bracket the
+  shelter dispatch and `plant_weather_shelter_enter/leave` bracket each
+  handler body.
+- **Runtime**: `plant_weather_register_handle` / `plant_weather_defer_handle`
+  register protected handles and queue deferred deallocations within the
+  active frame's exit-list.
+
+### Tests
+- `weather_memory`: ARC objects registered inside a WEATHER block are
+  freed after the terminal `CALM` (weather + persist status both report
+  zero live objects).
+- `weather_handler_cleanup`: temporaries created inside a variable-free
+  `SHELTER` handler are purged on handler exit (`live_objects` returns
+  to 0, handler hook count reported).
+- `weather_status`: telemetry accuracy across handle deferral (pending
+  deallocation queued in the exit-list), an empty `CALM` block, and
+  unmatched storm propagation through nested WEATHER frames.
+
 ## v0.48.37c — 2026 (True SAFE Worker-Process Isolation)
 
 ### New Features

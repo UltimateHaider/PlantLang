@@ -1,0 +1,8 @@
+s0={active_frames = 0, live_objects = 0, pending_frees = 0, storm_handlers = 0}
+reg=1
+defer=1
+sin={active_frames = 1, live_objects = 0, pending_frees = 1, storm_handlers = 0}
+s_deferred={active_frames = 0, live_objects = 0, pending_frees = 0, storm_handlers = 0}
+outer caught: inner unmatched
+outer calm
+final={active_frames = 0, live_objects = 0, pending_frees = 0, storm_handlers = 0}
