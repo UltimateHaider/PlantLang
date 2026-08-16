@@ -2189,6 +2189,18 @@ ACTION translate_expr(expr(TX)),
     REAP e FROM _handle_func_paren, e, "LOWER", "plant_lower".
     REAP e FROM _handle_func_paren, e, "TRIM", "plant_trim".
     REAP e FROM _handle_func_paren, e, "REVERSE", "plant_reverse".
+    # v0.48.38f — math built-ins (single-argument, dual-argument
+    # POW, and parameterless RANDOM all flow through the paren
+    # mapper; the runtime coerces tx_t operands to doubles)
+    REAP e FROM _handle_func_paren, e, "ABS", "plant_abs".
+    REAP e FROM _handle_func_paren, e, "ROUND", "plant_round".
+    REAP e FROM _handle_func_paren, e, "POW", "plant_pow".
+    REAP e FROM _handle_func_paren, e, "CEIL", "plant_ceil".
+    REAP e FROM _handle_func_paren, e, "FLOOR", "plant_floor".
+    REAP e FROM _handle_func_paren, e, "RANDOM", "plant_random".
+    REAP e FROM _handle_func_paren, e, "SIN", "plant_sin".
+    REAP e FROM _handle_func_paren, e, "COS", "plant_cos".
+    REAP e FROM _handle_func_paren, e, "SQRT", "plant_sqrt".
     REAP e FROM _storm_inject, e.
     REAP e FROM _handle_func, e, "TEST", "!".
     # list literals rewrite BEFORE boolean sanitization so a bare

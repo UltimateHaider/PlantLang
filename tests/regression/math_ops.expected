@@ -1,0 +1,14 @@
+abs=5
+round=4
+pow=8
+ceil=4
+floor=3
+sin0=0
+cos0=1
+sqrt16=4
+sqrt_neg=nan
+pow00=1
+rand_ok=1
+abs_str=7
+round_neg=-3
+sqrt9=3

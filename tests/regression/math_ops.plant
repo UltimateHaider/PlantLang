@@ -1,0 +1,30 @@
+# math_ops — math built-ins (v0.48.38f).
+# ABS / ROUND / POW / CEIL / FLOOR / RANDOM / SIN / COS / SQRT.
+# tx_t operands coerce to doubles: integer literals arrive as raw
+# small ints, numeric strings ("3.7" — the dialect has no decimal
+# literals) parse via strtod. Integral results render as long
+# integers; SQRT of a negative input yields "nan"; POW(0, 0) is 1.
+
+ACTION main(),
+  SHOW "abs=" + ABS(-5).
+  SHOW "round=" + ROUND("3.7").
+  SHOW "pow=" + POW(2, 3).
+  SHOW "ceil=" + CEIL("3.2").
+  SHOW "floor=" + FLOOR("3.9").
+  SHOW "sin0=" + SIN(0).
+  SHOW "cos0=" + COS(0).
+  SHOW "sqrt16=" + SQRT(16).
+  SHOW "sqrt_neg=" + SQRT(-1).
+  SHOW "pow00=" + POW(0, 0).
+  CREATE rr(TX) TO RANDOM().
+  IF rr >= "0" AND rr < "1",
+    SHOW "rand_ok=1".
+  /IF.
+  IF NOT (rr >= "0" AND rr < "1"),
+    SHOW "rand_ok=0".
+  /IF.
+  SHOW "abs_str=" + ABS("-7").
+  SHOW "round_neg=" + ROUND("-2.5").
+  SHOW "sqrt9=" + SQRT(9).
+  GIVE 0.
+/GIVE main.

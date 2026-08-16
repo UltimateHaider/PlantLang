@@ -6815,6 +6815,15 @@ tx_t translate_expr(tx_t expr) {
     e = _handle_func_paren(e, "LOWER", "plant_lower");
     e = _handle_func_paren(e, "TRIM", "plant_trim");
     e = _handle_func_paren(e, "REVERSE", "plant_reverse");
+    e = _handle_func_paren(e, "ABS", "plant_abs");
+    e = _handle_func_paren(e, "ROUND", "plant_round");
+    e = _handle_func_paren(e, "POW", "plant_pow");
+    e = _handle_func_paren(e, "CEIL", "plant_ceil");
+    e = _handle_func_paren(e, "FLOOR", "plant_floor");
+    e = _handle_func_paren(e, "RANDOM", "plant_random");
+    e = _handle_func_paren(e, "SIN", "plant_sin");
+    e = _handle_func_paren(e, "COS", "plant_cos");
+    e = _handle_func_paren(e, "SQRT", "plant_sqrt");
     e = _storm_inject(e);
     e = _handle_func(e, "TEST", "!");
     e = _list_literal(e);
@@ -11159,7 +11168,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.38e (pure native)");
+      plant_print("Chloroplast 0.48.38f (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

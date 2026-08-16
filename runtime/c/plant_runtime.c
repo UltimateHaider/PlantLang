@@ -2489,6 +2489,92 @@ tx_t plant_reverse(tx_t text) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   v0.48.38f — Math built-ins
+   ABS / ROUND / POW / CEIL / FLOOR / RANDOM / SIN / COS / SQRT.
+   tx_t operands are coerced to double: small raw integers (both
+   signs — call sites pass integer literals unwrapped, e.g.
+   plant_abs(-5)), numeric strings ("2", "3.7", pre-converted NUM
+   variables via _from_long) parse with a full-consumption strtod
+   scan. Unparseable inputs coerce to NaN. Results render as a long
+   integer when integral, otherwise "%.10g" ("nan" for NaN).
+   ═══════════════════════════════════════════════════════════════ */
+
+static int _plant_math_num(tx_t x, double* out) {
+    /* small raw ints first — 0 is also the NULL sentinel */
+    if ((intptr_t)x > -4096 && (intptr_t)x < 4096) { *out = (double)(intptr_t)x; return 1; }
+    if (!x) return 0;
+    const char* s = _S(x);
+    if (!s || s[0] == '\0') return 0;
+    char* end = NULL;
+    double v = strtod(s, &end);
+    if (end == s || *end != '\0') return 0;
+    *out = v;
+    return 1;
+}
+
+static tx_t _plant_math_result(double v) {
+    if (v == (double)(long long)v) return _from_long((long long)v);
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%.10g", v);
+    return strdup(buf);
+}
+
+tx_t plant_abs(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    return _plant_math_result(fabs(v));
+}
+
+tx_t plant_round(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    return _plant_math_result(round(v));
+}
+
+tx_t plant_pow(tx_t x, tx_t y) {
+    double a = NAN, b = NAN;
+    _plant_math_num(x, &a);
+    _plant_math_num(y, &b);
+    return _plant_math_result(pow(a, b));
+}
+
+tx_t plant_ceil(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    return _plant_math_result(ceil(v));
+}
+
+tx_t plant_floor(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    return _plant_math_result(floor(v));
+}
+
+tx_t plant_random(void) {
+    /* [0.0, 1.0) — the +1.0 keeps the upper bound exclusive */
+    return _plant_math_result((double)rand() / ((double)RAND_MAX + 1.0));
+}
+
+tx_t plant_sin(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    return _plant_math_result(sin(v));
+}
+
+tx_t plant_cos(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    return _plant_math_result(cos(v));
+}
+
+tx_t plant_sqrt(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    if (v < 0.0) return strdup("nan");
+    return _plant_math_result(sqrt(v));
+}
+
+/* ═══════════════════════════════════════════════════════════════
    v0.47.2 — Native Data Structures (Set / Queue / Stack)
    Implementations; signatures in plant_compat.h
    ═══════════════════════════════════════════════════════════════ */

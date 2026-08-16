@@ -687,6 +687,18 @@ tx_t  plant_lower(tx_t text);
    declared via plant_runtime.h; mirrored here for the FFI surface). */
 tx_t  plant_trim(tx_t text);
 tx_t  plant_reverse(tx_t text);
+
+/* v0.48.38f — math built-ins (also declared via plant_runtime.h;
+   mirrored here for the FFI surface). */
+tx_t  plant_abs(tx_t x);
+tx_t  plant_round(tx_t x);
+tx_t  plant_pow(tx_t x, tx_t y);
+tx_t  plant_ceil(tx_t x);
+tx_t  plant_floor(tx_t x);
+tx_t  plant_random(void);
+tx_t  plant_sin(tx_t x);
+tx_t  plant_cos(tx_t x);
+tx_t  plant_sqrt(tx_t x);
 long  plant_arc_gc(void);                             /* GC.cycle(): reclaim */
 tx_t  plant_persist_status(void);                     /* heap telemetry (text) */
 tx_t  plant_arc_finalize_count(void);                 /* finalize counter */

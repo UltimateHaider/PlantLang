@@ -1,5 +1,46 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.38f — 2026 (Math Built-ins)
+
+### New Features
+- **`ABS` / `ROUND` / `POW` / `CEIL` / `FLOOR` / `RANDOM` / `SIN` /
+  `COS` / `SQRT`** (plant_runtime.c, codegen_c.plant): a native math
+  library replacing external FFI calls. `translate_expr` maps the
+  single-argument forms, the dual-argument `POW(x, y)`, and the
+  parameterless `RANDOM()` through `_handle_func_paren` to
+  `plant_abs`/`plant_round`/`plant_pow`/`plant_ceil`/`plant_floor`/
+  `plant_random`/`plant_sin`/`plant_cos`/`plant_sqrt`.
+- **tx_t → double coercion** (plant_runtime.c): operands convert
+  dynamically — raw small integers of either sign (integer literals
+  arrive unwrapped at the call site, so `plant_abs(-5)` and
+  `plant_pow(0, 0)` stay exact; the small-int check precedes the NULL
+  guard because 0 doubles as the NULL sentinel) and numeric strings
+  (`"2"`, `"3.7"` — the dialect has no decimal literals, so fractional
+  scenarios pass strings) via a full-consumption `strtod` scan.
+  Unparseable inputs coerce to NaN.
+- **Edge-case safety**: `SQRT(-1)` → `"nan"` (explicit domain check);
+  `POW(0, 0)` → `"1"` (standard C `pow`); `RANDOM()` produces a
+  pseudo-random value in `[0.0, 1.0)` (`rand()` scaled by
+  `RAND_MAX + 1` so the upper bound stays exclusive).
+- **Result formatting**: integral results render as long integers,
+  fractional results with `"%.10g"`; `ROUND` follows C `round`
+  semantics (half away from zero — `ROUND("-2.5")` → `-3`).
+
+### Changes
+- `plant_runtime.h` declares all nine functions; `plant_compat.h`
+  mirrors the externs for the FFI surface.
+- Version markers (Makefile, main.plant, run_native_tests.sh) bumped
+  to 0.48.38f.
+
+### Tests
+- `tests/regression/math_ops.plant` (regression suite): `ABS(-5)` → `5`;
+  `ROUND("3.7")` → `4`; `POW(2, 3)` → `8`; `CEIL("3.2")` → `4`;
+  `FLOOR("3.9")` → `3`; `SIN(0)` → `0`; `COS(0)` → `1`;
+  `SQRT(16)` → `4`; `SQRT(-1)` → `nan`; `POW(0, 0)` → `1`;
+  `RANDOM()` asserted in-code to lie in `[0, 1)`; string operands
+  (`ABS("-7")`, `ROUND("-2.5")` → `-3`), `SQRT(9)` → `3`. 139/0
+  regression, 20/0 native, self-hosting converged (376802 B).
+
 ## v0.48.38e — 2026 (String Case Operations: UPPER, LOWER)
 
 ### New Features
