@@ -2423,6 +2423,34 @@ tx_t plant_sum(tx_t list) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   v0.48.38e — UPPER / LOWER string case operations
+   ASCII-safe case conversion: each character is cast to unsigned
+   char before toupper/tolower, avoiding undefined behavior for
+   high-bit bytes on platforms with signed char. NULL and empty
+   inputs return "".
+   ═══════════════════════════════════════════════════════════════ */
+
+tx_t plant_upper(tx_t text) {
+    const char* s = text ? _S(text) : "";
+    if (!s || s[0] == '\0') return strdup("");
+    size_t len = strlen(s);
+    char* out = (char*)plant_alloc(len + 1);
+    for (size_t i = 0; i < len; i++) out[i] = (char)toupper((unsigned char)s[i]);
+    out[len] = '\0';
+    return out;
+}
+
+tx_t plant_lower(tx_t text) {
+    const char* s = text ? _S(text) : "";
+    if (!s || s[0] == '\0') return strdup("");
+    size_t len = strlen(s);
+    char* out = (char*)plant_alloc(len + 1);
+    for (size_t i = 0; i < len; i++) out[i] = (char)tolower((unsigned char)s[i]);
+    out[len] = '\0';
+    return out;
+}
+
+/* ═══════════════════════════════════════════════════════════════
    v0.47.2 — Native Data Structures (Set / Queue / Stack)
    Implementations; signatures in plant_compat.h
    ═══════════════════════════════════════════════════════════════ */

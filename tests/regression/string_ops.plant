@@ -1,0 +1,20 @@
+# string_ops — UPPER / LOWER string case operations (v0.48.38e).
+# UPPER(text) / LOWER(text) convert ASCII characters to upper/lower
+# case (unsigned char cast keeps high-bit bytes safe); NULL and
+# empty inputs return "".
+
+ACTION main(),
+  SHOW "u1=" + UPPER("hello").
+  SHOW "l1=" + LOWER("HELLO").
+  SHOW "u2=" + UPPER("Hello World").
+  SHOW "l2=" + LOWER("Hello World").
+  SHOW "u3=" + UPPER("MIXED 123 !@#").
+  SHOW "l3=" + LOWER("MIXED 123 !@#").
+  SHOW "u4=" + UPPER("").
+  SHOW "l4=" + LOWER("").
+  SHOW "u5=" + UPPER(NULL).
+  SHOW "l5=" + LOWER(NULL).
+  SHOW "u6=" + UPPER("hello world").
+  SHOW "l6=" + LOWER("HELLO WORLD").
+  GIVE 0.
+/GIVE main.

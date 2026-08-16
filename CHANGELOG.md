@@ -1,5 +1,32 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.38e — 2026 (String Case Operations: UPPER, LOWER)
+
+### New Features
+- **`UPPER(text)` / `LOWER(text)` case conversion** (plant_runtime.c,
+  codegen_c.plant): convert every character of the input string to
+  its uppercase / lowercase form. Each character is cast to
+  `unsigned char` before `toupper`/`tolower`, keeping high-bit bytes
+  well-defined on platforms with signed `char`. NULL and empty inputs
+  return `""`. The compiler maps the calls through
+  `_handle_func_paren` (the same single-argument mechanism as
+  `JOIN`/`FIRST`) to `plant_upper(text)` / `plant_lower(text)`.
+
+### Changes
+- `plant_runtime.h` declares `plant_upper`, `plant_lower`;
+  `plant_compat.h` mirrors the two externs for the FFI surface.
+- Version markers (Makefile, main.plant, run_native_tests.sh) bumped
+  to 0.48.38e.
+
+### Tests
+- `tests/regression/string_ops.plant` (regression suite):
+  `UPPER("hello")` → `HELLO`; `LOWER("HELLO")` → `hello`;
+  `UPPER("Hello World")` → `HELLO WORLD`;
+  `LOWER("Hello World")` → `hello world`; mixed-case strings with
+  digits and punctuation; `UPPER("")` / `LOWER("")` → `""`;
+  `UPPER(NULL)` / `LOWER(NULL)` → `""`. 138/0 regression, 20/0
+  native, self-hosting converged (376213 B).
+
 ## v0.48.38d — 2026 (List Operations: FIRST, LAST, SUM)
 
 ### New Features

@@ -148,6 +148,11 @@ tx_t        plant_join(tx_t list, tx_t delim);
 tx_t        plant_first(tx_t list);
 tx_t        plant_last(tx_t list);
 tx_t        plant_sum(tx_t list);
+/* v0.48.38e — UPPER / LOWER string case operations: ASCII-safe
+   conversion (characters cast to unsigned char before toupper/
+   tolower); NULL and empty inputs yield "". */
+tx_t        plant_upper(tx_t text);
+tx_t        plant_lower(tx_t text);
 int         plant_storm_match(const char* thrown_type, const char* shelter_type);
 int         plant_storm_is_known(const char* type);
 const char* plant_storm_default_message(const char* type);
