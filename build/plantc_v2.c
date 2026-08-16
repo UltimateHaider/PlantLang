@@ -77,6 +77,7 @@ tx_t parse_program(PlantArray* tokens);
 tx_t _substr(tx_t str, long start, long end);
 tx_t _handle_func(tx_t expr, tx_t kw, tx_t cfn);
 tx_t _handle_func_paren(tx_t expr, tx_t kw, tx_t cfn);
+tx_t _storm_inject(tx_t expr);
 tx_t is_identifier(tx_t tok);
 tx_t seg_has_literal_digit(tx_t seg);
 tx_t seg_is_numeric(tx_t seg, PlantArray* nums);
@@ -4631,6 +4632,78 @@ tx_t _handle_func_paren(tx_t expr, tx_t kw, tx_t cfn) {
     }
     return res;
 }
+tx_t _storm_inject(tx_t expr) {
+  tx_t s0 = "";
+  tx_t sip = "";
+    tx_t sdela = "storm ";
+    tx_t sdelb = "storm";
+    tx_t sopen = "(";
+    PlantArray* sparts = plant_list_make ( 0 );
+    sparts = strings_SPLIT(expr, _cat(sdela, sopen));
+    if (plant_array_length(sparts) == 1) {
+        sparts = strings_SPLIT(expr, _cat(sdelb, sopen));
+    }
+    if (plant_array_length(sparts) == 1) {
+        return expr;
+    }
+    s0 = plant_list_get(sparts, 0);
+    tx_t sres = s0;
+    long si2 = 1;
+    tx_t sp = "";
+    while (si2 < plant_array_length(sparts)) {
+        sp = plant_list_get(sparts, si2);
+        long sisid = 0;
+        if (strlen( sres ) > 0) {
+            tx_t slast = "";
+            slast = char_at(sres, strlen( sres ) - 1);
+            sip = find_any(slast, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_");
+            if (sip != - 1) {
+                sisid = 1;
+            }
+        }
+        if (sisid == 0) {
+            long sdep = 0;
+            long sinstr = 0;
+            tx_t sch = "";
+            long j2 = 0;
+            long sfin = 0;
+            long smat = 0;
+            while (j2 < strlen( sp ) && sfin == 0) {
+                sch = char_at(sp, j2);
+                if (strcmp(sch,"\"") == 0) {
+                    sinstr = 1 - sinstr;
+                }
+                if (sinstr == 1 && strcmp(sch,"\\") == 0) {
+                    j2 = j2+1;
+                }
+                if (sinstr == 0 && strcmp(sch,"(") == 0) {
+                    sdep = sdep+1;
+                }
+                if (sinstr == 0 && strcmp(sch,")") == 0 && sdep == 0) {
+                    sfin = 1;
+                    smat = j2;
+                }
+                if (sinstr == 0 && strcmp(sch,")") == 0 && sdep > 0) {
+                    sdep = sdep - 1;
+                }
+                j2 = j2+1;
+            }
+            if (sfin == 1) {
+                tx_t sh2 = "";
+                sh2 = substring(sp, 0, smat);
+                tx_t st2 = "";
+                st2 = substring(sp, smat, strlen( sp ));
+                sp = _cat(_cat(sh2, ", __FILE__, __LINE__, 0"), st2);
+            }
+            sres = _cat(_cat(_cat(_cat(sres, "plant"), "_storm"), "("), sp);
+        }
+        if (sisid == 1) {
+            sres = _cat(sres, sp);
+        }
+        si2 = si2+1;
+    }
+    return sres;
+}
 tx_t is_identifier(tx_t tok) {
   tx_t f0 = "";
     long i0 = 0;
@@ -6502,7 +6575,7 @@ tx_t translate_expr(tx_t expr) {
     e = strings_REPLACE(e, " IS ", " == ");
     e = _handle_func(e, "COUNT", "plant_array_length");
     e = _handle_func_paren(e, "LEN", "strlen");
-    e = _handle_func_paren(e, "storm", "plant_storm");
+    e = _storm_inject(e);
     e = _handle_func(e, "TEST", "!");
     e = strings_REPLACE(e, "TRUE", "1");
     e = strings_REPLACE(e, "FALSE", "0");
@@ -10846,7 +10919,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.38a (pure native)");
+      plant_print("Chloroplast 0.48.38b (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

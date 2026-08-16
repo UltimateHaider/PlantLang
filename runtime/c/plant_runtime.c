@@ -5056,13 +5056,36 @@ tx_t plant_lock_status(void) {
    normalized: the type falls back to ANY_STORM, the message to the
    registry default (or "(unclassified storm)" for unconventional
    types), mirroring plant_throw's NULL-message behavior.
+   v0.48.38b — location backfill: the factory takes file/line/column
+   source metadata and packs each field conditionally (non-NULL file,
+   positive line/column) into the object, so THROW storm(...). objects
+   expose their compile site through SHELTER AS bindings.
    ═══════════════════════════════════════════════════════════════ */
 
-tx_t plant_storm(tx_t type, tx_t msg) {
-    if (!type || _S(type)[0] == '\0') type = (tx_t)"ANY_STORM";
-    if (!msg || _S(msg)[0] == '\0')
-        msg = (tx_t)plant_storm_default_message(_S(type));
-    tx_t map = (tx_t)plant_list_make(4, "type", type, "message", msg);
+tx_t plant_storm(tx_t type, tx_t msg, tx_t file, long line, long column) {
+    tx_t storm_type = type ? type : (tx_t)"ANY_STORM";
+    if (_S(storm_type)[0] == '\0') storm_type = (tx_t)"ANY_STORM";
+    tx_t smsg = msg;
+    if (!smsg || _S(smsg)[0] == '\0')
+        smsg = (tx_t)plant_storm_default_message(_S(storm_type));
+    PlantArray* list = plant_list_make(4, "type", storm_type, "message", smsg);
+    /* v0.48.38b — conditional source metadata: each field is packed
+       only when meaningful (file non-NULL, line/column > 0), keeping
+       objects built from legacy two-argument calls byte-identical to
+       v0.48.38a output. */
+    if (file) {
+        plant_list_push(list, (char*)"file");
+        plant_list_push(list, (char*)file);
+    }
+    if (line > 0) {
+        plant_list_push(list, (char*)"line");
+        plant_list_push(list, (char*)_from_long(line));
+    }
+    if (column > 0) {
+        plant_list_push(list, (char*)"column");
+        plant_list_push(list, (char*)_from_long(column));
+    }
+    tx_t map = (tx_t)list;
     plant_arc_obj* o = (plant_arc_obj*)plant_arc_alloc(sizeof(tx_t));
     if (!o) return map;               /* degraded: unmanaged fallback */
     free(o->data);                    /* payload becomes the MAP itself */

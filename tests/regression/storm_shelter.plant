@@ -1,0 +1,20 @@
+# storm_shelter — v0.48.38b: SHELTER AS binds the complete storm
+# object, including the compile-time source metadata injected at the
+# throw site (file/line packed by the factory, column omitted because
+# the codegen passes 0). All fields are reachable through _map_get on
+# the bound variable; "file" is the generated-C source path (asserted
+# non-empty via LEN), "line" the exact C line of the plant_storm call.
+
+ACTION main()
+  WEATHER,
+    THROW storm("ARG_STORM", "bad arg").
+  SHELTER ARG_STORM AS e,
+    SHOW "caught=" + _map_get(e, "type").
+    SHOW "msg=" + _map_get(e, "message").
+    SHOW "file_len=" + _from_long(LEN(_map_get(e, "file"))).
+    SHOW "line=" + _map_get(e, "line").
+    SHOW "col_absent=" + _map_get(e, "column").
+  CALM,
+  /WEATHER.
+  GIVE 0.
+/GIVE main.

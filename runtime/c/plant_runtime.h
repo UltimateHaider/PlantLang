@@ -118,14 +118,20 @@ void        plant_calm(PlantWeather* w);
 void        plant_throw(const char* type, const char* msg);
 const char* plant_exc_type(void);
 const char* plant_exc_msg(void);
-/* v0.48.38a — storm() Exception Factory. plant_storm builds an
+/* v0.48.38a/b — storm() Exception Factory. plant_storm builds an
    ARC-managed exception object (a {type, message} MAP) that persists
    across setjmp/longjmp unwinding; plant_throw_obj raises such an
    object through the innermost checkpoint; plant_exc_val returns the
    binding value a SHELTER AS-clause receives (the object for factory
    storms, else the message string); plant_storm_release decrements
-   the object's reference count once the handler logic has run. */
-tx_t        plant_storm(tx_t type, tx_t msg);
+   the object's reference count once the handler logic has run.
+   v0.48.38b — source-context injection: the factory additionally
+   accepts file (tx_t), line and column (long) metadata that is
+   conditionally packed into the object (file when non-NULL, line and
+   column when > 0), so THROW storm(...). objects carry their compile
+   site and SHELTER AS bindings expose e["file"] / e["line"] via
+   _map_get. */
+tx_t        plant_storm(tx_t type, tx_t msg, tx_t file, long line, long column);
 void        plant_throw_obj(tx_t obj);
 tx_t        plant_exc_val(void);
 void        plant_storm_release(tx_t obj);

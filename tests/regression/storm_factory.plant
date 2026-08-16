@@ -9,8 +9,9 @@
 # default message.
 
 ACTION main()
-  CREATE s1(TX) TO plant_map_to_string(storm("ZERO_STORM", "divide!")).
-  SHOW "made=" + s1.
+  CREATE s1m(TX) TO storm("ZERO_STORM", "divide!").
+  SHOW "made=" + plant_map_to_string(s1m).
+  SHOW "col_absent=" + _map_get(s1m, "column").
   CREATE s2(TX) TO plant_map_to_string(storm("ARG_STORM", "")).
   SHOW "empty_msg=" + s2.
   CREATE s3(TX) TO plant_map_to_string(storm("", "no type")).

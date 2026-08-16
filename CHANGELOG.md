@@ -1,5 +1,54 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.38b — 2026 (Location Backfill & SHELTER/AS Metadata Binding)
+
+### New Features
+- **Source-context injection** (codegen_c.plant): every `storm(...)`
+  factory call now compiles to
+  `plant_storm("TYPE", "msg", __FILE__, __LINE__, 0)` — the
+  compile-time source path and line of the generated call site are
+  packed into the exception object. Column tracking is non-standard,
+  so `0` is passed and the field is omitted from the object.
+- **Location backfill in the factory** (plant_runtime.c,
+  plant_runtime.h, plant_compat.h): `plant_storm` now takes
+  `(type, msg, file, line, column)`. `file` (tx_t) and `line` (long)
+  are packed conditionally — non-NULL file, positive line/column —
+  so objects built from legacy two-argument calls remain byte-
+  identical to v0.48.38a output. Empty type still falls back to
+  `ANY_STORM`; empty message still falls back to the registry default
+  via `plant_storm_default_message` (or `(unclassified storm)` for
+  unconventional types).
+- **SHELTER/AS metadata binding** (plant_runtime.c): the complete
+  exception MAP — `type`, `message`, and the injected `file`/`line`
+  fields — flows into the `AS e` variable (the `plant_storm_match`
+  dispatch matches on the type string and hands the whole object to
+  the handler, exactly as in v0.48.38a), so user code reads the
+  metadata with standard lookup syntax: `_map_get(e, "file")`,
+  `_map_get(e, "line")`.
+
+### Changes
+- `_storm_inject` (codegen_c.plant) replaces the plain `storm(` →
+  `plant_storm(` rewrite in `translate_expr`: it finds each `storm(`
+  call's matching close paren (paren-depth and string-literal aware),
+  appends the metadata just before it, and renames the call. The
+  split is guarded so `storm (` inside a longer identifier (e.g.
+  `plant_storm(` from prior rewrites) is left untouched — this also
+  protects the self-hosted bootstrap chain from rewriting its own
+  literals.
+- Regression coverage now asserts exact metadata values: the
+  generated-C source path and the C line of the `plant_storm` call
+  (deterministic per checkout; asserted non-empty for `file` and
+  exact for `line`), and column omission.
+
+### Tests
+- `tests/regression/storm_factory.plant` (updated): factory objects
+  serialize with `file`/`line` present and `column` absent; empty-type
+  and empty-message normalization unchanged.
+- `tests/regression/storm_shelter.plant` (new): `THROW storm(...).`
+  caught in `WEATHER/SHELTER ... AS e` exposes `e["type"]`,
+  `e["message"]`, a non-empty `e["file"]`, the exact `e["line"]`, and
+  an absent `e["column"]`.
+
 ## v0.48.38a — 2026 (storm() Exception Factory)
 
 ### New Features

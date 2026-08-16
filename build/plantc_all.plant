@@ -3484,6 +3484,82 @@ ACTION _handle_func_paren(expr(TX), kw(TX), cfn(TX)),
     GIVE res.
 /ACTION.
 
+# v0.48.38b — storm() source-context injection. The factory rewrite
+# maps storm( → plant_storm( AND appends compile-time source metadata
+# (__FILE__, __LINE__ and a zero column — column tracking is
+# non-standard, and 0 makes the runtime omit the field) just before
+# each storm call's matching close paren, so every factory object
+# packs its origin. The close-paren scan is paren-depth and
+# string-literal aware; the split fires on "storm (" (or "storm(")
+# exactly like _handle_func_paren — but only when the token is NOT
+# part of a longer identifier (e.g. "plant_storm("), which both keeps
+# pre-rewritten text intact and protects the self-hosted compiler
+# from rewriting its own literals during bootstrap.
+ACTION _storm_inject(expr(TX)),
+    # delimiters live in variables: literal-first REAP/CALL args skip
+    # _handle_cat, and a raw "storm (" / "storm(" literal inside the
+    # compiler's own source would be rewritten during bootstrap.
+    CREATE sdela(TX) TO "storm ".
+    CREATE sdelb(TX) TO "storm".
+    CREATE sopen(TX) TO "(".
+    CREATE sparts(LIST) TO plant_list_make(0).
+    REAP sparts FROM strings:SPLIT, expr, sdela + sopen.
+    IF COUNT sparts IS 1,
+        REAP sparts FROM strings:SPLIT, expr, sdelb + sopen.
+    /IF.
+    IF COUNT sparts IS 1, GIVE expr. /IF.
+    REAP s0 FROM plant_list_get, sparts, 0.
+    CREATE sres(TX) TO s0.
+    CREATE si2(NUM) TO 1.
+    CREATE sp(TX) TO "".
+    SEASON si2 < COUNT sparts,
+        REAP sp FROM plant_list_get, sparts, si2.
+        # identifier-guard: the char immediately before the split point
+        # belongs to the previous part (sres). A letter/digit/_ there
+        # means "storm (" is inside a longer identifier, not a call.
+        CREATE sisid(NUM) TO 0.
+        IF LEN(sres) > 0,
+            CREATE slast(TX) TO "".
+            REAP slast FROM char_at, sres, LEN(sres) - 1.
+            REAP sip FROM find_any, slast, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_".
+            IF sip ISNT -1, SET sisid TO 1. /IF.
+        /IF.
+        IF sisid IS 0,
+            CREATE sdep(NUM) TO 0.
+            CREATE sinstr(NUM) TO 0.
+            CREATE sch(TX) TO "".
+            CREATE j2(NUM) TO 0.
+            CREATE sfin(NUM) TO 0.
+            CREATE smat(NUM) TO 0.
+            SEASON j2 < LEN(sp) AND sfin IS 0,
+                REAP sch FROM char_at, sp, j2.
+                IF sch IS "\"", SET sinstr TO 1 - sinstr. /IF.
+                IF sinstr IS 1 AND sch IS "\\", SET j2 TO j2 + 1. /IF.
+                IF sinstr IS 0 AND sch IS "(", SET sdep TO sdep + 1. /IF.
+                IF sinstr IS 0 AND sch IS ")" AND sdep IS 0,
+                    SET sfin TO 1.
+                    SET smat TO j2.
+                /IF.
+                IF sinstr IS 0 AND sch IS ")" AND sdep > 0, SET sdep TO sdep - 1. /IF.
+                SET j2 TO j2 + 1.
+            /SEASON.
+            IF sfin IS 1,
+                CREATE sh2(TX) TO "".
+                REAP sh2 FROM substring, sp, 0, smat.
+                CREATE st2(TX) TO "".
+                REAP st2 FROM substring, sp, smat, LEN(sp).
+                SET sp TO sh2 + ", __FILE__, __LINE__, 0" + st2.
+            /IF.
+            SET sres TO sres + "plant" + "_storm" + "(" + sp.
+        /IF.
+        IF sisid IS 1,
+            SET sres TO sres + sp.
+        /IF.
+        SET si2 TO si2 + 1.
+    /SEASON.
+    GIVE sres.
+/ACTION.
+
 # ──────────────────────────────────────────────────────────────
 #  is_identifier — 1 when the text is a C/PlantLang identifier
 #  (letter or _ first, then letters/digits/_). Digit literals like
@@ -5308,7 +5384,7 @@ ACTION translate_expr(expr(TX)),
     REAP e FROM strings:REPLACE, e, " IS ", " == ".
     REAP e FROM _handle_func, e, "COUNT", "plant_array_length".
     REAP e FROM _handle_func_paren, e, "LEN", "strlen".
-    REAP e FROM _handle_func_paren, e, "storm", "plant_storm".
+    REAP e FROM _storm_inject, e.
     REAP e FROM _handle_func, e, "TEST", "!".
     REAP e FROM strings:REPLACE, e, "TRUE", "1".
     REAP e FROM strings:REPLACE, e, "FALSE", "0".
@@ -9619,7 +9695,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.48.38a (pure native)".
+  SHOW "Chloroplast 0.48.38b (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.
