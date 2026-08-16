@@ -139,6 +139,212 @@ ACTION _storm_inject(expr(TX)),
 /ACTION.
 
 # ──────────────────────────────────────────────────────────────
+#  v0.48.38c — literal list syntax [expr (, expr)*].
+#  The parser already passes bracketed tokens through in expression
+#  position (there is no expression AST — expression text flows to
+#  translate_expr, the same seam as the LEN/JOIN/storm rewrites),
+#  so the bracket literal is translated textually: each [ ... ]
+#  span becomes plant_list_make(count, elem, ...). Elements are
+#  split on top-level commas (paren/bracket/brace depth and string
+#  literal aware); integer literals wrap in _from_long (tx_t are
+#  strings, so numeric elements must be converted); nested [ ... ]
+#  spans recurse; everything else passes through as tx_t text.
+#  Indexing (name[expr]) is left alone — handle_brackets, which
+#  runs after this rewrite, still maps it to plant_list_get.
+# ──────────────────────────────────────────────────────────────
+
+ACTION _is_int(t(TX)),
+    CREATE k(NUM) TO 0.
+    CREATE ch(TX) TO "".
+    IF LEN(t) IS 0, GIVE 0. /IF.
+    IF t IS "-", GIVE 0. /IF.
+    REAP ch FROM char_at, t, 0.
+    IF ch IS "-", SET k TO 1. /IF.
+    SEASON k < LEN(t),
+        REAP ch FROM char_at, t, k.
+        REAP fp FROM find_any, ch, "0123456789".
+        IF fp IS -1, GIVE 0. /IF.
+        SET k TO k + 1.
+    /SEASON.
+    GIVE 1.
+/ACTION.
+
+ACTION _push_el(els(LIST), cur(TX)),
+    REAP elt FROM trim, cur.
+    IF LEN(elt) IS 0, GIVE els. /IF.
+    CREATE ef(TX) TO "".
+    REAP ec0 FROM char_at, elt, 0.
+    IF ec0 IS "[",
+        REAP is2 FROM substring, elt, 1, LEN(elt) - 1.
+        REAP ef FROM _seg_list, is2.
+    /IF.
+    IF ec0 ISNT "[",
+        REAP isi FROM _is_int, elt.
+        IF isi IS 1,
+            SET ef TO "_from_long(" + elt + ")".
+        /IF.
+        IF isi IS 0,
+            SET ef TO elt.
+        /IF.
+    /IF.
+    REAP els FROM plant_list_push, els, ef.
+    GIVE els.
+/ACTION.
+
+ACTION _seg_list(inner(TX)),
+    CREATE els(LIST) TO plant_list_make(0).
+    CREATE cur(TX) TO "".
+    CREATE dep(NUM) TO 0.
+    CREATE ist(NUM) TO 0.
+    CREATE ii(NUM) TO 0.
+    CREATE ch(TX) TO "".
+    CREATE esc2(NUM) TO 0.
+    SEASON ii < LEN(inner),
+        SET esc2 TO 0.
+        REAP ch FROM char_at, inner, ii.
+        IF ist IS 1 AND ch IS "\\" AND ii + 1 < LEN(inner),
+            SET cur TO cur + ch.
+            SET ii TO ii + 1.
+            REAP ch FROM char_at, inner, ii.
+            SET cur TO cur + ch.
+            SET esc2 TO 1.
+        /IF.
+        IF esc2 IS 0,
+        IF ch IS "\"", SET ist TO 1 - ist. /IF.
+        IF ist IS 0,
+            IF ch IS "[" OR ch IS "(" OR ch IS "{", SET dep TO dep + 1. /IF.
+            IF ch IS "]" OR ch IS ")" OR ch IS "}", SET dep TO dep - 1. /IF.
+            IF ch IS "," AND dep IS 0,
+                REAP els FROM _push_el, els, cur.
+                SET cur TO "".
+            /IF.
+        /IF.
+        IF ch ISNT "," OR ist IS 1 OR dep ISNT 0,
+            SET cur TO cur + ch.
+        /IF.
+        /IF.
+        SET ii TO ii + 1.
+    /SEASON.
+    REAP els FROM _push_el, els, cur.
+    IF COUNT els IS 0, GIVE "plant_list_make(0)". /IF.
+    # count text via _from_long: numeric segments inside string
+    # concatenation must stay TX (the v0.46.3-era bootstrap compiler
+    # does not _from_long-wrap numeric segments in _handle_cat)
+    CREATE cnt(TX) TO "".
+    REAP cnt FROM _from_long, COUNT els.
+    CREATE res(TX) TO "plant_list_make(" + cnt + ", ".
+    CREATE sii(NUM) TO 0.
+    SEASON sii < COUNT els,
+        REAP elx FROM plant_list_get, els, sii.
+        SET res TO res + elx.
+        IF sii < COUNT els - 1, SET res TO res + ", ". /IF.
+        SET sii TO sii + 1.
+    /SEASON.
+    SET res TO res + ")".
+    GIVE res.
+/ACTION.
+
+ACTION _list_literal(expr(TX)),
+    CREATE chk0(TX) TO "".
+    REAP chk0 FROM find_any, expr, "[".
+    IF chk0 IS -1, GIVE expr. /IF.
+    CREATE out(TX) TO "".
+    CREATE bd(NUM) TO 0.
+    CREATE inst(NUM) TO 0.
+    CREATE ls(NUM) TO 0.
+    CREATE lc(NUM) TO 0.
+    CREATE lst(TX) TO "".
+    CREATE li(NUM) TO 0.
+    CREATE ch(TX) TO "".
+    CREATE lesc(NUM) TO 0.
+    SEASON li < LEN(expr),
+        SET lc TO 0.
+        SET lesc TO 0.
+        REAP ch FROM char_at, expr, li.
+        IF inst IS 1 AND ch IS "\\" AND li + 1 < LEN(expr),
+            SET out TO out + ch.
+            SET li TO li + 1.
+            REAP ch FROM char_at, expr, li.
+            SET out TO out + ch.
+            SET lc TO 1.
+            SET lesc TO 1.
+        /IF.
+        IF lesc IS 0,
+        IF ch IS "\"", SET inst TO 1 - inst. /IF.
+        IF ch IS "\"" AND ls IS 0,
+            SET out TO out + ch.
+            SET lc TO 1.
+        /IF.
+        IF ch IS "\"" AND ls IS 1,
+            SET lst TO lst + ch.
+            SET lc TO 1.
+        /IF.
+        IF ch ISNT "\"" AND inst IS 0 AND ls IS 1,
+            IF ch IS "[", SET bd TO bd + 1. /IF.
+            IF ch IS "]",
+                SET bd TO bd - 1.
+                IF bd IS 0,
+                    REAP isub FROM substring, lst, 1, LEN(lst).
+                    SET out TO out + _seg_list(isub).
+                    SET ls TO 0.
+                    SET lc TO 1.
+                /IF.
+            /IF.
+            IF bd > 0, SET lst TO lst + ch. /IF.
+            IF ch ISNT "]",
+                SET lc TO 1.
+            /IF.
+            IF ch IS "]" AND bd > 0,
+                SET lc TO 1.
+            /IF.
+        /IF.
+        IF ch ISNT "\"" AND inst IS 1 AND ls IS 1,
+            SET lst TO lst + ch.
+            SET lc TO 1.
+        /IF.
+        IF ch ISNT "\"" AND inst IS 0 AND ls IS 0 AND ch IS "[",
+            # identifier-guard: skip whitespace backwards — tokenized
+            # expression text is space-joined ("si [ 2 ]"), so the
+            # char right before "[" may be a space. `)` / `]` also
+            # block (call-result / chained indexing is not a list).
+            CREATE pvc(TX) TO "".
+            CREATE pj(NUM) TO li - 1.
+            CREATE pch(TX) TO "".
+            SEASON pj >= 0,
+                REAP pch FROM char_at, expr, pj.
+                IF pch ISNT " " AND pch ISNT "\t",
+                    SET pvc TO pch.
+                    SET pj TO -1.
+                /IF.
+                IF pch IS " " OR pch IS "\t",
+                    SET pj TO pj - 1.
+                /IF.
+            /SEASON.
+            REAP pvi FROM find_any, pvc, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_)]".
+            IF li IS 0 OR pvi IS -1,
+                SET ls TO 1.
+                SET bd TO 1.
+                SET lst TO "".
+                SET lc TO 1.
+            /IF.
+            IF li > 0 AND pvi ISNT -1,
+                SET out TO out + ch.
+                SET lc TO 1.
+            /IF.
+        /IF.
+        IF ch ISNT "\"" AND inst IS 0 AND ls IS 0 AND ch ISNT "[" AND lc IS 0,
+            SET out TO out + ch.
+        /IF.
+        IF ch ISNT "\"" AND inst IS 1 AND ls IS 0,
+            SET out TO out + ch.
+        /IF.
+        /IF.
+        SET li TO li + 1.
+    /SEASON.
+    GIVE out.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
 #  is_identifier — 1 when the text is a C/PlantLang identifier
 #  (letter or _ first, then letters/digits/_). Digit literals like
 #  "2" or "0x10" are NOT identifiers. Used by seg_is_numeric so
@@ -1965,10 +2171,10 @@ ACTION translate_expr(expr(TX)),
     REAP e FROM _handle_func_paren, e, "JOIN", "plant_join".
     REAP e FROM _storm_inject, e.
     REAP e FROM _handle_func, e, "TEST", "!".
-    REAP e FROM strings:REPLACE, e, "TRUE", "1".
-    REAP e FROM strings:REPLACE, e, "FALSE", "0".
+    REAP e FROM plant_sanitize_bools, e.
     REAP e FROM strings:REPLACE, e, "NULL", "NULL".
     REAP e FROM strings:REPLACE, e, " : ", "_".
+    REAP e FROM _list_literal, e.
     REAP e FROM handle_brackets, e.
     GIVE e.
 /ACTION.

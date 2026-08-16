@@ -1081,6 +1081,7 @@ PlantArray* plant_string_split(const char* str, const char* delimiter) {
     arr->count = 0;
     arr->capacity = 0;
     arr->items = NULL;
+    arr->kind = 0;
     if (!str || !delimiter || delimiter[0] == '\0') return arr;
     size_t delim_len = strlen(delimiter);
     int64_t capacity = 8;
@@ -1121,6 +1122,7 @@ PlantArray* plant_list_create(int64_t capacity) {
     list->magic = PLANT_ARRAY_MAGIC;
     list->count = 0;
     list->capacity = capacity;
+    list->kind = 0;
     if (capacity > 0) {
         list->items = (char**)plant_alloc((size_t)capacity * sizeof(char*));
         for (int64_t i = 0; i < capacity; i++) list->items[i] = NULL;
@@ -2226,7 +2228,7 @@ static tx_t _plant_val_kind(tx_t v) {
         if (p->count >= 2 && p->items[0] && strcmp(_S(p->items[0]), "type") == 0
             && p->items[1] && strcmp(_S(p->items[1]), "closure") == 0)
             return strdup("closure");
-        if (p->count % 2 == 0) return strdup("map");
+        if (p->kind == 1) return strdup("map");
         return strdup("list");
     }
     if (_is_env_ptr(v)) return strdup("closure");
@@ -2294,7 +2296,9 @@ tx_t plant_analyze(tx_t v) {
             snprintf(sb, sizeof(sb), "0");
         }
     }
-    return (tx_t)plant_list_make(6, "type", _S(kind), "size", strdup(sb), "keys", keys);
+    PlantArray* _analyze_meta = plant_list_make(6, "type", _S(kind), "size", strdup(sb), "keys", keys);
+    _analyze_meta->kind = 1;
+    return (tx_t)_analyze_meta;
 }
 
 /* plant_typeof: type string only — thin wrapper over the shared
@@ -2316,7 +2320,7 @@ static tx_t _plant_ser(tx_t v, int depth) {
         return strdup(s ? s : "");
     }
     if (p->count == 0) return strdup("[]");
-    int is_map = (p->count % 2 == 0);
+    int is_map = (p->kind == 1);
     tx_t res = strdup(is_map ? "{" : "[");
     for (int64_t i = 0; i < p->count; i++) {
         if (is_map && i % 2 == 0) {
@@ -4841,11 +4845,13 @@ tx_t plant_persist_status(void) {
     long leased = 0;
     for (plant_arc_obj* o = g_arc_head; o; o = o->next)
         if (o->leased_until_ms > 0) leased++;
-    return (tx_t)plant_list_make(8,
+    PlantArray* _ps_meta = plant_list_make(8,
         "live_objects", _from_long(g_arc_live),
         "gc_runs", _from_long(g_arc_gc_runs),
         "leased_count", _from_long(leased),
         "pending_frees", _from_long(g_pending_frees));
+    _ps_meta->kind = 1;
+    return (tx_t)_ps_meta;
 }
 
 tx_t plant_arc_finalize_count(void) {
@@ -4995,11 +5001,13 @@ tx_t plant_weather_status(void) {
             else live++;
         }
     }
-    return (tx_t)plant_list_make(8,
+    PlantArray* _wt_meta = plant_list_make(8,
         "active_frames", _from_long(frames),
         "live_objects", _from_long(live),
         "pending_frees", _from_long(pending),
         "storm_handlers", _from_long(handlers));
+    _wt_meta->kind = 1;
+    return (tx_t)_wt_meta;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -5067,7 +5075,9 @@ tx_t plant_lock_held(tx_t key) {
 
 /* lock-table telemetry: a structured MAP with the count of held locks */
 tx_t plant_lock_status(void) {
-    return (tx_t)plant_list_make(2, "locked_count", _from_long(g_lock_count));
+    PlantArray* _lk_meta = plant_list_make(2, "locked_count", _from_long(g_lock_count));
+    _lk_meta->kind = 1;
+    return (tx_t)_lk_meta;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -5101,6 +5111,7 @@ tx_t plant_storm(tx_t type, tx_t msg, tx_t file, long line, long column) {
     if (!smsg || _S(smsg)[0] == '\0')
         smsg = (tx_t)plant_storm_default_message(_S(storm_type));
     PlantArray* list = plant_list_make(4, "type", storm_type, "message", smsg);
+    list->kind = 1;
     /* v0.48.38b — conditional source metadata: each field is packed
        only when meaningful (file non-NULL, line/column > 0), keeping
        objects built from legacy two-argument calls byte-identical to
@@ -5260,12 +5271,14 @@ tx_t plant_mem_free(tx_t v) {
 tx_t plant_mem_report(void) {
     plant_fast_init();
     plant_slab_init();
-    return (tx_t)plant_list_make(10,
+    PlantArray* _mr_meta = plant_list_make(10,
         "arena", _from_long(g_arena_live_bytes),
         "fast", _from_long((long)(g_fast.used + g_fast_esc_bytes)),
         "arc", _from_long(g_arc_live_bytes),
         "balanced", _from_long(g_bal_bytes),
         "slab", _from_long(g_slab_live * PLANT_SLAB_BLOCK));
+    _mr_meta->kind = 1;
+    return (tx_t)_mr_meta;
 }
 
 /* audit scanner: flags recurrent FAST_ESCALATE events, ARC churn
@@ -5294,7 +5307,7 @@ tx_t plant_mem_scan(void) {
     if (g_slab_live >= g_slab_blocks)
         wl += (long)snprintf(warn + wl, sizeof(warn) - (size_t)wl, "%sslab_exhausted", wl ? "," : "");
     if (!wl) snprintf(warn, sizeof(warn), "clean");
-    return (tx_t)plant_list_make(12,
+    PlantArray* _ms_meta = plant_list_make(12,
         "fast_escalations", _from_long(escal),
         "arc_allocs", _from_long(g_arc_allocs),
         "arc_frees", _from_long(g_arc_frees),
@@ -5302,6 +5315,8 @@ tx_t plant_mem_scan(void) {
         "arena_miss_pct", _from_long(miss),
         "slab_blocks", _from_long(g_slab_live),
         "warnings", warn);
+    _ms_meta->kind = 1;
+    return (tx_t)_ms_meta;
 }
 
 /* ── DistributedHeap: consistent-hash ring over ARC segments ──── */

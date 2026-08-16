@@ -161,6 +161,7 @@ typedef struct PlantArray {
     int64_t  count;
     int64_t  capacity;
     char**   items;
+    int8_t   kind;   /* 0 = LIST, 1 = MAP (metadata; set by constructors) */
 } PlantArray;
 
 PlantArray* plant_list_create(int64_t capacity);

@@ -29,8 +29,45 @@
   with a spaced delimiter; numeric elements with `-`; empty-list join;
   single-element join; mixed string/numeric/boolean elements with a
   pipe delimiter; nested MAP/LIST elements serialized by the object
-  serializer; NULL delimiter; NULL list. Lists are built with
-  `plant_list_make` (the dialect has no literal syntax).
+  serializer; NULL delimiter; NULL list.
+
+### v0.48.38c hotfix — Literal List Syntax & Boolean Sanitization
+
+- **Literal list syntax `[expr, expr, ...]`** (codegen_c.plant): the
+  parser already accepted `[ ... ]` in expression position, but the
+  seam between parser and codegen (no expression AST) meant brackets
+  passed through to C verbatim. A new `_list_literal` ACTION in
+  `translate_expr` rewrites list brackets into
+  `plant_list_make(count, elem1, ...)`: integer elements wrap in
+  `_from_long`, nested `[ ... ]` recurse through `_seg_list`, strings
+  and other elements pass through as tx_t text. An identifier-guard
+  keeps `name[expr]` indexing intact (walking back over whitespace —
+  tokenized expression text is space-joined — and blocking `)`/`]`),
+  and the scanner is quote-aware with backslash-escape handling, so
+  bracket characters inside string literals are never treated as list
+  boundaries. `[ ]` compiles to `plant_list_make(0)`.
+- **Boolean sanitization scoped outside quotes** (plant_compat.h):
+  `plant_sanitize_bools` replaces `TRUE`/`FALSE` with `1`/`0` only
+  outside double-quoted string literals, with identifier-boundary
+  checks (a digit-free `TRUESTATE`-style name stays intact). The
+  `TRUE`/`FALSE` literal replacements in `translate_expr` were
+  replaced by a single call to it, so `"hello | TRUE"` stays pristine.
+- **`PlantArray.kind` tag** (plant_runtime.h, plant_runtime.c): MAPs
+  and LISTs are no longer inferred from element-count parity — a
+  2-element list used to serialize/typeof as a map. `plant_list_create`
+  (and `plant_string_split`) set `kind = 0`; the seven metadata
+  constructors (ANALYZE, storm, telemetry: persist/weather/lock/mem
+  report/mem scan) mark `kind = 1`. `_plant_ser` and
+  `_plant_val_kind` consult the tag, so `JOIN([1, [2, 3], 4], "-")`
+  renders nested lists as `[2, 3]` and `TYPEOF` of an even-count list
+  reports `list`. (The ANALYZE/typeof regression expectations that
+  asserted the old parity heuristic were corrected.)
+- **Tests**: `tests/regression/join.plant` converted to native bracket
+  syntax — `JOIN(["a", "b"], ",")` → `a,b`; `JOIN([], ",")` → `""`;
+  `JOIN([1, [2, 3], 4], "-")` → `1-[2, 3]-4` (documented deviation:
+  the object serializer separates items with `", "`); a direct-string
+  `"hello | TRUE"` assertion. 136/0 regression, 20/0 native,
+  self-hosting converged (375590 B).
 
 ## v0.48.38b — 2026 (Location Backfill & SHELTER/AS Metadata Binding)
 

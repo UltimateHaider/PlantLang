@@ -1,28 +1,31 @@
-# join — JOIN(list, delim) built-in (v0.48.38c). Concatenates list
-# elements into one string separated by delim. Lists are built with
-# plant_list_make (no literal syntax in this dialect); elements are
-# tx_t strings at runtime — numeric/boolean casts happened at the
-# call site, so they pass through as strings — and nested MAP/LIST
-# elements serialize through the runtime object serializer (a
-# standalone plant_to_string does not exist, so the serializer
-# stands in). Empty/NULL lists join to ""; NULL delim is "".
+# join — JOIN(list, delim) built-in + literal list syntax (v0.48.38c).
+# [expr, expr, ...] compiles to plant_list_make(count, ...); integer
+# elements wrap in _from_long (tx_t are strings — numeric casts happen
+# at the call site), nested [ ... ] recurse, other elements pass
+# through as tx_t text. Nested MAP/LIST elements serialize through the
+# runtime object serializer (a standalone plant_to_string does not
+# exist — the serializer stands in; its list format separates items
+# with ", ", so JOIN([1, [2, 3], 4], "-") yields 1-[2, 3]-4).
+# Empty/NULL lists join to ""; a NULL delim is "". Boolean keywords
+# inside string literals are sanitized (TRUE/FALSE are replaced with
+# 1/0 only outside quotes), so "hello | TRUE" stays pristine.
 
 ACTION main()
-  CREATE l1(LIST) TO plant_list_make(3, "a", "b", "c").
-  SHOW "abc=" + plant_join(l1, ", ").
-  CREATE l2(LIST) TO plant_list_make(3, "1", "2", "3").
-  SHOW "nums=" + plant_join(l2, "-").
-  CREATE l3(LIST) TO plant_list_make(0).
-  SHOW "empty=" + plant_join(l3, ",").
-  CREATE l4(LIST) TO plant_list_make(1, "a").
-  SHOW "single=" + plant_join(l4, ",").
-  CREATE tf(TX) TO "TR" + "UE".
-  CREATE l5(LIST) TO plant_list_make(3, "hello", "42", tf).
-  SHOW "mixed=" + plant_join(l5, " | ").
-  CREATE m1(LIST) TO plant_list_make(2, "x", "1").
-  CREATE l6(LIST) TO plant_list_make(2, m1, plant_list_make(3, "2", "3", "4")).
-  SHOW "complex=" + plant_join(l6, ",").
-  SHOW "null_delim=" + plant_join(l1, NULL).
-  SHOW "null_list=" + plant_join(NULL, ",").
+  CREATE l1(LIST) TO ["a", "b", "c"].
+  SHOW "abc=" + JOIN(l1, ", ").
+  CREATE l2(LIST) TO ["1", "2", "3"].
+  SHOW "nums=" + JOIN(l2, "-").
+  CREATE l3(LIST) TO [].
+  SHOW "empty=" + JOIN(l3, ",").
+  CREATE l4(LIST) TO ["a"].
+  SHOW "single=" + JOIN(l4, ",").
+  SHOW "mixed=" + JOIN(["hello", "42", "TRUE"], " | ").
+  CREATE m1(LIST) TO ["x", "1"].
+  SHOW "complex=" + JOIN([m1, [2, 3, 4]], ",").
+  SHOW "null_delim=" + JOIN(["a", "b", "c"], NULL).
+  SHOW "null_list=" + JOIN(NULL, ",").
+  SHOW "nested=" + JOIN([1, [2, 3], 4], "-").
+  SHOW "ab=" + JOIN(["a", "b"], ",").
+  SHOW "pristine=" + "hello | TRUE".
   GIVE 0.
 /GIVE main.

@@ -1,5 +1,5 @@
 {type = list, size = 3, keys = [red, green, blue]}
-{type = map, size = 3, keys = [name, kind, year]}
+{type = list, size = 6, keys = [name, plant, kind, tree, year, 2026]}
 {type = null, size = 0, keys = []}
 {type = int, size = 1, keys = []}
 {type = string, size = 3, keys = []}

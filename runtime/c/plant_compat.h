@@ -216,6 +216,44 @@ static tx_t handle_brackets(tx_t expr) {
   free(buf);
   return result;
 }
+static int is_idc(char c) {
+  return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+         (c >= '0' && c <= '9') || c == '_';
+}
+
+/* v0.48.38c — boolean-literal sanitization. Replaces the standalone
+   tokens TRUE/FALSE with 1/0 ONLY outside double-quoted string
+   literals, so strings like "hello | TRUE" stay pristine (the old
+   naive text replace corrupted literal text tokens). Quote handling
+   is backslash-escape aware, and identifier-boundary checks keep
+   words like TRUESTATE intact. */
+static tx_t plant_sanitize_bools(tx_t expr) {
+  const char*_e=_S(expr);
+  if (!_e || !*_e) return _e ? strdup(_e) : NULL;
+  size_t len = strlen(_e);
+  char *buf = malloc(len + 1);
+  if (!buf) return strdup(_e);
+  size_t o = 0, i = 0;
+  int in = 0;
+  for (i = 0; i < len; i++) {
+    char c = _e[i];
+    if (c == '"' && (i == 0 || _e[i-1] != '\\')) { in = !in; buf[o++] = c; continue; }
+    if (!in && c == 'T' && i + 4 <= len && strncmp(_e + i, "TRUE", 4) == 0 &&
+        (i == 0 || !is_idc(_e[i-1])) && (i + 4 >= len || !is_idc(_e[i+4]))) {
+      buf[o++] = '1'; i += 3; continue;
+    }
+    if (!in && c == 'F' && i + 5 <= len && strncmp(_e + i, "FALSE", 5) == 0 &&
+        (i == 0 || !is_idc(_e[i-1])) && (i + 5 >= len || !is_idc(_e[i+5]))) {
+      buf[o++] = '0'; i += 4; continue;
+    }
+    buf[o++] = c;
+  }
+  buf[o] = 0;
+  tx_t r = strdup(buf);
+  free(buf);
+  return r;
+}
+
 static tx_t str_eq(tx_t a, tx_t b) { const char*x=_S(a),*y=_S(b); return (x&&y&&strcmp(x,y)==0)?"1":"0"; }
 static tx_t handle_strcmp(tx_t expr) {  const char*_e=_S(expr);
   if (!_e || !*_e) return _e ? strdup(_e) : NULL;
