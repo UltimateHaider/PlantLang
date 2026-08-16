@@ -2187,6 +2187,8 @@ ACTION translate_expr(expr(TX)),
     REAP e FROM _handle_func_paren, e, "SUM", "plant_sum".
     REAP e FROM _handle_func_paren, e, "UPPER", "plant_upper".
     REAP e FROM _handle_func_paren, e, "LOWER", "plant_lower".
+    REAP e FROM _handle_func_paren, e, "TRIM", "plant_trim".
+    REAP e FROM _handle_func_paren, e, "REVERSE", "plant_reverse".
     REAP e FROM _storm_inject, e.
     REAP e FROM _handle_func, e, "TEST", "!".
     # list literals rewrite BEFORE boolean sanitization so a bare

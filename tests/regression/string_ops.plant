@@ -1,7 +1,8 @@
-# string_ops — UPPER / LOWER string case operations (v0.48.38e).
-# UPPER(text) / LOWER(text) convert ASCII characters to upper/lower
-# case (unsigned char cast keeps high-bit bytes safe); NULL and
-# empty inputs return "".
+# string_ops — UPPER / LOWER / TRIM / REVERSE string operations
+# (v0.48.38e). UPPER/LOWER convert ASCII characters to upper/lower
+# case (unsigned char cast keeps high-bit bytes safe); TRIM strips
+# ' ', '\t', '\n', '\r' from both boundaries; REVERSE reverses the
+# character order. NULL and empty inputs return "".
 
 ACTION main(),
   SHOW "u1=" + UPPER("hello").
@@ -16,5 +17,16 @@ ACTION main(),
   SHOW "l5=" + LOWER(NULL).
   SHOW "u6=" + UPPER("hello world").
   SHOW "l6=" + LOWER("HELLO WORLD").
+  SHOW "t1=" + TRIM(" hello ").
+  SHOW "t2=" + TRIM("\thello\n").
+  SHOW "t3=" + TRIM("").
+  SHOW "t4=" + TRIM(NULL).
+  SHOW "t5=" + TRIM("   all whitespace ").
+  SHOW "t6=" + TRIM("no edges").
+  SHOW "r1=" + REVERSE("hello").
+  SHOW "r2=" + REVERSE("world").
+  SHOW "r3=" + REVERSE("").
+  SHOW "r4=" + REVERSE(NULL).
+  SHOW "r5=" + REVERSE("racecar").
   GIVE 0.
 /GIVE main.

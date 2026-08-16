@@ -6820,6 +6820,8 @@ tx_t translate_expr(tx_t expr) {
     e = _handle_func_paren(e, "SUM", "plant_sum");
     e = _handle_func_paren(e, "UPPER", "plant_upper");
     e = _handle_func_paren(e, "LOWER", "plant_lower");
+    e = _handle_func_paren(e, "TRIM", "plant_trim");
+    e = _handle_func_paren(e, "REVERSE", "plant_reverse");
     e = _storm_inject(e);
     e = _handle_func(e, "TEST", "!");
     e = _list_literal(e);

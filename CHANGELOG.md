@@ -11,10 +11,19 @@
   return `""`. The compiler maps the calls through
   `_handle_func_paren` (the same single-argument mechanism as
   `JOIN`/`FIRST`) to `plant_upper(text)` / `plant_lower(text)`.
+- **`TRIM(text)` / `REVERSE(text)` string utilities** (plant_runtime.c,
+  codegen_c.plant): `TRIM` strips `' '`, `'\t'`, `'\n'`, `'\r'` from
+  both boundaries (all-whitespace, empty and NULL inputs yield `""`);
+  `REVERSE` writes the characters into a fresh buffer in reverse
+  index order (`"hello"` → `"olleh"`). Both allocate through the
+  ARC/arena framework (`plant_alloc`) and are mapped in
+  `translate_expr` via `_handle_func_paren` to `plant_trim(text)` /
+  `plant_reverse(text)`.
 
 ### Changes
-- `plant_runtime.h` declares `plant_upper`, `plant_lower`;
-  `plant_compat.h` mirrors the two externs for the FFI surface.
+- `plant_runtime.h` declares `plant_upper`, `plant_lower`,
+  `plant_trim`, `plant_reverse`; `plant_compat.h` mirrors the externs
+  for the FFI surface.
 - Version markers (Makefile, main.plant, run_native_tests.sh) bumped
   to 0.48.38e.
 
@@ -24,8 +33,14 @@
   `UPPER("Hello World")` → `HELLO WORLD`;
   `LOWER("Hello World")` → `hello world`; mixed-case strings with
   digits and punctuation; `UPPER("")` / `LOWER("")` → `""`;
-  `UPPER(NULL)` / `LOWER(NULL)` → `""`. 138/0 regression, 20/0
-  native, self-hosting converged (376213 B).
+  `UPPER(NULL)` / `LOWER(NULL)` → `""`;
+  `TRIM(" hello ")` → `hello`; `TRIM("\thello\n")` → `hello`;
+  `TRIM("   all whitespace ")` → `all whitespace`;
+  `TRIM("")` / `TRIM(NULL)` → `""`;
+  `REVERSE("hello")` → `olleh`; `REVERSE("world")` → `dlrow`;
+  `REVERSE("racecar")` → `racecar`; `REVERSE("")` / `REVERSE(NULL)`
+  → `""`. 138/0 regression, 20/0 native, self-hosting converged
+  (376325 B).
 
 ## v0.48.38d — 2026 (List Operations: FIRST, LAST, SUM)
 

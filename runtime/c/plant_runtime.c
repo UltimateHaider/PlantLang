@@ -2451,6 +2451,44 @@ tx_t plant_lower(tx_t text) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   v0.48.38e (extension) — TRIM / REVERSE string utilities
+   plant_trim strips ' ', '\t', '\n', '\r' from both boundaries of
+   the input (an all-whitespace or empty/NULL input yields "");
+   plant_reverse writes the characters into a fresh buffer in
+   reverse index order ("" for empty/NULL inputs). Both allocate
+   through the ARC/arena framework (plant_alloc).
+   ═══════════════════════════════════════════════════════════════ */
+
+static int _plant_ws(char c) {
+    return c == ' ' || c == '\t' || c == '\n' || c == '\r';
+}
+
+tx_t plant_trim(tx_t text) {
+    const char* s = text ? _S(text) : "";
+    if (!s || s[0] == '\0') return strdup("");
+    size_t len = strlen(s);
+    size_t start = 0;
+    while (start < len && _plant_ws(s[start])) start++;
+    size_t end = len;
+    while (end > start && _plant_ws(s[end - 1])) end--;
+    if (start >= end) return strdup("");
+    char* out = (char*)plant_alloc(end - start + 1);
+    memcpy(out, s + start, end - start);
+    out[end - start] = '\0';
+    return out;
+}
+
+tx_t plant_reverse(tx_t text) {
+    const char* s = text ? _S(text) : "";
+    if (!s || s[0] == '\0') return strdup("");
+    size_t len = strlen(s);
+    char* out = (char*)plant_alloc(len + 1);
+    for (size_t i = 0; i < len; i++) out[i] = s[len - 1 - i];
+    out[len] = '\0';
+    return out;
+}
+
+/* ═══════════════════════════════════════════════════════════════
    v0.47.2 — Native Data Structures (Set / Queue / Stack)
    Implementations; signatures in plant_compat.h
    ═══════════════════════════════════════════════════════════════ */

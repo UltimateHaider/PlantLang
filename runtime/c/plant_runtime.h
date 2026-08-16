@@ -153,6 +153,11 @@ tx_t        plant_sum(tx_t list);
    tolower); NULL and empty inputs yield "". */
 tx_t        plant_upper(tx_t text);
 tx_t        plant_lower(tx_t text);
+/* v0.48.38e (extension) — TRIM / REVERSE string utilities: whitespace
+   stripping (' ', '\t', '\n', '\r') from both boundaries, and full
+   character reversal; NULL and empty inputs yield "". */
+tx_t        plant_trim(tx_t text);
+tx_t        plant_reverse(tx_t text);
 int         plant_storm_match(const char* thrown_type, const char* shelter_type);
 int         plant_storm_is_known(const char* type);
 const char* plant_storm_default_message(const char* type);
