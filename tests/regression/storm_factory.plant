@@ -1,0 +1,49 @@
+# storm_factory — v0.48.38a storm() Exception Factory. The factory
+# builds an ARC-managed exception object carrying {type, message};
+# THROW accepts the object, SHELTER AS binds it, the handler body
+# unpacks it via _map_get / plant_map_to_string, unmatched factory
+# storms propagate outward through nested WEATHER frames, and rapid
+# successive throw/handle cycles keep reference counting balanced.
+# Registry defaults cover empty messages; empty types normalize to
+# ANY_STORM; unconventional types fall back to the unclassified
+# default message.
+
+ACTION main()
+  CREATE s1(TX) TO plant_map_to_string(storm("ZERO_STORM", "divide!")).
+  SHOW "made=" + s1.
+  CREATE s2(TX) TO plant_map_to_string(storm("ARG_STORM", "")).
+  SHOW "empty_msg=" + s2.
+  CREATE s3(TX) TO plant_map_to_string(storm("", "no type")).
+  SHOW "no_type=" + s3.
+  WEATHER,
+    THROW storm("ARG_STORM", "bad arg value").
+  SHELTER ARG_STORM AS e,
+    SHOW "caught type=" + _map_get(e, "type").
+    SHOW "caught msg=" + _map_get(e, "message").
+    SHOW "ser=" + plant_map_to_string(e).
+  CALM,
+  /WEATHER.
+  WEATHER,
+    WEATHER,
+      THROW storm("CUSTOM", "deep custom").
+    CALM,
+    /WEATHER.
+    SHOW "BUG inner escaped".
+  SHELTER ANY_STORM AS e2,
+    SHOW "outer type=" + _map_get(e2, "type").
+    SHOW "outer msg=" + _map_get(e2, "message").
+  CALM,
+  /WEATHER.
+  CREATE i(NUM) TO 0.
+  SEASON i < 5,
+    WEATHER,
+      THROW storm("RANGE_STORM", "rapid").
+    SHELTER RANGE_STORM AS e3,
+      SHOW "rapid type=" + _map_get(e3, "type").
+      SHOW "rapid msg=" + _map_get(e3, "message").
+    CALM,
+    /WEATHER.
+    SET i TO i + 1.
+  /SEASON.
+  GIVE 0.
+/GIVE main.

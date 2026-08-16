@@ -956,6 +956,7 @@ void plant_weather_enter(PlantWeather* w, int storm_handlers) {
     w->handled = 0;
     w->exc_type = NULL;
     w->exc_msg = NULL;
+    w->exc_obj = NULL;
     w->exit_count = 0;
     w->storm_handlers = storm_handlers;
     w->shelter_mark = -1;
@@ -987,8 +988,14 @@ void plant_calm(PlantWeather* w) {
     int pending = w->raised && !w->handled;
     const char* t = pending ? (const char*)w->exc_type : NULL;
     const char* m = pending ? (const char*)w->exc_msg : NULL;
+    tx_t obj = pending ? (tx_t)w->exc_obj : NULL;
     plant_weather_leave(w);
-    if (pending) plant_throw(t, m);
+    /* v0.48.38a — factory storms propagate as objects: the frame was
+       the owner of the reference, so ownership moves outward without
+       any retain/release cycle; plant_throw_obj only re-arms the outer
+       checkpoint with the same object. */
+    if (pending && obj) plant_throw_obj(obj);
+    if (pending && !obj) plant_throw(t, m);
 }
 
 void plant_throw(const char* type, const char* msg) {
@@ -5029,6 +5036,90 @@ tx_t plant_lock_held(tx_t key) {
 /* lock-table telemetry: a structured MAP with the count of held locks */
 tx_t plant_lock_status(void) {
     return (tx_t)plant_list_make(2, "locked_count", _from_long(g_lock_count));
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.48.38a — storm() Exception Factory
+   plant_storm builds a standardized exception object: a MAP carrying
+   {type, message} whose backing memory is registered on the ARC heap
+   (a wrapper allocation whose payload is the MAP pointer). The object
+   therefore persists across setjmp/longjmp stack unwinding instead of
+   dying with the throwing call frame. Ownership model: the created
+   object carries one reference; plant_throw_obj transfers it to the
+   innermost WEATHER checkpoint; unmatched storms move the same
+   reference outward frame by frame through plant_calm; a matching
+   SHELTER consumes it — the generated dispatch calls
+   plant_storm_release after the handler body runs, dropping the count
+   to zero so the ARC heap finalizes the object. Classic
+   THROW <type> "<msg>". storms never allocate and keep the legacy
+   string-based frame fields. Zero/empty type or message arguments are
+   normalized: the type falls back to ANY_STORM, the message to the
+   registry default (or "(unclassified storm)" for unconventional
+   types), mirroring plant_throw's NULL-message behavior.
+   ═══════════════════════════════════════════════════════════════ */
+
+tx_t plant_storm(tx_t type, tx_t msg) {
+    if (!type || _S(type)[0] == '\0') type = (tx_t)"ANY_STORM";
+    if (!msg || _S(msg)[0] == '\0')
+        msg = (tx_t)plant_storm_default_message(_S(type));
+    tx_t map = (tx_t)plant_list_make(4, "type", type, "message", msg);
+    plant_arc_obj* o = (plant_arc_obj*)plant_arc_alloc(sizeof(tx_t));
+    if (!o) return map;               /* degraded: unmanaged fallback */
+    free(o->data);                    /* payload becomes the MAP itself */
+    o->data = (char*)map;             /* destroy() frees the MAP */
+    return map;
+}
+
+/* raise a factory storm object through the innermost checkpoint. The
+   type/message strings are extracted from the MAP and cached in the
+   frame (so plant_exc_type/plant_exc_msg and the generated __et/__em
+   captures stay uniform), and the object reference is transferred to
+   the frame's ownership for the propagation window. */
+void plant_throw_obj(tx_t obj) {
+    PlantWeather* w = _plant_weather_head;
+    const char* type = "ANY_STORM";
+    const char* msg = "(unclassified storm)";
+    if (obj) {
+        tx_t t = _map_get((PlantArray*)obj, (tx_t)"type");
+        tx_t m = _map_get((PlantArray*)obj, (tx_t)"message");
+        if (t && _S(t)[0] != '\0') type = _S(t);
+        if (m && _S(m)[0] != '\0') msg = _S(m);
+    }
+    if (w == NULL) {
+        fprintf(stderr, "[WEATHER] unhandled storm: %s %s\n", type, msg);
+        fflush(stderr);
+        abort();
+    }
+    w->raised = 1;
+    w->exc_obj = obj;
+    w->exc_type = (char*)type;
+    w->exc_msg = (char*)msg;
+    longjmp(w->buf, 1);
+}
+
+/* the binding value a SHELTER AS-clause receives: the factory object
+   when the storm was raised as one, else the classic message string
+   (preserving the pre-v0.48.38a semantics for AS e). */
+tx_t plant_exc_val(void) {
+    PlantWeather* w = _plant_weather_head;
+    if (w && w->exc_obj) return (tx_t)w->exc_obj;
+    if (w && w->exc_msg) return (tx_t)w->exc_msg;
+    return (tx_t)"";
+}
+
+/* drop the factory object's reference once the handler logic has run.
+   The scan locates the ARC wrapper whose payload is the MAP; classic
+   message strings (not factory objects) are never in the ARC heap, so
+   release is a safe no-op for them. */
+void plant_storm_release(tx_t obj) {
+    if (!obj) return;
+    for (plant_arc_obj* o = g_arc_head; o; o = o->next) {
+        if (o->size == sizeof(tx_t) && o->data &&
+            *(tx_t*)o->data == obj) {
+            plant_arc_release((tx_t)o);
+            return;
+        }
+    }
 }
 
 /* ═══════════════════════════════════════════════════════════════

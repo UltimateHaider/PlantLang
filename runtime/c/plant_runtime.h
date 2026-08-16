@@ -92,6 +92,12 @@ typedef struct PlantWeather {
     volatile int handled;
     volatile char* exc_type;
     volatile char* exc_msg;
+    /* v0.48.38a — factory storm object (ARC-managed {type, message}
+       MAP from plant_storm) carried by the frame during propagation;
+       NULL for classic THROW type/msg storms. Ownership transfers
+       frame-to-frame on rethrow and is released by the generated
+       shelter dispatch after the handler body runs. */
+    volatile tx_t exc_obj;
     /* v0.48.37d — exit-list teardown. Every WEATHER frame provisions a
        dedicated exit-list of protected resource handles. Handles are
        freed by plant_weather_leave on every exit path (ARC-aware, then
@@ -112,6 +118,17 @@ void        plant_calm(PlantWeather* w);
 void        plant_throw(const char* type, const char* msg);
 const char* plant_exc_type(void);
 const char* plant_exc_msg(void);
+/* v0.48.38a — storm() Exception Factory. plant_storm builds an
+   ARC-managed exception object (a {type, message} MAP) that persists
+   across setjmp/longjmp unwinding; plant_throw_obj raises such an
+   object through the innermost checkpoint; plant_exc_val returns the
+   binding value a SHELTER AS-clause receives (the object for factory
+   storms, else the message string); plant_storm_release decrements
+   the object's reference count once the handler logic has run. */
+tx_t        plant_storm(tx_t type, tx_t msg);
+void        plant_throw_obj(tx_t obj);
+tx_t        plant_exc_val(void);
+void        plant_storm_release(tx_t obj);
 int         plant_storm_match(const char* thrown_type, const char* shelter_type);
 int         plant_storm_is_known(const char* type);
 const char* plant_storm_default_message(const char* type);

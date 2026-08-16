@@ -3250,7 +3250,13 @@ tx_t parse_throw_stmt(PlantArray* tokens, long pos) {
     tx_t msg = "";
     tok = peek(tokens, p3);
     lx = tok_lex(tok);
-    if (strcmp(lx,".") != 0) {
+    if (strcmp(lx,"(") == 0) {
+        dot2 = collect_until(tokens, p2, ".");
+        msg = _first(dot2);
+        p3 = _second(dot2);
+        stype = "";
+    }
+    if (strcmp(lx,".") != 0 && strcmp(lx,"(") != 0) {
         dot2 = collect_until(tokens, p3, ".");
         msg = _first(dot2);
         p3 = _second(dot2);
@@ -6496,6 +6502,7 @@ tx_t translate_expr(tx_t expr) {
     e = strings_REPLACE(e, " IS ", " == ");
     e = _handle_func(e, "COUNT", "plant_array_length");
     e = _handle_func_paren(e, "LEN", "strlen");
+    e = _handle_func_paren(e, "storm", "plant_storm");
     e = _handle_func(e, "TEST", "!");
     e = strings_REPLACE(e, "TRUE", "1");
     e = strings_REPLACE(e, "FALSE", "0");
@@ -7331,6 +7338,9 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         tgt = _map_get(node, "target");
         act = _map_get(node, "action");
         act = strings_REPLACE(act, ":", "_");
+        if (strcmp(act,"storm") == 0) {
+            act = "plant_storm";
+        }
         tx_t callname = act;
         PlantArray* fparams = plant_list_make ( 0 );
         long gi = - 1;
@@ -7806,6 +7816,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         ccode = _cat(_cat(_cat(ccode, bcode), isel), "    } else {\n");
         ccode = _cat(_cat(ccode, isel), "      const char* __et = plant_exc_type();\n");
         ccode = _cat(_cat(ccode, isel), "      const char* __em = plant_exc_msg();\n");
+        ccode = _cat(_cat(ccode, isel), "      tx_t __ev = plant_exc_val();\n");
         ccode = _cat(_cat(_cat(_cat(ccode, isel), "      plant_weather_leave(&"), wnm), ");\n");
         ccode = _cat(_cat(_cat(_cat(ccode, isel), "      plant_weather_handling_begin(&"), wnm), ");\n");
         long si2 = 0;
@@ -7825,10 +7836,11 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
             ccode = _cat(_cat(_cat(_cat(ccode, isel), "        plant_weather_shelter_enter(&"), wnm), ");\n");
             ccode = _cat(_cat(_cat(_cat(ccode, isel), "        "), wnm), ".handled = 1;\n");
             if (strcmp(wbind2,"") != 0 && strcmp(wbind2,"null") != 0) {
-                ccode = _cat(_cat(_cat(_cat(ccode, isel), "        tx_t "), wbind2), " = (tx_t)__em;\n");
+                ccode = _cat(_cat(_cat(_cat(ccode, isel), "        tx_t "), wbind2), " = __ev;\n");
             }
             hcode = generate_body(wbd2, indent+3, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx);
             ccode = _cat(ccode, hcode);
+            ccode = _cat(_cat(ccode, isel), "        plant_storm_release(__ev);\n");
             ccode = _cat(_cat(_cat(_cat(ccode, isel), "        plant_weather_shelter_leave(&"), wnm), ");\n");
             si2 = si2+3;
         }
@@ -7850,6 +7862,9 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         if (strcmp(wmsg2,"") > 0) {
             cmsg = translate_expr(wmsg2);
             cmsg = _handle_cat(cmsg, nums, evars);
+        }
+        if (strcmp(wtype2,"") == 0) {
+            return _cat(_cat(_cat(isel, "  plant_throw_obj("), cmsg), ");\n");
         }
         return _cat(_cat(_cat(_cat(_cat(isel, "  plant_throw(\""), wtype2), "\", "), cmsg), ");\n");
     }
@@ -10831,7 +10846,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.37e (pure native)");
+      plant_print("Chloroplast 0.48.38a (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

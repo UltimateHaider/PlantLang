@@ -2263,7 +2263,16 @@ ACTION parse_throw_stmt(tokens(LIST), pos(NUM)),
   CREATE msg(TX) TO "".
   REAP tok FROM peek, tokens, p3.
   REAP lx FROM tok_lex, tok.
-  IF lx ISNT ".",
+  IF lx IS "(",
+    # v0.48.38a — THROW storm("TYPE", "msg"). factory form: the whole
+    # call expression is collected as the payload and the classic
+    # type token is emptied (codegen emits plant_throw_obj).
+    REAP dot2 FROM collect_until, tokens, p2, ".".
+    REAP msg FROM _first, dot2.
+    REAP p3 FROM _second, dot2.
+    SET stype TO "".
+  /IF.
+  IF lx ISNT "." AND lx ISNT "(",
     REAP dot2 FROM collect_until, tokens, p3, ".".
     REAP msg FROM _first, dot2.
     REAP p3 FROM _second, dot2.
@@ -5299,6 +5308,7 @@ ACTION translate_expr(expr(TX)),
     REAP e FROM strings:REPLACE, e, " IS ", " == ".
     REAP e FROM _handle_func, e, "COUNT", "plant_array_length".
     REAP e FROM _handle_func_paren, e, "LEN", "strlen".
+    REAP e FROM _handle_func_paren, e, "storm", "plant_storm".
     REAP e FROM _handle_func, e, "TEST", "!".
     REAP e FROM strings:REPLACE, e, "TRUE", "1".
     REAP e FROM strings:REPLACE, e, "FALSE", "0".
@@ -6055,6 +6065,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP tgt FROM _map_get, node, "target".
         REAP act FROM _map_get, node, "action".
         REAP act FROM strings:REPLACE, act, ":", "_".
+        IF act IS "storm", SET act TO "plant_storm". /IF.
         CREATE callname(TX) TO act.
         CREATE fparams(LIST) TO plant_list_make(0).
         CREATE gi(NUM) TO -1.
@@ -6646,6 +6657,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         SET ccode TO ccode + bcode + isel + "    \} else \{\n".
         SET ccode TO ccode + isel + "      const char* __et = plant_exc_type();\n".
         SET ccode TO ccode + isel + "      const char* __em = plant_exc_msg();\n".
+        SET ccode TO ccode + isel + "      tx_t __ev = plant_exc_val();\n".
         SET ccode TO ccode + isel + "      plant_weather_leave(&" + wnm + ");\n".
         SET ccode TO ccode + isel + "      plant_weather_handling_begin(&" + wnm + ");\n".
         CREATE si2(NUM) TO 0.
@@ -6665,10 +6677,16 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             SET ccode TO ccode + isel + "        plant_weather_shelter_enter(&" + wnm + ");\n".
             SET ccode TO ccode + isel + "        " + wnm + ".handled = 1;\n".
             IF wbind2 ISNT "" AND wbind2 ISNT "null",
-                SET ccode TO ccode + isel + "        tx_t " + wbind2 + " = (tx_t)__em;\n".
+                SET ccode TO ccode + isel + "        tx_t " + wbind2 + " = __ev;\n".
             /IF.
             REAP hcode FROM generate_body, wbd2, indent + 3, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx.
             SET ccode TO ccode + hcode.
+            # v0.48.38a — factory storm lifecycle: the captured binding
+            # value is the ARC-managed object when the storm was raised
+            # as one; releasing it here returns the object to the ARC
+            # heap once the handler logic has run. Classic storms bind
+            # the message string and release is a safe no-op.
+            SET ccode TO ccode + isel + "        plant_storm_release(__ev);\n".
             SET ccode TO ccode + isel + "        plant_weather_shelter_leave(&" + wnm + ");\n".
             SET si2 TO si2 + 3.
         /SEASON.
@@ -6692,6 +6710,12 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF wmsg2 > "",
             REAP cmsg FROM translate_expr, wmsg2.
             REAP cmsg FROM _handle_cat, cmsg, nums, evars.
+        /IF.
+        IF wtype2 IS "",
+            # v0.48.38a — factory storm object: the payload text is the
+            # storm(...) call, rewritten to plant_storm(...) above, and
+            # ownership of the ARC-managed object transfers to the frame.
+            GIVE isel + "  plant_throw_obj(" + cmsg + ");\n".
         /IF.
         GIVE isel + "  plant_throw(\"" + wtype2 + "\", " + cmsg + ");\n".
     /IF.
@@ -9595,7 +9619,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.48.37e (pure native)".
+  SHOW "Chloroplast 0.48.38a (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

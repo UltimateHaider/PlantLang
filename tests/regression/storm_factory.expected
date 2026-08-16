@@ -1,0 +1,18 @@
+made={type = ZERO_STORM, message = divide!}
+empty_msg={type = ARG_STORM, message = (unclassified storm)}
+no_type={type = ANY_STORM, message = no type}
+caught type=ARG_STORM
+caught msg=bad arg value
+ser={type = ARG_STORM, message = bad arg value}
+outer type=CUSTOM
+outer msg=deep custom
+rapid type=RANGE_STORM
+rapid msg=rapid
+rapid type=RANGE_STORM
+rapid msg=rapid
+rapid type=RANGE_STORM
+rapid msg=rapid
+rapid type=RANGE_STORM
+rapid msg=rapid
+rapid type=RANGE_STORM
+rapid msg=rapid

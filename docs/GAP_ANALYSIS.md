@@ -1,6 +1,6 @@
 # Legacy JS Interpreter vs Self-Hosted Compiler — Gap Analysis Report
 
-**Scope:** Legacy JavaScript interpreter (PlantLang ≤ v0.45.x, `core/interpreter.js` + associated modules, recovered from git at `7f54eae` v0.45.0) vs the self-hosted native compiler (v0.48.19, `src/plantc/*.plant` → C, `runtime/c/plant_runtime.c`).
+**Scope:** Legacy JavaScript interpreter (PlantLang ≤ v0.45.x, `core/interpreter.js` + associated modules, recovered from git at `7f54eae` v0.45.0) vs the self-hosted native compiler (v0.48.37e, `src/plantc/*.plant` → C, `runtime/c/plant_runtime.c`).
 
 ---
 
@@ -10,19 +10,19 @@ PlantLang transitioned from a **tree-walking JavaScript interpreter** (~9,000 li
 
 The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 port. High-level counts:
 
-| Area | Legacy (v0.45.0) | Current (v0.48.19) | Gap |
-|---|---|---|---|
-| Statement keywords (parser dispatch) | ~40 | ~18 + bare calls/closures | ~22 missing |
+| Area | Legacy (v0.45.0) | Current (v0.48.38a) | Gap |
+|---|---|---|---|---|
+| Statement keywords (parser dispatch) | ~40 | ~40 (incl. storms, CYCLE forms, NOW/ANALYZE/TYPEOF, FREE/ARC/FAST, WAIT/LOCK) | ~10 missing (deliberate cuts + legacy stubs) |
 | Innate/std library functions | ~60 (41 innate + 19 std/.plnt + 5 FFI stubs) | ~20 reachable builtins + ~50 declared runtime helpers | ~40 missing |
 | Runtime features | ~90 capabilities | ~70 capabilities | roughly balanced, different sets |
 | Network | HTTP client + server (HARVEST/LISTEN) | vestigial POSIX sockets in runtime, **not reachable** | high |
-| Error handling | Storm exceptions (WEATHER/SHELTER, 12 storm types) | 13 kinds (v0.48.25: +STOP_STORM), STOP IF, plant_calm finalization; no `storm()` factory | low |
+| Error handling | Storm exceptions (WEATHER/SHELTER, 12 storm types) | 13 kinds (v0.48.25: +STOP_STORM), STOP IF, plant_calm finalization, `storm()` factory (v0.48.38a) | low |
 | Object model | SPECIES classes, BLOOM instantiation, SELF methods, inheritance | none | high |
 
 **Key architectural differences that explain the gaps:**
 
 1. **Dynamic vs static typing.** The interpreter evaluated compound expressions by string-substitution into `new Function()` (arbitrary JavaScript accepted), used JS `Map`/`Array` for aggregates, and allowed runtime type coercion (`CONVERT`, `inferType`, `coerce`). The compiler is statically typed: every expression is rewritten into C with explicit `long`/`tx_t`/struct types. Anything that depended on runtime dynamics (type inspection, dynamic conversions, untyped aggregates, method dispatch) could not survive without a type system the compiler does not yet have.
-2. **Interpreted scope chain vs compiled C scopes.** The interpreter resolved variables through a runtime `Soil` scope chain with locks, pulses and storm-watching. Compiled code uses static C scopes; scope-dynamic features (LOCK/EVAPORATE, PULSE watchers, `WHENEVER`, `ROOT`/`ROOT_SCOPE` globals) have no compilation target.
+2. **Interpreted scope chain vs compiled C scopes.** The interpreter resolved variables through a runtime `Soil` scope chain with locks, pulses and storm-watching. Compiled code uses static C scopes; scope-dynamic features (legacy scope locks / EVAPORATE, PULSE watchers, `WHENEVER`, `ROOT`/`ROOT_SCOPE` globals) have no compilation target. (The v0.48.37e `LOCK var.` synchronization statement is a new value-keyed runtime Lock Table, distinct from the legacy per-variable scope lock.)
 3. **Host capabilities vs portable C runtime.** The interpreter leaned on Node.js (`fs`, `http`, `worker_threads`, `Atomics`, locale formatting, ANSI diagnostics). The C runtime re-implements only a thin slice (stdio via `runtime_bridge.c`, POSIX file ops, and *unwired* POSIX sockets). HTTP, worker-based HARVEST, VEIN file handles, locale-aware time formatting and terminal diagnostics were lost with Node.
 4. **Regex + AST dual pipeline vs single AST pipeline.** The interpreter had a legacy regex execution path with many one-off forms (`CONVERT`, `FLOW`, `MATCH … YIELD`, `PICK`, `NOTE`, `STEADY`) that were never migrated into its own AST path; those forms are effectively dead even in the legacy engine and were simply not carried over.
 5. **Interpreter-added features post-v0.45 are intentionally dropped.** The prompt excludes intentionally deprecated features; `SPECIES`/`BLOOM`, VEIN file IO and the JS `Function()` escape hatch were explicitly superseded (the Language Tour marks `core/*.js` as "historical only").
@@ -33,7 +33,7 @@ The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 
 
 - **Legacy side** (recovered from git `7f54eae`, the last commit shipping `core/interpreter.js`):
   `core/interpreter.js` (2,828 L), `core/parser.js` (3,033 L), `core/ast.js` (1,040 L), `core/typechecker.js` (1,529 L), `core/tokenizer.js` (259 L), `core/evaluator.js` (173 L), `core/runtime.js` (64 L), `core/innate.js` (67 L), `core/dispatcher.js` (286 L), `core/matrix.js`, `core/harvest.js` + `harvest_worker.js`, `core/diagnostics.js`, `core/lexer.js`, `core/runtime_bridge.c`, `src/interpreter/{cycle_evaluator,sort_evaluator,bloom_evaluator,show_formatter}.js`, `std/{prelude,string,math,io}.plnt`.
-- **Current side** (working tree v0.48.19): `src/plantc/{tokens,ast,lexer,parser,codegen_c,main}.plant`, `runtime/c/plant_runtime.c` (3,527 L), `runtime/c/plant_compat.h` (549 L), `runtime/c/plant_runtime.h`, `tests/native/mock_ffi.{h,c}`, `Language Tour.md`.
+- **Current side** (working tree v0.48.37e): `src/plantc/{tokens,ast,lexer,parser,codegen_c,main}.plant`, `runtime/c/plant_runtime.c` (≈6,000 L), `runtime/c/plant_compat.h` (549 L), `runtime/c/plant_runtime.h`, `tests/native/mock_ffi.{h,c}`, `Language Tour.md`.
 - **Verification method:** full keyword-dispatch enumeration of both parsers; complete function inventories of `plant_compat.h` and `plant_runtime.c`; spot-checks for every "missing" claim (all negative).
 
 Legend for gap tables: **S** = supported, **P** = partial (different semantics / only reachable internally), **M** = missing, **D** = intentionally deprecated / dropped by design.
@@ -78,16 +78,16 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `CYCLE x IN list` / `CYCLE i, idx IN` / `CYCLE i FROM lo TO hi` | S | **S** | All three CYCLE forms shipped in v0.48.22 (FROM/TO in v0.48.21); STEP is statically evaluated since v0.48.22-patch3 — zero steps are a compile-time error and expression steps pick direction-aware bounds |
 | `FOR item IN coll` | S | M | |
 | `BREAK` / `CONTINUE` | S | **S** | |
-| `STOP IF cond` | S | M | |
+| `STOP IF cond` | S | **S** | v0.48.25 (raises `STOP_STORM`, the 13th storm kind, classified by `plant_storm_match`) |
 | `GIVE expr.` | S | **S** | |
-| `SHOW expr.` / `SHOW NOW.` / `SHOW TYPE x.` | S | **P** | SHOW expr only; NOW/TYPE forms M |
-| `REAP v FROM src, args.` | S | **S** | only action calls; `NOW`, `TYPEOF`, string/expr sources M |
+| `SHOW expr.` / `SHOW NOW.` / `SHOW TYPE x.` | S | **P** | SHOW expr only; the NOW / TYPE *statements* exist (v0.48.36) but the `SHOW NOW.`/`SHOW TYPE x.` spellings themselves are M |
+| `REAP v FROM src, args.` | S | **S** | action/module calls; NOW/TYPEOF available via their v0.48.36 expression forms |
 | `REAP … FLOW f1 f2` pipelines | S | M | |
 | `PUT val INTO list.` | S | **S** | |
 | `TAKE val FROM list.` | S | **S** | v0.48.30 (`plant_list_remove`, first match only) |
 | `SORT list [BY f ASC/DESC].` / `SHAKE` / `BRAID` | S | **S** | v0.48.29 (SORT + ASC/DESC + BY multi-field; SHAKE Fisher-Yates); v0.48.31 (BRAID zip + BRAID … AS … MAP) |
 | `LINK "k" WITH v IN map.` | S | **S** | v0.48.31 upsert (update in place / append; NULL target instantiated) |
-| `WEATHER … SHELTER storm AS e … CALM.` | S | **S** | v0.48.25; THROW + 13 kinds + ANY_STORM catch-all, STOP IF, plant_calm finalization |
+| `WEATHER … SHELTER storm AS e … CALM.` | S | **S** | v0.48.25; THROW + 13 kinds + ANY_STORM catch-all, STOP IF, plant_calm finalization; v0.48.38a `storm()` factory (`THROW storm("TYPE", "msg").` with ARC-managed object binding) |
 | `MATCH expr { Variant(b) -> … }` / `MATCH … IS … YIELD` | S | M | |
 | `TAP/ABSORB/INFUSE/SEAL` (VEIN files) | S | M | INFUSE/ABSORB/SEAL were parse stubs in legacy too |
 | `HARVEST "url" [METHOD:][BODY:][HEADERS:][TIMEOUT:]` | S | **S** | v0.48.32 (HTTP/1.1 client, response MAP ok/status/body/headers; timeout 0 → 5s; no TLS); v0.48.34 (`… AS … MAP` keeps the connection live and exposes `sock` for plant_net_read/write/close) |
@@ -158,7 +158,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 → current: none as language-level; `plant_iterator_*`, `plant_range`, Set/Queue/Stack helpers exist in runtime but no list-comprehension surface. Missing: all 14.
 
 **`io` (5):** `NOW STAMP DATE TIME YEAR` (ar-IQ localized)
-→ current: `time_now format parse sleep` runtime helpers (compat.h `std/time`); language has no `NOW` form. Localization lost.
+→ current: `time_now format parse sleep` runtime helpers (compat.h `std/time`); the language-level `NOW` statement/expression shipped v0.48.36, `io:SHOWLN`/`io:FLUSH` shipped v0.48.28. ar-IQ localization lost.
 
 **`fs` (4):** `READ WRITE APPEND EXISTS`
 → current: `fs:READ fs:WRITE fs:EXISTS` **S** (compiler uses them); v0.48.28 added `fs:APPEND` **S** (`fs_append` in `plant_runtime.c`, "ab" mode auto-creates missing targets, returns `"1"`/`"0"`); plus runtime `file_copy/move/stat/start/dump/end` (compat.h `std/fs`) reachable via externals.
@@ -187,7 +187,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 
 ### 5.2 Current bridge surface
 - `plant_compat.h` declares **~103 compiler-facing functions**: `_S/_P/_L/_POS` macros, `_from_long/_to_long/_from_enum/_to_enum/_from_ffi_num`, `_cat`, `_map_get`, `plant_print`, `plant_init_cli`, `get_cli_arg`, `fs_READ/WRITE/EXISTS`, `strings_LENGTH/REPLACE/SPLIT`, `char_at/substring/find_any`, `plant_list_create/get/push`, `plant_array_length`, `plant_map_*`, `plant_string_*`, `plant_math_*`, `plant_time_*`, `plant_file_*`, `plant_json_*`, `plant_option/result/is_*`, `plant_range/array_slice`, `plant_iterator_*`, `plant_cb_*` callbacks, `plant_struct_free`, `plant_profile_*`, `plant_msleep`, `plant_ffi_errno/ffi_last_error`, mission-mode + audit + async + ARC APIs.
-- **Test FFI (`mock_ffi.{h,c}`):** ~40 `ffi_*` functions (sleep, smart/arc/persist status, audit dump, etc.) — test-provided, not language builtins.
+- **Test FFI (`mock_ffi.{h,c}`):** ~76 `ffi_*` functions (sleep, smart/arc/persist status, audit dump, weather memory, now/lock, etc.) — test-provided, not language builtins.
 - The 3 legacy stdio bridge functions are covered by `plant_print`/runtime.
 
 **Net:** the current surface is *larger* but structured around the mission/async runtime; the legacy *convenience* library (math/strings/lists/io) was largely not re-exposed.
@@ -206,7 +206,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | File IO | Node fs + VeinFS | POSIX `plant_file_*` + `fs:READ/WRITE/EXISTS` |
 
 ### 6.2 Legacy-only runtime features (M in current)
-- **Storms**: 13 typed exceptions (`ZERO_STORM` … `ANY_STORM`), `WEATHER/SHELTER/CALM`, `storm()` factory, location backfill. **v0.48.25 ships all 13 kinds**: the six core kinds (`ZERO_STORM`, `LOCK_STORM`, `MISSING_STORM`, `NETWORK_STORM`, `LOST_STORM`, `ANY_STORM`) plus the six additive classifications (`RANGE_STORM`, `TYPE_STORM`, `PARSE_STORM`, `HANDLE_STORM`, `HARVEST_STORM`, `FALL_STORM`) and `STOP_STORM` (the `STOP IF` classification), routed by the runtime's `plant_storm_match` against `AS e`-bound shelters with per-kind default messages, plus the `plant_calm` finalization pipeline (CALM runs on normal, caught, unmatched, and `GIVE`/`BREAK`/`CONTINUE` exits); still missing: the `storm()` factory and location backfill.
+- **Storms**: 13 typed exceptions (`ZERO_STORM` … `ANY_STORM`), `WEATHER/SHELTER/CALM`, `storm()` factory, location backfill. **v0.48.25 ships all 13 kinds**: the six core kinds (`ZERO_STORM`, `LOCK_STORM`, `MISSING_STORM`, `NETWORK_STORM`, `LOST_STORM`, `ANY_STORM`) plus the six additive classifications (`RANGE_STORM`, `TYPE_STORM`, `PARSE_STORM`, `HANDLE_STORM`, `HARVEST_STORM`, `FALL_STORM`) and `STOP_STORM` (the `STOP IF` classification), routed by the runtime's `plant_storm_match` against `AS e`-bound shelters with per-kind default messages, plus the `plant_calm` finalization pipeline (CALM runs on normal, caught, unmatched, and `GIVE`/`BREAK`/`CONTINUE` exits); **v0.48.38a ships the `storm()` factory** (`THROW storm("TYPE", "msg").` / `CALL storm(...).`): an ARC-managed `{type, message}` object that survives unwinding, binds as the SHELTER `AS e` value, and is released to the ARC heap after the handler body runs (`plant_storm_release`), with empty-type/empty-message normalization to `ANY_STORM` / registry defaults; still missing: location backfill.
 - **Soil scope chain**: locked vars (`LOCK_STORM`), PULSE flags, `WHENEVER … CHANGES` watchers.
 - **HTTP server** (LISTEN, request MAPs, JSON bodies, `GIVE … AS RESPONSE`, SIGINT/SIGTERM lifecycle) — `LISTEN ON port AS req.` + `GIVE … AS RESPONSE` shipped in v0.48.33 (one-shot server, plain-text bodies); still missing: JSON bodies and a signal-driven request loop.
 - **HTTP client** (HARVEST via worker threads, NETWORK_STORM, `{ok,status,body,headers}` result) — `plant_net_harvest` exists in the C runtime but is also **unwired**.
@@ -265,7 +265,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 ## 9. Roadmap Priorities
 
 **High effort / high value**
-1. **Storms / exception handling** (WEATHER/SHELTER/CALM + `LOST_STORM`/`ZERO_STORM`): **shipped** — v0.48.23 added `THROW` + `WEATHER/SHELTER/CALM` with mandatory `CALM`, unmatched re-propagation, and `GIVE`/`BREAK`/`CONTINUE` frame popping via `setjmp`/`longjmp` frames; v0.48.23-patch completed the 12-kind registry (with per-kind default messages) and the runtime `plant_storm_match` catch-all matcher; v0.48.25 adds `STOP IF` (raises `STOP_STORM`, the 13th kind) and the `plant_calm` finalization pipeline that runs `CALM` on every exit path, including `GIVE`/`BREAK`/`CONTINUE` interruptions. **Weather memory management shipped v0.48.37d**: every WEATHER frame binds a dedicated exit-list, `plant_weather_leave` frees registered handles (ARC-aware) and drains deferred deallocations on every exit path, SHELTER handler temporaries are purged on handler exit, and `plant_weather_status` reports `active_frames`/`live_objects`/`pending_frees`/`storm_handlers` telemetry. Remaining (low priority): the `storm()` factory and location backfill.
+1. **Storms / exception handling** (WEATHER/SHELTER/CALM + `LOST_STORM`/`ZERO_STORM`): **shipped** — v0.48.23 added `THROW` + `WEATHER/SHELTER/CALM` with mandatory `CALM`, unmatched re-propagation, and `GIVE`/`BREAK`/`CONTINUE` frame popping via `setjmp`/`longjmp` frames; v0.48.23-patch completed the 12-kind registry (with per-kind default messages) and the runtime `plant_storm_match` catch-all matcher; v0.48.25 adds `STOP IF` (raises `STOP_STORM`, the 13th kind) and the `plant_calm` finalization pipeline that runs `CALM` on every exit path, including `GIVE`/`BREAK`/`CONTINUE` interruptions. **Weather memory management shipped v0.48.37d**: every WEATHER frame binds a dedicated exit-list, `plant_weather_leave` frees registered handles (ARC-aware) and drains deferred deallocations on every exit path, SHELTER handler temporaries are purged on handler exit, and `plant_weather_status` reports `active_frames`/`live_objects`/`pending_frees`/`storm_handlers` telemetry. **`storm()` factory shipped v0.48.38a**: `THROW storm("TYPE", "msg").` builds an ARC-managed `{type, message}` exception object that survives unwinding, binds as the SHELTER `AS e` value, and is released after the handler body runs; `CALL storm(...).` and bare `storm(...).` statements work too. Remaining (low priority): location backfill.
 2. **List/map/std library surface**: array & map literals, slices, `FIRST/LAST/SUM/AVERAGE/MEDIAN/UNIQUE/REVERSE/FLATTEN/CHUNK/ZIP/RANGE`, string `FIND/COUNT_OF/JOIN/SLICE` (v0.48.26 shipped `UPPER/LOWER/TRIM/INCLUDES/STARTS_WITH/ENDS_WITH/REVERSE/REPEAT/PAD/PAD_LEFT` via the `strings:` FFI module), `math` extras (`LOG PI E SIGN CLAMP` shipped v0.48.27; `ABS ROUND POW CEIL FLOOR RANDOM SIN COS SQRT` bindings), `io:SHOWLN io:FLUSH` (shipped v0.48.28), `fs:APPEND` (shipped v0.48.28).
 3. **String interpolation** — shipped as `"str ${expr}"` (v0.48.22-patch2); ORIF/ELSE (v0.48.20), CYCLE 3 forms (v0.48.21-22) and INCREASE/DECREASE (v0.48.22-patch) are shipped; numeric CYCLE hardened with static STEP evaluation in v0.48.22-patch3 (zero-step compile error, direction-aware expression steps, runtime nonzero guard); v0.48.22-patch4 adds literal `\${` escape markers, `_cat3`/`_cat4` chain flattening, and the single-digit `_from_digit` fast path.
 
@@ -295,4 +295,4 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 **Intentionally out of scope (D)**
 - SPECIES/BLOOM object model, `SELF:`/method dispatch, `PLANT` library statements, PULSE/WHENEVER watchers, JS `Function()` escape hatch, locale-specific IO formatting, VERIFY/SUITE language framework.
 
-*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae).*
+*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.48.38a.*

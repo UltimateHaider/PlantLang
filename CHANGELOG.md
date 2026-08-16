@@ -1,5 +1,59 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.38a — 2026 (storm() Exception Factory)
+
+### New Features
+- **`storm("TYPE", "msg")` exception factory** (parser.plant,
+  codegen_c.plant, plant_runtime.c): builds a first-class exception
+  object — a `{type, message}` MAP registered on the ARC heap — that
+  survives setjmp/longjmp unwinding instead of dying with the throwing
+  call frame. `THROW storm(...).` raises such an object through the
+  innermost WEATHER checkpoint; `SHELTER TYPE AS e` binds the object
+  itself, so handlers unpack it via `_map_get(e, "type")` /
+  `_map_get(e, "message")` or serialize it with `plant_map_to_string`.
+- **Factory-object lifecycle** (plant_runtime.c): `plant_storm` creates
+  the object with one reference (its ARC wrapper's payload is the MAP,
+  so finalization frees both). `plant_throw_obj` transfers ownership to
+  the frame; unmatched storms propagate outward frame-by-frame through
+  `plant_calm` (same reference, no retain/release churn); a matching
+  SHELTER consumes it — the generated dispatch calls
+  `plant_storm_release` after the handler body runs, dropping the count
+  to zero for ARC finalization. Automatic ARC GC (v0.48.37) keeps
+  in-flight objects safe: refs > 0 keeps them marked.
+- **Normalization rules** (plant_runtime.c): empty type falls back to
+  `ANY_STORM`; empty message falls back to the registered storm default
+  (or `(unclassified storm)` for unconventional types), mirroring
+  `plant_throw`'s NULL-message behavior. Classic `THROW type "msg".`
+  storms are untouched and bind the message string in `AS e` clauses
+  exactly as before.
+
+### Changes
+- `PlantWeather` frame (plant_runtime.h) gains a `volatile tx_t
+  exc_obj` field alongside the classic `exc_type`/`exc_msg` strings.
+- `parse_throw_stmt` (parser.plant) recognizes `THROW storm(...).`:
+  the whole call expression is collected as the payload and the
+  classic type token is emptied; codegen emits `plant_throw_obj(...)`
+  for that form.
+- `translate_expr` (codegen_c.plant) rewrites `storm(` calls to
+  `plant_storm(`; the bare-statement path (`storm(...).` and
+  `CALL storm(...).`) maps the action name `storm` → `plant_storm`.
+- Weather dispatch (codegen_c.plant) captures `tx_t __ev =
+  plant_exc_val()` beside `__et`/`__em` before popping the frame;
+  `AS e` binds `__ev` (object for factory storms, message string for
+  classic ones); `plant_storm_release(__ev)` runs after each matched
+  handler body. Handlers that exit early (GIVE/BREAK/CONTINUE inside
+  a SHELTER) skip the release — the object stays ARC-managed but
+  uncollected until process end (known limitation, classic path has
+  the same string-lifetime caveat).
+
+### Tests
+- `tests/regression/storm_factory.plant` (regression suite): factory
+  creation and serialization; registry-default messages; ANY_STORM
+  type fallback; `THROW storm(...)` with type/message integrity via
+  `_map_get`; nested WEATHER propagation of an unmatched factory storm
+  (CUSTOM) into an outer ANY_STORM shelter; rapid successive
+  throw/handle cycles inside a loop.
+
 ## v0.48.37e — 2026 (WAIT and LOCK Synchronization Primitives)
 
 ### New Features

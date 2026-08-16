@@ -1815,7 +1815,16 @@ ACTION parse_throw_stmt(tokens(LIST), pos(NUM)),
   CREATE msg(TX) TO "".
   REAP tok FROM peek, tokens, p3.
   REAP lx FROM tok_lex, tok.
-  IF lx ISNT ".",
+  IF lx IS "(",
+    # v0.48.38a — THROW storm("TYPE", "msg"). factory form: the whole
+    # call expression is collected as the payload and the classic
+    # type token is emptied (codegen emits plant_throw_obj).
+    REAP dot2 FROM collect_until, tokens, p2, ".".
+    REAP msg FROM _first, dot2.
+    REAP p3 FROM _second, dot2.
+    SET stype TO "".
+  /IF.
+  IF lx ISNT "." AND lx ISNT "(",
     REAP dot2 FROM collect_until, tokens, p3, ".".
     REAP msg FROM _first, dot2.
     REAP p3 FROM _second, dot2.
