@@ -6582,6 +6582,7 @@ tx_t translate_expr(tx_t expr) {
     e = strings_REPLACE((tx_t)e, " IS ", " == ");
     e = _handle_func(e, "COUNT", "plant_array_length");
     e = _handle_func_paren(e, "LEN", "strlen");
+    e = _handle_func_paren(e, "JOIN", "plant_join");
     e = _storm_inject(e);
     e = _handle_func(e, "TEST", "!");
     e = strings_REPLACE((tx_t)e, "TRUE", "1");
@@ -10926,7 +10927,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.38b (pure native)");
+      plant_print("Chloroplast 0.48.38c (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

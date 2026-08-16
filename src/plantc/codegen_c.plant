@@ -1962,6 +1962,7 @@ ACTION translate_expr(expr(TX)),
     REAP e FROM strings:REPLACE, e, " IS ", " == ".
     REAP e FROM _handle_func, e, "COUNT", "plant_array_length".
     REAP e FROM _handle_func_paren, e, "LEN", "strlen".
+    REAP e FROM _handle_func_paren, e, "JOIN", "plant_join".
     REAP e FROM _storm_inject, e.
     REAP e FROM _handle_func, e, "TEST", "!".
     REAP e FROM strings:REPLACE, e, "TRUE", "1".

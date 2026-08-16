@@ -10,7 +10,7 @@ PlantLang transitioned from a **tree-walking JavaScript interpreter** (~9,000 li
 
 The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 port. High-level counts:
 
-| Area | Legacy (v0.45.0) | Current (v0.48.38b) | Gap |
+| Area | Legacy (v0.45.0) | Current (v0.48.38c) | Gap |
 |---|---|---|---|---|
 | Statement keywords (parser dispatch) | ~40 | ~40 (incl. storms, CYCLE forms, NOW/ANALYZE/TYPEOF, FREE/ARC/FAST, WAIT/LOCK) | ~10 missing (deliberate cuts + legacy stubs) |
 | Innate/std library functions | ~60 (41 innate + 19 std/.plnt + 5 FFI stubs) | ~20 reachable builtins + ~50 declared runtime helpers | ~40 missing |
@@ -123,7 +123,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `a.method(args)` (push/pop/put/get/has) | M | |
 | `PICK (c) a b` ternary | M | |
 | `COUNT(x)`, `SUM(x)`, `FIRST(x)`, `LAST(x)`, `SORT(x)`, `LEN(x)` | **P** | COUNT→`plant_array_length`, LEN→`strlen`; SUM/FIRST/LAST/SORT M |
-| `SPLIT(s, d)`, `JOIN(a, d)` | **P** | SPLIT via `strings:SPLIT`; JOIN M |
+| `SPLIT(s, d)`, `JOIN(a, d)` | **P** | SPLIT via `strings:SPLIT`; JOIN **S** (v0.48.38c: `JOIN(list, delim)` → `plant_join` in expression position, empty/NULL guards, serializer for nested MAP/LIST elements) |
 | `Option.Some/None`, `Result.Ok/Err` | M | runtime helpers `plant_option_*`/`plant_result_*` unwired |
 | `BLOOM Species` | M | |
 | Binary ops `+ - * / % **` | **S** | |
@@ -152,7 +152,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 → current: runtime has `math_sqrt cos sin tan floor ceil round abs pow min max random` plus v0.48.27 `math_log sign clamp pi e` (compat.h `std/math`), reachable via externals or the new `math:LOG/PI/E/SIGN/CLAMP` FFI bindings. Still missing by name: `math:ABS ROUND POW CEIL FLOOR RANDOM SIN COS SQRT` module calls (runtime `math_*` exists for most — bindings only).
 
 **`strings` (17):** `UPPER LOWER TRIM LENGTH REVERSE REPEAT PAD_LEFT PAD_RIGHT INCLUDES STARTS_WITH ENDS_WITH SPLIT REPLACE SLICE FIND COUNT_OF JOIN`
-→ current: `strings:LENGTH REPLACE SPLIT` only (compiler + compat.h). `string_repeat/reverse/pad` exist in runtime (compat.h `std/string`) — reachable via externals. Missing: `UPPER LOWER TRIM INCLUDES STARTS_WITH ENDS_WITH SLICE FIND COUNT_OF JOIN`.
+→ current: `strings:LENGTH REPLACE SPLIT` only (compiler + compat.h), plus the `JOIN(list, delim)` built-in (v0.48.38c, `plant_join` — element concatenation with delimiter control and object-serializer conversion for nested MAP/LIST elements). `string_repeat/reverse/pad` exist in runtime (compat.h `std/string`) — reachable via externals. Missing: `UPPER LOWER TRIM INCLUDES STARTS_WITH ENDS_WITH SLICE FIND COUNT_OF`.
 
 **`lists` (14):** `UNIQUE REVERSE FLATTEN SORT CHUNK ZIP AVERAGE MEDIAN FILTER_GT FILTER_LT INCLUDES INDEX_OF RANGE`
 → current: none as language-level; `plant_iterator_*`, `plant_range`, Set/Queue/Stack helpers exist in runtime but no list-comprehension surface. Missing: all 14.
@@ -232,7 +232,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 ## 7. Architecture Drivers of the Gaps
 
 1. **Static typing vs dynamic evaluation.** The legacy evaluator's `new Function()` compilation and `inferType/coerce` make dynamic forms cheap to implement in JS but impossible to express in typed C without a full type-inference pass. This explains the loss of: string interpolation, untyped aggregates, `CONVERT`, `TYPEOF`, `ANY/ALL/HAS/IS_A` conditions, and type-method dispatch.
-2. **C codegen vs JS runtime objects.** Maps/lists/structs are now opaque `tx_t` pointers with explicit helper calls. Language-level convenience (literals, slices, SORT/SHAKE/BRAID, JOIN) needs codegen rewrites that haven't been written, though the runtime helpers (`plant_array_length`, `plant_range`, `plant_iterator_*`) partially exist.
+2. **C codegen vs JS runtime objects.** Maps/lists/structs are now opaque `tx_t` pointers with explicit helper calls. Language-level convenience (literals, slices, SORT/SHAKE/BRAID, JOIN) needs codegen rewrites — SORT/SHAKE (v0.48.29), BRAID/LINK (v0.48.31) and JOIN (v0.48.38c, `JOIN(list, delim)` → `plant_join`) have them; the runtime helpers (`plant_array_length`, `plant_range`, `plant_iterator_*`) partially exist for the rest.
 3. **No exception machinery.** WEATHER/SHELTER and storms are the biggest *semantic* loss: compiled C has no unwinding; the compiler instead returns errno/`ffi_last_error` strings. Implementing storms would require setjmp/longjmp or explicit propagation — a major roadmap item.
 4. **Node dependency removal.** HTTP (client+server), VEIN FS, worker threads, locale formatting, ANSI diagnostics all died with Node. The C runtime retains v0.41-era POSIX sockets (`plant_net_harvest`, `plant_net_listen_*`) that predate the gap and are **unreachable from the language** — re-wiring them is cheap compared to writing them.
 5. **Scope model.** PULSE watchers, LOCK/EVAPORATE, ROOT globals and `SELF` bindings need runtime scope objects; compiled scopes are static, so these features would need runtime scope tables.
@@ -266,7 +266,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 
 **High effort / high value**
 1. **Storms / exception handling** (WEATHER/SHELTER/CALM + `LOST_STORM`/`ZERO_STORM`): **shipped** — v0.48.23 added `THROW` + `WEATHER/SHELTER/CALM` with mandatory `CALM`, unmatched re-propagation, and `GIVE`/`BREAK`/`CONTINUE` frame popping via `setjmp`/`longjmp` frames; v0.48.23-patch completed the 12-kind registry (with per-kind default messages) and the runtime `plant_storm_match` catch-all matcher; v0.48.25 adds `STOP IF` (raises `STOP_STORM`, the 13th kind) and the `plant_calm` finalization pipeline that runs `CALM` on every exit path, including `GIVE`/`BREAK`/`CONTINUE` interruptions. **Weather memory management shipped v0.48.37d**: every WEATHER frame binds a dedicated exit-list, `plant_weather_leave` frees registered handles (ARC-aware) and drains deferred deallocations on every exit path, SHELTER handler temporaries are purged on handler exit, and `plant_weather_status` reports `active_frames`/`live_objects`/`pending_frees`/`storm_handlers` telemetry. **`storm()` factory shipped v0.48.38a**: `THROW storm("TYPE", "msg").` builds an ARC-managed `{type, message}` exception object that survives unwinding, binds as the SHELTER `AS e` value, and is released after the handler body runs; `CALL storm(...).` and bare `storm(...).` statements work too. **Location backfill shipped v0.48.38b**: the factory takes `(file, line, column)`, the codegen injects `__FILE__`, `__LINE__`, `0` at every `storm(...)` call, and the fields are conditionally packed so `AS e` bindings expose `_map_get(e, "file")` / `_map_get(e, "line")`. Shipped in full.
-2. **List/map/std library surface**: array & map literals, slices, `FIRST/LAST/SUM/AVERAGE/MEDIAN/UNIQUE/REVERSE/FLATTEN/CHUNK/ZIP/RANGE`, string `FIND/COUNT_OF/JOIN/SLICE` (v0.48.26 shipped `UPPER/LOWER/TRIM/INCLUDES/STARTS_WITH/ENDS_WITH/REVERSE/REPEAT/PAD/PAD_LEFT` via the `strings:` FFI module), `math` extras (`LOG PI E SIGN CLAMP` shipped v0.48.27; `ABS ROUND POW CEIL FLOOR RANDOM SIN COS SQRT` bindings), `io:SHOWLN io:FLUSH` (shipped v0.48.28), `fs:APPEND` (shipped v0.48.28).
+2. **List/map/std library surface**: array & map literals, slices, `FIRST/LAST/SUM/AVERAGE/MEDIAN/UNIQUE/REVERSE/FLATTEN/CHUNK/ZIP/RANGE`, string `FIND/COUNT_OF/SLICE` (v0.48.26 shipped `UPPER/LOWER/TRIM/INCLUDES/STARTS_WITH/ENDS_WITH/REVERSE/REPEAT/PAD/PAD_LEFT` via the `strings:` FFI module; **`JOIN(list, delim)` shipped v0.48.38c**), `math` extras (`LOG PI E SIGN CLAMP` shipped v0.48.27; `ABS ROUND POW CEIL FLOOR RANDOM SIN COS SQRT` bindings), `io:SHOWLN io:FLUSH` (shipped v0.48.28), `fs:APPEND` (shipped v0.48.28).
 3. **String interpolation** — shipped as `"str ${expr}"` (v0.48.22-patch2); ORIF/ELSE (v0.48.20), CYCLE 3 forms (v0.48.21-22) and INCREASE/DECREASE (v0.48.22-patch) are shipped; numeric CYCLE hardened with static STEP evaluation in v0.48.22-patch3 (zero-step compile error, direction-aware expression steps, runtime nonzero guard); v0.48.22-patch4 adds literal `\${` escape markers, `_cat3`/`_cat4` chain flattening, and the single-digit `_from_digit` fast path.
 
 **Medium effort**
@@ -289,10 +289,10 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 8. **`CONST`/`ROOT` immutables** — shipped v0.48.35 (`CONST`/`ROOT`/`ROOT_SCOPE`).
 
 **Low effort / niche**
-8. **SPLIT/JOIN statement forms** (SORT/SHAKE shipped v0.48.29; BRAID/LINK shipped v0.48.31), `PICK`, `STOP IF` (shipped v0.48.25), `WAIT n.` statement (**shipped v0.48.37e**; `LOCK var.` synchronization also shipped v0.48.37e), `ANY/ALL/HAS/IS_A` conditions, `LOCATE`/`NOTE` comments, brace-form ACTION bodies, TYPE aliases, single-quoted strings.
+8. **SPLIT/JOIN statement forms** (SORT/SHAKE shipped v0.48.29; BRAID/LINK shipped v0.48.31; **`JOIN(list, delim)` function shipped v0.48.38c**), `PICK`, `STOP IF` (shipped v0.48.25), `WAIT n.` statement (**shipped v0.48.37e**; `LOCK var.` synchronization also shipped v0.48.37e), `ANY/ALL/HAS/IS_A` conditions, `LOCATE`/`NOTE` comments, brace-form ACTION bodies, TYPE aliases, single-quoted strings.
 9. **Legacy `N\` depth-prefixed syntax** (tokenized already; only needs codegen acceptance) for drop-in legacy source compatibility.
 
 **Intentionally out of scope (D)**
 - SPECIES/BLOOM object model, `SELF:`/method dispatch, `PLANT` library statements, PULSE/WHENEVER watchers, JS `Function()` escape hatch, locale-specific IO formatting, VERIFY/SUITE language framework.
 
-*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.48.38b.*
+*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.48.38c.*

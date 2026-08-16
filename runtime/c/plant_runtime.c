@@ -2333,6 +2333,38 @@ static tx_t _plant_ser(tx_t v, int depth) {
     return res;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   v0.48.38c — JOIN(list, delim) built-in
+   Concatenates the elements of a list into one string separated by
+   delim. An empty (or NULL) list yields ""; a NULL delim is treated
+   as "". Element conversion: tx_t values are strings in this model —
+   the NUM/SCL/FACT casts (the directive's _from_long/_from_double/
+   TRUE-FALSE translation) already happened at the call site, so
+   numeric and boolean elements arrive pre-converted and pass through
+   unchanged. Nested PlantArray elements (MAP/LIST) are serialized
+   through plant_map_to_string, the runtime's object serializer (a
+   standalone plant_to_string does not exist, so the serializer
+   stands in; NULL elements render as "").
+   ═══════════════════════════════════════════════════════════════ */
+
+tx_t plant_join(tx_t list, tx_t delim) {
+    PlantArray* a = (PlantArray*)list;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC || a->count == 0) return strdup("");
+    const char* d = delim ? _S(delim) : "";
+    tx_t res = strdup("");
+    for (int64_t i = 0; i < a->count; i++) {
+        if (i > 0) res = _cat(res, d);
+        tx_t el = a->items[i];
+        if (el && ((PlantArray*)el)->magic == PLANT_ARRAY_MAGIC) {
+            res = _cat(res, _S(plant_map_to_string(el)));
+        } else {
+            const char* s = el ? _S(el) : "";
+            res = _cat(res, s);
+        }
+    }
+    return res;
+}
+
 tx_t plant_map_to_string(tx_t v) {
     return _plant_ser(v, 0);
 }

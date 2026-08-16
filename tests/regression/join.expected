@@ -1,0 +1,8 @@
+abc=a, b, c
+nums=1-2-3
+empty=
+single=a
+mixed=hello | 42 | TRUE
+complex={x = 1},[2, 3, 4]
+null_delim=abc
+null_list=

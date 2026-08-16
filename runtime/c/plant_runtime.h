@@ -135,6 +135,11 @@ tx_t        plant_storm(tx_t type, tx_t msg, tx_t file, long line, long column);
 void        plant_throw_obj(tx_t obj);
 tx_t        plant_exc_val(void);
 void        plant_storm_release(tx_t obj);
+/* v0.48.38c — JOIN(list, delim) built-in: concatenates the list's
+   elements into one string separated by delim ("" for NULL delim;
+   "" result for empty/NULL lists; nested MAP/LIST elements serialize
+   through the runtime object serializer). */
+tx_t        plant_join(tx_t list, tx_t delim);
 int         plant_storm_match(const char* thrown_type, const char* shelter_type);
 int         plant_storm_is_known(const char* type);
 const char* plant_storm_default_message(const char* type);

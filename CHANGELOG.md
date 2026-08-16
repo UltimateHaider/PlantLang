@@ -1,5 +1,37 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.38c — 2026 (JOIN Built-In Function)
+
+### New Features
+- **`JOIN(list, delim)` built-in** (plant_runtime.c, codegen_c.plant):
+  concatenates a list's elements into one string separated by `delim`,
+  mirroring the classic SPLIT/JOIN pair from the legacy dialect. The
+  compiler maps the two-argument call `JOIN(l, d)` directly to
+  `plant_join(l, d)` through `_handle_func_paren` (the same mechanics
+  as `LEN`), so `JOIN` is usable in any expression position.
+- **Guards and edge semantics** (plant_runtime.c): an empty list and a
+  NULL list both join to `""`; a NULL `delim` is treated as `""`.
+- **Element conversion**: tx_t values are strings in the native model —
+  the NUM/SCL/FACT casts (the `_from_long`/`_from_double`/TRUE-FALSE
+  translation) already happen at the call site, so numeric and boolean
+  elements arrive pre-converted and pass through unchanged. Nested
+  MAP/LIST elements serialize through `plant_map_to_string`, the
+  runtime's object serializer — a standalone `plant_to_string` does not
+  exist, so the serializer stands in for the directive's "complex-type
+  conversion" path; NULL elements render as `""`.
+
+### Changes
+- `plant_runtime.h` and `plant_compat.h` declare `tx_t plant_join(tx_t
+  list, tx_t delim);` (prototype + FFI-surface mirror).
+
+### Tests
+- `tests/regression/join.plant` (regression suite): multi-element join
+  with a spaced delimiter; numeric elements with `-`; empty-list join;
+  single-element join; mixed string/numeric/boolean elements with a
+  pipe delimiter; nested MAP/LIST elements serialized by the object
+  serializer; NULL delimiter; NULL list. Lists are built with
+  `plant_list_make` (the dialect has no literal syntax).
+
 ## v0.48.38b — 2026 (Location Backfill & SHELTER/AS Metadata Binding)
 
 ### New Features
