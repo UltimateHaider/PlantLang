@@ -179,12 +179,25 @@ ACTION _push_el(els(LIST), cur(TX)),
         REAP ef FROM _seg_list, is2.
     /IF.
     IF ec0 ISNT "[",
+        # bare booleans inside a list literal materialize as the
+        # quoted string "TRUE"/"FALSE": a non-numeric element for
+        # SUM (skipped), and visible as text in JOIN/FIRST/LAST.
+        REAP ebv FROM str_eq, elt, "TRUE".
+        IF ebv IS "1",
+            SET ef TO "\"TRUE\"".
+        /IF.
+        REAP ebf FROM str_eq, elt, "FALSE".
+        IF ebf IS "1",
+            SET ef TO "\"FALSE\"".
+        /IF.
+        IF ebv IS "0" AND ebf IS "0",
         REAP isi FROM _is_int, elt.
         IF isi IS 1,
             SET ef TO "_from_long(" + elt + ")".
         /IF.
         IF isi IS 0,
             SET ef TO elt.
+        /IF.
         /IF.
     /IF.
     REAP els FROM plant_list_push, els, ef.
@@ -2169,12 +2182,19 @@ ACTION translate_expr(expr(TX)),
     REAP e FROM _handle_func, e, "COUNT", "plant_array_length".
     REAP e FROM _handle_func_paren, e, "LEN", "strlen".
     REAP e FROM _handle_func_paren, e, "JOIN", "plant_join".
+    REAP e FROM _handle_func_paren, e, "FIRST", "plant_first".
+    REAP e FROM _handle_func_paren, e, "LAST", "plant_last".
+    REAP e FROM _handle_func_paren, e, "SUM", "plant_sum".
     REAP e FROM _storm_inject, e.
     REAP e FROM _handle_func, e, "TEST", "!".
+    # list literals rewrite BEFORE boolean sanitization so a bare
+    # TRUE/FALSE inside [ ... ] survives as the quoted string
+    # "TRUE"/"FALSE" (a non-numeric element — SUM skips it, and
+    # the sanitizer then leaves quoted booleans untouched).
+    REAP e FROM _list_literal, e.
     REAP e FROM plant_sanitize_bools, e.
     REAP e FROM strings:REPLACE, e, "NULL", "NULL".
     REAP e FROM strings:REPLACE, e, " : ", "_".
-    REAP e FROM _list_literal, e.
     REAP e FROM handle_brackets, e.
     GIVE e.
 /ACTION.

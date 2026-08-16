@@ -2374,6 +2374,55 @@ tx_t plant_map_to_string(tx_t v) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   v0.48.38d — FIRST / LAST / SUM list operations
+   plant_first / plant_last return the boundary element of a list;
+   empty (or NULL / non-array) lists yield "". plant_sum aggregates
+   the numeric elements of a list: NUM/SCL elements arrive as
+   pre-converted tx_t text (_from_long/_from_double casts happen at
+   the call site), parsable strings ("2", "2.5") are converted with
+   a full-consumption strtod scan, and everything else — non-
+   parsable strings ("a", "TRUE" from bare booleans inside list
+   literals), nested MAP/LIST containers, NULLs, empty strings — is
+   skipped without interrupting the accumulation. An empty (or
+   NULL) list sums to "0". The result is "%.10g"-formatted unless
+   integral, when it renders as a long integer.
+   ═══════════════════════════════════════════════════════════════ */
+
+tx_t plant_first(tx_t list) {
+    PlantArray* a = (PlantArray*)list;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC || a->count == 0) return strdup("");
+    return a->items[0] ? a->items[0] : strdup("");
+}
+
+tx_t plant_last(tx_t list) {
+    PlantArray* a = (PlantArray*)list;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC || a->count == 0) return strdup("");
+    return a->items[a->count - 1] ? a->items[a->count - 1] : strdup("");
+}
+
+tx_t plant_sum(tx_t list) {
+    PlantArray* a = (PlantArray*)list;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC || a->count == 0) return strdup("0");
+    double acc = 0.0;
+    for (int64_t i = 0; i < a->count; i++) {
+        tx_t el = a->items[i];
+        if (!el) continue;
+        if ((uintptr_t)el < 4096) { acc += (double)(intptr_t)el; continue; }
+        if (((PlantArray*)el)->magic == PLANT_ARRAY_MAGIC) continue; /* MAP/LIST */
+        const char* s = _S(el);
+        if (!s || s[0] == '\0') continue;
+        char* end = NULL;
+        double v = strtod(s, &end);
+        if (end == s || *end != '\0') continue; /* non-parsable: skip */
+        acc += v;
+    }
+    if (acc == (double)(long long)acc) return _from_long((long long)acc);
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%.10g", acc);
+    return strdup(buf);
+}
+
+/* ═══════════════════════════════════════════════════════════════
    v0.47.2 — Native Data Structures (Set / Queue / Stack)
    Implementations; signatures in plant_compat.h
    ═══════════════════════════════════════════════════════════════ */

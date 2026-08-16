@@ -4736,6 +4736,8 @@ tx_t _push_el(PlantArray* els, tx_t cur) {
   tx_t elt = "";
   tx_t ec0 = "";
   tx_t is2 = "";
+  tx_t ebv = "";
+  tx_t ebf = "";
   tx_t isi = "";
     elt = trim(cur);
     if (strlen( elt ) == 0) {
@@ -4748,12 +4750,22 @@ tx_t _push_el(PlantArray* els, tx_t cur) {
         ef = _seg_list(is2);
     }
     if (strcmp(ec0,"[") != 0) {
-        isi = _is_int(elt);
-        if (isi == 1) {
-            ef = _cat(_cat("_from_long(", elt), ")");
+        ebv = str_eq(elt, "TRUE");
+        if (strcmp(ebv,"1") == 0) {
+            ef = "\"1\"";
         }
-        if (isi == 0) {
-            ef = elt;
+        ebf = str_eq(elt, "FALSE");
+        if (strcmp(ebf,"1") == 0) {
+            ef = "\"0\"";
+        }
+        if (strcmp(ebv,"0") == 0 && strcmp(ebf,"0") == 0) {
+            isi = _is_int(elt);
+            if (isi == 1) {
+                ef = _cat(_cat("_from_long(", elt), ")");
+            }
+            if (isi == 0) {
+                ef = elt;
+            }
         }
     }
     els = plant_list_push(els, ef);
@@ -6796,12 +6808,15 @@ tx_t translate_expr(tx_t expr) {
     e = _handle_func(e, "COUNT", "plant_array_length");
     e = _handle_func_paren(e, "LEN", "strlen");
     e = _handle_func_paren(e, "JOIN", "plant_join");
+    e = _handle_func_paren(e, "FIRST", "plant_first");
+    e = _handle_func_paren(e, "LAST", "plant_last");
+    e = _handle_func_paren(e, "SUM", "plant_sum");
     e = _storm_inject(e);
     e = _handle_func(e, "TEST", "!");
+    e = _list_literal(e);
     e = plant_sanitize_bools(e);
     e = strings_REPLACE(e, "NULL", "NULL");
     e = strings_REPLACE(e, " : ", "_");
-    e = _list_literal(e);
     e = handle_brackets(e);
     return e;
 }
@@ -11140,7 +11155,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.38c (pure native)");
+      plant_print("Chloroplast 0.48.38d (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

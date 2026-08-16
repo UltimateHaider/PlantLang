@@ -1,0 +1,25 @@
+# list_ops — FIRST / LAST / SUM list operations (v0.48.38d).
+# FIRST(list) / LAST(list) extract the boundary element ("" for
+# empty lists). SUM(list) aggregates numeric elements: NUM/SCL
+# arrive pre-converted as tx_t text, parsable strings ("2") are
+# converted with a full-consumption scan, and everything else —
+# non-parsable strings, bare booleans (which materialize as the
+# string "TRUE"/"FALSE" inside list literals), nested containers —
+# is skipped. Empty lists sum to "0".
+
+ACTION main(),
+  SHOW "first1=" + FIRST([1, 2, 3]).
+  SHOW "last1=" + LAST([1, 2, 3]).
+  SHOW "sum1=" + SUM([1, 2, 3]).
+  SHOW "first_empty=" + FIRST([]).
+  SHOW "last_empty=" + LAST([]).
+  SHOW "sum_empty=" + SUM([]).
+  SHOW "sum_mixed=" + SUM([1, "2", 3]).
+  SHOW "sum_strs=" + SUM(["a", "b"]).
+  SHOW "sum_bool=" + SUM([TRUE, 2]).
+  SHOW "sum_nested=" + SUM([1, [2, 3], 4]).
+  SHOW "first_str=" + FIRST(["x", "y"]).
+  SHOW "last_str=" + LAST(["x", "y"]).
+  SHOW "sum_null=" + SUM(NULL).
+  GIVE 0.
+/GIVE main.

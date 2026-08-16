@@ -1,5 +1,48 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.38d — 2026 (List Operations: FIRST, LAST, SUM)
+
+### New Features
+- **`FIRST(list)` / `LAST(list)` boundary extraction** (plant_runtime.c,
+  codegen_c.plant): return the initial / final element of a list as
+  tx_t text. Empty lists — and NULL / non-array arguments — return
+  `""`. The compiler maps the calls through `_handle_func_paren` (the
+  same single-argument mechanism as `JOIN`/`LEN`) to
+  `plant_first(list)` / `plant_last(list)`.
+- **`SUM(list)` numeric aggregation** (plant_runtime.c): accumulates
+  the list's numeric elements into a double. NUM/SCL elements arrive
+  pre-converted as tx_t text (`_from_long`/`_from_double` casts happen
+  at the call site); numeric strings such as `"2"` are converted with
+  a full-consumption `strtod` scan; everything else — non-parsable
+  strings (`"a"`), bare booleans, nested MAP/LIST containers, NULLs
+  and empty strings — is skipped without interrupting the
+  accumulation. An empty or NULL list sums to `"0"`. Integral results
+  render as long integers, fractional results with `"%.10g"`.
+- **Bare booleans inside list literals** (codegen_c.plant): the
+  `_list_literal` rewrite now runs before boolean sanitization, and
+  `_push_el` materializes a bare `TRUE`/`FALSE` element as the quoted
+  string `"TRUE"`/`"FALSE"` — a non-numeric element for `SUM`
+  (`SUM([TRUE, 2])` → `2`), and visible as text through `JOIN`,
+  `FIRST` and `LAST`. Quoted `"TRUE"` strings are unaffected, and the
+  sanitizer still converts bare booleans to `1`/`0` everywhere else.
+
+### Changes
+- `plant_runtime.h` declares `plant_first`, `plant_last`, `plant_sum`;
+  `plant_compat.h` mirrors the three externs for the FFI surface.
+- Version markers (Makefile, main.plant, run_native_tests.sh) bumped
+  to 0.48.38d.
+
+### Tests
+- `tests/regression/list_ops.plant` (regression suite):
+  `FIRST([1, 2, 3])` → `1`; `LAST([1, 2, 3])` → `3`;
+  `SUM([1, 2, 3])` → `6`; `FIRST([])` / `LAST([])` → `""`;
+  `SUM([])` → `0`; `SUM([1, "2", 3])` → `6` (parsable string);
+  `SUM(["a", "b"])` → `0` (non-parsable skipped);
+  `SUM([TRUE, 2])` → `2` (booleans ignored);
+  `SUM([1, [2, 3], 4])` → `5` (nested containers skipped);
+  `SUM(NULL)` → `0`. 137/0 regression, 20/0 native, self-hosting
+  converged (376103 B).
+
 ## v0.48.38c — 2026 (JOIN Built-In Function)
 
 ### New Features

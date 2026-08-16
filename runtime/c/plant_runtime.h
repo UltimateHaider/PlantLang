@@ -140,6 +140,14 @@ void        plant_storm_release(tx_t obj);
    "" result for empty/NULL lists; nested MAP/LIST elements serialize
    through the runtime object serializer). */
 tx_t        plant_join(tx_t list, tx_t delim);
+/* v0.48.38d — FIRST / LAST / SUM list operations: boundary-element
+   extraction with "" for empty/NULL lists; SUM aggregates numeric
+   elements (NUM/SCL arrive pre-converted as tx_t text), parses
+   numeric strings with a full-consumption scan, and skips non-
+   numeric elements (non-parsable strings, booleans, MAP/LIST). */
+tx_t        plant_first(tx_t list);
+tx_t        plant_last(tx_t list);
+tx_t        plant_sum(tx_t list);
 int         plant_storm_match(const char* thrown_type, const char* shelter_type);
 int         plant_storm_is_known(const char* type);
 const char* plant_storm_default_message(const char* type);

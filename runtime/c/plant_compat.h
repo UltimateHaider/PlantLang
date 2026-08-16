@@ -671,6 +671,12 @@ tx_t  plant_storm(tx_t type, tx_t msg, tx_t file, long line, long column);
 /* v0.48.38c — JOIN(list, delim) built-in (also declared via
    plant_runtime.h; mirrored here for the FFI surface). */
 tx_t  plant_join(tx_t list, tx_t delim);
+
+/* v0.48.38d — FIRST / LAST / SUM list operations (also declared via
+   plant_runtime.h; mirrored here for the FFI surface). */
+tx_t  plant_first(tx_t list);
+tx_t  plant_last(tx_t list);
+tx_t  plant_sum(tx_t list);
 long  plant_arc_gc(void);                             /* GC.cycle(): reclaim */
 tx_t  plant_persist_status(void);                     /* heap telemetry (text) */
 tx_t  plant_arc_finalize_count(void);                 /* finalize counter */

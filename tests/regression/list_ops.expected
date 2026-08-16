@@ -1,0 +1,13 @@
+first1=1
+last1=3
+sum1=6
+first_empty=
+last_empty=
+sum_empty=0
+sum_mixed=6
+sum_strs=0
+sum_bool=2
+sum_nested=5
+first_str=x
+last_str=y
+sum_null=0
