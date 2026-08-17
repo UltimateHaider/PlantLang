@@ -14,7 +14,7 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.48.38l
+VERSION    ?= 0.48.38m
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc

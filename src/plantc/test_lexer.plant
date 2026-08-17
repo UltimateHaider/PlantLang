@@ -1,3 +1,0 @@
-# Test lexer output
-CREATE tokens(N LIST) TO scan_tokens("LET x(NUM) TO 42. SHOW x.").
-SHOW tokens.

@@ -1,9 +1,0 @@
-IMPORT "ast.plant".
-
-ACTION test_action(x(TX)),
-  SHOW "INSIDE_ACTION".
-  GIVE x.
-/ACTION.
-
-REAP result FROM test_action, "hello".
-SHOW result.

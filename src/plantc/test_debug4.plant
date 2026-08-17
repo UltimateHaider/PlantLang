@@ -1,6 +1,0 @@
-IMPORT "ast.plant".
-CREATE a(TX) TO "hello".
-CREATE b(TX) TO "".
-CREATE c(TX) TO b + "  if (" + a + ")".
-SHOW "c value:".
-SHOW c.

@@ -1,5 +1,41 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.38m — 2026 (Legacy File Removal)
+
+### Housekeeping
+- Removed all legacy, unused, and obsolete files from the repository so
+  the tree contains only the active self-hosted pipeline:
+  - `core/` (17 files) — pre-self-host JavaScript engine (≤ v0.45.x)
+  - `src/**/*.js` (40 files) — JS/LLVM compiler tree that preceded
+    self-hosting (compiler, interpreter, cluster, security, telemetry,
+    driver, memory, runtime, testing, codegen subdirectories)
+  - `service/` — legacy Node.js compile/serve services
+    (`sandbox-runner.js` required the removed `core/interpreter.js`)
+  - `webrepl/` — legacy web REPL for the JS engine
+  - `std/` — legacy standard library for the JS/LLVM engine (the
+    native compiler uses built-in FFI instead)
+  - `benchmarks/` — v0.47.4-era benchmark suite (`make perf` uses
+    `tests/perf/`), including a committed Python bytecode cache
+  - `syntaxes/`, `themes/`, `snippets/`, `language-configuration.json`
+    — orphaned VS Code extension assets (no manifest)
+  - `tmp/`, `hello`, `missing.c`, `--version`, `--version.c`,
+    `test.plant`, `test_simple.plant`, `test_parser3.plant`,
+    `_test_pipeline.plant`, `run_phase1.sh`, `build.log`, `phase2.log`
+    — root stray/scratch files
+  - `runtime/runtime.c`, `runtime/runtime.o`, `runtime/runtime_bridge.o`,
+    `runtime/libplantlang.so` — older runtime version and build leftovers
+  - `tests/suite.plnt` — legacy monolithic suite (unused by any runner)
+  - `examples/log.txt`, `examples/results.txt`, `examples/hello.c` —
+    generated/scratch outputs
+  - `src/plantc/` scratch files — `lexer.c`, `main.c`, `ast.plant`,
+    `tokens.plant`, and 16 `test_*.plant` files (not part of the
+    active 4-file pipeline)
+
+### Verified
+- `make clean && make all` succeeds; `make self` converges (378128 B)
+- Native 20/0, generics 7/0, closures 6/0, regression 144/0
+- `bin/Chloroplast --version` reports 0.48.38m
+
 ## v0.48.38l — 2026 (Legacy Depth Marker Removal)
 
 ### Breaking Change

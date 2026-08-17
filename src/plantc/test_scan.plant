@@ -1,6 +1,0 @@
-IMPORT "tokens.plant".
-IMPORT "lexer.plant".
-CREATE raw(TX) TO scan_tokens("LET x(NUM) TO 42. SHOW x.").
-SHOW raw.
-CREATE tok(LIST) TO raw.
-SHOW tok.
