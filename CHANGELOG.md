@@ -1,5 +1,23 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.49.1 — 2026 (Regression Runner Stabilization)
+
+### Tests
+- `run_regression_tests.sh`: diff comparisons now normalize the
+  `.expected` fixture (`awk 1` into a build-dir copy) so a missing
+  trailing newline can no longer fail an otherwise identical output
+  (the v0.49.0 `harvest_http` failure mode). The harness stays
+  POSIX-sh portable (no process substitution; `/bin/sh` is dash).
+- `run_regression_tests.sh`: the mock HTTP server is now reaped on
+  every exit path — the background PID is captured at launch and a
+  `trap` on `EXIT`, `INT`, and `TERM` kills and `wait`s the process,
+  eliminating the leaked-server port contention on 41234 that
+  accumulated across repeated suite runs.
+
+### Housekeeping
+- Version bump 0.49.0 → 0.49.1 (Makefile, compiler banner, native
+  test suite version check).
+
 ## v0.49.0 — 2026 (HARVEST HTTP Client Subsystem)
 
 ### Network

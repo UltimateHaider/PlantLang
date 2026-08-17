@@ -22,7 +22,9 @@ if { ls "$DIR"/harvest_*.plant >/dev/null 2>&1 || ls "$DIR"/listen_*.plant >/dev
   python3 "$DIR/mock_http_server.py" >"$BUILD/mock_http_server.log" 2>&1 &
   MOCK_PID=$!
   sleep 1
-  trap 'if [ -n "$MOCK_PID" ]; then kill "$MOCK_PID" 2>/dev/null; fi' EXIT
+  # v0.49.1: reap the server on every exit path (normal finish, SIGINT,
+  # SIGTERM) so no leaked process holds port 41234 for the next run.
+  trap 'if [ -n "$MOCK_PID" ]; then kill "$MOCK_PID" 2>/dev/null; wait "$MOCK_PID" 2>/dev/null; fi' EXIT INT TERM
 fi
 pass=0
 fail=0
@@ -80,14 +82,18 @@ for src in "$DIR"/*.plant; do
         ;;
     esac
     wait "$spid" 2>/dev/null
-    if cat "$BUILD/$name.out" "$BUILD/$name.client" 2>/dev/null | diff - "$DIR/$name.expected" >/dev/null; then
+    # v0.49.1: normalize the fixture to always end with a newline so a
+    # missing trailing \n in an .expected file cannot fail the diff.
+    awk 1 "$DIR/$name.expected" > "$BUILD/$name.expected"
+    if cat "$BUILD/$name.out" "$BUILD/$name.client" 2>/dev/null | diff - "$BUILD/$name.expected" >/dev/null; then
       echo "PASS  $name"; pass=$((pass+1))
     else
       echo "FAIL  $name (output)"; fail=$((fail+1))
     fi
     continue
   fi
-  if "$BUILD/$name" 2>&1 | diff - "$DIR/$name.expected" >/dev/null; then
+  awk 1 "$DIR/$name.expected" > "$BUILD/$name.expected"
+  if "$BUILD/$name" 2>&1 | diff - "$BUILD/$name.expected" >/dev/null; then
     echo "PASS  $name"; pass=$((pass+1))
   else
     echo "FAIL  $name (output)"; fail=$((fail+1))
