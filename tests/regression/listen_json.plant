@@ -1,0 +1,17 @@
+# listen_json: GIVE ... AS RESPONSE JSON (v0.49.3).
+# Server side: a pair-list MAP is serialized via json_stringify and
+# replied with Content-Type: application/json. The driven client
+# (listen_client.py, POST on 41235) prints the status line and the
+# raw reply payload, proving the wire format: {"name":"chloroplast","ok":true}.
+ACTION main(),
+  SHOW "listen_json start".
+  LISTEN ON 41235 AS req.
+  REAP ok FROM _map_get, req, "ok".
+  SHOW "listen_json ok = " + ok.
+  CREATE m(LIST) TO plant_list_make(0).
+  LINK "name" WITH "chloroplast" IN m.
+  LINK "ok" WITH "true" IN m.
+  GIVE m AS RESPONSE JSON.
+  SHOW "listen_json responded".
+  GIVE 0.
+/GIVE main.

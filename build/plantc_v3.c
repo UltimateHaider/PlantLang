@@ -1820,6 +1820,9 @@ tx_t parse_give_stmt(PlantArray* tokens, long pos, tx_t clv) {
   tx_t p4 = "";
   tx_t rs_pair = "";
   tx_t p5 = "";
+  tx_t rtok = "";
+  tx_t rlx = "";
+  tx_t drop_rj = "";
   tx_t dot_pair = "";
   tx_t p6 = "";
     pair = consume(tokens, pos);
@@ -1838,9 +1841,17 @@ tx_t parse_give_stmt(PlantArray* tokens, long pos, tx_t clv) {
             p4 = _second(as_pair);
             rs_pair = consume(tokens, p4);
             p5 = _second(rs_pair);
+            tx_t rjson = "";
+            rtok = peek(tokens, p5);
+            rlx = tok_lex(rtok);
+            if (strcmp(rlx,"JSON") == 0) {
+                drop_rj = consume(tokens, p5);
+                p5 = _second(drop_rj);
+                rjson = "1";
+            }
             dot_pair = consume(tokens, p5);
             p6 = _second(dot_pair);
-            return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "respond_stmt" , "content" , expr , "req" , clv ) , p6 );
+            return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "respond_stmt" , "content" , expr , "req" , clv , "json" , rjson ) , p6 );
         }
     }
     return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "give_stmt" , "value" , expr ) , p3 );
@@ -3694,6 +3705,7 @@ tx_t parse_harvest_stmt(PlantArray* tokens, long pos) {
   tx_t tok = "";
   tx_t lx = "";
   tx_t dropm = "";
+  tx_t dropj = "";
   tx_t drop = "";
   tx_t opair = "";
   tx_t tok2 = "";
@@ -3714,7 +3726,8 @@ tx_t parse_harvest_stmt(PlantArray* tokens, long pos) {
     tx_t headers = "";
     tx_t timeout = "";
     tx_t map = "";
-    PlantArray* okws = plant_list_make ( 6 , "METHOD" , "BODY" , "HEADERS" , "TIMEOUT" , "MAP" , "." );
+    tx_t json = "";
+    PlantArray* okws = plant_list_make ( 7 , "METHOD" , "BODY" , "HEADERS" , "TIMEOUT" , "MAP" , "JSON" , "." );
     rpair = collect_until_keyword(tokens, p4, okws);
     resp = plant_list_get(rpair,  0 );
     p4 = _second(rpair);
@@ -3728,6 +3741,12 @@ tx_t parse_harvest_stmt(PlantArray* tokens, long pos) {
             dropm = consume(tokens, p4);
             p4 = _second(dropm);
             map = "1";
+                      continue;
+        }
+        if (strcmp(lx,"JSON") == 0) {
+            dropj = consume(tokens, p4);
+            p4 = _second(dropj);
+            json = "1";
                       continue;
         }
         if (strcmp(lx,"METHOD") == 0 || strcmp(lx,"BODY") == 0 || strcmp(lx,"HEADERS") == 0 || strcmp(lx,"TIMEOUT") == 0) {
@@ -3761,7 +3780,7 @@ tx_t parse_harvest_stmt(PlantArray* tokens, long pos) {
     }
     dot_pair = consume(tokens, p4);
     p5 = _second(dot_pair);
-    return plant_list_make ( 2 , plant_list_make ( 16 , "type" , "harvest_stmt" , "url" , url , "resp" , resp , "method" , method , "payload" , body , "headers" , headers , "timeout" , timeout , "map" , map ) , p5 );
+    return plant_list_make ( 2 , plant_list_make ( 20 , "type" , "harvest_stmt" , "url" , url , "resp" , resp , "method" , method , "payload" , body , "headers" , headers , "timeout" , timeout , "map" , map , "json" , json ) , p5 );
 }
 tx_t parse_listen_stmt(PlantArray* tokens, long pos) {
   tx_t pair = "";
@@ -7149,6 +7168,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t hhdrs = "";
   tx_t htime = "";
   tx_t hmap = "";
+  tx_t hjson = "";
   tx_t hcurl = "";
   tx_t hx0 = "";
   tx_t hy0 = "";
@@ -7164,6 +7184,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t lst1 = "";
   tx_t rs_body = "";
   tx_t rs_req = "";
+  tx_t rs_json = "";
   tx_t rsb0 = "";
   tx_t rsb1 = "";
   tx_t gdir = "";
@@ -7536,7 +7557,11 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         hhdrs = _map_get(node, "headers");
         htime = _map_get(node, "timeout");
         hmap = _map_get(node, "map");
+        hjson = _map_get(node, "json");
         tx_t hfn = "plant_net_harvest";
+        if (strcmp(hjson,"1") == 0) {
+            hfn = "plant_net_harvest_json";
+        }
         if (strcmp(hmap,"1") == 0) {
             hfn = "plant_net_harvest_map";
         }
@@ -7612,6 +7637,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
     if (strcmp(ntype,"respond_stmt") == 0) {
         rs_body = _map_get(node, "content");
         rs_req = _map_get(node, "req");
+        rs_json = _map_get(node, "json");
         if (strcmp(rs_req,"") == 0) {
             return "";
         }
@@ -7628,7 +7654,11 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         if (strcmp(rsb,"") == 0) {
             rsb = "\"\"";
         }
-        return _cat3(_cat4(isel, "  plant_net_respond(", rs_req, ", "), rsb, ");\n");
+        tx_t rfn = "plant_net_respond";
+        if (strcmp(rs_json,"1") == 0) {
+            rfn = "plant_net_respond_json";
+        }
+        return _cat(_cat4(_cat4(isel, "  ", rfn, "("), rs_req, ", ", rsb), ");\n");
     }
     if (strcmp(ntype,"sort_stmt") == 0) {
         target = _map_get(node, "target");
@@ -11264,7 +11294,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.2 (pure native)");
+      plant_print("Chloroplast 0.49.3 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

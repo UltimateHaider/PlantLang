@@ -1,0 +1,14 @@
+# listen_json_list: GIVE LIST ... AS RESPONSE JSON (v0.49.3).
+# A plain LIST (odd element count, so not a pair-list MAP) serializes
+# as a JSON array via the v0.49.3 json_stringify array path. The
+# driven client prints the raw reply payload: ["a","b","c"].
+ACTION main(),
+  SHOW "listen_json_list start".
+  LISTEN ON 41235 AS req.
+  REAP ok FROM _map_get, req, "ok".
+  SHOW "listen_json_list ok = " + ok.
+  CREATE l(LIST) TO plant_list_make(3, "a", "b", "c").
+  GIVE l AS RESPONSE JSON.
+  SHOW "listen_json_list responded".
+  GIVE 0.
+/GIVE main.

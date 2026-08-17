@@ -29,6 +29,8 @@ tx_t        plant_net_listen(int64_t port);                 /* request MAP: ok/m
 tx_t        plant_net_listen_timeout(int64_t port, int64_t timeout); /* LISTEN ... TIMEOUT t: accept() fails ok=FALSE after t seconds */
 tx_t        plant_net_respond(tx_t req, tx_t body);         /* sends HTTP/1.1 200 OK + Content-Length, closes the connection */
 tx_t        plant_net_harvest_map(tx_t url, tx_t method, tx_t body, tx_t headers, int64_t timeout); /* HARVEST ... AS MAP: response MAP with live sock key */
+tx_t        plant_net_harvest_json(tx_t url, tx_t method, tx_t body, tx_t headers, int64_t timeout); /* HARVEST ... AS JSON: parsed PlantJson in body key */
+tx_t        plant_net_respond_json(tx_t req, tx_t body);              /* GIVE ... AS RESPONSE JSON: json_stringify + application/json */
 tx_t        plant_net_read(tx_t fd);                        /* buffered read (500ms idle window); sock as decimal string */
 tx_t        plant_net_write(tx_t fd, tx_t data);            /* send-all; "TRUE" on success, "FALSE" on failure */
 tx_t        plant_net_close(tx_t fd);                       /* idempotent double-close-safe termination; "TRUE" */

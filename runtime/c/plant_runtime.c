@@ -454,6 +454,30 @@ tx_t plant_net_harvest_map(tx_t url, tx_t method, tx_t body, tx_t headers, int64
     return _plant_net_harvest_ex(url, method, body, headers, timeout, 1);
 }
 
+/* v0.49.3 — HARVEST ... AS resp JSON.: run the request as
+   plant_net_harvest, then replace the raw "body" string in the
+   response MAP with the parsed PlantJson structure (nested access via
+   json_get / json_at; json_val for scalar leaves). A body that does
+   not parse as JSON is replaced with the empty string (falsy). */
+tx_t plant_net_harvest_json(tx_t url, tx_t method, tx_t body, tx_t headers, int64_t timeout) {
+    tx_t resp = plant_net_harvest(url, method, body, headers, timeout);
+    PlantArray* m = (PlantArray*)resp;
+    if (!m || m->magic != PLANT_ARRAY_MAGIC) return resp;
+    const char* raw = "";
+    for (int64_t i = 0; i + 1 < m->count; i += 2)
+        if (m->items[i] && strcmp((const char*)m->items[i], "body") == 0) {
+            raw = (const char*)m->items[i + 1];
+            break;
+        }
+    tx_t parsed = json_parse((tx_t)raw);
+    for (int64_t i = 0; i + 1 < m->count; i += 2)
+        if (m->items[i] && strcmp((const char*)m->items[i], "body") == 0) {
+            plant_list_set(m, i + 1, parsed ? parsed : (tx_t)strdup(""));
+            break;
+        }
+    return resp;
+}
+
 /* ── v0.48.33: plant_net_listen / plant_net_respond — HTTP server ─
    LISTEN opens a listening socket on the port, waits for ONE client
    connection, reads (5s receive timeout) and parses the HTTP request
@@ -620,7 +644,7 @@ tx_t plant_net_listen_timeout(int64_t port, int64_t timeout) {
     return _plant_net_listen_ex(port, timeout);
 }
 
-tx_t plant_net_respond(tx_t req, tx_t body) {
+static int _plant_net_respond_ex(tx_t req, tx_t body, const char* ctype) {
     PlantArray* m = (PlantArray*)req;
     if (!m || m->magic != PLANT_ARRAY_MAGIC) return 0;
     int64_t svi = -1;
@@ -635,12 +659,27 @@ tx_t plant_net_respond(tx_t req, tx_t body) {
     const char* b = body ? (const char*)body : "";
     char hdr[256];
     int n = snprintf(hdr, sizeof(hdr),
-        "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n",
-        strlen(b));
+        "HTTP/1.1 200 OK\r\nContent-Type: %s\r\nContent-Length: %zu\r\nConnection: close\r\n\r\n",
+        ctype, strlen(b));
     if (n > 0) _plant_send_all(fd, hdr);
     if (b[0]) _plant_send_all(fd, b);
     _plant_close_raw(fd);
     return 0;
+}
+
+tx_t plant_net_respond(tx_t req, tx_t body) {
+    return (tx_t)_plant_net_respond_ex(req, body, "text/plain");
+}
+
+/* v0.49.3: GIVE ... AS RESPONSE JSON — serialize the body (a PlantJson
+   from json_parse, a pair-list MAP, or a plain LIST) and reply with
+   Content-Type: application/json. */
+tx_t plant_net_respond_json(tx_t req, tx_t body) {
+    char* ser = json_stringify(body);
+    if (!ser) ser = strdup("null");
+    int r = _plant_net_respond_ex(req, (tx_t)ser, "application/json");
+    free(ser);
+    return (tx_t)r;
 }
 
 /* ── v0.41.0: plant_net_listen_open — TCP listener ── */
@@ -1816,12 +1855,46 @@ tx_t json_parse(tx_t str) {
     return (tx_t)j;
 }
 
+/* v0.49.3: scalar value → JSON text for plain (non-PlantJson)
+   serialization: null/true/false/number stay raw, everything else is
+   quoted. Shared by the pair-list MAP and plain-LIST array paths. */
+static char* _json_scalar_string(const char* vs) {
+    if (!vs || !*vs) return strdup("null");
+    if (strcmp(vs, "true") == 0 || strcmp(vs, "false") == 0) return strdup(vs);
+    char* endp = NULL;
+    strtod(vs, &endp);
+    if (endp != vs && *endp == 0) return strdup(vs);
+    return _json_quote_string(vs);
+}
+
 tx_t json_stringify(tx_t val) {
     if (!val) return strdup("null");
     PlantJson* j = (PlantJson*)val;
     if (j->kind >= 0 && j->kind <= 5) return _json_stringify_value(j);
     PlantArray* a = (PlantArray*)val;
     if (a->magic == PLANT_ARRAY_MAGIC) {
+        /* v0.49.3: a plain LIST (odd element count) is not a pair-list
+           MAP, so serialize it as a JSON array instead of misreading
+           every other element as an object key. */
+        if ((a->count & 1) == 1) {
+            size_t cap = 64, len = 0;
+            char* out = (char*)malloc(cap);
+            if (!out) return NULL;
+            out[len++] = '[';
+            for (int64_t i = 0; i < a->count; i++) {
+                if (i > 0) { if (len + 2 > cap) { cap *= 2; out = (char*)realloc(out, cap); } out[len++] = ','; }
+                char* v = _json_scalar_string((const char*)a->items[i]);
+                size_t vl = v ? strlen(v) : 4;
+                while (len + vl + 2 > cap) cap *= 2;
+                out = (char*)realloc(out, cap);
+                if (v) { memcpy(out + len, v, vl); free(v); }
+                else { memcpy(out + len, "null", 4); vl = 4; }
+                len += vl;
+            }
+            out[len++] = ']';
+            out[len] = 0;
+            return out;
+        }
         /* defensive: native pair-list MAP of strings → JSON object */
         size_t cap = 64, len = 0;
         char* out = (char*)malloc(cap);
@@ -1830,16 +1903,7 @@ tx_t json_stringify(tx_t val) {
         for (int64_t i = 0; i + 1 < a->count; i += 2) {
             if (i > 0) { if (len + 2 > cap) { cap *= 2; out = (char*)realloc(out, cap); } out[len++] = ','; }
             char* k = _json_quote_string((char*)a->items[i]);
-            const char* vs = (const char*)a->items[i + 1];
-            char* v;
-            if (!vs || !*vs) v = strdup("null");
-            else if (strcmp(vs, "true") == 0 || strcmp(vs, "false") == 0) v = strdup(vs);
-            else {
-                char* endp = NULL;
-                strtod(vs, &endp);
-                if (endp != vs && *endp == 0) v = strdup(vs);
-                else v = _json_quote_string(vs);
-            }
+            char* v = _json_scalar_string((const char*)a->items[i + 1]);
             size_t need = (k ? strlen(k) : 0) + (v ? strlen(v) : 0) + 1;
             while (len + need + 1 > cap) cap *= 2;
             out = (char*)realloc(out, cap);

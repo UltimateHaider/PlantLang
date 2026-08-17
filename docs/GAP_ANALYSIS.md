@@ -1,8 +1,8 @@
 # Legacy JS Interpreter vs Self-Hosted Compiler — Gap Analysis Report
 
-**Scope:** Legacy JavaScript interpreter (PlantLang ≤ v0.45.x, `core/interpreter.js` + associated modules, recovered from git at `7f54eae` v0.45.0) vs the self-hosted native compiler (v0.49.2, `src/plantc/*.plant` → C, `runtime/c/plant_runtime.c`).
+**Scope:** Legacy JavaScript interpreter (PlantLang ≤ v0.45.x, `core/interpreter.js` + associated modules, recovered from git at `7f54eae` v0.45.0) vs the self-hosted native compiler (v0.49.3, `src/plantc/*.plant` → C, `runtime/c/plant_runtime.c`).
 
-> **Status note (v0.49.2):** the legacy side no longer exists in the
+> **Status note (v0.49.3):** the legacy side no longer exists in the
 > working tree. v0.48.38m removed `core/`, `src/**/*.js`, `service/`,
 > `webrepl/`, `std/`, `benchmarks/`, and the editor assets from the
 > repository; the legacy engine is now preserved only in git history
@@ -17,7 +17,7 @@ PlantLang transitioned from a **tree-walking JavaScript interpreter** (~9,000 li
 
 The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 port. High-level counts:
 
-| Area | Legacy (v0.45.0) | Current (v0.49.2) | Gap |
+| Area | Legacy (v0.45.0) | Current (v0.49.3) | Gap |
 |---|---|---|---|---|
 | Statement keywords (parser dispatch) | ~40 | ~40 (incl. storms, CYCLE forms, NOW/ANALYZE/TYPEOF, FREE/ARC/FAST, WAIT/LOCK) | ~10 missing (deliberate cuts + legacy stubs) |
 | Innate/std library functions | ~60 (41 innate + 19 std/.plnt + 5 FFI stubs) | ~31 expression builtins (codegen_c.plant:2238-2292) + ~22 FFI module bindings (strings/fs/math) + ~50 declared runtime helpers | ~20 missing |
@@ -40,7 +40,7 @@ The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 
 
 - **Legacy side** (recovered from git `7f54eae`, the last commit shipping `core/interpreter.js`; removed from the working tree in v0.48.38m — all sources below are historical):
   `core/interpreter.js` (2,828 L), `core/parser.js` (3,033 L), `core/ast.js` (1,040 L), `core/typechecker.js` (1,529 L), `core/tokenizer.js` (259 L), `core/evaluator.js` (173 L), `core/runtime.js` (64 L), `core/innate.js` (67 L), `core/dispatcher.js` (286 L), `core/matrix.js`, `core/harvest.js` + `harvest_worker.js`, `core/diagnostics.js`, `core/lexer.js`, `core/runtime_bridge.c`, `src/interpreter/{cycle_evaluator,sort_evaluator,bloom_evaluator,show_formatter}.js`, `std/{prelude,string,math,io}.plnt`.
-- **Current side** (working tree v0.49.2): `src/plantc/{lexer,parser,codegen_c,main}.plant`, `runtime/c/plant_runtime.c` (≈6,000 L), `runtime/c/plant_compat.h` (549 L), `runtime/c/plant_runtime.h`, `tests/native/mock_ffi.{h,c}`, `Language Tour.md`.
+- **Current side** (working tree v0.49.3): `src/plantc/{lexer,parser,codegen_c,main}.plant`, `runtime/c/plant_runtime.c` (≈6,000 L), `runtime/c/plant_compat.h` (549 L), `runtime/c/plant_runtime.h`, `tests/native/mock_ffi.{h,c}`, `Language Tour.md`.
 - **Verification method:** full keyword-dispatch enumeration of both parsers; complete function inventories of `plant_compat.h` and `plant_runtime.c`; spot-checks for every "missing" claim (all negative).
 
 Legend for gap tables: **S** = supported, **P** = partial (different semantics / only reachable internally), **M** = missing, **D** = intentionally deprecated / dropped by design.
@@ -218,7 +218,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 ### 6.2 Legacy-only runtime features (M in current)
 - **Storms**: 13 typed exceptions (`ZERO_STORM` … `ANY_STORM`), `WEATHER/SHELTER/CALM`, `storm()` factory, location backfill. **v0.48.25 ships all 13 kinds**: the six core kinds (`ZERO_STORM`, `LOCK_STORM`, `MISSING_STORM`, `NETWORK_STORM`, `LOST_STORM`, `ANY_STORM`) plus the six additive classifications (`RANGE_STORM`, `TYPE_STORM`, `PARSE_STORM`, `HANDLE_STORM`, `HARVEST_STORM`, `FALL_STORM`) and `STOP_STORM` (the `STOP IF` classification), routed by the runtime's `plant_storm_match` against `AS e`-bound shelters with per-kind default messages, plus the `plant_calm` finalization pipeline (CALM runs on normal, caught, unmatched, and `GIVE`/`BREAK`/`CONTINUE` exits); **v0.48.38a ships the `storm()` factory** (`THROW storm("TYPE", "msg").` / `CALL storm(...).`): an ARC-managed `{type, message}` object that survives unwinding, binds as the SHELTER `AS e` value, and is released to the ARC heap after the handler body runs (`plant_storm_release`), with empty-type/empty-message normalization to `ANY_STORM` / registry defaults; **v0.48.38b ships location backfill**: `storm(...)` compiles to `plant_storm("TYPE", "msg", __FILE__, __LINE__, 0)` — the factory packs the compile-site source path and line into the object (column omitted), and SHELTER `AS e` bindings expose `_map_get(e, "file")` / `_map_get(e, "line")` metadata. Nothing missing.
 - **Soil scope chain**: locked vars (`LOCK_STORM`), PULSE flags, `WHENEVER … CHANGES` watchers.
-- **HTTP server** (LISTEN, request MAPs, JSON bodies, `GIVE … AS RESPONSE`, SIGINT/SIGTERM lifecycle) — `LISTEN ON port AS req.` + `GIVE … AS RESPONSE` shipped in v0.48.33 (one-shot server, plain-text bodies); still missing: JSON bodies and a signal-driven request loop.
+- **HTTP server** (LISTEN, request MAPs, JSON bodies, `GIVE … AS RESPONSE`, SIGINT/SIGTERM lifecycle) — `LISTEN ON port AS req.` + `GIVE … AS RESPONSE` shipped in v0.48.33 (one-shot server, plain-text bodies), timeout option v0.49.2, **JSON bodies shipped v0.49.3** (`GIVE … AS RESPONSE JSON` → `plant_net_respond_json`, json_stringify with `application/json`; `HARVEST … AS resp JSON` → `plant_net_harvest_json` parses the body into a `PlantJson`). Still missing: a signal-driven request loop.
 - **HTTP client** (HARVEST via worker threads, NETWORK_STORM, `{ok,status,body,headers}` result) — **shipped and formalized v0.49.0**: `HARVEST url AS resp [METHOD m] [BODY b] [HEADERS h] [TIMEOUT t] [MAP].` maps to `plant_net_harvest` / `plant_net_harvest_map` (parser `parse_harvest_stmt`, codegen `harvest_stmt`); MAP-mode exposes the live `sock` for `plant_net_read/write/close`. Missing vs legacy: worker-thread fan-out and TLS (https: ports parse to 443 but the socket is plaintext).
 - **VEIN file handles** (TAP/ABSORB/INFUSE/SEAL) — **shipped v0.48.38k**: `plant_tap/absorb/infuse/seal` over `FILE*` handles tagged with `VEIN_MAGIC` (invalid handles return falsy/`""`; `SEAL` closes and frees). The legacy forms were parse stubs.
 - **VERIFY/SUITE** test framework + `SHOW_VERIFY_SUMMARY` (replaced by shell harnesses).
@@ -306,4 +306,4 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 **Intentionally out of scope (D)**
 - SPECIES/BLOOM object model, `SELF:`/method dispatch, `PLANT` library statements, PULSE/WHENEVER watchers, JS `Function()` escape hatch, locale-specific IO formatting, VERIFY/SUITE language framework.
 
-*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.49.2. As of v0.49.2 the legacy side exists only in git history — `core/`, `src/**/*.js`, `std/`, `service/`, `webrepl/`, and `benchmarks/` were removed from the working tree (commit `c17de62`).*
+*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.49.3. As of v0.49.3 the legacy side exists only in git history — `core/`, `src/**/*.js`, `std/`, `service/`, `webrepl/`, and `benchmarks/` were removed from the working tree (commit `c17de62`).*

@@ -671,6 +671,22 @@ HARVEST "http://127.0.0.1:41234/post" AS r
 - `MAP` mode keeps the connection alive and adds a `sock` key: the
   descriptor as a decimal string for `plant_net_read`, `plant_net_write`,
   and `plant_net_close` (buffered read, send-all, idempotent close).
+- `JSON` mode (v0.49.3) parses the response body into a `PlantJson`
+  structure in `resp["body"]` — nested access via `json_get`, array
+  elements via `json_at`, scalar leaves via `json_val`:
+
+```
+HARVEST "http://127.0.0.1:41234/json" AS r JSON.
+REAP body FROM _map_get, r, "body".
+REAP key FROM json_get, body, "key".
+SHOW json_val(key).                    # → value
+REAP arr FROM json_get, body, "list".
+REAP el0 FROM json_at, arr, 0.         # → "1"
+REAP out FROM json_stringify, body.    # canonical JSON text back
+```
+
+  A body that is not valid JSON becomes the empty string (falsy). The
+  plain form keeps the raw text body.
 
 ### HTTP Server — LISTEN
 
@@ -692,6 +708,12 @@ GIVE "Hello from Chloroplast" AS RESPONSE.
   same block with `HTTP/1.1 200 OK` + `Content-Length`, then closes the
   connection. Without a bound request (no LISTEN in scope) it is a safe
   no-op; bind failure and malformed requests surface as `ok = "FALSE"`.
+- `GIVE <body> AS RESPONSE JSON.` (v0.49.3) serializes the body with
+  `json_stringify` and replies with `Content-Type: application/json`.
+  The body may be a pair-list MAP (→ JSON object), a plain LIST
+  (odd element count → JSON array), or a `PlantJson` from `json_parse`;
+  scalar values follow JSON rules (true/false/numbers raw, strings
+  quoted). The non-JSON form stays `text/plain`.
 - The regression suite drives these one-shot servers with
   `tests/regression/listen_client.py`.
 

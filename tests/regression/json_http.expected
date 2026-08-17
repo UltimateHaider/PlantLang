@@ -1,0 +1,9 @@
+json start
+json ok = TRUE
+json key = value
+json nested x = 1
+json first = 1
+json roundtrip = {"key":"value","nested":{"x":1},"list":[1,2,3]}
+json array = [1,2,3]
+plain body = hello mock:none
+json done

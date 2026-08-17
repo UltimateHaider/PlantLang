@@ -1,0 +1,5 @@
+listen_json_list start
+listen_json_list ok = TRUE
+listen_json_list responded
+client status: HTTP/1.1 200 OK
+client body: ["a","b","c"]

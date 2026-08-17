@@ -1,5 +1,60 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.49.3 — 2026 (JSON Bodies in HTTP Subsystem)
+
+### Network
+- **HARVEST JSON client parsing:** `HARVEST url AS resp JSON.` routes to
+  the new `plant_net_harvest_json` runtime function — the request runs
+  as `plant_net_harvest`, then the raw response body is passed through
+  `json_parse` and the structured `PlantJson` replaces the string in
+  the response MAP's `body` key (nested access via `json_get` /
+  `json_at`, scalars via `json_val`; a body that does not parse as
+  JSON becomes the empty string, `ok` stays `TRUE`). The plain form is
+  unchanged (raw text body).
+- **GIVE ... AS RESPONSE JSON:** `GIVE body AS RESPONSE JSON.` routes to
+  `plant_net_respond_json`, which serializes the body with
+  `json_stringify` and replies with `Content-Type: application/json`
+  (plain `GIVE ... AS RESPONSE` stays `text/plain`). `json_stringify`
+  gains a v0.49.3 array path: a plain LIST (odd element count — not a
+  pair-list MAP) now serializes as a JSON array `["a","b","c"]` instead
+  of being misread as object key/value pairs; scalar quoting logic was
+  extracted into a shared `_json_scalar_string` helper (null/true/
+  false/numbers raw, everything else quoted).
+- Parser: the HARVEST option scan accepts a trailing `JSON` flag (any
+  position among the other modifiers); `GIVE ... AS RESPONSE [JSON].`
+  sets the flag on the respond node. Codegen: `json` wins over `MAP`
+  for harvest routing.
+- Header sync: `plant_runtime.h` exposes `plant_net_harvest_json` and
+  `plant_net_respond_json`; linkage to generated C flows through
+  `plant_compat.h`'s `#include <plant_runtime.h>` — no duplicate
+  externs required.
+
+### Tests
+- `tests/regression/json_http.plant` (+ `.expected`): HARVEST JSON with
+  nested key access (`body["nested"]["x"]`), array element access and
+  `json_stringify` round-trips (`{"key":"value","nested":{"x":1},
+  "list":[1,2,3]}` / `[1,2,3]`), plus the plain-form fallback (raw
+  `hello mock:none` string). Mock server gained a `/json` endpoint
+  (Content-Type: application/json).
+- `tests/regression/listen_json.plant` (+ `.expected`): `GIVE
+  MAP AS RESPONSE JSON` — client sees `{"name":"chloroplast","ok":true}`.
+- `tests/regression/listen_json_list.plant` (+ `.expected`): `GIVE
+  LIST AS RESPONSE JSON` — client sees `["a","b","c"]` (array path).
+- Wire format verified manually: the response carries
+  `Content-Type: application/json`; server-side tests are
+  `listen_`-prefixed so the harness drives them with `listen_client.py`
+  (a plain `json_http.plant` cannot host a LISTEN — the suite would
+  block on accept with no client).
+
+### Documentation
+- `Language Tour.md`: Networking section updated with the JSON forms
+  (`HARVEST ... AS resp JSON.`, `GIVE ... AS RESPONSE JSON.`) and the
+  `PlantJson` access pattern (`json_get` / `json_at` / `json_val`).
+
+### Housekeeping
+- Version bump 0.49.2 → 0.49.3 (Makefile, compiler banner, native test
+  suite version check).
+
 ## v0.49.2 — 2026 (LISTEN HTTP Server Subsystem)
 
 ### Network

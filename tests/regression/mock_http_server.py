@@ -7,6 +7,8 @@ files stay deterministic:
   /get      200, body "hello mock:<X-Test header or 'none'>",
             response header X-Mock: yes
   /post     200, body "POST:<request body>", header X-Mock: post
+  /json     200, body {"key":"value","nested":{"x":1},"list":[1,2,3]},
+            Content-Type: application/json (v0.49.3)
   /slow     sleeps 3s, then 200 "slow" (used for timeout tests)
   /empty    200, empty body
   /status404 404 "not found"
@@ -101,6 +103,14 @@ while True:
             resp = (
                 b"HTTP/1.1 200 OK\r\n"
                 b"X-Mock: post\r\n"
+                + ("Content-Length: %d\r\n\r\n" % len(payload)).encode()
+                + payload
+            )
+        elif path == "/json":
+            payload = b'{"key":"value","nested":{"x":1},"list":[1,2,3]}'
+            resp = (
+                b"HTTP/1.1 200 OK\r\n"
+                b"Content-Type: application/json\r\n"
                 + ("Content-Length: %d\r\n\r\n" % len(payload)).encode()
                 + payload
             )

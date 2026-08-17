@@ -1,0 +1,31 @@
+# json_http: JSON bodies in the HTTP subsystem (v0.49.3).
+# Client side: HARVEST ... AS resp JSON. parses the response body into
+# a PlantJson structure (nested key access via json_get, array element
+# access via json_at, scalar leaves via json_val), and json_stringify
+# round-trips it back to canonical JSON. The plain HARVEST form stays
+# untouched: the /get body remains a raw string.
+ACTION main(),
+  SHOW "json start".
+  HARVEST "http://127.0.0.1:41234/json" AS r JSON.
+  REAP ok FROM _map_get, r, "ok".
+  SHOW "json ok = " + ok.
+  REAP jb FROM _map_get, r, "body".
+  REAP key FROM json_get, jb, "key".
+  SHOW "json key = " + json_val(key).
+  REAP nested FROM json_get, jb, "nested".
+  REAP x FROM json_get, nested, "x".
+  SHOW "json nested x = " + json_val(x).
+  REAP arr FROM json_get, jb, "list".
+  REAP el0 FROM json_at, arr, 0.
+  SHOW "json first = " + json_val(el0).
+  REAP back FROM json_stringify, jb.
+  SHOW "json roundtrip = " + back.
+  REAP arrback FROM json_stringify, arr.
+  SHOW "json array = " + arrback.
+
+  HARVEST "http://127.0.0.1:41234/get" AS t.
+  REAP body FROM _map_get, t, "body".
+  SHOW "plain body = " + body.
+  SHOW "json done".
+  GIVE 0.
+/GIVE main.

@@ -701,9 +701,17 @@ ACTION parse_give_stmt(tokens(LIST), pos(NUM), clv(TX)),
       REAP p4 FROM _second, as_pair.
       REAP rs_pair FROM consume, tokens, p4.
       REAP p5 FROM _second, rs_pair.
+      CREATE rjson(TX) TO "".
+      REAP rtok FROM peek, tokens, p5.
+      REAP rlx FROM tok_lex, rtok.
+      IF rlx IS "JSON",
+        REAP drop_rj FROM consume, tokens, p5.
+        REAP p5 FROM _second, drop_rj.
+        SET rjson TO "1".
+      /IF.
       REAP dot_pair FROM consume, tokens, p5.
       REAP p6 FROM _second, dot_pair.
-      GIVE plant_list_make(2, plant_list_make(6, "type", "respond_stmt", "content", expr, "req", clv), p6).
+      GIVE plant_list_make(2, plant_list_make(8, "type", "respond_stmt", "content", expr, "req", clv, "json", rjson), p6).
     /IF.
   /IF.
   GIVE plant_list_make(2, plant_list_make(4, "type", "give_stmt", "value", expr), p3).
@@ -2249,7 +2257,8 @@ ACTION parse_harvest_stmt(tokens(LIST), pos(NUM)),
   CREATE headers(TX) TO "".
   CREATE timeout(TX) TO "".
   CREATE map(TX) TO "".
-  CREATE okws(LIST) TO plant_list_make(6, "METHOD", "BODY", "HEADERS", "TIMEOUT", "MAP", ".").
+  CREATE json(TX) TO "".
+  CREATE okws(LIST) TO plant_list_make(7, "METHOD", "BODY", "HEADERS", "TIMEOUT", "MAP", "JSON", ".").
   REAP rpair FROM collect_until_keyword, tokens, p4, okws.
   SET resp TO rpair[0].
   REAP p4 FROM _second, rpair.
@@ -2263,6 +2272,12 @@ ACTION parse_harvest_stmt(tokens(LIST), pos(NUM)),
       REAP dropm FROM consume, tokens, p4.
       REAP p4 FROM _second, dropm.
       SET map TO "1".
+      CONTINUE 0.
+    /IF.
+    IF lx IS "JSON",
+      REAP dropj FROM consume, tokens, p4.
+      REAP p4 FROM _second, dropj.
+      SET json TO "1".
       CONTINUE 0.
     /IF.
     IF lx IS "METHOD" OR lx IS "BODY" OR lx IS "HEADERS" OR lx IS "TIMEOUT",
@@ -2288,7 +2303,7 @@ ACTION parse_harvest_stmt(tokens(LIST), pos(NUM)),
   /SEASON.
   REAP dot_pair FROM consume, tokens, p4.
   REAP p5 FROM _second, dot_pair.
-  GIVE plant_list_make(2, plant_list_make(16, "type", "harvest_stmt", "url", url, "resp", resp, "method", method, "payload", body, "headers", headers, "timeout", timeout, "map", map), p5).
+  GIVE plant_list_make(2, plant_list_make(20, "type", "harvest_stmt", "url", url, "resp", resp, "method", method, "payload", body, "headers", headers, "timeout", timeout, "map", map, "json", json), p5).
 /ACTION.
 
 # v0.48.33 — LISTEN ON port AS req. opens an HTTP server socket on

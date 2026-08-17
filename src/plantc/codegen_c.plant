@@ -2831,7 +2831,11 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP hhdrs FROM _map_get, node, "headers".
         REAP htime FROM _map_get, node, "timeout".
         REAP hmap FROM _map_get, node, "map".
+        REAP hjson FROM _map_get, node, "json".
         CREATE hfn(TX) TO "plant_net_harvest".
+        IF hjson IS "1",
+            SET hfn TO "plant_net_harvest_json".
+        /IF.
         IF hmap IS "1",
             SET hfn TO "plant_net_harvest_map".
         /IF.
@@ -2901,14 +2905,18 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         /IF.
     /IF.
 
-    # ── respond_stmt: GIVE body AS RESPONSE. ──────────────────
-    #    plant_net_respond(req, body);   (v0.48.33)
+    # ── respond_stmt: GIVE body AS RESPONSE [JSON]. ──────────
+    #    plant_net_respond(req, body);        (v0.48.33)
+    #    plant_net_respond_json(req, body);   (v0.49.3)
     #    req names the request MAP from the nearest LISTEN in the
     #    same block (resolved by the parser); an unbound statement
-    #    (no LISTEN in scope) is dropped silently.
+    #    (no LISTEN in scope) is dropped silently. The JSON form
+    #    serializes the body (MAP/LIST/PlantJson) with
+    #    Content-Type: application/json.
     IF ntype IS "respond_stmt",
         REAP rs_body FROM _map_get, node, "content".
         REAP rs_req FROM _map_get, node, "req".
+        REAP rs_json FROM _map_get, node, "json".
         IF rs_req IS "",
             GIVE "".
         /IF.
@@ -2923,7 +2931,11 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             /IF.
         /IF.
         IF rsb IS "", SET rsb TO "\"\"". /IF.
-        GIVE isel + "  plant_net_respond(" + rs_req + ", " + rsb + ");\n".
+        CREATE rfn(TX) TO "plant_net_respond".
+        IF rs_json IS "1",
+            SET rfn TO "plant_net_respond_json".
+        /IF.
+        GIVE isel + "  " + rfn + "(" + rs_req + ", " + rsb + ");\n".
     /IF.
 
     # ── sort_stmt: SORT l [ASC|DESC] [BY f…]. → l = plant_sort(l, spec); ─
