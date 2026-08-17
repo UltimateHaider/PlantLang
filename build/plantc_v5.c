@@ -6901,6 +6901,7 @@ tx_t translate_expr(tx_t expr) {
     e = _handle_func_paren(e, "PICK", "plant_pick");
     e = _handle_func_paren(e, "FIND", "plant_find");
     e = _handle_func_paren(e, "COUNT_OF", "plant_count_of");
+    e = _handle_func_paren(e, "SLICE", "plant_slice");
     e = _storm_inject(e);
     e = _handle_func(e, "TEST", "!");
     e = _list_literal(e);
@@ -7121,6 +7122,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t cval = "";
   tx_t isn2 = "";
   tx_t snm2 = "";
+  tx_t sl0 = "";
   tx_t isel = "";
   tx_t target = "";
   tx_t vtype = "";
@@ -7295,6 +7297,12 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         snm2 = enum_expr_of(evars, cval);
         if (isn2 == 0 && strcmp(snm2,"") != 0) {
             cval = _cat(_cat4("_from_enum(", cval, ", \"", snm2), "\")");
+        }
+        if (isn2 == 0) {
+            sl0 = substring(cval, 0, 12);
+            if (strcmp(sl0,"plant_slice(") == 0) {
+                cval = _cat3("plant_map_to_string(", cval, ")");
+            }
         }
         isel = indent_str(indent);
         return _cat4(isel, "  plant_print(", cval, ");\n");
@@ -11245,7 +11253,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.38j (pure native)");
+      plant_print("Chloroplast 0.48.38i (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

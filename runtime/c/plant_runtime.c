@@ -12,6 +12,7 @@
 #include <time.h>
 #include <errno.h>
 #include <dlfcn.h>
+#include <limits.h>
 
 /* v0.48.37c: cross-TU CLI state — plant_init_cli() runs in the generated
    program's own translation unit (via plant_compat.h), while
@@ -2717,6 +2718,78 @@ tx_t plant_count_of(tx_t text, tx_t sub) {
         p += slen;
     }
     return _from_long(n);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.48.38i — Universal sequence slicing: SLICE(data, start, end)
+   Slices either a string (tx_t) or a list (PlantArray, auto-
+   dispatched via the magic tag) over the half-open range
+   [start, end). Arguments accept raw small-integer literals (the
+   literal 0 is indistinguishable from the NULL sentinel and is a
+   real index, so the small-int check precedes everything else) or
+   numeric strings. "Not given" arguments (NULL / empty /
+   unparseable) default to 0 for start and the sequence length for
+   end. A -1 bound is the "expansion" marker per the specification:
+   start = -1 defaults to the beginning of the sequence, end = -1
+   extends the slice to the end of the sequence. Other negative
+   indices resolve relative to the length (length + index). Bounds
+   clamp to [0, length]; end < start yields an empty result. List
+   elements are canonicalized to text (raw small integers become
+   decimal strings) so the result prints safely.
+   ═══════════════════════════════════════════════════════════════ */
+
+static long _slice_arg(tx_t v) {
+    if ((intptr_t)v > -4096 && (intptr_t)v < 4096)
+        return (long)(intptr_t)v;
+    const char* s = v ? _S(v) : NULL;
+    if (!s || !*s) return LONG_MIN;
+    char* e = NULL;
+    double d = strtod(s, &e);
+    if (e != s && *e == '\0') return (long)d;
+    return LONG_MIN;
+}
+
+static void _slice_resolve(long* s, long* e, long len) {
+    if (*s == LONG_MIN || *s == -1) *s = 0;
+    if (*e == LONG_MIN || *e == -1) *e = len;
+    if (*s < 0) *s += len;
+    if (*e < 0) *e += len;
+    if (*s < 0) *s = 0;
+    if (*s > len) *s = len;
+    if (*e < 0) *e = 0;
+    if (*e > len) *e = len;
+    if (*e < *s) *e = *s;
+}
+
+tx_t plant_slice(tx_t data, tx_t start, tx_t end) {
+    if (!data) return strdup("");
+    PlantArray* a = (PlantArray*)data;
+    if (a->magic == PLANT_ARRAY_MAGIC) {
+        long len = a->count;
+        long s = _slice_arg(start);
+        long e = _slice_arg(end);
+        _slice_resolve(&s, &e, len);
+        PlantArray* out = plant_list_create(e - s);
+        out->kind = a->kind;
+        for (long i = s; i < e; i++) {
+            char buf[32];
+            const char* el = _plant_el_text(a->items[i], buf);
+            plant_list_push(out, strdup(el));
+        }
+        return (tx_t)out;
+    }
+    const char* t = _S(data);
+    if (!t) return strdup("");
+    long len = (long)strlen(t);
+    long s = _slice_arg(start);
+    long e = _slice_arg(end);
+    _slice_resolve(&s, &e, len);
+    if (e <= s) return strdup("");
+    char* out = malloc((size_t)(e - s) + 1);
+    if (!out) return strdup("");
+    memcpy(out, t + s, (size_t)(e - s));
+    out[e - s] = '\0';
+    return out;
 }
 
 /* ═══════════════════════════════════════════════════════════════

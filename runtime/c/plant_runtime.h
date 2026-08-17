@@ -187,6 +187,11 @@ tx_t        plant_pick(tx_t cond, tx_t true_val, tx_t false_val);
    non-overlapping occurrences ("0" when either argument is empty). */
 tx_t        plant_find(tx_t text, tx_t sub);
 tx_t        plant_count_of(tx_t text, tx_t sub);
+/* v0.48.38i — universal slicing over strings and lists with
+   negative-index resolution (length + index), half-open [start,
+   end) bounds, clamping, and "not given" defaults (0 / length).
+   List results canonicalize elements to text. */
+tx_t        plant_slice(tx_t data, tx_t start, tx_t end);
 int         plant_storm_match(const char* thrown_type, const char* shelter_type);
 int         plant_storm_is_known(const char* type);
 const char* plant_storm_default_message(const char* type);

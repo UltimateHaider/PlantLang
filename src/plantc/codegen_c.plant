@@ -2275,6 +2275,10 @@ ACTION translate_expr(expr(TX)),
     # other dual-argument built-ins.
     REAP e FROM _handle_func_paren, e, "FIND", "plant_find".
     REAP e FROM _handle_func_paren, e, "COUNT_OF", "plant_count_of".
+    # v0.48.38i — universal slicing: SLICE(data, start, end) maps
+    # through _handle_func_paren; string and list arguments both
+    # arrive as expressions, the runtime dispatches on the value.
+    REAP e FROM _handle_func_paren, e, "SLICE", "plant_slice".
     REAP e FROM _storm_inject, e.
     REAP e FROM _handle_func, e, "TEST", "!".
     # list literals rewrite BEFORE boolean sanitization so a bare
@@ -2517,6 +2521,14 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP snm2 FROM enum_expr_of, evars, cval.
         IF isn2 IS 0 AND snm2 ISNT "",
             SET cval TO "_from_enum(" + cval + ", \"" + snm2 + "\")".
+        /IF.
+        # v0.48.38i — SHOW of a SLICE(...) list result serializes via
+        # plant_map_to_string; _cat/_S cannot stringify a PlantArray.
+        IF isn2 IS 0,
+            REAP sl0 FROM substring, cval, 0, 12.
+            IF sl0 IS "plant_slice(",
+                SET cval TO "plant_map_to_string(" + cval + ")".
+            /IF.
         /IF.
         REAP isel FROM indent_str, indent.
         GIVE isel + "  plant_print(" + cval + ");\n".

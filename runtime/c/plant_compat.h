@@ -714,6 +714,10 @@ tx_t  plant_pick(tx_t cond, tx_t true_val, tx_t false_val);
    plant_runtime.h; mirrored here for the FFI surface). */
 tx_t  plant_find(tx_t text, tx_t sub);
 tx_t  plant_count_of(tx_t text, tx_t sub);
+
+/* v0.48.38i — universal sequence slicing (also declared via
+   plant_runtime.h; mirrored here for the FFI surface). */
+tx_t  plant_slice(tx_t data, tx_t start, tx_t end);
 long  plant_arc_gc(void);                             /* GC.cycle(): reclaim */
 tx_t  plant_persist_status(void);                     /* heap telemetry (text) */
 tx_t  plant_arc_finalize_count(void);                 /* finalize counter */

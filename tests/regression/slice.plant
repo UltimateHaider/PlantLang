@@ -1,0 +1,22 @@
+# slice — universal sequence slicing SLICE(data, start, end)
+# (v0.48.38i). Half-open [start, end) bounds over strings and lists.
+# "Not given" arguments default to 0 (start) / length (end); -1 is
+# the bound-expansion marker (start -> beginning, end -> end of
+# sequence); other negative indices resolve relative to the length
+# (length + index); bounds clamp to the sequence. List results
+# serialize as "[e1, e2]" with unquoted elements.
+
+ACTION main(),
+  SHOW "s05=" + SLICE("hello world", 0, 5).
+  SHOW "s611=" + SLICE("hello world", 6, 11).
+  SHOW "s0m1=" + SLICE("hello world", 0, -1).
+  SHOW "sm5m1=" + SLICE("hello world", -5, -1).
+  SHOW "sm3m1=" + SLICE("hello", -3, -1).
+  SHOW SLICE([1, 2, 3, 4, 5], 0, 3).
+  SHOW SLICE([1, 2, 3, 4, 5], 0, -1).
+  SHOW SLICE([1, 2, 3, 4, 5], -2, -1).
+  SHOW SLICE(["a", "b", "c", "d"], 1, 3).
+  SHOW "empty=" + SLICE("hello", 2, 2).
+  SHOW "clamp=" + SLICE("hello", 0, 99).
+  GIVE 0.
+/GIVE main.

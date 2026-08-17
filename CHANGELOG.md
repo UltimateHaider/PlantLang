@@ -1,5 +1,45 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.38i — 2026 (Universal Sequence Slicing: SLICE)
+
+### New Features
+- **`SLICE(data, start, end)`** (plant_runtime.c, codegen_c.plant):
+  one built-in slices both strings (`TX`) and lists (`LIST`),
+  dispatching at runtime on the value's magic tag. Slices are
+  half-open `[start, end)`. `translate_expr` maps the triple-argument
+  form through `_handle_func_paren` to `plant_slice`.
+- **Index resolution** (plant_runtime.c): arguments accept raw
+  small-integer literals (the literal `0` is indistinguishable from
+  the NULL sentinel and counts as a real index, so the small-int
+  check precedes everything else) or numeric strings. "Not given"
+  arguments (NULL / empty / unparseable) default to `0` for `start`
+  and the sequence length for `end`. Per the specification, `-1` is
+  the **bound-expansion marker**: `start = -1` defaults to the
+  beginning and `end = -1` extends the slice to the end of the
+  sequence; other negative indices resolve relative to the length
+  (`length + index`). Bounds clamp to `[0, length]` and
+  `end < start` yields an empty result.
+- **List results** (plant_runtime.c, codegen_c.plant): sliced lists
+  are fresh `PlantArray`s whose elements are canonicalized to text
+  (raw small integers become decimal strings), so results print as
+  `[1, 2, 3]`. `SHOW` of a `SLICE(...)` list result wraps the call
+  in `plant_map_to_string` (the serializer) — `_cat`/`_S` cannot
+  stringify an array.
+
+### Changes
+- `plant_runtime.h` declares `plant_slice`; `plant_compat.h` mirrors
+  it for the FFI surface.
+- New regression suite `tests/regression/slice.plant` covering
+  positive and negative bounds on strings and lists, bound
+  expansion (`end = -1`), clamping, and empty ranges. Note: the
+  runtime follows the specification's written index rules; three
+  illustrative examples in the specification table are internally
+  contradictory (e.g. `(0, -1)` → `"hello worl"` requires
+  `end = -1` → `length - 1`, while `(-5, -1)` → `"world"` requires
+  `end = -1` → `length`) and resolve per the prose: `end = -1`
+  extends to the end (`SLICE("hello world", 0, -1)` → `"hello
+  world"`, `SLICE([1, 2, 3, 4, 5], 0, -1)` → `[1, 2, 3, 4, 5]`).
+
 ## v0.48.38j — 2026 (String Analysis Built-ins: FIND, COUNT_OF)
 
 ### New Features
