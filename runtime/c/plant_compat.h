@@ -709,6 +709,11 @@ tx_t  plant_all(tx_t list, tx_t cond);
 /* v0.48.38h — ternary built-in (also declared via plant_runtime.h;
    mirrored here for the FFI surface). */
 tx_t  plant_pick(tx_t cond, tx_t true_val, tx_t false_val);
+
+/* v0.48.38j — string analysis built-ins (also declared via
+   plant_runtime.h; mirrored here for the FFI surface). */
+tx_t  plant_find(tx_t text, tx_t sub);
+tx_t  plant_count_of(tx_t text, tx_t sub);
 long  plant_arc_gc(void);                             /* GC.cycle(): reclaim */
 tx_t  plant_persist_status(void);                     /* heap telemetry (text) */
 tx_t  plant_arc_finalize_count(void);                 /* finalize counter */

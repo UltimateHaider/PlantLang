@@ -181,6 +181,12 @@ tx_t        plant_all(tx_t list, tx_t cond);
    "0"/"false"/"FALSE") yield true_val; everything else yields
    false_val. Results canonicalize to text. */
 tx_t        plant_pick(tx_t cond, tx_t true_val, tx_t false_val);
+/* v0.48.38j — string analysis: FIND returns the 0-based index of
+   the first substring occurrence ("0" for an empty sub, "-1" when
+   text is empty or absent); COUNT_OF returns the number of
+   non-overlapping occurrences ("0" when either argument is empty). */
+tx_t        plant_find(tx_t text, tx_t sub);
+tx_t        plant_count_of(tx_t text, tx_t sub);
 int         plant_storm_match(const char* thrown_type, const char* shelter_type);
 int         plant_storm_is_known(const char* type);
 const char* plant_storm_default_message(const char* type);

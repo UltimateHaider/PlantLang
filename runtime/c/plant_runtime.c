@@ -2685,6 +2685,41 @@ tx_t plant_pick(tx_t cond, tx_t true_val, tx_t false_val) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   v0.48.38j — String analysis built-ins: FIND / COUNT_OF
+   plant_find(text, sub) returns the 0-based index of the first
+   occurrence of sub inside text ("0" for an empty sub, "-1" when
+   text is empty or the sub is absent). plant_count_of(text, sub)
+   counts non-overlapping occurrences via strstr with
+   pos + strlen(sub) pointer advancement ("0" when either argument
+   is empty). Results are returned as text via _from_long.
+   ═══════════════════════════════════════════════════════════════ */
+
+tx_t plant_find(tx_t text, tx_t sub) {
+    const char* t = text ? _S(text) : "";
+    if (!t || !*t) return strdup("-1");
+    const char* s = sub ? _S(sub) : "";
+    if (!s || !*s) return strdup("0");
+    const char* p = strstr(t, s);
+    if (!p) return strdup("-1");
+    return _from_long((long)(p - t));
+}
+
+tx_t plant_count_of(tx_t text, tx_t sub) {
+    const char* t = text ? _S(text) : "";
+    if (!t || !*t) return strdup("0");
+    const char* s = sub ? _S(sub) : "";
+    if (!s || !*s) return strdup("0");
+    long n = 0;
+    const char* p = t;
+    size_t slen = strlen(s);
+    while ((p = strstr(p, s)) != NULL) {
+        n++;
+        p += slen;
+    }
+    return _from_long(n);
+}
+
+/* ═══════════════════════════════════════════════════════════════
    v0.47.2 — Native Data Structures (Set / Queue / Stack)
    Implementations; signatures in plant_compat.h
    ═══════════════════════════════════════════════════════════════ */

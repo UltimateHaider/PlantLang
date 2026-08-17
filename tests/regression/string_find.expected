@@ -1,0 +1,10 @@
+find_world=6
+find_miss=-1
+find_empty_sub=0
+find_empty_text=-1
+count_two=2
+count_miss=0
+count_empty=0
+count_no_overlap=2
+find_aaa=0
+count_abc=3

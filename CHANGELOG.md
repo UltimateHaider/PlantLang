@@ -1,5 +1,31 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.38j — 2026 (String Analysis Built-ins: FIND, COUNT_OF)
+
+### New Features
+- **`FIND(text, sub)`** (plant_runtime.c, codegen_c.plant): returns
+  the 0-based index of the first occurrence of `sub` inside `text`
+  as text via `_from_long`. Empty/`NULL` `sub` yields `"0"` (an
+  empty needle matches at the start), empty/`NULL` `text` or a
+  missing substring yields `"-1"`.
+- **`COUNT_OF(text, sub)`** (plant_runtime.c, codegen_c.plant):
+  counts the total number of **non-overlapping** occurrences of
+  `sub` in `text` using `strstr` with `pos + strlen(sub)` pointer
+  advancement (`COUNT_OF("aaaa", "aa")` → `2`). Yields `"0"` when
+  either argument is empty/`NULL`.
+- Both map through `_handle_func_paren` in `translate_expr`
+  (`FIND` → `plant_find`, `COUNT_OF` → `plant_count_of`), matching
+  the established dual-argument built-in pattern.
+
+### Changes
+- `plant_runtime.h` declares both functions; `plant_compat.h`
+  mirrors them for the FFI surface.
+- New regression suite `tests/regression/string_find.plant`
+  covering first-occurrence lookup (`FIND("hello world", "world")`
+  → `"6"`), misses, empty-sub/text edge cases, repetition counting
+  (`"hello hello"` → 2, `"abcabcabc"` → 3), and the non-overlap
+  guarantee (`"aaaa"` / `"aa"` → 2).
+
 ## v0.48.38h — 2026 (Ternary Built-in: PICK)
 
 ### New Features

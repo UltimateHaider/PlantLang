@@ -1,0 +1,20 @@
+# string_find — FIND / COUNT_OF string built-ins (v0.48.38j).
+# FIND(text, sub) returns the 0-based index of the first occurrence
+# of sub ("0" for an empty sub, "-1" when text is empty or the sub
+# is absent). COUNT_OF(text, sub) counts non-overlapping occurrences
+# via strstr with pos + strlen(sub) advancement ("0" when either
+# argument is empty).
+
+ACTION main(),
+  SHOW "find_world=" + FIND("hello world", "world").
+  SHOW "find_miss=" + FIND("hello world", "x").
+  SHOW "find_empty_sub=" + FIND("hello", "").
+  SHOW "find_empty_text=" + FIND("", "x").
+  SHOW "count_two=" + COUNT_OF("hello hello", "hello").
+  SHOW "count_miss=" + COUNT_OF("hello", "x").
+  SHOW "count_empty=" + COUNT_OF("", "x").
+  SHOW "count_no_overlap=" + COUNT_OF("aaaa", "aa").
+  SHOW "find_aaa=" + FIND("aaa", "aa").
+  SHOW "count_abc=" + COUNT_OF("abcabcabc", "abc").
+  GIVE 0.
+/GIVE main.
