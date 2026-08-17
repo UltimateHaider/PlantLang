@@ -176,6 +176,11 @@ tx_t        plant_sqrt(tx_t x);
 tx_t        plant_has(tx_t list, tx_t value);
 tx_t        plant_any(tx_t list, tx_t cond);
 tx_t        plant_all(tx_t list, tx_t cond);
+/* v0.48.38h — ternary built-in: truthy conditions ("1", "TRUE",
+   "true", nonzero raw int literals, any non-empty string except
+   "0"/"false"/"FALSE") yield true_val; everything else yields
+   false_val. Results canonicalize to text. */
+tx_t        plant_pick(tx_t cond, tx_t true_val, tx_t false_val);
 int         plant_storm_match(const char* thrown_type, const char* shelter_type);
 int         plant_storm_is_known(const char* type);
 const char* plant_storm_default_message(const char* type);

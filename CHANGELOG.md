@@ -1,5 +1,35 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.38h — 2026 (Ternary Built-in: PICK)
+
+### New Features
+- **`PICK(cond, true_val, false_val)`** (plant_runtime.c,
+  codegen_c.plant): a concise ternary — returns `true_val` when the
+  condition is truthy and `false_val` otherwise. `translate_expr`
+  maps the triple-argument form through `_handle_func_paren` to
+  `plant_pick`, so conditions are evaluated lazily at the call site
+  in C and only the chosen value is materialized.
+- **Truthiness rules** (plant_runtime.c): a condition is truthy when
+  it is a nonzero raw small-integer literal (negative integers
+  included; the small-int check precedes the NULL guard because the
+  literal `0` is indistinguishable from the NULL sentinel) or a
+  non-empty string other than `"0"`, `"false"`, `"FALSE"`. Bare
+  `TRUE` / `FALSE` conditions become `1` / `0` via
+  `plant_sanitize_bools` before reaching the runtime.
+- **Result canonicalization** (plant_runtime.c): returned values
+  render as text like list elements — raw small integers become
+  decimal via `_from_long` (`PICK(TRUE, 1, 0)` → `"1"`), strings
+  pass through.
+
+### Changes
+- `plant_runtime.h` declares `plant_pick`; `plant_compat.h` mirrors
+  it for the FFI surface.
+- New regression suite `tests/regression/pick.plant` covering
+  integer literals (`PICK(1, ...)` → yes, `PICK(0, ...)` → no,
+  `PICK(-1, ...)` → yes), bare TRUE/FALSE, comparisons
+  (`PICK(20 >= 18, ...)` / `PICK(10 >= 18, ...)`), and text
+  conditions (`""`, `"TRUE"`, `"0"`, arbitrary non-empty strings).
+
 ## v0.48.38g — 2026 (Conditional List Built-ins: HAS, ANY, ALL)
 
 ### New Features

@@ -1,0 +1,20 @@
+# pick — ternary built-in PICK(cond, true_val, false_val) (v0.48.38h).
+# Truthy conditions: "1", "TRUE", "true", nonzero raw integer
+# literals, any non-empty string other than "0"/"false"/"FALSE".
+# Falsy: "0", "", NULL, "false", "FALSE". Returned values
+# canonicalize to text (raw integers render as decimal).
+
+ACTION main(),
+  SHOW "lit1=" + PICK(1, "yes", "no").
+  SHOW "lit0=" + PICK(0, "yes", "no").
+  SHOW "true=" + PICK(TRUE, 1, 0).
+  SHOW "false=" + PICK(FALSE, 1, 0).
+  SHOW "adult=" + PICK(20 >= 18, "adult", "child").
+  SHOW "child=" + PICK(10 >= 18, "adult", "child").
+  SHOW "empty=" + PICK("", "yes", "no").
+  SHOW "str=" + PICK("TRUE", "a", "b").
+  SHOW "zero=" + PICK("0", "a", "b").
+  SHOW "neg=" + PICK(-1, "a", "b").
+  SHOW "txt=" + PICK("anything", "a", "b").
+  GIVE 0.
+/GIVE main.

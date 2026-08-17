@@ -2655,6 +2655,36 @@ tx_t plant_all(tx_t list, tx_t cond) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   v0.48.38h — Ternary built-in: PICK(cond, true_val, false_val)
+   cond is truthy when it is a nonzero raw small integer literal
+   (the small-int check must precede the NULL guard — literal 0 is
+   indistinguishable from the NULL sentinel and falls through to the
+   text path) or a non-empty string other than "0"/"false"/"FALSE".
+   Returned values are canonicalized like list elements: raw small
+   integers render as decimal text via _from_long, everything else
+   stringifies.
+   ═══════════════════════════════════════════════════════════════ */
+
+static tx_t _plant_pick_ret(tx_t v) {
+    if ((intptr_t)v > -4096 && (intptr_t)v < 4096) {
+        char buf[32];
+        snprintf(buf, 32, "%ld", (long)(intptr_t)v);
+        return strdup(buf);
+    }
+    const char* s = v ? _S(v) : "";
+    return strdup(s ? s : "");
+}
+
+tx_t plant_pick(tx_t cond, tx_t true_val, tx_t false_val) {
+    if (cond != NULL && (intptr_t)cond > -4096 && (intptr_t)cond < 4096)
+        return _plant_pick_ret(true_val);
+    const char* c = cond ? _S(cond) : "";
+    int truthy = c && *c != '\0' && strcmp(c, "0") != 0 &&
+                 strcmp(c, "false") != 0 && strcmp(c, "FALSE") != 0;
+    return _plant_pick_ret(truthy ? true_val : false_val);
+}
+
+/* ═══════════════════════════════════════════════════════════════
    v0.47.2 — Native Data Structures (Set / Queue / Stack)
    Implementations; signatures in plant_compat.h
    ═══════════════════════════════════════════════════════════════ */
