@@ -1,0 +1,24 @@
+# list_cond — conditional list built-ins HAS / ANY / ALL (v0.48.38g).
+# HAS(list, value) reports "1" when the value is present (elements
+# and value canonicalize to text — HAS([1, 2, 3], 2) matches the
+# "2" element). ANY(list, cond) / ALL(list, cond) evaluate a runtime
+# condition string ("<op> <num>") against each numeric element; a
+# non-numeric element fails the predicate. ANY yields "0" for empty
+# lists; ALL is vacuously "1" for empty lists.
+
+ACTION main(),
+  SHOW "has_yes=" + HAS([1, 2, 3], 2).
+  SHOW "has_no=" + HAS([1, 2, 3], 5).
+  SHOW "has_empty=" + HAS([], 1).
+  SHOW "has_str=" + HAS(["a", "b"], "b").
+  SHOW "any_gt=" + ANY([1, 2, 3], > 2).
+  SHOW "any_gt5=" + ANY([1, 2, 3], > 5).
+  SHOW "any_empty=" + ANY([], > 0).
+  SHOW "all_gt0=" + ALL([1, 2, 3], > 0).
+  SHOW "all_gt2=" + ALL([1, 2, 3], > 2).
+  SHOW "all_empty=" + ALL([], > 0).
+  SHOW "any_eq=" + ANY([1, 2, 3], == 2).
+  SHOW "all_ge=" + ALL([1, 2, 3], >= 1).
+  SHOW "all_le=" + ALL([1, 2, 3], <= 3).
+  GIVE 0.
+/GIVE main.

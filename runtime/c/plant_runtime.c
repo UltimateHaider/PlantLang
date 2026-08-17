@@ -2575,6 +2575,86 @@ tx_t plant_sqrt(tx_t x) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   v0.48.38g — Conditional list built-ins: HAS / ANY / ALL
+   plant_has(list, value) reports "1" when value is present (both
+   sides are canonicalized to text — raw small integers convert via
+   _from_long so HAS([1, 2, 3], 2) matches the "2" element). ANY /
+   ALL evaluate a runtime condition string ("<op> <num>", op one of
+   > < >= <= == != =) against each numeric element; elements that
+   do not coerce to a number simply fail the predicate. ANY returns
+   "0" for empty lists; ALL is vacuously "1" for empty lists.
+   ═══════════════════════════════════════════════════════════════ */
+
+static const char* _plant_el_text(tx_t el, char* buf) {
+    if ((intptr_t)el > -4096 && (intptr_t)el < 4096) {
+        snprintf(buf, 32, "%ld", (long)(intptr_t)el);
+        return buf;
+    }
+    const char* s = el ? _S(el) : "";
+    return s ? s : "";
+}
+
+tx_t plant_has(tx_t list, tx_t value) {
+    PlantArray* a = (PlantArray*)list;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC || a->count == 0) return strdup("0");
+    char vb[32];
+    const char* v = _plant_el_text(value, vb);
+    for (int64_t i = 0; i < a->count; i++) {
+        char eb[32];
+        const char* e = _plant_el_text(a->items[i], eb);
+        if (strcmp(e, v) == 0) return strdup("1");
+    }
+    return strdup("0");
+}
+
+/* _plant_cond_match: evaluate "el <op> target" from a cond string
+   like "> 2" or "<= 0.5"; malformed conds match nothing. */
+static int _plant_cond_match(double el, const char* cond) {
+    if (!cond) return 0;
+    while (*cond == ' ' || *cond == '\t') cond++;
+    char op[4] = "";
+    int oi = 0;
+    while (*cond && *cond != ' ' && *cond != '\t' && oi < 3) {
+        op[oi++] = *cond++;
+    }
+    while (*cond == ' ' || *cond == '\t') cond++;
+    char* end = NULL;
+    double target = strtod(cond, &end);
+    if (end == cond) return 0;
+    if (strcmp(op, ">") == 0) return el > target;
+    if (strcmp(op, "<") == 0) return el < target;
+    if (strcmp(op, ">=") == 0) return el >= target;
+    if (strcmp(op, "<=") == 0) return el <= target;
+    if (strcmp(op, "==") == 0 || strcmp(op, "=") == 0) return el == target;
+    if (strcmp(op, "!=") == 0) return el != target;
+    return 0;
+}
+
+tx_t plant_any(tx_t list, tx_t cond) {
+    PlantArray* a = (PlantArray*)list;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC || a->count == 0) return strdup("0");
+    const char* cs = cond ? _S(cond) : "";
+    for (int64_t i = 0; i < a->count; i++) {
+        double elv;
+        if (_plant_math_num(a->items[i], &elv) && _plant_cond_match(elv, cs))
+            return strdup("1");
+    }
+    return strdup("0");
+}
+
+tx_t plant_all(tx_t list, tx_t cond) {
+    PlantArray* a = (PlantArray*)list;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC || a->count == 0) return strdup("1");
+    const char* cs = cond ? _S(cond) : "";
+    for (int64_t i = 0; i < a->count; i++) {
+        double elv;
+        if (!_plant_math_num(a->items[i], &elv) || !_plant_cond_match(elv, cs))
+            return strdup("0");
+    }
+    return strdup("1");
+}
+
+/* ═══════════════════════════════════════════════════════════════
    v0.47.2 — Native Data Structures (Set / Queue / Stack)
    Implementations; signatures in plant_compat.h
    ═══════════════════════════════════════════════════════════════ */

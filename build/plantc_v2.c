@@ -77,6 +77,8 @@ tx_t parse_program(PlantArray* tokens);
 tx_t _substr(tx_t str, long start, long end);
 tx_t _handle_func(tx_t expr, tx_t kw, tx_t cfn);
 tx_t _handle_func_paren(tx_t expr, tx_t kw, tx_t cfn);
+tx_t _find_substr(tx_t s, tx_t needle);
+tx_t _quote_cond_arg(tx_t e, tx_t cfn);
 tx_t _storm_inject(tx_t expr);
 tx_t _is_int(tx_t t);
 tx_t _push_el(PlantArray* els, tx_t cur);
@@ -4636,6 +4638,66 @@ tx_t _handle_func_paren(tx_t expr, tx_t kw, tx_t cfn) {
     }
     return res;
 }
+tx_t _find_substr(tx_t s, tx_t needle) {
+  tx_t seg = "";
+    long nlen = strlen( needle );
+    if (nlen == 0) {
+        return 0;
+    }
+    long slen = strlen( s );
+    long fi = 0;
+    while (fi + nlen <= slen) {
+        long bd = fi+nlen+0;
+        seg = substring(s, fi, bd);
+        if (strcmp(str_eq ( seg , needle ),"1") == 0) {
+            return fi;
+        }
+        fi = fi+1;
+    }
+    return - 1;
+}
+tx_t _quote_cond_arg(tx_t e, tx_t cfn) {
+  tx_t cpos = "";
+  tx_t qcond = "";
+  tx_t qhead = "";
+  tx_t qc0 = "";
+    cpos = _find_substr(e, _cat(cfn, "("));
+    if (cpos == - 1) {
+        return e;
+    }
+    long dep = 0;
+    long qi = strlen( e ) - 2;
+    tx_t qch = "";
+    long qcomma = - 1;
+    while (qi > cpos) {
+        qch = char_at(e, qi);
+        if (strcmp(qch,")") == 0) {
+            dep = dep+1;
+        }
+        if (strcmp(qch,"(") == 0) {
+            dep = dep - 1;
+            if (dep == 0) {
+                break;
+            }
+        }
+        if (dep == 0 && strcmp(qch,",") == 0) {
+            qcomma = qi;
+            break;
+        }
+        qi = qi - 1;
+    }
+    if (qcomma == - 1) {
+        return e;
+    }
+    qcond = substring(e, qcomma+1, strlen( e ) - 1);
+    qcond = trim(qcond);
+    qhead = substring(e, 0, qcomma+1);
+    qc0 = char_at(qcond, 0);
+    if (strcmp(qc0,"\"") == 0) {
+        return _cat(_cat(qhead, qcond), ")");
+    }
+    return _cat(_cat(_cat(qhead, "\""), qcond), "\")");
+}
 tx_t _storm_inject(tx_t expr) {
   tx_t s0 = "";
   tx_t sip = "";
@@ -6824,6 +6886,11 @@ tx_t translate_expr(tx_t expr) {
     e = _handle_func_paren(e, "SIN", "plant_sin");
     e = _handle_func_paren(e, "COS", "plant_cos");
     e = _handle_func_paren(e, "SQRT", "plant_sqrt");
+    e = _handle_func_paren(e, "HAS", "plant_has");
+    e = _handle_func_paren(e, "ANY", "plant_any");
+    e = _handle_func_paren(e, "ALL", "plant_all");
+    e = _quote_cond_arg(e, "plant_any");
+    e = _quote_cond_arg(e, "plant_all");
     e = _storm_inject(e);
     e = _handle_func(e, "TEST", "!");
     e = _list_literal(e);
@@ -11168,7 +11235,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.38f (pure native)");
+      plant_print("Chloroplast 0.48.38g (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

@@ -1,5 +1,37 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.38g — 2026 (Conditional List Built-ins: HAS, ANY, ALL)
+
+### New Features
+- **`HAS(list, value)`** (plant_runtime.c, codegen_c.plant): reports
+  `"1"` when `value` is present in `list`. Both sides canonicalize to
+  text first — raw small integers convert via `_from_long` (so
+  `HAS([1, 2, 3], 2)` matches the `"2"` element) and anything else
+  stringifies — then compares with `strcmp`. Empty lists yield `"0"`.
+- **`ANY(list, cond)` / `ALL(list, cond)`** (plant_runtime.c,
+  codegen_c.plant): evaluate a runtime condition string
+  (`"> 2"`, `"<= 0.5"`) against each numeric element of the list.
+  The condition supports `> < >= <= == != =`; the word-form
+  comparison (`ANY(l, IS 2)`) works too because `translate_expr`'s
+  ` IS ` → ` == ` replacement runs before the quote step. Elements
+  that do not coerce to a number fail the predicate. `ANY` yields
+  `"0"` for empty lists; `ALL` is vacuously `"1"` for empty lists.
+- **Condition quoting** (codegen_c.plant): `ANY`/`ALL` arguments
+  would be invalid C as bare text (`plant_any(l, > 2)`), so a new
+  `_quote_cond_arg` action scans backward from the closing paren for
+  the depth-0 comma separating the list argument from the condition
+  and wraps the remainder in a string literal (already-quoted
+  conditions pass through). A new `_find_substr` action performs the
+  substring search — `find_any` only matches a single character of
+  its delimiter set and is unsuitable for multi-character needles.
+
+### Changes
+- `plant_runtime.h` declares `plant_has`/`plant_any`/`plant_all`;
+  `plant_compat.h` mirrors them for the FFI surface.
+- New regression suite `tests/regression/list_cond.plant` covering
+  membership (present/absent/empty/string elements) and conditional
+  predicates (`>`, `==`, `>=`, `<=`; empty-list behavior).
+
 ## v0.48.38f — 2026 (Math Built-ins)
 
 ### New Features

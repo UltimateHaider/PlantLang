@@ -1,0 +1,13 @@
+has_yes=1
+has_no=0
+has_empty=0
+has_str=1
+any_gt=1
+any_gt5=0
+any_empty=0
+all_gt0=1
+all_gt2=0
+all_empty=1
+any_eq=1
+all_ge=1
+all_le=1

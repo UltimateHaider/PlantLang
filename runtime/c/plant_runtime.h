@@ -170,6 +170,12 @@ tx_t        plant_random(void);
 tx_t        plant_sin(tx_t x);
 tx_t        plant_cos(tx_t x);
 tx_t        plant_sqrt(tx_t x);
+/* v0.48.38g — conditional list built-ins: HAS checks element
+   presence (canonicalized text comparison); ANY / ALL evaluate a
+   runtime condition string ("<op> <num>") against each element. */
+tx_t        plant_has(tx_t list, tx_t value);
+tx_t        plant_any(tx_t list, tx_t cond);
+tx_t        plant_all(tx_t list, tx_t cond);
 int         plant_storm_match(const char* thrown_type, const char* shelter_type);
 int         plant_storm_is_known(const char* type);
 const char* plant_storm_default_message(const char* type);

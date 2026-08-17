@@ -699,6 +699,12 @@ tx_t  plant_random(void);
 tx_t  plant_sin(tx_t x);
 tx_t  plant_cos(tx_t x);
 tx_t  plant_sqrt(tx_t x);
+
+/* v0.48.38g — conditional list built-ins (also declared via
+   plant_runtime.h; mirrored here for the FFI surface). */
+tx_t  plant_has(tx_t list, tx_t value);
+tx_t  plant_any(tx_t list, tx_t cond);
+tx_t  plant_all(tx_t list, tx_t cond);
 long  plant_arc_gc(void);                             /* GC.cycle(): reclaim */
 tx_t  plant_persist_status(void);                     /* heap telemetry (text) */
 tx_t  plant_arc_finalize_count(void);                 /* finalize counter */
