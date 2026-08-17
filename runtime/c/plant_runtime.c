@@ -2793,6 +2793,67 @@ tx_t plant_slice(tx_t data, tx_t start, tx_t end) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   v0.48.38k — VEIN resource & file management: TAP / ABSORB /
+   INFUSE / SEAL. TAP opens a path with standard modes ("r", "w",
+   "a") and encapsulates the FILE* inside a heap block tagged with a
+   magic so the other three operations can validate the handle
+   before touching it. Failure to open returns NULL (falsy). ABSORB
+   reads the entire stream into a freshly allocated tx_t; INFUSE
+   writes/appends and reports "1"/"0"; SEAL closes the stream, zeroes
+   the tag, frees the handle, and reports "1"/"0".
+   ═══════════════════════════════════════════════════════════════ */
+
+typedef struct { uint32_t magic; FILE* fp; } Vein;
+
+#define VEIN_MAGIC 0x56454E31U
+
+tx_t plant_tap(tx_t path, tx_t mode) {
+    const char* p = path ? _S(path) : "";
+    const char* m = mode ? _S(mode) : "";
+    if (!p || !*p || !m || !*m) return NULL;
+    FILE* fp = fopen(p, m);
+    if (!fp) return NULL;
+    Vein* v = malloc(sizeof(Vein));
+    if (!v) { fclose(fp); return NULL; }
+    v->magic = VEIN_MAGIC;
+    v->fp = fp;
+    return (tx_t)v;
+}
+
+tx_t plant_absorb(tx_t vein) {
+    Vein* v = (Vein*)vein;
+    if (!v || v->magic != VEIN_MAGIC || !v->fp) return strdup("");
+    if (fseek(v->fp, 0, SEEK_END) != 0) return strdup("");
+    long sz = ftell(v->fp);
+    if (sz < 0) return strdup("");
+    if (fseek(v->fp, 0, SEEK_SET) != 0) return strdup("");
+    char* buf = malloc((size_t)sz + 1);
+    if (!buf) return strdup("");
+    size_t rd = fread(buf, 1, (size_t)sz, v->fp);
+    buf[rd] = '\0';
+    return buf;
+}
+
+tx_t plant_infuse(tx_t vein, tx_t data) {
+    Vein* v = (Vein*)vein;
+    if (!v || v->magic != VEIN_MAGIC || !v->fp) return strdup("0");
+    const char* d = data ? _S(data) : "";
+    size_t dl = strlen(d);
+    if (dl > 0 && fwrite(d, 1, dl, v->fp) != dl) return strdup("0");
+    return strdup("1");
+}
+
+tx_t plant_seal(tx_t vein) {
+    Vein* v = (Vein*)vein;
+    if (!v || v->magic != VEIN_MAGIC) return strdup("0");
+    int rc = (v->fp && fclose(v->fp) == 0) ? 1 : 0;
+    v->magic = 0;
+    v->fp = NULL;
+    free(v);
+    return strdup(rc ? "1" : "0");
+}
+
+/* ═══════════════════════════════════════════════════════════════
    v0.47.2 — Native Data Structures (Set / Queue / Stack)
    Implementations; signatures in plant_compat.h
    ═══════════════════════════════════════════════════════════════ */

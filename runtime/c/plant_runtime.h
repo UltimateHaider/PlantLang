@@ -192,6 +192,14 @@ tx_t        plant_count_of(tx_t text, tx_t sub);
    end) bounds, clamping, and "not given" defaults (0 / length).
    List results canonicalize elements to text. */
 tx_t        plant_slice(tx_t data, tx_t start, tx_t end);
+/* v0.48.38k — VEIN resource management: TAP opens a path ("r"/"w"/
+   "a") returning a tagged handle (NULL on failure); ABSORB reads
+   the full stream; INFUSE writes/appends returning "1"/"0"; SEAL
+   closes and frees the handle returning "1"/"0". */
+tx_t        plant_tap(tx_t path, tx_t mode);
+tx_t        plant_absorb(tx_t vein);
+tx_t        plant_infuse(tx_t vein, tx_t data);
+tx_t        plant_seal(tx_t vein);
 int         plant_storm_match(const char* thrown_type, const char* shelter_type);
 int         plant_storm_is_known(const char* type);
 const char* plant_storm_default_message(const char* type);

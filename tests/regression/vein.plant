@@ -1,0 +1,23 @@
+# vein — VEIN resource & file management (v0.48.38k).
+# TAP(path, mode) opens a resource ("r"/"w"/"a") returning a tagged
+# handle (NULL on failure); INFUSE(vein, data) writes/appends and
+# reports "1"/"0"; SEAL(vein) closes and frees the handle reporting
+# "1"/"0"; ABSORB(vein) reads the entire stream. The scratch file
+# lives in /tmp (the fs_append regression convention) so the test
+# never writes into the repository.
+
+ACTION main(),
+  CREATE v(VEIN) TO TAP("/tmp/plantlang_vein_test.txt", "w").
+  SHOW "infuse=" + INFUSE(v, "hello chloroplast").
+  SHOW "seal=" + SEAL(v).
+  CREATE v2(VEIN) TO TAP("/tmp/plantlang_vein_test.txt", "r").
+  SHOW "absorb=" + ABSORB(v2).
+  SHOW "seal2=" + SEAL(v2).
+  CREATE v3(VEIN) TO TAP("/tmp/plantlang_vein_test.txt", "a").
+  SHOW "append=" + INFUSE(v3, "!").
+  SHOW "seal3=" + SEAL(v3).
+  CREATE v4(VEIN) TO TAP("/tmp/plantlang_vein_test.txt", "r").
+  SHOW "absorb2=" + ABSORB(v4).
+  SHOW "seal4=" + SEAL(v4).
+  GIVE 0.
+/GIVE main.

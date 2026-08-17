@@ -1,5 +1,38 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.38k — 2026 (VEIN Resource & File Management)
+
+### New Features
+- **`TAP(path, mode)`** (plant_runtime.c, codegen_c.plant): opens a
+  file or resource with the standard modes `"r"` (read), `"w"`
+  (write/truncate), and `"a"` (append). The `FILE*` is encapsulated
+  in a heap block tagged with a magic (`VEIN_MAGIC`) so the other
+  operations can validate the handle before touching it. Returns
+  `NULL` (falsy) when the path or mode is invalid/empty or the open
+  fails.
+- **`ABSORB(vein)`** (plant_runtime.c, codegen_c.plant): reads the
+  entire stream into a freshly allocated `tx_t` (size via
+  `fseek`/`ftell`, exact read length honored). Invalid handles yield
+  `""`.
+- **`INFUSE(vein, data)`** (plant_runtime.c, codegen_c.plant):
+  writes or appends `data` into the open vein, returning `"1"` on a
+  complete write and `"0"` on any failure.
+- **`SEAL(vein)`** (plant_runtime.c, codegen_c.plant): closes the
+  stream (`fclose`), zeroes the magic tag, frees the handle block,
+  and returns `"1"`/`"0"`.
+- **Mappings** (codegen_c.plant): `TAP`/`INFUSE` bind through
+  `_handle_func_paren` (dual-argument); `ABSORB`/`SEAL` bind through
+  both `_handle_func_paren` (paren form, used by the tests) and
+  `_handle_func` (space form per the directive).
+
+### Changes
+- `plant_runtime.h` declares all four functions; `plant_compat.h`
+  mirrors them for the FFI surface.
+- New regression suite `tests/regression/vein.plant` covering the
+  full write → seal → read → seal cycle plus append mode; the
+  scratch file lives in `/tmp` (the `fs_append` convention) so the
+  suite never writes into the repository.
+
 ## v0.48.38i — 2026 (Universal Sequence Slicing: SLICE)
 
 ### New Features

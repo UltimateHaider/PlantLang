@@ -2279,6 +2279,15 @@ ACTION translate_expr(expr(TX)),
     # through _handle_func_paren; string and list arguments both
     # arrive as expressions, the runtime dispatches on the value.
     REAP e FROM _handle_func_paren, e, "SLICE", "plant_slice".
+    # v0.48.38k — VEIN resource management: TAP / INFUSE use the
+    # paren form; ABSORB / SEAL accept both the paren form (used by
+    # the test suite) and the space form (the _handle_func pattern).
+    REAP e FROM _handle_func_paren, e, "TAP", "plant_tap".
+    REAP e FROM _handle_func_paren, e, "INFUSE", "plant_infuse".
+    REAP e FROM _handle_func_paren, e, "ABSORB", "plant_absorb".
+    REAP e FROM _handle_func_paren, e, "SEAL", "plant_seal".
+    REAP e FROM _handle_func, e, "ABSORB", "plant_absorb".
+    REAP e FROM _handle_func, e, "SEAL", "plant_seal".
     REAP e FROM _storm_inject, e.
     REAP e FROM _handle_func, e, "TEST", "!".
     # list literals rewrite BEFORE boolean sanitization so a bare
