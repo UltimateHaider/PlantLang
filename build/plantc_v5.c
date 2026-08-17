@@ -3775,6 +3775,10 @@ tx_t parse_listen_stmt(PlantArray* tokens, long pos) {
   tx_t id_pair = "";
   tx_t reqname = "";
   tx_t p6 = "";
+  tx_t tok_t = "";
+  tx_t lx_t = "";
+  tx_t drop_t = "";
+  tx_t tpair = "";
   tx_t dot_pair = "";
   tx_t p7 = "";
     pair = consume(tokens, pos);
@@ -3790,9 +3794,19 @@ tx_t parse_listen_stmt(PlantArray* tokens, long pos) {
     id_pair = consume(tokens, p5);
     reqname = tok_lex(plant_list_get(id_pair,  0 ));
     p6 = _second(id_pair);
+    tx_t tmo = "";
+    tok_t = peek(tokens, p6);
+    lx_t = tok_lex(tok_t);
+    if (strcmp(lx_t,"TIMEOUT") == 0) {
+        drop_t = consume(tokens, p6);
+        p6 = _second(drop_t);
+        tpair = collect_until_keyword(tokens, p6, okws2);
+        tmo = plant_list_get(tpair,  0 );
+        p6 = _second(tpair);
+    }
     dot_pair = consume(tokens, p6);
     p7 = _second(dot_pair);
-    return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "listen_stmt" , "port" , port , "resp" , reqname ) , p7 );
+    return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "listen_stmt" , "port" , port , "resp" , reqname , "timeout" , tmo ) , p7 );
 }
 tx_t parse_enum_decl(PlantArray* tokens, long pos) {
   tx_t pair = "";
@@ -7143,8 +7157,11 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t hz1 = "";
   tx_t ls_port = "";
   tx_t ls_resp = "";
+  tx_t ls_tmo = "";
   tx_t lsp0 = "";
   tx_t lsp1 = "";
+  tx_t lst0 = "";
+  tx_t lst1 = "";
   tx_t rs_body = "";
   tx_t rs_req = "";
   tx_t rsb0 = "";
@@ -7567,6 +7584,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
     if (strcmp(ntype,"listen_stmt") == 0) {
         ls_port = _map_get(node, "port");
         ls_resp = _map_get(node, "resp");
+        ls_tmo = _map_get(node, "timeout");
         isel = indent_str(indent);
         tx_t lsp = ls_port;
         if (strcmp(lsp,"") > 0) {
@@ -7576,7 +7594,20 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
                 lsp = lsp1;
             }
         }
-        return _cat3(_cat4(isel, "  tx_t ", ls_resp, " = plant_net_listen("), lsp, ");\n");
+        tx_t lst = ls_tmo;
+        if (strcmp(lst,"") > 0) {
+            lst0 = substring(lst, 0, 1);
+            if (strcmp(lst0,"\"") != 0) {
+                lst1 = translate_expr(lst);
+                lst = lst1;
+            }
+        }
+        if (strcmp(lst,"") == 0) {
+            return _cat3(_cat4(isel, "  tx_t ", ls_resp, " = plant_net_listen("), lsp, ");\n");
+        }
+        if (strcmp(lst,"") != 0) {
+            return _cat(_cat4(_cat4(isel, "  tx_t ", ls_resp, " = plant_net_listen_timeout("), lsp, ", ", lst), ");\n");
+        }
     }
     if (strcmp(ntype,"respond_stmt") == 0) {
         rs_body = _map_get(node, "content");
@@ -11233,7 +11264,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.1 (pure native)");
+      plant_print("Chloroplast 0.49.2 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

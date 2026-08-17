@@ -2312,9 +2312,19 @@ ACTION parse_listen_stmt(tokens(LIST), pos(NUM)),
   REAP id_pair FROM consume, tokens, p5.
   REAP reqname FROM tok_lex, id_pair[0].
   REAP p6 FROM _second, id_pair.
+  CREATE tmo(TX) TO "".
+  REAP tok_t FROM peek, tokens, p6.
+  REAP lx_t FROM tok_lex, tok_t.
+  IF lx_t IS "TIMEOUT",
+    REAP drop_t FROM consume, tokens, p6.
+    REAP p6 FROM _second, drop_t.
+    REAP tpair FROM collect_until_keyword, tokens, p6, okws2.
+    SET tmo TO tpair[0].
+    REAP p6 FROM _second, tpair.
+  /IF.
   REAP dot_pair FROM consume, tokens, p6.
   REAP p7 FROM _second, dot_pair.
-  GIVE plant_list_make(2, plant_list_make(6, "type", "listen_stmt", "port", port, "resp", reqname), p7).
+  GIVE plant_list_make(2, plant_list_make(8, "type", "listen_stmt", "port", port, "resp", reqname, "timeout", tmo), p7).
 /ACTION.
 
 #── Declaration parsing ────────────────────────────────────────

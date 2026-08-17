@@ -467,8 +467,11 @@ tx_t plant_net_harvest_map(tx_t url, tx_t method, tx_t body, tx_t headers, int64
    The listening socket is closed right after the accept (single-request
    server). plant_net_respond sends an HTTP/1.1 200 OK response with
    Content-Type: text/plain and Content-Length, then closes the
-   connection; a NULL or sock-less request is a safe no-op. */
-tx_t plant_net_listen(int64_t port) {
+   connection; a NULL or sock-less request is a safe no-op.
+   v0.49.2: plant_net_listen_timeout(port, timeout) sets SO_RCVTIMEO on
+   the listening socket, so a client-less accept() fails with EAGAIN
+   after `timeout` seconds and the request MAP comes back ok=FALSE. */
+static tx_t _plant_net_listen_ex(int64_t port, int64_t timeout) {
     PlantArray* req = plant_list_create(10);
     req = plant_list_push(req, strdup("ok"));
     req = plant_list_push(req, strdup("FALSE"));
@@ -482,6 +485,10 @@ tx_t plant_net_listen(int64_t port) {
     req = plant_list_push(req, strdup(""));
     int fd = plant_net_listen_open((int)port);
     if (fd < 0) return (tx_t)req;
+    if (timeout > 0) {
+        struct timeval tv = { .tv_sec = timeout, .tv_usec = 0 };
+        setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    }
     int cfd = plant_net_accept(fd);
     _plant_close_raw(fd);
     if (cfd < 0) return (tx_t)req;
@@ -603,6 +610,14 @@ tx_t plant_net_listen(int64_t port) {
     plant_free(path);
     plant_free(body_copy);
     return (tx_t)req;
+}
+
+tx_t plant_net_listen(int64_t port) {
+    return _plant_net_listen_ex(port, 0);
+}
+
+tx_t plant_net_listen_timeout(int64_t port, int64_t timeout) {
+    return _plant_net_listen_ex(port, timeout);
 }
 
 tx_t plant_net_respond(tx_t req, tx_t body) {

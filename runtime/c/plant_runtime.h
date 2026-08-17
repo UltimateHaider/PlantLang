@@ -26,6 +26,7 @@ int64_t plant_net_accept(int64_t fd);
 
 /* ── v0.48.34: HTTP Server + Socket Utilities ── */
 tx_t        plant_net_listen(int64_t port);                 /* request MAP: ok/method/path/headers/body/sock */
+tx_t        plant_net_listen_timeout(int64_t port, int64_t timeout); /* LISTEN ... TIMEOUT t: accept() fails ok=FALSE after t seconds */
 tx_t        plant_net_respond(tx_t req, tx_t body);         /* sends HTTP/1.1 200 OK + Content-Length, closes the connection */
 tx_t        plant_net_harvest_map(tx_t url, tx_t method, tx_t body, tx_t headers, int64_t timeout); /* HARVEST ... AS MAP: response MAP with live sock key */
 tx_t        plant_net_read(tx_t fd);                        /* buffered read (500ms idle window); sock as decimal string */

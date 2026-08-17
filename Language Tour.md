@@ -641,6 +641,62 @@ Supported keys: `ADAPTIVE_THRESHOLD` (queue threshold, ≥1),
 
 ---
 
+## Networking (v0.48.32+)
+
+The native runtime speaks HTTP/1.1 over POSIX sockets: **HARVEST** is
+the client (v0.48.32, MAP mode v0.48.34, formalized v0.49.0) and
+**LISTEN** is the server (v0.48.33, timeout option v0.49.2). There is no
+TLS — `https://` URLs parse to port 443 but the socket stays plaintext.
+
+### HTTP Client — HARVEST
+
+```
+HARVEST "http://127.0.0.1:41234/get" AS res.
+REAP ok     FROM _map_get, res, "ok".       # "TRUE" / "FALSE"
+REAP status FROM _map_get, res, "status".   # "200", "0" on failure
+REAP body   FROM _map_get, res, "body".
+REAP hd     FROM _map_get, res, "headers".  # response header MAP
+```
+
+Optional modifiers (any order, commas allowed):
+
+```
+HARVEST "http://127.0.0.1:41234/post" AS r
+        METHOD POST BODY "hello=world" HEADERS h TIMEOUT 5.
+```
+
+- `METHOD m` — defaults to `GET`; `BODY b` — request payload (sent on
+  POST); `HEADERS h` — a MAP built with `LINK "Name" WITH "value" IN h`;
+  `TIMEOUT t` — seconds, `0`/absent means 5 s.
+- `MAP` mode keeps the connection alive and adds a `sock` key: the
+  descriptor as a decimal string for `plant_net_read`, `plant_net_write`,
+  and `plant_net_close` (buffered read, send-all, idempotent close).
+
+### HTTP Server — LISTEN
+
+```
+LISTEN ON 41235 AS req.
+REAP method FROM _map_get, req, "method".   # "GET", "POST", ...
+REAP path   FROM _map_get, req, "path".     # "/hello?q=1"
+REAP body   FROM _map_get, req, "body".     # per Content-Length
+REAP hd     FROM _map_get, req, "headers".  # request header MAP
+GIVE "Hello from Chloroplast" AS RESPONSE.
+```
+
+- `LISTEN ON <port> AS <req>.` blocks for ONE client connection, parses
+  the request into a MAP with `ok`/`method`/`path`/`headers`/`body`/`sock`
+  keys, then closes the listener (single-request server).
+- `LISTEN ON <port> AS <req> TIMEOUT <t>.` (v0.49.2) gives up on the
+  accept after `t` seconds and returns a MAP with `ok = "FALSE"`.
+- `GIVE <body> AS RESPONSE.` replies to the most recent `LISTEN` in the
+  same block with `HTTP/1.1 200 OK` + `Content-Length`, then closes the
+  connection. Without a bound request (no LISTEN in scope) it is a safe
+  no-op; bind failure and malformed requests surface as `ok = "FALSE"`.
+- The regression suite drives these one-shot servers with
+  `tests/regression/listen_client.py`.
+
+---
+
 ## Self-Hosting & Build
 
 The compiler is a single pipeline written in PlantLang itself:

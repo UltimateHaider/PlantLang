@@ -2748,9 +2748,19 @@ ACTION parse_listen_stmt(tokens(LIST), pos(NUM)),
   REAP id_pair FROM consume, tokens, p5.
   REAP reqname FROM tok_lex, id_pair[0].
   REAP p6 FROM _second, id_pair.
+  CREATE tmo(TX) TO "".
+  REAP tok_t FROM peek, tokens, p6.
+  REAP lx_t FROM tok_lex, tok_t.
+  IF lx_t IS "TIMEOUT",
+    REAP drop_t FROM consume, tokens, p6.
+    REAP p6 FROM _second, drop_t.
+    REAP tpair FROM collect_until_keyword, tokens, p6, okws2.
+    SET tmo TO tpair[0].
+    REAP p6 FROM _second, tpair.
+  /IF.
   REAP dot_pair FROM consume, tokens, p6.
   REAP p7 FROM _second, dot_pair.
-  GIVE plant_list_make(2, plant_list_make(6, "type", "listen_stmt", "port", port, "resp", reqname), p7).
+  GIVE plant_list_make(2, plant_list_make(8, "type", "listen_stmt", "port", port, "resp", reqname, "timeout", tmo), p7).
 /ACTION.
 
 #── Declaration parsing ────────────────────────────────────────
@@ -6270,13 +6280,15 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         GIVE isel + "  tx_t " + hresp + " = " + hfn + "(" + hcurl + ", " + hmethod + ", " + hcbody + ", " + hhdr + ", " + htmo + ");\n".
     /IF.
 
-    # ── listen_stmt: LISTEN ON port AS req. ───────────────────
-    #    tx_t req = plant_net_listen(port);   (v0.48.33)
+    # ── listen_stmt: LISTEN ON port AS req [TIMEOUT t]. ──────
+    #    tx_t req = plant_net_listen(port);        (v0.48.33)
+    #    tx_t req = plant_net_listen_timeout(port, t);  (v0.49.2)
     #    req is a NEW variable → declare. port is a numeric literal
     #    or a raw expression translated as-is.
     IF ntype IS "listen_stmt",
         REAP ls_port FROM _map_get, node, "port".
         REAP ls_resp FROM _map_get, node, "resp".
+        REAP ls_tmo FROM _map_get, node, "timeout".
         REAP isel FROM indent_str, indent.
         CREATE lsp(TX) TO ls_port.
         IF lsp > "",
@@ -6286,7 +6298,20 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
                 SET lsp TO lsp1.
             /IF.
         /IF.
-        GIVE isel + "  tx_t " + ls_resp + " = plant_net_listen(" + lsp + ");\n".
+        CREATE lst(TX) TO ls_tmo.
+        IF lst > "",
+            REAP lst0 FROM substring, lst, 0, 1.
+            IF lst0 ISNT "\"",
+                REAP lst1 FROM translate_expr, lst.
+                SET lst TO lst1.
+            /IF.
+        /IF.
+        IF lst IS "",
+            GIVE isel + "  tx_t " + ls_resp + " = plant_net_listen(" + lsp + ");\n".
+        /IF.
+        IF lst ISNT "",
+            GIVE isel + "  tx_t " + ls_resp + " = plant_net_listen_timeout(" + lsp + ", " + lst + ");\n".
+        /IF.
     /IF.
 
     # ── respond_stmt: GIVE body AS RESPONSE. ──────────────────
@@ -10014,7 +10039,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.49.1 (pure native)".
+  SHOW "Chloroplast 0.49.2 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

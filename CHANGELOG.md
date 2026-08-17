@@ -1,5 +1,46 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.49.2 — 2026 (LISTEN HTTP Server Subsystem)
+
+### Network
+- Formalized the LISTEN HTTP server subsystem: `LISTEN ON port AS req`
+  was confirmed fully wired end-to-end (parser `parse_listen_stmt`,
+  codegen → `plant_net_listen`, runtime request MAP
+  `ok`/`method`/`path`/`headers`/`body`/`sock`, `GIVE body AS RESPONSE`
+  → `plant_net_respond`) — shipped v0.48.33, no changes needed there.
+- **New `TIMEOUT` option (v0.49.2):** `LISTEN ON port AS req TIMEOUT t.`
+  — the parser now accepts an optional `TIMEOUT` modifier after the
+  request binding, and codegen routes to the new
+  `plant_net_listen_timeout(port, t)` runtime function. The runtime
+  sets `SO_RCVTIMEO` on the listening socket, so a client-less
+  `accept()` fails with `EAGAIN` after `t` seconds and the request MAP
+  comes back `ok = "FALSE"` (verified: 1 s timeout expires in ~1.06 s).
+  `plant_net_listen` is now a thin wrapper over the shared
+  `_plant_net_listen_ex(port, timeout)`.
+- Header sync: `plant_runtime.h` exposes `plant_net_listen`,
+  `plant_net_listen_timeout`, and `plant_net_respond`. Linkage to
+  generated C flows through `plant_compat.h`'s
+  `#include <plant_runtime.h>` — no duplicate externs required.
+
+### Tests
+- Added `tests/regression/listen_http.plant` (+ `.expected`): a
+  TIMEOUT-configured LISTEN driven by `listen_client.py` on port 41235,
+  covering request property inspection (`method`/`path`/`body`/
+  `headers["X-Probe"]`) and a `GIVE "Hello from Chloroplast"
+  AS RESPONSE.` round-trip (client sees `HTTP/1.1 200 OK`).
+  Named `listen_http` (not `listen`) so the harness's `listen_*`
+  client-driving path applies — a bare `listen.plant` would block on
+  accept with no client and hang the suite.
+
+### Documentation
+- `Language Tour.md`: new **Networking (v0.48.32+)** section covering
+  the HARVEST client syntax (options, MAP mode) and the LISTEN server
+  (request MAP properties, `TIMEOUT`, `GIVE … AS RESPONSE`, limits).
+
+### Housekeeping
+- Version bump 0.49.1 → 0.49.2 (Makefile, compiler banner, native test
+  suite version check).
+
 ## v0.49.1 — 2026 (Regression Runner Stabilization)
 
 ### Tests

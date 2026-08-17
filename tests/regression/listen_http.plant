@@ -1,0 +1,29 @@
+# listen_http: LISTEN HTTP server subsystem (v0.49.2).
+# Formalized LISTEN surface against the driven client:
+#   LISTEN ON port AS req [TIMEOUT t].
+#   GIVE body AS RESPONSE.
+# Scenarios: a TIMEOUT-configured LISTEN (accept fails with ok=FALSE
+# after t seconds when no client connects; here the driven client
+# connects immediately), request property inspection
+# (method/path/body/headers), and replying via GIVE ... AS RESPONSE.
+# The harness drives this binary with listen_client.py (POST on
+# 41235, X-Probe header + body), so the .expected file pairs the
+# server's stdout with the client's reply report.
+ACTION main(),
+  SHOW "listen_http start".
+  LISTEN ON 41235 AS req TIMEOUT 5.
+  REAP lok FROM _map_get, req, "ok".
+  REAP lm FROM _map_get, req, "method".
+  REAP lp FROM _map_get, req, "path".
+  REAP lb FROM _map_get, req, "body".
+  SHOW "listen_http ok = " + lok.
+  SHOW "listen_http method = " + lm.
+  SHOW "listen_http path = " + lp.
+  SHOW "listen_http body = " + lb.
+  REAP hd FROM _map_get, req, "headers".
+  REAP probe FROM _map_get, hd, "X-Probe".
+  SHOW "listen_http header = " + probe.
+  GIVE "Hello from Chloroplast" AS RESPONSE.
+  SHOW "listen_http responded".
+  GIVE 0.
+/GIVE main.

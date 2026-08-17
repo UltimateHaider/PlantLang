@@ -2867,13 +2867,15 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         GIVE isel + "  tx_t " + hresp + " = " + hfn + "(" + hcurl + ", " + hmethod + ", " + hcbody + ", " + hhdr + ", " + htmo + ");\n".
     /IF.
 
-    # ── listen_stmt: LISTEN ON port AS req. ───────────────────
-    #    tx_t req = plant_net_listen(port);   (v0.48.33)
+    # ── listen_stmt: LISTEN ON port AS req [TIMEOUT t]. ──────
+    #    tx_t req = plant_net_listen(port);        (v0.48.33)
+    #    tx_t req = plant_net_listen_timeout(port, t);  (v0.49.2)
     #    req is a NEW variable → declare. port is a numeric literal
     #    or a raw expression translated as-is.
     IF ntype IS "listen_stmt",
         REAP ls_port FROM _map_get, node, "port".
         REAP ls_resp FROM _map_get, node, "resp".
+        REAP ls_tmo FROM _map_get, node, "timeout".
         REAP isel FROM indent_str, indent.
         CREATE lsp(TX) TO ls_port.
         IF lsp > "",
@@ -2883,7 +2885,20 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
                 SET lsp TO lsp1.
             /IF.
         /IF.
-        GIVE isel + "  tx_t " + ls_resp + " = plant_net_listen(" + lsp + ");\n".
+        CREATE lst(TX) TO ls_tmo.
+        IF lst > "",
+            REAP lst0 FROM substring, lst, 0, 1.
+            IF lst0 ISNT "\"",
+                REAP lst1 FROM translate_expr, lst.
+                SET lst TO lst1.
+            /IF.
+        /IF.
+        IF lst IS "",
+            GIVE isel + "  tx_t " + ls_resp + " = plant_net_listen(" + lsp + ");\n".
+        /IF.
+        IF lst ISNT "",
+            GIVE isel + "  tx_t " + ls_resp + " = plant_net_listen_timeout(" + lsp + ", " + lst + ");\n".
+        /IF.
     /IF.
 
     # ── respond_stmt: GIVE body AS RESPONSE. ──────────────────
