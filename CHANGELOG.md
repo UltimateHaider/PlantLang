@@ -1,5 +1,49 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.49.0 — 2026 (HARVEST HTTP Client Subsystem)
+
+### Network
+- Formalized the HARVEST HTTP client subsystem as the v0.49.0
+  headline: the native runtime, self-hosted parser, and code
+  generator now present one synchronized surface:
+  `HARVEST url AS resp [METHOD m] [BODY b] [HEADERS h] [TIMEOUT t] [MAP].`
+  - Options are scanned in any order after the mandatory `AS resp`
+    binding (comma separators allowed); `MAP` is a flag, not a value.
+  - `resp` is a fresh response MAP with `ok`/`status`/`body`/`headers`
+    keys: `ok` is `TRUE`/`FALSE`, `status` is the numeric code (0 on
+    failure), `body` the response payload, `headers` a MAP of response
+    headers.
+  - Defaults: method `GET`, empty body, no extra headers, timeout 5s
+    (`TIMEOUT 0` also means 5s). `HEADERS` accepts a MAP built with
+    `LINK "Name" WITH "value" IN h`.
+  - `MAP` mode (keeps the connection alive) adds a `sock` key holding
+    the descriptor as a decimal string, for use with
+    `plant_net_read` / `plant_net_write` / `plant_net_close`.
+- Verified and locked down the runtime API in `plant_runtime.c`
+  (v0.48.32/34 era) — no runtime changes were required; the subsystem
+  was already complete. Linkage to generated C flows through
+  `plant_compat.h`'s `#include <plant_runtime.h>` (declarations at
+  `plant_runtime.h:23,30-33`), so no duplicate externs are needed.
+- Confirmed the parser (`parse_harvest_stmt`) and codegen
+  (`harvest_stmt` → `plant_net_harvest` / `plant_net_harvest_map`)
+  match the grammar exactly; added the consolidated regression suite.
+
+### Tests
+- Added `tests/regression/harvest_http.plant` (+ `.expected`) covering
+  the three canonical scenarios against the local mock server
+  (127.0.0.1:41234, started by the regression runner when
+  `harvest_*.plant`/`listen_*.plant` exist):
+  - Basic GET with response-MAP extraction
+  - Custom method + body + headers + timeout in non-canonical option
+    order (`TIMEOUT 5 METHOD POST BODY "hello=world" HEADERS h`)
+  - MAP-mode streaming lifecycle: `sock` extraction, buffered
+    `plant_net_read`, send-all `plant_net_write`, idempotent
+    `plant_net_close`
+
+### Housekeeping
+- Version bump 0.48.38m → 0.49.0 (Makefile, compiler banner,
+  native test suite version check).
+
 ## v0.48.38m — 2026 (Legacy File Removal)
 
 ### Housekeeping

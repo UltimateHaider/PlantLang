@@ -1,0 +1,15 @@
+http start
+get ok = TRUE
+get status = 200
+get body = hello mock:none
+post ok = TRUE
+post status = 200
+post echo = POST:hello=world
+header echo = hello mock:plantlang
+map ok = TRUE
+map body = hello mock
+stream read = server-push
+stream write = TRUE
+stream ack = push-ack:harvest-http-push
+stream close = TRUE
+http done

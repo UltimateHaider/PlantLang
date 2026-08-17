@@ -1,0 +1,50 @@
+# harvest_http: HARVEST HTTP client subsystem (v0.49.0).
+# Formalized HARVEST statement surface against the local mock server:
+#   HARVEST url AS resp [METHOD m] [BODY b] [HEADERS h] [TIMEOUT t] [MAP].
+# Scenarios: basic GET (response MAP ok/status/body/headers), custom
+# METHOD + BODY + HEADERS + TIMEOUT in a non-canonical option order
+# (the parser scans options in any order), request-header
+# transmission (echoed by the server), and MAP-mode streaming with
+# the low-level socket lifecycle (plant_net_read/write/close).
+ACTION main(),
+  SHOW "http start".
+  HARVEST "http://127.0.0.1:41234/get" AS res.
+  REAP ok FROM _map_get, res, "ok".
+  REAP st FROM _map_get, res, "status".
+  REAP body FROM _map_get, res, "body".
+  SHOW "get ok = " + ok.
+  SHOW "get status = " + st.
+  SHOW "get body = " + body.
+
+  CREATE hdrs(LIST) TO plant_list_make(0).
+  LINK "Content-Type" WITH "application/json" IN hdrs.
+  LINK "X-Test" WITH "plantlang" IN hdrs.
+  HARVEST "http://127.0.0.1:41234/post" AS post_res TIMEOUT 5 METHOD POST BODY "hello=world" HEADERS hdrs.
+  REAP pok FROM _map_get, post_res, "ok".
+  REAP pst FROM _map_get, post_res, "status".
+  REAP pbody FROM _map_get, post_res, "body".
+  SHOW "post ok = " + pok.
+  SHOW "post status = " + pst.
+  SHOW "post echo = " + pbody.
+
+  HARVEST "http://127.0.0.1:41234/get" AS hdr_res HEADERS hdrs.
+  REAP hbody FROM _map_get, hdr_res, "body".
+  SHOW "header echo = " + hbody.
+
+  HARVEST "http://127.0.0.1:41234/readback" AS stream_res MAP.
+  REAP sok FROM _map_get, stream_res, "ok".
+  REAP sbody FROM _map_get, stream_res, "body".
+  SHOW "map ok = " + sok.
+  SHOW "map body = " + sbody.
+  REAP fd FROM _map_get, stream_res, "sock".
+  REAP push FROM plant_net_read, fd.
+  SHOW "stream read = " + push.
+  REAP w FROM plant_net_write, fd, "harvest-http-push".
+  SHOW "stream write = " + w.
+  REAP ack FROM plant_net_read, fd.
+  SHOW "stream ack = " + ack.
+  REAP c FROM plant_net_close, fd.
+  SHOW "stream close = " + c.
+  SHOW "http done".
+  GIVE 0.
+/GIVE main.
