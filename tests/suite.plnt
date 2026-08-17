@@ -9,59 +9,59 @@ PLANT lists.
 
 
 # ── Helpers ─────────────────────────────────────────────────
-1\ ACTION add(a(NUM), b(NUM)),
-2\   GIVE a + b.
-1\ /ACTION.
+ACTION add(a(NUM), b(NUM)),
+  GIVE a + b.
+/ACTION.
 
-1\ ACTION multiply(a(NUM), b(NUM)),
-2\   GIVE a * b.
-1\ /ACTION.
+ACTION multiply(a(NUM), b(NUM)),
+  GIVE a * b.
+/ACTION.
 
-1\ ACTION factorial(n(NUM)),
-2\   IF n IS 0, GIVE 1.
-2\   REAP sub FROM factorial, n - 1.
-2\   GIVE n * sub.
-1\ /ACTION.
+ACTION factorial(n(NUM)),
+  IF n IS 0, GIVE 1.
+  REAP sub FROM factorial, n - 1.
+  GIVE n * sub.
+/ACTION.
 
-1\ ACTION greet(name(TX)),
-2\   GIVE "Hello, " + name + "!".
-1\ /ACTION.
+ACTION greet(name(TX)),
+  GIVE "Hello, " + name + "!".
+/ACTION.
 
-1\ ACTION safe_div(a(NUM), b(NUM)),
-2\   WEATHER,
-3\     GIVE a / b.
-2\   SHELTER ZERO_STORM,
-3\     GIVE -1.
-2\   CALM.
-1\ /ACTION.
+ACTION safe_div(a(NUM), b(NUM)),
+  WEATHER,
+    GIVE a / b.
+  SHELTER ZERO_STORM,
+    GIVE -1.
+  CALM.
+/ACTION.
 
-1\ SPECIES Counter,
-2\   VAR count(NUM) TO 0.
-2\   VAR step(NUM) TO 1.
-2\   ACTION tick(),
-3\     INCREASE SELF:count BY SELF:step.
-3\     GIVE SELF:count.
-2\   /ACTION.
-2\   ACTION reset(),
-3\     SET SELF:count TO 0.
-3\     GIVE 0.
-2\   /ACTION.
-1\ /SPECIES.
+SPECIES Counter,
+  VAR count(NUM) TO 0.
+  VAR step(NUM) TO 1.
+  ACTION tick(),
+    INCREASE SELF:count BY SELF:step.
+    GIVE SELF:count.
+  /ACTION.
+  ACTION reset(),
+    SET SELF:count TO 0.
+    GIVE 0.
+  /ACTION.
+/SPECIES.
 
-1\ SPECIES Animal,
-2\   VAR name(TX) TO "?".
-2\   VAR sound(TX) TO "...".
-2\   ACTION speak(),
-3\     GIVE SELF:name + " says " + SELF:sound.
-2\   /ACTION.
-1\ /SPECIES.
+SPECIES Animal,
+  VAR name(TX) TO "?".
+  VAR sound(TX) TO "...".
+  ACTION speak(),
+    GIVE SELF:name + " says " + SELF:sound.
+  /ACTION.
+/SPECIES.
 
-1\ SPECIES Dog PARENT Animal,
-2\   VAR breed(TX) TO "mixed".
-2\   ACTION fetch(),
-3\     GIVE SELF:name + " fetches!".
-2\   /ACTION.
-1\ /SPECIES.
+SPECIES Dog PARENT Animal,
+  VAR breed(TX) TO "mixed".
+  ACTION fetch(),
+    GIVE SELF:name + " fetches!".
+  /ACTION.
+/SPECIES.
 
 ROOT PASS_MARK TO 50.
 ROOT APP_NAME TO "PlantLang".

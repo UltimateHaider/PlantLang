@@ -2008,13 +2008,6 @@ ACTION parse_weather_stmt(tokens(LIST), pos(NUM), clv(TX), rtab(LIST), emode(TX)
 #   ("1" inside ROOT_SCOPE: CONST is elevated to ROOT) join the
 #   threading.
 ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), bstart(NUM), emode(TX)),
-  SEASON TRUE,
-    REAP tok FROM peek, tokens, pos.
-    REAP tp FROM tok_type, tok.
-    IF tp ISNT "DEPTH", BREAK 0. /IF.
-    REAP drop_pair FROM consume, tokens, pos.
-    REAP pos FROM _second, drop_pair.
-  /SEASON.
   REAP tok FROM peek, tokens, pos.
   REAP lx FROM tok_lex, tok.
   IF lx IS "CONST",

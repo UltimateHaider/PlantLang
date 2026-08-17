@@ -365,18 +365,6 @@ ACTION scan_tokens(src(TX)),
     IF ch IS "\"", SET i TO si[1]. /IF.
     IF ch IS "\"", CONTINUE. /IF.
 
-    # Depth marker N\  — check before Number
-    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND char_at(src, i + 1) IS "\\",
-      REAP si FROM match_number, src, i, n. /IF.
-    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND char_at(src, i + 1) IS "\\",
-      PUT plant_list_make(2, "DEPTH", si[0]) INTO tokens. /IF.
-    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND char_at(src, i + 1) IS "\\",
-      SET i TO si[1] + 1. /IF.
-    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND char_at(src, i + 1) IS "\\" AND i < n AND char_at(src, i) IS " ",
-      SET i TO i + 1. /IF.
-    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9" AND i + 1 < n AND char_at(src, i + 1) IS "\\",
-      CONTINUE. /IF.
-
     # Number
     IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", REAP si FROM match_number, src, i, n. /IF.
     IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", PUT plant_list_make(2, "NUMBER", si[0]) INTO tokens. /IF.

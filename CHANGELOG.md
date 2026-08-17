@@ -1,5 +1,26 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.48.38l — 2026 (Legacy Depth Marker Removal)
+
+### Breaking Change
+- **`N\` depth markers removed.** The legacy `N\` depth-prefix system
+  is permanently removed from the compiler. The lexer no longer
+  produces `DEPTH` tokens (`src/plantc/lexer.plant`), and the parser
+  no longer strips them (`src/plantc/parser.plant`). A prefix such as
+  `1\` now lexes as a NUMBER token plus an unhandled backslash ERROR
+  token; the parser's generic unrecognized-token skip discards them
+  one at a time, so the marker no longer carries any meaning.
+
+### Test Suite
+- `tests/suite.plnt` — all 46 legacy `N\` prefix markers stripped;
+  statements now use standard undecorated syntax.
+
+### Notes
+- The `\` escape semantics inside string literals (`\n`, `\t`, `\r`,
+  `\"`, `\\`) and interpolation (`\${`) are unaffected.
+- `codegen_c.plant`'s FFI serialization depth guard (`depth > 3`) is
+  unrelated to the removed markers and remains.
+
 ## v0.48.38k — 2026 (VEIN Resource & File Management)
 
 ### New Features

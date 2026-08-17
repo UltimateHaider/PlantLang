@@ -890,21 +890,6 @@ tx_t scan_tokens(tx_t src) {
         if (strcmp(ch,"\"") == 0) {
             continue;
         }
-        if (strcmp(ch,"0") >= 0 && strcmp(ch,"9") <= 0 && i + 1 < n && strcmp(char_at ( src , i + 1 ),"\\") == 0) {
-            si = match_number(src, i, n);
-        }
-        if (strcmp(ch,"0") >= 0 && strcmp(ch,"9") <= 0 && i + 1 < n && strcmp(char_at ( src , i + 1 ),"\\") == 0) {
-            tokens = plant_list_push(tokens, plant_list_make ( 2 , "DEPTH" , plant_list_get(si,  0 ) ));
-        }
-        if (strcmp(ch,"0") >= 0 && strcmp(ch,"9") <= 0 && i + 1 < n && strcmp(char_at ( src , i + 1 ),"\\") == 0) {
-            i = plant_list_get(si,  1 )+1;
-        }
-        if (strcmp(ch,"0") >= 0 && strcmp(ch,"9") <= 0 && i + 1 < n && strcmp(char_at ( src , i + 1 ),"\\") == 0 && i < n && strcmp(char_at ( src , i )," ") == 0) {
-            i = i+1;
-        }
-        if (strcmp(ch,"0") >= 0 && strcmp(ch,"9") <= 0 && i + 1 < n && strcmp(char_at ( src , i + 1 ),"\\") == 0) {
-            continue;
-        }
         if (strcmp(ch,"0") >= 0 && strcmp(ch,"9") <= 0) {
             si = match_number(src, i, n);
         }
@@ -3454,8 +3439,6 @@ tx_t parse_weather_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab
 }
 tx_t parse_statement(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab, PlantArray* rtab, long bstart, tx_t emode) {
   tx_t tok = "";
-  tx_t tp = "";
-  tx_t drop_pair = "";
   tx_t lx = "";
   tx_t r = "";
   tx_t nx = "";
@@ -3464,15 +3447,6 @@ tx_t parse_statement(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab, P
   tx_t nx2_ty = "";
   tx_t nx3 = "";
   tx_t nx3_ty = "";
-    while (1) {
-        tok = peek(tokens, pos);
-        tp = tok_type(tok);
-        if (strcmp(tp,"DEPTH") != 0) {
-            break;
-        }
-        drop_pair = consume(tokens, pos);
-        pos = _second(drop_pair);
-    }
     tok = peek(tokens, pos);
     lx = tok_lex(tok);
     if (strcmp(lx,"CONST") == 0) {
@@ -11252,7 +11226,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.48.38k (pure native)");
+      plant_print("Chloroplast 0.48.38l (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);
