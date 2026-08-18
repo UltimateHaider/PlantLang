@@ -301,15 +301,33 @@ make all && make self && make test
 
 ---
 
-### 🏷️ Badges
+## 🏷️ Badges
 
-```markdown
-[![Pure Native](https://img.shields.io/badge/Pure_Native-🚀-success?style=flat-square)](https://github.com/your/plantlang)
-[![Self-Hosting](https://img.shields.io/badge/Self_Hosting-✅-blue?style=flat-square)](https://github.com/your/plantlang)
-[![Zero GC](https://img.shields.io/badge/Zero_GC-💚-brightgreen?style=flat-square)](https://github.com/your/plantlang)
-[![No VM](https://img.shields.io/badge/No_VM-⚡-orange?style=flat-square)](https://github.com/your/plantlang)
-[![License MIT](https://img.shields.io/badge/License-MIT-ff69b4?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/Version-0.49.9-9cf?style=flat-square)](https://github.com/your/plantlang)
-[![Tests](https://img.shields.io/badge/Tests-154/154-4CAF50?style=flat-square)](https://github.com/your/plantlang)
-[![Self-Hosted](https://img.shields.io/badge/Self_Hosted-🔄-brightgreen?style=flat-square)](https://github.com/your/plantlang)
-```
+<p align="center">
+  <img src="https://img.shields.io/badge/Pure_Native-🚀-success?style=for-the-badge&logo=linux&logoColor=white" alt="Pure Native"/>
+  <img src="https://img.shields.io/badge/Self_Hosting-✅-blue?style=for-the-badge" alt="Self-Hosting"/>
+  <img src="https://img.shields.io/badge/Zero_GC-💚-brightgreen?style=for-the-badge" alt="Zero GC"/>
+  <img src="https://img.shields.io/badge/No_VM-⚡-orange?style=for-the-badge" alt="No VM"/>
+  <img src="https://img.shields.io/badge/License-MIT-ff69b4?style=for-the-badge" alt="License MIT"/>
+  <img src="https://img.shields.io/badge/Version-0.49.9-9cf?style=for-the-badge" alt="Version 0.49.9"/>
+  <img src="https://img.shields.io/badge/Tests-154/154-4CAF50?style=for-the-badge" alt="Tests 154/154"/>
+  <img src="https://img.shields.io/badge/Self_Hosted-🔄-brightgreen?style=for-the-badge" alt="Self-Hosted"/>
+  <img src="https://img.shields.io/badge/PRs-Welcome-ff69b4?style=for-the-badge" alt="PRs Welcome"/>
+  <img src="https://img.shields.io/badge/Made_with-❤️-red?style=for-the-badge" alt="Made with Love"/>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/github/stars/your/plantlang?style=social" alt="GitHub Stars"/>
+  <img src="https://img.shields.io/github/forks/your/plantlang?style=social" alt="GitHub Forks"/>
+  <img src="https://img.shields.io/github/watchers/your/plantlang?style=social" alt="GitHub Watchers"/>
+</p>
+
+---
+
+<p align="center">
+  <b>🌱 PlantLang. Readable. Fast. Self-Hosting.</b>
+  <br>
+  <i>"Code that reads like prose, compiled to C, running at native speed."</i>
+  <br><br>
+  <img src="https://img.shields.io/badge/Built_with-❤️-ff69b4?style=flat-square" alt="Built with Love"/>
+</p>
