@@ -50,11 +50,19 @@ typedef struct PlantMap {
     size_t threshold;  /* load-factor ceiling */
 } PlantMap;
 
-PlantMap* plant_map_create(size_t initial_capacity);
-void      plant_map_set(PlantMap* map, const char* key, void* value);
+PlantMap* plant_map_hash_create(size_t initial_capacity);
+void      plant_map_hash_set(PlantMap* map, const char* key, void* value);
 void*     plant_map_get(PlantMap* map, const char* key);
 char**    plant_map_keys(PlantMap* map, size_t* out_count);
 void      plant_map_free(PlantMap* map);
+
+/* v0.49.5 — native map literal API: plant_map_create()/plant_map_set()
+   build the language's pair-list MAP representation (PlantArray,
+   kind = 1) — the form LINK / _map_get / plant_map_to_string /
+   json_stringify all consume. set upserts (existing key replaced,
+   like plant_link) and returns the map so calls chain. */
+tx_t plant_map_create(void);
+tx_t plant_map_set(tx_t map, tx_t key, tx_t value);
 
 /* ── v0.42.0: Iterator Protocol ── */
 

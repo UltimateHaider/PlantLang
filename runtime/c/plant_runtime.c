@@ -763,7 +763,7 @@ tx_t plant_net_close(tx_t fd) {
    v0.42.0 — Map Data Structure
    ═══════════════════════════════════════════════════════════════ */
 
-PlantMap* plant_map_create(size_t initial_capacity) {
+PlantMap* plant_map_hash_create(size_t initial_capacity) {
     if (initial_capacity < 8) initial_capacity = 8;
     PlantMap* map = (PlantMap*)plant_alloc(sizeof(PlantMap));
     map->capacity = initial_capacity;
@@ -785,14 +785,14 @@ static void _plant_map_grow(PlantMap* map) {
     memset(map->entries, 0, new_cap * sizeof(PlantMapEntry));
     for (size_t i = 0; i < old_cap; i++) {
         if (old_entries[i].occupied) {
-            plant_map_set(map, old_entries[i].key, old_entries[i].value);
+            plant_map_hash_set(map, old_entries[i].key, old_entries[i].value);
             plant_free(old_entries[i].key);
         }
     }
     plant_free(old_entries);
 }
 
-void plant_map_set(PlantMap* map, const char* key, void* value) {
+void plant_map_hash_set(PlantMap* map, const char* key, void* value) {
     if (!map || !key) return;
     if (map->count >= map->threshold) _plant_map_grow(map);
     size_t idx = _plant_hash_str(key) & (map->capacity - 1);
@@ -810,6 +810,43 @@ void plant_map_set(PlantMap* map, const char* key, void* value) {
             return;
         }
     }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.49.5 — native map literal API ({k: v})
+   plant_map_create() / plant_map_set() build the language's pair-list
+   MAP representation (PlantArray, kind = 1) — the same form LINK,
+   _map_get, plant_map_to_string, json_stringify and the LISTEN /
+   HARVEST request maps all consume. set upserts (an existing key is
+   replaced in place, matching plant_link) and returns the map so the
+   compiler can chain calls: plant_map_set(plant_map_set(create(), k1,
+   v1), k2, v2). Keys are stored as tx_t text; values pass through as
+   tx_t (the _from_long wraps already happened at the call site).
+   ═══════════════════════════════════════════════════════════════ */
+
+tx_t plant_map_create(void) {
+    PlantArray* m = plant_list_create(8);
+    m->kind = 1;
+    return (tx_t)m;
+}
+
+tx_t plant_map_set(tx_t map, tx_t key, tx_t value) {
+    PlantArray* m = (PlantArray*)map;
+    if (!m || m->magic != PLANT_ARRAY_MAGIC) m = plant_list_create(8);
+    m->kind = 1;
+    const char* k = key ? _S(key) : "";
+    int64_t i = 0;
+    for (; i + 1 < m->count; i += 2) {
+        const char* ok = (const char*)m->items[i];
+        if (ok && strcmp(ok, k) == 0) break;
+    }
+    if (i + 1 < m->count) m->items[i + 1] = value;
+    else {
+        m = plant_list_push(m, (void*)k);
+        m = plant_list_push(m, value);
+        m->kind = 1;
+    }
+    return (tx_t)m;
 }
 
 void* plant_map_get(PlantMap* map, const char* key) {
@@ -2399,7 +2436,7 @@ static tx_t _plant_ser(tx_t v, int depth) {
         const char* s = _S(v);
         return strdup(s ? s : "");
     }
-    if (p->count == 0) return strdup("[]");
+    if (p->count == 0) return strdup(p->kind == 1 ? "{}" : "[]");
     int is_map = (p->kind == 1);
     tx_t res = strdup(is_map ? "{" : "[");
     for (int64_t i = 0; i < p->count; i++) {
@@ -3273,13 +3310,13 @@ void plant_profile_end(tx_t name) {
 }
 
 tx_t plant_profile_dump(void) {
-    tx_t r = (tx_t)plant_map_create(8);
+    tx_t r = (tx_t)plant_map_hash_create(8);
     for (size_t i = 0; i < plant_profiles_count; i++) {
         char buf[128];
         double ms = (double)plant_profiles[i].total_ns / 1e6;
         snprintf(buf, sizeof(buf), "%.3f ms / %lld calls", ms,
                  (long long)plant_profiles[i].count);
-        plant_map_set((PlantMap*)r, plant_profiles[i].name, strdup(buf));
+        plant_map_hash_set((PlantMap*)r, plant_profiles[i].name, strdup(buf));
     }
     return r;
 }

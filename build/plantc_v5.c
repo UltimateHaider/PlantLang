@@ -88,8 +88,13 @@ tx_t _quote_cond_arg(tx_t e, tx_t cfn);
 tx_t _storm_inject(tx_t expr);
 tx_t _is_int(tx_t t);
 tx_t _push_el(PlantArray* els, tx_t cur);
+tx_t _enc_el(tx_t elt);
 tx_t _seg_list(tx_t inner);
 tx_t _list_literal(tx_t expr);
+tx_t _seg_map(tx_t inner);
+tx_t _find_colon(tx_t ptext);
+tx_t _push_pair(tx_t acc, tx_t cur);
+tx_t _map_literal(tx_t expr);
 tx_t is_identifier(tx_t tok);
 tx_t seg_has_literal_digit(tx_t seg);
 tx_t seg_is_numeric(tx_t seg, PlantArray* nums);
@@ -1077,6 +1082,12 @@ tx_t collect_value(PlantArray* tokens, long start) {
         if (strcmp(lx,")") == 0) {
             depth = depth - 1;
         }
+        if (strcmp(lx,"{") == 0) {
+            depth = depth+1;
+        }
+        if (strcmp(lx,"}") == 0) {
+            depth = depth - 1;
+        }
         if (strcmp(text,"") > 0) {
             text = _cat(text, " ");
         }
@@ -1114,6 +1125,12 @@ tx_t collect_until(PlantArray* tokens, long start, tx_t delim) {
             depth = depth+1;
         }
         if (strcmp(lx,")") == 0) {
+            depth = depth - 1;
+        }
+        if (strcmp(lx,"{") == 0) {
+            depth = depth+1;
+        }
+        if (strcmp(lx,"}") == 0) {
             depth = depth - 1;
         }
         if (strcmp(text,"") > 0) {
@@ -4810,23 +4827,33 @@ tx_t _is_int(tx_t t) {
 }
 tx_t _push_el(PlantArray* els, tx_t cur) {
   tx_t elt = "";
+  tx_t ef = "";
+    elt = trim(cur);
+    if (strlen( elt ) == 0) {
+        return els;
+    }
+    ef = _enc_el(elt);
+    els = plant_list_push((tx_t)els, (tx_t)ef);
+    return els;
+}
+tx_t _enc_el(tx_t elt) {
   tx_t ec0 = "";
   tx_t is2 = "";
   tx_t ebv = "";
   tx_t ebf = "";
   tx_t isi = "";
   tx_t opf = "";
-    elt = trim(cur);
-    if (strlen( elt ) == 0) {
-        return els;
-    }
     tx_t ef = "";
     ec0 = char_at(elt, 0);
     if (strcmp(ec0,"[") == 0) {
         is2 = substring(elt, 1, strlen( elt ) - 1);
         ef = _seg_list(is2);
     }
-    if (strcmp(ec0,"[") != 0) {
+    if (strcmp(ec0,"{") == 0) {
+        is2 = substring(elt, 1, strlen( elt ) - 1);
+        ef = _seg_map(is2);
+    }
+    if (strcmp(ec0,"[") != 0 && strcmp(ec0,"{") != 0) {
         ebv = str_eq(elt, "TRUE");
         if (strcmp(ebv,"1") == 0) {
             ef = "\"TRUE\"";
@@ -4851,8 +4878,7 @@ tx_t _push_el(PlantArray* els, tx_t cur) {
             }
         }
     }
-    els = plant_list_push((tx_t)els, (tx_t)ef);
-    return els;
+    return ef;
 }
 tx_t _seg_list(tx_t inner) {
   tx_t elx = "";
@@ -5009,6 +5035,211 @@ tx_t _list_literal(tx_t expr) {
                 }
             }
             if (strcmp(ch,"\"") != 0 && inst == 0 && ls == 0 && strcmp(ch,"[") != 0 && lc == 0) {
+                out = _cat(out, ch);
+            }
+            if (strcmp(ch,"\"") != 0 && inst == 1 && ls == 0) {
+                out = _cat(out, ch);
+            }
+        }
+        li = li+1;
+    }
+    return out;
+}
+tx_t _seg_map(tx_t inner) {
+    tx_t acc = "plant_map_create()";
+    tx_t cur = "";
+    long dep = 0;
+    long ist = 0;
+    long ii = 0;
+    tx_t ch = "";
+    long esc2 = 0;
+    while (ii < strlen( inner )) {
+        esc2 = 0;
+        ch = char_at(inner, ii);
+        if (ist == 1 && strcmp(ch,"\\") == 0 && ii + 1 < strlen( inner )) {
+            cur = _cat(cur, ch);
+            ii = ii+1;
+            ch = char_at(inner, ii);
+            cur = _cat(cur, ch);
+            esc2 = 1;
+        }
+        if (esc2 == 0) {
+            if (strcmp(ch,"\"") == 0) {
+                ist = 1 - ist;
+            }
+            if (ist == 0) {
+                if (strcmp(ch,"[") == 0 || strcmp(ch,"(") == 0 || strcmp(ch,"{") == 0) {
+                    dep = dep+1;
+                }
+                if (strcmp(ch,"]") == 0 || strcmp(ch,")") == 0 || strcmp(ch,"}") == 0) {
+                    dep = dep - 1;
+                }
+                if (strcmp(ch,",") == 0 && dep == 0) {
+                    acc = _push_pair(acc, cur);
+                    cur = "";
+                }
+            }
+            if (strcmp(ch,",") != 0 || ist == 1 || dep != 0) {
+                cur = _cat(cur, ch);
+            }
+        }
+        ii = ii+1;
+    }
+    acc = _push_pair(acc, cur);
+    return acc;
+}
+tx_t _find_colon(tx_t ptext) {
+    long dep = 0;
+    long ist = 0;
+    long ii = 0;
+    tx_t ch = "";
+    while (ii < strlen( ptext )) {
+        ch = char_at(ptext, ii);
+        if (strcmp(ch,"\"") == 0) {
+            ist = 1 - ist;
+        }
+        if (ist == 0) {
+            if (strcmp(ch,"[") == 0 || strcmp(ch,"(") == 0 || strcmp(ch,"{") == 0) {
+                dep = dep+1;
+            }
+            if (strcmp(ch,"]") == 0 || strcmp(ch,")") == 0 || strcmp(ch,"}") == 0) {
+                dep = dep - 1;
+            }
+            if (strcmp(ch,":") == 0 && dep == 0) {
+                return ii;
+            }
+        }
+        ii = ii+1;
+    }
+    return - 1;
+}
+tx_t _push_pair(tx_t acc, tx_t cur) {
+  tx_t ptext = "";
+  tx_t ci = "";
+  tx_t ktxt = "";
+  tx_t vtxt = "";
+  tx_t kt = "";
+  tx_t vt = "";
+  tx_t ken = "";
+  tx_t ven = "";
+    ptext = trim(cur);
+    if (strlen( ptext ) == 0) {
+        return acc;
+    }
+    ci = _find_colon(ptext);
+    if (ci == - 1) {
+        return acc;
+    }
+    ktxt = substring(ptext, 0, ci);
+    vtxt = substring(ptext, ci+1, strlen( ptext ));
+    kt = trim(ktxt);
+    vt = trim(vtxt);
+    if (strlen( kt ) == 0) {
+        return acc;
+    }
+    if (strlen( vt ) == 0) {
+        return acc;
+    }
+    ken = _enc_el(kt);
+    ven = _enc_el(vt);
+    acc = _cat4(_cat4("plant_map_set(", acc, ", ", ken), ", ", ven, ")");
+    return acc;
+}
+tx_t _map_literal(tx_t expr) {
+  tx_t isub = "";
+  tx_t pvi = "";
+    tx_t chk0 = "";
+    chk0 = find_any(expr, "{");
+    if (chk0 == - 1) {
+        return expr;
+    }
+    tx_t out = "";
+    long bd = 0;
+    long inst = 0;
+    long ls = 0;
+    long lc = 0;
+    tx_t lst = "";
+    long li = 0;
+    tx_t ch = "";
+    long lesc = 0;
+    while (li < strlen( expr )) {
+        lc = 0;
+        lesc = 0;
+        ch = char_at(expr, li);
+        if (inst == 1 && strcmp(ch,"\\") == 0 && li + 1 < strlen( expr )) {
+            out = _cat(out, ch);
+            li = li+1;
+            ch = char_at(expr, li);
+            out = _cat(out, ch);
+            lc = 1;
+            lesc = 1;
+        }
+        if (lesc == 0) {
+            if (strcmp(ch,"\"") == 0) {
+                inst = 1 - inst;
+            }
+            if (strcmp(ch,"\"") == 0 && ls == 0) {
+                out = _cat(out, ch);
+                lc = 1;
+            }
+            if (strcmp(ch,"\"") == 0 && ls == 1) {
+                lst = _cat(lst, ch);
+                lc = 1;
+            }
+            if (strcmp(ch,"\"") != 0 && inst == 0 && ls == 1) {
+                if (strcmp(ch,"{") == 0) {
+                    bd = bd+1;
+                }
+                if (strcmp(ch,"}") == 0) {
+                    bd = bd - 1;
+                    if (bd == 0) {
+                        isub = substring(lst, 1, strlen( lst ));
+                        out = _cat(out, _seg_map ( isub ));
+                        ls = 0;
+                        lc = 1;
+                    }
+                }
+                if (bd > 0) {
+                    lst = _cat(lst, ch);
+                }
+                if (strcmp(ch,"}") != 0) {
+                    lc = 1;
+                }
+                if (strcmp(ch,"}") == 0 && bd > 0) {
+                    lc = 1;
+                }
+            }
+            if (strcmp(ch,"\"") != 0 && inst == 1 && ls == 1) {
+                lst = _cat(lst, ch);
+                lc = 1;
+            }
+            if (strcmp(ch,"\"") != 0 && inst == 0 && ls == 0 && strcmp(ch,"{") == 0) {
+                tx_t pvc = "";
+                long pj = li - 1;
+                tx_t pch = "";
+                while (pj >= 0) {
+                    pch = char_at(expr, pj);
+                    if (strcmp(pch," ") != 0 && strcmp(pch,"\t") != 0) {
+                        pvc = pch;
+                        pj = - 1;
+                    }
+                    if (strcmp(pch," ") == 0 || strcmp(pch,"\t") == 0) {
+                        pj = pj - 1;
+                    }
+                }
+                pvi = find_any(pvc, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_)]");
+                if (li == 0 || pvi == - 1) {
+                    ls = 1;
+                    bd = 1;
+                    lst = "";
+                    lc = 1;
+                }
+                if (li > 0 && pvi != - 1) {
+                    out = _cat(out, ch);
+                    lc = 1;
+                }
+            }
+            if (strcmp(ch,"\"") != 0 && inst == 0 && ls == 0 && strcmp(ch,"{") != 0 && lc == 0) {
                 out = _cat(out, ch);
             }
             if (strcmp(ch,"\"") != 0 && inst == 1 && ls == 0) {
@@ -6924,6 +7155,7 @@ tx_t translate_expr(tx_t expr) {
     e = _handle_func(e, "SEAL", "plant_seal");
     e = _storm_inject(e);
     e = _handle_func(e, "TEST", "!");
+    e = _map_literal(e);
     e = _list_literal(e);
     e = plant_sanitize_bools((tx_t)e);
     e = strings_REPLACE((tx_t)e, "NULL", "NULL");
@@ -8986,7 +9218,7 @@ tx_t ffi_emit_struct_helpers(tx_t cname, PlantArray* flds) {
     h3 = _cat(_cat4(_cat4(_cat4("static void* plant_struct_alloc_copy_", cname, "(", cname), " v) { ", cname, "* r = ("), cname, "*)plant_alloc(sizeof(", cname), ")); *r = v; return (void*)r; }\n");
     h3 = _cat3(_cat4(_cat4(_cat4(h3, "static ", cname, "* plant_map_to_ref_"), cname, "(tx_t m) { return (", cname), "*)plant_struct_alloc_copy_", cname, "(plant_map_to_"), cname, "(m)); }\n");
     h4 = _cat(_cat4("static tx_t plant_", cname, "_to_map(", cname), " v) {\n");
-    h4 = _cat(h4, "  tx_t r = (tx_t)plant_map_create(8);\n");
+    h4 = _cat(h4, "  tx_t r = (tx_t)plant_map_hash_create(8);\n");
     long fi7 = 0;
     tx_t fn7 = "";
     tx_t ft7 = "";
@@ -8995,23 +9227,23 @@ tx_t ffi_emit_struct_helpers(tx_t cname, PlantArray* flds) {
         ft7 = plant_list_get(flds, fi7+1);
         fb7 = type_base(ft7);
         if (strcmp(fb7,"NUM") == 0) {
-            h4 = _cat3(_cat4(h4, "  plant_map_set(r, \"", fn7, "\", (void*)(intptr_t)v."), fn7, ");\n");
+            h4 = _cat3(_cat4(h4, "  plant_map_hash_set(r, \"", fn7, "\", (void*)(intptr_t)v."), fn7, ");\n");
         }
         if (strcmp(fb7,"FACT") == 0) {
-            h4 = _cat3(_cat4(h4, "  plant_map_set(r, \"", fn7, "\", (void*)(intptr_t)v."), fn7, ");\n");
+            h4 = _cat3(_cat4(h4, "  plant_map_hash_set(r, \"", fn7, "\", (void*)(intptr_t)v."), fn7, ");\n");
         }
         if (strcmp(fb7,"TX") == 0) {
-            h4 = _cat3(_cat4(h4, "  plant_map_set(r, \"", fn7, "\", v."), fn7, ");\n");
+            h4 = _cat3(_cat4(h4, "  plant_map_hash_set(r, \"", fn7, "\", v."), fn7, ");\n");
         }
         fs7 = is_struct_type(ft7);
         if (strcmp(fs7,"1") == 0) {
             es7 = substring(ft7, 0, 7);
             if (strcmp(es7,"STRUCT ") == 0) {
                 fcn7 = ffi_struct_cname(ft7);
-                h4 = _cat(_cat4(_cat4(h4, "  plant_map_set(r, \"", fn7, "\", plant_"), fcn7, "_to_map(v.", fn7), "));\n");
+                h4 = _cat(_cat4(_cat4(h4, "  plant_map_hash_set(r, \"", fn7, "\", plant_"), fcn7, "_to_map(v.", fn7), "));\n");
             }
             if (strcmp(es7,"STRUCT ") != 0) {
-                h4 = _cat3(_cat4(h4, "  plant_map_set(r, \"", fn7, "\", v."), fn7, ");\n");
+                h4 = _cat3(_cat4(h4, "  plant_map_hash_set(r, \"", fn7, "\", v."), fn7, ");\n");
             }
         }
         if (strcmp(fb7,"LIST") == 0) {
@@ -11301,7 +11533,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.4 (pure native)");
+      plant_print("Chloroplast 0.49.5 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

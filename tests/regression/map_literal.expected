@@ -1,0 +1,8 @@
+name=plant
+year=2026
+m1={name = plant, kind = tree, year = 2026}
+j1={"name":"plant","kind":"tree","year":2026}
+ax=1
+bx=11
+m2={a = [1, 2], b = {x = 11}, lit = 2, c = z}
+e={}

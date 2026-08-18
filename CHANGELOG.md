@@ -1,5 +1,60 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.49.5 — 2026 (Map Literals `{k: v}`)
+
+### Language
+- **Native map literals:** `{k: v}` — braces tokenize as LBRACE/
+  RBRACE (lexer), statement collectors depth-count braces (so a
+  terminator inside `{ ... }` never fires), and `translate_expr`'s
+  `_map_literal` scanner (quote-/escape-aware, brace-depth aware,
+  identifier-guarded so legacy `Obj{...}` struct-literal syntax
+  passes through) rewrites `{ ... }` spans into a chain of pair-list
+  MAP setters:
+  - `{ "name": "plant", "year": 2026 }` →
+    `plant_map_set(plant_map_set(plant_map_create(), "name",
+    "plant"), "year", _from_long(2026))`
+  - nested `{ ... }` and `[ ... ]` values recurse (`_seg_map` →
+    `_push_pair` → `_find_colon` for the key/value split, values via
+    the shared `_enc_el` coder — same `_from_long` / TRUE-FALSE /
+    operator wrapping as list elements)
+  - `{}` → `plant_map_create()`; `{k: v}` at expression start or
+    after `(`/`,`/space opens a span; `)`/`]`/identifier before `{`
+    blocks (struct-literal syntax)
+  - `_map_literal` runs before `_list_literal` so `[ {a: 1} ]` and
+    `{ a: [1, 2] }` both convert; the emitted chains contain no
+    brackets or bare colons for later passes.
+- **Runtime — pair-list map API:** `tx_t plant_map_create(void)` and
+  `tx_t plant_map_set(tx_t map, tx_t key, tx_t value)` (plant_runtime.c)
+  build the language's pair-list MAP representation (PlantArray,
+  kind = 1) — the same form `LINK`, `_map_get`, `plant_map_to_string`,
+  `json_stringify` and the LISTEN/HARVEST request maps consume.
+  `set` upserts (existing key replaced, like `plant_link`) and returns
+  the map so calls chain. Exposed via plant_runtime.h + plant_compat.h.
+- **Hash-table API renamed:** the C-level `plant_map_create(size_t)` /
+  `plant_map_set(PlantMap*, const char*, void*)` (struct/FFI
+  marshalling, mock profiles) became `plant_map_hash_create` /
+  `plant_map_hash_set`; `plant_map_get` / `plant_map_free` unchanged.
+  Emitters updated: struct `plant_<T>_to_map` codegen, `ffi_ext.plant`.
+- **Serializer:** empty pair-list MAPs now render `{}` instead of `[]`
+  (kind-aware `_plant_ser`).
+
+### Tests
+- Added `tests/regression/map_literal.plant` (+ `.expected`): simple
+  `{ "name": "plant", "kind": "tree", "year": 2026 }`, nested
+  `{ "a": [1, 2], "b": { "x": n + 1 } }`, arithmetic value
+  `"lit": 1 + 1`, empty `{}`, reads via `_map_get`, serialization via
+  `plant_map_to_string` and `json_stringify`.
+- STRUCT/native suites re-verified against the renamed hash API.
+
+### Documentation
+- `Language Tour.md`: Maps section documents the literal syntax,
+  nesting, incremental `plant_map_create()`/`plant_map_set()`
+  building, serialization, and the hash-table rename.
+
+### Housekeeping
+- Version bump 0.49.4 → 0.49.5 (Makefile, compiler banner, native test
+  suite version check).
+
 ## v0.49.4 — 2026 (List Literals Syntax)
 
 ### Language

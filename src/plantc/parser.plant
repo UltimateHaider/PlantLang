@@ -110,6 +110,14 @@ ACTION collect_value(tokens(LIST), start(NUM)),
     IF lx IS ")",
       SET depth TO depth - 1.
     /IF.
+    # v0.49.5 — { ... } map literal spans also hold depth, so a
+    # statement terminator (or delimiter) inside them never fires
+    IF lx IS "{",
+      SET depth TO depth + 1.
+    /IF.
+    IF lx IS "}",
+      SET depth TO depth - 1.
+    /IF.
     IF text > "",
       SET text TO text + " ".
     /IF.
@@ -143,6 +151,14 @@ ACTION collect_until(tokens(LIST), start(NUM), delim(TX)),
       SET depth TO depth + 1.
     /IF.
     IF lx IS ")",
+      SET depth TO depth - 1.
+    /IF.
+    # v0.49.5 — { ... } map literal spans also hold depth, so a
+    # statement terminator (or delimiter) inside them never fires
+    IF lx IS "{",
+      SET depth TO depth + 1.
+    /IF.
+    IF lx IS "}",
       SET depth TO depth - 1.
     /IF.
     IF text > "",

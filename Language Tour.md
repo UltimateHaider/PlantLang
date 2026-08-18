@@ -122,21 +122,47 @@ CREATE fruits(LIST) TO plant_list_make(3, "apple", "banana", "kiwi").
 `LET` is an accepted alias for `CREATE` (same semantics). `SET` requires a
 prior `CREATE` — there is no implicit declaration.
 
-### Maps (Hash Tables)
+### Maps
 
-Maps are created with the runtime helpers and accessed via `_map_get`:
+**Map literals (v0.49.5):** `{k: v}` declares and initializes a
+key-value structure in place — keys and values are quoted strings,
+numbers, variables, nested lists `[ ... ]`, or nested maps `{ ... }`;
+NUM-typed values wrap in `_from_long`:
 
 ```
-CREATE user(LIST) TO plant_list_make(0).
+CREATE user(LIST) TO { "name": "Haider", "score": 94 }.
+SHOW _map_get(user, "name").            # → Haider
+
+CREATE n(NUM) TO 10.
+CREATE cfg(LIST) TO { "tags": ["a", "b"], "limits": { "max": n + 1 } }.
+CREATE empty(LIST) TO {}.               # → plant_map_create()
+```
+
+The literal compiles to a chain of pair-list MAP setters —
+`plant_map_set(plant_map_set(plant_map_create(), "name", "Haider"),
+"score", _from_long(94))` — producing the same pair-list MAP form
+that `LINK`, `_map_get`, `plant_map_to_string`, `json_stringify` and
+the LISTEN/HARVEST request maps all consume. Read with `_map_get`,
+serialize with `plant_map_to_string` (→ `{name = Haider, ...}`) or
+`json_stringify` (→ `{"name":"Haider",...}`).
+
+Maps can also be built incrementally:
+
+```
+CREATE user(LIST) TO plant_map_create().
 plant_map_set(user, "name", "Haider").
-plant_map_set(user, "score", 94).
+plant_map_set(user, "score", _from_long(94)).
 
 REAP nm FROM _map_get, user, "name".
 SHOW nm.             # → Haider
 ```
 
 `plant_map_set(...)` as a bare call statement is a first-class statement
-(v0.48.4).
+(v0.48.4) and upserts (existing keys are replaced). Note: bare NUM
+variables as keys or values (e.g. `{n: "x"}`) are not yet wrapped —
+use a numeric expression or literal. The C-level hash-table API used
+by struct/FFI marshalling is `plant_map_hash_create` /
+`plant_map_hash_set` (renamed in v0.49.5).
 
 ### ENUM
 

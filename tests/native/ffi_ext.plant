@@ -25,9 +25,9 @@ ACTION cb_demo(n(NUM)),
 /ACTION.
 
 ACTION main(),
-  CREATE p(TX) TO plant_map_create(0).
-  plant_map_set(p, "x", 3).
-  plant_map_set(p, "y", 4).
+  CREATE p(TX) TO plant_map_hash_create(0).
+  plant_map_hash_set(p, "x", 3).
+  plant_map_hash_set(p, "y", 4).
   REAP s FROM ffi_point_sumv, p.
   SHOW "point_sumv: " + s.
   REAP s2 FROM ffi_scale_ref, p, 10.
@@ -36,10 +36,10 @@ ACTION main(),
   REAP gx FROM _from_long, plant_map_get(g, "x").
   REAP gy FROM _from_long, plant_map_get(g, "y").
   SHOW "get_point x: " + gx + " y: " + gy.
-  CREATE w(TX) TO plant_map_create(0).
-  plant_map_set(w, "p", p).
-  plant_map_set(w, "tag", 5).
-  plant_map_set(p, "x", 10).
+  CREATE w(TX) TO plant_map_hash_create(0).
+  plant_map_hash_set(w, "p", p).
+  plant_map_hash_set(w, "tag", 5).
+  plant_map_hash_set(p, "x", 10).
   REAP ws FROM ffi_wrap_sumv, w.
   SHOW "wrap_sumv: " + ws.
   REAP b FROM ffi_get_buf.
@@ -52,12 +52,12 @@ ACTION main(),
   SHOW "run_cb: " + _from_long(rc1).
   REAP rc2 FROM ffi_run_cb, cb_demo, 0, 7.
   SHOW "cb_demo via ensure: " + _from_long(rc2).
-  CREATE l(TX) TO plant_map_create(0).
-  CREATE l2(TX) TO plant_map_create(0).
-  CREATE l1(TX) TO plant_map_create(0).
-  plant_map_set(l1, "v", 9).
-  plant_map_set(l2, "a", l1).
-  plant_map_set(l, "a", l2).
+  CREATE l(TX) TO plant_map_hash_create(0).
+  CREATE l2(TX) TO plant_map_hash_create(0).
+  CREATE l1(TX) TO plant_map_hash_create(0).
+  plant_map_hash_set(l1, "v", 9).
+  plant_map_hash_set(l2, "a", l1).
+  plant_map_hash_set(l, "a", l2).
   REAP lr FROM ffi_l4_v, l.
   SHOW "l4 deep(guard): " + lr.
   GIVE 0.

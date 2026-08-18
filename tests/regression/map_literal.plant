@@ -1,0 +1,28 @@
+# map_literal: native map literal syntax (v0.49.5).
+# {k: v} compiles to a chain of pair-list MAP setters:
+# plant_map_set(plant_map_set(plant_map_create(), k1, v1), k2, v2).
+# Integer literals and NUM-typed expressions wrap in _from_long;
+# nested [ ... ] and { ... } values recurse; {} is plant_map_create();
+# the result is the language's pair-list MAP form — readable via
+# _map_get, serializable via plant_map_to_string / json_stringify.
+ACTION main(),
+  CREATE m1(LIST) TO { "name": "plant", "kind": "tree", "year": 2026 }.
+  REAP nm FROM _map_get, m1, "name".
+  REAP yr FROM _map_get, m1, "year".
+  SHOW "name=" + nm.
+  SHOW "year=" + yr.
+  SHOW "m1=" + plant_map_to_string(m1).
+  SHOW "j1=" + json_stringify(m1).
+  CREATE n(NUM) TO 10.
+  CREATE m2(LIST) TO { "a": [1, 2], "b": { "x": n + 1 }, "lit": 1 + 1, "c": "z" }.
+  REAP a1 FROM _map_get, m2, "a".
+  REAP ax FROM plant_list_get, a1, 0.
+  REAP b1 FROM _map_get, m2, "b".
+  REAP bx FROM _map_get, b1, "x".
+  SHOW "ax=" + ax.
+  SHOW "bx=" + bx.
+  SHOW "m2=" + plant_map_to_string(m2).
+  CREATE e(LIST) TO {}.
+  SHOW "e=" + plant_map_to_string(e).
+  GIVE 0.
+/GIVE main.

@@ -546,6 +546,14 @@ ACTION collect_value(tokens(LIST), start(NUM)),
     IF lx IS ")",
       SET depth TO depth - 1.
     /IF.
+    # v0.49.5 — { ... } map literal spans also hold depth, so a
+    # statement terminator (or delimiter) inside them never fires
+    IF lx IS "{",
+      SET depth TO depth + 1.
+    /IF.
+    IF lx IS "}",
+      SET depth TO depth - 1.
+    /IF.
     IF text > "",
       SET text TO text + " ".
     /IF.
@@ -579,6 +587,14 @@ ACTION collect_until(tokens(LIST), start(NUM), delim(TX)),
       SET depth TO depth + 1.
     /IF.
     IF lx IS ")",
+      SET depth TO depth - 1.
+    /IF.
+    # v0.49.5 — { ... } map literal spans also hold depth, so a
+    # statement terminator (or delimiter) inside them never fires
+    IF lx IS "{",
+      SET depth TO depth + 1.
+    /IF.
+    IF lx IS "}",
       SET depth TO depth - 1.
     /IF.
     IF text > "",
@@ -3656,14 +3672,32 @@ ACTION _is_int(t(TX)),
 ACTION _push_el(els(LIST), cur(TX)),
     REAP elt FROM trim, cur.
     IF LEN(elt) IS 0, GIVE els. /IF.
+    REAP ef FROM _enc_el, elt.
+    REAP els FROM plant_list_push, els, ef.
+    GIVE els.
+/ACTION.
+
+# _enc_el — encode a single list/map element or pair value into the
+# C expression emitted inside plant_list_make / plant_map_set: quoted
+# strings pass through as tx_t text; [ ... ] spans recurse into
+# _seg_list; { ... } spans recurse into _seg_map; bare booleans
+# materialize as the quoted strings; integer literals and arithmetic
+# expressions wrap in _from_long (NUM-typed values arrive as raw C
+# longs — pointer-truncation would crash the runtime's serializer);
+# everything else passes through as tx_t.
+ACTION _enc_el(elt(TX)),
     CREATE ef(TX) TO "".
     REAP ec0 FROM char_at, elt, 0.
     IF ec0 IS "[",
         REAP is2 FROM substring, elt, 1, LEN(elt) - 1.
         REAP ef FROM _seg_list, is2.
     /IF.
-    IF ec0 ISNT "[",
-        # bare booleans inside a list literal materialize as the
+    IF ec0 IS "{",
+        REAP is2 FROM substring, elt, 1, LEN(elt) - 1.
+        REAP ef FROM _seg_map, is2.
+    /IF.
+    IF ec0 ISNT "[" AND ec0 ISNT "{",
+        # bare booleans inside a literal materialize as the
         # quoted string "TRUE"/"FALSE": a non-numeric element for
         # SUM (skipped), and visible as text in JOIN/FIRST/LAST.
         REAP ebv FROM str_eq, elt, "TRUE".
@@ -3695,8 +3729,7 @@ ACTION _push_el(els(LIST), cur(TX)),
         /IF.
         /IF.
     /IF.
-    REAP els FROM plant_list_push, els, ef.
-    GIVE els.
+    GIVE ef.
 /ACTION.
 
 ACTION _seg_list(inner(TX)),
@@ -3841,6 +3874,202 @@ ACTION _list_literal(expr(TX)),
             /IF.
         /IF.
         IF ch ISNT "\"" AND inst IS 0 AND ls IS 0 AND ch ISNT "[" AND lc IS 0,
+            SET out TO out + ch.
+        /IF.
+        IF ch ISNT "\"" AND inst IS 1 AND ls IS 0,
+            SET out TO out + ch.
+        /IF.
+        /IF.
+        SET li TO li + 1.
+    /SEASON.
+    GIVE out.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
+#  Map literal translation (v0.49.5): {k: v} pairs compile to a
+#  chain of pair-list MAP setters —
+#  { "name": "plant", "year": 2026 } →
+#    plant_map_set(plant_map_set(plant_map_create(),
+#      "name", "plant"), "year", _from_long(2026))
+#  Empty {} → plant_map_create(). Nested { ... } and [ ... ]
+#  values recurse through _enc_el.
+# ──────────────────────────────────────────────────────────────
+
+# _seg_map — split the inner text of { ... } on top-level commas
+# (quote-, paren-, bracket- and brace-depth aware) and fold the
+# pairs into the plant_map_set chain.
+ACTION _seg_map(inner(TX)),
+    CREATE acc(TX) TO "plant_map_create()".
+    CREATE cur(TX) TO "".
+    CREATE dep(NUM) TO 0.
+    CREATE ist(NUM) TO 0.
+    CREATE ii(NUM) TO 0.
+    CREATE ch(TX) TO "".
+    CREATE esc2(NUM) TO 0.
+    SEASON ii < LEN(inner),
+        SET esc2 TO 0.
+        REAP ch FROM char_at, inner, ii.
+        IF ist IS 1 AND ch IS "\\" AND ii + 1 < LEN(inner),
+            SET cur TO cur + ch.
+            SET ii TO ii + 1.
+            REAP ch FROM char_at, inner, ii.
+            SET cur TO cur + ch.
+            SET esc2 TO 1.
+        /IF.
+        IF esc2 IS 0,
+        IF ch IS "\"", SET ist TO 1 - ist. /IF.
+        IF ist IS 0,
+            IF ch IS "[" OR ch IS "(" OR ch IS "{", SET dep TO dep + 1. /IF.
+            IF ch IS "]" OR ch IS ")" OR ch IS "}", SET dep TO dep - 1. /IF.
+            IF ch IS "," AND dep IS 0,
+                REAP acc FROM _push_pair, acc, cur.
+                SET cur TO "".
+            /IF.
+        /IF.
+        IF ch ISNT "," OR ist IS 1 OR dep ISNT 0,
+            SET cur TO cur + ch.
+        /IF.
+        /IF.
+        SET ii TO ii + 1.
+    /SEASON.
+    REAP acc FROM _push_pair, acc, cur.
+    GIVE acc.
+/ACTION.
+
+# _find_colon — index of the first top-level ":" (quote-, paren-,
+# bracket- and brace-aware); -1 when absent.
+ACTION _find_colon(ptext(TX)),
+    CREATE dep(NUM) TO 0.
+    CREATE ist(NUM) TO 0.
+    CREATE ii(NUM) TO 0.
+    CREATE ch(TX) TO "".
+    SEASON ii < LEN(ptext),
+        REAP ch FROM char_at, ptext, ii.
+        IF ch IS "\"", SET ist TO 1 - ist. /IF.
+        IF ist IS 0,
+            IF ch IS "[" OR ch IS "(" OR ch IS "{", SET dep TO dep + 1. /IF.
+            IF ch IS "]" OR ch IS ")" OR ch IS "}", SET dep TO dep - 1. /IF.
+            IF ch IS ":" AND dep IS 0, GIVE ii. /IF.
+        /IF.
+        SET ii TO ii + 1.
+    /SEASON.
+    GIVE -1.
+/ACTION.
+
+# _push_pair — encode one "key: value" pair and fold it into the
+# chain: plant_map_set(<acc>, <key>, <value>). Empty / malformed
+# pairs are skipped.
+ACTION _push_pair(acc(TX), cur(TX)),
+    REAP ptext FROM trim, cur.
+    IF LEN(ptext) IS 0, GIVE acc. /IF.
+    REAP ci FROM _find_colon, ptext.
+    IF ci IS -1, GIVE acc. /IF.
+    REAP ktxt FROM substring, ptext, 0, ci.
+    REAP vtxt FROM substring, ptext, ci + 1, LEN(ptext).
+    REAP kt FROM trim, ktxt.
+    REAP vt FROM trim, vtxt.
+    IF LEN(kt) IS 0, GIVE acc. /IF.
+    IF LEN(vt) IS 0, GIVE acc. /IF.
+    REAP ken FROM _enc_el, kt.
+    REAP ven FROM _enc_el, vt.
+    SET acc TO "plant_map_set(" + acc + ", " + ken + ", " + ven + ")".
+    GIVE acc.
+/ACTION.
+
+# _map_literal — scan an expression for top-level { ... } spans and
+# rewrite them through _seg_map. Quote- and escape-aware; braces
+# inside strings are literal text. The identifier-guard mirrors
+# _list_literal: a "{" preceded by an identifier (or ) or ]) is
+# legacy struct-literal syntax and passes through untouched.
+ACTION _map_literal(expr(TX)),
+    CREATE chk0(TX) TO "".
+    REAP chk0 FROM find_any, expr, "{".
+    IF chk0 IS -1, GIVE expr. /IF.
+    CREATE out(TX) TO "".
+    CREATE bd(NUM) TO 0.
+    CREATE inst(NUM) TO 0.
+    CREATE ls(NUM) TO 0.
+    CREATE lc(NUM) TO 0.
+    CREATE lst(TX) TO "".
+    CREATE li(NUM) TO 0.
+    CREATE ch(TX) TO "".
+    CREATE lesc(NUM) TO 0.
+    SEASON li < LEN(expr),
+        SET lc TO 0.
+        SET lesc TO 0.
+        REAP ch FROM char_at, expr, li.
+        IF inst IS 1 AND ch IS "\\" AND li + 1 < LEN(expr),
+            SET out TO out + ch.
+            SET li TO li + 1.
+            REAP ch FROM char_at, expr, li.
+            SET out TO out + ch.
+            SET lc TO 1.
+            SET lesc TO 1.
+        /IF.
+        IF lesc IS 0,
+        IF ch IS "\"", SET inst TO 1 - inst. /IF.
+        IF ch IS "\"" AND ls IS 0,
+            SET out TO out + ch.
+            SET lc TO 1.
+        /IF.
+        IF ch IS "\"" AND ls IS 1,
+            SET lst TO lst + ch.
+            SET lc TO 1.
+        /IF.
+        IF ch ISNT "\"" AND inst IS 0 AND ls IS 1,
+            IF ch IS "{", SET bd TO bd + 1. /IF.
+            IF ch IS "}",
+                SET bd TO bd - 1.
+                IF bd IS 0,
+                    REAP isub FROM substring, lst, 1, LEN(lst).
+                    SET out TO out + _seg_map(isub).
+                    SET ls TO 0.
+                    SET lc TO 1.
+                /IF.
+            /IF.
+            IF bd > 0, SET lst TO lst + ch. /IF.
+            IF ch ISNT "}",
+                SET lc TO 1.
+            /IF.
+            IF ch IS "}" AND bd > 0,
+                SET lc TO 1.
+            /IF.
+        /IF.
+        IF ch ISNT "\"" AND inst IS 1 AND ls IS 1,
+            SET lst TO lst + ch.
+            SET lc TO 1.
+        /IF.
+        IF ch ISNT "\"" AND inst IS 0 AND ls IS 0 AND ch IS "{",
+            # identifier-guard: skip whitespace backwards — tokenized
+            # expression text is space-joined, so the char right
+            # before "{" may be a space. `)` / `]` also block
+            # (call-result / chained access is not a map literal).
+            CREATE pvc(TX) TO "".
+            CREATE pj(NUM) TO li - 1.
+            CREATE pch(TX) TO "".
+            SEASON pj >= 0,
+                REAP pch FROM char_at, expr, pj.
+                IF pch ISNT " " AND pch ISNT "\t",
+                    SET pvc TO pch.
+                    SET pj TO -1.
+                /IF.
+                IF pch IS " " OR pch IS "\t",
+                    SET pj TO pj - 1.
+                /IF.
+            /SEASON.
+            REAP pvi FROM find_any, pvc, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_)]".
+            IF li IS 0 OR pvi IS -1,
+                SET ls TO 1.
+                SET bd TO 1.
+                SET lst TO "".
+                SET lc TO 1.
+            /IF.
+            IF li > 0 AND pvi ISNT -1,
+                SET out TO out + ch.
+                SET lc TO 1.
+            /IF.
+        /IF.
+        IF ch ISNT "\"" AND inst IS 0 AND ls IS 0 AND ch ISNT "{" AND lc IS 0,
             SET out TO out + ch.
         /IF.
         IF ch ISNT "\"" AND inst IS 1 AND ls IS 0,
@@ -5729,6 +5958,11 @@ ACTION translate_expr(expr(TX)),
     REAP e FROM _handle_func, e, "SEAL", "plant_seal".
     REAP e FROM _storm_inject, e.
     REAP e FROM _handle_func, e, "TEST", "!".
+    # map literals rewrite BEFORE list literals so { ... } spans
+    # (and [ ... ] values nested inside them) are fully converted;
+    # the emitted plant_map_set/plant_map_create chains contain no
+    # brackets or bare colons for the later passes to see.
+    REAP e FROM _map_literal, e.
     # list literals rewrite BEFORE boolean sanitization so a bare
     # TRUE/FALSE inside [ ... ] survives as the quoted string
     # "TRUE"/"FALSE" (a non-numeric element — SUM skips it, and
@@ -7821,7 +8055,7 @@ ACTION ffi_emit_struct_helpers(cname(TX), flds(LIST)),
   SET h3 TO "static void* plant_struct_alloc_copy_" + cname + "(" + cname + " v) { " + cname + "* r = (" + cname + "*)plant_alloc(sizeof(" + cname + ")); *r = v; return (void*)r; }\n".
   SET h3 TO h3 + "static " + cname + "* plant_map_to_ref_" + cname + "(tx_t m) { return (" + cname + "*)plant_struct_alloc_copy_" + cname + "(plant_map_to_" + cname + "(m)); }\n".
   SET h4 TO "static tx_t plant_" + cname + "_to_map(" + cname + " v) \{\n".
-  SET h4 TO h4 + "  tx_t r = (tx_t)plant_map_create(8);\n".
+  SET h4 TO h4 + "  tx_t r = (tx_t)plant_map_hash_create(8);\n".
   CREATE fi7(NUM) TO 0.
   CREATE fn7(TX) TO "".
   CREATE ft7(TX) TO "".
@@ -7830,23 +8064,23 @@ ACTION ffi_emit_struct_helpers(cname(TX), flds(LIST)),
     REAP ft7 FROM plant_list_get, flds, fi7 + 1.
     REAP fb7 FROM type_base, ft7.
     IF fb7 IS "NUM",
-      SET h4 TO h4 + "  plant_map_set(r, \"" + fn7 + "\", (void*)(intptr_t)v." + fn7 + ");\n".
+      SET h4 TO h4 + "  plant_map_hash_set(r, \"" + fn7 + "\", (void*)(intptr_t)v." + fn7 + ");\n".
     /IF.
     IF fb7 IS "FACT",
-      SET h4 TO h4 + "  plant_map_set(r, \"" + fn7 + "\", (void*)(intptr_t)v." + fn7 + ");\n".
+      SET h4 TO h4 + "  plant_map_hash_set(r, \"" + fn7 + "\", (void*)(intptr_t)v." + fn7 + ");\n".
     /IF.
     IF fb7 IS "TX",
-      SET h4 TO h4 + "  plant_map_set(r, \"" + fn7 + "\", v." + fn7 + ");\n".
+      SET h4 TO h4 + "  plant_map_hash_set(r, \"" + fn7 + "\", v." + fn7 + ");\n".
     /IF.
     REAP fs7 FROM is_struct_type, ft7.
     IF fs7 IS "1",
       REAP es7 FROM substring, ft7, 0, 7.
       IF es7 IS "STRUCT ",
         REAP fcn7 FROM ffi_struct_cname, ft7.
-        SET h4 TO h4 + "  plant_map_set(r, \"" + fn7 + "\", plant_" + fcn7 + "_to_map(v." + fn7 + "));\n".
+        SET h4 TO h4 + "  plant_map_hash_set(r, \"" + fn7 + "\", plant_" + fcn7 + "_to_map(v." + fn7 + "));\n".
       /IF.
       IF es7 ISNT "STRUCT ",
-        SET h4 TO h4 + "  plant_map_set(r, \"" + fn7 + "\", v." + fn7 + ");\n".
+        SET h4 TO h4 + "  plant_map_hash_set(r, \"" + fn7 + "\", v." + fn7 + ");\n".
       /IF.
     /IF.
     IF fb7 IS "LIST",
@@ -10077,7 +10311,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.49.4 (pure native)".
+  SHOW "Chloroplast 0.49.5 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

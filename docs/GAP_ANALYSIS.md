@@ -1,8 +1,8 @@
 # Legacy JS Interpreter vs Self-Hosted Compiler — Gap Analysis Report
 
-**Scope:** Legacy JavaScript interpreter (PlantLang ≤ v0.45.x, `core/interpreter.js` + associated modules, recovered from git at `7f54eae` v0.45.0) vs the self-hosted native compiler (v0.49.4, `src/plantc/*.plant` → C, `runtime/c/plant_runtime.c`).
+**Scope:** Legacy JavaScript interpreter (PlantLang ≤ v0.45.x, `core/interpreter.js` + associated modules, recovered from git at `7f54eae` v0.45.0) vs the self-hosted native compiler (v0.49.5, `src/plantc/*.plant` → C, `runtime/c/plant_runtime.c`).
 
-> **Status note (v0.49.4):** the legacy side no longer exists in the
+> **Status note (v0.49.5):** the legacy side no longer exists in the
 > working tree. v0.48.38m removed `core/`, `src/**/*.js`, `service/`,
 > `webrepl/`, `std/`, `benchmarks/`, and the editor assets from the
 > repository; the legacy engine is now preserved only in git history
@@ -17,7 +17,7 @@ PlantLang transitioned from a **tree-walking JavaScript interpreter** (~9,000 li
 
 The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 port. High-level counts:
 
-| Area | Legacy (v0.45.0) | Current (v0.49.4) | Gap |
+| Area | Legacy (v0.45.0) | Current (v0.49.5) | Gap |
 |---|---|---|---|---|
 | Statement keywords (parser dispatch) | ~40 | ~40 (incl. storms, CYCLE forms, NOW/ANALYZE/TYPEOF, FREE/ARC/FAST, WAIT/LOCK) | ~10 missing (deliberate cuts + legacy stubs) |
 | Innate/std library functions | ~60 (41 innate + 19 std/.plnt + 5 FFI stubs) | ~31 expression builtins (codegen_c.plant:2238-2292) + ~22 FFI module bindings (strings/fs/math) + ~50 declared runtime helpers | ~20 missing |
@@ -40,7 +40,7 @@ The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 
 
 - **Legacy side** (recovered from git `7f54eae`, the last commit shipping `core/interpreter.js`; removed from the working tree in v0.48.38m — all sources below are historical):
   `core/interpreter.js` (2,828 L), `core/parser.js` (3,033 L), `core/ast.js` (1,040 L), `core/typechecker.js` (1,529 L), `core/tokenizer.js` (259 L), `core/evaluator.js` (173 L), `core/runtime.js` (64 L), `core/innate.js` (67 L), `core/dispatcher.js` (286 L), `core/matrix.js`, `core/harvest.js` + `harvest_worker.js`, `core/diagnostics.js`, `core/lexer.js`, `core/runtime_bridge.c`, `src/interpreter/{cycle_evaluator,sort_evaluator,bloom_evaluator,show_formatter}.js`, `std/{prelude,string,math,io}.plnt`.
-- **Current side** (working tree v0.49.4): `src/plantc/{lexer,parser,codegen_c,main}.plant`, `runtime/c/plant_runtime.c` (≈6,000 L), `runtime/c/plant_compat.h` (549 L), `runtime/c/plant_runtime.h`, `tests/native/mock_ffi.{h,c}`, `Language Tour.md`.
+- **Current side** (working tree v0.49.5): `src/plantc/{lexer,parser,codegen_c,main}.plant`, `runtime/c/plant_runtime.c` (≈6,000 L), `runtime/c/plant_compat.h` (549 L), `runtime/c/plant_runtime.h`, `tests/native/mock_ffi.{h,c}`, `Language Tour.md`.
 - **Verification method:** full keyword-dispatch enumeration of both parsers; complete function inventories of `plant_compat.h` and `plant_runtime.c`; spot-checks for every "missing" claim (all negative).
 
 Legend for gap tables: **S** = supported, **P** = partial (different semantics / only reachable internally), **M** = missing, **D** = intentionally deprecated / dropped by design.
@@ -75,7 +75,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | Legacy construct | Legacy status | Current | Notes |
 |---|---|---|---|
 | `CREATE` (typed, `TO`, empty) | S | **S** | no `PULSE` flag |
-| `CREATE x(LIST) TO a, b, c.` comma init | S | M | aggregates built via `plant_list_make` |
+| `CREATE x(LIST) TO a, b, c.` comma init | S | M | aggregates built via `plant_list_make`; native alternative: `CREATE x(LIST) TO [a, b, c].` literal (v0.49.4) |
 | `LET x = expr.` | S | **S** | |
 | `SET t TO e.` | S | **S** | `SELF:prop`/`obj:field` member targets M |
 | `INCREASE` / `DECREASE … BY` | S | **S** | `INCREASE x BY n.` / `DECREASE x BY n.` shipped in v0.48.22-patch (numeric targets only, compound C assignment) |
@@ -97,8 +97,8 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `WEATHER … SHELTER storm AS e … CALM.` | S | **S** | v0.48.25; THROW + 13 kinds + ANY_STORM catch-all, STOP IF, plant_calm finalization; v0.48.38a `storm()` factory (`THROW storm("TYPE", "msg").` with ARC-managed object binding); v0.48.38b location backfill (`__FILE__`/`__LINE__` injected at the throw site, exposed via `_map_get(e, "file")`/`"line"`) |
 | `MATCH expr { Variant(b) -> … }` / `MATCH … IS … YIELD` | S | M | |
 | `TAP/ABSORB/INFUSE/SEAL` (VEIN files) | S | **S** | v0.48.38k (`plant_tap/absorb/infuse/seal` over `FILE*` handles tagged with `VEIN_MAGIC`; legacy INFUSE/ABSORB/SEAL were parse stubs) |
-| `HARVEST "url" [METHOD:][BODY:][HEADERS:][TIMEOUT:]` | S | **S** | v0.48.32 (HTTP/1.1 client, response MAP ok/status/body/headers; timeout 0 → 5s; no TLS); v0.48.34 (`… AS … MAP` keeps the connection alive and exposes `sock` for plant_net_read/write/close); v0.49.0 (formalized grammar `HARVEST url AS resp [METHOD m] [BODY b] [HEADERS h] [TIMEOUT t] [MAP]`, any-order options); v0.49.4 (`… AS resp JSON` → `plant_net_harvest_json`, body parsed into a `PlantJson`) |
-| `LISTEN BRANCH ON port … LISTEN/.` + `GIVE … AS RESPONSE` | S | **S** | v0.48.33 (LISTEN ON port AS req. one-shot server, request MAP ok/method/path/headers/body, GIVE … AS RESPONSE replies 200 + Content-Length; bind failure → ok FALSE); v0.49.2 (`TIMEOUT t` option → `plant_net_listen_timeout`, accept fails ok FALSE); v0.49.4 (`GIVE … AS RESPONSE JSON` → `plant_net_respond_json`, json_stringify + application/json; plain LISTs serialize as JSON arrays) |
+| `HARVEST "url" [METHOD:][BODY:][HEADERS:][TIMEOUT:]` | S | **S** | v0.48.32 (HTTP/1.1 client, response MAP ok/status/body/headers; timeout 0 → 5s; no TLS); v0.48.34 (`… AS … MAP` keeps the connection alive and exposes `sock` for plant_net_read/write/close); v0.49.0 (formalized grammar `HARVEST url AS resp [METHOD m] [BODY b] [HEADERS h] [TIMEOUT t] [MAP]`, any-order options); v0.49.3 (`… AS resp JSON` → `plant_net_harvest_json`, body parsed into a `PlantJson`) |
+| `LISTEN BRANCH ON port … LISTEN/.` + `GIVE … AS RESPONSE` | S | **S** | v0.48.33 (LISTEN ON port AS req. one-shot server, request MAP ok/method/path/headers/body, GIVE … AS RESPONSE replies 200 + Content-Length; bind failure → ok FALSE); v0.49.2 (`TIMEOUT t` option → `plant_net_listen_timeout`, accept fails ok FALSE); v0.49.3 (`GIVE … AS RESPONSE JSON` → `plant_net_respond_json`, json_stringify + application/json; plain LISTs serialize as JSON arrays) |
 | `WAIT n.` (sync sleep) / `LOCK var.` (sync guard) | S | **S** | v0.48.37e (`WAIT` → `plant_msleep` statement; `LOCK` → centralized runtime Lock Table over variable values, `plant_lock`/`release`/`held`/`status`, `ERR:undefined`/`ERR:full`; zero/negative/bare durations are no-ops) |
 | `ANALYZE x.` / `NOW FORMAT:*` / `TYPEOF x.` | S | **S** | v0.48.36 (structural runtime classifier `_plant_val_kind`, uniform `{type = …, size = …, keys = […]}` report, `bad-format:<NAME>` fallback, implicit null for undeclared targets) |
 | `FREE` / `ARC LINK|UNLINK` / `FAST RESET.` | S | **S** | v0.48.37a (slab-aware `plant_mem_free` with NULL-back write, ARC edge statements over `plant_arc_link`/`plant_arc_unlink`, mid-scope bump release; `FREE` of a literal is a user error as in C) |
@@ -120,11 +120,11 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `"str {expr}"` string interpolation | **S** | shipped as `"str ${expr}"` (v0.48.22-patch2) with nesting, numeric/enum wrapping; `\${` stays literal and concat chains flatten to `_cat3`/`_cat4` with a single-digit fast path (v0.48.22-patch4) |
 | `'str'` single-quoted | M | regex-path only in legacy too |
 | `TRUE`/`FALSE`/`NULL`/`VOID` | **P** | TRUE/FALSE/NULL; VOID M |
-| `[a, b, c]` array literal | M | use `plant_list_make(n, …)` |
-| `{ k: v }` map literal | M | use `_map_get`/`plant_map_get` style |
+| `[a, b, c]` array literal | M | **S** (v0.49.4: native literals — `[1, 2, 3]` → `plant_list_make(3, _from_long(1), …)`, integer literals and NUM-typed expressions wrap in `_from_long` (`[x + 1, y]` → `_from_long(x + 1)`), nested `["a", ["b", "c"], "w"]` recurse, `[]` → `plant_list_make(0)`, bare TRUE/FALSE quote as strings; strings/list variables pass through as tx_t; still unsupported: chained indexing `b[1][0]`, string concatenation inside a literal) |
+| `{ k: v }` map literal | M | **S** (v0.49.5: native literals — `{ "name": "plant", "year": 2026 }` → `plant_map_set(plant_map_set(plant_map_create(), "name", "plant"), "year", _from_long(2026))`; keys/values are quoted strings, numbers (→ `_from_long`), variables, nested `[ … ]` and `{ … }`; `{}` → `plant_map_create()`; produces the pair-list MAP form — readable via `_map_get`, serializable via `plant_map_to_string`/`json_stringify`; bare NUM variables as keys/values still unwrapped) |
 | `StructName{ args }` / `{field: value}` struct literals | M | structs are map-backed, created via action returns |
 | `a..b` range expression | M | runtime `plant_range` helper exists but not as syntax |
-| `x[i]` index | **S** | rewritten to `plant_list_get`/array access |
+| `x[i]` index | **S** | rewritten to `plant_list_get`/array access; `name[expr]` → `plant_list_get(name, expr)` via C-side `handle_brackets` — expression position only (v0.49.4-documented; `REAP … FROM x[i]` target and chained `b[1][0]` unsupported) |
 | `x[s:e]` slices | M | `SLICE(seq, start, end)` built-in **S** (v0.48.38i, half-open bounds with -1 bound expansion); `x[s:e]` syntax M |
 | `obj:prop`, `obj:"k1":"k2"`, `a.b.c`, `SELF:prop` | M | colon-call only for `module:func` |
 | `a.method(args)` (push/pop/put/get/has) | M | |
@@ -218,8 +218,8 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 ### 6.2 Legacy-only runtime features (M in current)
 - **Storms**: 13 typed exceptions (`ZERO_STORM` … `ANY_STORM`), `WEATHER/SHELTER/CALM`, `storm()` factory, location backfill. **v0.48.25 ships all 13 kinds**: the six core kinds (`ZERO_STORM`, `LOCK_STORM`, `MISSING_STORM`, `NETWORK_STORM`, `LOST_STORM`, `ANY_STORM`) plus the six additive classifications (`RANGE_STORM`, `TYPE_STORM`, `PARSE_STORM`, `HANDLE_STORM`, `HARVEST_STORM`, `FALL_STORM`) and `STOP_STORM` (the `STOP IF` classification), routed by the runtime's `plant_storm_match` against `AS e`-bound shelters with per-kind default messages, plus the `plant_calm` finalization pipeline (CALM runs on normal, caught, unmatched, and `GIVE`/`BREAK`/`CONTINUE` exits); **v0.48.38a ships the `storm()` factory** (`THROW storm("TYPE", "msg").` / `CALL storm(...).`): an ARC-managed `{type, message}` object that survives unwinding, binds as the SHELTER `AS e` value, and is released to the ARC heap after the handler body runs (`plant_storm_release`), with empty-type/empty-message normalization to `ANY_STORM` / registry defaults; **v0.48.38b ships location backfill**: `storm(...)` compiles to `plant_storm("TYPE", "msg", __FILE__, __LINE__, 0)` — the factory packs the compile-site source path and line into the object (column omitted), and SHELTER `AS e` bindings expose `_map_get(e, "file")` / `_map_get(e, "line")` metadata. Nothing missing.
 - **Soil scope chain**: locked vars (`LOCK_STORM`), PULSE flags, `WHENEVER … CHANGES` watchers.
-- **HTTP server** (LISTEN, request MAPs, JSON bodies, `GIVE … AS RESPONSE`, SIGINT/SIGTERM lifecycle) — `LISTEN ON port AS req.` + `GIVE … AS RESPONSE` shipped in v0.48.33 (one-shot server, plain-text bodies), timeout option v0.49.2, **JSON bodies shipped v0.49.4** (`GIVE … AS RESPONSE JSON` → `plant_net_respond_json`, json_stringify with `application/json`; `HARVEST … AS resp JSON` → `plant_net_harvest_json` parses the body into a `PlantJson`). Still missing: a signal-driven request loop.
-- **HTTP client** (HARVEST via worker threads, NETWORK_STORM, `{ok,status,body,headers}` result) — **shipped and formalized v0.49.0**: `HARVEST url AS resp [METHOD m] [BODY b] [HEADERS h] [TIMEOUT t] [MAP].` maps to `plant_net_harvest` / `plant_net_harvest_map` (parser `parse_harvest_stmt`, codegen `harvest_stmt`); MAP-mode exposes the live `sock` for `plant_net_read/write/close`; **v0.49.4 adds `… AS resp JSON.`** → `plant_net_harvest_json` (body parsed into a `PlantJson`, nested access via json_get/json_at). Missing vs legacy: worker-thread fan-out and TLS (https: ports parse to 443 but the socket is plaintext).
+- **HTTP server** (LISTEN, request MAPs, JSON bodies, `GIVE … AS RESPONSE`, SIGINT/SIGTERM lifecycle) — `LISTEN ON port AS req.` + `GIVE … AS RESPONSE` shipped in v0.48.33 (one-shot server, plain-text bodies), timeout option v0.49.2, **JSON bodies shipped v0.49.3** (`GIVE … AS RESPONSE JSON` → `plant_net_respond_json`, json_stringify with `application/json`; `HARVEST … AS resp JSON` → `plant_net_harvest_json` parses the body into a `PlantJson`). Still missing: a signal-driven request loop.
+- **HTTP client** (HARVEST via worker threads, NETWORK_STORM, `{ok,status,body,headers}` result) — **shipped and formalized v0.49.0**: `HARVEST url AS resp [METHOD m] [BODY b] [HEADERS h] [TIMEOUT t] [MAP].` maps to `plant_net_harvest` / `plant_net_harvest_map` (parser `parse_harvest_stmt`, codegen `harvest_stmt`); MAP-mode exposes the live `sock` for `plant_net_read/write/close`; **v0.49.3 adds `… AS resp JSON.`** → `plant_net_harvest_json` (body parsed into a `PlantJson`, nested access via json_get/json_at). Missing vs legacy: worker-thread fan-out and TLS (https: ports parse to 443 but the socket is plaintext).
 - **VEIN file handles** (TAP/ABSORB/INFUSE/SEAL) — **shipped v0.48.38k**: `plant_tap/absorb/infuse/seal` over `FILE*` handles tagged with `VEIN_MAGIC` (invalid handles return falsy/`""`; `SEAL` closes and frees). The legacy forms were parse stubs.
 - **VERIFY/SUITE** test framework + `SHOW_VERIFY_SUMMARY` (replaced by shell harnesses).
 - **WAIT** synchronous sleep statement (Atomics.wait capped at 10 s) — **shipped v0.48.37e** as `WAIT n.` over POSIX `nanosleep` (`plant_msleep`); bare/zero/negative durations are no-ops. The legacy `Atomics.wait`-style capped variant is N/A in the native runtime.
@@ -242,7 +242,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 ## 7. Architecture Drivers of the Gaps
 
 1. **Static typing vs dynamic evaluation.** The legacy evaluator's `new Function()` compilation and `inferType/coerce` make dynamic forms cheap to implement in JS but impossible to express in typed C without a full type-inference pass. This explains the loss of: string interpolation, untyped aggregates, `CONVERT`, `TYPEOF`, `ANY/ALL/HAS/IS_A` conditions, and type-method dispatch.
-2. **C codegen vs JS runtime objects.** Maps/lists/structs are now opaque `tx_t` pointers with explicit helper calls. Language-level convenience (literals, slices, SORT/SHAKE/BRAID, JOIN) needs codegen rewrites — SORT/SHAKE (v0.48.29), BRAID/LINK (v0.48.31) and JOIN (v0.48.38c, `JOIN(list, delim)` → `plant_join`) have them; the runtime helpers (`plant_array_length`, `plant_range`, `plant_iterator_*`) partially exist for the rest.
+2. **C codegen vs JS runtime objects.** Maps/lists/structs are now opaque `tx_t` pointers with explicit helper calls. Language-level convenience (literals, slices, SORT/SHAKE/BRAID, JOIN) needs codegen rewrites — SORT/SHAKE (v0.48.29), BRAID/LINK (v0.48.31), JOIN (v0.48.38c, `JOIN(list, delim)` → `plant_join`) and list literals (v0.49.4, `[ … ]` → `plant_list_make` with `_from_long` wrapping) and map literals (v0.49.5, `{ k: v }` → `plant_map_create` + chained `plant_map_set`) have them; the runtime helpers (`plant_array_length`, `plant_range`, `plant_iterator_*`) partially exist for the rest.
 3. **No exception machinery.** WEATHER/SHELTER and storms are the biggest *semantic* loss: compiled C has no unwinding; the compiler instead returns errno/`ffi_last_error` strings. Implementing storms would require setjmp/longjmp or explicit propagation — a major roadmap item.
 4. **Node dependency removal.** HTTP (client+server), VEIN FS, worker threads, locale formatting, ANSI diagnostics all died with Node. The C runtime retains v0.41-era POSIX sockets (`plant_net_harvest`, `plant_net_listen_*`) that predate the gap and are **unreachable from the language** — re-wiring them is cheap compared to writing them.
 5. **Scope model.** PULSE watchers, LOCK/EVAPORATE, ROOT globals and `SELF` bindings need runtime scope objects; compiled scopes are static, so these features would need runtime scope tables.
@@ -255,17 +255,18 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 
 | Legacy idiom | Current equivalent |
 |---|---|
-| `CREATE x(LIST) TO 1, 2, 3.` | `CREATE x(LIST) TO plant_list_make(3, 1, 2, 3).` |
-| `x[i]` / slices | `plant_list_get(x, i)` / `plant_array_slice` |
+| `CREATE x(LIST) TO 1, 2, 3.` | `CREATE x(LIST) TO plant_list_make(3, 1, 2, 3).` (or, v0.49.4: `CREATE x(LIST) TO [1, 2, 3].`) |
+| `x[i]` / slices | `plant_list_get(x, i)` / `plant_array_slice` (v0.49.4: `x[i]` works directly in expression position) |
 | `PUT v INTO l.` | `CALL plant_list_push(l, v).` (or `CALL ffi_…`) |
 | Map access `m:"k"` | `_map_get(m, "k")` |
+| `{k: v}` map literal | `{ "k": v }` (v0.49.5) — or `plant_map_create()` + `plant_map_set(m, k, v)` |
 | `SORT l.` / `SHAKE l.` | `l = plant_sort(l, spec)` / `l = plant_shuffle(l)` (v0.48.29) |
 | `math:SQRT(x)` | declare `ACTION sqrt_(v(SCL)) -> external.` against `math_sqrt`, or call `std/math` externals |
 | `strings:UPPER(s)` | `UPPER(s)` expression built-in (v0.48.38e) or `REAP r FROM strings:UPPER, s.` |
 | `strings:FIND(s, sub)` / `COUNT_OF(s, sub)` / `SLICE(s, a, b)` / `JOIN(l, d)` | `FIND(s, sub)` / `COUNT_OF(s, sub)` / `SLICE(x, a, b)` / `JOIN(l, d)` expression built-ins (v0.48.38j/i/c) |
 | `fs:READ(p)` | `REAP r FROM fs:READ, p.` (works) |
 | `WEATHER … SHELTER` | errno checks: `REAP e FROM ffi_last_error, ….` + `IF` |
-| `HARVEST "url" …` | `HARVEST url AS resp [METHOD m] [BODY b] [HEADERS h] [TIMEOUT t] [MAP|JSON].` (v0.48.32/34, formalized v0.49.0, JSON v0.49.4) |
+| `HARVEST "url" …` | `HARVEST url AS resp [METHOD m] [BODY b] [HEADERS h] [TIMEOUT t] [MAP|JSON].` (v0.48.32/34, formalized v0.49.0, JSON v0.49.3) |
 | `WAIT n.` | `WAIT n.` statement (v0.48.37e) / `CALL ffi_sleep(n).` (test FFI) / `plant_msleep` external |
 | `VERIFY`/`SUITE` | regression harness `.plant` + `.expected` files |
 | `IMPORT "std/io".` | direct `plant_print`/SHOW; externals for the rest |
@@ -306,4 +307,4 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 **Intentionally out of scope (D)**
 - SPECIES/BLOOM object model, `SELF:`/method dispatch, `PLANT` library statements, PULSE/WHENEVER watchers, JS `Function()` escape hatch, locale-specific IO formatting, VERIFY/SUITE language framework.
 
-*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.49.4. As of v0.49.4 the legacy side exists only in git history — `core/`, `src/**/*.js`, `std/`, `service/`, `webrepl/`, and `benchmarks/` were removed from the working tree (commit `c17de62`).*
+*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.49.5. As of v0.49.5 the legacy side exists only in git history — `core/`, `src/**/*.js`, `std/`, `service/`, `webrepl/`, and `benchmarks/` were removed from the working tree (commit `c17de62`).*
