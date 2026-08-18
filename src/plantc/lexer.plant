@@ -207,6 +207,18 @@ ACTION match_number(src(TX), i(NUM), n(NUM)),
     SET num TO num + ch.
     SET ni TO ni + 1.
   /SEASON.
+  # v0.49.6 — decimal fraction: consume "." only when a digit
+  # follows, so 1.5 is one NUMBER token while "SHOW x." still
+  # terminates at the statement dot.
+  IF ni + 1 < n AND char_at(src, ni) IS "." AND char_at(src, ni + 1) GREATER THAN OR EQUAL "0" AND char_at(src, ni + 1) LESS THAN OR EQUAL "9",
+    SET num TO num + ".".
+    SET ni TO ni + 1.
+    SEASON ni < n AND char_at(src, ni) GREATER THAN OR EQUAL "0" AND char_at(src, ni) LESS THAN OR EQUAL "9",
+      REAP ch FROM char_at, src, ni.
+      SET num TO num + ch.
+      SET ni TO ni + 1.
+    /SEASON.
+  /IF.
   GIVE plant_list_make(2, num, ni).
 /ACTION.
 

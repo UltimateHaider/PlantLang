@@ -118,6 +118,15 @@ ACTION collect_value(tokens(LIST), start(NUM)),
     IF lx IS "}",
       SET depth TO depth - 1.
     /IF.
+    # v0.49.6 — [ ... ] list literal spans hold depth too, so a
+    # terminator/delimiter inside them never fires (REAP r FROM f,
+    # [1, 2]. — the comma inside the literal is not an arg split)
+    IF lx IS "[",
+      SET depth TO depth + 1.
+    /IF.
+    IF lx IS "]",
+      SET depth TO depth - 1.
+    /IF.
     IF text > "",
       SET text TO text + " ".
     /IF.
@@ -159,6 +168,14 @@ ACTION collect_until(tokens(LIST), start(NUM), delim(TX)),
       SET depth TO depth + 1.
     /IF.
     IF lx IS "}",
+      SET depth TO depth - 1.
+    /IF.
+    # v0.49.6 — [ ... ] list literal spans hold depth too (a
+    # delimiter inside a literal is not a terminator)
+    IF lx IS "[",
+      SET depth TO depth + 1.
+    /IF.
+    IF lx IS "]",
       SET depth TO depth - 1.
     /IF.
     IF text > "",
@@ -1094,6 +1111,37 @@ ACTION parse_closure(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
   GIVE plant_list_make(2, cnode, p5).
 /ACTION.
 
+# _is_type_text — "1" when t is comma-separated type names (plain
+# identifiers, optionally REF-prefixed or LIST[...]-parameterized).
+# v0.49.6 — distinguishes generic args (foo[NUM, TX], ped[Color])
+# from index expressions at REAP call sites: any digit literal,
+# operator, or quote in the content marks an index (REAP x FROM
+# a[0].), since type names are always identifier-shaped.
+ACTION _is_type_text(t(TX), rtab(LIST)),
+  REAP parts FROM strings:SPLIT, t, ",".
+  CREATE ti(NUM) TO 0.
+  CREATE tp(TX) TO "".
+  SEASON ti < COUNT parts,
+    REAP tp FROM plant_list_get, parts, ti.
+    REAP tp FROM trim, tp.
+    IF LEN(tp) IS 0, GIVE 0. /IF.
+    REAP refp FROM substring, tp, 0, 3.
+    IF refp IS "REF",
+      REAP tp FROM substring, tp, 4, LEN(tp).
+      REAP tp FROM trim, tp.
+    /IF.
+    REAP bi FROM find_any, tp, "[".
+    IF bi ISNT -1,
+      REAP tp FROM substring, tp, 0, bi.
+      REAP tp FROM trim, tp.
+    /IF.
+    REAP tk FROM is_identifier, tp.
+    IF tk IS 0, GIVE 0. /IF.
+    SET ti TO ti + 1.
+  /SEASON.
+  GIVE 1.
+/ACTION.
+
 ACTION parse_reap_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -1126,10 +1174,25 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
     REAP p5 FROM _second, ga_lb.
     REAP gv FROM collect_type_text, tokens, p5, "]", 0.
     REAP gtext FROM _first, gv.
+    # v0.49.6 — the [ ... ] after a REAP action is generic type args
+    # only when its content is pure type text (identifiers, commas,
+    # and registered generic names). Otherwise it is an index
+    # expression: REAP x FROM a[0]. — re-collect the whole value
+    # starting at the action token (p4) and emit an expression reap
+    # that the codegen translates like any other value.
+    REAP isgt FROM _is_type_text, gtext, rtab.
+    IF isgt IS 0,
+      REAP vpair FROM collect_value, tokens, p4.
+      REAP exprt FROM _first, vpair.
+      REAP p6 FROM _second, vpair.
+      GIVE plant_list_make(2, plant_list_make(12, "type", "reap_expr_stmt", "target", var_name, "expr", exprt, "args", plant_list_make(0), "clargs", plant_list_make(0), "ctx", ""), p6).
+    /IF.
+    IF isgt IS 1,
     REAP p5 FROM _second, gv.
     REAP ga_rb FROM consume, tokens, p5.
     REAP p5 FROM _second, ga_rb.
     SET act_name TO act_name + "[" + gtext + "]".
+    /IF.
   /IF.
   # v0.48.37c: REAP r FROM f(a, b, c). — consume the call parens
   # upfront so multi-arg calls split on "," at depth 0 instead of
@@ -1246,6 +1309,10 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
       IF alx IS "IN" AND adepth IS 0, BREAK 0. /IF.
       IF alx IS "(", SET adepth TO adepth + 1. /IF.
       IF alx IS ")", SET adepth TO adepth - 1. /IF.
+      # v0.49.6 — [ ... ] literal spans hold depth, so a comma inside
+      # [1, 2] is not an arg split (REAP r FROM f, [1, 2].)
+      IF alx IS "[", SET adepth TO adepth + 1. /IF.
+      IF alx IS "]", SET adepth TO adepth - 1. /IF.
       IF arg_text > "", SET arg_text TO arg_text + " ". /IF.
       SET arg_text TO arg_text + alx.
       REAP cp FROM consume, tokens, p5.

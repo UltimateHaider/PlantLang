@@ -225,10 +225,39 @@ ACTION _is_int(t(TX)),
     GIVE 1.
 /ACTION.
 
-ACTION _push_el(els(LIST), cur(TX)),
+# _is_decimal — true for a bare decimal literal: only digits and a
+# single dot, with a digit on each side (1.5 yes; .5, 5., 1.2.3 no).
+# v0.49.6 — routes [1.5, 2.7] elements to _from_double.
+ACTION _is_decimal(t(TX)),
+    CREATE k(NUM) TO 0.
+    CREATE ch(TX) TO "".
+    CREATE dots(NUM) TO 0.
+    CREATE digs(NUM) TO 0.
+    IF LEN(t) IS 0, GIVE 0. /IF.
+    SEASON k < LEN(t),
+        REAP ch FROM char_at, t, k.
+        REAP fp FROM find_any, ch, "0123456789".
+        IF fp ISNT -1, SET digs TO digs + 1. /IF.
+        IF ch IS ".",
+            SET dots TO dots + 1.
+        /IF.
+        IF ch ISNT "." AND fp IS -1, GIVE 0. /IF.
+        SET k TO k + 1.
+    /SEASON.
+    IF dots IS 1 AND digs > 0,
+        REAP fc FROM char_at, t, 0.
+        REAP lc FROM char_at, t, LEN(t) - 1.
+        IF fc ISNT "." AND lc ISNT ".",
+            GIVE 1.
+        /IF.
+    /IF.
+    GIVE 0.
+/ACTION.
+
+ACTION _push_el(els(LIST), cur(TX), nums(LIST), evars(LIST)),
     REAP elt FROM trim, cur.
     IF LEN(elt) IS 0, GIVE els. /IF.
-    REAP ef FROM _enc_el, elt.
+    REAP ef FROM _enc_el, elt, nums, evars.
     REAP els FROM plant_list_push, els, ef.
     GIVE els.
 /ACTION.
@@ -240,19 +269,39 @@ ACTION _push_el(els(LIST), cur(TX)),
 # materialize as the quoted strings; integer literals and arithmetic
 # expressions wrap in _from_long (NUM-typed values arrive as raw C
 # longs — pointer-truncation would crash the runtime's serializer);
-# everything else passes through as tx_t.
-ACTION _enc_el(elt(TX)),
+# v0.49.6 — " + " concatenation runs through _handle_cat (so ["a" +
+# "b"] emits _cat(...)), bare NUM variables wrap in _from_long (so
+# [n, "x"] is valid), and decimal literals wrap in _from_double (so
+# [1.5, 2.7] is valid); everything else passes through as tx_t.
+ACTION _enc_el(elt(TX), nums(LIST), evars(LIST)),
     CREATE ef(TX) TO "".
     REAP ec0 FROM char_at, elt, 0.
     IF ec0 IS "[",
         REAP is2 FROM substring, elt, 1, LEN(elt) - 1.
-        REAP ef FROM _seg_list, is2.
+        REAP ef FROM _seg_list, is2, nums, evars.
     /IF.
     IF ec0 IS "{",
         REAP is2 FROM substring, elt, 1, LEN(elt) - 1.
-        REAP ef FROM _seg_map, is2.
+        REAP ef FROM _seg_map, is2, nums, evars.
     /IF.
     IF ec0 ISNT "[" AND ec0 ISNT "{",
+        # v0.49.6 — a concatenation span first: "a" + "b" becomes
+        # _cat("a", "b"); [x + 1, n] wraps the numeric segments the
+        # same way statement-level SET/CREATE values do. _handle_cat
+        # returns the element untouched when there is no top-level
+        # " + " (quoted "a+b" passes through raw).
+        REAP cplus FROM find_any, elt, "+".
+        IF cplus ISNT -1,
+            REAP elt FROM _handle_cat, elt, nums, evars.
+        /IF.
+        REAP eq1 FROM char_at, elt, 0.
+        IF eq1 IS "\"",
+            # quoted element passes through raw (tx_t text); the
+            # bool/int/numeric checks below must not touch it —
+            # find_any would see "+" inside "a+b" and wrap a string
+            SET ef TO elt.
+        /IF.
+        IF eq1 ISNT "\"",
         # bare booleans inside a literal materialize as the
         # quoted string "TRUE"/"FALSE": a non-numeric element for
         # SUM (skipped), and visible as text in JOIN/FIRST/LAST.
@@ -270,6 +319,22 @@ ACTION _enc_el(elt(TX)),
             SET ef TO "_from_long(" + elt + ")".
         /IF.
         IF isi IS 0,
+            # v0.49.6 — decimal literal element: [1.5, 2.7] wraps
+            # in _from_double so the fractional value survives.
+            REAP dci FROM _is_decimal, elt.
+            IF dci IS 1,
+                SET ef TO "_from_double(" + elt + ")".
+            /IF.
+            IF dci IS 0,
+            # v0.49.6 — bare numeric variable: an identifier (or
+            # numeric helper call) in nums wraps in _from_long;
+            # _from_long(strlen(x)) is a bonus fix — before, the
+            # truncating-pointer path stored garbage.
+            REAP sgn FROM seg_is_numeric, elt, nums.
+            IF sgn IS 1,
+                SET ef TO "_from_long(" + elt + ")".
+            /IF.
+            IF sgn IS 0,
             # v0.49.4 — arithmetic element (unquoted, contains an
             # operator): NUM-typed expressions like "x + 1" arrive as
             # raw C longs; wrap so the runtime stores a tx_t number
@@ -282,13 +347,16 @@ ACTION _enc_el(elt(TX)),
             IF opf ISNT -1,
                 SET ef TO "_from_long(" + elt + ")".
             /IF.
+            /IF.
+            /IF.
+        /IF.
         /IF.
         /IF.
     /IF.
     GIVE ef.
 /ACTION.
 
-ACTION _seg_list(inner(TX)),
+ACTION _seg_list(inner(TX), nums(LIST), evars(LIST)),
     CREATE els(LIST) TO plant_list_make(0).
     CREATE cur(TX) TO "".
     CREATE dep(NUM) TO 0.
@@ -312,7 +380,7 @@ ACTION _seg_list(inner(TX)),
             IF ch IS "[" OR ch IS "(" OR ch IS "{", SET dep TO dep + 1. /IF.
             IF ch IS "]" OR ch IS ")" OR ch IS "}", SET dep TO dep - 1. /IF.
             IF ch IS "," AND dep IS 0,
-                REAP els FROM _push_el, els, cur.
+                REAP els FROM _push_el, els, cur, nums, evars.
                 SET cur TO "".
             /IF.
         /IF.
@@ -322,7 +390,7 @@ ACTION _seg_list(inner(TX)),
         /IF.
         SET ii TO ii + 1.
     /SEASON.
-    REAP els FROM _push_el, els, cur.
+    REAP els FROM _push_el, els, cur, nums, evars.
     IF COUNT els IS 0, GIVE "plant_list_make(0)". /IF.
     # count text via _from_long: numeric segments inside string
     # concatenation must stay TX (the v0.46.3-era bootstrap compiler
@@ -341,7 +409,7 @@ ACTION _seg_list(inner(TX)),
     GIVE res.
 /ACTION.
 
-ACTION _list_literal(expr(TX)),
+ACTION _list_literal(expr(TX), nums(LIST), evars(LIST)),
     CREATE chk0(TX) TO "".
     REAP chk0 FROM find_any, expr, "[".
     IF chk0 IS -1, GIVE expr. /IF.
@@ -382,7 +450,7 @@ ACTION _list_literal(expr(TX)),
                 SET bd TO bd - 1.
                 IF bd IS 0,
                     REAP isub FROM substring, lst, 1, LEN(lst).
-                    SET out TO out + _seg_list(isub).
+                    SET out TO out + _seg_list(isub, nums, evars).
                     SET ls TO 0.
                     SET lc TO 1.
                 /IF.
@@ -454,7 +522,7 @@ ACTION _list_literal(expr(TX)),
 # _seg_map — split the inner text of { ... } on top-level commas
 # (quote-, paren-, bracket- and brace-depth aware) and fold the
 # pairs into the plant_map_set chain.
-ACTION _seg_map(inner(TX)),
+ACTION _seg_map(inner(TX), nums(LIST), evars(LIST)),
     CREATE acc(TX) TO "plant_map_create()".
     CREATE cur(TX) TO "".
     CREATE dep(NUM) TO 0.
@@ -478,7 +546,7 @@ ACTION _seg_map(inner(TX)),
             IF ch IS "[" OR ch IS "(" OR ch IS "{", SET dep TO dep + 1. /IF.
             IF ch IS "]" OR ch IS ")" OR ch IS "}", SET dep TO dep - 1. /IF.
             IF ch IS "," AND dep IS 0,
-                REAP acc FROM _push_pair, acc, cur.
+                REAP acc FROM _push_pair, acc, cur, nums, evars.
                 SET cur TO "".
             /IF.
         /IF.
@@ -488,7 +556,7 @@ ACTION _seg_map(inner(TX)),
         /IF.
         SET ii TO ii + 1.
     /SEASON.
-    REAP acc FROM _push_pair, acc, cur.
+    REAP acc FROM _push_pair, acc, cur, nums, evars.
     GIVE acc.
 /ACTION.
 
@@ -515,7 +583,7 @@ ACTION _find_colon(ptext(TX)),
 # _push_pair — encode one "key: value" pair and fold it into the
 # chain: plant_map_set(<acc>, <key>, <value>). Empty / malformed
 # pairs are skipped.
-ACTION _push_pair(acc(TX), cur(TX)),
+ACTION _push_pair(acc(TX), cur(TX), nums(LIST), evars(LIST)),
     REAP ptext FROM trim, cur.
     IF LEN(ptext) IS 0, GIVE acc. /IF.
     REAP ci FROM _find_colon, ptext.
@@ -526,8 +594,8 @@ ACTION _push_pair(acc(TX), cur(TX)),
     REAP vt FROM trim, vtxt.
     IF LEN(kt) IS 0, GIVE acc. /IF.
     IF LEN(vt) IS 0, GIVE acc. /IF.
-    REAP ken FROM _enc_el, kt.
-    REAP ven FROM _enc_el, vt.
+    REAP ken FROM _enc_el, kt, nums, evars.
+    REAP ven FROM _enc_el, vt, nums, evars.
     SET acc TO "plant_map_set(" + acc + ", " + ken + ", " + ven + ")".
     GIVE acc.
 /ACTION.
@@ -537,7 +605,7 @@ ACTION _push_pair(acc(TX), cur(TX)),
 # inside strings are literal text. The identifier-guard mirrors
 # _list_literal: a "{" preceded by an identifier (or ) or ]) is
 # legacy struct-literal syntax and passes through untouched.
-ACTION _map_literal(expr(TX)),
+ACTION _map_literal(expr(TX), nums(LIST), evars(LIST)),
     CREATE chk0(TX) TO "".
     REAP chk0 FROM find_any, expr, "{".
     IF chk0 IS -1, GIVE expr. /IF.
@@ -578,7 +646,7 @@ ACTION _map_literal(expr(TX)),
                 SET bd TO bd - 1.
                 IF bd IS 0,
                     REAP isub FROM substring, lst, 1, LEN(lst).
-                    SET out TO out + _seg_map(isub).
+                    SET out TO out + _seg_map(isub, nums, evars).
                     SET ls TO 0.
                     SET lc TO 1.
                 /IF.
@@ -1021,7 +1089,7 @@ ACTION _expand_bare(t(TX), nums(LIST), evars(LIST)),
       /SEASON.
       REAP inner FROM substring, t, i + 2, j - 1.
       REAP inner FROM _expand_bare, inner, nums, evars.
-      REAP inner FROM translate_expr, inner.
+      REAP inner FROM translate_expr, inner, nums, evars.
       REAP inner FROM _handle_cat, inner, nums, evars.
       SET res TO res + inner.
       SET i TO j.
@@ -1121,7 +1189,7 @@ ACTION _interp_expand(raw(TX), nums(LIST), evars(LIST)),
         REAP seg2 FROM _unescape, seg.
         REAP seg2 FROM _expand_bare, seg2, nums, evars.
         REAP seg2 FROM _interp_to_cat, seg2, nums, evars.
-        REAP seg2 FROM translate_expr, seg2.
+        REAP seg2 FROM translate_expr, seg2, nums, evars.
         REAP seg2 FROM _handle_cat, seg2, nums, evars.
         REAP sg2n FROM seg_is_numeric, seg2, nums.
         IF sg2n IS 1,
@@ -1166,13 +1234,17 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
     CREATE pi(NUM) TO 0.
     CREATE pel(TX) TO "".
     CREATE has_str(NUM) TO 0.
-    # scan for top-level " + " (outside parens and strings) and split there
+    # scan for top-level " + " (outside parens, brackets, and
+    # strings) and split there. v0.49.6 — [ and { join the depth
+    # tracking so a whole [ ... ] / { ... } literal passes through
+    # the splitter untouched (["a" + "b", "c"] reaches _list_literal
+    # whole; the elements get their own concat handling in _enc_el).
     SEASON i < LEN(expr),
         REAP ch FROM char_at, expr, i.
         IF ch IS "\"", SET instr TO 1 - instr. SET has_str TO 1. /IF.
         IF instr IS 1 AND ch IS "\\", SET i TO i + 1. /IF.
-        IF instr IS 0 AND ch IS "(", SET depth TO depth + 1. /IF.
-        IF instr IS 0 AND ch IS ")", SET depth TO depth - 1. /IF.
+        IF instr IS 0 AND (ch IS "(" OR ch IS "[" OR ch IS "{"), SET depth TO depth + 1. /IF.
+        IF instr IS 0 AND (ch IS ")" OR ch IS "]" OR ch IS "}"), SET depth TO depth - 1. /IF.
         IF instr IS 0 AND ch IS "+" AND depth IS 0,
             REAP c0 FROM char_at, expr, i - 1.
             REAP c1 FROM char_at, expr, i + 1.
@@ -2013,7 +2085,7 @@ ACTION async_argstr(args(LIST), sigs(LIST), act(TX), nums(LIST), stvars(LIST), e
     CREATE aex(TX) TO ael.
     REAP a0 FROM substring, ael, 0, 1.
     IF a0 ISNT "\"",
-      REAP aex FROM translate_expr, ael.
+      REAP aex FROM translate_expr, ael, nums, evars.
       REAP aex FROM _handle_cat, aex, nums, evars.
     /IF.
     REAP rp FROM is_ref_at, fparams, ai.
@@ -2425,7 +2497,7 @@ ACTION _ni_replace(e(TX)),
     GIVE out.
 /ACTION.
 
-ACTION translate_expr(expr(TX)),
+ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     CREATE e(TX) TO expr.
     # ── v0.48.36 — temporal queries / introspection in expression
     #    position: NOW [FORMAT : x] → plant_now("x"), ANALYZE x →
@@ -2518,12 +2590,12 @@ ACTION translate_expr(expr(TX)),
     # (and [ ... ] values nested inside them) are fully converted;
     # the emitted plant_map_set/plant_map_create chains contain no
     # brackets or bare colons for the later passes to see.
-    REAP e FROM _map_literal, e.
+    REAP e FROM _map_literal, e, nums, evars.
     # list literals rewrite BEFORE boolean sanitization so a bare
     # TRUE/FALSE inside [ ... ] survives as the quoted string
     # "TRUE"/"FALSE" (a non-numeric element — SUM skips it, and
     # the sanitizer then leaves quoted booleans untouched).
-    REAP e FROM _list_literal, e.
+    REAP e FROM _list_literal, e, nums, evars.
     REAP e FROM plant_sanitize_bools, e.
     REAP e FROM strings:REPLACE, e, "NULL", "NULL".
     REAP e FROM strings:REPLACE, e, " : ", "_".
@@ -2750,7 +2822,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    instead of raw long-as-pointer bits (v0.48.5).
     IF ntype IS "show_stmt",
         REAP val FROM _map_get, node, "value".
-        REAP cval FROM translate_expr, val.
+        REAP cval FROM translate_expr, val, nums, evars.
         REAP cval FROM _handle_cat, cval, nums, evars.
         REAP isn2 FROM expr_is_numeric, cval, nums.
         IF isn2 IS 1,
@@ -2810,7 +2882,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             GIVE ccode2.
         /IF.
         REAP val FROM _map_get, node, "value".
-        REAP cval FROM translate_expr, val.
+        REAP cval FROM translate_expr, val, nums, evars.
         REAP cval FROM _handle_cat, cval, nums, evars.
         IF actx IS "a",
             GIVE isel + "  " + target + " = " + cval + ";\n".
@@ -2844,7 +2916,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     IF ntype IS "set_stmt",
         REAP target FROM _map_get, node, "target".
         REAP val FROM _map_get, node, "value".
-        REAP cval FROM translate_expr, val.
+        REAP cval FROM translate_expr, val, nums, evars.
         REAP cval FROM _handle_cat, cval, nums, evars.
         REAP isel FROM indent_str, indent.
         GIVE isel + "  " + target + " = " + cval + ";\n".
@@ -2859,7 +2931,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     IF ntype IS "increase_stmt" OR ntype IS "decrease_stmt",
         REAP target FROM _map_get, node, "target".
         REAP val FROM _map_get, node, "value".
-        REAP cval FROM translate_expr, val.
+        REAP cval FROM translate_expr, val, nums, evars.
         REAP cval FROM _handle_cat, cval, nums, evars.
         REAP isel FROM indent_str, indent.
         REAP isnc FROM list_contains, nums, target.
@@ -2909,7 +2981,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             GIVE ccode2.
         /IF.
         REAP val FROM _map_get, node, "value".
-        REAP cval FROM translate_expr, val.
+        REAP cval FROM translate_expr, val, nums, evars.
         REAP cval FROM _handle_cat, cval, nums, evars.
         IF actx IS "a",
             GIVE isel + "  " + target + " = " + cval + ";\n".
@@ -2945,7 +3017,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    convention so existing callers are unaffected.
     IF ntype IS "give_stmt",
         REAP val FROM _map_get, node, "value".
-        REAP cval FROM translate_expr, val.
+        REAP cval FROM translate_expr, val, nums, evars.
         REAP cval FROM _handle_cat, cval, nums, evars.
         REAP isn3 FROM expr_is_numeric, cval, nums.
         IF isn3 IS 0,
@@ -2993,7 +3065,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     IF ntype IS "put_stmt",
         REAP item FROM _map_get, node, "item".
         REAP target FROM _map_get, node, "target".
-        REAP citem FROM translate_expr, item.
+        REAP citem FROM translate_expr, item, nums, evars.
         REAP citem FROM _handle_cat, citem, nums, evars.
         REAP isel FROM indent_str, indent.
         GIVE isel + "  " + target + " = plant_list_add(" + target + ", " + citem + ");\n".
@@ -3003,7 +3075,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     IF ntype IS "take_stmt",
         REAP item FROM _map_get, node, "item".
         REAP target FROM _map_get, node, "target".
-        REAP citem FROM translate_expr, item.
+        REAP citem FROM translate_expr, item, nums, evars.
         REAP citem FROM _handle_cat, citem, nums, evars.
         REAP isel FROM indent_str, indent.
         GIVE isel + "  " + target + " = plant_list_remove(" + target + ", " + citem + ");\n".
@@ -3034,9 +3106,9 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP key FROM _map_get, node, "key".
         REAP value FROM _map_get, node, "value".
         REAP target FROM _map_get, node, "target".
-        REAP ckey FROM translate_expr, key.
+        REAP ckey FROM translate_expr, key, nums, evars.
         REAP ckey FROM _handle_cat, ckey, nums, evars.
-        REAP cval FROM translate_expr, value.
+        REAP cval FROM translate_expr, value, nums, evars.
         REAP cval FROM _handle_cat, cval, nums, evars.
         REAP isel FROM indent_str, indent.
         GIVE isel + "  " + target + " = plant_link(" + target + ", " + ckey + ", " + cval + ");\n".
@@ -3069,7 +3141,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             SET hfn TO "plant_net_harvest_map".
         /IF.
         REAP isel FROM indent_str, indent.
-        REAP hcurl FROM translate_expr, hurl.
+        REAP hcurl FROM translate_expr, hurl, nums, evars.
         CREATE hmethod(TX) TO hmeth.
         IF hmethod > "",
             REAP hx0 FROM substring, hmethod, 0, 1.
@@ -3080,7 +3152,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF hcbody > "",
             REAP hy0 FROM substring, hcbody, 0, 1.
             IF hy0 ISNT "\"",
-                REAP hy1 FROM translate_expr, hcbody.
+                REAP hy1 FROM translate_expr, hcbody, nums, evars.
                 REAP hy1 FROM _handle_cat, hy1, nums, evars.
                 SET hcbody TO hy1.
             /IF.
@@ -3092,7 +3164,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF htmo > "",
             REAP hz0 FROM substring, htmo, 0, 1.
             IF hz0 ISNT "\"",
-                REAP hz1 FROM translate_expr, htmo.
+                REAP hz1 FROM translate_expr, htmo, nums, evars.
                 SET htmo TO hz1.
             /IF.
         /IF.
@@ -3114,7 +3186,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF lsp > "",
             REAP lsp0 FROM substring, lsp, 0, 1.
             IF lsp0 ISNT "\"",
-                REAP lsp1 FROM translate_expr, lsp.
+                REAP lsp1 FROM translate_expr, lsp, nums, evars.
                 SET lsp TO lsp1.
             /IF.
         /IF.
@@ -3122,7 +3194,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF lst > "",
             REAP lst0 FROM substring, lst, 0, 1.
             IF lst0 ISNT "\"",
-                REAP lst1 FROM translate_expr, lst.
+                REAP lst1 FROM translate_expr, lst, nums, evars.
                 SET lst TO lst1.
             /IF.
         /IF.
@@ -3154,7 +3226,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF rsb > "",
             REAP rsb0 FROM substring, rsb, 0, 1.
             IF rsb0 ISNT "\"",
-                REAP rsb1 FROM translate_expr, rsb.
+                REAP rsb1 FROM translate_expr, rsb, nums, evars.
                 REAP rsb1 FROM _handle_cat, rsb1, nums, evars.
                 SET rsb TO rsb1.
             /IF.
@@ -3252,7 +3324,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    only cancels the handle if it lives in the given context) ─
     IF ntype IS "cancel_stmt",
         REAP val FROM _map_get, node, "value".
-        REAP cval FROM translate_expr, val.
+        REAP cval FROM translate_expr, val, nums, evars.
         REAP cctx FROM _map_get, node, "ctx".
         REAP isel FROM indent_str, indent.
         IF cctx ISNT "" AND cctx ISNT "null",
@@ -3272,7 +3344,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF lv IS "DEBUG", SET lvnum TO "1". /IF.
         IF lv IS "PERF", SET lvnum TO "2". /IF.
     REAP val FROM _map_get, node, "value".
-    REAP cval FROM translate_expr, val.
+    REAP cval FROM translate_expr, val, nums, evars.
     REAP cval FROM _handle_cat, cval, nums, evars.
     REAP tctx FROM _map_get, node, "ctx".
     REAP isel FROM indent_str, indent.
@@ -3413,7 +3485,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
              IF cl_ok IS "0",
                  REAP arg0 FROM substring, arg_el, 0, 1.
                  IF arg0 ISNT "\"",
-                    REAP aexpr FROM translate_expr, arg_el.
+                    REAP aexpr FROM translate_expr, arg_el, nums, evars.
                     REAP aexpr FROM _handle_cat, aexpr, nums, evars.
                 /IF.
                 IF safe_call IS "1",
@@ -3592,6 +3664,20 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             /IF.
         /IF.
     /IF.
+
+    # ── reap_expr_stmt: REAP x FROM a[0]. — direct ingestion from an
+    #    indexed location (v0.49.6). The parser captured the whole
+    #    expression (a [ 0 ]); translate it here like any value so the
+    #    list/map accessors, numeric wrappers, and chained indexing
+    #    all apply.
+    IF ntype IS "reap_expr_stmt",
+        REAP tgt2 FROM _map_get, node, "target".
+        REAP expr2 FROM _map_get, node, "expr".
+        REAP cval2 FROM translate_expr, expr2, nums, evars.
+        REAP cval2 FROM _handle_cat, cval2, nums, evars.
+        REAP isel2 FROM indent_str, indent.
+        GIVE isel2 + "  " + tgt2 + " = " + cval2 + ";\n".
+    /IF.
   
     # ── const_stmt: CONST name TO "lit". → static const char *name ─
     #    = "lit"; (v0.48.35). Root-elevated constants ("root":"1")
@@ -3644,7 +3730,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     # ── analyze_stmt: ANALYZE x. → plant_print(plant_map_to_string(plant_analyze(x))); ─
     IF ntype IS "analyze_stmt",
         REAP tgt FROM _map_get, node, "target".
-        REAP cval FROM translate_expr, tgt.
+        REAP cval FROM translate_expr, tgt, nums, evars.
         REAP cval FROM _handle_cat, cval, nums, evars.
         REAP isn2 FROM expr_is_numeric, cval, nums.
         IF isn2 IS 1,
@@ -3657,7 +3743,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     # ── typeof_stmt: TYPEOF x. → plant_print(plant_typeof(x)); ────
     IF ntype IS "typeof_stmt",
         REAP tgt2 FROM _map_get, node, "target".
-        REAP cval2 FROM translate_expr, tgt2.
+        REAP cval2 FROM translate_expr, tgt2, nums, evars.
         REAP cval2 FROM _handle_cat, cval2, nums, evars.
         REAP isn3 FROM expr_is_numeric, cval2, nums.
         IF isn3 IS 1,
@@ -3670,7 +3756,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     # ── free_stmt: FREE x. → x = plant_mem_free((tx_t)x); ────
     IF ntype IS "free_stmt",
         REAP ftgt FROM _map_get, node, "target".
-        REAP fcv FROM translate_expr, ftgt.
+        REAP fcv FROM translate_expr, ftgt, nums, evars.
         REAP isel FROM indent_str, indent.
         GIVE isel + "  " + fcv + " = plant_mem_free((tx_t)" + fcv + ");\n".
     /IF.
@@ -3679,8 +3765,8 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     IF ntype IS "arc_link_stmt" OR ntype IS "arc_unlink_stmt",
         REAP ap FROM _map_get, node, "parent".
         REAP ac FROM _map_get, node, "child".
-        REAP avp FROM translate_expr, ap.
-        REAP avc FROM translate_expr, ac.
+        REAP avp FROM translate_expr, ap, nums, evars.
+        REAP avc FROM translate_expr, ac, nums, evars.
         REAP isnp FROM expr_is_numeric, avp, nums.
         IF isnp IS 1,
             SET avp TO "_from_long(" + avp + ")".
@@ -3712,7 +3798,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP isel FROM indent_str, indent.
         CREATE wsleep(TX) TO "0".
         IF wms > "",
-            REAP wc2 FROM translate_expr, wms.
+            REAP wc2 FROM translate_expr, wms, nums, evars.
             SET wsleep TO wc2.
         /IF.
         GIVE isel + "  plant_msleep(" + wsleep + ");\n".
@@ -3724,7 +3810,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    targets are stringified so their value is the key.
     IF ntype IS "lock_stmt",
         REAP lv2 FROM _map_get, node, "var".
-        REAP lcv2 FROM translate_expr, lv2.
+        REAP lcv2 FROM translate_expr, lv2, nums, evars.
         REAP isnl2 FROM expr_is_numeric, lcv2, nums.
         IF isnl2 IS 1,
             SET lcv2 TO "_from_long(" + lcv2 + ")".
@@ -3738,7 +3824,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     IF ntype IS "if_stmt",
         REAP cond FROM _map_get, node, "cond".
         REAP bd FROM _map_get, node, "body".
-        REAP ccond FROM translate_expr, cond.
+        REAP ccond FROM translate_expr, cond, nums, evars.
         REAP ccond FROM handle_strcmp, ccond.
         REAP isel FROM indent_str, indent.
         CREATE ccode(TX) TO isel + "  if (" + ccond + ") \{\n".
@@ -3750,7 +3836,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             SEASON ei2 < COUNT elif,
                 REAP econd FROM plant_list_get, elif, ei2.
                 REAP ebd FROM plant_list_get, elif, ei2 + 1.
-                REAP ecc FROM translate_expr, econd.
+                REAP ecc FROM translate_expr, econd, nums, evars.
                 REAP ecc FROM handle_strcmp, ecc.
                 SET ccode TO ccode + isel + "  \} else if (" + ecc + ") \{\n".
                 REAP ebc FROM generate_body, ebd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
@@ -3772,7 +3858,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     IF ntype IS "season_stmt",
         REAP cond FROM _map_get, node, "cond".
         REAP bd FROM _map_get, node, "body".
-        REAP ccond FROM translate_expr, cond.
+        REAP ccond FROM translate_expr, cond, nums, evars.
         REAP ccond FROM handle_strcmp, ccond.
         REAP isel FROM indent_str, indent.
         CREATE ccode(TX) TO isel + "  while (" + ccond + ") \{\n".
@@ -3798,11 +3884,11 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         # descending ranges work; a runtime step emits a sign test in
         # the middle clause (v0.48.21).
         IF fromExpr ISNT "",
-            REAP cfrom FROM translate_expr, fromExpr.
-            REAP cto FROM translate_expr, toExpr.
+            REAP cfrom FROM translate_expr, fromExpr, nums, evars.
+            REAP cto FROM translate_expr, toExpr, nums, evars.
             CREATE stepstr(TX) TO "1".
             IF stepExpr > "" AND stepExpr ISNT "null",
-                REAP cstep FROM translate_expr, stepExpr.
+                REAP cstep FROM translate_expr, stepExpr, nums, evars.
                 SET stepstr TO cstep.
             /IF.
             # v0.48.22-patch3: fold the resolved step to its sign. A
@@ -3838,7 +3924,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             IF indexVar ISNT "" AND indexVar ISNT "null",
                 SET idxvar TO indexVar.
             /IF.
-            REAP clist FROM translate_expr, listExpr.
+            REAP clist FROM translate_expr, listExpr, nums, evars.
             SET ccode TO isel + "  for (long " + idxvar + " = 0; " + idxvar + " < plant_array_length(" + clist + "); " + idxvar + "++) \{\n".
             SET ccode TO ccode + isel + "    tx_t " + ivar + " = plant_list_get(" + clist + ", " + idxvar + ");\n".
             REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
@@ -3956,7 +4042,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP isel FROM indent_str, indent.
         CREATE cmsg(TX) TO "NULL".
         IF wmsg2 > "",
-            REAP cmsg FROM translate_expr, wmsg2.
+            REAP cmsg FROM translate_expr, wmsg2, nums, evars.
             REAP cmsg FROM _handle_cat, cmsg, nums, evars.
         /IF.
         IF wtype2 IS "",
@@ -3976,7 +4062,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    the descriptive default ("conditional stop requested").
     IF ntype IS "stop_if_stmt",
         REAP scond FROM _map_get, node, "cond".
-        REAP scc FROM translate_expr, scond.
+        REAP scc FROM translate_expr, scond, nums, evars.
         REAP scc FROM handle_strcmp, scc.
         REAP isel FROM indent_str, indent.
         GIVE isel + "  if (" + scc + ") \{\n" + isel + "    plant_throw(\"STOP_STORM\", NULL);\n" + isel + "  \}\n".
@@ -3986,7 +4072,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     IF ntype IS "match_stmt",
         REAP subj FROM _map_get, node, "subjectExpr".
         CREATE clauses(LIST) TO _map_get(node, "clauses").
-        REAP csubj FROM translate_expr, subj.
+        REAP csubj FROM translate_expr, subj, nums, evars.
         REAP isel FROM indent_str, indent.
         CREATE ccode(TX) TO isel + "  switch (" + csubj + ") \{\n".
         CREATE ci(NUM) TO 0.
@@ -6422,6 +6508,18 @@ ACTION _cl_scopes(bd(LIST), scopes(LIST), sigs(LIST)),
                 /IF.
             /IF.
         /IF.
+        # v0.49.6 — reap_expr_stmt targets (REAP x FROM a[0].) are
+        # plain tx_t too, declared exactly like reap_stmt targets.
+        IF sty IS "reap_expr_stmt",
+            REAP stg FROM _map_get, st, "target".
+            IF stg ISNT "_",
+                REAP oldc FROM _cl_map_get, res, stg.
+                IF oldc IS "",
+                    PUT stg INTO res.
+                    PUT "tx_t" INTO res.
+                /IF.
+            /IF.
+        /IF.
         IF sty IS "cycle_stmt",
             REAP iv FROM _map_get, st, "iterVar".
             REAP le FROM _map_get, st, "listExpr".
@@ -6811,9 +6909,9 @@ ACTION _cl_emit_fn(cnode(LIST), sigs(LIST), subst(LIST), reg(LIST)),
     /SEASON.
     IF str_eq(bk, "expr") IS "1",
         REAP bx FROM _map_get, cnode, "body".
-        REAP cx3 FROM translate_expr, bx.
         CREATE nums_c(LIST) TO collect_nums_cb(plant_list_make(0), params, shads, subst).
         CREATE evars_c(LIST) TO collect_enums(plant_list_make(0), cbpars2, subst, reg, sigs).
+        REAP cx3 FROM translate_expr, bx, nums_c, evars_c.
         REAP cx3 FROM _handle_cat, cx3, nums_c, evars_c.
         SET fnc TO fnc + "  return " + cx3 + ";\n".
     /IF.

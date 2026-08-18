@@ -41,6 +41,10 @@ static long plant_rw_arg_long(tx_t v) { if (!v) return 0; if ((uintptr_t)v < 409
    Static return is safe: the runtime never writes into tx_t strings. */
 static tx_t _from_digit(long n) { static const char* _dg[10] = {"0","1","2","3","4","5","6","7","8","9"}; if (n >= 0 && n <= 9) return (tx_t)_dg[n]; char buf[64]; snprintf(buf,64,"%ld",n); return strdup(buf); }
 static tx_t _from_long(long n) { return _from_digit(n); }
+/* v0.49.6 — decimal literals: [1.5, 2.7] emit _from_double(...).
+   %g prints integral doubles without the trailing dot (1.0 → "1"),
+   so the number string round-trips through _to_long/atol too. */
+static tx_t _from_double(double d) { char buf[64]; snprintf(buf, 64, "%.10g", d); return strdup(buf); }
 /* v0.48.5 — FFI numeric results: C functions returning `long` hand
    raw integer bits back in tx_t. On this runtime intptr_t == void*,
    so the conversion is identical to _from_long; this single choke
@@ -174,44 +178,92 @@ static long find_any(tx_t s, tx_t delims) {
   while (*p) { if (strchr(_d, *p)) return (long)(p - _s); p++; }
   return -1;
 }
+static int is_idc(char c);
+/* v0.49.6 — multi-pass rightmost-first rewrite so chained indices
+   compose: a [ 1 ] [ 0 ] → plant_list_get(plant_list_get(a, 1), 0)
+   and plant_map_get(m, "a")[0] works too. Each pass finds the
+   RIGHTMOST indexable "[" (the spans before it are still verbatim,
+   so the base is copied straight out of the input), rewrites it into
+   a fresh output, and repeats — inner indices get rewritten on the
+   following passes. The base walker accepts an identifier (dotted
+   paths included), a balanced ) group (call results: f(x), (x + 1),
+   f([1, 2])), or a balanced ] group (nested indices: a [ 1 ]), so
+   any sub-expression is indexable. */
+static const char *bracket_base(const char *cur, const char *p, const char **bs_out) {
+  const char *id = p - 1;
+  while (id >= cur && (*id == ' ' || *id == '\t')) id--;
+  if (id < cur) return NULL;
+  const char *bs = NULL;
+  if (is_idc(*id)) {
+    while (id >= cur && (is_idc(*id) || *id == '.')) id--;
+    bs = id + 1;
+    if (!((*bs >= 'a' && *bs <= 'z') || (*bs >= 'A' && *bs <= 'Z') || *bs == '_')) return NULL;
+  } else if (*id == ']' || *id == ')') {
+    char close = *id, open = (*id == ')') ? '(' : '[';
+    const char *q = id;
+    int d = 0, ok = 0;
+    while (q >= cur) {
+      if (*q == close) d++;
+      if (*q == open) { d--; if (d == 0) { ok = 1; break; } }
+      q--;
+    }
+    if (!ok) return NULL;
+    const char *n = q - 1;
+    while (n >= cur && (*n == ' ' || *n == '\t')) n--;
+    if (n >= cur && is_idc(*n)) {
+      while (n >= cur && (is_idc(*n) || *n == '.')) n--;
+      bs = n + 1;
+    } else {
+      bs = q;
+    }
+  } else {
+    return NULL;
+  }
+  *bs_out = bs;
+  return bs;
+}
 static tx_t handle_brackets(tx_t expr) {
   const char*_e=_S(expr);
   if (!_e || !*_e) return _e ? strdup(_e) : NULL;
   size_t len = strlen(_e);
-  char *buf = malloc(len * 4 + 1);
+  char *buf = malloc(len * 64 + 1);
   if (!buf) return strdup(_e);
-  char *out = buf;
-  const char *p = _e;
-  while (*p) {
-    if (*p == '[' && p > _e) {
-      const char *id = p - 1;
-      while (id >= _e && (*id == ' ' || *id == '\t')) id--;
-      while (id >= _e && (*id == '_' || (*id >= 'a' && *id <= 'z') || (*id >= 'A' && *id <= 'Z') || (*id >= '0' && *id <= '9'))) id--;
-      id++;
-      if (id < p && ((*id >= 'a' && *id <= 'z') || (*id >= 'A' && *id <= 'Z') || *id == '_')) {
-        size_t idl = (size_t)(p - id);
-        out -= idl;
-        memcpy(out, "plant_list_get(", 15); out += 15;
-        const char *idend = id;
-        while (idend < p && (*idend == '_' || (*idend >= 'a' && *idend <= 'z') || (*idend >= 'A' && *idend <= 'Z') || (*idend >= '0' && *idend <= '9'))) idend++;
-        memcpy(out, id, (size_t)(idend - id)); out += idend - id;
-        memcpy(out, ", ", 2); out += 2;
-        p++;
-        int depth = 1;
-        while (*p && depth > 0) {
-          if (*p == '[') depth++;
-          if (*p == ']') depth--;
-          if (depth > 0) { *out++ = *p++; }
-        }
-        if (*p == ']') p++;
-        *out++ = ')';
-        _e = p;
-        continue;
-      }
+  char *cur = strdup(_e);
+  for (int pass = 0; pass < 32; pass++) {
+    /* rightmost indexable "[": scan from the end, skipping "["s
+       whose base walker fails (standalone list literals) */
+    const char *pend = cur + strlen(cur);
+    const char *p = pend - 1;
+    const char *bs = NULL;
+    while (p >= cur && !bs) {
+      if (*p == '[' && p > cur) bracket_base(cur, p, &bs);
+      p--;
     }
-    *out++ = *p++;
+    p++;
+    if (!bs) { tx_t r = strdup(cur); free(cur); return r; }
+    /* bs..p is verbatim in the input — copy [cur..bs), emit the
+       rewrite, copy the tail */
+    char *out = buf;
+    size_t pre = (size_t)(bs - cur);
+    memcpy(out, cur, pre); out += pre;
+    memcpy(out, "plant_list_get(", 15); out += 15;
+    memcpy(out, bs, (size_t)(p - bs)); out += (size_t)(p - bs);
+    memcpy(out, ", ", 2); out += 2;
+    const char *ip = p + 1;
+    int depth = 1;
+    while (*ip && depth > 0) {
+      if (*ip == '[') depth++;
+      if (*ip == ']') depth--;
+      if (depth > 0) { *out++ = *ip++; }
+    }
+    if (*ip == ']') ip++;
+    *out++ = ')';
+    while (*ip) *out++ = *ip++;
+    *out = 0;
+    free(cur);
+    cur = strdup(buf);
   }
-  *out = 0;
+  free(cur);
   tx_t result = strdup(buf);
   free(buf);
   return result;
