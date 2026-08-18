@@ -252,7 +252,18 @@ ACTION _push_el(els(LIST), cur(TX)),
             SET ef TO "_from_long(" + elt + ")".
         /IF.
         IF isi IS 0,
-            SET ef TO elt.
+            # v0.49.4 — arithmetic element (unquoted, contains an
+            # operator): NUM-typed expressions like "x + 1" arrive as
+            # raw C longs; wrap so the runtime stores a tx_t number
+            # string. Quoted strings and bare identifiers pass
+            # through untouched.
+            REAP opf FROM find_any, elt, "+-*/".
+            IF opf IS -1,
+                SET ef TO elt.
+            /IF.
+            IF opf ISNT -1,
+                SET ef TO "_from_long(" + elt + ")".
+            /IF.
         /IF.
         /IF.
     /IF.

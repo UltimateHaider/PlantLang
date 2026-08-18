@@ -4808,6 +4808,7 @@ tx_t _push_el(PlantArray* els, tx_t cur) {
   tx_t ebv = "";
   tx_t ebf = "";
   tx_t isi = "";
+  tx_t opf = "";
     elt = trim(cur);
     if (strlen( elt ) == 0) {
         return els;
@@ -4833,7 +4834,13 @@ tx_t _push_el(PlantArray* els, tx_t cur) {
                 ef = _cat(_cat("_from_long(", elt), ")");
             }
             if (isi == 0) {
-                ef = elt;
+                opf = find_any(elt, "+-*/");
+                if (opf == - 1) {
+                    ef = elt;
+                }
+                if (opf != - 1) {
+                    ef = _cat(_cat("_from_long(", elt), ")");
+                }
             }
         }
     }
@@ -11287,7 +11294,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.3 (pure native)");
+      plant_print("Chloroplast 0.49.4 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

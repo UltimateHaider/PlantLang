@@ -310,7 +310,22 @@ SEASON count GREATER THAN 0,
 
 ### Lists
 
-Runtime helpers build and manipulate lists natively:
+**List literals (v0.49.4):** `[e1, e2, ...]` declares and initializes a
+list in place — integer literals and NUM-typed expressions are stored
+as number strings, strings and variables pass through, and brackets
+nest recursively. Element access uses `name[expr]`:
+
+```
+CREATE a(LIST) TO [1, 2, 3].              # [1, 2, 3]
+CREATE b(LIST) TO ["x", ["y", "z"], "w"]. # nested lists
+CREATE c(LIST) TO [].                     # empty → plant_list_make(0)
+CREATE n(NUM) TO 10.
+CREATE d(LIST) TO [n + 1, "var"].         # expressions + variables
+SHOW JOIN(d, "-").                        # → 11-var
+SHOW a[0].                                # → 1 (name[expr] → plant_list_get)
+```
+
+Runtime helpers also build and manipulate lists natively:
 
 ```
 CREATE parts(LIST) TO plant_list_make(0).
@@ -329,6 +344,8 @@ IF _at(parts, 0) IS "first",
 - `PUT item INTO list.` — append.
 - `COUNT list` — element count (e.g. `SEASON i < COUNT lst`).
 - `_map_get(map, key)` — map lookup.
+- Note: chained indexing (`b[1][0]`) and string concatenation inside a
+  literal are not yet supported.
 
 ### String Operations
 

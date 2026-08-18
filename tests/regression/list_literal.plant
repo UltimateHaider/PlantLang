@@ -1,0 +1,25 @@
+# list_literal: native list literal syntax (v0.49.4).
+# [e1, e2, ...] compiles to plant_list_make(count, ...): integer
+# literals wrap in _from_long, nested [ ... ] recurse, NUM-typed
+# expressions wrap in _from_long, string variables and literals pass
+# through as tx_t, [] is plant_list_make(0), and name[expr] rewrites
+# to plant_list_get for element access.
+ACTION main(),
+  CREATE a(LIST) TO [1, 2, 3].
+  SHOW "simple=" + JOIN(a, ",").
+  CREATE b(LIST) TO ["x", ["y", "z"], "w"].
+  SHOW "nested=" + JOIN(b, "|").
+  CREATE c(LIST) TO [].
+  SHOW "empty=" + JOIN(c, ",").
+  CREATE n(NUM) TO 10.
+  CREATE y(TX) TO "var".
+  CREATE d(LIST) TO [n + 1, y].
+  SHOW "mixed=" + JOIN(d, "-").
+  CREATE e(LIST) TO [1 + 1, 5].
+  SHOW "arith=" + JOIN(e, ",").
+  SHOW "lit=" + JOIN([n + 1, 2], ",").
+  SHOW "i0=" + a[0].
+  SHOW "i2=" + a[2].
+  SHOW "inner=" + JOIN(b[1], "-").
+  GIVE 0.
+/GIVE main.

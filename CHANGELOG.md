@@ -1,5 +1,49 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.49.4 — 2026 (List Literals Syntax)
+
+### Language
+- **Native list literals:** `[e1, e2, ...]` — brackets tokenize as
+  LBRACKET/RBRACKET and pass through the statement collectors, and
+  `translate_expr`'s `_list_literal` scanner (quote/escape-aware,
+  nesting-depth aware, identifier-guarded so `name[expr]` indexing is
+  never mistaken for a literal) rewrites them into
+  `plant_list_make(count, e1, ...)`:
+  - integer literals wrap in `_from_long` (`[1, 2, 3]` →
+    `plant_list_make(3, _from_long(1), _from_long(2), _from_long(3))`)
+  - nested lists recurse through `_seg_list` (`["a", ["b", "c"], "w"]`
+    → `plant_list_make(3, "a", plant_list_make(2, "b", "c"), "w")`)
+  - `[]` → `plant_list_make(0)`
+  - bare TRUE/FALSE materialize as the quoted strings (SUM skips them)
+  - strings, string variables, and list variables pass through as tx_t
+- **Fix (v0.49.4):** NUM-typed expressions inside a literal — `[x + 1,
+  y]` — previously emitted the raw C `long` (pointer-truncated into
+  the varargs list, segfaulting the serializer). `_push_el` now wraps
+  unquoted elements containing an arithmetic operator in
+  `_from_long(...)` → `plant_list_make(2, _from_long(x + 1), y)`.
+- **Element access:** `name[expr]` → `plant_list_get(name, expr)`
+  (C-side `handle_brackets`, pre-existing; single-level only — chained
+  indexing like `b[1][0]` remains unsupported).
+- Existing syntax (v0.48.38c-era): literals in expression/call
+  positions (`JOIN([m1, [2, 3, 4]], ",")`) already worked and stay
+  covered by `join.plant`.
+
+### Tests
+- Added `tests/regression/list_literal.plant` (+ `.expected`): simple
+  `[1, 2, 3]`, nested `["x", ["y", "z"], "w"]`, empty `[]`, mixed
+  `[n + 1, y]` (NUM expression + TX variable), arithmetic `[1 + 1, 5]`,
+  literal in SHOW position, and `name[expr]` element access (single +
+  nested-list via `JOIN(b[1], "-")`).
+
+### Documentation
+- `Language Tour.md`: Lists section documents the literal syntax,
+  element access, nesting, and the unsupported cases (chained
+  indexing, string concatenation inside a literal).
+
+### Housekeeping
+- Version bump 0.49.3 → 0.49.4 (Makefile, compiler banner, native test
+  suite version check).
+
 ## v0.49.3 — 2026 (JSON Bodies in HTTP Subsystem)
 
 ### Network

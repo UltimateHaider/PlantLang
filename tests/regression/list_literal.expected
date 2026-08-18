@@ -1,0 +1,9 @@
+simple=1,2,3
+nested=x|[y, z]|w
+empty=
+mixed=11-var
+arith=2,5
+lit=11,2
+i0=1
+i2=3
+inner=y-z
