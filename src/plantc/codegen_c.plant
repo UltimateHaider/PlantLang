@@ -1748,9 +1748,19 @@ ACTION collect_enums_walk(bd, subst, reg, sigs, res),
         SET ii3 TO ii3 + 1.
       /SEASON.
     /IF.
-    IF wty IS "season_stmt" OR wty IS "cycle_stmt" OR wty IS "match_stmt",
+    IF wty IS "season_stmt" OR wty IS "cycle_stmt",
       CREATE sbl(LIST) TO _map_get(wnd, "body").
       REAP wret FROM collect_enums_walk, sbl, subst, reg, sigs, res.
+    /IF.
+    IF wty IS "match_stmt",
+      CREATE mcl1(LIST) TO _map_get(wnd, "clauses").
+      CREATE mci1(NUM) TO 0.
+      SEASON mci1 < COUNT mcl1,
+        REAP mcl2 FROM plant_list_get, mcl1, mci1.
+        REAP mcb1 FROM _map_get, mcl2, "bodyStatements".
+        REAP wret FROM collect_enums_walk, mcb1, subst, reg, sigs, res.
+        SET mci1 TO mci1 + 1.
+      /SEASON.
     /IF.
     IF wty IS "weather_stmt",
       REAP wbl4 FROM _weather_bodies, wnd.
@@ -1930,9 +1940,19 @@ ACTION collect_nums_walk(bd(LIST), subst(LIST), res(LIST)),
         SET ii4 TO ii4 + 1.
       /SEASON.
     /IF.
-    IF wty IS "season_stmt" OR wty IS "cycle_stmt" OR wty IS "match_stmt",
+    IF wty IS "season_stmt" OR wty IS "cycle_stmt",
       REAP wbd2 FROM _map_get, wnd, "body".
       REAP wret2 FROM collect_nums_walk, wbd2, subst, res.
+    /IF.
+    IF wty IS "match_stmt",
+      CREATE mcl3(LIST) TO _map_get(wnd, "clauses").
+      CREATE mci3(NUM) TO 0.
+      SEASON mci3 < COUNT mcl3,
+        REAP mcl4 FROM plant_list_get, mcl3, mci3.
+        REAP mcb2 FROM _map_get, mcl4, "bodyStatements".
+        REAP wret2 FROM collect_nums_walk, mcb2, subst, res.
+        SET mci3 TO mci3 + 1.
+      /SEASON.
     /IF.
     IF wty IS "weather_stmt",
       REAP wbl5 FROM _weather_bodies, wnd.
@@ -4068,32 +4088,67 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         GIVE isel + "  if (" + scc + ") \{\n" + isel + "    plant_throw(\"STOP_STORM\", NULL);\n" + isel + "  \}\n".
     /IF.
   
-    # ── match_stmt: MATCH expr { Variant -> { stmts } } → switch ─
+    # ── match_stmt: MATCH subject { pattern -> body } →
+    #    { tx_t __mt = <subject>;
+    #      if (_match_eq(__mt, "lit")) { … }          // literal arm
+    #      else if (plant_array_length(__mt) == 2 && _match_eq(plant_list_get(__mt, 0), "Tag")) {
+    #        tx_t <bind> = _match_extract(__mt, "Tag"); … }  // binding arm
+    #      else { … } }                               // wildcard arm
+    #    The __mt temp lives in its own block so nested or sibling
+    #    MATCHes never collide, and binding declarations inside arm
+    #    blocks are C-block-scoped (v0.49.7).
     IF ntype IS "match_stmt",
         REAP subj FROM _map_get, node, "subjectExpr".
         CREATE clauses(LIST) TO _map_get(node, "clauses").
         REAP csubj FROM translate_expr, subj, nums, evars.
         REAP isel FROM indent_str, indent.
-        CREATE ccode(TX) TO isel + "  switch (" + csubj + ") \{\n".
+        CREATE ccode(TX) TO isel + "  \{\n" + isel + "    tx_t __mt = " + csubj + ";\n".
         CREATE ci(NUM) TO 0.
         CREATE clause(TX) TO "".
+        CREATE vname(TX) TO "".
+        CREATE binding(TX) TO "".
+        CREATE wc(NUM) TO 0.
         SEASON ci < COUNT clauses,
             REAP clause FROM plant_list_get, clauses, ci.
             REAP vname FROM _map_get, clause, "variantName".
             REAP binding FROM _map_get, clause, "binding".
             REAP cbody FROM _map_get, clause, "bodyStatements".
-            SET ccode TO ccode + isel + "    case " + vname + ":\n".
+            SET wc TO 0.
+            IF vname IS "_", SET wc TO 1. /IF.
+            IF ci IS 0,
+                IF wc IS 1,
+                    SET ccode TO ccode + isel + "    if (1) \{\n".
+                /IF.
+                IF wc IS 0,
+                    IF binding > "" AND binding ISNT "null",
+                        SET ccode TO ccode + isel + "    if (plant_array_length(__mt) == 2 && _match_eq(plant_list_get(__mt, 0), \"" + vname + "\")) \{\n".
+                    /IF.
+                    IF binding IS "" OR binding IS "null",
+                        SET ccode TO ccode + isel + "    if (_match_eq(__mt, \"" + vname + "\")) \{\n".
+                    /IF.
+                /IF.
+            /IF.
+            IF ci > 0,
+                IF wc IS 1,
+                    SET ccode TO ccode + isel + "    \} else \{\n".
+                /IF.
+                IF wc IS 0,
+                    IF binding > "" AND binding ISNT "null",
+                        SET ccode TO ccode + isel + "    \} else if (plant_array_length(__mt) == 2 && _match_eq(plant_list_get(__mt, 0), \"" + vname + "\")) \{\n".
+                    /IF.
+                    IF binding IS "" OR binding IS "null",
+                        SET ccode TO ccode + isel + "    \} else if (_match_eq(__mt, \"" + vname + "\")) \{\n".
+                    /IF.
+                /IF.
+            /IF.
             IF binding > "" AND binding ISNT "null",
-                SET ccode TO ccode + isel + "      \{\n".
-                SET ccode TO ccode + isel + "        tx_t " + binding + " = " + csubj + ";\n".
-                REAP bcode FROM generate_body, cbody, indent + 4, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
-                SET ccode TO ccode + bcode + isel + "      \}\n".
+                SET ccode TO ccode + isel + "        tx_t " + binding + " = _match_extract(__mt, \"" + vname + "\");\n".
             /IF.
-            IF binding IS "" OR binding IS "null",
-                REAP bcode FROM generate_body, cbody, indent + 4, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
-                SET ccode TO ccode + bcode.
+            REAP bcode FROM generate_body, cbody, indent + 4, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
+            SET ccode TO ccode + bcode.
+            IF ci + 1 IS COUNT clauses,
+                SET ccode TO ccode + isel + "    \}\n".
             /IF.
-            SET ccode TO ccode + isel + "      break;\n".
             SET ci TO ci + 1.
         /SEASON.
         SET ccode TO ccode + isel + "  \}\n".
@@ -4420,9 +4475,19 @@ ACTION collect_stvars_walk(bd(LIST), subst(LIST), res(LIST)),
         SET ii6 TO ii6 + 1.
       /SEASON.
     /IF.
-    IF wty IS "season_stmt" OR wty IS "cycle_stmt" OR wty IS "match_stmt",
+    IF wty IS "season_stmt" OR wty IS "cycle_stmt",
       REAP wbd2 FROM _map_get, wnd, "body".
       REAP wret2 FROM collect_stvars_walk, wbd2, subst, res.
+    /IF.
+    IF wty IS "match_stmt",
+      CREATE mcl5(LIST) TO _map_get(wnd, "clauses").
+      CREATE mci5(NUM) TO 0.
+      SEASON mci5 < COUNT mcl5,
+        REAP mcl6 FROM plant_list_get, mcl5, mci5.
+        REAP mcb3 FROM _map_get, mcl6, "bodyStatements".
+        REAP wret2 FROM collect_stvars_walk, mcb3, subst, res.
+        SET mci5 TO mci5 + 1.
+      /SEASON.
     /IF.
     IF wty IS "weather_stmt",
       REAP wbl7 FROM _weather_bodies, wnd.
@@ -5099,6 +5164,16 @@ ACTION collect_struct_insts(bd(LIST), subst(LIST), structs(LIST), acc(LIST)),
             REAP sub_bd FROM _map_get, nd, "body".
             REAP acc FROM collect_struct_insts, sub_bd, subst, structs, acc.
         /IF.
+        IF ty IS "match_stmt",
+            CREATE mcl9(LIST) TO _map_get(nd, "clauses").
+            CREATE mci9(NUM) TO 0.
+            SEASON mci9 < COUNT mcl9,
+                REAP mcl10 FROM plant_list_get, mcl9, mci9.
+                REAP mcb5 FROM _map_get, mcl10, "bodyStatements".
+                REAP acc FROM collect_struct_insts, mcb5, subst, structs, acc.
+                SET mci9 TO mci9 + 1.
+            /SEASON.
+        /IF.
         IF ty IS "weather_stmt",
             REAP wbl9 FROM _weather_bodies, nd.
             CREATE wbi9(NUM) TO 0.
@@ -5244,6 +5319,16 @@ ACTION collect_insts(bd(LIST), subst(LIST), templates(LIST), acc(LIST)),
         IF ty IS "season_stmt",
             REAP sub_bd FROM _map_get, nd, "body".
             REAP acc FROM collect_insts, sub_bd, subst, templates, acc.
+        /IF.
+        IF ty IS "match_stmt",
+            CREATE mcl11(LIST) TO _map_get(nd, "clauses").
+            CREATE mci11(NUM) TO 0.
+            SEASON mci11 < COUNT mcl11,
+                REAP mcl12 FROM plant_list_get, mcl11, mci11.
+                REAP mcb6 FROM _map_get, mcl12, "bodyStatements".
+                REAP acc FROM collect_insts, mcb6, subst, templates, acc.
+                SET mci11 TO mci11 + 1.
+            /SEASON.
         /IF.
         IF ty IS "weather_stmt",
             REAP wbl10 FROM _weather_bodies, nd.
@@ -5537,7 +5622,7 @@ ACTION callees_of(bd(LIST)),
         SET ii10 TO ii10 + 1.
       /SEASON.
     /IF.
-    IF cty IS "season_stmt" OR cty IS "cycle_stmt" OR cty IS "match_stmt",
+    IF cty IS "season_stmt" OR cty IS "cycle_stmt",
       REAP cbd2 FROM _map_get, cnd, "body".
       REAP cret2 FROM callees_of, cbd2.
       CREATE cj(NUM) TO 0.
@@ -5546,6 +5631,23 @@ ACTION callees_of(bd(LIST)),
         REAP cje FROM plant_list_get, cret2, cj.
         REAP acc FROM callee_add, acc, cje.
         SET cj TO cj + 1.
+      /SEASON.
+    /IF.
+    IF cty IS "match_stmt",
+      CREATE mcl7(LIST) TO _map_get(cnd, "clauses").
+      CREATE mci7(NUM) TO 0.
+      SEASON mci7 < COUNT mcl7,
+        REAP mcl8 FROM plant_list_get, mcl7, mci7.
+        REAP mcb4 FROM _map_get, mcl8, "bodyStatements".
+        REAP cret2 FROM callees_of, mcb4.
+        CREATE cj2(NUM) TO 0.
+        CREATE cje2(TX) TO "".
+        SEASON cj2 < COUNT cret2,
+          REAP cje2 FROM plant_list_get, cret2, cj2.
+          REAP acc FROM callee_add, acc, cje2.
+          SET cj2 TO cj2 + 1.
+        /SEASON.
+        SET mci7 TO mci7 + 1.
       /SEASON.
     /IF.
     IF cty IS "weather_stmt",
@@ -5658,6 +5760,16 @@ ACTION collect_roots(bd(LIST), acc(LIST)),
     IF t2 IS "season_stmt" OR t2 IS "cycle_stmt" OR t2 IS "root_scope",
       REAP sbd2 FROM _map_get, n2, "body".
       REAP acc FROM collect_roots, sbd2, acc.
+    /IF.
+    IF t2 IS "match_stmt",
+      CREATE mcl13(LIST) TO _map_get(n2, "clauses").
+      CREATE mci13(NUM) TO 0.
+      SEASON mci13 < COUNT mcl13,
+        REAP mcl14 FROM plant_list_get, mcl13, mci13.
+        REAP mcb7 FROM _map_get, mcl14, "bodyStatements".
+        REAP acc FROM collect_roots, mcb7, acc.
+        SET mci13 TO mci13 + 1.
+      /SEASON.
     /IF.
     IF t2 IS "weather_stmt",
       REAP wf2 FROM _weather_bodies, n2.

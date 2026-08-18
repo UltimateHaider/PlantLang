@@ -1,8 +1,8 @@
 # Legacy JS Interpreter vs Self-Hosted Compiler — Gap Analysis Report
 
-**Scope:** Legacy JavaScript interpreter (PlantLang ≤ v0.45.x, `core/interpreter.js` + associated modules, recovered from git at `7f54eae` v0.45.0) vs the self-hosted native compiler (v0.49.5, `src/plantc/*.plant` → C, `runtime/c/plant_runtime.c`).
+**Scope:** Legacy JavaScript interpreter (PlantLang ≤ v0.45.x, `core/interpreter.js` + associated modules, recovered from git at `7f54eae` v0.45.0) vs the self-hosted native compiler (v0.49.6, `src/plantc/*.plant` → C, `runtime/c/plant_runtime.c`).
 
-> **Status note (v0.49.5):** the legacy side no longer exists in the
+> **Status note (v0.49.6):** the legacy side no longer exists in the
 > working tree. v0.48.38m removed `core/`, `src/**/*.js`, `service/`,
 > `webrepl/`, `std/`, `benchmarks/`, and the editor assets from the
 > repository; the legacy engine is now preserved only in git history
@@ -17,7 +17,7 @@ PlantLang transitioned from a **tree-walking JavaScript interpreter** (~9,000 li
 
 The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 port. High-level counts:
 
-| Area | Legacy (v0.45.0) | Current (v0.49.5) | Gap |
+| Area | Legacy (v0.45.0) | Current (v0.49.6) | Gap |
 |---|---|---|---|---|
 | Statement keywords (parser dispatch) | ~40 | ~40 (incl. storms, CYCLE forms, NOW/ANALYZE/TYPEOF, FREE/ARC/FAST, WAIT/LOCK) | ~10 missing (deliberate cuts + legacy stubs) |
 | Innate/std library functions | ~60 (41 innate + 19 std/.plnt + 5 FFI stubs) | ~31 expression builtins (codegen_c.plant:2238-2292) + ~22 FFI module bindings (strings/fs/math) + ~50 declared runtime helpers | ~20 missing |
@@ -40,7 +40,7 @@ The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 
 
 - **Legacy side** (recovered from git `7f54eae`, the last commit shipping `core/interpreter.js`; removed from the working tree in v0.48.38m — all sources below are historical):
   `core/interpreter.js` (2,828 L), `core/parser.js` (3,033 L), `core/ast.js` (1,040 L), `core/typechecker.js` (1,529 L), `core/tokenizer.js` (259 L), `core/evaluator.js` (173 L), `core/runtime.js` (64 L), `core/innate.js` (67 L), `core/dispatcher.js` (286 L), `core/matrix.js`, `core/harvest.js` + `harvest_worker.js`, `core/diagnostics.js`, `core/lexer.js`, `core/runtime_bridge.c`, `src/interpreter/{cycle_evaluator,sort_evaluator,bloom_evaluator,show_formatter}.js`, `std/{prelude,string,math,io}.plnt`.
-- **Current side** (working tree v0.49.5): `src/plantc/{lexer,parser,codegen_c,main}.plant`, `runtime/c/plant_runtime.c` (≈6,000 L), `runtime/c/plant_compat.h` (549 L), `runtime/c/plant_runtime.h`, `tests/native/mock_ffi.{h,c}`, `Language Tour.md`.
+- **Current side** (working tree v0.49.6): `src/plantc/{lexer,parser,codegen_c,main}.plant`, `runtime/c/plant_runtime.c` (≈6,000 L), `runtime/c/plant_compat.h` (787 L), `runtime/c/plant_runtime.h`, `tests/native/mock_ffi.{h,c}`, `Language Tour.md`.
 - **Verification method:** full keyword-dispatch enumeration of both parsers; complete function inventories of `plant_compat.h` and `plant_runtime.c`; spot-checks for every "missing" claim (all negative).
 
 Legend for gap tables: **S** = supported, **P** = partial (different semantics / only reachable internally), **M** = missing, **D** = intentionally deprecated / dropped by design.
@@ -115,16 +115,16 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 
 | Legacy form | Current | Notes |
 |---|---|---|
-| Integer/decimal literals, negative numbers | **S** | |
+| Integer/decimal literals, negative numbers | **S** | decimal spans lexed since v0.49.6 (`match_number` consumes `1.5`/`2.7`); decimals inside `[ … ]`/`{ … }` literals wrap in `_from_double`; bare decimals in plain assignments stay raw (`SET d TO 1.5.` → `d = 1.5;`, truncating for `long` targets — pre-existing behavior) |
 | `"str"` with `\n \t \r \" \' \\` escapes | **S** | |
 | `"str {expr}"` string interpolation | **S** | shipped as `"str ${expr}"` (v0.48.22-patch2) with nesting, numeric/enum wrapping; `\${` stays literal and concat chains flatten to `_cat3`/`_cat4` with a single-digit fast path (v0.48.22-patch4) |
 | `'str'` single-quoted | M | regex-path only in legacy too |
 | `TRUE`/`FALSE`/`NULL`/`VOID` | **P** | TRUE/FALSE/NULL; VOID M |
-| `[a, b, c]` array literal | M | **S** (v0.49.4: native literals — `[1, 2, 3]` → `plant_list_make(3, _from_long(1), …)`, integer literals and NUM-typed expressions wrap in `_from_long` (`[x + 1, y]` → `_from_long(x + 1)`), nested `["a", ["b", "c"], "w"]` recurse, `[]` → `plant_list_make(0)`, bare TRUE/FALSE quote as strings; strings/list variables pass through as tx_t; still unsupported: chained indexing `b[1][0]`, string concatenation inside a literal) |
-| `{ k: v }` map literal | M | **S** (v0.49.5: native literals — `{ "name": "plant", "year": 2026 }` → `plant_map_set(plant_map_set(plant_map_create(), "name", "plant"), "year", _from_long(2026))`; keys/values are quoted strings, numbers (→ `_from_long`), variables, nested `[ … ]` and `{ … }`; `{}` → `plant_map_create()`; produces the pair-list MAP form — readable via `_map_get`, serializable via `plant_map_to_string`/`json_stringify`; bare NUM variables as keys/values still unwrapped) |
+| `[a, b, c]` array literal | M | **S** (v0.49.4: native literals — `[1, 2, 3]` → `plant_list_make(3, _from_long(1), …)`, integer literals and NUM-typed expressions wrap in `_from_long` (`[x + 1, y]` → `_from_long(x + 1)`), nested `["a", ["b", "c"], "w"]` recurse, `[]` → `plant_list_make(0)`, bare TRUE/FALSE quote as strings; v0.49.6: decimal elements wrap in `_from_double` (`[1.5, 2.7]` → `plant_list_make(3, _from_double(1.5), _from_double(2.7))`); strings/list variables pass through as tx_t; still unsupported: string concatenation inside a literal) |
+| `{ k: v }` map literal | M | **S** (v0.49.5: native literals — `{ "name": "plant", "year": 2026 }` → `plant_map_set(plant_map_set(plant_map_create(), "name", "plant"), "year", _from_long(2026))`; keys/values are quoted strings, numbers (→ `_from_long`), variables, nested `[ … ]` and `{ … }`; `{}` → `plant_map_create()`; produces the pair-list MAP form — readable via `_map_get`, serializable via `plant_map_to_string`/`json_stringify`; v0.49.6: decimal values wrap in `_from_double`; bare NUM variables as keys/values still unwrapped) |
 | `StructName{ args }` / `{field: value}` struct literals | M | structs are map-backed, created via action returns |
 | `a..b` range expression | M | runtime `plant_range` helper exists but not as syntax |
-| `x[i]` index | **S** | rewritten to `plant_list_get`/array access; `name[expr]` → `plant_list_get(name, expr)` via C-side `handle_brackets` — expression position only (v0.49.4-documented; `REAP … FROM x[i]` target and chained `b[1][0]` unsupported) |
+| `x[i]` index | **S** | rewritten to `plant_list_get`/array access; `name[expr]` → `plant_list_get(name, expr)` via C-side `handle_brackets` — expression position only (v0.49.4-documented; v0.49.6: multi-pass rightmost rewrite adds chained `b[1][0]` → `plant_list_get(plant_list_get(b, 1), 0)` and call-result indexing `f(x)[0]`, `plant_map_get(m, "k")[0]`; `REAP … FROM x[i]` target still unsupported) |
 | `x[s:e]` slices | M | `SLICE(seq, start, end)` built-in **S** (v0.48.38i, half-open bounds with -1 bound expansion); `x[s:e]` syntax M |
 | `obj:prop`, `obj:"k1":"k2"`, `a.b.c`, `SELF:prop` | M | colon-call only for `module:func` |
 | `a.method(args)` (push/pop/put/get/has) | M | |
@@ -256,7 +256,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | Legacy idiom | Current equivalent |
 |---|---|
 | `CREATE x(LIST) TO 1, 2, 3.` | `CREATE x(LIST) TO plant_list_make(3, 1, 2, 3).` (or, v0.49.4: `CREATE x(LIST) TO [1, 2, 3].`) |
-| `x[i]` / slices | `plant_list_get(x, i)` / `plant_array_slice` (v0.49.4: `x[i]` works directly in expression position) |
+| `x[i]` / slices | `plant_list_get(x, i)` / `plant_array_slice` (v0.49.4: `x[i]` works directly in expression position; v0.49.6: chained `b[1][0]` and `f(x)[0]` work too) |
 | `PUT v INTO l.` | `CALL plant_list_push(l, v).` (or `CALL ffi_…`) |
 | Map access `m:"k"` | `_map_get(m, "k")` |
 | `{k: v}` map literal | `{ "k": v }` (v0.49.5) — or `plant_map_create()` + `plant_map_set(m, k, v)` |
@@ -278,7 +278,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 
 **High effort / high value**
 1. **Storms / exception handling** (WEATHER/SHELTER/CALM + `LOST_STORM`/`ZERO_STORM`): **shipped** — v0.48.23 added `THROW` + `WEATHER/SHELTER/CALM` with mandatory `CALM`, unmatched re-propagation, and `GIVE`/`BREAK`/`CONTINUE` frame popping via `setjmp`/`longjmp` frames; v0.48.23-patch completed the 12-kind registry (with per-kind default messages) and the runtime `plant_storm_match` catch-all matcher; v0.48.25 adds `STOP IF` (raises `STOP_STORM`, the 13th kind) and the `plant_calm` finalization pipeline that runs `CALM` on every exit path, including `GIVE`/`BREAK`/`CONTINUE` interruptions. **Weather memory management shipped v0.48.37d**: every WEATHER frame binds a dedicated exit-list, `plant_weather_leave` frees registered handles (ARC-aware) and drains deferred deallocations on every exit path, SHELTER handler temporaries are purged on handler exit, and `plant_weather_status` reports `active_frames`/`live_objects`/`pending_frees`/`storm_handlers` telemetry. **`storm()` factory shipped v0.48.38a**: `THROW storm("TYPE", "msg").` builds an ARC-managed `{type, message}` exception object that survives unwinding, binds as the SHELTER `AS e` value, and is released after the handler body runs; `CALL storm(...).` and bare `storm(...).` statements work too. **Location backfill shipped v0.48.38b**: the factory takes `(file, line, column)`, the codegen injects `__FILE__`, `__LINE__`, `0` at every `storm(...)` call, and the fields are conditionally packed so `AS e` bindings expose `_map_get(e, "file")` / `_map_get(e, "line")`. Shipped in full.
-2. **List/map/std library surface**: array & map literals, slices, `FIRST/LAST/SUM/AVERAGE/MEDIAN/UNIQUE/REVERSE/FLATTEN/CHUNK/ZIP/RANGE`, string `FIND/COUNT_OF` (**shipped v0.48.38j**), `SLICE` (**shipped v0.48.38i**), `JOIN` (**shipped v0.48.38c**), `UPPER/LOWER/TRIM/INCLUDES/STARTS_WITH/ENDS_WITH/REVERSE/REPEAT/PAD/PAD_LEFT` (v0.48.26 shipped via the `strings:` FFI module), `math` extras (`LOG PI E SIGN CLAMP` shipped v0.48.27; `ABS ROUND POW CEIL FLOOR RANDOM SIN COS SQRT` bindings), `io:SHOWLN io:FLUSH` (shipped v0.48.28), `fs:APPEND` (shipped v0.48.28).
+2. **List/map/std library surface**: array & map literals (v0.49.4 `[ … ]`, v0.49.5 `{ k: v }`, v0.49.6 decimal elements `_from_double`), slices, `FIRST/LAST/SUM/AVERAGE/MEDIAN/UNIQUE/REVERSE/FLATTEN/CHUNK/ZIP/RANGE`, string `FIND/COUNT_OF` (**shipped v0.48.38j**), `SLICE` (**shipped v0.48.38i**), `JOIN` (**shipped v0.48.38c**), `UPPER/LOWER/TRIM/INCLUDES/STARTS_WITH/ENDS_WITH/REVERSE/REPEAT/PAD/PAD_LEFT` (v0.48.26 shipped via the `strings:` FFI module), `math` extras (`LOG PI E SIGN CLAMP` shipped v0.48.27; `ABS ROUND POW CEIL FLOOR RANDOM SIN COS SQRT` bindings), `io:SHOWLN io:FLUSH` (shipped v0.48.28), `fs:APPEND` (shipped v0.48.28).
 3. **String interpolation** — shipped as `"str ${expr}"` (v0.48.22-patch2); ORIF/ELSE (v0.48.20), CYCLE 3 forms (v0.48.21-22) and INCREASE/DECREASE (v0.48.22-patch) are shipped; numeric CYCLE hardened with static STEP evaluation in v0.48.22-patch3 (zero-step compile error, direction-aware expression steps, runtime nonzero guard); v0.48.22-patch4 adds literal `\${` escape markers, `_cat3`/`_cat4` chain flattening, and the single-digit `_from_digit` fast path.
 
 **Medium effort**
@@ -307,4 +307,4 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 **Intentionally out of scope (D)**
 - SPECIES/BLOOM object model, `SELF:`/method dispatch, `PLANT` library statements, PULSE/WHENEVER watchers, JS `Function()` escape hatch, locale-specific IO formatting, VERIFY/SUITE language framework.
 
-*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.49.5. As of v0.49.5 the legacy side exists only in git history — `core/`, `src/**/*.js`, `std/`, `service/`, `webrepl/`, and `benchmarks/` were removed from the working tree (commit `c17de62`).*
+*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.49.6. As of v0.49.6 the legacy side exists only in git history — `core/`, `src/**/*.js`, `std/`, `service/`, `webrepl/`, and `benchmarks/` were removed from the working tree (commit `c17de62`).*

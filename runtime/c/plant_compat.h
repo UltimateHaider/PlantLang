@@ -11,6 +11,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 
 #define _S(x) ((const char*)(x))
 #define _P(x) ((PlantArray*)(x))
@@ -377,6 +378,33 @@ static tx_t handle_strcmp(tx_t expr) {  const char*_e=_S(expr);
 }
 
 static int64_t plant_array_length(PlantArray* a) { return a ? a->count : 0; }
+/* v0.49.7 — MATCH pattern equality. Numeric-aware compare: raw
+   small ints (< 4096 inline range) and pure-numeric strings compare
+   numerically (so a subject holding the string "5" matches the
+   literal pattern 5 and vice versa); everything else compares as
+   text. NULL == NULL; NULL never equals a value. */
+static tx_t _match_eq(tx_t a, tx_t b) {
+  const char *sa = _S(a), *sb = _S(b);
+  if (!sa || !sb) return (sa == sb) ? (tx_t)1 : (tx_t)0;
+  long la = plant_rw_arg_long(a), lb = plant_rw_arg_long(b);
+  int na = 0, nb = 0;
+  if ((uintptr_t)a < 4096) { na = 1; }
+  else { char *ea = NULL; errno = 0; long va = strtol(sa, &ea, 10); if (ea != sa && *ea == '\0' && errno == 0) { na = 1; } }
+  if ((uintptr_t)b < 4096) { nb = 1; }
+  else { char *eb = NULL; errno = 0; long vb = strtol(sb, &eb, 10); if (eb != sb && *eb == '\0' && errno == 0) { nb = 1; } }
+  if (na && nb) return (la == lb) ? (tx_t)1 : (tx_t)0;
+  return strcmp(sa, sb) == 0 ? (tx_t)1 : (tx_t)0;
+}
+/* v0.49.7 — MATCH binding extraction: value is the [tag, payload]
+   pair-list form (as produced by _from_enum and the Option/Result
+   helpers); pattern is the tag text. Returns the payload when the
+   tag matches, else NULL. */
+static tx_t _match_extract(tx_t value, tx_t pattern) {
+  if (!value) return NULL;
+  if (plant_array_length(value) == 2 && _match_eq(plant_list_get(value, 0), pattern))
+    return plant_list_get(value, 1);
+  return NULL;
+}
 static PlantArray* strings_SPLIT(tx_t s, tx_t d) {
   const char*_s=_S(s), *_d=_S(d);
   if (!_s || !_d) return plant_list_create(0);

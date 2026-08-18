@@ -1,0 +1,44 @@
+# match: MATCH pattern dispatch (v0.49.7).
+# Literal arms compare via _match_eq (numeric-aware: the string "1"
+# matches the literal 1), the wildcard arm catches everything else,
+# and Name(var) arms match [tag, payload] pair lists and bind the
+# payload inside the arm. Bare Name arms match the tag only.
+ACTION classify(v(TX)),
+  MATCH v {
+    1 -> GIVE "one".
+    2 -> GIVE "two".
+    _ -> GIVE "other".
+  }
+/ACTION.
+
+ACTION tag_of(v(TX)),
+  MATCH v {
+    Ok(x) -> GIVE "ok:" + x.
+    Err(e) -> GIVE "err:" + e.
+    _ -> GIVE "none".
+  }
+/ACTION.
+
+ACTION flag_of(v(TX)),
+  MATCH v {
+    Maybe -> GIVE "maybe".
+    Some(n) -> { SHOW "got " + n. GIVE "some". }
+    _ -> GIVE "bare".
+  }
+/ACTION.
+
+ACTION main(),
+  SHOW "lit: " + classify(1).
+  SHOW "lit: " + classify(2).
+  SHOW "lit: " + classify(9).
+  SHOW "str: " + classify("1").
+  SHOW "str: " + classify("x").
+
+  SHOW "bind: " + tag_of(plant_list_make(2, "Ok", "7")).
+  SHOW "bind: " + tag_of(plant_list_make(2, "Err", "oops")).
+  SHOW "bind: " + tag_of(plant_list_make(2, "Other", "ignored")).
+  SHOW "bind: " + tag_of(plant_list_make(1, "Ok")).
+
+  SHOW "flag: " + flag_of(plant_list_make(2, "Maybe", "x")).
+  SHOW "flag: " + flag_of(plant_list_make(2, "Some", "42")).
+/ACTION.

@@ -1,0 +1,12 @@
+lit: one
+lit: two
+lit: other
+str: one
+str: other
+bind: ok:7
+bind: err:oops
+bind: none
+bind: none
+flag: bare
+got 42
+flag: some

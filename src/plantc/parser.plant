@@ -1737,6 +1737,147 @@ ACTION parse_if_stmt(tokens(LIST), pos(NUM), clv(TX), rtab(LIST), emode(TX)),
   /SEASON.
 /ACTION.
 
+# v0.49.7 — MATCH subject { pattern -> body } — pattern dispatch over
+#   a subject expression. Patterns:
+#     - static literals: NUMBER, quoted STRING, TRUE/FALSE
+#     - wildcard: _ (must be the last arm)
+#     - tagged binding: Name(var) — matches a [tag, payload] pair
+#       list and binds the payload to var in the arm body; bare Name
+#       matches the tag without binding.
+#   Bodies are a single statement or a { … } group of statements.
+#   AST: match_stmt with subjectExpr and clauses (a list of
+#   [variantName, binding, bodyStatements] triples; variantName is
+#   the C-quoted literal text, "_", or the bare tag name).
+ACTION parse_match_stmt(tokens(LIST), pos(NUM), clv(TX), rtab(LIST), emode(TX)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP spair FROM collect_until_keyword, tokens, p2, plant_list_make(1, "{").
+  CREATE subj(TX) TO spair[0].
+  REAP p3 FROM _second, spair.
+  IF subj IS "",
+    GIVE plant_list_make(2, null, p3).
+  /IF.
+  REAP lb FROM consume, tokens, p3.
+  REAP p4 FROM _second, lb.
+  CREATE clauses(LIST) TO plant_list_make(0).
+  CREATE wild_seen(TX) TO "0".
+  SEASON TRUE,
+    REAP is_eof_flag FROM is_eof, tokens, p4.
+    IF is_eof_flag,
+      GIVE plant_list_make(2, plant_list_make(12, "type", "match_stmt", "subjectExpr", subj, "clauses", clauses), p4).
+    /IF.
+    REAP tok FROM peek, tokens, p4.
+    REAP lx FROM tok_lex, tok.
+    REAP tt FROM tok_type, tok.
+    IF lx IS "}",
+      REAP rb FROM consume, tokens, p4.
+      REAP p5 FROM _second, rb.
+      GIVE plant_list_make(2, plant_list_make(12, "type", "match_stmt", "subjectExpr", subj, "clauses", clauses), p5).
+    /IF.
+    CREATE ptext(TX) TO "".
+    CREATE pbind(TX) TO "".
+    IF tt IS "NUMBER" OR tt IS "STRING" OR tt IS "INTERP" OR tt IS _cat("TR", "UE") OR tt IS _cat("FA", "LSE"),
+      IF tt IS "STRING" OR tt IS "INTERP",
+        REAP esc FROM escape_string, lx.
+        SET ptext TO esc.
+      /IF.
+      IF tt IS "NUMBER", SET ptext TO lx. /IF.
+      IF tt IS _cat("TR", "UE"), SET ptext TO _cat("\"T", "RUE\""). /IF.
+      IF tt IS _cat("FA", "LSE"), SET ptext TO _cat("\"F", "ALSE\""). /IF.
+      REAP pcons FROM consume, tokens, p4.
+      REAP p4 FROM _second, pcons.
+    /IF.
+    IF tt IS "WILDCARD",
+      SET ptext TO "_".
+      REAP pcons FROM consume, tokens, p4.
+      REAP p4 FROM _second, pcons.
+    /IF.
+    IF tt IS "IDENT",
+      REAP pcons FROM consume, tokens, p4.
+      REAP p4 FROM _second, pcons.
+      REAP ntok FROM peek, tokens, p4.
+      REAP ntt FROM tok_type, ntok.
+      IF ntt IS "LPAREN",
+        REAP ntok2 FROM peek, tokens, p4 + 1.
+        REAP ntt2 FROM tok_type, ntok2.
+        IF ntt2 ISNT "IDENT",
+          GIVE plant_list_make(2, null, p4).
+        /IF.
+        CREATE bnd TO ntok2[1].
+        REAP lpair FROM consume, tokens, p4.
+        REAP p4b FROM _second, lpair.
+        REAP bpair FROM consume, tokens, p4b.
+        REAP p4c FROM _second, bpair.
+        REAP rpair FROM consume, tokens, p4c.
+        REAP p4 FROM _second, rpair.
+        SET ptext TO lx.
+        SET pbind TO bnd.
+      /IF.
+      IF ntt ISNT "LPAREN",
+        SET ptext TO lx.
+      /IF.
+    /IF.
+    IF ptext IS "",
+      GIVE plant_list_make(2, null, p4).
+    /IF.
+    IF ptext IS "_" AND wild_seen IS "1",
+      GIVE plant_list_make(2, null, p4).
+    /IF.
+    IF ptext IS "_", SET wild_seen TO "1". /IF.
+    IF wild_seen IS "1" AND ptext ISNT "_",
+      GIVE plant_list_make(2, null, p4).
+    /IF.
+    REAP atok FROM peek, tokens, p4.
+    REAP alx FROM tok_lex, atok.
+    IF alx ISNT "->",
+      GIVE plant_list_make(2, null, p4).
+    /IF.
+    REAP ar FROM consume, tokens, p4.
+    REAP p4 FROM _second, ar.
+    CREATE ctab(LIST) TO plant_list_make(0).
+    CREATE bstart(NUM) TO p4.
+    CREATE cbody(LIST) TO plant_list_make(0).
+    REAP btok FROM peek, tokens, p4.
+    REAP blx FROM tok_lex, btok.
+    IF blx IS "{",
+      REAP lbg FROM consume, tokens, p4.
+      REAP p4 FROM _second, lbg.
+      SEASON TRUE,
+        REAP is_eof2 FROM is_eof, tokens, p4.
+        IF is_eof2, BREAK 0. /IF.
+        REAP btok2 FROM peek, tokens, p4.
+        REAP blx2 FROM tok_lex, btok2.
+        IF blx2 IS "}",
+          REAP rbg FROM consume, tokens, p4.
+          REAP p4 FROM _second, rbg.
+          BREAK 0.
+        /IF.
+        REAP bpair2 FROM parse_statement, tokens, p4, clv, ctab, rtab, bstart, emode.
+        CREATE bstmt TO bpair2[0].
+        REAP p4 FROM _second, bpair2.
+        IF bstmt > "",
+          PUT bstmt INTO cbody.
+        /IF.
+      /SEASON.
+    /IF.
+    IF blx ISNT "{",
+      REAP bpair2 FROM parse_statement, tokens, p4, clv, ctab, rtab, bstart, emode.
+      CREATE bstmt TO bpair2[0].
+      REAP p4 FROM _second, bpair2.
+      IF bstmt > "",
+        PUT bstmt INTO cbody.
+      /IF.
+    /IF.
+    REAP dotok FROM peek, tokens, p4.
+    REAP dotlx FROM tok_lex, dotok.
+    IF dotlx IS ".",
+      REAP dcons FROM consume, tokens, p4.
+      REAP p4 FROM _second, dcons.
+    /IF.
+    PUT plant_list_make(12, "variantName", ptext, "binding", pbind, "bodyStatements", cbody) INTO clauses.
+  /SEASON.
+/ACTION.
+
 ACTION parse_season_stmt(tokens(LIST), pos(NUM), clv(TX), rtab(LIST), emode(TX)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -2179,6 +2320,10 @@ ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), 
   /IF.
   IF lx IS "SEASON",
     REAP r FROM parse_season_stmt, tokens, pos, clv, rtab, emode.
+    GIVE r.
+  /IF.
+  IF lx IS "MATCH",
+    REAP r FROM parse_match_stmt, tokens, pos, clv, rtab, emode.
     GIVE r.
   /IF.
   IF lx IS "CYCLE",

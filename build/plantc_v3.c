@@ -62,6 +62,7 @@ tx_t parse_shake_stmt(PlantArray* tokens, long pos);
 tx_t parse_break_stmt(PlantArray* tokens, long pos);
 tx_t parse_continue_stmt(PlantArray* tokens, long pos);
 tx_t parse_if_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, tx_t emode);
+tx_t parse_match_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, tx_t emode);
 tx_t parse_season_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, tx_t emode);
 tx_t parse_cycle_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, tx_t emode);
 tx_t parse_throw_stmt(PlantArray* tokens, long pos);
@@ -3153,6 +3154,183 @@ tx_t parse_if_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, tx_
     }
   return parse_if_stmt;
 }
+tx_t parse_match_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, tx_t emode) {
+  tx_t pair = "";
+  tx_t p2 = "";
+  tx_t spair = "";
+  tx_t p3 = "";
+  tx_t lb = "";
+  tx_t p4 = "";
+  tx_t is_eof_flag = "";
+  tx_t tok = "";
+  tx_t lx = "";
+  tx_t tt = "";
+  tx_t rb = "";
+  tx_t p5 = "";
+  tx_t esc = "";
+  tx_t pcons = "";
+  tx_t ntok = "";
+  tx_t ntt = "";
+  tx_t ntok2 = "";
+  tx_t ntt2 = "";
+  tx_t lpair = "";
+  tx_t p4b = "";
+  tx_t bpair = "";
+  tx_t p4c = "";
+  tx_t rpair = "";
+  tx_t atok = "";
+  tx_t alx = "";
+  tx_t ar = "";
+  tx_t btok = "";
+  tx_t blx = "";
+  tx_t lbg = "";
+  tx_t is_eof2 = "";
+  tx_t btok2 = "";
+  tx_t blx2 = "";
+  tx_t rbg = "";
+  tx_t bpair2 = "";
+  tx_t dotok = "";
+  tx_t dotlx = "";
+  tx_t dcons = "";
+    pair = consume(tokens, pos);
+    p2 = _second(pair);
+    spair = collect_until_keyword(tokens, p2, plant_list_make ( 1 , "{" ));
+    tx_t subj = plant_list_get(spair ,  0 );
+    p3 = _second(spair);
+    if (strcmp(subj,"") == 0) {
+        return plant_list_make ( 2 , NULL , p3 );
+    }
+    lb = consume(tokens, p3);
+    p4 = _second(lb);
+    PlantArray* clauses = plant_list_make ( 0 );
+    tx_t wild_seen = "0";
+    while (1) {
+        is_eof_flag = is_eof(tokens, p4);
+        if (is_eof_flag) {
+            return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "match_stmt" , "subjectExpr" , subj , "clauses" , clauses ) , p4 );
+        }
+        tok = peek(tokens, p4);
+        lx = tok_lex(tok);
+        tt = tok_type(tok);
+        if (strcmp(lx,"}") == 0) {
+            rb = consume(tokens, p4);
+            p5 = _second(rb);
+            return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "match_stmt" , "subjectExpr" , subj , "clauses" , clauses ) , p5 );
+        }
+        tx_t ptext = "";
+        tx_t pbind = "";
+        if (strcmp(tt,"NUMBER") == 0 || strcmp(tt,"STRING") == 0 || strcmp(tt,"INTERP") == 0 || strcmp(tt,_cat ( "TR" , "UE" )) == 0 || strcmp(tt,_cat ( "FA" , "LSE" )) == 0) {
+            if (strcmp(tt,"STRING") == 0 || strcmp(tt,"INTERP") == 0) {
+                esc = escape_string(lx);
+                ptext = esc;
+            }
+            if (strcmp(tt,"NUMBER") == 0) {
+                ptext = lx;
+            }
+            if (strcmp(tt,_cat ( "TR" , "UE" )) == 0) {
+                ptext = _cat ( "\"T" , "RUE\"" );
+            }
+            if (strcmp(tt,_cat ( "FA" , "LSE" )) == 0) {
+                ptext = _cat ( "\"F" , "ALSE\"" );
+            }
+            pcons = consume(tokens, p4);
+            p4 = _second(pcons);
+        }
+        if (strcmp(tt,"WILDCARD") == 0) {
+            ptext = "_";
+            pcons = consume(tokens, p4);
+            p4 = _second(pcons);
+        }
+        if (strcmp(tt,"IDENT") == 0) {
+            pcons = consume(tokens, p4);
+            p4 = _second(pcons);
+            ntok = peek(tokens, p4);
+            ntt = tok_type(ntok);
+            if (strcmp(ntt,"LPAREN") == 0) {
+                ntok2 = peek(tokens, p4+1);
+                ntt2 = tok_type(ntok2);
+                if (strcmp(ntt2,"IDENT") != 0) {
+                    return plant_list_make ( 2 , NULL , p4 );
+                }
+                tx_t bnd = plant_list_get(ntok2 ,  1 );
+                lpair = consume(tokens, p4);
+                p4b = _second(lpair);
+                bpair = consume(tokens, p4b);
+                p4c = _second(bpair);
+                rpair = consume(tokens, p4c);
+                p4 = _second(rpair);
+                ptext = lx;
+                pbind = bnd;
+            }
+            if (strcmp(ntt,"LPAREN") != 0) {
+                ptext = lx;
+            }
+        }
+        if (strcmp(ptext,"") == 0) {
+            return plant_list_make ( 2 , NULL , p4 );
+        }
+        if (strcmp(ptext,"_") == 0 && strcmp(wild_seen,"1") == 0) {
+            return plant_list_make ( 2 , NULL , p4 );
+        }
+        if (strcmp(ptext,"_") == 0) {
+            wild_seen = "1";
+        }
+        if (strcmp(wild_seen,"1") == 0 && strcmp(ptext,"_") != 0) {
+            return plant_list_make ( 2 , NULL , p4 );
+        }
+        atok = peek(tokens, p4);
+        alx = tok_lex(atok);
+        if (strcmp(alx,"->") != 0) {
+            return plant_list_make ( 2 , NULL , p4 );
+        }
+        ar = consume(tokens, p4);
+        p4 = _second(ar);
+        PlantArray* ctab = plant_list_make ( 0 );
+        long bstart = p4;
+        PlantArray* cbody = plant_list_make ( 0 );
+        btok = peek(tokens, p4);
+        blx = tok_lex(btok);
+        if (strcmp(blx,"{") == 0) {
+            lbg = consume(tokens, p4);
+            p4 = _second(lbg);
+            while (1) {
+                is_eof2 = is_eof(tokens, p4);
+                if (is_eof2) {
+                                      break;
+                }
+                btok2 = peek(tokens, p4);
+                blx2 = tok_lex(btok2);
+                if (strcmp(blx2,"}") == 0) {
+                    rbg = consume(tokens, p4);
+                    p4 = _second(rbg);
+                                      break;
+                }
+                bpair2 = parse_statement(tokens, p4, clv, ctab, rtab, bstart, emode);
+                tx_t bstmt = plant_list_get(bpair2 ,  0 );
+                p4 = _second(bpair2);
+                if (strcmp(bstmt,"") > 0) {
+                    cbody = plant_list_add(cbody, bstmt);
+                }
+            }
+        }
+        if (strcmp(blx,"{") != 0) {
+            bpair2 = parse_statement(tokens, p4, clv, ctab, rtab, bstart, emode);
+            tx_t bstmt = plant_list_get(bpair2 ,  0 );
+            p4 = _second(bpair2);
+            if (strcmp(bstmt,"") > 0) {
+                cbody = plant_list_add(cbody, bstmt);
+            }
+        }
+        dotok = peek(tokens, p4);
+        dotlx = tok_lex(dotok);
+        if (strcmp(dotlx,".") == 0) {
+            dcons = consume(tokens, p4);
+            p4 = _second(dcons);
+        }
+        clauses = plant_list_add(clauses, plant_list_make ( 12 , "variantName" , ptext , "binding" , pbind , "bodyStatements" , cbody ));
+    }
+  return parse_match_stmt;
+}
 tx_t parse_season_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, tx_t emode) {
   tx_t pair = "";
   tx_t p2 = "";
@@ -3635,6 +3813,10 @@ tx_t parse_statement(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab, P
     }
     if (strcmp(lx,"SEASON") == 0) {
         r = parse_season_stmt(tokens, pos, clv, rtab, emode);
+        return r;
+    }
+    if (strcmp(lx,"MATCH") == 0) {
+        r = parse_match_stmt(tokens, pos, clv, rtab, emode);
         return r;
     }
     if (strcmp(lx,"CYCLE") == 0) {
@@ -6369,6 +6551,8 @@ tx_t collect_enums_walk(tx_t bd, tx_t subst, tx_t reg, tx_t sigs, tx_t res) {
   tx_t wf2 = "";
   tx_t ib = "";
   tx_t ibd3 = "";
+  tx_t mcl2 = "";
+  tx_t mcb1 = "";
   tx_t wbl4 = "";
   tx_t wbel4 = "";
     long wi = 0;
@@ -6432,9 +6616,19 @@ tx_t collect_enums_walk(tx_t bd, tx_t subst, tx_t reg, tx_t sigs, tx_t res) {
                 ii3 = ii3+1;
             }
         }
-        if (strcmp(wty,"season_stmt") == 0 || strcmp(wty,"cycle_stmt") == 0 || strcmp(wty,"match_stmt") == 0) {
+        if (strcmp(wty,"season_stmt") == 0 || strcmp(wty,"cycle_stmt") == 0) {
             PlantArray* sbl = _map_get ( wnd , "body" );
             wret = collect_enums_walk(sbl, subst, reg, sigs, res);
+        }
+        if (strcmp(wty,"match_stmt") == 0) {
+            PlantArray* mcl1 = _map_get ( wnd , "clauses" );
+            long mci1 = 0;
+            while (mci1 < plant_array_length(mcl1)) {
+                mcl2 = plant_list_get(mcl1, mci1);
+                mcb1 = _map_get(mcl2, "bodyStatements");
+                wret = collect_enums_walk(mcb1, subst, reg, sigs, res);
+                mci1 = mci1+1;
+            }
         }
         if (strcmp(wty,"weather_stmt") == 0) {
             wbl4 = _weather_bodies(wnd);
@@ -6595,6 +6789,8 @@ tx_t collect_nums_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
   tx_t ibd4 = "";
   tx_t wret2 = "";
   tx_t wbd2 = "";
+  tx_t mcl4 = "";
+  tx_t mcb2 = "";
   tx_t wbl5 = "";
   tx_t wbel5 = "";
   tx_t wle2 = "";
@@ -6633,9 +6829,19 @@ tx_t collect_nums_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
                 ii4 = ii4+1;
             }
         }
-        if (strcmp(wty,"season_stmt") == 0 || strcmp(wty,"cycle_stmt") == 0 || strcmp(wty,"match_stmt") == 0) {
+        if (strcmp(wty,"season_stmt") == 0 || strcmp(wty,"cycle_stmt") == 0) {
             wbd2 = _map_get(wnd, "body");
             wret2 = collect_nums_walk(wbd2, subst, res);
+        }
+        if (strcmp(wty,"match_stmt") == 0) {
+            PlantArray* mcl3 = _map_get ( wnd , "clauses" );
+            long mci3 = 0;
+            while (mci3 < plant_array_length(mcl3)) {
+                mcl4 = plant_list_get(mcl3, mci3);
+                mcb2 = _map_get(mcl4, "bodyStatements");
+                wret2 = collect_nums_walk(mcb2, subst, res);
+                mci3 = mci3+1;
+            }
         }
         if (strcmp(wty,"weather_stmt") == 0) {
             wbl5 = _weather_bodies(wnd);
@@ -7657,8 +7863,6 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t scc = "";
   tx_t subj = "";
   tx_t csubj = "";
-  tx_t vname = "";
-  tx_t binding = "";
   tx_t cbody = "";
   tx_t aname = "";
   tx_t prio_s = "";
@@ -8710,26 +8914,55 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         PlantArray* clauses = _map_get ( node , "clauses" );
         csubj = translate_expr(subj, nums, evars);
         isel = indent_str(indent);
-        tx_t ccode = _cat4(isel, "  switch (", csubj, ") {\n");
+        tx_t ccode = _cat3(_cat4(isel, "  {\n", isel, "    tx_t __mt = "), csubj, ";\n");
         long ci = 0;
         tx_t clause = "";
+        tx_t vname = "";
+        tx_t binding = "";
+        long wc = 0;
         while (ci < plant_array_length(clauses)) {
             clause = plant_list_get(clauses, ci);
             vname = _map_get(clause, "variantName");
             binding = _map_get(clause, "binding");
             cbody = _map_get(clause, "bodyStatements");
-            ccode = _cat(_cat4(ccode, isel, "    case ", vname), ":\n");
+            wc = 0;
+            if (strcmp(vname,"_") == 0) {
+                wc = 1;
+            }
+            if (ci == 0) {
+                if (wc == 1) {
+                    ccode = _cat3(ccode, isel, "    if (1) {\n");
+                }
+                if (wc == 0) {
+                    if (strcmp(binding,"") > 0 && strcmp(binding,"null") != 0) {
+                        ccode = _cat(_cat4(ccode, isel, "    if (plant_array_length(__mt) == 2 && _match_eq(plant_list_get(__mt, 0), \"", vname), "\")) {\n");
+                    }
+                    if (strcmp(binding,"") == 0 || strcmp(binding,"null") == 0) {
+                        ccode = _cat(_cat4(ccode, isel, "    if (_match_eq(__mt, \"", vname), "\")) {\n");
+                    }
+                }
+            }
+            if (ci > 0) {
+                if (wc == 1) {
+                    ccode = _cat3(ccode, isel, "    } else {\n");
+                }
+                if (wc == 0) {
+                    if (strcmp(binding,"") > 0 && strcmp(binding,"null") != 0) {
+                        ccode = _cat(_cat4(ccode, isel, "    } else if (plant_array_length(__mt) == 2 && _match_eq(plant_list_get(__mt, 0), \"", vname), "\")) {\n");
+                    }
+                    if (strcmp(binding,"") == 0 || strcmp(binding,"null") == 0) {
+                        ccode = _cat(_cat4(ccode, isel, "    } else if (_match_eq(__mt, \"", vname), "\")) {\n");
+                    }
+                }
+            }
             if (strcmp(binding,"") > 0 && strcmp(binding,"null") != 0) {
-                ccode = _cat3(ccode, isel, "      {\n");
-                ccode = _cat4(_cat4(ccode, isel, "        tx_t ", binding), " = ", csubj, ";\n");
-                bcode = generate_body(cbody, indent+4, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit);
-                ccode = _cat4(ccode, bcode, isel, "      }\n");
+                ccode = _cat4(_cat4(ccode, isel, "        tx_t ", binding), " = _match_extract(__mt, \"", vname, "\");\n");
             }
-            if (strcmp(binding,"") == 0 || strcmp(binding,"null") == 0) {
-                bcode = generate_body(cbody, indent+4, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit);
-                ccode = _cat(ccode, bcode);
+            bcode = generate_body(cbody, indent+4, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit);
+            ccode = _cat(ccode, bcode);
+            if (ci + 1 == plant_array_length(clauses)) {
+                ccode = _cat3(ccode, isel, "    }\n");
             }
-            ccode = _cat3(ccode, isel, "      break;\n");
             ci = ci+1;
         }
         ccode = _cat3(ccode, isel, "  }\n");
@@ -9029,6 +9262,8 @@ tx_t collect_stvars_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
   tx_t ibd6 = "";
   tx_t wret2 = "";
   tx_t wbd2 = "";
+  tx_t mcl6 = "";
+  tx_t mcb3 = "";
   tx_t wbl7 = "";
   tx_t wbel7 = "";
     long wi = 0;
@@ -9063,9 +9298,19 @@ tx_t collect_stvars_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
                 ii6 = ii6+1;
             }
         }
-        if (strcmp(wty,"season_stmt") == 0 || strcmp(wty,"cycle_stmt") == 0 || strcmp(wty,"match_stmt") == 0) {
+        if (strcmp(wty,"season_stmt") == 0 || strcmp(wty,"cycle_stmt") == 0) {
             wbd2 = _map_get(wnd, "body");
             wret2 = collect_stvars_walk(wbd2, subst, res);
+        }
+        if (strcmp(wty,"match_stmt") == 0) {
+            PlantArray* mcl5 = _map_get ( wnd , "clauses" );
+            long mci5 = 0;
+            while (mci5 < plant_array_length(mcl5)) {
+                mcl6 = plant_list_get(mcl5, mci5);
+                mcb3 = _map_get(mcl6, "bodyStatements");
+                wret2 = collect_stvars_walk(mcb3, subst, res);
+                mci5 = mci5+1;
+            }
         }
         if (strcmp(wty,"weather_stmt") == 0) {
             wbl7 = _weather_bodies(wnd);
@@ -9713,6 +9958,8 @@ tx_t scan_fields(PlantArray* fields, PlantArray* subst, PlantArray* structs, Pla
 tx_t collect_struct_insts(PlantArray* bd, PlantArray* subst, PlantArray* structs, PlantArray* acc) {
   tx_t ib = "";
   tx_t ibd8 = "";
+  tx_t mcl10 = "";
+  tx_t mcb5 = "";
   tx_t wbl9 = "";
   tx_t wbel9 = "";
     long ci = 0;
@@ -9741,6 +9988,16 @@ tx_t collect_struct_insts(PlantArray* bd, PlantArray* subst, PlantArray* structs
         if (strcmp(ty,"season_stmt") == 0) {
             sub_bd = _map_get(nd, "body");
             acc = collect_struct_insts(sub_bd, subst, structs, acc);
+        }
+        if (strcmp(ty,"match_stmt") == 0) {
+            PlantArray* mcl9 = _map_get ( nd , "clauses" );
+            long mci9 = 0;
+            while (mci9 < plant_array_length(mcl9)) {
+                mcl10 = plant_list_get(mcl9, mci9);
+                mcb5 = _map_get(mcl10, "bodyStatements");
+                acc = collect_struct_insts(mcb5, subst, structs, acc);
+                mci9 = mci9+1;
+            }
         }
         if (strcmp(ty,"weather_stmt") == 0) {
             wbl9 = _weather_bodies(nd);
@@ -9852,6 +10109,8 @@ tx_t collect_insts(PlantArray* bd, PlantArray* subst, PlantArray* templates, Pla
   tx_t ib = "";
   tx_t ibd9 = "";
   tx_t sub_bd = "";
+  tx_t mcl12 = "";
+  tx_t mcb6 = "";
   tx_t wbl10 = "";
   tx_t wbel10 = "";
     long ci = 0;
@@ -9894,6 +10153,16 @@ tx_t collect_insts(PlantArray* bd, PlantArray* subst, PlantArray* templates, Pla
         if (strcmp(ty,"season_stmt") == 0) {
             sub_bd = _map_get(nd, "body");
             acc = collect_insts(sub_bd, subst, templates, acc);
+        }
+        if (strcmp(ty,"match_stmt") == 0) {
+            PlantArray* mcl11 = _map_get ( nd , "clauses" );
+            long mci11 = 0;
+            while (mci11 < plant_array_length(mcl11)) {
+                mcl12 = plant_list_get(mcl11, mci11);
+                mcb6 = _map_get(mcl12, "bodyStatements");
+                acc = collect_insts(mcb6, subst, templates, acc);
+                mci11 = mci11+1;
+            }
         }
         if (strcmp(ty,"weather_stmt") == 0) {
             wbl10 = _weather_bodies(nd);
@@ -10150,6 +10419,8 @@ tx_t callees_of(PlantArray* bd) {
   tx_t ibd10 = "";
   tx_t cret2 = "";
   tx_t cbd2 = "";
+  tx_t mcl8 = "";
+  tx_t mcb4 = "";
   tx_t wbl11 = "";
   tx_t wbel11 = "";
     PlantArray* acc = plant_list_make ( 0 );
@@ -10190,7 +10461,7 @@ tx_t callees_of(PlantArray* bd) {
                 ii10 = ii10+1;
             }
         }
-        if (strcmp(cty,"season_stmt") == 0 || strcmp(cty,"cycle_stmt") == 0 || strcmp(cty,"match_stmt") == 0) {
+        if (strcmp(cty,"season_stmt") == 0 || strcmp(cty,"cycle_stmt") == 0) {
             cbd2 = _map_get(cnd, "body");
             cret2 = callees_of(cbd2);
             long cj = 0;
@@ -10199,6 +10470,23 @@ tx_t callees_of(PlantArray* bd) {
                 cje = plant_list_get(cret2, cj);
                 acc = callee_add(acc, cje);
                 cj = cj+1;
+            }
+        }
+        if (strcmp(cty,"match_stmt") == 0) {
+            PlantArray* mcl7 = _map_get ( cnd , "clauses" );
+            long mci7 = 0;
+            while (mci7 < plant_array_length(mcl7)) {
+                mcl8 = plant_list_get(mcl7, mci7);
+                mcb4 = _map_get(mcl8, "bodyStatements");
+                cret2 = callees_of(mcb4);
+                long cj2 = 0;
+                tx_t cje2 = "";
+                while (cj2 < plant_array_length(cret2)) {
+                    cje2 = plant_list_get(cret2, cj2);
+                    acc = callee_add(acc, cje2);
+                    cj2 = cj2+1;
+                }
+                mci7 = mci7+1;
             }
         }
         if (strcmp(cty,"weather_stmt") == 0) {
@@ -10270,6 +10558,8 @@ tx_t collect_roots(PlantArray* bd, PlantArray* acc) {
   tx_t ifb = "";
   tx_t ibd2 = "";
   tx_t sbd2 = "";
+  tx_t mcl14 = "";
+  tx_t mcb7 = "";
   tx_t wf2 = "";
   tx_t wbd2 = "";
   tx_t abd2 = "";
@@ -10306,6 +10596,16 @@ tx_t collect_roots(PlantArray* bd, PlantArray* acc) {
         if (strcmp(t2,"season_stmt") == 0 || strcmp(t2,"cycle_stmt") == 0 || strcmp(t2,"root_scope") == 0) {
             sbd2 = _map_get(n2, "body");
             acc = collect_roots(sbd2, acc);
+        }
+        if (strcmp(t2,"match_stmt") == 0) {
+            PlantArray* mcl13 = _map_get ( n2 , "clauses" );
+            long mci13 = 0;
+            while (mci13 < plant_array_length(mcl13)) {
+                mcl14 = plant_list_get(mcl13, mci13);
+                mcb7 = _map_get(mcl14, "bodyStatements");
+                acc = collect_roots(mcb7, acc);
+                mci13 = mci13+1;
+            }
         }
         if (strcmp(t2,"weather_stmt") == 0) {
             wf2 = _weather_bodies(n2);
