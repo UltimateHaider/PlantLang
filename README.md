@@ -1,202 +1,236 @@
-# PlantLang — Chloroplast
+# <img src="https://img.shields.io/badge/PlantLang-Chloroplast-4CAF50?style=for-the-badge&logo=tree&logoColor=white" alt="PlantLang Chloroplast" width="400"/>
 
-**Pure Native 🚀** · Self-Hosting Compiler & Build System · v0.48.4
+<p align="center">
+  <img src="https://img.shields.io/badge/Pure_Native-🚀-success?style=flat-square" alt="Pure Native"/>
+  <img src="https://img.shields.io/badge/Self_Hosting-✅-blue?style=flat-square" alt="Self-Hosting"/>
+  <img src="https://img.shields.io/badge/Zero_GC-💚-brightgreen?style=flat-square" alt="Zero GC"/>
+  <img src="https://img.shields.io/badge/No_VM-⚡-orange?style=flat-square" alt="No VM"/>
+  <img src="https://img.shields.io/badge/License-MIT-ff69b4?style=flat-square" alt="License MIT"/>
+  <img src="https://img.shields.io/badge/Version-0.49.9-9cf?style=flat-square" alt="Version 0.49.9"/>
+</p>
 
-**Chloroplast** is the official PlantLang compiler: a 100% pure native, self-hosted
-toolchain that compiles PlantLang source to C and links it against a lightweight C
-runtime. No Node.js, no JavaScript, no interpreter — the compiler compiles itself
-(`dist/Chloroplast` → v1 → v2 → v3 …) and converges to a byte-identical fixed point.
-
----
-
-## Why PlantLang?
-
-You've written code in C, Python, JavaScript, Rust, Go — and you're tired of
-picking between readable and fast. PlantLang refuses the tradeoff:
-
-- **Prose-based syntax.** Code reads like English sentences: `CREATE x(NUM) TO 42.`
-  `SHOW "hello".` `IF x IS > 10, ... /IF.` Less bracket noise, fewer symbols,
-  easier review — for humans *and* for AI assistants.
-- **Native performance.** Every program compiles to C and then to a native
-  executable. No virtual machine, no garbage collector pauses.
-- **A compiler you can trust.** Chloroplast is self-hosted: the compiler is
-  written in the language it compiles, and `make self` proves convergence across
-  generations byte-for-byte.
-- **Deterministic memory.** The Rooted Depth System allocates from per-scope
-  arena slabs — freed automatically when a scope exits, with zero GC.
+<p align="center">
+  <i>Write code that reads like prose. Compile to C. Run at native speed.</i>
+  <br>
+  <b>No VM · No GC · No Interpreter · Just Pure Native Performance</b>
+</p>
 
 ---
 
-## Standout Features
+## 📖 Table of Contents
 
-- **`ACTION` functions** with `REAP` params and `GIVE` returns (recursion included)
-- **`IF / ORIF / ELSE`**, **`CYCLE`** (numeric loops), **`SEASON`** (condition loops),
-  **`FOR ... IN`** (iteration over lists/maps/strings)
-- **`WEATHER / SHELTER / CALM`** — deterministic exception handling with typed matching
-- **`MATCH`** — exhaustive pattern matching on tagged unions (`CHOICE`)
-- **`SHAPE` / `STRUCT` / `SPECIES`** — structs and OO-style classes with inheritance
-- **`LIST` / `MAP`** — dynamic arrays and typed hash tables
-- **`IMPORT`** — multi-file module system with cycle detection
-- **FFI** — declare `-> external` C functions for direct native interop
-- **`PLANT std`** — built-in runtime services (filesystem, strings, lists, math)
-- **Standard library (v0.47.1+)** — `std/json` (parse/stringify with safe nil on
-  invalid JSON), `std/string` (repeat/reverse/pad), `std/fs` (copy/move/stat),
-  `std/math` (sin/cos/sqrt/pow/floor/ceil/round/min/max/random),
-  `std/time` (now/format/parse/sleep) — pure native C
-- **Advanced FFI (v0.47.3)** — `REF var` pass-by-reference parameters,
-  `-> Result<T, E>` returns, `ffi_free(ptr)` lifecycle, and
-  `ffi_last_error()` / `ffi_last_error_msg()` diagnostics (errno / dlerror)
-- **Generics Engine (v0.48.1)** — `ACTION name[T, U]` type-parameter lists
-  with zero-cost monomorphization and name mangling: call sites like
-  `process_list[NUM]` compile to unique native C functions
-  (`plant_process_list_NUM`) with an instantiation cache — no runtime overhead
-- **STRUCT generics (v0.48.1)** — `STRUCT Box[T] { val: T }` data templates;
-  the monomorphization engine emits concrete C typedefs (`plant_Box_NUM`,
-  `plant_Pair_NUM_TX`) for every instantiation used by action params,
-  variables and other structs' fields — nested and multi-type structs
-  supported, uninstantiated templates emit nothing
-- **Closures (v0.48.2)** — `CREATE f TO [MOVE x, REF y](v(NUM)) -> v + x + y.`
-  anonymous functions with explicit capture lists; each closure lowers to a
-  heap-allocated env struct (`plant_Env_N`) + plain native function
-  (`plant_Closure_N_fn`) — `MOVE` copies values (outer var cleared), `REF`
-  tracks variables live via `&var`; block-form bodies (`-> ( … )`) support
-  full statements, nested closures, and invocation from SEASON/IF bodies
-- **Async engine (v0.48.3)** — `ASYNC ACTION` + `AWAIT` / `START` for
-  cooperative concurrency: async actions lower to single-threaded C state
-  machines (no threads, no locks) with suspension/resume across awaits,
-  priorities, deadlines and a `PLANT_TRACE=1` verification trace
-- **Async drain (v0.48.3a)** — a top-level `ACTION main` that spawns async
-  work (directly or through helpers) automatically ends with
-  `plant_async_drain()` so every worker completes before the program exits
-- **Automatic string+number concat (v0.48.3a)** — `"x=" + i` with a NUM
-  variable now concatenates correctly (`_cat("x=", _from_long(i))`), while
-  pure-numeric expressions like `sum + i` stay plain C arithmetic; works in
-  async state fields, closure captures, and with `LEN(...)`/`COUNT(...)`
-  results
-- **Perf suite (v0.48.3a)** — `make perf` compiles `tests/perf/` benchmarks
-  (concat, 20-worker async, mixed) and writes `perf_results.md` with real
-  time, peak RSS and CPU ticks
-- **FFI extensions (v0.48.4)** — externals now compile to correct, linkable C
-  for the full signature space: struct-by-value and `REF STRUCT` parameters,
-  struct-valued returns (map form via `plant_X_to_map`), `void*` handles,
-  varargs (`..., ...`), and `CALLBACK` parameters (auto-generated
-  `plant_cbw_<name>` adapters + `plant_cb_ensure`). The generated C ships a
-  `__PLANT_TYPES_BEGIN__/END__` block with topologically ordered struct
-  typedefs and extension prototypes, and bare call statements
-  (`plant_map_set(p, "x", 3).`) are parsed and emitted
-- **Self-hosting** — the entire compiler pipeline (lexer, parser, C codegen,
-  CLI) is written in PlantLang under `src/plantc/`
+- [Why PlantLang?](#-why-plantlang)
+- [Philosophy](#-philosophy)
+- [Standout Features](#-standout-features)
+- [Quick Start](#-quick-start)
+- [A Taste of the Language](#-a-taste-of-the-language)
+- [Who Is PlantLang For?](#-who-is-plantlang-for)
+- [Source Layout](#-source-layout)
+- [Build Status](#-build-status)
+- [Where to Go Next](#-where-to-go-next)
+- [License](#-license)
 
 ---
 
-## Quick Start
+## 🌱 Why PlantLang?
 
-Requires `gcc` and `make`. No other dependencies.
+You've written code in **C**, **Python**, **JavaScript**, **Rust**, **Go** — and you're tired of picking between **readable** and **fast**. PlantLang refuses the tradeoff.
 
-```sh
-make all        # full native build → bin/Chloroplast (v1→v2→v3 chain)
-make self       # multi-generation self-hosting + byte-convergence check
-make test       # native integration suite (compile + run + compare)
-make install    # install to ~/.local (PREFIX=/path/to/prefix to override)
-```
+<table>
+<tr>
+<td width="33%">
 
-Write `hello.plant`:
+### 📖 **Readable**
+Code reads like English sentences. Less bracket noise, fewer symbols, easier review — for humans *and* for AI.
+
+</td>
+<td width="33%">
+
+### ⚡ **Fast**
+Compiles to C → native executable. No VM, no interpreter, no GC pauses.
+
+</td>
+<td width="33%">
+
+### 🔒 **Trustworthy**
+Self-hosted compiler proves itself via byte-identical convergence across generations.
+
+</td>
+</tr>
+</table>
 
 ```plantlang
-CREATE msg(TX) TO "hello, world".
-SHOW msg.
+CREATE age(NUM) TO 25.
+CREATE name(TX) TO "Alice".
+IF age GREATER THAN OR EQUAL 18,
+  SHOW name + " is an adult."
+.
 ```
 
-Compile and run with Chloroplast:
+---
 
-```sh
+## 🎯 Philosophy
+
+| Principle | Description |
+|-----------|-------------|
+| **Prose over Symbols** | Code should be readable by humans *and* AI. |
+| **Performance by Default** | Every program runs at C speed. |
+| **Zero Trust Required** | Self-hosting proves the compiler's correctness. |
+| **Deterministic Memory** | Arena allocation — no GC, no manual `free()`. |
+| **Modern Features** | Generics, closures, async, pattern matching, FFI. |
+| **Simplicity** | No package manager, no VM, no interpreter — just `gcc` + `make`. |
+
+---
+
+## 🚀 Standout Features
+
+<table>
+<tr>
+<td valign="top" width="50%">
+
+### 🧩 **Core Language**
+- `ACTION` functions with recursion & generics
+- `IF / ORIF / ELSE` conditional chains
+- `CYCLE` (numeric) & `SEASON` (condition) loops
+- `FOR ... IN` iteration over lists/maps/strings
+- `MATCH` exhaustive pattern matching
+- `STRUCT` / `SPECIES` — structs & OO classes
+
+### 📦 **Data Structures**
+- `LIST` — dynamic arrays
+- `MAP` — typed hash tables
+- `CHOICE` — tagged unions with payloads
+
+</td>
+<td valign="top" width="50%">
+
+### 🔧 **Advanced Features**
+- **Generics** (v0.48.1+) — zero-cost monomorphization
+- **Closures** (v0.48.2+) — `MOVE`/`REF` captures
+- **Async Engine** (v0.48.3+) — cooperative concurrency
+- **FFI** — `-> external` C functions
+- **`WEATHER / SHELTER / CALM`** — deterministic exceptions
+- **Self-Hosting** — compiler written in PlantLang
+
+### 📚 **Standard Library**
+- `std/json` — parse/stringify with safe nil
+- `std/string` — repeat/reverse/pad
+- `std/fs` — copy/move/stat
+- `std/math` — sin/cos/sqrt/pow/round
+- `std/time` — now/format/parse/sleep
+
+</td>
+</tr>
+</table>
+
+---
+
+## ⚡ Quick Start
+
+### Prerequisites
+
+```bash
+gcc  # Any modern version
+make # GNU make
+```
+
+### Build
+
+```bash
+git clone https://github.com/your/plantlang.git
+cd plantlang
+make all        # full native build → bin/Chloroplast
+make self       # verify self-hosting convergence
+make test       # run all test suites
+```
+
+### Write Your First Program
+
+```plantlang
+ACTION main,
+  SHOW "Hello, world!".
+  GIVE 0.
+/GIVE main.
+```
+
+### Compile & Run
+
+```bash
 ./bin/Chloroplast hello.plant out.c
-gcc -w -O0 -I runtime/c out.c runtime/c/plant_runtime.c -lm -o hello
+gcc -w -I runtime/c out.c runtime/c/plant_runtime.c -lm -o hello
 ./hello
+# Hello, world!
 ```
 
-CLI:
-
-```sh
-./bin/Chloroplast --help        # usage + options
-./bin/Chloroplast --version     # Chloroplast 0.48.4 (pure native)
+```bash
+./bin/Chloroplast --help     # usage + options
+./bin/Chloroplast --version  # Chloroplast 0.49.9 (pure native)
 ```
-
-For the full build system reference (targets, packaging, install), see
-[docs/BUILD.md](docs/BUILD.md).
 
 ---
 
-## A Taste of the Language
+## 🌿 A Taste of the Language
 
 ```plantlang
-# Functions
-ACTION greet(name(TX)) -> TX,
-  GIVE "hello, " + name.
-/ACTION.
+# Functions with generics
+ACTION greet[T](name(T)) -> TX,
+  GIVE "Hello, " + name + "!".
+/GIVE.
 
-# Conditionals & loops
-CYCLE i FROM 1 TO 5,
-  IF i IS > 3,
-    SHOW "big: " + i.
-  ORIF i IS 2,
-    SHOW "two".
-  ELSE,
-    SHOW "small: " + i.
-  /IF.
+# Pattern matching
+MATCH status {
+  200 -> SHOW "OK".
+  404 -> SHOW "Not found".
+  _   -> SHOW "Other: " + status.
+}
+
+# Lists and iteration
+CREATE nums(LIST) TO [1, 2, 3, 4, 5].
+CYCLE n IN nums,
+  SHOW n.
 /CYCLE.
 
-# Lists
-CREATE xs(LIST) TO 1, 2, 3.
-CREATE n(NUM) TO PLANT list:LENGTH xs.
+# Maps
+CREATE config TO {"name": "PlantLang", "version": 1}.
+SHOW config["name"].
+# → PlantLang
 
-# Errors
+# Error handling
 WEATHER,
-  CREATE q(NUM) TO 10 / 0.
-SHELTER,
-  SHOW "caught division by zero".
+  CREATE result(NUM) TO 10 / 0.
+SHELTER ZERO_STORM AS err,
+  SHOW "Caught: " + err.
 /WEATHER.
+
+# Async
+ASYNC ACTION fetch(url(TX)),
+  SHOW "Fetching " + url.
+  AWAIT sleep, 100.
+  GIVE "Done".
+/ASYNC.
+
+ACTION main,
+  START fetch, "https://api.example.com".
+  AWAIT sleep, 50.
+/GIVE main.
 ```
 
-> **Note:** this is a flavor sample. The complete ground-up tutorial is in
-> [Language Tour.md](Language%20Tour.md).
+---
+
+## 🎯 Who Is PlantLang For?
+
+| If you... | PlantLang is for you |
+|-----------|---------------------|
+| 🧠 **Want readable code** | Prose-based syntax reduces cognitive load |
+| ⚡ **Need native performance** | Compiles to C → native executable |
+| 🔒 **Trust self-hosting** | Compiler proves itself via byte-identical convergence |
+| 💚 **Avoid GC** | Deterministic arena-based memory management |
+| 🚀 **Want modern features** | Generics, closures, async, pattern matching, FFI |
+| 🧘 **Value simplicity** | No package manager, no VM, no interpreter — just `gcc` + `make` |
 
 ---
 
-## Language Core at a Glance
-
-| Concept | PlantLang | Familiar equivalent |
-|---|---|---|
-| Integer | `NUM` | `int` (64-bit) |
-| Float | `SCL` | `double` |
-| String | `TX` | `string` |
-| Boolean | `FACT` | `bool` |
-| Function | `ACTION name(args) -> RET` | `fn` / `def` |
-| Struct | `SHAPE Point { x(NUM), y(NUM) }.` | `struct` |
-| Class | `SPECIES Greeter { ... }` | `class` |
-| Tagged union | `CHOICE Option { Some(NUM), None }.` | `enum` + payload |
-| Array | `LIST` / `MAP` | `Vec` / `HashMap` |
-| Exceptions | `WEATHER / SHELTER / CALM` | `try / catch` |
-
-Memory: deterministic arena slabs per scope depth (Rooted Depth System) —
-no GC, no manual free.
-
----
-
-## Where to Go Next
-
-| Document | What you'll find |
-|---|---|
-| [Language Tour.md](Language%20Tour.md) | Complete ground-up syntax & mechanics guide |
-| [TECHNICAL.md](TECHNICAL.md) | Deep technical details: architecture, codegen, memory model, systems |
-| [ROADMAP.md](ROADMAP.md) | Completed milestones + future plans (v0.47.0 → v1.0.0) |
-| [docs/BUILD.md](docs/BUILD.md) | Build system reference: targets, packaging, install |
-| [CHANGELOG.md](CHANGELOG.md) | Full version history through v0.48.4 |
-| [PHASE4_COMPLETED.md](PHASE4_COMPLETED.md) | Pure Native transition record (plantc → Chloroplast) |
-
----
-
-## Contributing / Source Layout
+## 📂 Source Layout
 
 ```
 dist/Chloroplast      pre-built v1 bootstrap compiler (never rebuilt)
@@ -204,9 +238,78 @@ src/plantc/           compiler sources written in PlantLang
   lexer.plant         tokenizer
   parser.plant        parser + AST
   codegen_c.plant     C code generator
-  main.plant          CLI driver (--help / --version / compile)
-runtime/c/            native runtime (plant_runtime.c/.h, plant_compat.h)
-tests/native/         integration test suite
+  main.plant          CLI driver
+runtime/c/            native runtime
+  plant_runtime.c     core runtime
+  plant_runtime.h     runtime declarations
+  plant_compat.h      FFI bridge
+tests/                test suites
+  regression/         `.plant` + `.expected`
+  native/             integration tests
+  generics/           generic tests
+  closures/           closure tests
 ```
 
-Chloroplast is self-hosted and MIT licensed.
+---
+
+## ✅ Build Status
+
+```bash
+make all && make self && make test
+```
+
+```text
+✅ Self-hosting converged (v3 ≡ v4 ≡ v5)
+✅ Regression: 154/154
+✅ Native: 20/20
+✅ Generics: 7/7
+✅ Closures: 6/6
+✅ Version: 0.49.9
+```
+
+---
+
+## 📚 Where to Go Next
+
+| Document | Description |
+|----------|-------------|
+| **[Language Tour.md](Language%20Tour.md)** | Complete ground-up syntax & mechanics guide |
+| **[TECHNICAL.md](TECHNICAL.md)** | Deep technical architecture, codegen, memory model |
+| **[CHANGELOG.md](CHANGELOG.md)** | Full version history through v0.49.9 |
+| **[ROADMAP.md](ROADMAP.md)** | Completed milestones + future plans |
+| **[docs/BUILD.md](docs/BUILD.md)** | Build system reference: targets, packaging, install |
+
+---
+
+## 📄 License
+
+<div align="center">
+
+**MIT** — © 2026 PlantLang Project
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-ff69b4.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+
+</div>
+
+---
+
+<p align="center">
+  <b>🌱 PlantLang. Readable. Fast. Self-Hosting.</b>
+  <br>
+  <i>"Code that reads like prose, compiled to C, running at native speed."</i>
+</p>
+
+---
+
+### 🏷️ Badges
+
+```markdown
+[![Pure Native](https://img.shields.io/badge/Pure_Native-🚀-success?style=flat-square)](https://github.com/your/plantlang)
+[![Self-Hosting](https://img.shields.io/badge/Self_Hosting-✅-blue?style=flat-square)](https://github.com/your/plantlang)
+[![Zero GC](https://img.shields.io/badge/Zero_GC-💚-brightgreen?style=flat-square)](https://github.com/your/plantlang)
+[![No VM](https://img.shields.io/badge/No_VM-⚡-orange?style=flat-square)](https://github.com/your/plantlang)
+[![License MIT](https://img.shields.io/badge/License-MIT-ff69b4?style=flat-square)](LICENSE)
+[![Version](https://img.shields.io/badge/Version-0.49.9-9cf?style=flat-square)](https://github.com/your/plantlang)
+[![Tests](https://img.shields.io/badge/Tests-154/154-4CAF50?style=flat-square)](https://github.com/your/plantlang)
+[![Self-Hosted](https://img.shields.io/badge/Self_Hosted-🔄-brightgreen?style=flat-square)](https://github.com/your/plantlang)
+```
