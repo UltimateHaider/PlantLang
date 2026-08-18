@@ -302,6 +302,37 @@ ACTION main(),
 > remaining case that needs the explicit pattern is a raw return held in a
 > `TX`/implicit variable, where `SHOW r.` still reads it as a string pointer.
 
+### REAP Expressions (v0.49.9)
+
+`REAP` also ingests general expressions — translate-time builtins,
+arithmetic, indexing, and literals — with no action involved:
+
+```
+ACTION main(),
+  CREATE lst(LIST) TO plant_list_make(3, "aa", "bb", "cc").
+  REAP f FROM FIND("abc", "b").       # builtin → "1"
+  REAP j FROM JOIN(lst, "-").         # builtin → "aa-bb-cc"
+  REAP s FROM SLICE("abcdef", 1, 3).  # builtin → "bc"
+  REAP u FROM UPPER("AbC").           # builtin → "ABC"
+  REAP a FROM ABS(-7).                # builtin → "7"
+  REAP n FROM 2 + 3.                  # arithmetic → "5"
+  REAP x FROM lst[0].                 # indexing → "aa"
+  REAP c FROM COUNT lst.              # → "3"
+  SHOW f + " " + j + " " + s + " " + u + " " + a + " " + n + " " + x + " " + c.
+  GIVE 0.
+/GIVE main.
+```
+
+The token after `FROM` decides the form: `IDENT ,` action calls, `IDENT :`
+module calls, `IDENT [types]` generic calls, and `IDENT (...)` calls to
+non-builtin actions keep the legacy forms; everything else — builtin names
+(`FIND JOIN SLICE UPPER LOWER ABS ROUND LEN FIRST LAST ...`), arithmetic,
+indexing, `COUNT`, and literals — is a general expression translated exactly
+like a `SET`/`SHOW` value (so builtins work, e.g. `REAP f FROM FIND(t, s).`
+previously emitted a raw `FIND(...)` C call and failed to link). Numeric
+results are stored as text (`_from_long`), so concatenation and `SHOW` never
+see raw integer bits — matching the behavior of numeric-action REAPs.
+
 ### Conditions
 
 ```
@@ -332,6 +363,59 @@ SEASON count GREATER THAN 0,
 
 - `BREAK.` (or `BREAK 0.`) exits the innermost `SEASON` immediately.
 - `CONTINUE.` skips to the next iteration.
+- Loops must be inside an `ACTION` body.
+
+### CYCLE (numeric and collection loops)
+
+**Collection iteration** — `CYCLE item IN list` visits every element:
+
+```
+CREATE lst(LIST) TO ["a", "b", "c"].
+CYCLE item IN lst,
+  SHOW item.
+/CYCLE.
+```
+
+**Indexed collection iteration** — `CYCLE item, idx IN list` also binds
+the 0-based position:
+
+```
+CYCLE item, idx IN lst,
+  SHOW idx + ":" + item.
+/CYCLE.
+```
+
+**Range iteration** — `CYCLE i FROM lo TO hi` counts lo..hi
+inclusive (both bounds are expressions; the counter is a `NUM`):
+
+```
+CYCLE i FROM 1 TO 5,
+  SHOW _from_long(i).
+/CYCLE.
+```
+
+**Stepped range iteration** — `CYCLE i FROM lo TO hi STEP k` adds a
+step value; any spacing around `STEP` is accepted (`STEP 2`,
+`STEP  2`, the attached `STEP2`, and negative increments `STEP -2` /
+`STEP-2`):
+
+```
+CYCLE i FROM 1 TO 9 STEP 2,   # 1 3 5 7 9
+  SHOW _from_long(i).
+/CYCLE.
+CYCLE i FROM 5 TO 1 STEP -2,  # 5 3 1 (descending)
+  SHOW _from_long(i).
+/CYCLE.
+```
+
+- `STEP` defaults to 1; the step may be a literal, a constant
+  expression (`STEP 1 + 1`), or a runtime variable. A statically-zero
+  step (`STEP 0`, `STEP 2 - 2`) is a compile-time error, and a
+  zero-valued runtime step iterates zero times instead of spinning.
+- The bound operator follows the step sign: ascending ranges use
+  `<=`, descending use `>=`, so a negative step counts down.
+- `BREAK.` exits the innermost `CYCLE`; `CONTINUE.` skips to the next
+  iteration (the index increment still runs).
 - Loops must be inside an `ACTION` body.
 
 ### Lists

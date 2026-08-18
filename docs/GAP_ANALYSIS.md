@@ -1,8 +1,8 @@
 # Legacy JS Interpreter vs Self-Hosted Compiler — Gap Analysis Report
 
-**Scope:** Legacy JavaScript interpreter (PlantLang ≤ v0.45.x, `core/interpreter.js` + associated modules, recovered from git at `7f54eae` v0.45.0) vs the self-hosted native compiler (v0.49.6, `src/plantc/*.plant` → C, `runtime/c/plant_runtime.c`).
+**Scope:** Legacy JavaScript interpreter (PlantLang ≤ v0.45.x, `core/interpreter.js` + associated modules, recovered from git at `7f54eae` v0.45.0) vs the self-hosted native compiler (v0.49.9, `src/plantc/*.plant` → C, `runtime/c/plant_runtime.c`).
 
-> **Status note (v0.49.6):** the legacy side no longer exists in the
+> **Status note (v0.49.9):** the legacy side no longer exists in the
 > working tree. v0.48.38m removed `core/`, `src/**/*.js`, `service/`,
 > `webrepl/`, `std/`, `benchmarks/`, and the editor assets from the
 > repository; the legacy engine is now preserved only in git history
@@ -17,7 +17,7 @@ PlantLang transitioned from a **tree-walking JavaScript interpreter** (~9,000 li
 
 The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 port. High-level counts:
 
-| Area | Legacy (v0.45.0) | Current (v0.49.6) | Gap |
+| Area | Legacy (v0.45.0) | Current (v0.49.9) | Gap |
 |---|---|---|---|---|
 | Statement keywords (parser dispatch) | ~40 | ~40 (incl. storms, CYCLE forms, NOW/ANALYZE/TYPEOF, FREE/ARC/FAST, WAIT/LOCK) | ~10 missing (deliberate cuts + legacy stubs) |
 | Innate/std library functions | ~60 (41 innate + 19 std/.plnt + 5 FFI stubs) | ~31 expression builtins (codegen_c.plant:2238-2292) + ~22 FFI module bindings (strings/fs/math) + ~50 declared runtime helpers | ~20 missing |
@@ -40,7 +40,7 @@ The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 
 
 - **Legacy side** (recovered from git `7f54eae`, the last commit shipping `core/interpreter.js`; removed from the working tree in v0.48.38m — all sources below are historical):
   `core/interpreter.js` (2,828 L), `core/parser.js` (3,033 L), `core/ast.js` (1,040 L), `core/typechecker.js` (1,529 L), `core/tokenizer.js` (259 L), `core/evaluator.js` (173 L), `core/runtime.js` (64 L), `core/innate.js` (67 L), `core/dispatcher.js` (286 L), `core/matrix.js`, `core/harvest.js` + `harvest_worker.js`, `core/diagnostics.js`, `core/lexer.js`, `core/runtime_bridge.c`, `src/interpreter/{cycle_evaluator,sort_evaluator,bloom_evaluator,show_formatter}.js`, `std/{prelude,string,math,io}.plnt`.
-- **Current side** (working tree v0.49.6): `src/plantc/{lexer,parser,codegen_c,main}.plant`, `runtime/c/plant_runtime.c` (≈6,000 L), `runtime/c/plant_compat.h` (787 L), `runtime/c/plant_runtime.h`, `tests/native/mock_ffi.{h,c}`, `Language Tour.md`.
+- **Current side** (working tree v0.49.9): `src/plantc/{lexer,parser,codegen_c,main}.plant`, `runtime/c/plant_runtime.c` (≈6,000 L), `runtime/c/plant_compat.h` (787 L), `runtime/c/plant_runtime.h`, `tests/native/mock_ffi.{h,c}`, `Language Tour.md`.
 - **Verification method:** full keyword-dispatch enumeration of both parsers; complete function inventories of `plant_compat.h` and `plant_runtime.c`; spot-checks for every "missing" claim (all negative).
 
 Legend for gap tables: **S** = supported, **P** = partial (different semantics / only reachable internally), **M** = missing, **D** = intentionally deprecated / dropped by design.
@@ -82,20 +82,20 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `EVAPORATE` / `LOCK` / `EMPTY` | S | M | EMPTY was already a parse stub in legacy |
 | `IF cond, body [ORIF][ELSE]` | S | **S** | Shipped in v0.48.20 (multi-branch chains) |
 | `SEASON cond, body` | S | **S** | |
-| `CYCLE x IN list` / `CYCLE i, idx IN` / `CYCLE i FROM lo TO hi` | S | **S** | All three CYCLE forms shipped in v0.48.22 (FROM/TO in v0.48.21); STEP is statically evaluated since v0.48.22-patch3 — zero steps are a compile-time error and expression steps pick direction-aware bounds |
+| `CYCLE x IN list` / `CYCLE i, idx IN` / `CYCLE i FROM lo TO hi` | S | **S** | All three CYCLE forms shipped in v0.48.22 (FROM/TO in v0.48.21); STEP is statically evaluated since v0.48.22-patch3 — zero steps are a compile-time error and expression steps pick direction-aware bounds. v0.49.8: STEP is a registered lexer keyword and the to-expression is collected token-wise (`collect_until_keyword`), replacing the `" STEP "` text split — `STEP 2`, `STEP  2`, attached `STEP2`, and negative increments `STEP -2`/`STEP-2` all parse identically |
 | `FOR item IN coll` | S | M | |
 | `BREAK` / `CONTINUE` | S | **S** | |
 | `STOP IF cond` | S | **S** | v0.48.25 (raises `STOP_STORM`, the 13th storm kind, classified by `plant_storm_match`) |
 | `GIVE expr.` | S | **S** | |
 | `SHOW expr.` / `SHOW NOW.` / `SHOW TYPE x.` | S | **P** | SHOW expr only; the NOW / TYPE *statements* exist (v0.48.36) but the `SHOW NOW.`/`SHOW TYPE x.` spellings themselves are M |
-| `REAP v FROM src, args.` | S | **S** | action/module calls; NOW/TYPEOF available via their v0.48.36 expression forms |
+| `REAP v FROM src, args.` | S | **S** | action/module calls; NOW/TYPEOF available via their v0.48.36 expression forms. v0.49.9: general expressions — REAP accepts translate-time builtins (FIND JOIN SLICE UPPER LOWER ABS ROUND LEN FIRST LAST SUM TRIM REVERSE POW CEIL FLOOR RANDOM SIN COS SQRT HAS ANY ALL PICK COUNT_OF TAP INFUSE ABSORB SEAL TEST COUNT NOW ANALYZE TYPEOF), arithmetic, indexing (a[0]), and literals; numeric results are stored as text (_from_long); legacy IDENT, IDENT:, IDENT[types], and non-builtin IDENT(...) call forms unchanged |
 | `REAP … FLOW f1 f2` pipelines | S | M | |
 | `PUT val INTO list.` | S | **S** | |
 | `TAKE val FROM list.` | S | **S** | v0.48.30 (`plant_list_remove`, first match only) |
 | `SORT list [BY f ASC/DESC].` / `SHAKE` / `BRAID` | S | **S** | v0.48.29 (SORT + ASC/DESC + BY multi-field; SHAKE Fisher-Yates); v0.48.31 (BRAID zip + BRAID … AS … MAP) |
 | `LINK "k" WITH v IN map.` | S | **S** | v0.48.31 upsert (update in place / append; NULL target instantiated) |
 | `WEATHER … SHELTER storm AS e … CALM.` | S | **S** | v0.48.25; THROW + 13 kinds + ANY_STORM catch-all, STOP IF, plant_calm finalization; v0.48.38a `storm()` factory (`THROW storm("TYPE", "msg").` with ARC-managed object binding); v0.48.38b location backfill (`__FILE__`/`__LINE__` injected at the throw site, exposed via `_map_get(e, "file")`/`"line"`) |
-| `MATCH expr { Variant(b) -> … }` / `MATCH … IS … YIELD` | S | M | |
+| `MATCH expr { Variant(b) -> … }` / `MATCH … IS … YIELD` | S | **S** | v0.49.8: `MATCH subject { pattern -> … }` with literal arms (numbers, strings, TRUE/FALSE), bare-tag arms, `Name(x)` payload bindings and a trailing `_` wildcard; compiles to an if/else-if/else chain over `{ tx_t __mt = <subject>; … }` — literal arms via `_match_eq(__mt, "lit")`, tag arms via `plant_array_length(__mt) == 2 && _match_eq(plant_list_get(__mt, 0), "Tag")` with the payload bound inside the arm block (`tx_t x = _match_extract(__mt, "Tag");`); the wildcard is the unconditional else arm and must come last. `MATCH … IS … YIELD` remains M (regex-path legacy) |
 | `TAP/ABSORB/INFUSE/SEAL` (VEIN files) | S | **S** | v0.48.38k (`plant_tap/absorb/infuse/seal` over `FILE*` handles tagged with `VEIN_MAGIC`; legacy INFUSE/ABSORB/SEAL were parse stubs) |
 | `HARVEST "url" [METHOD:][BODY:][HEADERS:][TIMEOUT:]` | S | **S** | v0.48.32 (HTTP/1.1 client, response MAP ok/status/body/headers; timeout 0 → 5s; no TLS); v0.48.34 (`… AS … MAP` keeps the connection alive and exposes `sock` for plant_net_read/write/close); v0.49.0 (formalized grammar `HARVEST url AS resp [METHOD m] [BODY b] [HEADERS h] [TIMEOUT t] [MAP]`, any-order options); v0.49.3 (`… AS resp JSON` → `plant_net_harvest_json`, body parsed into a `PlantJson`) |
 | `LISTEN BRANCH ON port … LISTEN/.` + `GIVE … AS RESPONSE` | S | **S** | v0.48.33 (LISTEN ON port AS req. one-shot server, request MAP ok/method/path/headers/body, GIVE … AS RESPONSE replies 200 + Content-Length; bind failure → ok FALSE); v0.49.2 (`TIMEOUT t` option → `plant_net_listen_timeout`, accept fails ok FALSE); v0.49.3 (`GIVE … AS RESPONSE JSON` → `plant_net_respond_json`, json_stringify + application/json; plain LISTs serialize as JSON arrays) |
@@ -307,4 +307,4 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 **Intentionally out of scope (D)**
 - SPECIES/BLOOM object model, `SELF:`/method dispatch, `PLANT` library statements, PULSE/WHENEVER watchers, JS `Function()` escape hatch, locale-specific IO formatting, VERIFY/SUITE language framework.
 
-*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.49.6. As of v0.49.6 the legacy side exists only in git history — `core/`, `src/**/*.js`, `std/`, `service/`, `webrepl/`, and `benchmarks/` were removed from the working tree (commit `c17de62`).*
+*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.49.9. As of v0.49.9 the legacy side exists only in git history — `core/`, `src/**/*.js`, `std/`, `service/`, `webrepl/`, and `benchmarks/` were removed from the working tree (commit `c17de62`).*

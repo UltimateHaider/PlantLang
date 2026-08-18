@@ -46,6 +46,7 @@ tx_t parse_let_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode);
 tx_t parse_closure(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode);
 tx_t _is_type_text(tx_t t, PlantArray* rtab);
 tx_t parse_reap_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode);
+tx_t is_reap_builtin(tx_t name);
 tx_t parse_call_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode);
 tx_t parse_put_stmt(PlantArray* tokens, long pos);
 tx_t parse_take_stmt(PlantArray* tokens, long pos);
@@ -379,6 +380,9 @@ tx_t is_keyword(tx_t wrd) {
     if (strcmp(wrd,"STOP") == 0) {
         return 1;
     }
+    if (strcmp(wrd,"STEP") == 0) {
+        return 1;
+    }
     if (strcmp(wrd,"INTO") == 0) {
         return 1;
     }
@@ -564,6 +568,9 @@ tx_t keyword_to_type(tx_t wrd) {
     }
     if (strcmp(wrd,"STOP") == 0) {
         return "STOP";
+    }
+    if (strcmp(wrd,"STEP") == 0) {
+        return "STEP";
     }
     if (strcmp(wrd,"INTO") == 0) {
         return "INTO";
@@ -2377,6 +2384,7 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
   tx_t p4 = "";
   tx_t act_pair = "";
   tx_t act_name = "";
+  tx_t act_ty = "";
   tx_t p5 = "";
   tx_t next_tok = "";
   tx_t next_lx = "";
@@ -2394,6 +2402,11 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
   tx_t exprt = "";
   tx_t p6 = "";
   tx_t ga_rb = "";
+  tx_t ex_tok = "";
+  tx_t ex_lx = "";
+  tx_t ex_ty = "";
+  tx_t vpair2 = "";
+  tx_t exprt2 = "";
   tx_t cp_tok = "";
   tx_t cp_lx = "";
   tx_t cp_pair = "";
@@ -2445,6 +2458,7 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
     p4 = _second(from_pair);
     act_pair = consume(tokens, p4);
     act_name = tok_lex(plant_list_get(act_pair,  0 ));
+    act_ty = tok_type(plant_list_get(act_pair,  0 ));
     p5 = _second(act_pair);
     next_tok = peek(tokens, p5);
     next_lx = tok_lex(next_tok);
@@ -2458,6 +2472,7 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
         act_name = _cat(act_name, func_name);
         p5 = _second(func_pair);
     }
+    tx_t is_genargs = "0";
     ga_tok = peek(tokens, p5);
     ga_lx = tok_lex(ga_tok);
     if (strcmp(ga_lx,"[") == 0) {
@@ -2477,6 +2492,41 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
             ga_rb = consume(tokens, p5);
             p5 = _second(ga_rb);
             act_name = _cat(_cat(_cat(act_name, "["), gtext), "]");
+            is_genargs = "1";
+        }
+    }
+    if (strcmp(is_genargs,"1") != 0) {
+        ex_tok = peek(tokens, p5);
+        ex_lx = tok_lex(ex_tok);
+        ex_ty = tok_type(ex_tok);
+        if (strcmp(ex_ty,"COLON") != 0 && strcmp(ex_lx,",") != 0 && strcmp(ex_lx,"[") != 0) {
+            tx_t bare_call = "0";
+            if (strcmp(act_ty,"IDENT") == 0) {
+                if (strcmp(ex_lx,".") == 0) {
+                    bare_call = "1";
+                }
+            }
+            if (strcmp(bare_call,"1") != 0) {
+                tx_t ex_builtin = "0";
+                ex_builtin = is_reap_builtin(act_name);
+                tx_t ex_ok = "0";
+                if (strcmp(ex_builtin,"1") == 0) {
+                    ex_ok = "1";
+                }
+                if (strcmp(ex_builtin,"1") != 0) {
+                    if (strcmp(ex_ty,"IDENT") != 0) {
+                        if (strcmp(ex_lx,"(") != 0) {
+                            ex_ok = "1";
+                        }
+                    }
+                }
+                if (strcmp(ex_ok,"1") == 0) {
+                    vpair2 = collect_value(tokens, p4);
+                    exprt2 = _first(vpair2);
+                    p6 = _second(vpair2);
+                    return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "reap_expr_stmt" , "target" , var_name , "expr" , exprt2 , "args" , plant_list_make ( 0 ) , "clargs" , plant_list_make ( 0 ) , "ctx" , "" ) , p6 );
+                }
+            }
         }
     }
     tx_t has_cparen = "0";
@@ -2623,6 +2673,12 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
         }
     }
   return parse_reap_stmt;
+}
+tx_t is_reap_builtin(tx_t name) {
+    if (strcmp(name,"LEN") == 0 || strcmp(name,"JOIN") == 0 || strcmp(name,"FIRST") == 0 || strcmp(name,"LAST") == 0 || strcmp(name,"SUM") == 0 || strcmp(name,"UPPER") == 0 || strcmp(name,"LOWER") == 0 || strcmp(name,"TRIM") == 0 || strcmp(name,"REVERSE") == 0 || strcmp(name,"ABS") == 0 || strcmp(name,"ROUND") == 0 || strcmp(name,"POW") == 0 || strcmp(name,"CEIL") == 0 || strcmp(name,"FLOOR") == 0 || strcmp(name,"RANDOM") == 0 || strcmp(name,"SIN") == 0 || strcmp(name,"COS") == 0 || strcmp(name,"SQRT") == 0 || strcmp(name,"HAS") == 0 || strcmp(name,"ANY") == 0 || strcmp(name,"ALL") == 0 || strcmp(name,"PICK") == 0 || strcmp(name,"FIND") == 0 || strcmp(name,"COUNT_OF") == 0 || strcmp(name,"SLICE") == 0 || strcmp(name,"TAP") == 0 || strcmp(name,"INFUSE") == 0 || strcmp(name,"ABSORB") == 0 || strcmp(name,"SEAL") == 0 || strcmp(name,"TEST") == 0 || strcmp(name,"COUNT") == 0 || strcmp(name,"NOW") == 0 || strcmp(name,"ANALYZE") == 0 || strcmp(name,"TYPEOF") == 0) {
+        return "1";
+    }
+    return "0";
 }
 tx_t parse_call_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) {
   tx_t act_pair = "";
@@ -3390,7 +3446,13 @@ tx_t parse_cycle_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, 
   tx_t lx = "";
   tx_t p3 = "";
   tx_t p4 = "";
+  tx_t stok = "";
+  tx_t slx = "";
   tx_t sparts = "";
+  tx_t sbefore = "";
+  tx_t safter = "";
+  tx_t after_c = "";
+  tx_t last_c = "";
   tx_t sgn = "";
   tx_t lx2 = "";
   tx_t is_eof_flag = "";
@@ -3423,13 +3485,41 @@ tx_t parse_cycle_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, 
         p3 = _second(cpair);
         cpair = consume(tokens, p3);
         p3 = _second(cpair);
-        cpair = collect_until(tokens, p3, ",");
+        cpair = collect_until_keyword(tokens, p3, plant_list_make ( 2 , "STEP" , "," ));
         toExpr = plant_list_get(cpair,  0 );
         p4 = _second(cpair);
-        sparts = strings_SPLIT(toExpr, " STEP ");
-        if (plant_array_length(sparts) == 2) {
-            toExpr = plant_list_get(sparts, 0);
-            stepExpr = plant_list_get(sparts, 1);
+        stok = peek(tokens, p4);
+        slx = tok_lex(stok);
+        if (strcmp(slx,"STEP") == 0) {
+            cpair = consume(tokens, p4);
+            p4 = _second(cpair);
+            cpair = collect_until(tokens, p4, ",");
+            stepExpr = plant_list_get(cpair,  0 );
+            p4 = _second(cpair);
+        }
+        if (strcmp(slx,"STEP") != 0) {
+            sparts = strings_SPLIT(toExpr, "STEP");
+            if (plant_array_length(sparts) == 2) {
+                sbefore = plant_list_get(sparts, 0);
+                safter = plant_list_get(sparts, 1);
+                after_c = substring(safter, 0, 1);
+                tx_t before_ok = "0";
+                if (strcmp(sbefore,"") == 0) {
+                    before_ok = "1";
+                }
+                if (strcmp(sbefore,"") != 0) {
+                    last_c = substring(sbefore, strlen( sbefore ) - 1, strlen( sbefore ));
+                    if (strcmp(last_c," ") == 0) {
+                        before_ok = "1";
+                    }
+                }
+                if (strcmp(before_ok,"1") == 0 && _is_digit ( after_c ) == 1) {
+                    toExpr = sbefore;
+                    stepExpr = safter;
+                }
+            }
+        }
+        if (strcmp(stepExpr,"") > 0) {
             sgn = _step_sign(stepExpr);
             if (strcmp(sgn,"0") == 0) {
                 return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "#error STEP cannot be 0" ) , p4 );
@@ -6297,6 +6387,30 @@ tx_t collect_used_walk(PlantArray* bd, PlantArray* used, PlantArray* declared) {
                 used = plant_list_push(used, tgt);
             }
         }
+        if (strcmp(ty,"reap_expr_stmt") == 0) {
+            tgt = _map_get(nd, "target");
+            long found = 0;
+            long fi = 0;
+            tx_t fe = "";
+            while (fi < plant_array_length(declared)) {
+                fe = plant_list_get(declared, fi);
+                if (strcmp(str_eq ( fe , tgt ),"1") == 0) {
+                    found = 1;
+                }
+                fi = fi+1;
+            }
+            fi = 0;
+            while (fi < plant_array_length(used)) {
+                fe = plant_list_get(used, fi);
+                if (strcmp(str_eq ( fe , tgt ),"1") == 0) {
+                    found = 1;
+                }
+                fi = fi+1;
+            }
+            if (!found) {
+                used = plant_list_push(used, tgt);
+            }
+        }
         if (strcmp(ty,"typeof_stmt") == 0 || strcmp(ty,"analyze_stmt") == 0) {
             tgt = _map_get(nd, "target");
             tid = is_identifier(tgt);
@@ -7805,6 +7919,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t tgt2 = "";
   tx_t expr2 = "";
   tx_t cval2 = "";
+  tx_t isnum2 = "";
   tx_t isel2 = "";
   tx_t cname = "";
   tx_t croot = "";
@@ -8632,6 +8747,10 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         expr2 = _map_get(node, "expr");
         cval2 = translate_expr(expr2, nums, evars);
         cval2 = _handle_cat(cval2, nums, evars);
+        isnum2 = expr_is_numeric(cval2, nums);
+        if (isnum2 == 1) {
+            cval2 = _cat(_cat("_from_long(", cval2), ")");
+        }
         isel2 = indent_str(indent);
         return _cat(_cat(_cat(_cat(_cat(isel2, "  "), tgt2), " = "), cval2), ";\n");
     }
@@ -10438,6 +10557,12 @@ tx_t callees_of(PlantArray* bd) {
                 acc = callee_from_value(acc, cval);
             }
         }
+        if (strcmp(cty,"reap_expr_stmt") == 0) {
+            cval = _map_get(cnd, "expr");
+            if (strcmp(cval,"") > 0) {
+                acc = callee_from_value(acc, cval);
+            }
+        }
         if (strcmp(cty,"if_stmt") == 0) {
             ib = _if_bodies(cnd);
             long ii10 = 0;
@@ -11979,7 +12104,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.5 (pure native)");
+      plant_print("Chloroplast 0.49.9 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

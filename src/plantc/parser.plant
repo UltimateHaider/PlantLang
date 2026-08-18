@@ -1152,6 +1152,7 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
   REAP p4 FROM _second, from_pair.
   REAP act_pair FROM consume, tokens, p4.
   REAP act_name FROM tok_lex, act_pair[0].
+  REAP act_ty FROM tok_type, act_pair[0].
   REAP p5 FROM _second, act_pair.
   # Check for module:function syntax (e.g., strings:REPLACE)
   REAP next_tok FROM peek, tokens, p5.
@@ -1167,6 +1168,7 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
       REAP p5 FROM _second, func_pair.
     /IF.
   # generic type arguments at the call site: foo[NUM, TX]
+  CREATE is_genargs(TX) TO "0".
   REAP ga_tok FROM peek, tokens, p5.
   REAP ga_lx FROM tok_lex, ga_tok.
   IF ga_lx IS "[",
@@ -1192,6 +1194,49 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
     REAP ga_rb FROM consume, tokens, p5.
     REAP p5 FROM _second, ga_rb.
     SET act_name TO act_name + "[" + gtext + "]".
+    SET is_genargs TO "1".
+    /IF.
+  /IF.
+  # v0.49.9 — general-expression REAP: REAP x FROM FIND(s, t). /
+  # ABS(-7) / a + b / COUNT lst / literals — the value is any
+  # translate-time expression, not an action call. The legacy action
+  # forms win: ",", ":", and "[" type args were handled above, and a
+  # parens call keeps the legacy path UNLESS the name is a
+  # translate-time builtin (the legacy path would emit a raw C
+  # name(...) call and fail at link time). A bare IDENT keeps the
+  # legacy path too (zero-arg action call or space-form args).
+  IF is_genargs ISNT "1",
+    REAP ex_tok FROM peek, tokens, p5.
+    REAP ex_lx FROM tok_lex, ex_tok.
+    REAP ex_ty FROM tok_type, ex_tok.
+    IF ex_ty ISNT "COLON" AND ex_lx ISNT "," AND ex_lx ISNT "[",
+      # bare name followed by "." is a legacy zero-arg call
+      # (action or module function) — never an expression
+      CREATE bare_call(TX) TO "0".
+      IF act_ty IS "IDENT",
+        IF ex_lx IS ".",
+          SET bare_call TO "1".
+        /IF.
+      /IF.
+      IF bare_call ISNT "1",
+      CREATE ex_builtin(TX) TO "0".
+      REAP ex_builtin FROM is_reap_builtin, act_name.
+      CREATE ex_ok(TX) TO "0".
+      IF ex_builtin IS "1", SET ex_ok TO "1". /IF.
+      IF ex_builtin ISNT "1",
+        IF ex_ty ISNT "IDENT",
+          IF ex_lx ISNT "(",
+            SET ex_ok TO "1".
+          /IF.
+        /IF.
+      /IF.
+      IF ex_ok IS "1",
+        REAP vpair2 FROM collect_value, tokens, p4.
+        REAP exprt2 FROM _first, vpair2.
+        REAP p6 FROM _second, vpair2.
+        GIVE plant_list_make(2, plant_list_make(12, "type", "reap_expr_stmt", "target", var_name, "expr", exprt2, "args", plant_list_make(0), "clargs", plant_list_make(0), "ctx", ""), p6).
+      /IF.
+      /IF.
     /IF.
   /IF.
   # v0.48.37c: REAP r FROM f(a, b, c). — consume the call parens
@@ -1336,6 +1381,19 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
       GIVE plant_list_make(2, plant_list_make(12, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args, "clargs", clargs, "ctx", ""), p6).
     /IF.
   /SEASON.
+/ACTION.
+
+# v0.49.9 — is this name a translate-time builtin (mirrors the
+# _handle_func_paren / _handle_func / _ni_replace list in
+# translate_expr)? The legacy REAP action path would emit it as a
+# raw C name(...) call and fail at link time, so builtin REAPs are
+# routed to the expression path. Bare action identifiers are never
+# builtins.
+ACTION is_reap_builtin(name(TX)),
+  IF name IS "LEN" OR name IS "JOIN" OR name IS "FIRST" OR name IS "LAST" OR name IS "SUM" OR name IS "UPPER" OR name IS "LOWER" OR name IS "TRIM" OR name IS "REVERSE" OR name IS "ABS" OR name IS "ROUND" OR name IS "POW" OR name IS "CEIL" OR name IS "FLOOR" OR name IS "RANDOM" OR name IS "SIN" OR name IS "COS" OR name IS "SQRT" OR name IS "HAS" OR name IS "ANY" OR name IS "ALL" OR name IS "PICK" OR name IS "FIND" OR name IS "COUNT_OF" OR name IS "SLICE" OR name IS "TAP" OR name IS "INFUSE" OR name IS "ABSORB" OR name IS "SEAL" OR name IS "TEST" OR name IS "COUNT" OR name IS "NOW" OR name IS "ANALYZE" OR name IS "TYPEOF",
+    GIVE "1".
+  /IF.
+  GIVE "0".
 /ACTION.
 
 # parse_call_stmt — bare call: name(args). → call_stmt node.
@@ -1925,9 +1983,11 @@ ACTION parse_season_stmt(tokens(LIST), pos(NUM), clv(TX), rtab(LIST), emode(TX))
 #    CYCLE i FROM lo TO hi [STEP k],      → fromExpr/toExpr/stepExpr
 #    CYCLE item IN list,                  → listExpr, indexVar ""
 #    CYCLE item, idx IN list,             → listExpr + indexVar
-# STEP defaults to 1; the STEP clause is detected in the collected
-# to-expression text (split on " STEP "); keywords are consumed
-# token-wise so nested parens and commas inside expressions survive.
+# STEP defaults to 1; since v0.49.8 the STEP clause is parsed
+# token-wise with collect_until_keyword (STEP is a lexer keyword), so
+# "STEP 2", "STEP  2", "STEP -2" and "STEP-2" all parse, with a
+# guarded prefix split recovering the attached "STEP2" form (see the
+# FROM branch).
 ACTION parse_cycle_stmt(tokens(LIST), pos(NUM), clv(TX), rtab(LIST), emode(TX)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -1950,13 +2010,51 @@ ACTION parse_cycle_stmt(tokens(LIST), pos(NUM), clv(TX), rtab(LIST), emode(TX)),
     REAP p3 FROM _second, cpair.
     REAP cpair FROM consume, tokens, p3.
     REAP p3 FROM _second, cpair.
-    REAP cpair FROM collect_until, tokens, p3, ",".
+    # v0.49.8 — the to-expression is collected token-wise and stops at
+    # the STEP keyword (or the comma), so any spacing around STEP is
+    # accepted: "STEP 2", "STEP  2", "STEP -2" and "STEP-2" (the '-'
+    # is its own MINUS token, so both lex identically). The old
+    # strings:SPLIT on " STEP " is gone. Only the attached form
+    # "STEP2" (no gap at all) lexes as a single NAME token; it is
+    # recovered here with a guarded prefix split of the collected
+    # to-expression (word-boundary "STEP" followed by a digit).
+    REAP cpair FROM collect_until_keyword, tokens, p3, plant_list_make(2, "STEP", ",").
     SET toExpr TO cpair[0].
     REAP p4 FROM _second, cpair.
-    REAP sparts FROM strings:SPLIT, toExpr, " STEP ".
-    IF COUNT sparts IS 2,
-      REAP toExpr FROM plant_list_get, sparts, 0.
-      REAP stepExpr FROM plant_list_get, sparts, 1.
+    REAP stok FROM peek, tokens, p4.
+    REAP slx FROM tok_lex, stok.
+    IF slx IS "STEP",
+      REAP cpair FROM consume, tokens, p4.
+      REAP p4 FROM _second, cpair.
+      REAP cpair FROM collect_until, tokens, p4, ",".
+      SET stepExpr TO cpair[0].
+      REAP p4 FROM _second, cpair.
+    /IF.
+    IF slx ISNT "STEP",
+      # attached form "STEP2": the lexer glues "STEP" to the digits
+      # into one NAME token, so it can only be recovered from the
+      # collected text. Guarded: split on "STEP", then require the
+      # remainder to start with a digit and the prefix to be empty or
+      # space-terminated (a variable named e.g. MYSTEP2 or a bare
+      # "STEP" suffix never matches).
+      REAP sparts FROM strings:SPLIT, toExpr, "STEP".
+      IF COUNT sparts IS 2,
+        REAP sbefore FROM plant_list_get, sparts, 0.
+        REAP safter FROM plant_list_get, sparts, 1.
+        REAP after_c FROM substring, safter, 0, 1.
+        CREATE before_ok(TX) TO "0".
+        IF sbefore IS "", SET before_ok TO "1". /IF.
+        IF sbefore ISNT "",
+          REAP last_c FROM substring, sbefore, LEN(sbefore) - 1, LEN(sbefore).
+          IF last_c IS " ", SET before_ok TO "1". /IF.
+        /IF.
+        IF before_ok IS "1" AND _is_digit(after_c) IS 1,
+          SET toExpr TO sbefore.
+          SET stepExpr TO safter.
+        /IF.
+      /IF.
+    /IF.
+    IF stepExpr > "",
       # v0.48.22-patch3: a statically-zero STEP (literal "0" or a
       # constant expression such as "2 - 2") is a compile-time error,
       # intercepted here prior to code emission so it can never

@@ -1,0 +1,43 @@
+# v0.49.8: STEP clause spacing robustness — the STEP keyword is now
+# lexer-registered and the to-expression is collected token-wise, so
+# standard spacing, multiple spaces, the attached "STEP2" form, and
+# negative increments (spaced or attached) all parse identically.
+ACTION main(),
+  CREATE s1(TX) TO "".
+  CYCLE i FROM 1 TO 5 STEP 2,
+    SET s1 TO s1 + _from_long(i) + " ".
+  /CYCLE.
+  SHOW "std=" + s1.
+  CREATE s2(TX) TO "".
+  CYCLE i FROM 1 TO 5 STEP  2,
+    SET s2 TO s2 + _from_long(i) + " ".
+  /CYCLE.
+  SHOW "multisp=" + s2.
+  CREATE s3(TX) TO "".
+  CYCLE i FROM 1 TO 5 STEP2,
+    SET s3 TO s3 + _from_long(i) + " ".
+  /CYCLE.
+  SHOW "attached=" + s3.
+  CREATE s4(TX) TO "".
+  CYCLE i FROM 5 TO 1 STEP -2,
+    SET s4 TO s4 + _from_long(i) + " ".
+  /CYCLE.
+  SHOW "neg=" + s4.
+  CREATE s5(TX) TO "".
+  CYCLE i FROM 5 TO 1 STEP-2,
+    SET s5 TO s5 + _from_long(i) + " ".
+  /CYCLE.
+  SHOW "negatt=" + s5.
+  CREATE s6(TX) TO "".
+  CYCLE i FROM 10 TO 2 STEP - 3,
+    SET s6 TO s6 + _from_long(i) + " ".
+  /CYCLE.
+  SHOW "neg-spaced=" + s6.
+  CREATE k(NUM) TO 4.
+  CREATE s7(TX) TO "".
+  CYCLE i FROM 1 TO 9 STEP k,
+    SET s7 TO s7 + _from_long(i) + " ".
+  /CYCLE.
+  SHOW "runtime=" + s7.
+  GIVE 0.
+/GIVE main.

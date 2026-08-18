@@ -1445,6 +1445,29 @@ ACTION collect_used_walk(bd(LIST), used(LIST), declared(LIST)),
         PUT tgt INTO used.
       /IF.
     /IF.
+    # v0.49.9 — reap_expr_stmt targets (REAP x FROM a[0]. / FIND(…)
+    # / a + b) are implicit vars too: they need the tx_t "" implicit
+    # declaration pass exactly like reap_stmt targets.
+    IF ty IS "reap_expr_stmt",
+      REAP tgt FROM _map_get, nd, "target".
+      CREATE found(NUM) TO 0.
+      CREATE fi(NUM) TO 0.
+      CREATE fe(TX) TO "".
+      SEASON fi < COUNT declared,
+        REAP fe FROM plant_list_get, declared, fi.
+        IF str_eq(fe, tgt) IS "1", SET found TO 1. /IF.
+        SET fi TO fi + 1.
+      /SEASON.
+      SET fi TO 0.
+      SEASON fi < COUNT used,
+        REAP fe FROM plant_list_get, used, fi.
+        IF str_eq(fe, tgt) IS "1", SET found TO 1. /IF.
+        SET fi TO fi + 1.
+      /SEASON.
+      IF NOT found,
+        PUT tgt INTO used.
+      /IF.
+    /IF.
     # v0.48.36 — TYPEOF/ANALYZE on a bare identifier that is never
     # declared (params, CREATE/LET) or REAP'd: auto-declare it as
     # tx_t "" so the query runs against an empty (null) value instead
@@ -3695,6 +3718,13 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP expr2 FROM _map_get, node, "expr".
         REAP cval2 FROM translate_expr, expr2, nums, evars.
         REAP cval2 FROM _handle_cat, cval2, nums, evars.
+        # v0.49.9 — numeric results (COUNT, arithmetic, _to_long…)
+        # are stored as text like numeric-action REAPs, so SHOW/
+        # concat never dereference raw long bits.
+        REAP isnum2 FROM expr_is_numeric, cval2, nums.
+        IF isnum2 IS 1,
+            SET cval2 TO "_from_long(" + cval2 + ")".
+        /IF.
         REAP isel2 FROM indent_str, indent.
         GIVE isel2 + "  " + tgt2 + " = " + cval2 + ";\n".
     /IF.
@@ -5602,6 +5632,15 @@ ACTION callees_of(bd(LIST)),
     /IF.
     IF cty IS "set_stmt" OR cty IS "create_stmt" OR cty IS "let_stmt" OR cty IS "give_stmt" OR cty IS "show_stmt" OR cty IS "put_stmt" OR cty IS "cancel_stmt" OR cty IS "trace_stmt" OR cty IS "config_stmt",
       REAP cval FROM _map_get, cnd, "value".
+      IF cval > "",
+        REAP acc FROM callee_from_value, acc, cval.
+      /IF.
+    /IF.
+    # v0.49.9 — reap_expr_stmt expressions can embed action calls
+    # (e.g. REAP x FROM UPPER(helper(3)).): scan the expr text for
+    # calls exactly like values above.
+    IF cty IS "reap_expr_stmt",
+      REAP cval FROM _map_get, cnd, "expr".
       IF cval > "",
         REAP acc FROM callee_from_value, acc, cval.
       /IF.

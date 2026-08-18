@@ -1,5 +1,88 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.49.9 — 2026 (Expression Support in REAP Statements)
+
+### Language
+- **`REAP` accepts general expressions.** The value after `FROM` is
+  classified at parse time: `IDENT ,` action calls, `IDENT :` module
+  calls, `IDENT [types]` generic calls, and `IDENT (...)` calls to
+  non-builtin actions keep the legacy forms; everything else is a
+  general expression translated exactly like a `SET`/`SHOW` value
+  (`src/plantc/parser.plant` `parse_reap_stmt`):
+  - translate-time builtins now work in REAP position — previously
+    `REAP f FROM FIND(t, s).` emitted a raw `FIND(...)` C call and
+    failed at link time; now it emits `plant_find(...)`. Covered:
+    `FIND JOIN SLICE UPPER LOWER ABS ROUND LEN FIRST LAST SUM TRIM
+    REVERSE POW CEIL FLOOR RANDOM SIN COS SQRT HAS ANY ALL PICK
+    COUNT_OF TAP INFUSE ABSORB SEAL TEST COUNT NOW ANALYZE TYPEOF`.
+  - arithmetic (`REAP n FROM 2 + 3.`), indexing (`REAP x FROM a[0].`,
+    `REAP p FROM lst[1] + "!".`), literals, and bare variables.
+  - nested combinations, e.g. `REAP b FROM UPPER(JOIN(lst, ":")) + "!".`
+    — embedded action calls are registered for prototype emission via
+    the `callees_of` expression scan.
+- **Numeric results are stored as text.** `REAP n FROM 2 + 3.` emits
+  `_from_long(2 + 3)` so the target holds `"5"` — concatenation and
+  `SHOW` never dereference raw integer bits (matches the existing
+  numeric-action REAP convention).
+- **Fixed `REAP x FROM a[0].` undeclared-target bug** (v0.49.6): the
+  expression-REAP target is now registered by `collect_used_walk` and
+  declared `tx_t ""` like any other REAP target.
+
+### Tests
+- New `tests/regression/reap_expr.plant/.expected`: 20 cases covering
+  FIND/JOIN/SLICE/UPPER/LOWER/ABS/ROUND, COUNT, arithmetic, indexing,
+  index+concat, nested builtins with embedded action calls, and the
+  preserved legacy forms (zero-arg bare call, parens call, comma call,
+  module call). Full regression: 154/154; native: 20/20.
+
+### Internal
+- New parser helper `is_reap_builtin` (name → "1"/"0") mirroring the
+  `_handle_func_paren`/`_handle_func`/`_ni_replace` list in
+  `translate_expr`; classification guards keep legacy action forms
+  (bare `IDENT .` zero-arg calls, `(` calls, generic `[types]`).
+- Version bump 0.49.8 → 0.49.9 (Makefile, compiler banner, native test
+  runner version check).
+
+## v0.49.8 — 2026 (STEP Spacing Refinement & CYCLE Documentation)
+
+### Language
+- **Robust `STEP` parsing in numeric `CYCLE` loops.** `STEP` is now a
+  registered lexer keyword, and the to-expression is collected
+  token-wise with `collect_until_keyword` (stopping at `STEP` or the
+  header comma) instead of the old `strings:SPLIT` on `" STEP "`. All
+  spacing and attachment variants parse identically:
+  - `CYCLE i FROM 1 TO 5 STEP 2` (standard)
+  - `CYCLE i FROM 1 TO 5 STEP  2` (multiple spaces)
+  - `CYCLE i FROM 1 TO 5 STEP2` (attached value — recovered from the
+    single NAME token via a guarded prefix split: word-boundary
+    `STEP` followed by a digit; a variable like `MYSTEP2` or a bare
+    trailing `STEP` never matches)
+  - `CYCLE i FROM 5 TO 1 STEP -2` and `CYCLE i FROM 5 TO 1 STEP-2`
+    (negative increments — the `-` is its own MINUS token, so both
+    lex identically)
+- **Validation guardrails unchanged and re-verified:** a statically
+  zero `STEP` (`STEP 0`, `STEP 2 - 2`) is a compile-time error
+  (`#error STEP cannot be 0`) at both the parser and codegen layers;
+  runtime steps keep the `!= 0` guarded bound so a zero-valued
+  runtime step iterates zero times instead of spinning.
+
+### Tests
+- Added `tests/regression/cycle_step_spacing.plant` (+ `.expected`):
+  standard, multi-space, attached, spaced/attached negative, spaced
+  minus (`STEP - 3`), and runtime-variable steps.
+- Existing `cycle_*` suite re-verified (153 regression tests pass).
+
+### Documentation
+- `Language Tour.md`: new **CYCLE** section after SEASON — collection
+  iteration (`CYCLE item IN list`), indexed collection iteration
+  (`CYCLE item, idx IN list`), range iteration (`CYCLE i FROM lo TO
+  hi`), stepped ranges (`… STEP k`), step sign/bound semantics,
+  zero-step guard, and BREAK/CONTINUE integration.
+
+### Housekeeping
+- Version bump 0.49.7 → 0.49.8 (Makefile, compiler banner, native test
+  suite version check).
+
 ## v0.49.5 — 2026 (Map Literals `{k: v}`)
 
 ### Language

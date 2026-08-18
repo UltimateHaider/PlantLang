@@ -1,0 +1,17 @@
+lit=hello
+find=1
+join=aa-bb-cc
+slice=bc
+upper=ABC
+lower=abc
+abs=7
+round=3
+count=3
+arith=5
+idx=aa
+idxcat=bb!
+nested=AA:BB:CC!
+zero=Z
+call=6
+callin=4
+module=a-b
