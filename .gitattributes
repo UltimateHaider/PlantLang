@@ -1,2 +1,18 @@
 # PlantLang source files
 *.plnt linguist-language=PlantLang
+
+# C runtime files
+runtime/c/*.c linguist-language=C
+runtime/c/*.h linguist-language=C
+
+# Documentation
+*.md linguist-documentation
+*.txt linguist-documentation
+
+# Build artifacts (exclude from language stats)
+build/** linguist-vendored
+dist/** linguist-vendored
+*.c linguist-vendored  # generated C from PlantLang
+
+# Test files
+tests/** linguist-test

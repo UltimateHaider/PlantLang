@@ -1241,7 +1241,7 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
     # whole; the elements get their own concat handling in _enc_el).
     SEASON i < LEN(expr),
         REAP ch FROM char_at, expr, i.
-        IF ch IS "\"", SET instr TO 1 - instr. SET has_str TO 1. /IF.
+        IF ch IS "\"", SET instr TO 1 - instr. /IF.
         IF instr IS 1 AND ch IS "\\", SET i TO i + 1. /IF.
         IF instr IS 0 AND (ch IS "(" OR ch IS "[" OR ch IS "{"), SET depth TO depth + 1. /IF.
         IF instr IS 0 AND (ch IS ")" OR ch IS "]" OR ch IS "}"), SET depth TO depth - 1. /IF.
@@ -1258,6 +1258,49 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
     /SEASON.
     REAP seg FROM substring, expr, start, LEN(expr).
     IF (COUNT parts) IS 0, GIVE expr. /IF.
+    # v0.49.10 — has_str is a top-level string-literal segment, not
+    # any quote in the text: the field-name strings inside
+    # _map_get(...) segments (parser-emitted a.b.c lookups) must not
+    # force the _cat path when a numeric literal is also present
+    # (m.count + 1 is long arithmetic)
+    CREATE hp9(NUM) TO 0.
+    CREATE hseg(TX) TO "".
+    CREATE hqb(NUM) TO 0.
+    CREATE hqc(TX) TO "".
+    CREATE hp1(TX) TO "".
+    # a top-level segment is a string when it starts with a quote
+    # ("x=" + m.name) or carries quotes inside a call (interp
+    # results like _cat3("", s, "")), but NOT when it is a
+    # parser-emitted field lookup — m.count + 1 stays arithmetic
+    # (the raw path wraps those in _to_long)
+    SEASON hp9 < COUNT parts,
+        REAP hseg FROM plant_list_get, parts, hp9.
+        REAP hp0 FROM substring, hseg, 0, 1.
+        IF hp0 IS "\"", SET has_str TO 1. /IF.
+        REAP hp1 FROM substring, hseg, 0, 9.
+        IF hp1 ISNT "_map_get(",
+            SET hqb TO 0.
+            SEASON hqb < LEN(hseg),
+                REAP hqc FROM char_at, hseg, hqb.
+                IF hqc IS "\"", SET has_str TO 1. /IF.
+                SET hqb TO hqb + 1.
+            /SEASON.
+        /IF.
+        SET hp9 TO hp9 + 1.
+    /SEASON.
+    # the tail segment after the final " + " lives in seg, not in
+    # parts — it must count as a top-level string literal too
+    REAP sp0 FROM substring, seg, 0, 1.
+    IF sp0 IS "\"", SET has_str TO 1. /IF.
+    REAP sp1 FROM substring, seg, 0, 9.
+    IF sp1 ISNT "_map_get(",
+        SET hqb TO 0.
+        SEASON hqb < LEN(seg),
+            REAP hqc FROM char_at, seg, hqb.
+            IF hqc IS "\"", SET has_str TO 1. /IF.
+            SET hqb TO hqb + 1.
+        /SEASON.
+    /IF.
     # genuine numeric literal present (digit outside identifiers, e.g.
     # "1" in "p5 + 1") and no quoted string → raw numeric C "+", the
     # v0.48.3 shortcut REAP'd index vars (tx_t holding bit patterns)
@@ -1274,7 +1317,40 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
     REAP hl9 FROM seg_has_literal_digit, seg.
     IF hl9 IS 1, SET has_lit TO 1. /IF.
     IF has_str IS 0 AND has_lit IS 1,
-        GIVE strings_REPLACE(expr, " + ", "+").
+        # v0.49.10 — field-access segments (parser-emitted
+        # _map_get(...) calls) are tx_t lookups; a numeric literal
+        # elsewhere in the chain makes it arithmetic, so each
+        # top-level field segment wraps in _to_long before the raw
+        # "+" shortcut (n + 1 stays long arithmetic; n + s stays _cat)
+        CREATE wparts(LIST) TO plant_list_make(0).
+        CREATE wi2(NUM) TO 0.
+        CREATE wseg(TX) TO "".
+        SEASON wi2 < COUNT parts,
+            REAP wseg FROM plant_list_get, parts, wi2.
+            REAP wp0 FROM substring, wseg, 0, 9.
+            IF wp0 IS "_map_get(",
+                SET wseg TO "_to_long(" + wseg + ")".
+            /IF.
+            PUT wseg INTO wparts.
+            SET wi2 TO wi2 + 1.
+        /SEASON.
+        REAP wp0 FROM substring, seg, 0, 9.
+        IF wp0 IS "_map_get(",
+            SET seg TO "_to_long(" + seg + ")".
+        /IF.
+        PUT seg INTO wparts.
+        # digit-free vars: the stale bootstrap compiler takes its
+        # has_digit raw-+ shortcut on pure var+var concatenations
+        CREATE wres(TX) TO "".
+        CREATE wi3(NUM) TO 0.
+        CREATE wsegb(TX) TO "".
+        SEASON wi3 < COUNT wparts,
+            REAP wsegb FROM plant_list_get, wparts, wi3.
+            IF wres > "", SET wres TO wres + " + ". /IF.
+            SET wres TO wres + wsegb.
+            SET wi3 TO wi3 + 1.
+        /SEASON.
+        GIVE strings_REPLACE(wres, " + ", "+").
     /IF.
     # no genuine literal: ambiguous — every segment verifiably numeric
     # (digit literal, NUM/FACT var in nums, known numeric-returning
@@ -2930,10 +3006,24 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF actx IS "a",
             GIVE isel + "  " + target + " = " + cval + ";\n".
         /IF.
+        # v0.49.10 — a field-access CREATE value (parser-emitted
+        # _map_get(...) text) is a tx_t lookup: wrap in _to_long so
+        # numeric targets keep C arithmetic. Other non-numeric
+        # values (raw-position REAP targets, strings) pass through
+        # unchanged — they already carry C-long bits or are user
+        # errors (v0.49.10).
+        REAP isnc2 FROM expr_is_numeric, cval, nums.
+        REAP fw0 FROM substring, cval, 0, 9.
         IF vtype IS "NUM",
+            IF isnc2 IS 0 AND fw0 IS "_map_get(",
+                SET cval TO "_to_long(" + cval + ")".
+            /IF.
             GIVE isel + "  long " + target + " = " + cval + ";\n".
         /IF.
         IF vtype IS "FACT",
+            IF isnc2 IS 0 AND fw0 IS "_map_get(",
+                SET cval TO "_to_long(" + cval + ")".
+            /IF.
             GIVE isel + "  int " + target + " = " + cval + ";\n".
         /IF.
         IF vtype IS "LIST",
@@ -3073,6 +3163,18 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             REAP in3 FROM is_numeric_type, rty.
             IF in3 IS 1,
                 SET cval TO "_from_long(" + cval + ")".
+            /IF.
+        /IF.
+        # v0.49.10 — GIVE of a field-access value (parser-emitted
+        # _map_get(...) text) from a NUM/FACT action: numeric
+        # returns are C longs, so the text lookup converts with
+        # _to_long (mirrors the CREATE wrap; other non-numeric
+        # values pass through unchanged)
+        IF isn3 IS 0 AND rty ISNT "",
+            REAP in3 FROM is_numeric_type, rty.
+            REAP fw1 FROM substring, cval, 0, 9.
+            IF in3 IS 1 AND snm3 IS "" AND fw1 IS "_map_get(",
+                SET cval TO "_to_long(" + cval + ")".
             /IF.
         /IF.
         REAP isel FROM indent_str, indent.

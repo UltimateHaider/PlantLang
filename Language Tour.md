@@ -224,6 +224,29 @@ Each instantiation used in the program is monomorphized into a concrete
 typedef (`plant_Box_NUM`, `plant_Pair_NUM_TX`, …); uninstantiated templates
 emit nothing.
 
+**Field access (v0.49.10):** `a.b.c` on a map-backed LIST reads a key
+with `_map_get` — no explicit `_map_get` call needed:
+
+```
+CREATE m(LIST) TO { "name": "root", "count": 7,
+                    "inner": { "val": "9" },
+                    "list": ["a", "b", "c"] }.
+SHOW m.name.                # → root          (_map_get(m, "name"))
+SHOW m.inner.val.           # → 9             (chained, 3 levels)
+SHOW m.count + 1.           # → 8             (numeric coercion)
+SHOW "x=" + m.name.         # → x=root        (concatenates)
+SHOW m.list[0].             # → a             (index into a field)
+CREATE n(NUM) TO m.count.   # numeric field read wraps in _to_long
+```
+
+Rules: a trailing bare `IDENT .` binds to that IDENT only; other tails
+(chains, `x[0].name`, string expressions) use the whole expression as
+the lookup target. The token after `.` must be a non-keyword IDENT not
+followed by `(` or `:`. A field next to a numeric literal is coerced
+with `_to_long` (so `m.count + 1` is arithmetic); field + field or
+field + string has no literal digit, so it concatenates — field values
+are text lookups.
+
 ### Actions (functions)
 
 ```

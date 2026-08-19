@@ -1,0 +1,26 @@
+# field_access — v0.49.10: native a.b.c field access lowers to
+# _map_get lookups on map-backed lists (plant_list_make key/value
+# pairs). Field + numeric-literal is arithmetic (_to_long coercion),
+# field + field or field + string concatenates (text lookup
+# semantics). Chained access nests: a.b.c -> _map_get(_map_get(a,
+# "b"), "c").
+ACTION main()
+  CREATE sx(TX) TO "".
+  CREATE inner(LIST) TO plant_list_make(4, "name", "root", "count", "7").
+  SHOW inner.name.
+  SHOW inner.name + "!".
+  SHOW inner.count + 1.
+  SHOW "x=" + inner.name.
+  SET sx TO inner.name.
+  SHOW sx.
+  CREATE n(NUM) TO inner.count.
+  SHOW n + 1.
+  CREATE outer(LIST) TO plant_list_make(4, "pt", plant_list_make(4, "name", "root", "nest", plant_list_make(4, "val", "9", "name", "deep")), "list", plant_list_make(3, "a", "b", "c")).
+  SHOW outer.pt.name.
+  SHOW outer.pt.nest.val.
+  SHOW outer.pt.nest.val + 1.
+  SHOW outer.list[0].
+  SHOW outer.list[2].
+  SHOW "end".
+  GIVE 0.
+/ACTION.

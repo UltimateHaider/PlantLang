@@ -1,5 +1,54 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.49.10 — 2026 (Native Field Access `a.b.c`)
+
+### Language
+- **`a.b.c` field access lowers to `_map_get` lookups.** `IDENT . IDENT`
+  sequences are recognized at parse time (`src/plantc/parser.plant`
+  `parse_field_access`) and emit
+  `_map_get(target, "field")` (runtime `_map_get`, plant_compat.h:
+  421). Chained access nests: `a.b.c` →
+  `_map_get(_map_get(a, "b"), "c")`. Field values are looked up in
+  map-backed lists (`plant_list_make` key/value pairs).
+  - target binding: a trailing bare `IDENT .` binds to that IDENT only
+    (so `"x=" + m.name` emits `_cat("x=", _map_get(m, "name"))`); any
+    other tail (chained access, indexed expression like `x[0].name`,
+    string concat) uses the whole expression as the target.
+  - the token after `.` must be a non-keyword IDENT (keywords such as
+    `ORIF` excluded) and must not be followed by `(` or `:`, so
+    `SHOW "big". ORIF ...` stays a plain statement.
+  - indexing after a field (`m.list[0]`) and further chaining both
+    work: `m.list[0]` → `plant_list_get(_map_get(m, "list"), 0)`.
+- **Numeric coercion for field reads.** In arithmetic, a top-level
+  `_map_get(...)` segment next to a numeric literal is wrapped in
+  `_to_long(...)`: `m.count + 1` → `_from_long(_to_long(_map_get(m,
+  "count"))+1)` (same for `CREATE x(NUM) TO m.f.` and `GIVE`/`SET`
+  numeric targets). Field + field or field + string has no numeric
+  literal, so it concatenates (`_cat`) like any other text value.
+- **String concat classification fixed.** `has_str` in `_handle_cat`
+  is now computed over the expression parts (including the final tail
+  segment — previously the tail after the last ` + ` was missed, so
+  async codegen emitted raw `code + "..."` C concatenation); a segment
+  is a string when it starts with `"` or contains quotes inside a
+  call (e.g. `_cat3("", s, "")`), except `_map_get(`-prefixed
+  segments (kept arithmetic).
+- **Field access does not misfire inside action calls.** A field
+  pattern where the preceding token is not a bare IDENT (e.g.
+  `f(a.b)` — preceded by `(`) is left untouched, and keyword tokens
+  are excluded from field position.
+- **Regression:** `tests/regression/field_access.plant` covers single
+  field, chained (2- and 3-level) access, field + literal arithmetic,
+  field + string concat, `SET`/`CREATE NUM` from a field, index into
+  a field list, and statement-terminator safety. 155/155 regression
+  tests pass.
+
+### Internal
+- Stale-v1 bootstrap constraint: the new code paths keep all
+  concatenated variable names digit-free (`has_str`/`has_lit` raw
+  `+` path in v1) and avoid `+` rewrites inside call parens.
+- Version marker moved to v0.49.10 (`Makefile`, `src/plantc/main.plant`
+  version banner, `tests/native/run_native_tests.sh` check).
+
 ## v0.49.9 — 2026 (Expression Support in REAP Statements)
 
 ### Language

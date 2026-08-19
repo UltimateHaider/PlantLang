@@ -1,8 +1,8 @@
 # Legacy JS Interpreter vs Self-Hosted Compiler — Gap Analysis Report
 
-**Scope:** Legacy JavaScript interpreter (PlantLang ≤ v0.45.x, `core/interpreter.js` + associated modules, recovered from git at `7f54eae` v0.45.0) vs the self-hosted native compiler (v0.49.9, `src/plantc/*.plant` → C, `runtime/c/plant_runtime.c`).
+**Scope:** Legacy JavaScript interpreter (PlantLang ≤ v0.45.x, `core/interpreter.js` + associated modules, recovered from git at `7f54eae` v0.45.0) vs the self-hosted native compiler (v0.49.10, `src/plantc/*.plant` → C, `runtime/c/plant_runtime.c`).
 
-> **Status note (v0.49.9):** the legacy side no longer exists in the
+> **Status note (v0.49.10):** the legacy side no longer exists in the
 > working tree. v0.48.38m removed `core/`, `src/**/*.js`, `service/`,
 > `webrepl/`, `std/`, `benchmarks/`, and the editor assets from the
 > repository; the legacy engine is now preserved only in git history
@@ -17,7 +17,7 @@ PlantLang transitioned from a **tree-walking JavaScript interpreter** (~9,000 li
 
 The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 port. High-level counts:
 
-| Area | Legacy (v0.45.0) | Current (v0.49.9) | Gap |
+| Area | Legacy (v0.45.0) | Current (v0.49.10) | Gap |
 |---|---|---|---|---|
 | Statement keywords (parser dispatch) | ~40 | ~40 (incl. storms, CYCLE forms, NOW/ANALYZE/TYPEOF, FREE/ARC/FAST, WAIT/LOCK) | ~10 missing (deliberate cuts + legacy stubs) |
 | Innate/std library functions | ~60 (41 innate + 19 std/.plnt + 5 FFI stubs) | ~31 expression builtins (codegen_c.plant:2238-2292) + ~22 FFI module bindings (strings/fs/math) + ~50 declared runtime helpers | ~20 missing |
@@ -40,7 +40,7 @@ The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 
 
 - **Legacy side** (recovered from git `7f54eae`, the last commit shipping `core/interpreter.js`; removed from the working tree in v0.48.38m — all sources below are historical):
   `core/interpreter.js` (2,828 L), `core/parser.js` (3,033 L), `core/ast.js` (1,040 L), `core/typechecker.js` (1,529 L), `core/tokenizer.js` (259 L), `core/evaluator.js` (173 L), `core/runtime.js` (64 L), `core/innate.js` (67 L), `core/dispatcher.js` (286 L), `core/matrix.js`, `core/harvest.js` + `harvest_worker.js`, `core/diagnostics.js`, `core/lexer.js`, `core/runtime_bridge.c`, `src/interpreter/{cycle_evaluator,sort_evaluator,bloom_evaluator,show_formatter}.js`, `std/{prelude,string,math,io}.plnt`.
-- **Current side** (working tree v0.49.9): `src/plantc/{lexer,parser,codegen_c,main}.plant`, `runtime/c/plant_runtime.c` (≈6,000 L), `runtime/c/plant_compat.h` (787 L), `runtime/c/plant_runtime.h`, `tests/native/mock_ffi.{h,c}`, `Language Tour.md`.
+- **Current side** (working tree v0.49.10): `src/plantc/{lexer,parser,codegen_c,main}.plant`, `runtime/c/plant_runtime.c` (≈6,000 L), `runtime/c/plant_compat.h` (787 L), `runtime/c/plant_runtime.h`, `tests/native/mock_ffi.{h,c}`, `Language Tour.md`.
 - **Verification method:** full keyword-dispatch enumeration of both parsers; complete function inventories of `plant_compat.h` and `plant_runtime.c`; spot-checks for every "missing" claim (all negative).
 
 Legend for gap tables: **S** = supported, **P** = partial (different semantics / only reachable internally), **M** = missing, **D** = intentionally deprecated / dropped by design.
@@ -124,9 +124,9 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `{ k: v }` map literal | M | **S** (v0.49.5: native literals — `{ "name": "plant", "year": 2026 }` → `plant_map_set(plant_map_set(plant_map_create(), "name", "plant"), "year", _from_long(2026))`; keys/values are quoted strings, numbers (→ `_from_long`), variables, nested `[ … ]` and `{ … }`; `{}` → `plant_map_create()`; produces the pair-list MAP form — readable via `_map_get`, serializable via `plant_map_to_string`/`json_stringify`; v0.49.6: decimal values wrap in `_from_double`; bare NUM variables as keys/values still unwrapped) |
 | `StructName{ args }` / `{field: value}` struct literals | M | structs are map-backed, created via action returns |
 | `a..b` range expression | M | runtime `plant_range` helper exists but not as syntax |
-| `x[i]` index | **S** | rewritten to `plant_list_get`/array access; `name[expr]` → `plant_list_get(name, expr)` via C-side `handle_brackets` — expression position (v0.49.4-documented; v0.49.6: multi-pass rightmost rewrite adds chained `b[1][0]` → `plant_list_get(plant_list_get(b, 1), 0)` and call-result indexing `f(x)[0]`, `plant_map_get(m, "k")[0]`). `REAP … FROM x[i].` supported since v0.49.6 (reap_expr_stmt) — the target-declaration wiring shipped in v0.49.9 (`collect_used_walk` declares the target `tx_t ""`), and indexed values combine with operators/concat in REAP position (`REAP p FROM lst[1] + "!".`) |
+| `x[i]` index | **S** | rewritten to `plant_list_get`/array access; `name[expr]` → `plant_list_get(name, expr)` via C-side `handle_brackets` — expression position (v0.49.4-documented; v0.49.6: multi-pass rightmost rewrite adds chained `b[1][0]` → `plant_list_get(plant_list_get(b, 1), 0)` and call-result indexing `f(x)[0]`, `plant_map_get(m, "k")[0]`). `REAP … FROM x[i].` supported since v0.49.6 (reap_expr_stmt) — the target-declaration wiring shipped in v0.49.9 (`collect_used_walk` declares the target `tx_t ""`), and indexed values combine with operators/concat in REAP position (`REAP p FROM lst[1] + "!".`). v0.49.10: indexing into a field-access result works — `m.list[0]` → `plant_list_get(_map_get(m, "list"), 0)` |
 | `x[s:e]` slices | M | `SLICE(seq, start, end)` built-in **S** (v0.48.38i, half-open bounds with -1 bound expansion); `x[s:e]` syntax M |
-| `obj:prop`, `obj:"k1":"k2"`, `a.b.c`, `SELF:prop` | M | colon-call only for `module:func` |
+| `obj:prop`, `obj:"k1":"k2"`, `a.b.c`, `SELF:prop` | M | colon-call only for `module:func`; **`a.b.c` field access S (v0.49.10)**: `IDENT . IDENT` lowers to `_map_get(target, "field")` on map-backed lists (chained: `a.b.c` → `_map_get(_map_get(a, "b"), "c")`; field + numeric literal → `_to_long` coercion; `m.list[0]` indexing into a field works; trailing bare `IDENT.` binds to that IDENT, other tails use the whole expression). FFI-struct handles (PlantMap hash maps) still read via explicit `plant_map_get` + `_from_long` |
 | `a.method(args)` (push/pop/put/get/has) | M | |
 | `PICK (c) a b` ternary | **S** | v0.48.38h: `PICK(cond, a, b)` built-in with truthiness rules (`"0"`/`"false"` falsy) |
 | `COUNT(x)`, `SUM(x)`, `FIRST(x)`, `LAST(x)`, `SORT(x)`, `LEN(x)` | **P** | COUNT→`plant_array_length`, LEN→`strlen`; FIRST/LAST/SUM **S** (v0.48.38d: `plant_first`/`plant_last` boundary elements, `plant_sum` numeric aggregation — empty/NULL → `"0"`, non-parsable elements skipped); SORT(x) expression form M (SORT statement shipped v0.48.29) |
@@ -307,4 +307,4 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 **Intentionally out of scope (D)**
 - SPECIES/BLOOM object model, `SELF:`/method dispatch, `PLANT` library statements, PULSE/WHENEVER watchers, JS `Function()` escape hatch, locale-specific IO formatting, VERIFY/SUITE language framework.
 
-*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.49.9. As of v0.49.9 the legacy side exists only in git history — `core/`, `src/**/*.js`, `std/`, `service/`, `webrepl/`, and `benchmarks/` were removed from the working tree (commit `c17de62`).*
+*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.49.10. As of v0.49.10 the legacy side exists only in git history — `core/`, `src/**/*.js`, `std/`, `service/`, `webrepl/`, and `benchmarks/` were removed from the working tree (commit `c17de62`).*

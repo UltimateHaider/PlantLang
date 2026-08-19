@@ -489,6 +489,10 @@ ACTION _second(pair(LIST)),
   GIVE pair[1].
 /ACTION.
 
+ACTION _third(pair(LIST)),
+  GIVE pair[2].
+/ACTION.
+
 ACTION is_eof(tokens(LIST), pos(NUM)),
   IF pos >= COUNT tokens,
     GIVE TRUE.
@@ -523,6 +527,68 @@ ACTION escape_string(s(TX)),
   GIVE r.
 /ACTION.
 
+# v0.49.10 — field access: at a dot inside a collected value, a
+# following non-keyword IDENT is a map/struct field selector, not a
+# statement terminator. The lowered text is emitted directly, so the
+# caller loop's re-entry chains levels: a.b.c → _map_get(a, "b") →
+# _map_get(_map_get(a, "b"), "c") (translate_expr passes the call
+# through untouched). Statement keywords and collect delimiters are
+# never field names, and IDENT( / IDENT: ( after the dot starts a
+# new statement — the dot stays a terminator. At depth 0 the target
+# is the whole accumulated text; inside parens/brackets (dpth "1")
+# only a bare IDENT target is supported (f(a.b), [a.b, c]).
+ACTION parse_field_access(tokens(LIST), pos(NUM), text(TX), dpth(TX)),
+  REAP ftok FROM peek, tokens, pos + 1.
+  REAP flx FROM tok_lex, ftok.
+  REAP fty FROM tok_type, ftok.
+  IF fty ISNT "IDENT", GIVE plant_list_make(3, "0", text, pos). /IF.
+  IF text IS "", GIVE plant_list_make(3, "0", text, pos). /IF.
+  IF flx IS "SET" OR flx IS "REAP" OR flx IS "SHOW" OR flx IS "CREATE" OR flx IS "GIVE" OR flx IS "IF" OR flx IS "ORIF" OR flx IS "SEASON" OR flx IS "WHILE" OR flx IS "FOR" OR flx IS "CALL" OR flx IS "START" OR flx IS "AWAIT" OR flx IS "CANCEL" OR flx IS "TRACE" OR flx IS "MISSION" OR flx IS "FREE" OR flx IS "WAIT" OR flx IS "LOCK" OR flx IS "ARC" OR flx IS "PUT" OR flx IS "TAKE" OR flx IS "BRAID" OR flx IS "LINK" OR flx IS "SORT" OR flx IS "SHAKE" OR flx IS "BREAK" OR flx IS "CONTINUE" OR flx IS "LET" OR flx IS "NOW" OR flx IS "ANALYZE" OR flx IS "TYPEOF" OR flx IS "ROOT" OR flx IS "ROOT_SCOPE" OR flx IS "CONST" OR flx IS "IN" OR flx IS "FROM" OR flx IS "TO" OR flx IS "WITH" OR flx IS "AS" OR flx IS "INTO" OR flx IS "BY" OR flx IS "ASYNC" OR flx IS "MATCH" OR flx IS "CYCLE" OR flx IS "WEATHER" OR flx IS "THROW" OR flx IS "STOP" OR flx IS "INCREASE" OR flx IS "DECREASE" OR flx IS "HARVEST" OR flx IS "LISTEN" OR flx IS "FAST",
+    GIVE plant_list_make(3, "0", text, pos).
+  /IF.
+  REAP nt2 FROM peek, tokens, pos + 2.
+  REAP nt2_ty FROM tok_type, nt2.
+  IF nt2_ty IS "LPAREN", GIVE plant_list_make(3, "0", text, pos). /IF.
+  IF nt2_ty IS "COLON", GIVE plant_list_make(3, "0", text, pos). /IF.
+  REAP ltk FROM peek, tokens, pos - 1.
+  REAP lt_ty FROM tok_type, ltk.
+  IF dpth ISNT "0",
+    IF lt_ty ISNT "IDENT", GIVE plant_list_make(3, "0", text, pos). /IF.
+  /IF.
+  REAP dotp FROM consume, tokens, pos.
+  REAP p2 FROM _second, dotp.
+  REAP fldp FROM consume, tokens, p2.
+  REAP fld FROM tok_lex, fldp[0].
+  REAP p3 FROM _second, fldp.
+  # stepwise two-operand concatenations: the stale bootstrap
+  # compiler only _cat's simple pairs, not multi-segment chains
+  CREATE nfld(TX) TO "\"" + fld + "\"".
+  CREATE fin(TX) TO "_map_get(".
+  # target selection: a trailing bare IDENT is the lookup target
+  # ("x=" + m.name → "x=" + _map_get(m, "name")); a text ending
+  # in ")" (previous emission — a.b.c chains the last lookup) or
+  # any other non-IDENT tail (x[0].name) takes the whole text
+  REAP ttail FROM substring, text, LEN(text) - 2, LEN(text).
+  IF lt_ty IS "IDENT",
+    IF ttail ISNT "\")",
+      REAP lt_lx FROM tok_lex, ltk.
+      REAP cut FROM substring, text, 0, LEN(text) - LEN(lt_lx).
+      SET fin TO fin + lt_lx.
+      SET fin TO cut + fin.
+    /IF.
+    IF ttail IS "\")",
+      SET fin TO fin + text.
+    /IF.
+  /IF.
+  IF lt_ty ISNT "IDENT",
+    SET fin TO fin + text.
+  /IF.
+  SET fin TO fin + ", ".
+  SET fin TO fin + nfld.
+  SET fin TO fin + ")".
+  GIVE plant_list_make(3, "1", fin, p3).
+/ACTION.
+
 ACTION collect_value(tokens(LIST), start(NUM)),
   CREATE text(TX) TO "".
   CREATE p2(NUM) TO start.
@@ -538,6 +604,20 @@ ACTION collect_value(tokens(LIST), start(NUM)),
     IF tt IS "STRING" OR tt IS "INTERP",
       REAP lx FROM escape_string, lx.
       SET lx TO "\"" + lx + "\"".
+    /IF.
+    # v0.49.10 — a dot followed by a field name (see
+    # parse_field_access) extends the value; otherwise a depth-0
+    # dot still terminates the statement
+    IF lx IS "." AND text > "",
+      REAP fpp FROM parse_field_access, tokens, p2, text, _from_long(depth).
+      REAP fpf FROM _first, fpp.
+      IF fpf IS "1",
+        REAP fpt FROM _second, fpp.
+        REAP fpp2 FROM _third, fpp.
+        SET text TO fpt.
+        SET p2 TO fpp2.
+        CONTINUE 0.
+      /IF.
     /IF.
     IF lx IS "." AND depth IS 0,
       REAP cpair FROM consume, tokens, p2.
@@ -605,6 +685,18 @@ ACTION collect_until(tokens(LIST), start(NUM), delim(TX)),
     /IF.
     IF _cat("", lx) IS _cat("", delim) AND depth IS 0,
       GIVE plant_list_make(2, text, p2).
+    /IF.
+    # v0.49.10 — field access before a delimiter/terminator dot
+    IF lx IS "." AND text > "",
+      REAP fpp FROM parse_field_access, tokens, p2, text, _from_long(depth).
+      REAP fpf FROM _first, fpp.
+      IF fpf IS "1",
+        REAP fpt FROM _second, fpp.
+        REAP fpp2 FROM _third, fpp.
+        SET text TO fpt.
+        SET p2 TO fpp2.
+        CONTINUE 0.
+      /IF.
     /IF.
     IF lx IS "(",
       SET depth TO depth + 1.
@@ -1661,11 +1753,16 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
     REAP ex_ty FROM tok_type, ex_tok.
     IF ex_ty ISNT "COLON" AND ex_lx ISNT "," AND ex_lx ISNT "[",
       # bare name followed by "." is a legacy zero-arg call
-      # (action or module function) — never an expression
+      # (action or module function) — never an expression; unless
+      # the dot opens a field access (a.b), which is an expression
       CREATE bare_call(TX) TO "0".
       IF act_ty IS "IDENT",
         IF ex_lx IS ".",
-          SET bare_call TO "1".
+          REAP fchk FROM parse_field_access, tokens, p5, act_name, "0".
+          REAP fchk0 FROM _first, fchk.
+          IF fchk0 ISNT "1",
+            SET bare_call TO "1".
+          /IF.
         /IF.
       /IF.
       IF bare_call ISNT "1",
@@ -1798,6 +1895,19 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
         SET alx TO "\"" + alx + "\"".
       /IF.
       IF alx IS "," AND adepth IS 0, BREAK 0. /IF.
+      # v0.49.10 — field access extends the arg text before the
+      # comma/dot/close splits it (REAP x FROM f, a.b.)
+      IF alx IS "." AND arg_text > "",
+        REAP fpp FROM parse_field_access, tokens, p5, arg_text, _from_long(adepth).
+        REAP fpf FROM _first, fpp.
+        IF fpf IS "1",
+          REAP fpt FROM _second, fpp.
+          REAP fpp2 FROM _third, fpp.
+          SET arg_text TO fpt.
+          SET p5 TO fpp2.
+          CONTINUE 0.
+        /IF.
+      /IF.
       IF alx IS "." AND adepth IS 0, BREAK 0. /IF.
       # ")" at depth 0 closes an enclosing closure block body
       IF alx IS ")" AND adepth IS 0, BREAK 0. /IF.
@@ -3005,6 +3115,18 @@ ACTION collect_until_keyword(tokens(LIST), start(NUM), kws(LIST)),
     /SEASON.
     IF kw_hit IS "1",
       GIVE plant_list_make(2, text, p2).
+    /IF.
+    # v0.49.10 — field access before a keyword terminator
+    IF lx IS "." AND text > "",
+      REAP fpp FROM parse_field_access, tokens, p2, text, _from_long(depth).
+      REAP fpf FROM _first, fpp.
+      IF fpf IS "1",
+        REAP fpt FROM _second, fpp.
+        REAP fpp2 FROM _third, fpp.
+        SET text TO fpt.
+        SET p2 TO fpp2.
+        CONTINUE 0.
+      /IF.
     /IF.
     IF lx IS "(", SET depth TO depth + 1. /IF.
     IF lx IS ")", SET depth TO depth - 1. /IF.
@@ -5009,7 +5131,7 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
     # whole; the elements get their own concat handling in _enc_el).
     SEASON i < LEN(expr),
         REAP ch FROM char_at, expr, i.
-        IF ch IS "\"", SET instr TO 1 - instr. SET has_str TO 1. /IF.
+        IF ch IS "\"", SET instr TO 1 - instr. /IF.
         IF instr IS 1 AND ch IS "\\", SET i TO i + 1. /IF.
         IF instr IS 0 AND (ch IS "(" OR ch IS "[" OR ch IS "{"), SET depth TO depth + 1. /IF.
         IF instr IS 0 AND (ch IS ")" OR ch IS "]" OR ch IS "}"), SET depth TO depth - 1. /IF.
@@ -5026,6 +5148,49 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
     /SEASON.
     REAP seg FROM substring, expr, start, LEN(expr).
     IF (COUNT parts) IS 0, GIVE expr. /IF.
+    # v0.49.10 — has_str is a top-level string-literal segment, not
+    # any quote in the text: the field-name strings inside
+    # _map_get(...) segments (parser-emitted a.b.c lookups) must not
+    # force the _cat path when a numeric literal is also present
+    # (m.count + 1 is long arithmetic)
+    CREATE hp9(NUM) TO 0.
+    CREATE hseg(TX) TO "".
+    CREATE hqb(NUM) TO 0.
+    CREATE hqc(TX) TO "".
+    CREATE hp1(TX) TO "".
+    # a top-level segment is a string when it starts with a quote
+    # ("x=" + m.name) or carries quotes inside a call (interp
+    # results like _cat3("", s, "")), but NOT when it is a
+    # parser-emitted field lookup — m.count + 1 stays arithmetic
+    # (the raw path wraps those in _to_long)
+    SEASON hp9 < COUNT parts,
+        REAP hseg FROM plant_list_get, parts, hp9.
+        REAP hp0 FROM substring, hseg, 0, 1.
+        IF hp0 IS "\"", SET has_str TO 1. /IF.
+        REAP hp1 FROM substring, hseg, 0, 9.
+        IF hp1 ISNT "_map_get(",
+            SET hqb TO 0.
+            SEASON hqb < LEN(hseg),
+                REAP hqc FROM char_at, hseg, hqb.
+                IF hqc IS "\"", SET has_str TO 1. /IF.
+                SET hqb TO hqb + 1.
+            /SEASON.
+        /IF.
+        SET hp9 TO hp9 + 1.
+    /SEASON.
+    # the tail segment after the final " + " lives in seg, not in
+    # parts — it must count as a top-level string literal too
+    REAP sp0 FROM substring, seg, 0, 1.
+    IF sp0 IS "\"", SET has_str TO 1. /IF.
+    REAP sp1 FROM substring, seg, 0, 9.
+    IF sp1 ISNT "_map_get(",
+        SET hqb TO 0.
+        SEASON hqb < LEN(seg),
+            REAP hqc FROM char_at, seg, hqb.
+            IF hqc IS "\"", SET has_str TO 1. /IF.
+            SET hqb TO hqb + 1.
+        /SEASON.
+    /IF.
     # genuine numeric literal present (digit outside identifiers, e.g.
     # "1" in "p5 + 1") and no quoted string → raw numeric C "+", the
     # v0.48.3 shortcut REAP'd index vars (tx_t holding bit patterns)
@@ -5042,7 +5207,40 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
     REAP hl9 FROM seg_has_literal_digit, seg.
     IF hl9 IS 1, SET has_lit TO 1. /IF.
     IF has_str IS 0 AND has_lit IS 1,
-        GIVE strings_REPLACE(expr, " + ", "+").
+        # v0.49.10 — field-access segments (parser-emitted
+        # _map_get(...) calls) are tx_t lookups; a numeric literal
+        # elsewhere in the chain makes it arithmetic, so each
+        # top-level field segment wraps in _to_long before the raw
+        # "+" shortcut (n + 1 stays long arithmetic; n + s stays _cat)
+        CREATE wparts(LIST) TO plant_list_make(0).
+        CREATE wi2(NUM) TO 0.
+        CREATE wseg(TX) TO "".
+        SEASON wi2 < COUNT parts,
+            REAP wseg FROM plant_list_get, parts, wi2.
+            REAP wp0 FROM substring, wseg, 0, 9.
+            IF wp0 IS "_map_get(",
+                SET wseg TO "_to_long(" + wseg + ")".
+            /IF.
+            PUT wseg INTO wparts.
+            SET wi2 TO wi2 + 1.
+        /SEASON.
+        REAP wp0 FROM substring, seg, 0, 9.
+        IF wp0 IS "_map_get(",
+            SET seg TO "_to_long(" + seg + ")".
+        /IF.
+        PUT seg INTO wparts.
+        # digit-free vars: the stale bootstrap compiler takes its
+        # has_digit raw-+ shortcut on pure var+var concatenations
+        CREATE wres(TX) TO "".
+        CREATE wi3(NUM) TO 0.
+        CREATE wsegb(TX) TO "".
+        SEASON wi3 < COUNT wparts,
+            REAP wsegb FROM plant_list_get, wparts, wi3.
+            IF wres > "", SET wres TO wres + " + ". /IF.
+            SET wres TO wres + wsegb.
+            SET wi3 TO wi3 + 1.
+        /SEASON.
+        GIVE strings_REPLACE(wres, " + ", "+").
     /IF.
     # no genuine literal: ambiguous — every segment verifiably numeric
     # (digit literal, NUM/FACT var in nums, known numeric-returning
@@ -6698,10 +6896,24 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF actx IS "a",
             GIVE isel + "  " + target + " = " + cval + ";\n".
         /IF.
+        # v0.49.10 — a field-access CREATE value (parser-emitted
+        # _map_get(...) text) is a tx_t lookup: wrap in _to_long so
+        # numeric targets keep C arithmetic. Other non-numeric
+        # values (raw-position REAP targets, strings) pass through
+        # unchanged — they already carry C-long bits or are user
+        # errors (v0.49.10).
+        REAP isnc2 FROM expr_is_numeric, cval, nums.
+        REAP fw0 FROM substring, cval, 0, 9.
         IF vtype IS "NUM",
+            IF isnc2 IS 0 AND fw0 IS "_map_get(",
+                SET cval TO "_to_long(" + cval + ")".
+            /IF.
             GIVE isel + "  long " + target + " = " + cval + ";\n".
         /IF.
         IF vtype IS "FACT",
+            IF isnc2 IS 0 AND fw0 IS "_map_get(",
+                SET cval TO "_to_long(" + cval + ")".
+            /IF.
             GIVE isel + "  int " + target + " = " + cval + ";\n".
         /IF.
         IF vtype IS "LIST",
@@ -6841,6 +7053,18 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             REAP in3 FROM is_numeric_type, rty.
             IF in3 IS 1,
                 SET cval TO "_from_long(" + cval + ")".
+            /IF.
+        /IF.
+        # v0.49.10 — GIVE of a field-access value (parser-emitted
+        # _map_get(...) text) from a NUM/FACT action: numeric
+        # returns are C longs, so the text lookup converts with
+        # _to_long (mirrors the CREATE wrap; other non-numeric
+        # values pass through unchanged)
+        IF isn3 IS 0 AND rty ISNT "",
+            REAP in3 FROM is_numeric_type, rty.
+            REAP fw1 FROM substring, cval, 0, 9.
+            IF in3 IS 1 AND snm3 IS "" AND fw1 IS "_map_get(",
+                SET cval TO "_to_long(" + cval + ")".
             /IF.
         /IF.
         REAP isel FROM indent_str, indent.
@@ -10884,7 +11108,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.49.9 (pure native)".
+  SHOW "Chloroplast 0.49.10 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.
