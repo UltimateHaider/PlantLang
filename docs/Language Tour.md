@@ -531,6 +531,36 @@ Runtime helpers: `_from_long(n)` (number → text), `_to_long(s)` (text →
 number), `LEN(s)` (string length), `_cat(a, b)` (concat). Module-style
 calls also exist: `strings:LENGTH`, `strings:REPLACE`, `strings:SPLIT`.
 
+#### Bare String Built-ins (v0.49.13)
+
+Six string utilities are first-class expression built-ins — no
+`strings:` module prefix required. They accept string literals,
+variables, and nested built-in calls in any value position (REAP, SHOW,
+SET):
+
+```
+REAP i  FROM INCLUDES("hello world", "lo wo").   # → 1  (substring present)
+REAP i2 FROM INCLUDES("hello", "xyz").           # → 0  (absent)
+REAP s  FROM STARTS_WITH("hello", "he").         # → 1  (prefix match)
+REAP s2 FROM STARTS_WITH("hello", "lo").         # → 0
+REAP e  FROM ENDS_WITH("hello", "llo").          # → 1  (suffix match)
+REAP e2 FROM ENDS_WITH("hello", "hel").          # → 0
+REAP r  FROM REPEAT("ab", 3).                    # → "ababab"
+REAP r2 FROM REPEAT("x", 0).                     # → ""   (count <= 0)
+REAP p  FROM PAD("x", 5, ".").                   # → "x...."  (right-pad)
+REAP p2 FROM PAD("hello", 3, ".").               # → "hello"  (at/over length)
+REAP q  FROM PAD_LEFT("ab", 4, "-").             # → "--ab"   (left-pad)
+SHOW PAD_LEFT(REPEAT("y", 2), 4, "_").           # → "__yy"   (nested)
+```
+
+All six return text: the three predicates (`INCLUDES`, `STARTS_WITH`,
+`ENDS_WITH`) return `"1"`/`"0"`; `REPEAT` with `count <= 0` (or an empty
+input) returns `""`; `PAD`/`PAD_LEFT` pass the input through unchanged
+when it already meets the target length. Counts and lengths are numeric
+literals or numeric helpers — pass numeric *values* through the
+`strings:` module forms (`strings:REPEAT, s, n`) when the count comes
+from a `TX`-typed variable. The `strings:` forms remain fully supported.
+
 ---
 
 ## Closures (v0.48.2)

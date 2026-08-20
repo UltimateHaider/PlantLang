@@ -38,6 +38,13 @@ ACTION is_keyword(wrd(TX)),
   IF wrd IS "IN", GIVE TRUE. /IF.
   IF wrd IS "SPLIT", GIVE TRUE. /IF.
   IF wrd IS "JOIN", GIVE TRUE. /IF.
+  # v0.49.13 — bare string built-ins.
+  IF wrd IS "INCLUDES", GIVE TRUE. /IF.
+  IF wrd IS "STARTS_WITH", GIVE TRUE. /IF.
+  IF wrd IS "ENDS_WITH", GIVE TRUE. /IF.
+  IF wrd IS "REPEAT", GIVE TRUE. /IF.
+  IF wrd IS "PAD", GIVE TRUE. /IF.
+  IF wrd IS "PAD_LEFT", GIVE TRUE. /IF.
   IF wrd IS "ENUM", GIVE TRUE. /IF.
   IF wrd IS "CONST", GIVE TRUE. /IF.
   IF wrd IS "ROOT", GIVE TRUE. /IF.
@@ -105,6 +112,13 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "IN", GIVE "IN". /IF.
   IF wrd IS "SPLIT", GIVE "SPLIT". /IF.
   IF wrd IS "JOIN", GIVE "JOIN". /IF.
+  # v0.49.13 — bare string built-ins.
+  IF wrd IS "INCLUDES", GIVE "INCLUDES". /IF.
+  IF wrd IS "STARTS_WITH", GIVE "STARTS_WITH". /IF.
+  IF wrd IS "ENDS_WITH", GIVE "ENDS_WITH". /IF.
+  IF wrd IS "REPEAT", GIVE "REPEAT". /IF.
+  IF wrd IS "PAD", GIVE "PAD". /IF.
+  IF wrd IS "PAD_LEFT", GIVE "PAD_LEFT". /IF.
   IF wrd IS "ENUM", GIVE "ENUM". /IF.
   IF wrd IS "CONST", GIVE "CONST". /IF.
   IF wrd IS "ROOT", GIVE "ROOT". /IF.

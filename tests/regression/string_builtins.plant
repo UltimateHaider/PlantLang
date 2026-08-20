@@ -1,0 +1,74 @@
+# v0.49.13 — bare string built-ins: INCLUDES, STARTS_WITH,
+# ENDS_WITH, REPEAT, PAD (right), PAD_LEFT. These are first-class
+# expression built-ins now — no strings: module prefix required.
+# Edge cases mirror tests/regression/string_full.plant: empty
+# strings, single characters, zero-iteration repetition, padding
+# where the target length is below the input length, and nesting.
+ACTION main(),
+  SHOW "== includes ==".
+  REAP i1 FROM INCLUDES("hello world", "lo wo").
+  SHOW i1.
+  REAP i2 FROM INCLUDES("hello", "xyz").
+  SHOW i2.
+  REAP i3 FROM INCLUDES("hello", "").
+  SHOW i3.
+  REAP i4 FROM INCLUDES("", "x").
+  SHOW i4.
+  REAP i5 FROM INCLUDES("a", "a").
+  SHOW i5.
+  SHOW "== starts_with ==".
+  REAP s1 FROM STARTS_WITH("hello", "he").
+  SHOW s1.
+  REAP s2 FROM STARTS_WITH("hello", "lo").
+  SHOW s2.
+  REAP s3 FROM STARTS_WITH("hello", "").
+  SHOW s3.
+  REAP s4 FROM STARTS_WITH("", "h").
+  SHOW s4.
+  SHOW "== ends_with ==".
+  REAP e1 FROM ENDS_WITH("hello", "llo").
+  SHOW e1.
+  REAP e2 FROM ENDS_WITH("hello", "hel").
+  SHOW e2.
+  REAP e3 FROM ENDS_WITH("hello", "").
+  SHOW e3.
+  REAP e4 FROM ENDS_WITH("", "o").
+  SHOW e4.
+  SHOW "== repeat ==".
+  REAP x1 FROM REPEAT("ab", 3).
+  SHOW x1.
+  REAP x2 FROM REPEAT("x", 0).
+  SHOW "[" + x2 + "]".
+  REAP x3 FROM REPEAT("x", 1).
+  SHOW x3.
+  REAP x4 FROM REPEAT("", 5).
+  SHOW "[" + x4 + "]".
+  REAP x5 FROM REPEAT("12", 4).
+  SHOW x5.
+  SHOW "== pad (right) ==".
+  REAP p1 FROM PAD("x", 5, ".").
+  SHOW p1.
+  REAP p2 FROM PAD("hello", 3, ".").
+  SHOW p2.
+  REAP p3 FROM PAD("ab", 4, "-").
+  SHOW p3.
+  REAP p4 FROM PAD("ok", 2, ".").
+  SHOW p4.
+  SHOW "== pad_left ==".
+  REAP q1 FROM PAD_LEFT("x", 5, ".").
+  SHOW q1.
+  REAP q2 FROM PAD_LEFT("hello", 3, ".").
+  SHOW q2.
+  REAP q3 FROM PAD_LEFT("ab", 4, "-").
+  SHOW q3.
+  SHOW "== expression positions ==".
+  SHOW "[" + INCLUDES("abcd", "bc") + "]".
+  REAP t FROM REPEAT("z", 2).
+  SHOW t.
+  SHOW PAD("a", 3, "*").
+  SHOW PAD_LEFT(REPEAT("y", 2), 4, "_").
+  SHOW STARTS_WITH("prefix!", "pre").
+  SHOW ENDS_WITH("suffix", "fix").
+  SHOW "done".
+  GIVE 0.
+/GIVE main.

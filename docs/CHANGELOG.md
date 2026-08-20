@@ -1,5 +1,46 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.49.13 — 2026 (Bare String Built-ins)
+
+### Language
+- **Bare string built-ins**: `INCLUDES`, `STARTS_WITH`, `ENDS_WITH`,
+  `REPEAT`, `PAD`, and `PAD_LEFT` are now first-class expression
+  built-ins — callable without the `strings:` module prefix:
+  - `INCLUDES(text, sub)` → `string_includes` — `"1"` when `text`
+    contains `sub` (empty `sub` always matches), else `"0"`.
+  - `STARTS_WITH(text, pre)` → `string_starts_with` — `"1"` when `text`
+    starts with `pre`, else `"0"`.
+  - `ENDS_WITH(text, suf)` → `string_ends_with` — `"1"` when `text`
+    ends with `suf`, else `"0"`.
+  - `REPEAT(text, count)` → `string_repeat` — `text` repeated `count`
+    times (`count <= 0` yields `""`).
+  - `PAD(text, length, pad_char)` → `string_pad` — right-pad `text` to
+    `length` with `pad_char` (passthrough when already at/over length).
+  - `PAD_LEFT(text, length, pad_char)` → `string_pad_left` — left-pad
+    `text` to `length` with `pad_char`.
+- The six names are registered as lexer keywords
+  (`is_keyword`/`keyword_to_type` in `src/plantc/lexer.plant`), recognized
+  by the REAP general-expression classification (`is_reap_builtin` in
+  `src/plantc/parser.plant`), and translated in `_handle_func_paren`
+  (`src/plantc/codegen_c.plant`). They work in REAP, SHOW, and SET value
+  positions, including nested calls (`PAD_LEFT(REPEAT("y", 2), 4, "_")`).
+- Backward compatible: the module-qualified forms (`strings:REPEAT`, ...)
+  remain fully supported and unchanged.
+
+### Tests
+- New `tests/regression/string_builtins.plant` (+ `.expected`): bare-form
+  coverage of all six built-ins with edge cases (empty strings, empty
+  substring/suffix/prefix, zero-iteration repetition, target length below
+  input length) plus expression-position and nested-call checks.
+
+### Internal
+- Version marker moved to v0.49.13 (`Makefile`,
+  `src/plantc/main.plant` version banner,
+  `tests/native/run_native_tests.sh` check).
+- Verification: regression 157/157, native 20/20, generics 7/7, closures
+  6/6, `make self` converged. CI-equivalent commands
+  (`make all && make self && make test`) pass on the v0.49.13 HEAD.
+
 ## v0.49.12 — 2026 (Infrastructure & Developer Experience)
 
 ### Infrastructure

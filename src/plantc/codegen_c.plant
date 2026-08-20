@@ -2703,6 +2703,16 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     # through _handle_func_paren; string and list arguments both
     # arrive as expressions, the runtime dispatches on the value.
     REAP e FROM _handle_func_paren, e, "SLICE", "plant_slice".
+    # v0.49.13 — bare string built-ins: INCLUDES / STARTS_WITH /
+    # ENDS_WITH / REPEAT / PAD / PAD_LEFT map through the paren
+    # mapper straight to their runtime helpers; the strings:
+    # module-qualified forms remain fully supported.
+    REAP e FROM _handle_func_paren, e, "INCLUDES", "string_includes".
+    REAP e FROM _handle_func_paren, e, "STARTS_WITH", "string_starts_with".
+    REAP e FROM _handle_func_paren, e, "ENDS_WITH", "string_ends_with".
+    REAP e FROM _handle_func_paren, e, "REPEAT", "string_repeat".
+    REAP e FROM _handle_func_paren, e, "PAD", "string_pad".
+    REAP e FROM _handle_func_paren, e, "PAD_LEFT", "string_pad_left".
     # v0.48.38k — VEIN resource management: TAP / INFUSE use the
     # paren form; ABSORB / SEAL accept both the paren form (used by
     # the test suite) and the space form (the _handle_func pattern).

@@ -1,0 +1,39 @@
+== includes ==
+1
+0
+1
+0
+1
+== starts_with ==
+1
+0
+1
+0
+== ends_with ==
+1
+0
+1
+0
+== repeat ==
+ababab
+[]
+x
+[]
+12121212
+== pad (right) ==
+x....
+hello
+ab--
+ok
+== pad_left ==
+....x
+hello
+--ab
+== expression positions ==
+[1]
+zz
+a**
+__yy
+1
+1
+done

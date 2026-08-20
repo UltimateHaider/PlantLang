@@ -310,6 +310,24 @@ tx_t is_keyword(tx_t wrd) {
     if (strcmp(wrd,"JOIN") == 0) {
         return 1;
     }
+    if (strcmp(wrd,"INCLUDES") == 0) {
+        return 1;
+    }
+    if (strcmp(wrd,"STARTS_WITH") == 0) {
+        return 1;
+    }
+    if (strcmp(wrd,"ENDS_WITH") == 0) {
+        return 1;
+    }
+    if (strcmp(wrd,"REPEAT") == 0) {
+        return 1;
+    }
+    if (strcmp(wrd,"PAD") == 0) {
+        return 1;
+    }
+    if (strcmp(wrd,"PAD_LEFT") == 0) {
+        return 1;
+    }
     if (strcmp(wrd,"ENUM") == 0) {
         return 1;
     }
@@ -498,6 +516,24 @@ tx_t keyword_to_type(tx_t wrd) {
     }
     if (strcmp(wrd,"JOIN") == 0) {
         return "JOIN";
+    }
+    if (strcmp(wrd,"INCLUDES") == 0) {
+        return "INCLUDES";
+    }
+    if (strcmp(wrd,"STARTS_WITH") == 0) {
+        return "STARTS_WITH";
+    }
+    if (strcmp(wrd,"ENDS_WITH") == 0) {
+        return "ENDS_WITH";
+    }
+    if (strcmp(wrd,"REPEAT") == 0) {
+        return "REPEAT";
+    }
+    if (strcmp(wrd,"PAD") == 0) {
+        return "PAD";
+    }
+    if (strcmp(wrd,"PAD_LEFT") == 0) {
+        return "PAD_LEFT";
     }
     if (strcmp(wrd,"ENUM") == 0) {
         return "ENUM";
@@ -2902,7 +2938,7 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
   return parse_reap_stmt;
 }
 tx_t is_reap_builtin(tx_t name) {
-    if (strcmp(name,"LEN") == 0 || strcmp(name,"JOIN") == 0 || strcmp(name,"FIRST") == 0 || strcmp(name,"LAST") == 0 || strcmp(name,"SUM") == 0 || strcmp(name,"UPPER") == 0 || strcmp(name,"LOWER") == 0 || strcmp(name,"TRIM") == 0 || strcmp(name,"REVERSE") == 0 || strcmp(name,"ABS") == 0 || strcmp(name,"ROUND") == 0 || strcmp(name,"POW") == 0 || strcmp(name,"CEIL") == 0 || strcmp(name,"FLOOR") == 0 || strcmp(name,"RANDOM") == 0 || strcmp(name,"SIN") == 0 || strcmp(name,"COS") == 0 || strcmp(name,"SQRT") == 0 || strcmp(name,"HAS") == 0 || strcmp(name,"ANY") == 0 || strcmp(name,"ALL") == 0 || strcmp(name,"PICK") == 0 || strcmp(name,"FIND") == 0 || strcmp(name,"COUNT_OF") == 0 || strcmp(name,"SLICE") == 0 || strcmp(name,"TAP") == 0 || strcmp(name,"INFUSE") == 0 || strcmp(name,"ABSORB") == 0 || strcmp(name,"SEAL") == 0 || strcmp(name,"TEST") == 0 || strcmp(name,"COUNT") == 0 || strcmp(name,"NOW") == 0 || strcmp(name,"ANALYZE") == 0 || strcmp(name,"TYPEOF") == 0) {
+    if (strcmp(name,"LEN") == 0 || strcmp(name,"JOIN") == 0 || strcmp(name,"FIRST") == 0 || strcmp(name,"LAST") == 0 || strcmp(name,"SUM") == 0 || strcmp(name,"UPPER") == 0 || strcmp(name,"LOWER") == 0 || strcmp(name,"TRIM") == 0 || strcmp(name,"REVERSE") == 0 || strcmp(name,"ABS") == 0 || strcmp(name,"ROUND") == 0 || strcmp(name,"POW") == 0 || strcmp(name,"CEIL") == 0 || strcmp(name,"FLOOR") == 0 || strcmp(name,"RANDOM") == 0 || strcmp(name,"SIN") == 0 || strcmp(name,"COS") == 0 || strcmp(name,"SQRT") == 0 || strcmp(name,"HAS") == 0 || strcmp(name,"ANY") == 0 || strcmp(name,"ALL") == 0 || strcmp(name,"PICK") == 0 || strcmp(name,"FIND") == 0 || strcmp(name,"COUNT_OF") == 0 || strcmp(name,"SLICE") == 0 || strcmp(name,"TAP") == 0 || strcmp(name,"INFUSE") == 0 || strcmp(name,"ABSORB") == 0 || strcmp(name,"SEAL") == 0 || strcmp(name,"TEST") == 0 || strcmp(name,"COUNT") == 0 || strcmp(name,"NOW") == 0 || strcmp(name,"ANALYZE") == 0 || strcmp(name,"TYPEOF") == 0 || strcmp(name,"INCLUDES") == 0 || strcmp(name,"STARTS_WITH") == 0 || strcmp(name,"ENDS_WITH") == 0 || strcmp(name,"REPEAT") == 0 || strcmp(name,"PAD") == 0 || strcmp(name,"PAD_LEFT") == 0) {
         return "1";
     }
     return "0";
@@ -7935,6 +7971,12 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars) {
     e = _handle_func_paren(e, "FIND", "plant_find");
     e = _handle_func_paren(e, "COUNT_OF", "plant_count_of");
     e = _handle_func_paren(e, "SLICE", "plant_slice");
+    e = _handle_func_paren(e, "INCLUDES", "string_includes");
+    e = _handle_func_paren(e, "STARTS_WITH", "string_starts_with");
+    e = _handle_func_paren(e, "ENDS_WITH", "string_ends_with");
+    e = _handle_func_paren(e, "REPEAT", "string_repeat");
+    e = _handle_func_paren(e, "PAD", "string_pad");
+    e = _handle_func_paren(e, "PAD_LEFT", "string_pad_left");
     e = _handle_func_paren(e, "TAP", "plant_tap");
     e = _handle_func_paren(e, "INFUSE", "plant_infuse");
     e = _handle_func_paren(e, "ABSORB", "plant_absorb");
@@ -12466,7 +12508,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.12 (pure native)");
+      plant_print("Chloroplast 0.49.13 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);
