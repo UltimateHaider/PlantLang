@@ -355,6 +355,11 @@ ACTION scan_tokens(src(TX)),
   CREATE i(NUM) TO 0.
   CREATE n(NUM) TO LEN(src).
   CREATE ch(TX) TO "".
+  # v0.49.11 — line_start marks the first token on each line (3rd
+  # element of the token pair); parse_field_access uses it to tell a
+  # chain dot from a statement-terminator dot followed by a new
+  # statement (m.name. / m.put(...) must not merge into one chain)
+  CREATE line_start(NUM) TO 1.
 
   SEASON i < n,
     REAP ch FROM char_at, src, i.
@@ -365,6 +370,7 @@ ACTION scan_tokens(src(TX)),
 
     # Newline
     IF ch IS "\n", SET i TO i + 1. /IF.
+    IF ch IS "\n", SET line_start TO 1. /IF.
     IF ch IS "\n", CONTINUE. /IF.
 
     # Comment
@@ -372,16 +378,20 @@ ACTION scan_tokens(src(TX)),
     IF ch IS "#", SET i TO si. /IF.
     IF ch IS "#", CONTINUE. /IF.
 
+    # any token emitted this iteration opens the line?
+    CREATE ls0(NUM) TO line_start.
+    SET line_start TO 0.
+
     # String literal (with ${...} interpolation, v0.48.22-patch2)
     IF ch IS "\"", REAP si FROM match_string_i, src, i, n. /IF.
-    IF ch IS "\"", IF si[2] IS 1, PUT plant_list_make(2, "INTERP", si[0]) INTO tokens. /IF. /IF.
-    IF ch IS "\"", IF si[2] ISNT 1, PUT plant_list_make(2, "STRING", si[0]) INTO tokens. /IF. /IF.
+    IF ch IS "\"", IF si[2] IS 1, PUT plant_list_make(3, "INTERP", si[0], _from_long(ls0)) INTO tokens. /IF. /IF.
+    IF ch IS "\"", IF si[2] ISNT 1, PUT plant_list_make(3, "STRING", si[0], _from_long(ls0)) INTO tokens. /IF. /IF.
     IF ch IS "\"", SET i TO si[1]. /IF.
     IF ch IS "\"", CONTINUE. /IF.
 
     # Number
     IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", REAP si FROM match_number, src, i, n. /IF.
-    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", PUT plant_list_make(2, "NUMBER", si[0]) INTO tokens. /IF.
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", PUT plant_list_make(3, "NUMBER", si[0], _from_long(ls0)) INTO tokens. /IF.
     IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", SET i TO si[1]. /IF.
     IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", CONTINUE. /IF.
 
@@ -389,61 +399,61 @@ ACTION scan_tokens(src(TX)),
     REAP ok FROM is_alpha_start, ch.
     IF ok, REAP si FROM match_ident_or_keyword, src, i, n. /IF.
     IF ok, REAP tok_ty FROM keyword_to_type, si[0]. /IF.
-    IF ok, PUT plant_list_make(2, tok_ty, si[0]) INTO tokens. /IF.
+    IF ok, PUT plant_list_make(3, tok_ty, si[0], _from_long(ls0)) INTO tokens. /IF.
     IF ok, SET i TO si[1]. /IF.
     IF ok, CONTINUE. /IF.
 
     # DOT_DOT
     IF ch IS "." AND i + 1 < n AND char_at(src, i + 1) IS ".",
-      PUT plant_list_make(2, "DOT_DOT", "..") INTO tokens.
+      PUT plant_list_make(3, "DOT_DOT", "..", _from_long(ls0)) INTO tokens.
       SET i TO i + 2.
       CONTINUE.
     /IF.
 
     # ARROW
     IF ch IS "-" AND i + 1 < n AND char_at(src, i + 1) IS ">",
-      PUT plant_list_make(2, "ARROW", "->") INTO tokens.
+      PUT plant_list_make(3, "ARROW", "->", _from_long(ls0)) INTO tokens.
       SET i TO i + 2.
       CONTINUE.
     /IF.
 
     # Combined comparisons >= <= == !=
     IF ch IS ">" AND i + 1 < n AND char_at(src, i + 1) IS "=",
-      PUT plant_list_make(2, "GREATER", ">=") INTO tokens.
+      PUT plant_list_make(3, "GREATER", ">=", _from_long(ls0)) INTO tokens.
       SET i TO i + 2.
       CONTINUE.
     /IF.
     IF ch IS "<" AND i + 1 < n AND char_at(src, i + 1) IS "=",
-      PUT plant_list_make(2, "LESS", "<=") INTO tokens.
+      PUT plant_list_make(3, "LESS", "<=", _from_long(ls0)) INTO tokens.
       SET i TO i + 2.
       CONTINUE.
     /IF.
     IF ch IS "=" AND i + 1 < n AND char_at(src, i + 1) IS "=",
-      PUT plant_list_make(2, "EQUAL", "==") INTO tokens.
+      PUT plant_list_make(3, "EQUAL", "==", _from_long(ls0)) INTO tokens.
       SET i TO i + 2.
       CONTINUE.
     /IF.
     IF ch IS "!" AND i + 1 < n AND char_at(src, i + 1) IS "=",
-      PUT plant_list_make(2, "BANG", "!=") INTO tokens.
+      PUT plant_list_make(3, "BANG", "!=", _from_long(ls0)) INTO tokens.
       SET i TO i + 2.
       CONTINUE.
     /IF.
 
     # STAR_STAR
     IF ch IS "*" AND i + 1 < n AND char_at(src, i + 1) IS "*",
-      PUT plant_list_make(2, "STAR_STAR", "**") INTO tokens.
+      PUT plant_list_make(3, "STAR_STAR", "**", _from_long(ls0)) INTO tokens.
       SET i TO i + 2.
       CONTINUE.
     /IF.
 
     # Single-char
     REAP tok_ty FROM char_type, ch.
-    IF tok_ty ISNT "", PUT plant_list_make(2, tok_ty, ch) INTO tokens. /IF.
+    IF tok_ty ISNT "", PUT plant_list_make(3, tok_ty, ch, _from_long(ls0)) INTO tokens. /IF.
     IF tok_ty ISNT "", SET i TO i + 1. /IF.
     IF tok_ty ISNT "", CONTINUE. /IF.
 
     # Unknown
-    PUT plant_list_make(2, "ERROR", ch) INTO tokens.
+    PUT plant_list_make(3, "ERROR", ch, _from_long(ls0)) INTO tokens.
     SET i TO i + 1.
   /SEASON.
 

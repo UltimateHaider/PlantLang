@@ -761,6 +761,19 @@ ACTION seg_has_literal_digit(seg(TX)),
   GIVE 0.
 /ACTION.
 
+ACTION is_lookup_prefix(seg(TX)),
+  # v0.49.11 — parser-emitted lookups that carry tx_t (or raw-long)
+  # values and must be coerced in numeric contexts and never treated
+  # as string segments by has_str: v0.49.10 field access (_map_get),
+  # method-call get/pop (plant_map_get/plant_list_pop), and the
+  # _from_long wrapper the parser puts around has() results.
+  IF substring(seg, 0, 9) IS "_map_get(", GIVE "1". /IF.
+  IF substring(seg, 0, 14) IS "plant_map_get(", GIVE "1". /IF.
+  IF substring(seg, 0, 15) IS "plant_list_pop(", GIVE "1". /IF.
+  IF substring(seg, 0, 11) IS "_from_long(", GIVE "1". /IF.
+  GIVE "0".
+/ACTION.
+
 ACTION seg_is_numeric(seg(TX), nums(LIST)),
   REAP sb FROM strings:REPLACE, seg, " ", "".
   IF sb IS "", GIVE 0. /IF.
@@ -1277,8 +1290,7 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
         REAP hseg FROM plant_list_get, parts, hp9.
         REAP hp0 FROM substring, hseg, 0, 1.
         IF hp0 IS "\"", SET has_str TO 1. /IF.
-        REAP hp1 FROM substring, hseg, 0, 9.
-        IF hp1 ISNT "_map_get(",
+        IF is_lookup_prefix(hseg) ISNT "1",
             SET hqb TO 0.
             SEASON hqb < LEN(hseg),
                 REAP hqc FROM char_at, hseg, hqb.
@@ -1292,8 +1304,7 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
     # parts — it must count as a top-level string literal too
     REAP sp0 FROM substring, seg, 0, 1.
     IF sp0 IS "\"", SET has_str TO 1. /IF.
-    REAP sp1 FROM substring, seg, 0, 9.
-    IF sp1 ISNT "_map_get(",
+    IF is_lookup_prefix(seg) ISNT "1",
         SET hqb TO 0.
         SEASON hqb < LEN(seg),
             REAP hqc FROM char_at, seg, hqb.
@@ -1327,15 +1338,13 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
         CREATE wseg(TX) TO "".
         SEASON wi2 < COUNT parts,
             REAP wseg FROM plant_list_get, parts, wi2.
-            REAP wp0 FROM substring, wseg, 0, 9.
-            IF wp0 IS "_map_get(",
+            IF is_lookup_prefix(wseg) IS "1",
                 SET wseg TO "_to_long(" + wseg + ")".
             /IF.
             PUT wseg INTO wparts.
             SET wi2 TO wi2 + 1.
         /SEASON.
-        REAP wp0 FROM substring, seg, 0, 9.
-        IF wp0 IS "_map_get(",
+        IF is_lookup_prefix(seg) IS "1",
             SET seg TO "_to_long(" + seg + ")".
         /IF.
         PUT seg INTO wparts.
@@ -3013,15 +3022,14 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         # unchanged — they already carry C-long bits or are user
         # errors (v0.49.10).
         REAP isnc2 FROM expr_is_numeric, cval, nums.
-        REAP fw0 FROM substring, cval, 0, 9.
         IF vtype IS "NUM",
-            IF isnc2 IS 0 AND fw0 IS "_map_get(",
+            IF isnc2 IS 0 AND is_lookup_prefix(cval) IS "1",
                 SET cval TO "_to_long(" + cval + ")".
             /IF.
             GIVE isel + "  long " + target + " = " + cval + ";\n".
         /IF.
         IF vtype IS "FACT",
-            IF isnc2 IS 0 AND fw0 IS "_map_get(",
+            IF isnc2 IS 0 AND is_lookup_prefix(cval) IS "1",
                 SET cval TO "_to_long(" + cval + ")".
             /IF.
             GIVE isel + "  int " + target + " = " + cval + ";\n".
@@ -3172,8 +3180,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         # values pass through unchanged)
         IF isn3 IS 0 AND rty ISNT "",
             REAP in3 FROM is_numeric_type, rty.
-            REAP fw1 FROM substring, cval, 0, 9.
-            IF in3 IS 1 AND snm3 IS "" AND fw1 IS "_map_get(",
+            IF in3 IS 1 AND snm3 IS "" AND is_lookup_prefix(cval) IS "1",
                 SET cval TO "_to_long(" + cval + ")".
             /IF.
         /IF.
@@ -3509,6 +3516,14 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         GIVE isel + "  plant_async_config(\"" + key + "\", \"" + val + "\");\n".
     /IF.
   
+    # ── emit_stmt: raw C statement text (v0.49.11 — bare method
+    #    calls like l.push("d"). → plant_list_push(l, "d");) ─
+    IF ntype IS "emit_stmt",
+        REAP ec2 FROM _map_get, node, "code".
+        REAP isel FROM indent_str, indent.
+        GIVE isel + ec2 + ";\n".
+    /IF.
+
     # ── call_stmt: bare call for void FFI helpers — reuses the
     #    reap_stmt discard path (target "_") so the call is emitted
     #    with the full ffi/struct/varargs arg handling. ─

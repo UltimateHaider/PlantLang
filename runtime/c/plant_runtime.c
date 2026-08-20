@@ -849,8 +849,22 @@ tx_t plant_map_set(tx_t map, tx_t key, tx_t value) {
     return (tx_t)m;
 }
 
+/* v0.49.11: method-call get — dispatches on representation. The
+   language's pair-list MAPs (PlantArray, PLANT_ARRAY_MAGIC — map
+   literals, plant_list_make pairs) are linear-scanned ("" when
+   missing, matching _map_get); struct/FFI maps (PlantMap hash)
+   use the probe below (NULL when missing, preserving the struct
+   marshalling contract). */
 void* plant_map_get(PlantMap* map, const char* key) {
-    if (!map || !key || map->count == 0) return NULL;
+    if (!map || !key) return NULL;
+    if (((PlantArray*)map)->magic == PLANT_ARRAY_MAGIC) {
+        PlantArray* m = (PlantArray*)map;
+        for (int64_t i = 0; i + 1 < m->count; i += 2) {
+            const char* ok = (const char*)m->items[i];
+            if (ok && strcmp(ok, key) == 0) return m->items[i + 1];
+        }
+        return "";
+    }
     size_t idx = _plant_hash_str(key) & (map->capacity - 1);
     for (size_t i = 0; i < map->capacity; i++) {
         size_t probe = (idx + i) & (map->capacity - 1);
@@ -858,6 +872,25 @@ void* plant_map_get(PlantMap* map, const char* key) {
         if (strcmp(map->entries[probe].key, key) == 0) return map->entries[probe].value;
     }
     return NULL;
+}
+
+int plant_map_has(PlantMap* map, const char* key) {
+    if (!map || !key) return 0;
+    if (((PlantArray*)map)->magic == PLANT_ARRAY_MAGIC) {
+        PlantArray* m = (PlantArray*)map;
+        for (int64_t i = 0; i + 1 < m->count; i += 2) {
+            const char* ok = (const char*)m->items[i];
+            if (ok && strcmp(ok, key) == 0) return 1;
+        }
+        return 0;
+    }
+    size_t idx = _plant_hash_str(key) & (map->capacity - 1);
+    for (size_t i = 0; i < map->capacity; i++) {
+        size_t probe = (idx + i) & (map->capacity - 1);
+        if (!map->entries[probe].occupied) return 0;
+        if (strcmp(map->entries[probe].key, key) == 0) return 1;
+    }
+    return 0;
 }
 
 char** plant_map_keys(PlantMap* map, size_t* out_count) {
@@ -1246,6 +1279,11 @@ PlantArray* plant_list_push(PlantArray* list, void* value) {
     }
     list->items[list->count++] = value;
     return list;
+}
+
+void* plant_list_pop(PlantArray* list) {
+    if (!list || list->count == 0) return "";
+    return list->items[--list->count];
 }
 
 PlantArray* plant_list_make(int64_t count, ...) {

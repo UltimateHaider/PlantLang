@@ -53,6 +53,7 @@ typedef struct PlantMap {
 PlantMap* plant_map_hash_create(size_t initial_capacity);
 void      plant_map_hash_set(PlantMap* map, const char* key, void* value);
 void*     plant_map_get(PlantMap* map, const char* key);
+int       plant_map_has(PlantMap* map, const char* key); /* 1 if present; dispatches on representation */
 char**    plant_map_keys(PlantMap* map, size_t* out_count);
 void      plant_map_free(PlantMap* map);
 
@@ -239,6 +240,7 @@ PlantArray* plant_list_create(int64_t capacity);
 void*       plant_list_get(PlantArray* list, int64_t index);
 void        plant_list_set(PlantArray* list, int64_t index, void* value);
 PlantArray* plant_list_push(PlantArray* list, void* value);
+void*       plant_list_pop(PlantArray* list);   /* removes+returns last element; empty -> "" */
 PlantArray* plant_list_make(int64_t count, ...);
 tx_t        plant_list_add(tx_t list, tx_t value);    /* NULL-safe: instantiate when list is NULL */
 tx_t        plant_list_remove(tx_t list, tx_t value); /* first matching occurrence; NULL/empty no-op */

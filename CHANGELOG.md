@@ -1,5 +1,72 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.49.11 — 2026 (Native Method Calls `a.method(args)`)
+
+### Language
+- **`obj.method(args)` lowers directly to the runtime API.** `IDENT .`
+  followed by a method name and `(` is recognized at parse time
+  (`src/plantc/parser.plant` `parse_method_call`, reached from the
+  `parse_field_access` LPAREN guard) and emits the call inline —
+  no intermediate AST. Method map:
+  `push(x)` → `plant_list_push(obj, x)`,
+  `pop()` → `plant_list_pop(obj)`,
+  `get(k)` → `plant_map_get(obj, k)`,
+  `put(k, v)` → `plant_map_set(obj, k, v)`,
+  `has(k)` → `plant_map_has(obj, k)`.
+  - the receiver selection mirrors field access: a trailing bare
+    `IDENT .` binds to that IDENT only (`"x=" + m.push(v)` emits
+    `_cat("x=", plant_list_push(m, v))`); any other tail (previous
+    emission, indexed expression) takes the whole collected text.
+  - arguments are the collected value up to the closing `)` at depth 0
+    (commas, nesting, field access and nested method calls inside
+    arguments all work); empty argument lists emit no comma
+    (`plant_list_pop(l)`).
+  - `has` is parser-wrapped in `_from_long(...)` so `SHOW m.has(k)`
+    prints text; in arithmetic the numeric wraps in codegen treat
+    `_from_long(` as a lookup prefix (`_to_long(_from_long(...))`).
+  - chained forms compose through the existing `collect_value` loop:
+    `l.push("x").pop()` → `plant_list_pop(plant_list_push(l, "x"))`,
+    `nested.get("pt").get("y")` →
+    `plant_map_get(plant_map_get(nested, "pt"), "y")`,
+    `m.get("x").name` → `_map_get(plant_map_get(m, "x"), "name")`.
+  - unknown method names are rejected at parse time (falls back to the
+    pre-v0.49.11 behavior).
+- **Bare method statements.** `m.put("k", "v").` / `l.push("x").` as a
+  statement is recognized by the statement dispatcher
+  (`IDENT . IDENT (`), collected whole (chains included) and emitted
+  raw via the new `emit_stmt` node (`plant_map_set(m, "k", "v");`).
+- **Line-aware statement termination.** The lexer marks the first token
+  of each line (3rd element of the token pair) and `parse_field_access`
+  refuses to chain onto a line-leading IDENT. A chain never opens a
+  new line, so `SHOW m.name.` followed by `m.put(...)` on the next
+  line stays two statements instead of merging into one expression.
+  (Same-line bare statements after an expression remain ambiguous and
+  chain, as before.)
+- **`plant_map_get`/`plant_map_has` dispatch on representation.**
+  runtime/c/plant_runtime.c: array magic (`PLANT_ARRAY_MAGIC`) → linear
+  pair-list scan returning `""` on miss; PlantMap hash maps → probe
+  (NULL on miss, preserving the FFI-struct marshalling contract).
+  `plant_list_pop` pops the last element (`""` when empty).
+- **Regression:** `tests/regression/method_call.plant` covers
+  get/has/put on map-backed lists, arithmetic (`m.get("count") + 1`),
+  string concat (`"x=" + m.get("name")`), bare mutation statements,
+  `push`/`pop` on lists, chained method-method, nested
+  method-method, and method results feeding index/field positions.
+  156/156 regression tests pass.
+
+### Internal
+- `is_lookup_prefix` (codegen_c.plant) unifies the lookup-prefix test
+  (`_map_get(`, `plant_map_get(`, `plant_list_pop(`, `_from_long(`) —
+  replaces the hardcoded `_map_get(` checks in the has_str exclusions,
+  the raw-`+` `_to_long` wraps and the CREATE/GIVE numeric wraps.
+- Stale-v1 bootstrap constraint: all new emission strings are built in
+  stepwise two-operand concats (no `+` rewrites inside call parens);
+  token flags are passed as `_from_long(ls0)` (plant_list_make varargs
+  read pointers, so a raw NUM would crash the generated C).
+- Version marker moved to v0.49.11 (`Makefile`,
+  `src/plantc/main.plant` version banner,
+  `tests/native/run_native_tests.sh` check).
+
 ## v0.49.10 — 2026 (Native Field Access `a.b.c`)
 
 ### Language

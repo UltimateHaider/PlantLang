@@ -247,6 +247,40 @@ with `_to_long` (so `m.count + 1` is arithmetic); field + field or
 field + string has no literal digit, so it concatenates — field values
 are text lookups.
 
+**Method calls (v0.49.11):** `obj.method(args)` maps directly onto the
+runtime API — no intermediate AST. Recognized methods and their
+lowering: `push(x)` → `plant_list_push(obj, x)`, `pop()` →
+`plant_list_pop(obj)`, `get(k)` → `plant_map_get(obj, k)`,
+`put(k, v)` → `plant_map_set(obj, k, v)`, `has(k)` →
+`plant_map_has(obj, k)` (parser-wrapped in `_from_long(...)` so it
+prints as text; in arithmetic it coerces numerically). Calls work in
+any expression position and chain with field access:
+
+```
+CREATE m(LIST) TO { "name": "root", "count": 7 }.
+SHOW m.get("name").             # → root          (plant_map_get(m, "name"))
+SHOW m.has("name").             # → 1             (plant_map_has)
+SHOW m.get("count") + 1.        # → 8             (numeric coercion)
+m.put("extra", "9").            # bare mutation statement
+SHOW m.get("extra").            # → 9
+CREATE l(LIST) TO ["a", "b", "c"].
+l.push("d").                    # → l is [a b c d]
+SHOW l.pop().                   # → d
+SHOW l.push("x").pop().         # → x             (chained method-method)
+SHOW nested.get("pt").get("y"). # → 9             (nested lookups)
+SHOW m.get("x").name.           # → field into a method result
+```
+
+The receiver is chosen like field access: a trailing bare `IDENT .`
+binds to that IDENT (`"x=" + m.push(v)` → `_cat("x=", plant_list_push(m, v))`);
+other tails take the whole collected expression. `get`/`put`/`has` work
+on map-backed lists (key/value pairs via `plant_list_make` — the count
+is the element count, so two pairs are `plant_list_make(4, ...)`);
+`push`/`pop` work on plain lists. Unknown methods are rejected at
+parse time. Statement separation is line-aware: a chain never opens a
+new line, so `SHOW m.name.` followed by `m.put(...)` on the next line
+stays two statements (lexer marks line-leading tokens).
+
 ### Actions (functions)
 
 ```

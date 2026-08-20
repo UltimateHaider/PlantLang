@@ -1,0 +1,26 @@
+# method_call — v0.49.11: obj.method(args) lowers directly to the
+# runtime API. push→plant_list_push, pop→plant_list_pop,
+# get→plant_map_get, put→plant_map_set, has→plant_map_has. Chained
+# forms (field-method, method-method, method-field, nested) compose
+# through the collect_value loop.
+ACTION main()
+  CREATE m(LIST) TO plant_list_make(4, "name", "root", "count", "7").
+  SHOW m.get("name").
+  SHOW m.has("name").
+  SHOW m.has("missing").
+  m.put("extra", "9").
+  SHOW m.get("extra").
+  SHOW "x=" + m.get("name").
+  SHOW m.get("count") + 1.
+  CREATE l(LIST) TO plant_list_make(3, "a", "b", "c").
+  l.push("d").
+  SHOW l[3].
+  SHOW l.pop().
+  SHOW l.push("x").pop().
+  CREATE nested(LIST) TO plant_list_make(2, "pt", plant_list_make(4, "x", "7", "y", "9")).
+  SHOW nested.get("pt").get("y").
+  SHOW nested.get("pt").y.
+  SHOW nested.get("pt").get("y") + 1.
+  SHOW "end".
+  GIVE 0.
+/ACTION.

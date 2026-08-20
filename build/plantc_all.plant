@@ -355,6 +355,11 @@ ACTION scan_tokens(src(TX)),
   CREATE i(NUM) TO 0.
   CREATE n(NUM) TO LEN(src).
   CREATE ch(TX) TO "".
+  # v0.49.11 — line_start marks the first token on each line (3rd
+  # element of the token pair); parse_field_access uses it to tell a
+  # chain dot from a statement-terminator dot followed by a new
+  # statement (m.name. / m.put(...) must not merge into one chain)
+  CREATE line_start(NUM) TO 1.
 
   SEASON i < n,
     REAP ch FROM char_at, src, i.
@@ -365,6 +370,7 @@ ACTION scan_tokens(src(TX)),
 
     # Newline
     IF ch IS "\n", SET i TO i + 1. /IF.
+    IF ch IS "\n", SET line_start TO 1. /IF.
     IF ch IS "\n", CONTINUE. /IF.
 
     # Comment
@@ -372,16 +378,20 @@ ACTION scan_tokens(src(TX)),
     IF ch IS "#", SET i TO si. /IF.
     IF ch IS "#", CONTINUE. /IF.
 
+    # any token emitted this iteration opens the line?
+    CREATE ls0(NUM) TO line_start.
+    SET line_start TO 0.
+
     # String literal (with ${...} interpolation, v0.48.22-patch2)
     IF ch IS "\"", REAP si FROM match_string_i, src, i, n. /IF.
-    IF ch IS "\"", IF si[2] IS 1, PUT plant_list_make(2, "INTERP", si[0]) INTO tokens. /IF. /IF.
-    IF ch IS "\"", IF si[2] ISNT 1, PUT plant_list_make(2, "STRING", si[0]) INTO tokens. /IF. /IF.
+    IF ch IS "\"", IF si[2] IS 1, PUT plant_list_make(3, "INTERP", si[0], _from_long(ls0)) INTO tokens. /IF. /IF.
+    IF ch IS "\"", IF si[2] ISNT 1, PUT plant_list_make(3, "STRING", si[0], _from_long(ls0)) INTO tokens. /IF. /IF.
     IF ch IS "\"", SET i TO si[1]. /IF.
     IF ch IS "\"", CONTINUE. /IF.
 
     # Number
     IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", REAP si FROM match_number, src, i, n. /IF.
-    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", PUT plant_list_make(2, "NUMBER", si[0]) INTO tokens. /IF.
+    IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", PUT plant_list_make(3, "NUMBER", si[0], _from_long(ls0)) INTO tokens. /IF.
     IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", SET i TO si[1]. /IF.
     IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", CONTINUE. /IF.
 
@@ -389,61 +399,61 @@ ACTION scan_tokens(src(TX)),
     REAP ok FROM is_alpha_start, ch.
     IF ok, REAP si FROM match_ident_or_keyword, src, i, n. /IF.
     IF ok, REAP tok_ty FROM keyword_to_type, si[0]. /IF.
-    IF ok, PUT plant_list_make(2, tok_ty, si[0]) INTO tokens. /IF.
+    IF ok, PUT plant_list_make(3, tok_ty, si[0], _from_long(ls0)) INTO tokens. /IF.
     IF ok, SET i TO si[1]. /IF.
     IF ok, CONTINUE. /IF.
 
     # DOT_DOT
     IF ch IS "." AND i + 1 < n AND char_at(src, i + 1) IS ".",
-      PUT plant_list_make(2, "DOT_DOT", "..") INTO tokens.
+      PUT plant_list_make(3, "DOT_DOT", "..", _from_long(ls0)) INTO tokens.
       SET i TO i + 2.
       CONTINUE.
     /IF.
 
     # ARROW
     IF ch IS "-" AND i + 1 < n AND char_at(src, i + 1) IS ">",
-      PUT plant_list_make(2, "ARROW", "->") INTO tokens.
+      PUT plant_list_make(3, "ARROW", "->", _from_long(ls0)) INTO tokens.
       SET i TO i + 2.
       CONTINUE.
     /IF.
 
     # Combined comparisons >= <= == !=
     IF ch IS ">" AND i + 1 < n AND char_at(src, i + 1) IS "=",
-      PUT plant_list_make(2, "GREATER", ">=") INTO tokens.
+      PUT plant_list_make(3, "GREATER", ">=", _from_long(ls0)) INTO tokens.
       SET i TO i + 2.
       CONTINUE.
     /IF.
     IF ch IS "<" AND i + 1 < n AND char_at(src, i + 1) IS "=",
-      PUT plant_list_make(2, "LESS", "<=") INTO tokens.
+      PUT plant_list_make(3, "LESS", "<=", _from_long(ls0)) INTO tokens.
       SET i TO i + 2.
       CONTINUE.
     /IF.
     IF ch IS "=" AND i + 1 < n AND char_at(src, i + 1) IS "=",
-      PUT plant_list_make(2, "EQUAL", "==") INTO tokens.
+      PUT plant_list_make(3, "EQUAL", "==", _from_long(ls0)) INTO tokens.
       SET i TO i + 2.
       CONTINUE.
     /IF.
     IF ch IS "!" AND i + 1 < n AND char_at(src, i + 1) IS "=",
-      PUT plant_list_make(2, "BANG", "!=") INTO tokens.
+      PUT plant_list_make(3, "BANG", "!=", _from_long(ls0)) INTO tokens.
       SET i TO i + 2.
       CONTINUE.
     /IF.
 
     # STAR_STAR
     IF ch IS "*" AND i + 1 < n AND char_at(src, i + 1) IS "*",
-      PUT plant_list_make(2, "STAR_STAR", "**") INTO tokens.
+      PUT plant_list_make(3, "STAR_STAR", "**", _from_long(ls0)) INTO tokens.
       SET i TO i + 2.
       CONTINUE.
     /IF.
 
     # Single-char
     REAP tok_ty FROM char_type, ch.
-    IF tok_ty ISNT "", PUT plant_list_make(2, tok_ty, ch) INTO tokens. /IF.
+    IF tok_ty ISNT "", PUT plant_list_make(3, tok_ty, ch, _from_long(ls0)) INTO tokens. /IF.
     IF tok_ty ISNT "", SET i TO i + 1. /IF.
     IF tok_ty ISNT "", CONTINUE. /IF.
 
     # Unknown
-    PUT plant_list_make(2, "ERROR", ch) INTO tokens.
+    PUT plant_list_make(3, "ERROR", ch, _from_long(ls0)) INTO tokens.
     SET i TO i + 1.
   /SEASON.
 
@@ -468,6 +478,12 @@ ACTION tok_lex(tok(LIST)),
 
 ACTION tok_type(tok(LIST)),
   GIVE tok[0].
+/ACTION.
+
+ACTION tok_line_leading(tok(LIST)),
+  # v0.49.11 — 3rd element of the lexer token pair marks the first
+  # token on a line ("1"); 2-element tokens ("") are never line-leading
+  GIVE tok[2].
 /ACTION.
 
 ACTION peek(tokens(LIST), pos(NUM)),
@@ -542,13 +558,24 @@ ACTION parse_field_access(tokens(LIST), pos(NUM), text(TX), dpth(TX)),
   REAP flx FROM tok_lex, ftok.
   REAP fty FROM tok_type, ftok.
   IF fty ISNT "IDENT", GIVE plant_list_make(3, "0", text, pos). /IF.
+  # v0.49.11 — a chain never opens a new line: a line-leading IDENT at
+  # pos+1 is the first token of the next statement, so this dot is a
+  # statement terminator (m.name. / m.put(...) must not merge into the
+  # previous statement's chain)
+  REAP fll FROM tok_line_leading, ftok.
+  IF fll IS "1", GIVE plant_list_make(3, "0", text, pos). /IF.
   IF text IS "", GIVE plant_list_make(3, "0", text, pos). /IF.
   IF flx IS "SET" OR flx IS "REAP" OR flx IS "SHOW" OR flx IS "CREATE" OR flx IS "GIVE" OR flx IS "IF" OR flx IS "ORIF" OR flx IS "SEASON" OR flx IS "WHILE" OR flx IS "FOR" OR flx IS "CALL" OR flx IS "START" OR flx IS "AWAIT" OR flx IS "CANCEL" OR flx IS "TRACE" OR flx IS "MISSION" OR flx IS "FREE" OR flx IS "WAIT" OR flx IS "LOCK" OR flx IS "ARC" OR flx IS "PUT" OR flx IS "TAKE" OR flx IS "BRAID" OR flx IS "LINK" OR flx IS "SORT" OR flx IS "SHAKE" OR flx IS "BREAK" OR flx IS "CONTINUE" OR flx IS "LET" OR flx IS "NOW" OR flx IS "ANALYZE" OR flx IS "TYPEOF" OR flx IS "ROOT" OR flx IS "ROOT_SCOPE" OR flx IS "CONST" OR flx IS "IN" OR flx IS "FROM" OR flx IS "TO" OR flx IS "WITH" OR flx IS "AS" OR flx IS "INTO" OR flx IS "BY" OR flx IS "ASYNC" OR flx IS "MATCH" OR flx IS "CYCLE" OR flx IS "WEATHER" OR flx IS "THROW" OR flx IS "STOP" OR flx IS "INCREASE" OR flx IS "DECREASE" OR flx IS "HARVEST" OR flx IS "LISTEN" OR flx IS "FAST",
     GIVE plant_list_make(3, "0", text, pos).
   /IF.
   REAP nt2 FROM peek, tokens, pos + 2.
   REAP nt2_ty FROM tok_type, nt2.
-  IF nt2_ty IS "LPAREN", GIVE plant_list_make(3, "0", text, pos). /IF.
+  IF nt2_ty IS "LPAREN",
+    REAP mpp0 FROM parse_method_call, tokens, pos, text.
+    REAP mpf0 FROM _first, mpp0.
+    IF mpf0 IS "1", GIVE mpp0. /IF.
+    GIVE plant_list_make(3, "0", text, pos).
+  /IF.
   IF nt2_ty IS "COLON", GIVE plant_list_make(3, "0", text, pos). /IF.
   REAP ltk FROM peek, tokens, pos - 1.
   REAP lt_ty FROM tok_type, ltk.
@@ -587,6 +614,71 @@ ACTION parse_field_access(tokens(LIST), pos(NUM), text(TX), dpth(TX)),
   SET fin TO fin + nfld.
   SET fin TO fin + ")".
   GIVE plant_list_make(3, "1", fin, p3).
+/ACTION.
+
+ACTION parse_method_call(tokens(LIST), pos(NUM), text(TX)),
+  # v0.49.11 — obj.method(args): the token at pos is ".", pos+1 the
+  # method IDENT, pos+2 the opening "(" (the caller guarantees this).
+  # The receiver selection mirrors parse_field_access: a trailing bare
+  # IDENT is the receiver ("x=" + m.push(v) → m); a previous emission
+  # (chained m.push(a).pop() or m.a.pop()) or indexed/other tail takes
+  # the whole collected text as the receiver.
+  REAP mtok0 FROM peek, tokens, pos + 1.
+  REAP mname FROM tok_lex, mtok0.
+  REAP ltk0 FROM peek, tokens, pos - 1.
+  REAP lt_ty0 FROM tok_type, ltk0.
+  REAP ttail0 FROM substring, text, LEN(text) - 2, LEN(text).
+  CREATE recv(TX) TO text.
+  CREATE pre(TX) TO "".
+  IF lt_ty0 IS "IDENT",
+    IF ttail0 ISNT "\")",
+      REAP lt_lx0 FROM tok_lex, ltk0.
+      SET recv TO lt_lx0.
+      REAP cut0 FROM substring, text, 0, LEN(text) - LEN(lt_lx0).
+      SET pre TO cut0.
+    /IF.
+  /IF.
+  # method dispatch — maps directly onto the runtime API
+  CREATE mfn(TX) TO "".
+  IF mname IS "push", SET mfn TO "plant_list_push". /IF.
+  IF mname IS "pop", SET mfn TO "plant_list_pop". /IF.
+  IF mname IS "get", SET mfn TO "plant_map_get". /IF.
+  IF mname IS "put", SET mfn TO "plant_map_set". /IF.
+  IF mname IS "has", SET mfn TO "plant_map_has". /IF.
+  IF mfn IS "", GIVE plant_list_make(3, "0", text, pos). /IF.
+  # consume ".", the method name, and the opening "("
+  REAP mcp FROM consume, tokens, pos.
+  REAP mpp FROM _second, mcp.
+  REAP mcp2 FROM consume, tokens, mpp.
+  REAP mpp FROM _second, mcp2.
+  REAP mcp3 FROM consume, tokens, mpp.
+  REAP mpp FROM _second, mcp3.
+  # the argument list is the collected value up to the closing ")"
+  # at depth 0 (collect_value already handles commas, nesting, field
+  # access and nested method calls inside the arguments)
+  REAP mvp FROM collect_value, tokens, mpp.
+  REAP margs FROM _first, mvp.
+  REAP mpp FROM _second, mvp.
+  REAP mcp4 FROM consume, tokens, mpp.
+  REAP mpp FROM _second, mcp4.
+  # build the emission in stepwise two-operand concats (the stale
+  # bootstrap only _cat's simple pairs): pre + fn(recv, args)
+  CREATE minner(TX) TO mfn.
+  SET minner TO minner + "(".
+  SET minner TO minner + recv.
+  IF margs > "",
+    SET minner TO minner + ", ".
+    SET minner TO minner + margs.
+  /IF.
+  SET minner TO minner + ")".
+  CREATE mres(TX) TO minner.
+  IF mname IS "has",
+    SET mres TO "_from_long(" + minner + ")".
+  /IF.
+  IF pre > "",
+    SET mres TO pre + mres.
+  /IF.
+  GIVE plant_list_make(3, "1", mres, mpp).
 /ACTION.
 
 ACTION collect_value(tokens(LIST), start(NUM)),
@@ -3071,6 +3163,23 @@ ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), 
     REAP r FROM parse_call_stmt, tokens, pos, rtab, emode.
     GIVE r.
   /IF.
+  # v0.49.11 — method-call statement: IDENT . IDENT ( → collect the
+  # whole expression (chained calls included) and emit it raw
+  # (l.push("d"). → plant_list_push(l, "d");)
+  IF nx_ty IS "DOT",
+    REAP mm1 FROM peek, tokens, pos + 2.
+    REAP mm1_ty FROM tok_type, mm1.
+    IF mm1_ty IS "IDENT",
+      REAP mm2 FROM peek, tokens, pos + 3.
+      REAP mm2_ty FROM tok_type, mm2.
+      IF mm2_ty IS "LPAREN",
+        REAP mv1 FROM collect_value, tokens, pos.
+        REAP mvt FROM _first, mv1.
+        REAP mvp FROM _second, mv1.
+        GIVE plant_list_make(2, plant_list_make(4, "type", "emit_stmt", "code", mvt), mvp).
+      /IF.
+    /IF.
+  /IF.
   REAP nx2 FROM peek, tokens, pos + 1.
   REAP nx2_ty FROM tok_type, nx2.
   IF nx2_ty IS "COLON",
@@ -4651,6 +4760,19 @@ ACTION seg_has_literal_digit(seg(TX)),
   GIVE 0.
 /ACTION.
 
+ACTION is_lookup_prefix(seg(TX)),
+  # v0.49.11 — parser-emitted lookups that carry tx_t (or raw-long)
+  # values and must be coerced in numeric contexts and never treated
+  # as string segments by has_str: v0.49.10 field access (_map_get),
+  # method-call get/pop (plant_map_get/plant_list_pop), and the
+  # _from_long wrapper the parser puts around has() results.
+  IF substring(seg, 0, 9) IS "_map_get(", GIVE "1". /IF.
+  IF substring(seg, 0, 14) IS "plant_map_get(", GIVE "1". /IF.
+  IF substring(seg, 0, 15) IS "plant_list_pop(", GIVE "1". /IF.
+  IF substring(seg, 0, 11) IS "_from_long(", GIVE "1". /IF.
+  GIVE "0".
+/ACTION.
+
 ACTION seg_is_numeric(seg(TX), nums(LIST)),
   REAP sb FROM strings:REPLACE, seg, " ", "".
   IF sb IS "", GIVE 0. /IF.
@@ -5167,8 +5289,7 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
         REAP hseg FROM plant_list_get, parts, hp9.
         REAP hp0 FROM substring, hseg, 0, 1.
         IF hp0 IS "\"", SET has_str TO 1. /IF.
-        REAP hp1 FROM substring, hseg, 0, 9.
-        IF hp1 ISNT "_map_get(",
+        IF is_lookup_prefix(hseg) ISNT "1",
             SET hqb TO 0.
             SEASON hqb < LEN(hseg),
                 REAP hqc FROM char_at, hseg, hqb.
@@ -5182,8 +5303,7 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
     # parts — it must count as a top-level string literal too
     REAP sp0 FROM substring, seg, 0, 1.
     IF sp0 IS "\"", SET has_str TO 1. /IF.
-    REAP sp1 FROM substring, seg, 0, 9.
-    IF sp1 ISNT "_map_get(",
+    IF is_lookup_prefix(seg) ISNT "1",
         SET hqb TO 0.
         SEASON hqb < LEN(seg),
             REAP hqc FROM char_at, seg, hqb.
@@ -5217,15 +5337,13 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
         CREATE wseg(TX) TO "".
         SEASON wi2 < COUNT parts,
             REAP wseg FROM plant_list_get, parts, wi2.
-            REAP wp0 FROM substring, wseg, 0, 9.
-            IF wp0 IS "_map_get(",
+            IF is_lookup_prefix(wseg) IS "1",
                 SET wseg TO "_to_long(" + wseg + ")".
             /IF.
             PUT wseg INTO wparts.
             SET wi2 TO wi2 + 1.
         /SEASON.
-        REAP wp0 FROM substring, seg, 0, 9.
-        IF wp0 IS "_map_get(",
+        IF is_lookup_prefix(seg) IS "1",
             SET seg TO "_to_long(" + seg + ")".
         /IF.
         PUT seg INTO wparts.
@@ -6903,15 +7021,14 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         # unchanged — they already carry C-long bits or are user
         # errors (v0.49.10).
         REAP isnc2 FROM expr_is_numeric, cval, nums.
-        REAP fw0 FROM substring, cval, 0, 9.
         IF vtype IS "NUM",
-            IF isnc2 IS 0 AND fw0 IS "_map_get(",
+            IF isnc2 IS 0 AND is_lookup_prefix(cval) IS "1",
                 SET cval TO "_to_long(" + cval + ")".
             /IF.
             GIVE isel + "  long " + target + " = " + cval + ";\n".
         /IF.
         IF vtype IS "FACT",
-            IF isnc2 IS 0 AND fw0 IS "_map_get(",
+            IF isnc2 IS 0 AND is_lookup_prefix(cval) IS "1",
                 SET cval TO "_to_long(" + cval + ")".
             /IF.
             GIVE isel + "  int " + target + " = " + cval + ";\n".
@@ -7062,8 +7179,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         # values pass through unchanged)
         IF isn3 IS 0 AND rty ISNT "",
             REAP in3 FROM is_numeric_type, rty.
-            REAP fw1 FROM substring, cval, 0, 9.
-            IF in3 IS 1 AND snm3 IS "" AND fw1 IS "_map_get(",
+            IF in3 IS 1 AND snm3 IS "" AND is_lookup_prefix(cval) IS "1",
                 SET cval TO "_to_long(" + cval + ")".
             /IF.
         /IF.
@@ -7399,6 +7515,14 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         GIVE isel + "  plant_async_config(\"" + key + "\", \"" + val + "\");\n".
     /IF.
   
+    # ── emit_stmt: raw C statement text (v0.49.11 — bare method
+    #    calls like l.push("d"). → plant_list_push(l, "d");) ─
+    IF ntype IS "emit_stmt",
+        REAP ec2 FROM _map_get, node, "code".
+        REAP isel FROM indent_str, indent.
+        GIVE isel + ec2 + ";\n".
+    /IF.
+
     # ── call_stmt: bare call for void FFI helpers — reuses the
     #    reap_stmt discard path (target "_") so the call is emitted
     #    with the full ffi/struct/varargs arg handling. ─
@@ -11108,7 +11232,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.49.10 (pure native)".
+  SHOW "Chloroplast 0.49.11 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.
