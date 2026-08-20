@@ -349,6 +349,21 @@ tx_t is_keyword(tx_t wrd) {
     if (strcmp(wrd,"MEDIAN") == 0) {
         return 1;
     }
+    if (strcmp(wrd,"FLATTEN") == 0) {
+        return 1;
+    }
+    if (strcmp(wrd,"CHUNK") == 0) {
+        return 1;
+    }
+    if (strcmp(wrd,"ZIP") == 0) {
+        return 1;
+    }
+    if (strcmp(wrd,"FILTER_GT") == 0) {
+        return 1;
+    }
+    if (strcmp(wrd,"FILTER_LT") == 0) {
+        return 1;
+    }
     if (strcmp(wrd,"ENUM") == 0) {
         return 1;
     }
@@ -576,6 +591,21 @@ tx_t keyword_to_type(tx_t wrd) {
     }
     if (strcmp(wrd,"MEDIAN") == 0) {
         return "MEDIAN";
+    }
+    if (strcmp(wrd,"FLATTEN") == 0) {
+        return "FLATTEN";
+    }
+    if (strcmp(wrd,"CHUNK") == 0) {
+        return "CHUNK";
+    }
+    if (strcmp(wrd,"ZIP") == 0) {
+        return "ZIP";
+    }
+    if (strcmp(wrd,"FILTER_GT") == 0) {
+        return "FILTER_GT";
+    }
+    if (strcmp(wrd,"FILTER_LT") == 0) {
+        return "FILTER_LT";
     }
     if (strcmp(wrd,"ENUM") == 0) {
         return "ENUM";
@@ -2980,7 +3010,7 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
   return parse_reap_stmt;
 }
 tx_t is_reap_builtin(tx_t name) {
-    if (strcmp(name,"LEN") == 0 || strcmp(name,"JOIN") == 0 || strcmp(name,"FIRST") == 0 || strcmp(name,"LAST") == 0 || strcmp(name,"SUM") == 0 || strcmp(name,"UPPER") == 0 || strcmp(name,"LOWER") == 0 || strcmp(name,"TRIM") == 0 || strcmp(name,"REVERSE") == 0 || strcmp(name,"ABS") == 0 || strcmp(name,"ROUND") == 0 || strcmp(name,"POW") == 0 || strcmp(name,"CEIL") == 0 || strcmp(name,"FLOOR") == 0 || strcmp(name,"RANDOM") == 0 || strcmp(name,"SIN") == 0 || strcmp(name,"COS") == 0 || strcmp(name,"SQRT") == 0 || strcmp(name,"HAS") == 0 || strcmp(name,"ANY") == 0 || strcmp(name,"ALL") == 0 || strcmp(name,"PICK") == 0 || strcmp(name,"FIND") == 0 || strcmp(name,"COUNT_OF") == 0 || strcmp(name,"SLICE") == 0 || strcmp(name,"TAP") == 0 || strcmp(name,"INFUSE") == 0 || strcmp(name,"ABSORB") == 0 || strcmp(name,"SEAL") == 0 || strcmp(name,"TEST") == 0 || strcmp(name,"COUNT") == 0 || strcmp(name,"NOW") == 0 || strcmp(name,"ANALYZE") == 0 || strcmp(name,"TYPEOF") == 0 || strcmp(name,"INCLUDES") == 0 || strcmp(name,"STARTS_WITH") == 0 || strcmp(name,"ENDS_WITH") == 0 || strcmp(name,"REPEAT") == 0 || strcmp(name,"PAD") == 0 || strcmp(name,"PAD_LEFT") == 0 || strcmp(name,"REVERSE") == 0 || strcmp(name,"RANGE") == 0 || strcmp(name,"SORT") == 0 || strcmp(name,"INDEX_OF") == 0 || strcmp(name,"UNIQUE") == 0 || strcmp(name,"AVERAGE") == 0 || strcmp(name,"MEDIAN") == 0) {
+    if (strcmp(name,"LEN") == 0 || strcmp(name,"JOIN") == 0 || strcmp(name,"FIRST") == 0 || strcmp(name,"LAST") == 0 || strcmp(name,"SUM") == 0 || strcmp(name,"UPPER") == 0 || strcmp(name,"LOWER") == 0 || strcmp(name,"TRIM") == 0 || strcmp(name,"REVERSE") == 0 || strcmp(name,"ABS") == 0 || strcmp(name,"ROUND") == 0 || strcmp(name,"POW") == 0 || strcmp(name,"CEIL") == 0 || strcmp(name,"FLOOR") == 0 || strcmp(name,"RANDOM") == 0 || strcmp(name,"SIN") == 0 || strcmp(name,"COS") == 0 || strcmp(name,"SQRT") == 0 || strcmp(name,"HAS") == 0 || strcmp(name,"ANY") == 0 || strcmp(name,"ALL") == 0 || strcmp(name,"PICK") == 0 || strcmp(name,"FIND") == 0 || strcmp(name,"COUNT_OF") == 0 || strcmp(name,"SLICE") == 0 || strcmp(name,"TAP") == 0 || strcmp(name,"INFUSE") == 0 || strcmp(name,"ABSORB") == 0 || strcmp(name,"SEAL") == 0 || strcmp(name,"TEST") == 0 || strcmp(name,"COUNT") == 0 || strcmp(name,"NOW") == 0 || strcmp(name,"ANALYZE") == 0 || strcmp(name,"TYPEOF") == 0 || strcmp(name,"INCLUDES") == 0 || strcmp(name,"STARTS_WITH") == 0 || strcmp(name,"ENDS_WITH") == 0 || strcmp(name,"REPEAT") == 0 || strcmp(name,"PAD") == 0 || strcmp(name,"PAD_LEFT") == 0 || strcmp(name,"REVERSE") == 0 || strcmp(name,"RANGE") == 0 || strcmp(name,"SORT") == 0 || strcmp(name,"INDEX_OF") == 0 || strcmp(name,"UNIQUE") == 0 || strcmp(name,"AVERAGE") == 0 || strcmp(name,"MEDIAN") == 0 || strcmp(name,"FLATTEN") == 0 || strcmp(name,"CHUNK") == 0 || strcmp(name,"ZIP") == 0 || strcmp(name,"FILTER_GT") == 0 || strcmp(name,"FILTER_LT") == 0) {
         return "1";
     }
     return "0";
@@ -8025,6 +8055,11 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars) {
     e = _handle_func_paren(e, "UNIQUE", "plant_list_unique");
     e = _handle_func_paren(e, "AVERAGE", "plant_list_average");
     e = _handle_func_paren(e, "MEDIAN", "plant_list_median");
+    e = _handle_func_paren(e, "FLATTEN", "plant_list_flatten");
+    e = _handle_func_paren(e, "CHUNK", "plant_list_chunk");
+    e = _handle_func_paren(e, "ZIP", "plant_list_zip");
+    e = _handle_func_paren(e, "FILTER_GT", "plant_list_filter_gt");
+    e = _handle_func_paren(e, "FILTER_LT", "plant_list_filter_lt");
     e = _handle_func_paren(e, "TAP", "plant_tap");
     e = _handle_func_paren(e, "INFUSE", "plant_infuse");
     e = _handle_func_paren(e, "ABSORB", "plant_absorb");
@@ -12556,7 +12591,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.15 (pure native)");
+      plant_print("Chloroplast 0.49.16 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

@@ -2724,6 +2724,14 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     REAP e FROM _handle_func_paren, e, "UNIQUE", "plant_list_unique".
     REAP e FROM _handle_func_paren, e, "AVERAGE", "plant_list_average".
     REAP e FROM _handle_func_paren, e, "MEDIAN", "plant_list_median".
+    # v0.49.16 — list built-ins (batch 2): FLATTEN / CHUNK / ZIP /
+    # FILTER_GT / FILTER_LT complete the list toolkit (the full
+    # legacy `lists` (14) surface now has expression built-ins).
+    REAP e FROM _handle_func_paren, e, "FLATTEN", "plant_list_flatten".
+    REAP e FROM _handle_func_paren, e, "CHUNK", "plant_list_chunk".
+    REAP e FROM _handle_func_paren, e, "ZIP", "plant_list_zip".
+    REAP e FROM _handle_func_paren, e, "FILTER_GT", "plant_list_filter_gt".
+    REAP e FROM _handle_func_paren, e, "FILTER_LT", "plant_list_filter_lt".
     # v0.48.38k — VEIN resource management: TAP / INFUSE use the
     # paren form; ABSORB / SEAL accept both the paren form (used by
     # the test suite) and the space form (the _handle_func pattern).

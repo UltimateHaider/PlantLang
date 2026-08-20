@@ -1,5 +1,50 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.49.16 — 2026 (List Built-ins, Batch 2 — Lists Complete)
+
+### Language
+- **List built-ins (batch 2)**: `FLATTEN`, `CHUNK`, `ZIP`,
+  `FILTER_GT`, `FILTER_LT` are bare expression built-ins — the legacy
+  `lists` (14) surface is now **100% expression built-ins**:
+  - `FLATTEN(list)` → `plant_list_flatten` — single-level unnest:
+    direct sub-lists are spliced in; deeper nesting and maps pass
+    through (`FLATTEN([[1, [2]]])` → `[1, [2]]`).
+  - `CHUNK(list, size)` → `plant_list_chunk` — sub-lists of at most
+    `size` elements (`size < 1` or empty input → `[]`).
+  - `ZIP(a, b)` → `plant_list_zip` — element-wise `[a_i, b_i]` pair
+    lists, truncated to the shorter input; a non-list argument → `[]`.
+  - `FILTER_GT(list, t)` / `FILTER_LT(list, t)` →
+    `plant_list_filter_gt`/`plant_list_filter_lt` — keep elements
+    strictly greater / strictly less than the numeric threshold
+    (tagged-int/strtod parsing; non-numeric elements dropped; the
+    literal `0` threshold is supported).
+- All five are lexer keywords (`is_keyword`/`keyword_to_type` in
+  `src/plantc/lexer.plant`), recognized by the REAP general-expression
+  classification (`is_reap_builtin` in `src/plantc/parser.plant`), and
+  translated in `_handle_func_paren` (`src/plantc/codegen_c.plant`) to
+  new runtime helpers in `runtime/c/plant_runtime.c` (declared in
+  `plant_runtime.h` and as `extern` in `plant_compat.h`). Nested calls
+  work (`SORT(FILTER_GT([5, 1, 4, 2], 2))` → `[4, 5]`).
+- Fix included: numeric-argument parsing in the new filters treats the
+  literal `0` (which arrives as a NULL tx_t slot) as the value `0`,
+  matching the `_slice_arg` convention; NULL *elements* are still
+  skipped.
+
+### Tests
+- New `tests/regression/list_builtins2.plant` (+ `.expected`): all five
+  built-ins — edge cases (empty lists, `size < 1` chunks, oversized
+  single-chunk, truncated zip, strict boundaries, non-numeric elements,
+  `0` threshold), chunk counts via `COUNT var` (the space form), and
+  nested calls.
+
+### Internal
+- Version marker moved to v0.49.16 (`Makefile`,
+  `src/plantc/main.plant` version banner,
+  `tests/native/run_native_tests.sh` check).
+- Verification: regression 159/159, native 20/20, generics 7/7,
+  closures 6/6, `make self` converged. CI-equivalent commands
+  (`make all && make self && make test`) pass on the v0.49.16 HEAD.
+
 ## v0.49.15 — 2026 (List Built-ins, Batch 1)
 
 ### Language

@@ -553,6 +553,36 @@ Semantics notes:
 - Counts/lengths are numeric literals or numeric helpers — pass numeric
   *values* from `TX` variables through the FFI forms if needed.
 
+#### Advanced List Built-ins (v0.49.16)
+
+Batch 2 completes the list toolkit — the full legacy `lists` (14)
+surface is now expression built-ins:
+
+```
+REAP f  FROM JOIN(FLATTEN([["a", "b"], ["c"]]), " ").  # -> "a b c"
+REAP f2 FROM JOIN(FLATTEN([[1, [2]]]), " ").           # -> "1 [2]"  (single-level)
+REAP c  FROM JOIN(CHUNK([1, 2, 3, 4, 5], 2), " ").     # -> "[1, 2] [3, 4] [5]"
+REAP z  FROM JOIN(ZIP(["a", "b"], [1, 2]), " ").       # -> "[a, 1] [b, 2]"
+REAP z2 FROM JOIN(ZIP([1, 2, 3], ["x"]), " ").         # -> "[1, x]"  (truncated)
+REAP g  FROM JOIN(FILTER_GT([1, 2, 3, 4], 2), " ").    # -> "3 4"
+REAP l  FROM JOIN(FILTER_LT([1, 2, 3, 4], 3), " ").    # -> "1 2"
+REAP n  FROM JOIN(SORT(FILTER_GT([5, 1, 4, 2], 2)), " ").  # -> "4 5"  (nested)
+```
+
+Semantics notes:
+
+- `FLATTEN` unnests one level: direct sub-lists are spliced in, deeper
+  nesting and maps pass through (`FLATTEN([[1, [2]]])` → `[1, [2]]`).
+- `CHUNK(lst, n)` subdivides into sub-lists of at most `n` elements
+  (`n < 1` or an empty input yields `[]`); `CHUNK([1,2,3], 5)` → one
+  sub-list.
+- `ZIP(a, b)` pairs elements element-wise into `[a_i, b_i]` lists,
+  truncating to the shorter input; a non-list argument yields `[]`.
+- `FILTER_GT`/`FILTER_LT` keep elements strictly greater/less than the
+  numeric threshold; non-numeric elements are dropped (mirroring
+  `AVERAGE`/`MEDIAN`). Thresholds and lengths are integer literals
+  (`FILTER_GT(lst, 0)` works — literal `0` is supported).
+
 ### String Operations
 
 Strings are immutable `TX` values; `+` concatenates. Concatenating a

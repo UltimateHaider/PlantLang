@@ -53,6 +53,12 @@ ACTION is_keyword(wrd(TX)),
   IF wrd IS "UNIQUE", GIVE TRUE. /IF.
   IF wrd IS "AVERAGE", GIVE TRUE. /IF.
   IF wrd IS "MEDIAN", GIVE TRUE. /IF.
+  # v0.49.16 — list built-ins (batch 2).
+  IF wrd IS "FLATTEN", GIVE TRUE. /IF.
+  IF wrd IS "CHUNK", GIVE TRUE. /IF.
+  IF wrd IS "ZIP", GIVE TRUE. /IF.
+  IF wrd IS "FILTER_GT", GIVE TRUE. /IF.
+  IF wrd IS "FILTER_LT", GIVE TRUE. /IF.
   IF wrd IS "ENUM", GIVE TRUE. /IF.
   IF wrd IS "CONST", GIVE TRUE. /IF.
   IF wrd IS "ROOT", GIVE TRUE. /IF.
@@ -135,6 +141,12 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "UNIQUE", GIVE "UNIQUE". /IF.
   IF wrd IS "AVERAGE", GIVE "AVERAGE". /IF.
   IF wrd IS "MEDIAN", GIVE "MEDIAN". /IF.
+  # v0.49.16 — list built-ins (batch 2).
+  IF wrd IS "FLATTEN", GIVE "FLATTEN". /IF.
+  IF wrd IS "CHUNK", GIVE "CHUNK". /IF.
+  IF wrd IS "ZIP", GIVE "ZIP". /IF.
+  IF wrd IS "FILTER_GT", GIVE "FILTER_GT". /IF.
+  IF wrd IS "FILTER_LT", GIVE "FILTER_LT". /IF.
   IF wrd IS "ENUM", GIVE "ENUM". /IF.
   IF wrd IS "CONST", GIVE "CONST". /IF.
   IF wrd IS "ROOT", GIVE "ROOT". /IF.

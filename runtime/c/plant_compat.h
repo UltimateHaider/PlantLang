@@ -485,6 +485,13 @@ extern tx_t plant_list_unique(tx_t data);
 extern tx_t plant_list_average(tx_t data);
 extern tx_t plant_list_median(tx_t data);
 
+/* ── v0.49.16: list built-in batch 2 (extern linkage) ──────────── */
+extern tx_t plant_list_flatten(tx_t data);
+extern tx_t plant_list_chunk(tx_t data, tx_t size);
+extern tx_t plant_list_zip(tx_t left, tx_t right);
+extern tx_t plant_list_filter_gt(tx_t data, tx_t threshold);
+extern tx_t plant_list_filter_lt(tx_t data, tx_t threshold);
+
 /* ── std/fs ── */
 tx_t file_copy(tx_t src, tx_t dest);   /* "1" ok | "0" error */
 tx_t file_move(tx_t src, tx_t dest);   /* "1" ok | "0" error (rename, copy+unlink fallback) */

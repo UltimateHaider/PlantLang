@@ -214,6 +214,13 @@ tx_t        plant_list_index_of(tx_t data, tx_t item); /* first index or "-1"; n
 tx_t        plant_list_unique(tx_t data);   /* first-occurrence dedupe copy; non-list passthrough */
 tx_t        plant_list_average(tx_t data);  /* mean of numeric elements; empty → "0" */
 tx_t        plant_list_median(tx_t data);   /* median of numeric elements; empty → "0" */
+
+/* ── v0.49.16: List built-ins (batch 2) ── */
+tx_t        plant_list_flatten(tx_t data);  /* single-level unnest of kind-0 sub-lists; else passthrough */
+tx_t        plant_list_chunk(tx_t data, tx_t size);  /* sub-lists of max size; size<1 or empty → [] */
+tx_t        plant_list_zip(tx_t left, tx_t right);   /* element-wise pairs, truncated to shorter; non-list → [] */
+tx_t        plant_list_filter_gt(tx_t data, tx_t threshold); /* numeric elements strictly > threshold */
+tx_t        plant_list_filter_lt(tx_t data, tx_t threshold); /* numeric elements strictly < threshold */
 /* v0.48.38k — VEIN resource management: TAP opens a path ("r"/"w"/
    "a") returning a tagged handle (NULL on failure); ABSORB reads
    the full stream; INFUSE writes/appends returning "1"/"0"; SEAL

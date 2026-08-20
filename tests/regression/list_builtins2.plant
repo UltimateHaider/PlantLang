@@ -1,0 +1,72 @@
+# v0.49.16 — list built-ins (batch 2): FLATTEN, CHUNK, ZIP,
+# FILTER_GT, FILTER_LT as bare expression built-ins. Lists are
+# asserted via the JOIN built-in (space-separated text; nested
+# lists serialize as "[e1, e2]"), the COUNT built-in for lengths,
+# and SHOW for scalars — the patterns established by sort.plant and
+# list_builtins.plant.
+ACTION main(),
+  SHOW "== flatten ==".
+  REAP f1 FROM JOIN(FLATTEN([["a", "b"], ["c"]]), " ").
+  SHOW f1.
+  REAP f2 FROM JOIN(FLATTEN([1, [2, 3], 4]), " ").
+  SHOW f2.
+  REAP f3 FROM JOIN(FLATTEN([]), " ").
+  SHOW "[" + f3 + "]".
+  REAP f4 FROM FLATTEN("abc").
+  SHOW f4.
+  REAP f5 FROM JOIN(FLATTEN([[1, [2]]]), " ").
+  SHOW f5.
+  SHOW "== chunk ==".
+  REAP c1 FROM JOIN(CHUNK([1, 2, 3, 4], 2), " ").
+  SHOW c1.
+  REAP c2 FROM JOIN(CHUNK([1, 2, 3, 4, 5], 2), " ").
+  SHOW c2.
+  REAP ch3 FROM CHUNK([1, 2, 3, 4], 2).
+  REAP c3 FROM COUNT ch3.
+  SHOW c3.
+  REAP ch4 FROM CHUNK([1, 2, 3], 5).
+  REAP c4 FROM COUNT ch4.
+  SHOW c4.
+  REAP ch5 FROM CHUNK([1, 2, 3], 0).
+  REAP c5 FROM COUNT ch5.
+  SHOW c5.
+  REAP ch6 FROM CHUNK([], 2).
+  REAP c6 FROM COUNT ch6.
+  SHOW c6.
+  SHOW "== zip ==".
+  REAP z1 FROM JOIN(ZIP(["a", "b"], [1, 2]), " ").
+  SHOW z1.
+  REAP z2 FROM JOIN(ZIP([1, 2, 3], ["x"]), " ").
+  SHOW z2.
+  REAP zc3 FROM ZIP([1, 2, 3], ["x", "y"]).
+  REAP z3 FROM COUNT zc3.
+  SHOW z3.
+  REAP zc4 FROM ZIP([], [1, 2]).
+  REAP z4 FROM COUNT zc4.
+  SHOW z4.
+  SHOW "== filter_gt ==".
+  REAP g1 FROM JOIN(FILTER_GT([1, 2, 3, 4], 2), " ").
+  SHOW g1.
+  REAP g2 FROM JOIN(FILTER_GT([1, 2, 3], 3), " ").
+  SHOW "[" + g2 + "]".
+  REAP g3 FROM JOIN(FILTER_GT([1, 2, 3], 0), " ").
+  SHOW g3.
+  REAP g4 FROM JOIN(FILTER_GT(["a", 1, "b", 2], 1), " ").
+  SHOW g4.
+  SHOW "== filter_lt ==".
+  REAP l1 FROM JOIN(FILTER_LT([1, 2, 3, 4], 3), " ").
+  SHOW l1.
+  REAP l2 FROM JOIN(FILTER_LT([1, 2, 3], 1), " ").
+  SHOW "[" + l2 + "]".
+  REAP l3 FROM JOIN(FILTER_LT([5, 10, 15], 10), " ").
+  SHOW l3.
+  SHOW "== nested ==".
+  REAP n1 FROM JOIN(FLATTEN(CHUNK([1, 2, 3, 4], 2)), " ").
+  SHOW n1.
+  REAP n2 FROM JOIN(SORT(FILTER_GT([5, 1, 4, 2], 2)), " ").
+  SHOW n2.
+  REAP n3 FROM JOIN(FLATTEN(ZIP(["a", "b"], [1, 2, 3])), " ").
+  SHOW n3.
+  SHOW "done".
+  GIVE 0.
+/GIVE main.

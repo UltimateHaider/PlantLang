@@ -3092,6 +3092,113 @@ tx_t plant_list_median(tx_t data) {
     return strdup(buf);
 }
 
+/* ── v0.49.16 — List built-ins (batch 2) ─────────────────────────
+   FLATTEN / CHUNK / ZIP / FILTER_GT / FILTER_LT. Single-level
+   flatten (maps and non-list elements pass through), CHUNK
+   subdivides into max-size sub-lists, ZIP pairs element-wise and
+   truncates to the shorter list, and the filters keep elements
+   strictly greater / strictly less than the numeric threshold
+   (non-numeric elements are dropped, mirroring AVERAGE/MEDIAN). */
+
+static double _list_num(tx_t el, int* ok) {
+    *ok = 0;
+    if ((intptr_t)el > -4096 && (intptr_t)el < 4096) {
+        *ok = 1;
+        return (double)(intptr_t)el;
+    }
+    if (((PlantArray*)el)->magic == PLANT_ARRAY_MAGIC) return 0.0; /* MAP/LIST */
+    const char* s = _S(el);
+    if (!s || s[0] == '\0') return 0.0;
+    char* end = NULL;
+    double v = strtod(s, &end);
+    if (end == s || *end != '\0') return 0.0; /* non-parsable */
+    *ok = 1;
+    return v;
+}
+
+tx_t plant_list_flatten(tx_t data) {
+    PlantArray* a = (PlantArray*)data;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC) return data;
+    PlantArray* out = plant_list_create(a->count);
+    for (int64_t i = 0; i < a->count; i++) {
+        tx_t el = a->items[i];
+        if (el && ((PlantArray*)el)->magic == PLANT_ARRAY_MAGIC &&
+            ((PlantArray*)el)->kind == 0) {
+            PlantArray* sub = (PlantArray*)el;
+            for (int64_t j = 0; j < sub->count; j++)
+                out = plant_list_push(out, sub->items[j]);
+        } else {
+            out = plant_list_push(out, el);
+        }
+    }
+    return (tx_t)out;
+}
+
+tx_t plant_list_chunk(tx_t data, tx_t size) {
+    PlantArray* a = (PlantArray*)data;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC) return data;
+    long sz = _slice_arg(size);
+    if (sz < 1 || a->count == 0) return (tx_t)plant_list_create(0);
+    PlantArray* out = plant_list_create(a->count / sz + 1);
+    for (int64_t i = 0; i < a->count; i += sz) {
+        PlantArray* sub = plant_list_create(sz);
+        for (long j = 0; j < sz && i + j < a->count; j++)
+            sub = plant_list_push(sub, a->items[i + j]);
+        out = plant_list_push(out, (tx_t)sub);
+    }
+    return (tx_t)out;
+}
+
+tx_t plant_list_zip(tx_t left, tx_t right) {
+    PlantArray* a = (PlantArray*)left;
+    PlantArray* b = (PlantArray*)right;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC ||
+        !b || b->magic != PLANT_ARRAY_MAGIC) {
+        return (tx_t)plant_list_create(0);
+    }
+    int64_t n = a->count < b->count ? a->count : b->count;
+    PlantArray* out = plant_list_create(n);
+    for (int64_t i = 0; i < n; i++) {
+        PlantArray* pair = plant_list_create(2);
+        pair = plant_list_push(pair, a->items[i]);
+        pair = plant_list_push(pair, b->items[i]);
+        out = plant_list_push(out, (tx_t)pair);
+    }
+    return (tx_t)out;
+}
+
+tx_t plant_list_filter_gt(tx_t data, tx_t threshold) {
+    PlantArray* a = (PlantArray*)data;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC) return data;
+    int tok = 0;
+    double t = _list_num(threshold, &tok);
+    if (!tok) return (tx_t)plant_list_create(0);
+    PlantArray* out = plant_list_create(a->count);
+    for (int64_t i = 0; i < a->count; i++) {
+        if (!a->items[i]) continue;
+        int ok = 0;
+        double v = _list_num(a->items[i], &ok);
+        if (ok && v > t) out = plant_list_push(out, a->items[i]);
+    }
+    return (tx_t)out;
+}
+
+tx_t plant_list_filter_lt(tx_t data, tx_t threshold) {
+    PlantArray* a = (PlantArray*)data;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC) return data;
+    int tok = 0;
+    double t = _list_num(threshold, &tok);
+    if (!tok) return (tx_t)plant_list_create(0);
+    PlantArray* out = plant_list_create(a->count);
+    for (int64_t i = 0; i < a->count; i++) {
+        if (!a->items[i]) continue;
+        int ok = 0;
+        double v = _list_num(a->items[i], &ok);
+        if (ok && v < t) out = plant_list_push(out, a->items[i]);
+    }
+    return (tx_t)out;
+}
+
 /* ═══════════════════════════════════════════════════════════════
    v0.48.38k — VEIN resource & file management: TAP / ABSORB /
    INFUSE / SEAL. TAP opens a path with standard modes ("r", "w",
