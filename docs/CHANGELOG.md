@@ -1,5 +1,44 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.49.14 — 2026 (Community Profile & CI Pause)
+
+### Community
+- **`CODE_OF_CONDUCT.md`**: Contributor Covenant v2.1 with the standard
+  pledge, standards, enforcement responsibilities/scope, and the four-step
+  enforcement ladder. The enforcement contact is a placeholder to be filled
+  in by the maintainer (`[INSERT CONTACT METHOD — e.g. maintainer email or
+  GitHub username]`).
+- **`SECURITY.md`**: vulnerability reporting guidance — private channels
+  only (GitHub Security tab / security advisory, or email placeholder),
+  never a public issue; acknowledgement within 48h and status updates
+  every 7 days; supported-versions table (0.49.x supported, <= 0.48
+  end-of-life); coordinated disclosure policy (fix-then-disclose, reporter
+  credited on request, early disclosure only for in-the-wild exploitation).
+- **Issue forms** (`.github/ISSUE_TEMPLATE/`): `bug_report.yml` (GitHub
+  Issue Forms — version, description, reproduction steps, actual vs
+  expected output, environment) and `feature_request.yml` (problem,
+  proposed solution, alternatives considered, example usage), both with
+  required-field validation and appropriate labels.
+- **Pull request template** (`.github/PULL_REQUEST_TEMPLATE.md`):
+  description, type-of-change checkboxes (bugfix/feature/compiler/runtime/
+  docs/infrastructure/breaking), testing checklist (`make all`, `make self`,
+  `make test` with current suite counts), and a contributor checklist
+  (project conventions, CONTRIBUTING.md read, CHANGELOG updated, no
+  secrets).
+
+### Infrastructure
+- **GitHub Actions removed**: `.github/workflows/test.yml` deleted — CI is
+  temporarily disabled due to a billing issue on the account. All local
+  verification commands are unaffected: `make all && make self && make test`
+  remain the canonical check (regression 157/157, native 20/20, generics
+  7/7, closures 6/6 on the v0.49.14 HEAD).
+
+### Internal
+- Version marker moved to v0.49.14 (`Makefile`,
+  `src/plantc/main.plant` version banner,
+  `tests/native/run_native_tests.sh` check).
+- No compiler, runtime, or test-suite source changes in this release.
+
 ## v0.49.13 — 2026 (Bare String Built-ins)
 
 ### Language

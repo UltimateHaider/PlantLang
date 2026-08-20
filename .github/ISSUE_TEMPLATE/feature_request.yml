@@ -1,0 +1,50 @@
+name: Feature Request
+description: Propose a new feature or improvement for PlantLang / Chloroplast
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting an improvement! Please describe the problem you
+        are trying to solve and how the feature would fit the language.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: >-
+        What problem does this feature solve? Describe the use case and why
+        existing functionality (built-ins, module calls, FFI) is not enough.
+      placeholder: |
+        I want to ... but currently I have to ...
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: >-
+        How should the feature behave? Include syntax, semantics, and any
+        interaction with existing features (built-ins, REAP, expressions).
+      placeholder: |
+        Example:
+          REAP r FROM TOKENIZE("a,b,c", ",").   # -> ["a", "b", "c"]
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any alternative designs, workarounds, or approaches you considered.
+    validations:
+      required: false
+  - type: textarea
+    id: example
+    attributes:
+      label: Example Usage
+      description: >-
+        A small `.plant` example showing the feature in action and its expected
+        output.
+      render: plant
+    validations:
+      required: false

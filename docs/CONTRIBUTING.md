@@ -76,8 +76,10 @@ Use the GitHub issue tracker. Include:
    `.expected`) for any behavior change.
 4. Update the docs (`CHANGELOG.md`, `docs/GAP_ANALYSIS.md`, and the Language
    Tour) to match your change.
-5. Open the PR against `main` or `Safarna`. CI runs the full build and test
-   pipeline on every push and pull request — it must be green.
+5. Open the PR against `main` or `Safarna`. CI is temporarily disabled
+   (see the v0.49.14 changelog) — the local pipeline is the gate: `make all`,
+   `make self`, and `make test` must all pass, and the verification results
+   should be mentioned in the PR description.
 
 ## Version bumps
 
