@@ -1,0 +1,97 @@
+{
+  "name": "PlantLang",
+  "scopeName": "source.plantlang",
+  "fileTypes": ["plant", "pl"],
+  "uuid": "1a2b3c4d-5e6f-4a5b-9c8d-7e6f5a4b3c2d",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#types" },
+    { "include": "#builtins" },
+    { "include": "#operators" },
+    { "include": "#identifiers" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.number-sign.plantlang",
+          "match": "#.*$"
+        }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.plantlang",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.other.interpolation.plantlang",
+              "match": "\\$\\{[^}]*\\}"
+            },
+            {
+              "name": "constant.character.escape.plantlang",
+              "match": "\\\\[nrt\"\\\\]"
+            }
+          ]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        {
+          "name": "constant.numeric.plantlang",
+          "match": "\\b\\d+(\\.\\d+)?\\b"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.plantlang",
+          "match": "\\b(ACTION|CREATE|SET|SHOW|REAP|GIVE|IF|ORIF|ELSE|SEASON|WHILE|CYCLE|FOR|WEATHER|SHELTER|CALM|MATCH|CONST|ROOT|ROOT_SCOPE|AWAIT|START|CANCEL|TRACE|WAIT|LOCK|FREE|ARC|PUT|TAKE|BRAID|LINK|SORT|SHAKE|BREAK|CONTINUE|LET|NOW|ANALYZE|TYPEOF|ASYNC|MISSION|HARVEST|LISTEN|TAP|ABSORB|INFUSE|SEAL|LOOP|RETURN|TYPE|IMPORT|FUNCTION|OPTION|RESULT|THROW|STOP|STEP|INTO|INCREASE|DECREASE|TEST|FAST|CALL|WITH|BY|TO|FROM|AS|IN|AND|OR|NOT|IS|ISNT|GREATER|LESS|THAN)\\b"
+        },
+        {
+          "name": "constant.language.plantlang",
+          "match": "\\b(TRUE|FALSE|NULL)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        {
+          "name": "storage.type.plantlang",
+          "match": "\\b(NUM|SCL|TX|FACT|LIST|MAP|STRUCT|ENUM|VEIN)\\b"
+        }
+      ]
+    },
+    "builtins": {
+      "patterns": [
+        {
+          "name": "support.function.builtin.plantlang",
+          "match": "\\b(PICK|FIND|COUNT_OF|COUNT|SLICE|JOIN|SPLIT|FIRST|LAST|SUM|UPPER|LOWER|TRIM|REVERSE|ABS|ROUND|POW|CEIL|FLOOR|RANDOM|SIN|COS|SQRT|HAS|ANY|ALL|LEN|SLICE)\\b"
+        }
+      ]
+    },
+    "operators": {
+      "patterns": [
+        {
+          "name": "keyword.operator.plantlang",
+          "match": "(==|!=|<=|>=|->|\\.\\.|\\+|-|\\*|/|%|=|<|>|!|&|\\||\\?|:|\\.|,|;|\\(|\\)|\\{|\\}|\\[|\\])"
+        }
+      ]
+    },
+    "identifiers": {
+      "patterns": [
+        {
+          "name": "variable.other.plantlang",
+          "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b"
+        }
+      ]
+    }
+  }
+}

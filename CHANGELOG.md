@@ -1,5 +1,40 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.49.12 — 2026 (Infrastructure & Developer Experience)
+
+### Infrastructure
+- **CI workflow** (`.github/workflows/test.yml`): runs on push and pull
+  request against `main` and `Safarna`. Steps: checkout, install `gcc` +
+  `make`, `make all`, `make self` (self-hosting convergence check), and
+  `make test` (native + generics + closures + regression suites). The
+  workflow fails if any step fails, and always reports the pipeline result.
+- **`CONTRIBUTING.md`**: new-contributor guide — repository layout, build
+  commands (`make all`, `make self`, `make test`), how the test suites work
+  (`.plant` + `.expected` diffs), code style conventions (two-space indent,
+  digit-free concatenated variable names, stepwise two-operand `SET`
+  concats — the stale v1 bootstrap constraints), and issue/PR submission
+  guidance against `main` / `Safarna`.
+- **Syntax highlighting** (`syntaxes/plantlang.tmLanguage.json`): TextMate
+  grammar (`source.plantlang`) covering the full keyword set from
+  `src/plantc/lexer.plant` plus expression built-ins (PICK, FIND, COUNT_OF,
+  SLICE, JOIN, FIRST, LAST, SUM, UPPER, LOWER, TRIM, REVERSE, ABS, ROUND,
+  POW, CEIL, FLOOR, RANDOM, SIN, COS, SQRT, HAS, ANY, ALL), type
+  annotations (NUM, SCL, TX, FACT, LIST, MAP, STRUCT, ENUM, VEIN), strings
+  with `${...}` interpolation, `#` comments, numbers, and operators.
+- **`docs/BUILD.md`**: new "Binary Artifacts in Git" section documenting why
+  `bin/Chloroplast`, `dist/Chloroplast`, and `build/plantc_v*` are tracked —
+  they are bootstrap seeds for the self-hosting chain; `dist/Chloroplast` is
+  the immutable v1 seed (never rebuilt, kept by `make clean`) and the
+  artifacts are required for `make self` convergence.
+
+### Internal
+- Version marker moved to v0.49.12 (`Makefile`,
+  `src/plantc/main.plant` version banner,
+  `tests/native/run_native_tests.sh` check).
+- Verification: regression 156/156, native 20/20, generics 7/7, closures
+  6/6, `make self` converged. CI-equivalent commands
+  (`make all && make self && make test`) pass on the v0.49.12 HEAD.
+
 ## v0.49.11 — 2026 (Native Method Calls `a.method(args)`)
 
 ### Language

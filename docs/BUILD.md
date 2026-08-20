@@ -52,6 +52,34 @@ cat src/plantc/{lexer,parser,codegen_c,main}.plant | \
   grep -v '^IMPORT\|^PLANT ' > build/plantc_all.plant
 ```
 
+## Binary Artifacts in Git
+
+The repository tracks compiled binaries on purpose: `bin/Chloroplast`,
+`dist/Chloroplast`, and the `build/plantc_v*` chain. They are **bootstrap
+seeds** for the self-hosting build and are required for `make all` / `make self`
+to work without any external compiler toolchain beyond `gcc`.
+
+- `dist/Chloroplast` is the **v1 seed**. It is a pre-built snapshot of the
+  compiler, checked in at the last stable release, and it is **never rebuilt**
+  by the build system (`make clean` explicitly keeps it). It is the entry
+  point of the bootstrap chain: it compiles `src/plantc/*.plant` into
+  `build/plantc_v2.c`, which is then compiled to `build/plantc_v2` with `gcc`.
+- `bin/Chloroplast` is the **shipped compiler** — the `v3` generation produced
+  by `make all`. It is checked in so that users and CI can compile programs
+  immediately, and so the release tarball (`make dist`) can ship a working
+  binary.
+- `build/plantc_v*` (`plantc_v2`, `plantc_v3`, `plantc_v4`, `plantc_v5`) are
+  the intermediate generations of the self-hosting chain. Checking them in
+  makes the convergence check deterministic: `make self` re-derives each
+  generation and confirms the compilers reach a fixed point
+  (`plantc_v3.c == plantc_v4.c == plantc_v5.c`).
+
+Do not delete these files, and do not rebuild `dist/Chloroplast` from current
+sources — the whole point of the bootstrap seed is that it is an immutable,
+known-good starting point. When you commit, keep them in sync with the sources:
+`make all` + `make self` regenerating them is a requirement for CI and
+`make dist` to pass.
+
 ## Compiling a PlantLang Program
 
 ```sh
