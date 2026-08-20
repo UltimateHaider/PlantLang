@@ -204,6 +204,16 @@ tx_t        plant_count_of(tx_t text, tx_t sub);
    end) bounds, clamping, and "not given" defaults (0 / length).
    List results canonicalize elements to text. */
 tx_t        plant_slice(tx_t data, tx_t start, tx_t end);
+
+/* ── v0.49.15: List built-ins (batch 1) ── */
+tx_t        plant_list_reverse(tx_t data);  /* list → reversed copy; else plant_reverse (string) */
+tx_t        plant_range_list(tx_t start, tx_t end); /* [start, end) integer list; e<=s → [] */
+tx_t        plant_list_sort(tx_t data);     /* list → plant_sort(data, ""); else passthrough */
+tx_t        plant_list_includes(tx_t data, tx_t item); /* list element scan; else string_includes */
+tx_t        plant_list_index_of(tx_t data, tx_t item); /* first index or "-1"; non-list → "-1" */
+tx_t        plant_list_unique(tx_t data);   /* first-occurrence dedupe copy; non-list passthrough */
+tx_t        plant_list_average(tx_t data);  /* mean of numeric elements; empty → "0" */
+tx_t        plant_list_median(tx_t data);   /* median of numeric elements; empty → "0" */
 /* v0.48.38k — VEIN resource management: TAP opens a path ("r"/"w"/
    "a") returning a tagged handle (NULL on failure); ABSORB reads
    the full stream; INFUSE writes/appends returning "1"/"0"; SEAL

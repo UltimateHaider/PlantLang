@@ -45,6 +45,14 @@ ACTION is_keyword(wrd(TX)),
   IF wrd IS "REPEAT", GIVE TRUE. /IF.
   IF wrd IS "PAD", GIVE TRUE. /IF.
   IF wrd IS "PAD_LEFT", GIVE TRUE. /IF.
+  # v0.49.15 — list built-ins (batch 1).
+  IF wrd IS "REVERSE", GIVE TRUE. /IF.
+  IF wrd IS "RANGE", GIVE TRUE. /IF.
+  IF wrd IS "SORT", GIVE TRUE. /IF.
+  IF wrd IS "INDEX_OF", GIVE TRUE. /IF.
+  IF wrd IS "UNIQUE", GIVE TRUE. /IF.
+  IF wrd IS "AVERAGE", GIVE TRUE. /IF.
+  IF wrd IS "MEDIAN", GIVE TRUE. /IF.
   IF wrd IS "ENUM", GIVE TRUE. /IF.
   IF wrd IS "CONST", GIVE TRUE. /IF.
   IF wrd IS "ROOT", GIVE TRUE. /IF.
@@ -119,6 +127,14 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "REPEAT", GIVE "REPEAT". /IF.
   IF wrd IS "PAD", GIVE "PAD". /IF.
   IF wrd IS "PAD_LEFT", GIVE "PAD_LEFT". /IF.
+  # v0.49.15 — list built-ins (batch 1).
+  IF wrd IS "REVERSE", GIVE "REVERSE". /IF.
+  IF wrd IS "RANGE", GIVE "RANGE". /IF.
+  IF wrd IS "SORT", GIVE "SORT". /IF.
+  IF wrd IS "INDEX_OF", GIVE "INDEX_OF". /IF.
+  IF wrd IS "UNIQUE", GIVE "UNIQUE". /IF.
+  IF wrd IS "AVERAGE", GIVE "AVERAGE". /IF.
+  IF wrd IS "MEDIAN", GIVE "MEDIAN". /IF.
   IF wrd IS "ENUM", GIVE "ENUM". /IF.
   IF wrd IS "CONST", GIVE "CONST". /IF.
   IF wrd IS "ROOT", GIVE "ROOT". /IF.
@@ -2056,7 +2072,7 @@ ACTION parse_reap_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
 # routed to the expression path. Bare action identifiers are never
 # builtins.
 ACTION is_reap_builtin(name(TX)),
-  IF name IS "LEN" OR name IS "JOIN" OR name IS "FIRST" OR name IS "LAST" OR name IS "SUM" OR name IS "UPPER" OR name IS "LOWER" OR name IS "TRIM" OR name IS "REVERSE" OR name IS "ABS" OR name IS "ROUND" OR name IS "POW" OR name IS "CEIL" OR name IS "FLOOR" OR name IS "RANDOM" OR name IS "SIN" OR name IS "COS" OR name IS "SQRT" OR name IS "HAS" OR name IS "ANY" OR name IS "ALL" OR name IS "PICK" OR name IS "FIND" OR name IS "COUNT_OF" OR name IS "SLICE" OR name IS "TAP" OR name IS "INFUSE" OR name IS "ABSORB" OR name IS "SEAL" OR name IS "TEST" OR name IS "COUNT" OR name IS "NOW" OR name IS "ANALYZE" OR name IS "TYPEOF" OR name IS "INCLUDES" OR name IS "STARTS_WITH" OR name IS "ENDS_WITH" OR name IS "REPEAT" OR name IS "PAD" OR name IS "PAD_LEFT",
+  IF name IS "LEN" OR name IS "JOIN" OR name IS "FIRST" OR name IS "LAST" OR name IS "SUM" OR name IS "UPPER" OR name IS "LOWER" OR name IS "TRIM" OR name IS "REVERSE" OR name IS "ABS" OR name IS "ROUND" OR name IS "POW" OR name IS "CEIL" OR name IS "FLOOR" OR name IS "RANDOM" OR name IS "SIN" OR name IS "COS" OR name IS "SQRT" OR name IS "HAS" OR name IS "ANY" OR name IS "ALL" OR name IS "PICK" OR name IS "FIND" OR name IS "COUNT_OF" OR name IS "SLICE" OR name IS "TAP" OR name IS "INFUSE" OR name IS "ABSORB" OR name IS "SEAL" OR name IS "TEST" OR name IS "COUNT" OR name IS "NOW" OR name IS "ANALYZE" OR name IS "TYPEOF" OR name IS "INCLUDES" OR name IS "STARTS_WITH" OR name IS "ENDS_WITH" OR name IS "REPEAT" OR name IS "PAD" OR name IS "PAD_LEFT" OR name IS "REVERSE" OR name IS "RANGE" OR name IS "SORT" OR name IS "INDEX_OF" OR name IS "UNIQUE" OR name IS "AVERAGE" OR name IS "MEDIAN",
     GIVE "1".
   /IF.
   GIVE "0".
@@ -6681,7 +6697,7 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     REAP e FROM _handle_func_paren, e, "UPPER", "plant_upper".
     REAP e FROM _handle_func_paren, e, "LOWER", "plant_lower".
     REAP e FROM _handle_func_paren, e, "TRIM", "plant_trim".
-    REAP e FROM _handle_func_paren, e, "REVERSE", "plant_reverse".
+    REAP e FROM _handle_func_paren, e, "REVERSE", "plant_list_reverse".
     # v0.48.38f — math built-ins (single-argument, dual-argument
     # POW, and parameterless RANDOM all flow through the paren
     # mapper; the runtime coerces tx_t operands to doubles)
@@ -6720,12 +6736,23 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     # ENDS_WITH / REPEAT / PAD / PAD_LEFT map through the paren
     # mapper straight to their runtime helpers; the strings:
     # module-qualified forms remain fully supported.
-    REAP e FROM _handle_func_paren, e, "INCLUDES", "string_includes".
+    REAP e FROM _handle_func_paren, e, "INCLUDES", "plant_list_includes".
     REAP e FROM _handle_func_paren, e, "STARTS_WITH", "string_starts_with".
     REAP e FROM _handle_func_paren, e, "ENDS_WITH", "string_ends_with".
     REAP e FROM _handle_func_paren, e, "REPEAT", "string_repeat".
     REAP e FROM _handle_func_paren, e, "PAD", "string_pad".
     REAP e FROM _handle_func_paren, e, "PAD_LEFT", "string_pad_left".
+    # v0.49.15 — list built-ins (batch 1): REVERSE / RANGE / SORT /
+    # INCLUDES / INDEX_OF / UNIQUE / AVERAGE / MEDIAN map through the
+    # paren mapper to list-aware runtime helpers (REVERSE and INCLUDES
+    # dispatch on the first argument's type, so the string built-ins
+    # keep their behavior).
+    REAP e FROM _handle_func_paren, e, "RANGE", "plant_range_list".
+    REAP e FROM _handle_func_paren, e, "SORT", "plant_list_sort".
+    REAP e FROM _handle_func_paren, e, "INDEX_OF", "plant_list_index_of".
+    REAP e FROM _handle_func_paren, e, "UNIQUE", "plant_list_unique".
+    REAP e FROM _handle_func_paren, e, "AVERAGE", "plant_list_average".
+    REAP e FROM _handle_func_paren, e, "MEDIAN", "plant_list_median".
     # v0.48.38k — VEIN resource management: TAP / INFUSE use the
     # paren form; ABSORB / SEAL accept both the paren form (used by
     # the test suite) and the space form (the _handle_func pattern).
@@ -11256,7 +11283,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.49.14 (pure native)".
+  SHOW "Chloroplast 0.49.15 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

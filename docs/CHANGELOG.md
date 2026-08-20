@@ -1,5 +1,55 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.49.15 — 2026 (List Built-ins, Batch 1)
+
+### Language
+- **List built-ins (batch 1)**: `REVERSE`, `RANGE`, `SORT`, `INCLUDES`,
+  `INDEX_OF`, `UNIQUE`, `AVERAGE`, `MEDIAN` are now bare expression
+  built-ins — no `strings:`/`lists:` module prefix required:
+  - `REVERSE(list)` → `plant_list_reverse` — element-wise reversed
+    copy; string arguments still reverse characters (dispatch keeps
+    the v0.48.38e string behavior).
+  - `RANGE(start, end)` → `plant_range_list` — half-open `[start, end)`
+    integer list (`end <= start` → `[]`, negative bounds supported).
+  - `SORT(list)` → `plant_list_sort` — ascending sort
+    (`plant_sort(list, "")`; the v0.48.29 `SORT lst [ASC|DESC]`
+    statement is unchanged).
+  - `INCLUDES(list, item)` → `plant_list_includes` — element
+    membership `"1"`/`"0"`; string arguments keep substring semantics.
+  - `INDEX_OF(list, item)` → `plant_list_index_of` — first matching
+    index or `"-1"`.
+  - `UNIQUE(list)` → `plant_list_unique` — first-occurrence dedupe
+    copy, order preserved.
+  - `AVERAGE(list)` → `plant_list_average` — mean of numeric elements
+    (fractional results like `2.5`; empty/unnumeric → `"0"`).
+  - `MEDIAN(list)` → `plant_list_median` — median of numeric elements
+    (even count → mean of the middle pair).
+- All eight are lexer keywords (`is_keyword`/`keyword_to_type` in
+  `src/plantc/lexer.plant`), recognized by the REAP general-expression
+  classification (`is_reap_builtin` in `src/plantc/parser.plant`), and
+  translated in `_handle_func_paren` (`src/plantc/codegen_c.plant`) to
+  list-aware runtime helpers (new section in
+  `runtime/c/plant_runtime.c`, declared in `plant_runtime.h` and as
+  `extern` in `plant_compat.h`). Nested calls work
+  (`AVERAGE(UNIQUE([1, 1, 2, 3]))` → `2`).
+- Backward compatible: string `REVERSE`/`INCLUDES` behavior is
+  preserved via runtime dispatch on the first argument's type.
+
+### Tests
+- New `tests/regression/list_builtins.plant` (+ `.expected`): all eight
+  built-ins — edge cases (empty lists, `end <= start` ranges, negative
+  bounds, absent items, single-element median, all-unnumeric lists),
+  string-dispatch regression (`REVERSE("abc")`, `INCLUDES("hello",
+  "lo")`), and nested calls.
+
+### Internal
+- Version marker moved to v0.49.15 (`Makefile`,
+  `src/plantc/main.plant` version banner,
+  `tests/native/run_native_tests.sh` check).
+- Verification: regression 158/158, native 20/20, generics 7/7,
+  closures 6/6, `make self` converged. CI-equivalent commands
+  (`make all && make self && make test`) pass on the v0.49.15 HEAD.
+
 ## v0.49.14 — 2026 (Community Profile & CI Pause)
 
 ### Community

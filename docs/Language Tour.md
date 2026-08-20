@@ -514,6 +514,45 @@ IF _at(parts, 0) IS "first",
 - Note: chained indexing (`b[1][0]`) and string concatenation inside a
   literal are not yet supported.
 
+### List Built-ins (v0.49.15)
+
+Eight list utilities are bare expression built-ins (batch 1) — no
+module prefix required, usable in any value position (REAP, SHOW, SET)
+and nested inside other calls. List arguments may be literals,
+variables, or nested built-in results:
+
+```
+REAP r  FROM JOIN(REVERSE(["a", "b", "c"]), " ").   # -> "c b a"
+REAP r2 FROM JOIN(RANGE(1, 5), " ").                # -> "1 2 3 4"  (half-open [a, b))
+REAP r3 FROM JOIN(RANGE(-2, 2), " ").               # -> "-2 -1 0 1"
+REAP s  FROM JOIN(SORT(["cherry", "apple", "b"]), " ").  # -> "apple b cherry"
+REAP i  FROM INCLUDES([1, 2, 3], 2).                # -> 1  (element membership)
+REAP x  FROM INDEX_OF(["a", "b", "c"], "b").        # -> 1  (first index; -1 absent)
+REAP u  FROM JOIN(UNIQUE(["a", "b", "a"]), " ").    # -> "a b"  (first occurrence wins)
+REAP a  FROM AVERAGE([1, 2, 3, 4]).                 # -> 2.5
+REAP m  FROM MEDIAN([4, 1, 2, 3]).                  # -> 2.5  (even count: mean of middle pair)
+REAP n  FROM AVERAGE(UNIQUE([1, 1, 2, 3])).         # -> 2    (nested)
+```
+
+Semantics notes:
+
+- `RANGE(a, b)` produces the integers `[a, b)` — `b <= a` yields `[]`;
+  negative bounds work (`RANGE(-2, 2)` → `-2 -1 0 1`).
+- `REVERSE` and `INCLUDES` dispatch on the first argument's type:
+  lists get element-wise reversal / membership; strings keep the
+  string built-in behavior (`REVERSE("abc")` → `"cba"`, substring
+  `INCLUDES`).
+- `SORT(lst)` sorts ascending (string/lexicographic order) and returns
+  the same list (in place) — the v0.48.29 `SORT lst [ASC|DESC]`
+  statement remains available for explicit order control.
+- `AVERAGE`/`MEDIAN` parse numeric elements (non-numeric elements and
+  nested lists/maps are skipped); an empty list yields `"0"`. Averages
+  can be fractional (`AVERAGE([1, 2])` → `1.5`).
+- `INDEX_OF` returns the first matching index, or `-1` when absent
+  (and for non-list inputs). `UNIQUE` keeps first occurrences in order.
+- Counts/lengths are numeric literals or numeric helpers — pass numeric
+  *values* from `TX` variables through the FFI forms if needed.
+
 ### String Operations
 
 Strings are immutable `TX` values; `+` concatenates. Concatenating a

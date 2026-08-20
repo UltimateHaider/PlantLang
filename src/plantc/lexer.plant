@@ -45,6 +45,14 @@ ACTION is_keyword(wrd(TX)),
   IF wrd IS "REPEAT", GIVE TRUE. /IF.
   IF wrd IS "PAD", GIVE TRUE. /IF.
   IF wrd IS "PAD_LEFT", GIVE TRUE. /IF.
+  # v0.49.15 — list built-ins (batch 1).
+  IF wrd IS "REVERSE", GIVE TRUE. /IF.
+  IF wrd IS "RANGE", GIVE TRUE. /IF.
+  IF wrd IS "SORT", GIVE TRUE. /IF.
+  IF wrd IS "INDEX_OF", GIVE TRUE. /IF.
+  IF wrd IS "UNIQUE", GIVE TRUE. /IF.
+  IF wrd IS "AVERAGE", GIVE TRUE. /IF.
+  IF wrd IS "MEDIAN", GIVE TRUE. /IF.
   IF wrd IS "ENUM", GIVE TRUE. /IF.
   IF wrd IS "CONST", GIVE TRUE. /IF.
   IF wrd IS "ROOT", GIVE TRUE. /IF.
@@ -119,6 +127,14 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "REPEAT", GIVE "REPEAT". /IF.
   IF wrd IS "PAD", GIVE "PAD". /IF.
   IF wrd IS "PAD_LEFT", GIVE "PAD_LEFT". /IF.
+  # v0.49.15 — list built-ins (batch 1).
+  IF wrd IS "REVERSE", GIVE "REVERSE". /IF.
+  IF wrd IS "RANGE", GIVE "RANGE". /IF.
+  IF wrd IS "SORT", GIVE "SORT". /IF.
+  IF wrd IS "INDEX_OF", GIVE "INDEX_OF". /IF.
+  IF wrd IS "UNIQUE", GIVE "UNIQUE". /IF.
+  IF wrd IS "AVERAGE", GIVE "AVERAGE". /IF.
+  IF wrd IS "MEDIAN", GIVE "MEDIAN". /IF.
   IF wrd IS "ENUM", GIVE "ENUM". /IF.
   IF wrd IS "CONST", GIVE "CONST". /IF.
   IF wrd IS "ROOT", GIVE "ROOT". /IF.

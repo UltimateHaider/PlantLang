@@ -472,6 +472,19 @@ static tx_t strings_REPEAT(tx_t s, long n)      { return string_repeat(s, n); }
 static tx_t strings_PAD(tx_t s, long n, tx_t c) { return string_pad(s, n, c); }
 static tx_t strings_PAD_LEFT(tx_t s, long n, tx_t c) { return string_pad_left(s, n, c); }
 
+/* ── v0.49.15: list built-in runtime helpers (extern linkage) ────
+   Bare expression built-ins (REVERSE / RANGE / SORT / INCLUDES /
+   INDEX_OF / UNIQUE / AVERAGE / MEDIAN) map to these in
+   _handle_func_paren; implementations live in plant_runtime.c. */
+extern tx_t plant_list_reverse(tx_t data);
+extern tx_t plant_range_list(tx_t start, tx_t end);
+extern tx_t plant_list_sort(tx_t data);
+extern tx_t plant_list_includes(tx_t data, tx_t item);
+extern tx_t plant_list_index_of(tx_t data, tx_t item);
+extern tx_t plant_list_unique(tx_t data);
+extern tx_t plant_list_average(tx_t data);
+extern tx_t plant_list_median(tx_t data);
+
 /* ── std/fs ── */
 tx_t file_copy(tx_t src, tx_t dest);   /* "1" ok | "0" error */
 tx_t file_move(tx_t src, tx_t dest);   /* "1" ok | "0" error (rename, copy+unlink fallback) */

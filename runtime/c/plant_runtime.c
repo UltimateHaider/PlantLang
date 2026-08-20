@@ -2947,6 +2947,152 @@ tx_t plant_slice(tx_t data, tx_t start, tx_t end) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   v0.49.15 — List built-ins (batch 1): REVERSE / RANGE / SORT /
+   INCLUDES / INDEX_OF / UNIQUE / AVERAGE / MEDIAN. List-aware
+   helpers; non-list inputs dispatch to the string equivalents
+   (plant_reverse / string_includes) so the existing string
+   built-ins keep their behavior. Element comparison uses
+   _plant_el_text (tagged small ints and strings), numeric
+   extraction mirrors plant_sum (strtod, non-parsable skipped).
+   ═══════════════════════════════════════════════════════════════ */
+
+tx_t plant_list_reverse(tx_t data) {
+    PlantArray* a = (PlantArray*)data;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC) return plant_reverse(data);
+    PlantArray* out = plant_list_create(a->count);
+    out->kind = a->kind;
+    for (int64_t i = a->count - 1; i >= 0; i--)
+        out = plant_list_push(out, a->items[i]);
+    return (tx_t)out;
+}
+
+tx_t plant_range_list(tx_t start, tx_t end) {
+    long s = _slice_arg(start);
+    long e = _slice_arg(end);
+    if (e <= s) return (tx_t)plant_list_create(0);
+    PlantArray* out = plant_list_create(e - s);
+    for (long i = s; i < e; i++)
+        out = plant_list_push(out, _from_long(i));
+    return (tx_t)out;
+}
+
+tx_t plant_list_sort(tx_t data) {
+    PlantArray* a = (PlantArray*)data;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC) return data;
+    return plant_sort(data, "");
+}
+
+tx_t plant_list_includes(tx_t data, tx_t item) {
+    PlantArray* a = (PlantArray*)data;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC) return string_includes(data, item);
+    char vb[32];
+    const char* v = _plant_el_text(item, vb);
+    for (int64_t i = 0; i < a->count; i++) {
+        char eb[32];
+        const char* e = _plant_el_text(a->items[i], eb);
+        if (e && v && strcmp(e, v) == 0) return strdup("1");
+    }
+    return strdup("0");
+}
+
+tx_t plant_list_index_of(tx_t data, tx_t item) {
+    PlantArray* a = (PlantArray*)data;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC) return strdup("-1");
+    char vb[32];
+    const char* v = _plant_el_text(item, vb);
+    for (int64_t i = 0; i < a->count; i++) {
+        char eb[32];
+        const char* e = _plant_el_text(a->items[i], eb);
+        if (e && v && strcmp(e, v) == 0) return _from_long((long)i);
+    }
+    return strdup("-1");
+}
+
+tx_t plant_list_unique(tx_t data) {
+    PlantArray* a = (PlantArray*)data;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC) return data;
+    PlantArray* out = plant_list_create(a->count);
+    out->kind = a->kind;
+    for (int64_t i = 0; i < a->count; i++) {
+        char eb[32];
+        const char* e = _plant_el_text(a->items[i], eb);
+        int seen = 0;
+        for (int64_t j = 0; j < out->count; j++) {
+            char ob[32];
+            const char* o = _plant_el_text(out->items[j], ob);
+            if (e && o && strcmp(e, o) == 0) { seen = 1; break; }
+        }
+        if (!seen) out = plant_list_push(out, a->items[i]);
+    }
+    return (tx_t)out;
+}
+
+static int _list_num_compare(const void* pa, const void* pb) {
+    double x = *(const double*)pa;
+    double y = *(const double*)pb;
+    return (x > y) - (x < y);
+}
+
+tx_t plant_list_average(tx_t data) {
+    PlantArray* a = (PlantArray*)data;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC || a->count == 0) return strdup("0");
+    double acc = 0.0;
+    int64_t n = 0;
+    for (int64_t i = 0; i < a->count; i++) {
+        tx_t el = a->items[i];
+        if (!el) continue;
+        if ((uintptr_t)el < 4096) { acc += (double)(intptr_t)el; n++; continue; }
+        if (((PlantArray*)el)->magic == PLANT_ARRAY_MAGIC) continue; /* MAP/LIST */
+        const char* s = _S(el);
+        if (!s || s[0] == '\0') continue;
+        char* end = NULL;
+        double v = strtod(s, &end);
+        if (end == s || *end != '\0') continue; /* non-parsable: skip */
+        acc += v;
+        n++;
+    }
+    if (n == 0) return strdup("0");
+    double avg = acc / (double)n;
+    if (avg == (double)(long long)avg) return _from_long((long long)avg);
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%.10g", avg);
+    return strdup(buf);
+}
+
+tx_t plant_list_median(tx_t data) {
+    PlantArray* a = (PlantArray*)data;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC || a->count == 0) return strdup("0");
+    double* vals = (double*)malloc((size_t)a->count * sizeof(double));
+    if (!vals) return strdup("0");
+    int64_t n = 0;
+    for (int64_t i = 0; i < a->count; i++) {
+        tx_t el = a->items[i];
+        if (!el) continue;
+        if ((uintptr_t)el < 4096) { vals[n++] = (double)(intptr_t)el; continue; }
+        if (((PlantArray*)el)->magic == PLANT_ARRAY_MAGIC) continue; /* MAP/LIST */
+        const char* s = _S(el);
+        if (!s || s[0] == '\0') continue;
+        char* end = NULL;
+        double v = strtod(s, &end);
+        if (end == s || *end != '\0') continue; /* non-parsable: skip */
+        vals[n++] = v;
+    }
+    if (n == 0) { free(vals); return strdup("0"); }
+    qsort(vals, (size_t)n, sizeof(double), _list_num_compare);
+    double med;
+    if (n % 2 == 1) {
+        med = vals[n / 2];
+    } else {
+        med = (vals[n / 2 - 1] + vals[n / 2]) / 2.0;
+    }
+    free(vals);
+    if (med == (double)(long long)med) return _from_long((long long)med);
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%.10g", med);
+    return strdup(buf);
+}
+
+/* ═══════════════════════════════════════════════════════════════
    v0.48.38k — VEIN resource & file management: TAP / ABSORB /
    INFUSE / SEAL. TAP opens a path with standard modes ("r", "w",
    "a") and encapsulates the FILE* inside a heap block tagged with a

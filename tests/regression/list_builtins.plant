@@ -1,0 +1,91 @@
+# v0.49.15 — list built-ins (batch 1): REVERSE, RANGE, SORT,
+# INCLUDES, INDEX_OF, UNIQUE, AVERAGE, MEDIAN as bare expression
+# built-ins. Lists are joined to space-separated text for assertion
+# (the JOIN built-in pattern established by sort.plant). REVERSE and
+# INCLUDES dispatch on the first argument's type, so the string
+# built-ins keep their behavior.
+ACTION main(),
+  SHOW "== reverse ==".
+  REAP r1 FROM JOIN(REVERSE(["a", "b", "c"]), " ").
+  SHOW r1.
+  REAP r2 FROM JOIN(REVERSE([1, 2, 3]), " ").
+  SHOW r2.
+  REAP r3 FROM JOIN(REVERSE(["solo"]), " ").
+  SHOW r3.
+  REAP r4 FROM JOIN(REVERSE([]), " ").
+  SHOW "[" + r4 + "]".
+  REAP r5 FROM REVERSE("abc").
+  SHOW r5.
+  SHOW "== range ==".
+  REAP g1 FROM JOIN(RANGE(1, 5), " ").
+  SHOW g1.
+  REAP g2 FROM JOIN(RANGE(0, 3), " ").
+  SHOW g2.
+  REAP g3 FROM JOIN(RANGE(5, 5), " ").
+  SHOW "[" + g3 + "]".
+  REAP g4 FROM JOIN(RANGE(3, 1), " ").
+  SHOW "[" + g4 + "]".
+  REAP g5 FROM JOIN(RANGE(-2, 2), " ").
+  SHOW g5.
+  SHOW "== sort (expression) ==".
+  REAP s1 FROM JOIN(SORT(["cherry", "apple", "banana"]), " ").
+  SHOW s1.
+  REAP s2 FROM JOIN(SORT([3, 1, 2]), " ").
+  SHOW s2.
+  SHOW "== includes (list) ==".
+  REAP i1 FROM INCLUDES(["a", "b", "c"], "b").
+  SHOW i1.
+  REAP i2 FROM INCLUDES(["a", "b", "c"], "z").
+  SHOW i2.
+  REAP i3 FROM INCLUDES([1, 2, 3], 2).
+  SHOW i3.
+  REAP i4 FROM INCLUDES([1, 2, 3], 9).
+  SHOW i4.
+  REAP i5 FROM INCLUDES("hello", "lo").
+  SHOW i5.
+  SHOW "== index_of ==".
+  REAP x1 FROM INDEX_OF(["a", "b", "c"], "b").
+  SHOW x1.
+  REAP x2 FROM INDEX_OF(["a", "b", "c"], "z").
+  SHOW x2.
+  REAP x3 FROM INDEX_OF([7, 8, 9], 9).
+  SHOW x3.
+  SHOW "== unique ==".
+  REAP u1 FROM JOIN(UNIQUE(["a", "b", "a", "c", "b"]), " ").
+  SHOW u1.
+  REAP u2 FROM JOIN(UNIQUE([1, 2, 2, 3, 1]), " ").
+  SHOW u2.
+  REAP u3 FROM JOIN(UNIQUE(["same", "same"]), " ").
+  SHOW u3.
+  REAP u4 FROM JOIN(UNIQUE([]), " ").
+  SHOW "[" + u4 + "]".
+  SHOW "== average ==".
+  REAP a1 FROM AVERAGE([1, 2, 3, 4]).
+  SHOW a1.
+  REAP a2 FROM AVERAGE([2, 2, 2]).
+  SHOW a2.
+  REAP a3 FROM AVERAGE([1, 2]).
+  SHOW a3.
+  REAP a4 FROM AVERAGE([]).
+  SHOW a4.
+  REAP a5 FROM AVERAGE(["x", "y"]).
+  SHOW a5.
+  SHOW "== median ==".
+  REAP m1 FROM MEDIAN([5, 1, 3]).
+  SHOW m1.
+  REAP m2 FROM MEDIAN([4, 1, 2, 3]).
+  SHOW m2.
+  REAP m3 FROM MEDIAN([7]).
+  SHOW m3.
+  REAP m4 FROM MEDIAN([]).
+  SHOW m4.
+  SHOW "== nested ==".
+  REAP n1 FROM JOIN(REVERSE(RANGE(1, 4)), " ").
+  SHOW n1.
+  REAP n2 FROM JOIN(SORT(REVERSE(["b", "a", "c"])), " ").
+  SHOW n2.
+  REAP n3 FROM AVERAGE(UNIQUE([1, 1, 2, 3])).
+  SHOW n3.
+  SHOW "done".
+  GIVE 0.
+/GIVE main.
