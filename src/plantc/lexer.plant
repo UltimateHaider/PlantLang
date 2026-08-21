@@ -147,6 +147,24 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "ZIP", GIVE "ZIP". /IF.
   IF wrd IS "FILTER_GT", GIVE "FILTER_GT". /IF.
   IF wrd IS "FILTER_LT", GIVE "FILTER_LT". /IF.
+  # v0.49.17 — extended math built-ins.
+  IF wrd IS "MIN", GIVE "MIN". /IF.
+  IF wrd IS "MAX", GIVE "MAX". /IF.
+  IF wrd IS "TAN", GIVE "TAN". /IF.
+  IF wrd IS "ATAN", GIVE "ATAN". /IF.
+  IF wrd IS "COT", GIVE "COT". /IF.
+  IF wrd IS "ASIN", GIVE "ASIN". /IF.
+  IF wrd IS "ACOS", GIVE "ACOS". /IF.
+  IF wrd IS "ATAN2", GIVE "ATAN2". /IF.
+  IF wrd IS "SINH", GIVE "SINH". /IF.
+  IF wrd IS "COSH", GIVE "COSH". /IF.
+  IF wrd IS "TANH", GIVE "TANH". /IF.
+  IF wrd IS "EXP", GIVE "EXP". /IF.
+  IF wrd IS "EXPM1", GIVE "EXPM1". /IF.
+  IF wrd IS "LOG10", GIVE "LOG10". /IF.
+  IF wrd IS "LOG2", GIVE "LOG2". /IF.
+  IF wrd IS "LOG1P", GIVE "LOG1P". /IF.
+  IF wrd IS "HYPOT", GIVE "HYPOT". /IF.
   IF wrd IS "ENUM", GIVE "ENUM". /IF.
   IF wrd IS "CONST", GIVE "CONST". /IF.
   IF wrd IS "ROOT", GIVE "ROOT". /IF.

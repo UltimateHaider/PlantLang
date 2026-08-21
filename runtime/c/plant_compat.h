@@ -526,6 +526,23 @@ static tx_t math_CLAMP(tx_t x, tx_t lo, tx_t hi) { return math_clamp(x, lo, hi);
 static tx_t math_PI(void)              { return math_pi(); }
 static tx_t math_E(void)               { return math_e(); }
 
+/* ── v0.49.17 Extended math library ──────────────────────────── */
+tx_t math_tan(tx_t x);
+tx_t math_atan(tx_t x);
+tx_t math_cot(tx_t x);
+tx_t math_asin(tx_t x);
+tx_t math_acos(tx_t x);
+tx_t math_atan2(tx_t x, tx_t y);
+tx_t math_sinh(tx_t x);
+tx_t math_cosh(tx_t x);
+tx_t math_tanh(tx_t x);
+tx_t math_exp(tx_t x);
+tx_t math_expm1(tx_t x);
+tx_t math_log10(tx_t x);
+tx_t math_log2(tx_t x);
+tx_t math_log1p(tx_t x);
+tx_t math_hypot(tx_t x, tx_t y);
+
 /* ── std/io FFI bindings (v0.48.28) ── */
 static tx_t io_SHOWLN(tx_t s)          { return io_showln(s); }
 static tx_t io_FLUSH(void)             { return io_flush(); }

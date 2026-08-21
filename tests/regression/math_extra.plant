@@ -1,0 +1,76 @@
+# v0.49.17 — Extended math library (17 built-ins):
+# MIN MAX TAN ATAN COT ASIN ACOS ATAN2 SINH COSH TANH EXP EXPM1
+# LOG10 LOG2 LOG1P HYPOT. Bare expression built-ins; numeric args
+# arrive as tagged small ints and are decoded by _plant_math_num.
+ACTION main(),
+  SHOW "== min/max ==".
+  SHOW MIN(3, 5).
+  SHOW MAX(3, 5).
+  SHOW MIN(-1, 4).
+  SHOW MIN(3, 3).
+  SHOW MIN(2.5, 1.5).
+  SHOW MAX(2.5, 1.5).
+  SHOW MIN(0, 5).
+  SHOW MAX(0, 5).
+  SHOW MIN(5, 0).
+  SHOW MAX(5, 0).
+  SHOW "== tan/atan ==".
+  SHOW TAN(0).
+  SHOW TAN(1).
+  SHOW TAN(0.5).
+  SHOW ATAN(0).
+  SHOW ATAN(1).
+  SHOW ATAN(0.5).
+  SHOW "== cot ==".
+  SHOW COT(0.5).
+  SHOW COT(1).
+  SHOW "== asin/acos ==".
+  SHOW ASIN(0).
+  SHOW ASIN(0.5).
+  SHOW ASIN(2).
+  SHOW ACOS(0).
+  SHOW ACOS(0.5).
+  SHOW ACOS(2).
+  SHOW "== atan2 ==".
+  SHOW ATAN2(1, 1).
+  SHOW ATAN2(1, 0).
+  SHOW ATAN2(0, 0).
+  SHOW ATAN2(-1, -1).
+  SHOW "== hyperbolics ==".
+  SHOW SINH(0).
+  SHOW SINH(1).
+  SHOW COSH(0).
+  SHOW COSH(1).
+  SHOW TANH(0).
+  SHOW TANH(1).
+  SHOW "== exp/log ==".
+  SHOW EXP(0).
+  SHOW EXP(1).
+  SHOW EXPM1(0).
+  SHOW EXPM1(1).
+  SHOW LOG10(10).
+  SHOW LOG10(100).
+  SHOW LOG10(0).
+  SHOW LOG2(2).
+  SHOW LOG2(8).
+  SHOW LOG2(0).
+  SHOW LOG1P(0).
+  SHOW LOG1P(1).
+  SHOW "== hypot ==".
+  SHOW HYPOT(3, 4).
+  SHOW HYPOT(0, 0).
+  SHOW HYPOT(1, 1).
+  SHOW HYPOT(1.5, 2).
+  SHOW "== nested ==".
+  SHOW MIN(MAX(2, 9), 4).
+  SHOW MAX(MIN(2, 9), 4).
+  SHOW TAN(0.5) + ATAN(0.5).
+  SHOW HYPOT(TAN(0.5), 1).
+  SHOW LOG10(EXPM1(9)).
+  SHOW "== math: FFI module still works ==".
+  REAP p FROM math:PI.
+  SHOW p.
+  REAP l FROM math:LOG, 10.
+  SHOW l.
+  GIVE 0.
+/GIVE main.

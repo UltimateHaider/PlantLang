@@ -2253,8 +2253,33 @@ tx_t math_pow(tx_t x, tx_t y) { char b[64]; snprintf(b, 64, "%.10g", pow(_num(_S
 tx_t math_floor(tx_t x) { char b[64]; snprintf(b, 64, "%.0f", floor(_num(_S(x)))); return strdup(b); }
 tx_t math_ceil(tx_t x)  { char b[64]; snprintf(b, 64, "%.0f", ceil(_num(_S(x)))); return strdup(b); }
 tx_t math_round(tx_t x) { char b[64]; snprintf(b, 64, "%.0f", round(_num(_S(x)))); return strdup(b); }
-tx_t math_min(tx_t a, tx_t b) { const char* x = _S(a), *y = _S(b); return strdup(_num(x) <= _num(y) ? (x ? x : "") : (y ? y : "")); }
-tx_t math_max(tx_t a, tx_t b) { const char* x = _S(a), *y = _S(b); return strdup(_num(x) >= _num(y) ? (x ? x : "") : (y ? y : "")); }
+
+static int _plant_math_num(tx_t x, double* out);
+static tx_t _plant_math_result(double v);
+
+tx_t math_min(tx_t a, tx_t b) {
+    double da = NAN, db = NAN;
+    int su = _plant_math_num(a, &da);
+    int sv = _plant_math_num(b, &db);
+    if (su && sv) {
+        return _plant_math_result(da <= db ? da : db);
+    }
+    if (su) return _plant_math_result(da);
+    if (sv) return _plant_math_result(db);
+    return "0";
+}
+
+tx_t math_max(tx_t a, tx_t b) {
+    double da = NAN, db = NAN;
+    int su = _plant_math_num(a, &da);
+    int sv = _plant_math_num(b, &db);
+    if (su && sv) {
+        return _plant_math_result(da >= db ? da : db);
+    }
+    if (su) return _plant_math_result(da);
+    if (sv) return _plant_math_result(db);
+    return "0";
+}
 
 tx_t math_random(void) {
     static int seeded = 0;
@@ -2301,6 +2326,104 @@ tx_t math_clamp(tx_t x, tx_t lo, tx_t hi) {
 }
 tx_t math_pi(void) { char b[64]; snprintf(b, 64, "%.15g", M_PI); return strdup(b); }
 tx_t math_e(void)  { char b[64]; snprintf(b, 64, "%.15g", M_E);  return strdup(b); }
+
+/* ── v0.49.17 Extended math library ──────────────────────────── */
+tx_t math_tan(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    return _plant_math_result(tan(v));
+}
+
+tx_t math_atan(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    return _plant_math_result(atan(v));
+}
+
+tx_t math_cot(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    return _plant_math_result(1.0 / tan(v));
+}
+
+tx_t math_asin(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    if (v < -1.0 || v > 1.0) return strdup("-nan");
+    return _plant_math_result(asin(v));
+}
+
+tx_t math_acos(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    if (v < -1.0 || v > 1.0) return strdup("-nan");
+    return _plant_math_result(acos(v));
+}
+
+tx_t math_atan2(tx_t x, tx_t y) {
+    double a = NAN, b = NAN;
+    _plant_math_num(x, &a);
+    _plant_math_num(y, &b);
+    return _plant_math_result(atan2(a, b));
+}
+
+tx_t math_sinh(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    return _plant_math_result(sinh(v));
+}
+
+tx_t math_cosh(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    return _plant_math_result(cosh(v));
+}
+
+tx_t math_tanh(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    return _plant_math_result(tanh(v));
+}
+
+tx_t math_exp(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    return _plant_math_result(exp(v));
+}
+
+tx_t math_expm1(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    return _plant_math_result(expm1(v));
+}
+
+tx_t math_log10(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    if (v <= 0.0) return strdup("-nan");
+    return _plant_math_result(log10(v));
+}
+
+tx_t math_log2(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    if (v <= 0.0) return strdup("-nan");
+    return _plant_math_result(log2(v));
+}
+
+tx_t math_log1p(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    if (v <= -1.0) return strdup("-nan");
+    return _plant_math_result(log1p(v));
+}
+
+tx_t math_hypot(tx_t x, tx_t y) {
+    double a = NAN, b = NAN;
+    _plant_math_num(x, &a);
+    _plant_math_num(y, &b);
+    return _plant_math_result(hypot(a, b));
+}
 
 /* ── std/time ────────────────────────────────────────────────── */
 

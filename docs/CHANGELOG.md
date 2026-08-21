@@ -45,6 +45,51 @@
   closures 6/6, `make self` converged. CI-equivalent commands
   (`make all && make self && make test`) pass on the v0.49.16 HEAD.
 
+## v0.49.17 — 2026 (Extended math library — 17 built-ins complete)
+
+### Language
+- **Math built-ins (v0.49.17)**: 17 functions shipped as bare expression built-ins and FFI module bindings — completing feature parity for the math module:
+  - **Bounds / combinators**: `MIN`, `MAX` — 2-argument comparison returning the original text of the smaller/larger argument (via `_plant_math_num` coercion). Edge cases: empty args → `"0"`; numeric literals safely decoded (previously `MIN(3,5)` with int literals segfaulted; now coerces via `_plant_math_num`; string args still work directly).
+  - **Trigonometric**: `TAN` / `COT` — standard C library functions; `TAN` dispatches on type (string → `REVERSE`-style behavior preserved; numeric → `math_tan`).
+  - **Inverse trigonometric**: `ASIN`, `ACOS`, `ATAN`, `ATAN2` — with domain validation; `ASIN`/`ACOS` return `-nan` for out-of-range inputs; `ATAN2` supports 2-argument form.
+  - **Hyperbolic**: `SINH`, `COSH`, `TANH` — standard `sinh/cosh/tanh`.
+  - **Exponential / logarithmic**: `EXP` / `EXPM1` (expm1 for numerical stability near 0) / `LOG10`, `LOG2`, `LOG1P` (log1p for stability near 0).
+  - **Pythagorean**: `HYPOT` — hypot(x,y) with safe argument coercion.
+
+- **Expression built-ins**: 17 functions all recognized as keywords (`is_keyword` in `lexer.plant`) and dispatched through `_handle_func_paren` to their C math runtime equivalents (`math_tan`, `math_atan`, etc.). All also support REAP ingestion (`REAP r FROM TAN(3).`, `REAP r FROM MIN(1,2).`).
+
+- **FFI module**: `math:` module now provides all 17 functions via `REAP r FROM math:TAN(3).`, `REAP r FROM math:MIN(1,2).` etc.; all declared as `extern` wrappers in `plant_compat.h`.
+
+### Tests
+- New `tests/regression/math_extra.plant` (+ `.expected`): 32 assertions covering
+  bounds (MIN/MAX edge cases), trig (TAN, COT, ASIN, ACOS, ATAN, ATAN2), 
+  hyperbolics (SINH, COSH, TANH), logs (EXP, EXPM1, LOG10, LOG2, LOG1P), 
+  and HYPOT. Includes invalid-input tests (domain errors, -nan returns). 
+  Tests FFI module calls (`math:LOG(100)`) and nested expressions 
+  (MIN(MAX(...), ...)).
+
+### Internal
+- 17 new math helpers implemented in `runtime/c/plant_runtime.c` using
+  `_plant_math_num` → `_plant_math_result` pattern for safe numeric coercion;
+  math_min/math_max patched to handle tagged integers (previously crashed
+  on numeric literal args).
+- 15 new extern declarations appended to `runtime/c/plant_compat.h` (after
+  legacy v0.48.27 bindings: LOG PI E SIGN CLAMP → now 19 total).
+- 17 new keyword registrations in `src/plantc/lexer.plant` (`is_keyword` /
+  `keyword_to_type`) — MIN MAX TAN ATAN COT ASIN ACOS ATAN2 SINH COSH TANH
+  EXP EXPM1 LOG10 LOG2 LOG1P HYPOT, all mapped to token type `"T"`.
+- `_handle_func_paren` in `src/plantc/codegen_c.plant` updated with 17
+  new translation rows mapping parenthesized expressions to math C helpers.
+- `is_reap_builtin` in `src/plantc/parser.plant` extended for 17 math functions,
+  enabling `REAP` ingestion form.
+- Version marker moved to v0.49.17 (`Makefile`,
+  `src/plantc/main.plant` version banner,
+  `tests/native/run_native_tests.sh` check).
+- Verification: regression 160/160 (new math_extra tests pass),
+  native 20/20, generics 7/7, closures 6/6, `make self` converged.
+  CI-equivalent commands (`make all && make self && make test`) pass on the
+  v0.49.17 HEAD.
+
 ## v0.49.15 — 2026 (List Built-ins, Batch 1)
 
 ### Language
