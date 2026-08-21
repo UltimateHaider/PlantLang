@@ -614,6 +614,57 @@ tx_t keyword_to_type(tx_t wrd) {
     if (strcmp(wrd,"FILTER_LT") == 0) {
         return "FILTER_LT";
     }
+    if (strcmp(wrd,"MIN") == 0) {
+        return "MIN";
+    }
+    if (strcmp(wrd,"MAX") == 0) {
+        return "MAX";
+    }
+    if (strcmp(wrd,"TAN") == 0) {
+        return "TAN";
+    }
+    if (strcmp(wrd,"ATAN") == 0) {
+        return "ATAN";
+    }
+    if (strcmp(wrd,"COT") == 0) {
+        return "COT";
+    }
+    if (strcmp(wrd,"ASIN") == 0) {
+        return "ASIN";
+    }
+    if (strcmp(wrd,"ACOS") == 0) {
+        return "ACOS";
+    }
+    if (strcmp(wrd,"ATAN2") == 0) {
+        return "ATAN2";
+    }
+    if (strcmp(wrd,"SINH") == 0) {
+        return "SINH";
+    }
+    if (strcmp(wrd,"COSH") == 0) {
+        return "COSH";
+    }
+    if (strcmp(wrd,"TANH") == 0) {
+        return "TANH";
+    }
+    if (strcmp(wrd,"EXP") == 0) {
+        return "EXP";
+    }
+    if (strcmp(wrd,"EXPM1") == 0) {
+        return "EXPM1";
+    }
+    if (strcmp(wrd,"LOG10") == 0) {
+        return "LOG10";
+    }
+    if (strcmp(wrd,"LOG2") == 0) {
+        return "LOG2";
+    }
+    if (strcmp(wrd,"LOG1P") == 0) {
+        return "LOG1P";
+    }
+    if (strcmp(wrd,"HYPOT") == 0) {
+        return "HYPOT";
+    }
     if (strcmp(wrd,"ENUM") == 0) {
         return "ENUM";
     }
@@ -8067,6 +8118,23 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars) {
     e = _handle_func_paren(e, "ZIP", "plant_list_zip");
     e = _handle_func_paren(e, "FILTER_GT", "plant_list_filter_gt");
     e = _handle_func_paren(e, "FILTER_LT", "plant_list_filter_lt");
+    e = _handle_func_paren(e, "MIN", "math_min");
+    e = _handle_func_paren(e, "MAX", "math_max");
+    e = _handle_func_paren(e, "TAN", "math_tan");
+    e = _handle_func_paren(e, "ATAN", "math_atan");
+    e = _handle_func_paren(e, "COT", "math_cot");
+    e = _handle_func_paren(e, "ASIN", "math_asin");
+    e = _handle_func_paren(e, "ACOS", "math_acos");
+    e = _handle_func_paren(e, "ATAN2", "math_atan2");
+    e = _handle_func_paren(e, "SINH", "math_sinh");
+    e = _handle_func_paren(e, "COSH", "math_cosh");
+    e = _handle_func_paren(e, "TANH", "math_tanh");
+    e = _handle_func_paren(e, "EXP", "math_exp");
+    e = _handle_func_paren(e, "EXPM1", "math_expm1");
+    e = _handle_func_paren(e, "LOG10", "math_log10");
+    e = _handle_func_paren(e, "LOG2", "math_log2");
+    e = _handle_func_paren(e, "LOG1P", "math_log1p");
+    e = _handle_func_paren(e, "HYPOT", "math_hypot");
     e = _handle_func_paren(e, "TAP", "plant_tap");
     e = _handle_func_paren(e, "INFUSE", "plant_infuse");
     e = _handle_func_paren(e, "ABSORB", "plant_absorb");
@@ -12598,7 +12666,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.16 (pure native)");
+      plant_print("Chloroplast 0.49.17 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

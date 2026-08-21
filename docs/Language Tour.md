@@ -799,6 +799,51 @@ REAP mx FROM math_max, "3", "7".   # → 7
 REAP rd FROM math_random.          # uniform [0,1) as text
 ```
 
+### Extended Math Library (v0.49.17)
+
+17 new math built-ins as bare expression built-ins and FFI module
+bindings — all dispatch through `_plant_math_num` for safe numeric
+coercion (tagged small ints, numeric strings, `_from_long` NUM vars).
+Results render as a long integer when integral, otherwise "%.10g"
+("nan" / "-nan" for domain errors).
+
+```
+# Bounds / combinators
+SHOW MIN(3, 5).                     # → 3
+SHOW MAX(3, 5).                     # → 5
+
+# Trigonometric & inverse
+SHOW TAN(0).                        # → 0
+SHOW ATAN(0).                       # → 0
+SHOW COT(0.5).                      # → 1.83048772172
+SHOW ASIN(0).                       # → 0
+SHOW ASIN(2).                       # → -nan  (out of range)
+SHOW ACOS(0.5).                     # → 1.0471975512
+SHOW ATAN2(1, 1).                   # → 0.785398163397
+
+# Hyperbolic
+SHOW SINH(0).                       # → 0
+SHOW COSH(1).                       # → 1.54308063482
+SHOW TANH(1).                       # → 0.76159415596
+
+# Exponential & logarithmic
+SHOW EXP(0).                        # → 1
+SHOW EXPM1(0).                      # → 0
+SHOW LOG10(10).                     # → 1
+SHOW LOG2(8).                       # → 3
+SHOW LOG1P(0).                      # → 0
+
+# Pythagorean
+SHOW HYPOT(3, 4).                   # → 5
+```
+
+All 17 are also available via the `math:` FFI module
+(`REAP r FROM math:TAN, 3.`) and support REAP ingestion
+(`REAP r FROM MIN(1, 2).`). Numeric literals arrive as tagged small
+ints and are decoded safely — `MIN(3, 5)` with integer literals no
+longer segfaults (the legacy `math_min`/`math_max` helpers were patched
+in v0.49.17 to use `_plant_math_num`).
+
 ### std/time
 
 ```
