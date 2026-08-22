@@ -526,6 +526,7 @@ static tx_t math_CLAMP(tx_t x, tx_t lo, tx_t hi) { return math_clamp(x, lo, hi);
 static tx_t math_PI(void)              { return math_pi(); }
 static tx_t math_E(void)               { return math_e(); }
 
+
 /* ── v0.49.17 Extended math library ──────────────────────────── */
 tx_t math_tan(tx_t x);
 tx_t math_atan(tx_t x);
@@ -555,6 +556,48 @@ tx_t math_gamma(tx_t x);
 tx_t math_lgamma(tx_t x);
 tx_t math_exp2(tx_t x);
 tx_t math_log_base(tx_t x, tx_t b);
+
+/* ── std/math FFI bindings (v0.49.19 — full module namespace) ──
+   Every math-family endpoint is reachable as REAP … FROM math:FUNC.
+   Legacy-eight endpoints route to their tagged-int-safe plant_*
+   helpers; the v0.49.17/v0.49.18 tiers already are the safe ones. */
+static tx_t math_ABS(tx_t x)           { return plant_abs(x); }
+static tx_t math_ROUND(tx_t x)         { return plant_round(x); }
+static tx_t math_POW(tx_t x, tx_t y)   { return plant_pow(x, y); }
+static tx_t math_CEIL(tx_t x)          { return plant_ceil(x); }
+static tx_t math_FLOOR(tx_t x)         { return plant_floor(x); }
+static tx_t math_RANDOM(void)          { return plant_random(); }
+static tx_t math_SIN(tx_t x)           { return plant_sin(x); }
+static tx_t math_COS(tx_t x)           { return plant_cos(x); }
+static tx_t math_SQRT(tx_t x)          { return plant_sqrt(x); }
+static tx_t math_TAN(tx_t x)           { return math_tan(x); }
+static tx_t math_ATAN(tx_t x)          { return math_atan(x); }
+static tx_t math_COT(tx_t x)           { return math_cot(x); }
+static tx_t math_ASIN(tx_t x)          { return math_asin(x); }
+static tx_t math_ACOS(tx_t x)          { return math_acos(x); }
+static tx_t math_ATAN2(tx_t x, tx_t y) { return math_atan2(x, y); }
+static tx_t math_SINH(tx_t x)          { return math_sinh(x); }
+static tx_t math_COSH(tx_t x)          { return math_cosh(x); }
+static tx_t math_TANH(tx_t x)          { return math_tanh(x); }
+static tx_t math_EXP(tx_t x)           { return math_exp(x); }
+static tx_t math_EXPM1(tx_t x)         { return math_expm1(x); }
+static tx_t math_EXP2(tx_t x)          { return math_exp2(x); }
+static tx_t math_LOG10(tx_t x)         { return math_log10(x); }
+static tx_t math_LOG2(tx_t x)          { return math_log2(x); }
+static tx_t math_LOG1P(tx_t x)         { return math_log1p(x); }
+static tx_t math_HYPOT(tx_t x, tx_t y) { return math_hypot(x, y); }
+static tx_t math_MIN(tx_t a, tx_t b)   { return math_min(a, b); }
+static tx_t math_MAX(tx_t a, tx_t b)   { return math_max(a, b); }
+static tx_t math_SEC(tx_t x)           { return math_sec(x); }
+static tx_t math_CSC(tx_t x)           { return math_csc(x); }
+static tx_t math_ASINH(tx_t x)         { return math_asinh(x); }
+static tx_t math_ACOSH(tx_t x)         { return math_acosh(x); }
+static tx_t math_ATANH(tx_t x)         { return math_atanh(x); }
+static tx_t math_ERF(tx_t x)           { return math_erf(x); }
+static tx_t math_ERFC(tx_t x)          { return math_erfc(x); }
+static tx_t math_GAMMA(tx_t x)         { return math_gamma(x); }
+static tx_t math_LGAMMA(tx_t x)        { return math_lgamma(x); }
+static tx_t math_LOG_BASE(tx_t x, tx_t b) { return math_log_base(x, b); }
 
 /* ── std/io FFI bindings (v0.48.28) ── */
 static tx_t io_SHOWLN(tx_t s)          { return io_showln(s); }

@@ -1593,6 +1593,10 @@ ACTION is_reap_builtin(name(TX)),
   IF name IS "SEC" OR name IS "CSC" OR name IS "ASINH" OR name IS "ACOSH" OR name IS "ATANH" OR name IS "ERF" OR name IS "ERFC" OR name IS "GAMMA" OR name IS "LGAMMA" OR name IS "EXP2" OR name IS "LOG_BASE",
     GIVE "1".
   /IF.
+  # v0.49.19 — natural logarithm built-in (REAP ingestion).
+  IF name IS "LOG",
+    GIVE "1".
+  /IF.
   GIVE "0".
 /ACTION.
 

@@ -1,5 +1,48 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.49.19 — 2026 (Math gap closure — uniform argument handling, LOG built-in, full module namespace)
+
+### Language
+- **Legacy eight upgraded**: `ABS ROUND POW CEIL FLOOR SIN COS SQRT`
+  now route through `_math_func_paren` like every other math built-in,
+  so decimal literal arguments compile and keep full precision
+  (`ROUND(3.7)` → 4, `POW(2.5, 2)` → 6.25, `SIN(0.5)` → 0.4794255386,
+  `SQRT(2.25)` → 1.5). Previously these emitted raw C doubles against
+  tx_t parameters — a hard compile error for any decimal argument.
+- **`LOG` is a bare built-in**: natural logarithm as a reserved
+  keyword in every call form — expression (`SHOW LOG(10)`), REAP
+  ingestion (`REAP r FROM LOG(8)`), and module (`math:LOG`). x <= 0
+  returns the deterministic diagnostic string from `math_log`
+  ("ERR: math_log(x): x must be > 0 …"), now pinned by test.
+  `math_log` itself was hardened to decode tagged small ints safely
+  via `_plant_math_num` (legacy path preserved for other payloads).
+
+### Runtime / FFI
+- **Complete `math:` module namespace**: 37 new static wrappers in
+  `plant_compat.h` (after the five v0.48.27 ones) — every math-family
+  endpoint is now reachable as `REAP … FROM math:FUNC`: legacy eight +
+  RANDOM route to their tagged-safe `plant_*` helpers; the v0.49.17 /
+  v0.49.18 tiers route to their `math_*` helpers. 42 module endpoints
+  in total (incl. SIGN/CLAMP/PI/E).
+
+### Tests
+- New `tests/regression/math_fix.plant` (+ `.expected`): 31
+  assertions — decimals on the legacy eight (incl. negatives:
+  `ABS(-2.5)`, `ROUND(-3.2)`), bare LOG incl. domain error and
+  `EXP(LOG(10))` round-trip, and 15 module-form probes across both
+  math tiers plus PI.
+- Regression suite: 161 → **162** passing files.
+
+### Internal
+- Codegen: 8 rows migrated `_handle_func_paren` → `_math_func_paren`;
+  new LOG row placed after the shadow-order guard block. Parser:
+  `is_reap_builtin` gains a LOG entry. Lexer: LOG keyword registered
+  ahead of LOG10/LOG2/LOG1P.
+- Version markers moved to v0.49.19 (`Makefile`,
+  `src/plantc/main.plant` banner, `tests/native/run_native_tests.sh`).
+- Verification: regression 162/162, native 20/20, generics 7/7,
+  closures 6/6, `make self` converged (433695 bytes).
+
 ## v0.49.18 — 2026 (Advanced math library — 11 built-ins; math subsystem mature)
 
 ### Language

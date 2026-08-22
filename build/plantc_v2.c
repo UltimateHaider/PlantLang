@@ -649,6 +649,9 @@ tx_t keyword_to_type(tx_t wrd) {
     if (strcmp(wrd,"EXPM1") == 0) {
         return "EXPM1";
     }
+    if (strcmp(wrd,"LOG") == 0) {
+        return "LOG";
+    }
     if (strcmp(wrd,"LOG10") == 0) {
         return "LOG10";
     }
@@ -3104,6 +3107,9 @@ tx_t is_reap_builtin(tx_t name) {
         return "1";
     }
     if (strcmp(name,"SEC") == 0 || strcmp(name,"CSC") == 0 || strcmp(name,"ASINH") == 0 || strcmp(name,"ACOSH") == 0 || strcmp(name,"ATANH") == 0 || strcmp(name,"ERF") == 0 || strcmp(name,"ERFC") == 0 || strcmp(name,"GAMMA") == 0 || strcmp(name,"LGAMMA") == 0 || strcmp(name,"EXP2") == 0 || strcmp(name,"LOG_BASE") == 0) {
+        return "1";
+    }
+    if (strcmp(name,"LOG") == 0) {
         return "1";
     }
     return "0";
@@ -8259,6 +8265,7 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars) {
     e = _math_func_paren(e, "ASIN", "math_asin");
     e = _math_func_paren(e, "ACOS", "math_acos");
     e = _math_func_paren(e, "ATAN", "math_atan");
+    e = _math_func_paren(e, "LOG", "math_log");
     e = _handle_func_paren(e, "LEN", "strlen");
     e = _handle_func_paren(e, "JOIN", "plant_join");
     e = _handle_func_paren(e, "FIRST", "plant_first");
@@ -8268,15 +8275,15 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars) {
     e = _handle_func_paren(e, "LOWER", "plant_lower");
     e = _handle_func_paren(e, "TRIM", "plant_trim");
     e = _handle_func_paren(e, "REVERSE", "plant_list_reverse");
-    e = _handle_func_paren(e, "ABS", "plant_abs");
-    e = _handle_func_paren(e, "ROUND", "plant_round");
-    e = _handle_func_paren(e, "POW", "plant_pow");
-    e = _handle_func_paren(e, "CEIL", "plant_ceil");
-    e = _handle_func_paren(e, "FLOOR", "plant_floor");
+    e = _math_func_paren(e, "ABS", "plant_abs");
+    e = _math_func_paren(e, "ROUND", "plant_round");
+    e = _math_func_paren(e, "POW", "plant_pow");
+    e = _math_func_paren(e, "CEIL", "plant_ceil");
+    e = _math_func_paren(e, "FLOOR", "plant_floor");
     e = _handle_func_paren(e, "RANDOM", "plant_random");
-    e = _handle_func_paren(e, "SIN", "plant_sin");
-    e = _handle_func_paren(e, "COS", "plant_cos");
-    e = _handle_func_paren(e, "SQRT", "plant_sqrt");
+    e = _math_func_paren(e, "SIN", "plant_sin");
+    e = _math_func_paren(e, "COS", "plant_cos");
+    e = _math_func_paren(e, "SQRT", "plant_sqrt");
     e = _handle_func_paren(e, "HAS", "plant_has");
     e = _handle_func_paren(e, "ANY", "plant_any");
     e = _handle_func_paren(e, "ALL", "plant_all");
@@ -12855,7 +12862,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.18 (pure native)");
+      plant_print("Chloroplast 0.49.19 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

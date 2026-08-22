@@ -161,6 +161,8 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "TANH", GIVE "TANH". /IF.
   IF wrd IS "EXP", GIVE "EXP". /IF.
   IF wrd IS "EXPM1", GIVE "EXPM1". /IF.
+  # v0.49.19 — natural logarithm built-in.
+  IF wrd IS "LOG", GIVE "LOG". /IF.
   IF wrd IS "LOG10", GIVE "LOG10". /IF.
   IF wrd IS "LOG2", GIVE "LOG2". /IF.
   IF wrd IS "LOG1P", GIVE "LOG1P". /IF.

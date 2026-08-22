@@ -875,6 +875,12 @@ SHOW LOG_BASE(8, 1).                 # → -nan
 # Nesting works anywhere an expression does
 SHOW EXP2(LOG_BASE(8, 2)).           # → 8
 ```
+All of these also accept decimal literals directly (`ROUND(3.7)`,
+`POW(2.5, 2)`), and since v0.49.19 the same is true for the older
+built-ins (`ABS ROUND POW CEIL FLOOR SIN COS SQRT`). `LOG(x)` is the
+natural-log built-in (`LOG(10)` → 2.302585093; x <= 0 yields the
+"ERR:" diagnostic). Every math function is additionally reachable
+through the `math:` module form (`REAP s FROM math:SIN, "0.5".`).
 
 ### std/time
 

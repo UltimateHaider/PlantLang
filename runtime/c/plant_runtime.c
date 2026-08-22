@@ -2300,7 +2300,11 @@ tx_t math_random(void) {
 #endif
 
 tx_t math_log(tx_t x) {
-    double v = _num(_S(x));
+    /* v0.49.19: tagged small ints arrive as raw pointer values —
+       _plant_math_num decodes them safely; other payloads keep the
+       legacy _num(_S(x)) path (string tx_t). */
+    double v = NAN;
+    if (!_plant_math_num(x, &v)) v = _num(_S(x));
     if (v <= 0) {
         char e[96];
         snprintf(e, 96, "ERR: math_log(x): x must be > 0 (x = %.10g)", v);

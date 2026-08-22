@@ -1,0 +1,61 @@
+# v0.49.19 — math gap closure:
+# 1) the eight legacy built-ins (ABS ROUND POW CEIL FLOOR SIN COS SQRT)
+#    now accept decimal literal arguments (routed through the same
+#    _math_func_paren wrapper as the newer tiers),
+# 2) LOG is a bare built-in keyword (natural log; x <= 0 returns the
+#    deterministic "ERR:" diagnostic from math_log),
+# 3) every math endpoint is reachable via the math: module form.
+ACTION main(),
+  SHOW "== legacy decimals ==".
+  SHOW ABS(-2.5).
+  SHOW ABS(2.5).
+  SHOW ROUND(3.7).
+  SHOW ROUND(-3.2).
+  SHOW CEIL(3.2).
+  SHOW FLOOR(3.9).
+  SHOW POW(2.5, 2).
+  SHOW SIN(0.5).
+  SHOW COS(0.5).
+  SHOW SQRT(2.25).
+  SHOW SQRT(-1).
+  SHOW "== bare log ==".
+  SHOW LOG(10).
+  SHOW LOG(100).
+  SHOW LOG(1).
+  SHOW LOG(-1).
+  REAP lr FROM LOG(8).
+  SHOW lr.
+  SHOW EXP(LOG(10)).
+  SHOW "== module forms ==".
+  REAP a FROM math:ABS, "-2.5".
+  SHOW a.
+  REAP s FROM math:SIN, "0.5".
+  SHOW s.
+  REAP c FROM math:COS, "0".
+  SHOW c.
+  REAP t FROM math:TAN, "1".
+  SHOW t.
+  REAP p FROM math:POW, "2", "10".
+  SHOW p.
+  REAP mn FROM math:MIN, "3", "7".
+  SHOW mn.
+  REAP mx FROM math:MAX, "-5", "3".
+  SHOW mx.
+  REAP hp FROM math:HYPOT, "3", "4".
+  SHOW hp.
+  REAP sc FROM math:SEC, "0".
+  SHOW sc.
+  REAP cs FROM math:CSC, "1".
+  SHOW cs.
+  REAP lb FROM math:LOG_BASE, "8", "2".
+  SHOW lb.
+  REAP gm FROM math:GAMMA, "5".
+  SHOW gm.
+  REAP lg FROM math:LGAMMA, "5".
+  SHOW lg.
+  REAP e2 FROM math:EXP2, "3".
+  SHOW e2.
+  REAP pi FROM math:PI.
+  SHOW pi.
+  GIVE 0.
+/GIVE main.

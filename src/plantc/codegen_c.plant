@@ -2791,6 +2791,10 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     REAP e FROM _math_func_paren, e, "ASIN", "math_asin".
     REAP e FROM _math_func_paren, e, "ACOS", "math_acos".
     REAP e FROM _math_func_paren, e, "ATAN", "math_atan".
+    # v0.49.19 — natural logarithm as a bare built-in: LOG(x) →
+    # math_log(x). No shadow hazard (LOG10/LOG2/LOG1P needles require
+    # the digit right after "LOG").
+    REAP e FROM _math_func_paren, e, "LOG", "math_log".
 
     REAP e FROM _handle_func_paren, e, "LEN", "strlen".
     REAP e FROM _handle_func_paren, e, "JOIN", "plant_join".
@@ -2804,15 +2808,15 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     # v0.48.38f — math built-ins (single-argument, dual-argument
     # POW, and parameterless RANDOM all flow through the paren
     # mapper; the runtime coerces tx_t operands to doubles)
-    REAP e FROM _handle_func_paren, e, "ABS", "plant_abs".
-    REAP e FROM _handle_func_paren, e, "ROUND", "plant_round".
-    REAP e FROM _handle_func_paren, e, "POW", "plant_pow".
-    REAP e FROM _handle_func_paren, e, "CEIL", "plant_ceil".
-    REAP e FROM _handle_func_paren, e, "FLOOR", "plant_floor".
+    REAP e FROM _math_func_paren, e, "ABS", "plant_abs".
+    REAP e FROM _math_func_paren, e, "ROUND", "plant_round".
+    REAP e FROM _math_func_paren, e, "POW", "plant_pow".
+    REAP e FROM _math_func_paren, e, "CEIL", "plant_ceil".
+    REAP e FROM _math_func_paren, e, "FLOOR", "plant_floor".
     REAP e FROM _handle_func_paren, e, "RANDOM", "plant_random".
-    REAP e FROM _handle_func_paren, e, "SIN", "plant_sin".
-    REAP e FROM _handle_func_paren, e, "COS", "plant_cos".
-    REAP e FROM _handle_func_paren, e, "SQRT", "plant_sqrt".
+    REAP e FROM _math_func_paren, e, "SIN", "plant_sin".
+    REAP e FROM _math_func_paren, e, "COS", "plant_cos".
+    REAP e FROM _math_func_paren, e, "SQRT", "plant_sqrt".
     # v0.48.38g — conditional list built-ins: HAS passes its value
     # through as an expression; ANY/ALL get their condition text
     # quoted into a string literal ("> 2" would be invalid C as a
