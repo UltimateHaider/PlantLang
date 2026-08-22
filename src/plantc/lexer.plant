@@ -161,6 +161,11 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "TANH", GIVE "TANH". /IF.
   IF wrd IS "EXP", GIVE "EXP". /IF.
   IF wrd IS "EXPM1", GIVE "EXPM1". /IF.
+  # v0.49.21 — statistical & array aggregation built-ins.
+  IF wrd IS "VARIANCE", GIVE "VARIANCE". /IF.
+  IF wrd IS "STDDEV", GIVE "STDDEV". /IF.
+  IF wrd IS "PRODUCT", GIVE "PRODUCT". /IF.
+  IF wrd IS "MODE", GIVE "MODE". /IF.
   # v0.49.19 — natural logarithm built-in.
   IF wrd IS "LOG", GIVE "LOG". /IF.
   IF wrd IS "LOG10", GIVE "LOG10". /IF.

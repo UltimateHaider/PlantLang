@@ -1,0 +1,35 @@
+== variance/stddev/product ==
+1.25
+1.118033989
+24
+== extrema/spread/mode ==
+1
+4
+3
+7
+== scalar forms intact ==
+3
+3
+2,3,4,5
+== reap ingestion ==
+1.25
+24
+1
+4
+3
+1
+== edges ==
+0
+0
+1
+0
+0
+0
+[]
+[]
+== type coercion ==
+8
+2
+4
+0
+3

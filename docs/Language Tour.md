@@ -906,6 +906,25 @@ Variants use underscore compounds (`Option_Some`, `Option_None`,
 `Result_Ok`, `Result_Err`) so they never collide with dot-notation
 field access.
 
+### Statistical Aggregations (v0.49.21)
+
+```
+CREATE nums(LIST) TO [1, 2, 3, 4].
+SHOW VARIANCE(nums).           # 1.25     (population)
+SHOW STDDEV(nums).             # 1.118033989
+SHOW PRODUCT(nums).            # 24
+SHOW MIN(nums).                # 1        (single arg = list form)
+SHOW MAX(nums).                # 4
+SHOW RANGE(nums).              # 3        (max - min spread)
+SHOW MODE([7, 2, 7, 9, 7]).    # 7
+
+SHOW MIN(3, 5).                # 3        (two args = scalar form)
+SHOW JOIN(RANGE(2, 6), ",").   # 2,3,4,5  (scalar form builds lists)
+```
+
+Empty inputs default to `"0"` (product `"1"`, mode `""`);
+non-parsable elements are filtered before aggregating.
+
 ### std/time
 
 ```

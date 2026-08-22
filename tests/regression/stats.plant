@@ -1,0 +1,53 @@
+# v0.49.21 — statistical & array aggregation built-ins:
+# VARIANCE / STDDEV / PRODUCT / MIN(list) / MAX(list) / RANGE(list) /
+# MODE. Single-list forms dispatch on arity (two-arg calls keep the
+# scalar semantics of MIN(a,b)/MAX(a,b)/RANGE(a,b)). Non-parsable
+# elements are filtered; defaults per spec: variance/stddev/min/max/
+# range -> "0", product -> "1", mode -> "".
+ACTION main(),
+  CREATE nums(LIST) TO [1, 2, 3, 4].
+  SHOW "== variance/stddev/product ==".
+  SHOW VARIANCE(nums).
+  SHOW STDDEV(nums).
+  SHOW PRODUCT(nums).
+  SHOW "== extrema/spread/mode ==".
+  SHOW MIN(nums).
+  SHOW MAX(nums).
+  SHOW RANGE(nums).
+  SHOW MODE([7, 2, 7, 9, 7]).
+  SHOW "== scalar forms intact ==".
+  SHOW MIN(3, 5).
+  SHOW MAX(-5, 3).
+  SHOW JOIN(RANGE(2, 6), ",").
+  SHOW "== reap ingestion ==".
+  REAP v FROM VARIANCE(nums).
+  SHOW v.
+  REAP p FROM PRODUCT(nums).
+  SHOW p.
+  REAP lo FROM MIN(nums).
+  SHOW lo.
+  REAP hi FROM MAX(nums).
+  SHOW hi.
+  REAP sp FROM RANGE(nums).
+  SHOW sp.
+  REAP md FROM MODE(nums).
+  SHOW md.
+  SHOW "== edges ==".
+  CREATE empty(LIST) TO [].
+  SHOW VARIANCE(empty).
+  SHOW STDDEV(empty).
+  SHOW PRODUCT(empty).
+  SHOW MIN(empty).
+  SHOW MAX(empty).
+  SHOW RANGE(empty).
+  SHOW "[" + MODE(empty) + "]".
+  SHOW "[" + JOIN(MODE([1, 1]), "") + "]".
+  SHOW "== type coercion ==".
+  CREATE mixed(LIST) TO ["2", "x", "4", "b"].
+  SHOW PRODUCT(mixed).
+  SHOW MIN(mixed).
+  SHOW MAX(mixed).
+  SHOW VARIANCE(["x", "y"]).
+  SHOW MODE(["3", "3", "5"]).
+  GIVE 0.
+/GIVE main.

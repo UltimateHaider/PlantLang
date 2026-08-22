@@ -88,6 +88,8 @@ tx_t _is_num_literal(tx_t s);
 tx_t _wrap_math_args(tx_t e, tx_t cfn);
 tx_t _math_func_paren(tx_t expr, tx_t kw, tx_t cfn);
 tx_t _trim_sp(tx_t s);
+tx_t _kw_commacount(tx_t expr, tx_t kw);
+tx_t _stat_paren(tx_t expr, tx_t kw, tx_t cscalar, tx_t clist);
 tx_t _handle_range(tx_t e);
 tx_t _range_once(tx_t e);
 tx_t _find_substr(tx_t s, tx_t needle);
@@ -651,6 +653,18 @@ tx_t keyword_to_type(tx_t wrd) {
     }
     if (strcmp(wrd,"EXPM1") == 0) {
         return "EXPM1";
+    }
+    if (strcmp(wrd,"VARIANCE") == 0) {
+        return "VARIANCE";
+    }
+    if (strcmp(wrd,"STDDEV") == 0) {
+        return "STDDEV";
+    }
+    if (strcmp(wrd,"PRODUCT") == 0) {
+        return "PRODUCT";
+    }
+    if (strcmp(wrd,"MODE") == 0) {
+        return "MODE";
     }
     if (strcmp(wrd,"LOG") == 0) {
         return "LOG";
@@ -3145,6 +3159,9 @@ tx_t is_reap_builtin(tx_t name) {
         return "1";
     }
     if (strcmp(name,"LOG") == 0) {
+        return "1";
+    }
+    if (strcmp(name,"VARIANCE") == 0 || strcmp(name,"STDDEV") == 0 || strcmp(name,"PRODUCT") == 0 || strcmp(name,"MODE") == 0) {
         return "1";
     }
     if (strcmp(name,"Option_Some") == 0 || strcmp(name,"Option_None") == 0 || strcmp(name,"Result_Ok") == 0 || strcmp(name,"Result_Err") == 0) {
@@ -5676,6 +5693,63 @@ tx_t _trim_sp(tx_t s) {
         return "";
     }
     return substring ( s , st , en + 1 );
+}
+tx_t _kw_commacount(tx_t expr, tx_t kw) {
+  tx_t h1 = "";
+  tx_t h2 = "";
+  tx_t ch = "";
+    h1 = _find_substr(expr, _cat(kw, " ("));
+    long open = - 1;
+    if (h1 != - 1) {
+        open = h1+strlen( kw )+1;
+    }
+    if (open == - 1) {
+        h2 = _find_substr(expr, _cat(kw, "("));
+        if (h2 != - 1) {
+            open = h2+strlen( kw );
+        }
+    }
+    if (open == - 1) {
+        return "-1";
+    }
+    long i = open+1;
+    long dep = 1;
+    long commas = 0;
+    while (i < strlen( expr )) {
+        ch = char_at(expr, i);
+        if (strcmp(ch,"(") == 0 || strcmp(ch,"[") == 0) {
+            dep = dep+1;
+        }
+        if (strcmp(ch,")") == 0 || strcmp(ch,"]") == 0) {
+            dep = dep - 1;
+            if (dep == 0) {
+                break;
+            }
+        }
+        if (strcmp(ch,",") == 0 && dep == 1) {
+            commas = commas+1;
+        }
+        i = i+1;
+    }
+    return _from_long ( commas );
+}
+tx_t _stat_paren(tx_t expr, tx_t kw, tx_t cscalar, tx_t clist) {
+  tx_t cc = "";
+  tx_t e3 = "";
+  tx_t e2 = "";
+    cc = _kw_commacount(expr, kw);
+    if (strcmp(cc,"-1") == 0) {
+        return expr;
+    }
+    if (strcmp(cc,"0") == 0) {
+        e3 = _math_func_paren(expr, kw, clist);
+        return e3;
+    }
+    if (strcmp(cc,"0") != 0 && strcmp(cc,"-1") != 0) {
+        e2 = _math_func_paren(expr, kw, cscalar);
+        return e2;
+    }
+  return _stat_paren;
 }
 tx_t _handle_range(tx_t e) {
   tx_t f = "";
@@ -8480,6 +8554,10 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars) {
     e = _math_func_paren(e, "ASIN", "math_asin");
     e = _math_func_paren(e, "ACOS", "math_acos");
     e = _math_func_paren(e, "ATAN", "math_atan");
+    e = _math_func_paren(e, "VARIANCE", "plant_list_variance");
+    e = _math_func_paren(e, "STDDEV", "plant_list_stddev");
+    e = _math_func_paren(e, "PRODUCT", "plant_list_product");
+    e = _math_func_paren(e, "MODE", "plant_list_mode");
     e = _math_func_paren(e, "LOG", "math_log");
     e = _handle_func_paren(e, "Option_Some", "plant_option_some");
     e = _handle_func_paren(e, "Option_None", "plant_option_none");
@@ -8519,7 +8597,7 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars) {
     e = _handle_func_paren(e, "REPEAT", "string_repeat");
     e = _handle_func_paren(e, "PAD", "string_pad");
     e = _handle_func_paren(e, "PAD_LEFT", "string_pad_left");
-    e = _handle_func_paren(e, "RANGE", "plant_range_list");
+    e = _stat_paren(e, "RANGE", "plant_range_list", "plant_list_range");
     e = _handle_func_paren(e, "SORT", "plant_list_sort");
     e = _handle_func_paren(e, "INDEX_OF", "plant_list_index_of");
     e = _handle_func_paren(e, "UNIQUE", "plant_list_unique");
@@ -8530,8 +8608,8 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars) {
     e = _handle_func_paren(e, "ZIP", "plant_list_zip");
     e = _handle_func_paren(e, "FILTER_GT", "plant_list_filter_gt");
     e = _handle_func_paren(e, "FILTER_LT", "plant_list_filter_lt");
-    e = _math_func_paren(e, "MIN", "math_min");
-    e = _math_func_paren(e, "MAX", "math_max");
+    e = _stat_paren(e, "MIN", "math_min", "plant_list_min");
+    e = _stat_paren(e, "MAX", "math_max", "plant_list_max");
     e = _math_func_paren(e, "TAN", "math_tan");
     e = _math_func_paren(e, "COT", "math_cot");
     e = _math_func_paren(e, "ATAN2", "math_atan2");
@@ -13082,7 +13160,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.20 (pure native)");
+      plant_print("Chloroplast 0.49.21 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

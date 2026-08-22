@@ -3332,6 +3332,119 @@ static double _list_num(tx_t el, int* ok) {
     return v;
 }
 
+/* ═══════════════════════════════════════════════════════════════
+   v0.49.21 — statistical & array aggregation built-ins
+   All seven accept one list argument; non-parsable elements are
+   filtered (via _list_num), NULL/magic-checked, and every empty /
+   no-valid-element case has an explicit default per spec:
+   variance/stddev/min/max/range → "0", product → "1", mode → "".
+   ═══════════════════════════════════════════════════════════════ */
+
+static void _stat_scan(tx_t data, double* sum, double* sq, int64_t* n,
+                       double* mn, double* mx) {
+    *sum = 0.0; *sq = 0.0; *n = 0; *mn = 0.0; *mx = 0.0;
+    PlantArray* a = (PlantArray*)data;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC) return;
+    for (int64_t i = 0; i < a->count; i++) {
+        tx_t el = a->items[i];
+        if (!el) continue;
+        int ok = 0;
+        double v = _list_num(el, &ok);
+        if (!ok) continue;
+        if (*n == 0) { *mn = v; *mx = v; }
+        if (v < *mn) *mn = v;
+        if (v > *mx) *mx = v;
+        *sum += v;
+        *sq += v * v;
+        *n += 1;
+    }
+}
+
+tx_t plant_list_variance(tx_t data) {
+    double sum, sq, mn, mx; int64_t n;
+    _stat_scan(data, &sum, &sq, &n, &mn, &mx);
+    if (n == 0) return strdup("0");
+    double mean = sum / (double)n;
+    double var = sq / (double)n - mean * mean;   /* population */
+    if (var < 0.0) var = 0.0;                    /* float-fuzz guard */
+    return _plant_math_result(var);
+}
+
+tx_t plant_list_stddev(tx_t data) {
+    double sum, sq, mn, mx; int64_t n;
+    _stat_scan(data, &sum, &sq, &n, &mn, &mx);
+    if (n == 0) return strdup("0");
+    double mean = sum / (double)n;
+    double var = sq / (double)n - mean * mean;
+    if (var < 0.0) var = 0.0;
+    return _plant_math_result(sqrt(var));
+}
+
+tx_t plant_list_product(tx_t data) {
+    double sum, sq, mn, mx; int64_t n;
+    _stat_scan(data, &sum, &sq, &n, &mn, &mx);
+    (void)n;
+    double acc = 1.0;
+    PlantArray* a = (PlantArray*)data;
+    if (a && a->magic == PLANT_ARRAY_MAGIC) {
+        for (int64_t i = 0; i < a->count; i++) {
+            tx_t el = a->items[i];
+            if (!el) continue;
+            int ok = 0;
+            double v = _list_num(el, &ok);
+            if (ok) acc *= v;
+        }
+    }
+    return _plant_math_result(acc);
+}
+
+tx_t plant_list_min(tx_t data) {
+    double sum, sq, mn, mx; int64_t n;
+    _stat_scan(data, &sum, &sq, &n, &mn, &mx);
+    if (n == 0) return strdup("0");
+    return _plant_math_result(mn);
+}
+
+tx_t plant_list_max(tx_t data) {
+    double sum, sq, mn, mx; int64_t n;
+    _stat_scan(data, &sum, &sq, &n, &mn, &mx);
+    if (n == 0) return strdup("0");
+    return _plant_math_result(mx);
+}
+
+tx_t plant_list_range(tx_t data) {
+    double sum, sq, mn, mx; int64_t n;
+    _stat_scan(data, &sum, &sq, &n, &mn, &mx);
+    if (n == 0) return strdup("0");
+    return _plant_math_result(mx - mn);
+}
+
+tx_t plant_list_mode(tx_t data) {
+    PlantArray* a = (PlantArray*)data;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC || a->count == 0) return strdup("");
+    tx_t best = NULL;
+    long bestc = 0;
+    for (int64_t i = 0; i < a->count; i++) {
+        tx_t el = a->items[i];
+        if (!el) continue;
+        int ok = 0;
+        double v = _list_num(el, &ok);
+        if (!ok) continue;
+        long c = 1;
+        for (int64_t j = i + 1; j < a->count; j++) {
+            tx_t ej = a->items[j];
+            if (!ej) continue;
+            int okj = 0;
+            double vj = _list_num(ej, &okj);
+            if (okj && vj == v) c++;
+        }
+        if (c > bestc) { bestc = c; best = el; }
+    }
+    if (!best || bestc < 1) return strdup("");
+    if ((uintptr_t)best < 4096) return _from_long((intptr_t)best);
+    return strdup(_S(best));
+}
+
 tx_t plant_list_flatten(tx_t data) {
     PlantArray* a = (PlantArray*)data;
     if (!a || a->magic != PLANT_ARRAY_MAGIC) return data;

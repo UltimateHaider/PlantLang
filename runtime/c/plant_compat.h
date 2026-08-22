@@ -557,6 +557,15 @@ tx_t math_lgamma(tx_t x);
 tx_t math_exp2(tx_t x);
 tx_t math_log_base(tx_t x, tx_t b);
 
+/* ── v0.49.21 statistical & array aggregations ───────────────── */
+tx_t plant_list_variance(tx_t data);
+tx_t plant_list_stddev(tx_t data);
+tx_t plant_list_product(tx_t data);
+tx_t plant_list_min(tx_t data);
+tx_t plant_list_max(tx_t data);
+tx_t plant_list_range(tx_t data);
+tx_t plant_list_mode(tx_t data);
+
 /* ── std/math FFI bindings (v0.49.19 — full module namespace) ──
    Every math-family endpoint is reachable as REAP … FROM math:FUNC.
    Legacy-eight endpoints route to their tagged-int-safe plant_*
