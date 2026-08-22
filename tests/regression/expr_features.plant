@@ -1,0 +1,39 @@
+# v0.49.20 — enhanced expressive features:
+# 1) single-quoted string literals ('str') with \' escape support,
+# 2) infix range shorthand (a..b) lowering to plant_range_list,
+# 3) Option/Result monadic constructors (Option_Some/Option_None/
+#    Result_Ok/Result_Err) over the v0.44.0 runtime tagged unions.
+ACTION main(),
+  SHOW "== single quotes ==".
+  SHOW 'hello'.
+  SHOW 'it\'s'.
+  SHOW "double".
+  REAP eq FROM INCLUDES('hello world', 'wor').
+  SHOW eq.
+  REAP n FROM INCLUDES('abc', 'z').
+  SHOW n.
+  REAP esc FROM INCLUDES('don\'t', '\'').
+  SHOW esc.
+  SHOW "== ranges ==".
+  SHOW JOIN(1..4, ",").
+  SHOW JOIN(-2..2, " ").
+  SHOW JOIN(RANGE(1, 4), ",").
+  SHOW JOIN(3..3, "|").
+  SHOW JOIN(5..5, "|").
+  SHOW "== monads ==".
+  REAP t FROM Option_Some('v7').
+  REAP u FROM plant_unwrap, t.
+  SHOW u.
+  REAP ok FROM Result_Ok('fine').
+  REAP uv FROM plant_unwrap, ok.
+  SHOW uv.
+  REAP e FROM Result_Err('boom').
+  REAP ue FROM plant_unwrap_err, e.
+  SHOW ue.
+  REAP nn FROM Option_None().
+  CREATE chk(NUM) TO plant_is_none(nn).
+  SHOW chk.
+  CREATE som(NUM) TO plant_is_some(t).
+  SHOW som.
+  GIVE 0.
+/GIVE main.

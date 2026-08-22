@@ -304,11 +304,21 @@ ACTION match_string(src(TX), i(NUM), n(NUM)),
   CREATE si(NUM) TO i.
   CREATE done(FACT) TO FALSE.
   CREATE ch(TX) TO "".
-  IF si < n AND char_at(src, si) IS "\"", SET si TO si + 1. /IF.
+  # v0.49.20 — the opening character selects the delimiter: " or '
+  CREATE q(TX) TO "".
+  IF si < n,
+    REAP cq FROM char_at, src, si.
+    IF cq IS "\"", SET q TO "\"". /IF.
+    IF cq IS "'", SET q TO "'". /IF.
+    IF q ISNT "", SET si TO si + 1. /IF.
+  /IF.
   SEASON NOT done AND si < n,
     REAP ch FROM char_at, src, si.
-    IF ch IS "\"", SET done TO TRUE. /IF.
-    IF ch IS "\"", CONTINUE. /IF.
+    # str_eq: variable-vs-variable 'IS' lowers to pointer ==; only
+    # literal comparisons compile to strcmp.
+    REAP isq FROM str_eq, ch, q.
+    IF isq IS "1", SET done TO TRUE. /IF.
+    IF isq IS "1", CONTINUE. /IF.
     IF ch IS "\\",
       SET si TO si + 1.
       IF si < n,
@@ -323,7 +333,11 @@ ACTION match_string(src(TX), i(NUM), n(NUM)),
       SET si TO si + 1.
     /IF.
   /SEASON.
-  IF si < n AND char_at(src, si) IS "\"", SET si TO si + 1. /IF.
+  IF si < n,
+    REAP cend FROM char_at, src, si.
+    REAP isq2 FROM str_eq, cend, q.
+    IF isq2 IS "1", SET si TO si + 1. /IF.
+  /IF.
   GIVE plant_list_make(2, val, si).
 /ACTION.
 
@@ -462,6 +476,13 @@ ACTION scan_tokens(src(TX)),
     IF ch IS "\"", IF si[2] ISNT 1, PUT plant_list_make(3, "STRING", si[0], _from_long(ls0)) INTO tokens. /IF. /IF.
     IF ch IS "\"", SET i TO si[1]. /IF.
     IF ch IS "\"", CONTINUE. /IF.
+
+    # Single-quoted string literal (v0.49.20) — same STRING token,
+    # no ${...} interpolation; \' escapes via the shared scanner.
+    IF ch IS "'", REAP sqi FROM match_string, src, i, n. /IF.
+    IF ch IS "'", PUT plant_list_make(3, "STRING", sqi[0], _from_long(ls0)) INTO tokens. /IF.
+    IF ch IS "'", SET i TO sqi[1]. /IF.
+    IF ch IS "'", CONTINUE. /IF.
 
     # Number
     IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", REAP si FROM match_number, src, i, n. /IF.
@@ -2129,6 +2150,11 @@ ACTION is_reap_builtin(name(TX)),
   /IF.
   # v0.49.19 — natural logarithm built-in (REAP ingestion).
   IF name IS "LOG",
+    GIVE "1".
+  /IF.
+  # v0.49.20 — monadic constructors (REAP ingestion; underscore
+  # compounds avoid dot-notation ambiguity).
+  IF name IS "Option_Some" OR name IS "Option_None" OR name IS "Result_Ok" OR name IS "Result_Err",
     GIVE "1".
   /IF.
   GIVE "0".
@@ -4263,6 +4289,136 @@ ACTION _math_func_paren(expr(TX), kw(TX), cfn(TX)),
   GIVE e3.
 /ACTION.
 
+# _trim_sp — leading/trailing space strip (small local helper).
+ACTION _trim_sp(s(TX)),
+  CREATE st(NUM) TO 0.
+  CREATE en(NUM) TO LEN(s) - 1.
+  SEASON st <= en,
+    REAP c FROM char_at, s, st.
+    IF c ISNT " ", BREAK 0. /IF.
+    SET st TO st + 1.
+  /SEASON.
+  SEASON en >= st,
+    REAP c2 FROM char_at, s, en.
+    IF c2 ISNT " ", BREAK 0. /IF.
+    SET en TO en - 1.
+  /SEASON.
+  IF en < st, GIVE "". /IF.
+  GIVE substring(s, st, en + 1).
+/ACTION.
+
+# _handle_range — v0.49.20 infix range shorthand: rewrites the FIRST
+# top-level "A .. B" occurrence to plant_range_list(A, B). Depth-
+# aware, so dots nested in parens/brackets are untouched; decimal
+# literals never form ".." (the lexer consumes them whole). Numeric
+# literal bounds are tx_t-coerced via _wrap_math_args afterwards.
+ACTION _handle_range(e(TX)),
+  CREATE res(TX) TO "".
+  SET res TO res + e.
+  # repeat: rewrite the first in-range occurrence, splice, rescan
+  # (terminates because each splice removes one "..")
+  CREATE scanning(FACT) TO TRUE.
+  SEASON scanning IS TRUE,
+    REAP f FROM _range_once, res.
+    IF str_eq(f, res) IS "1", SET scanning TO FALSE. /IF.
+    SET res TO f.
+  /SEASON.
+  GIVE res.
+/ACTION.
+
+# _range_once — one splice pass: finds the first ".." outside string
+# literals at any bracket depth, walks outward to the enclosing
+# argument boundaries (depth-matched ',' '(' ')'), and splices
+# plant_range_list(lhs, rhs) in place. Returns e unchanged when no
+# range is present (compared via str_eq by the caller).
+ACTION _range_once(e(TX)),
+  CREATE i(NUM) TO 0.
+  CREATE dep(NUM) TO 0.
+  CREATE hit(NUM) TO -1.
+  CREATE instr(FACT) TO FALSE.
+  CREATE wasin(FACT) TO FALSE.
+  CREATE qch(TX) TO "\"".
+  SEASON i + 1 < LEN(e),
+    REAP c3 FROM char_at, e, i.
+    SET wasin TO instr.
+    IF wasin IS FALSE,
+      IF c3 IS "\"", SET instr TO TRUE. /IF.
+      IF c3 IS "\"", SET qch TO "\"". /IF.
+      IF c3 IS "'", SET instr TO TRUE. /IF.
+      IF c3 IS "'", SET qch TO "'". /IF.
+    /IF.
+    IF wasin IS TRUE,
+      IF c3 IS "\\", SET i TO i + 1. /IF.
+      REAP isclose FROM str_eq, c3, qch.
+      IF isclose IS "1", SET instr TO FALSE. /IF.
+    /IF.
+    IF instr IS FALSE,
+      IF c3 IS "(" OR c3 IS "[", SET dep TO dep + 1. /IF.
+      IF c3 IS ")" OR c3 IS "]", SET dep TO dep - 1. /IF.
+      IF dep >= 0 AND c3 IS ".",
+        REAP c4 FROM char_at, e, i + 1.
+        IF c4 IS ".",
+          SET hit TO i.
+          BREAK 0.
+        /IF.
+      /IF.
+    /IF.
+    SET i TO i + 1.
+  /SEASON.
+  IF hit IS -1, GIVE e. /IF.
+  # left boundary: nearest depth-matched '(', '[' or ',' before hit
+  CREATE p(NUM) TO hit - 1.
+  CREATE cur(NUM) TO dep.
+  SEASON p >= 0,
+    REAP lc FROM char_at, e, p.
+    IF lc IS ")" OR lc IS "]", SET cur TO cur + 1. /IF.
+    IF lc IS "(" OR lc IS "[",
+      IF cur IS dep, BREAK 0. /IF.
+      SET cur TO cur - 1.
+    /IF.
+    IF lc IS "," AND cur IS dep, BREAK 0. /IF.
+    SET p TO p - 1.
+  /SEASON.
+  CREATE lstart(NUM) TO p + 1.
+  # right boundary: nearest depth-matched ',', ')' or ']' after hit+2
+  CREATE k(NUM) TO hit + 2.
+  CREATE rend(NUM) TO LEN(e).
+  CREATE cur2(NUM) TO dep.
+  SEASON k < LEN(e),
+    REAP rc FROM char_at, e, k.
+    IF rc IS "(" OR rc IS "[", SET cur2 TO cur2 + 1. /IF.
+    IF rc IS ")" OR rc IS "]",
+      IF cur2 IS dep,
+        SET rend TO k.
+        BREAK 0.
+      /IF.
+      SET cur2 TO cur2 - 1.
+    /IF.
+    IF rc IS "," AND cur2 IS dep,
+      SET rend TO k.
+      BREAK 0.
+    /IF.
+    SET k TO k + 1.
+  /SEASON.
+  REAP lhs FROM _trim_sp, substring(e, lstart, hit).
+  REAP rhs FROM _trim_sp, substring(e, hit + 2, rend).
+  IF lhs IS "" OR rhs IS "", GIVE e. /IF.
+  # tx_t-coerce numeric literal bounds
+  CREATE calltxt(TX) TO "plant_range_list(".
+  SET calltxt TO calltxt + lhs.
+  SET calltxt TO calltxt + ", ".
+  SET calltxt TO calltxt + rhs.
+  SET calltxt TO calltxt + ")".
+  REAP wrapped FROM _wrap_math_args, calltxt, "plant_range_list".
+  # splice: head + wrapped + tail via SET-appends
+  CREATE head(TX) TO substring(e, 0, lstart).
+  CREATE tail(TX) TO substring(e, rend, LEN(e)).
+  CREATE out(TX) TO head.
+  SET out TO out + wrapped.
+  SET out TO out + tail.
+  GIVE out.
+/ACTION.
+
 # _find_substr — position of the first occurrence of the substring
 # needle inside s, or -1 when absent. (find_any only searches for a
 # single character of its delimiter set — NOT a substring — so a
@@ -5000,6 +5156,14 @@ ACTION seg_is_numeric(seg(TX), nums(LIST)),
   IF pre8 IS "ffi_last_error(", GIVE 1. /IF.
   REAP pre9 FROM substring, sb, 0, 18.
   IF pre9 IS "plant_rw_arg_long(", GIVE 1. /IF.
+  REAP pre10 FROM substring, sb, 0, 13.
+  IF pre10 IS "plant_is_some(", GIVE 1. /IF.
+  REAP pre11 FROM substring, sb, 0, 13.
+  IF pre11 IS "plant_is_none(", GIVE 1. /IF.
+  REAP pre12 FROM substring, sb, 0, 11.
+  IF pre12 IS "plant_is_ok(", GIVE 1. /IF.
+  REAP pre13 FROM substring, sb, 0, 12.
+  IF pre13 IS "plant_is_err(", GIVE 1. /IF.
   CREATE si(NUM) TO 0.
   CREATE sc(TX) TO "".
   CREATE tok(TX) TO "".
@@ -6880,6 +7044,14 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     # math_log(x). No shadow hazard (LOG10/LOG2/LOG1P needles require
     # the digit right after "LOG").
     REAP e FROM _math_func_paren, e, "LOG", "math_log".
+    # v0.49.20 — Option/Result monadic constructors (underscore
+    # compounds; no collision with dot-notation field access).
+    REAP e FROM _handle_func_paren, e, "Option_Some", "plant_option_some".
+    REAP e FROM _handle_func_paren, e, "Option_None", "plant_option_none".
+    REAP e FROM _handle_func_paren, e, "Result_Ok", "plant_result_ok".
+    REAP e FROM _handle_func_paren, e, "Result_Err", "plant_result_err".
+    # v0.49.20 — infix range shorthand: 1..4 → plant_range_list(1, 4)
+    REAP e FROM _handle_range, e.
 
     REAP e FROM _handle_func_paren, e, "LEN", "strlen".
     REAP e FROM _handle_func_paren, e, "JOIN", "plant_join".
@@ -11516,7 +11688,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.49.19 (pure native)".
+  SHOW "Chloroplast 0.49.20 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

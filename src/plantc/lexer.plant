@@ -304,11 +304,21 @@ ACTION match_string(src(TX), i(NUM), n(NUM)),
   CREATE si(NUM) TO i.
   CREATE done(FACT) TO FALSE.
   CREATE ch(TX) TO "".
-  IF si < n AND char_at(src, si) IS "\"", SET si TO si + 1. /IF.
+  # v0.49.20 — the opening character selects the delimiter: " or '
+  CREATE q(TX) TO "".
+  IF si < n,
+    REAP cq FROM char_at, src, si.
+    IF cq IS "\"", SET q TO "\"". /IF.
+    IF cq IS "'", SET q TO "'". /IF.
+    IF q ISNT "", SET si TO si + 1. /IF.
+  /IF.
   SEASON NOT done AND si < n,
     REAP ch FROM char_at, src, si.
-    IF ch IS "\"", SET done TO TRUE. /IF.
-    IF ch IS "\"", CONTINUE. /IF.
+    # str_eq: variable-vs-variable 'IS' lowers to pointer ==; only
+    # literal comparisons compile to strcmp.
+    REAP isq FROM str_eq, ch, q.
+    IF isq IS "1", SET done TO TRUE. /IF.
+    IF isq IS "1", CONTINUE. /IF.
     IF ch IS "\\",
       SET si TO si + 1.
       IF si < n,
@@ -323,7 +333,11 @@ ACTION match_string(src(TX), i(NUM), n(NUM)),
       SET si TO si + 1.
     /IF.
   /SEASON.
-  IF si < n AND char_at(src, si) IS "\"", SET si TO si + 1. /IF.
+  IF si < n,
+    REAP cend FROM char_at, src, si.
+    REAP isq2 FROM str_eq, cend, q.
+    IF isq2 IS "1", SET si TO si + 1. /IF.
+  /IF.
   GIVE plant_list_make(2, val, si).
 /ACTION.
 
@@ -462,6 +476,13 @@ ACTION scan_tokens(src(TX)),
     IF ch IS "\"", IF si[2] ISNT 1, PUT plant_list_make(3, "STRING", si[0], _from_long(ls0)) INTO tokens. /IF. /IF.
     IF ch IS "\"", SET i TO si[1]. /IF.
     IF ch IS "\"", CONTINUE. /IF.
+
+    # Single-quoted string literal (v0.49.20) — same STRING token,
+    # no ${...} interpolation; \' escapes via the shared scanner.
+    IF ch IS "'", REAP sqi FROM match_string, src, i, n. /IF.
+    IF ch IS "'", PUT plant_list_make(3, "STRING", sqi[0], _from_long(ls0)) INTO tokens. /IF.
+    IF ch IS "'", SET i TO sqi[1]. /IF.
+    IF ch IS "'", CONTINUE. /IF.
 
     # Number
     IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", REAP si FROM match_number, src, i, n. /IF.

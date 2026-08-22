@@ -882,6 +882,30 @@ natural-log built-in (`LOG(10)` → 2.302585093; x <= 0 yields the
 "ERR:" diagnostic). Every math function is additionally reachable
 through the `math:` module form (`REAP s FROM math:SIN, "0.5".`).
 
+### Single Quotes, Ranges, Option/Result (v0.49.20)
+
+Single-quoted strings are interchangeable with double quotes
+(`'it\'s'` needs the `\'` escape; no `${...}` interpolation inside
+single quotes). Infix ranges are shorthand for the RANGE built-in:
+
+```
+SHOW 'hello'.                  # same STRING token as "hello"
+SHOW JOIN(1..4, ",").          # 1,2,3   (== JOIN(RANGE(1, 4), ","))
+SHOW JOIN(-2..2, " ").         # -2 -1 0 1
+
+REAP t FROM Option_Some('v7'). # monadic wrappers over the runtime
+REAP u FROM plant_unwrap, t.   # tagged unions (v0.44.0 helpers)
+SHOW u.                        # v7
+REAP e FROM Result_Err('boom').
+REAP ue FROM plant_unwrap_err, e.
+SHOW ue.                       # boom
+CREATE n(NUM) TO plant_is_some(t).   # predicates are numeric
+```
+
+Variants use underscore compounds (`Option_Some`, `Option_None`,
+`Result_Ok`, `Result_Err`) so they never collide with dot-notation
+field access.
+
 ### std/time
 
 ```

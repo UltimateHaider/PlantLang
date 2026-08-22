@@ -1,5 +1,63 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.49.20 — 2026 (Expressive features — single-quoted strings, a..b ranges, Option/Result constructors)
+
+### Language
+- **Single-quoted strings**: `'str'` literals now tokenize via the
+  shared scanner — the opening quote selects the delimiter (`"` or
+  `'`), escapes work in both styles (`'it\'s'` → `it's`; `\n \t \r`
+  shared), and single quotes emit the same STRING token (no
+  `${...}` interpolation). Previously `'` fell through as an unknown
+  character and compiled into C multi-char literals (segfault class).
+- **Infix range shorthand**: `a..b` lowers to
+  `plant_range_list(a, b)` — depth-aware, string-literal-aware splice
+  of the first range per pass, repeated until none remain; works at
+  any bracket depth (`JOIN(1..4, ",")`), with numeric literal bounds
+  coerced via `_wrap_math_args`. Empty/half-open edges match the
+  RANGE built-in (`5..5` → `[]`).
+- **Option/Result monadic constructors**: `Option_Some(x)`,
+  `Option_None()`, `Result_Ok(x)`, `Result_Err(x)` lower to the
+  v0.44.0 runtime tagged unions (`plant_option_some`, …).
+  Underscore compounds sidestep dot-notation field-access ambiguity.
+  REAP ingestion supported. The four predicates
+  (`plant_is_some/none/ok/err`) are whitelisted as known numeric
+  calls, so `CREATE n(NUM) TO plant_is_none(t).` and numeric SHOW
+  contexts wrap correctly.
+
+### Compiler fixes surfaced by this release
+- **Variable-vs-variable `IS` on strings lowers to pointer `==`**
+  (only literal comparisons compile to `strcmp`). Both new scanners
+  initially hit this: delimiter matching now goes through `str_eq`.
+  Documented here because any future dynamic-delimiter code must do
+  the same.
+- `_handle_range` first version misdetected `".."` *inside* string
+  literals (self-host crash); final version tracks quote state with
+  a pre-character `wasin` flag so an opening quote cannot close
+  itself in the same iteration.
+
+### Tests
+- New `tests/regression/expr_features.plant` (+ `.expected`): 20
+  assertions — quote styles + escapes + INCLUDES on both, range
+  values/negatives/empty edges/RANGE-equivalence, monad round-trips
+  (Some/Ok/Err + unwraps) and all four predicates.
+- Regression suite: 162 → **163** passing files.
+
+### Internal
+- Lexer: `match_string` parameterized over the opening quote;
+  `'` dispatch branch added (no interpolation path).
+- Codegen: `_trim_sp`, `_range_once`, `_handle_range` passes hooked
+  after the name-rewrite rows (ordering matters: COUNT-style rewrites
+  must land before splicing); four monad rows; predicate whitelist
+  entries in `seg_is_numeric`.
+- Parser: monad names added to `is_reap_builtin`.
+- Known pre-existing quirk (out of scope, documented): paren-form
+  `COUNT(expr)` emits `plant_array_length()(...)` (double parens) —
+  only the space form is valid today.
+- Version markers moved to v0.49.20 (`Makefile`,
+  `src/plantc/main.plant` banner, `tests/native/run_native_tests.sh`).
+- Verification: regression 163/163, native 20/20, generics 7/7,
+  closures 6/6, `make self` converged (439507 bytes).
+
 ## v0.49.19 — 2026 (Math gap closure — uniform argument handling, LOG built-in, full module namespace)
 
 ### Language
