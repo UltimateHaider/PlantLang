@@ -654,6 +654,27 @@ tx_t keyword_to_type(tx_t wrd) {
     if (strcmp(wrd,"EXPM1") == 0) {
         return "EXPM1";
     }
+    if (strcmp(wrd,"DOT") == 0) {
+        return "DOT";
+    }
+    if (strcmp(wrd,"CROSS") == 0) {
+        return "CROSS";
+    }
+    if (strcmp(wrd,"NORM") == 0) {
+        return "NORM";
+    }
+    if (strcmp(wrd,"TRANSPOSE") == 0) {
+        return "TRANSPOSE";
+    }
+    if (strcmp(wrd,"MATRIX_MULT") == 0) {
+        return "MATRIX_MULT";
+    }
+    if (strcmp(wrd,"INVERSE") == 0) {
+        return "INVERSE";
+    }
+    if (strcmp(wrd,"DET") == 0) {
+        return "DET";
+    }
     if (strcmp(wrd,"VARIANCE") == 0) {
         return "VARIANCE";
     }
@@ -3159,6 +3180,9 @@ tx_t is_reap_builtin(tx_t name) {
         return "1";
     }
     if (strcmp(name,"LOG") == 0) {
+        return "1";
+    }
+    if (strcmp(name,"DOT") == 0 || strcmp(name,"CROSS") == 0 || strcmp(name,"NORM") == 0 || strcmp(name,"TRANSPOSE") == 0 || strcmp(name,"MATRIX_MULT") == 0 || strcmp(name,"INVERSE") == 0 || strcmp(name,"DET") == 0) {
         return "1";
     }
     if (strcmp(name,"VARIANCE") == 0 || strcmp(name,"STDDEV") == 0 || strcmp(name,"PRODUCT") == 0 || strcmp(name,"MODE") == 0) {
@@ -8558,6 +8582,13 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars) {
     e = _math_func_paren(e, "STDDEV", "plant_list_stddev");
     e = _math_func_paren(e, "PRODUCT", "plant_list_product");
     e = _math_func_paren(e, "MODE", "plant_list_mode");
+    e = _math_func_paren(e, "DOT", "plant_dot");
+    e = _math_func_paren(e, "CROSS", "plant_cross");
+    e = _math_func_paren(e, "NORM", "plant_norm");
+    e = _math_func_paren(e, "TRANSPOSE", "plant_transpose");
+    e = _math_func_paren(e, "MATRIX_MULT", "plant_matrix_mult");
+    e = _math_func_paren(e, "INVERSE", "plant_inverse");
+    e = _math_func_paren(e, "DET", "plant_det");
     e = _math_func_paren(e, "LOG", "math_log");
     e = _handle_func_paren(e, "Option_Some", "plant_option_some");
     e = _handle_func_paren(e, "Option_None", "plant_option_none");
@@ -13160,7 +13191,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.21 (pure native)");
+      plant_print("Chloroplast 0.49.22 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

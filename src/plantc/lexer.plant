@@ -161,6 +161,14 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "TANH", GIVE "TANH". /IF.
   IF wrd IS "EXP", GIVE "EXP". /IF.
   IF wrd IS "EXPM1", GIVE "EXPM1". /IF.
+  # v0.49.22 — linear algebra built-ins.
+  IF wrd IS "DOT", GIVE "DOT". /IF.
+  IF wrd IS "CROSS", GIVE "CROSS". /IF.
+  IF wrd IS "NORM", GIVE "NORM". /IF.
+  IF wrd IS "TRANSPOSE", GIVE "TRANSPOSE". /IF.
+  IF wrd IS "MATRIX_MULT", GIVE "MATRIX_MULT". /IF.
+  IF wrd IS "INVERSE", GIVE "INVERSE". /IF.
+  IF wrd IS "DET", GIVE "DET". /IF.
   # v0.49.21 — statistical & array aggregation built-ins.
   IF wrd IS "VARIANCE", GIVE "VARIANCE". /IF.
   IF wrd IS "STDDEV", GIVE "STDDEV". /IF.

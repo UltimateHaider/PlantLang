@@ -566,6 +566,15 @@ tx_t plant_list_max(tx_t data);
 tx_t plant_list_range(tx_t data);
 tx_t plant_list_mode(tx_t data);
 
+/* -- v0.49.22 matrix & linear algebra -------------------------- */
+tx_t plant_dot(tx_t v1, tx_t v2);
+tx_t plant_cross(tx_t v1, tx_t v2);
+tx_t plant_norm(tx_t v);
+tx_t plant_transpose(tx_t m);
+tx_t plant_matrix_mult(tx_t m1, tx_t m2);
+tx_t plant_inverse(tx_t m);
+tx_t plant_det(tx_t m);
+
 /* ── std/math FFI bindings (v0.49.19 — full module namespace) ──
    Every math-family endpoint is reachable as REAP … FROM math:FUNC.
    Legacy-eight endpoints route to their tagged-int-safe plant_*

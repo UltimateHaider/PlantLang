@@ -1597,6 +1597,10 @@ ACTION is_reap_builtin(name(TX)),
   IF name IS "LOG",
     GIVE "1".
   /IF.
+  # v0.49.22 — linear algebra built-ins (REAP ingestion).
+  IF name IS "DOT" OR name IS "CROSS" OR name IS "NORM" OR name IS "TRANSPOSE" OR name IS "MATRIX_MULT" OR name IS "INVERSE" OR name IS "DET",
+    GIVE "1".
+  /IF.
   # v0.49.21 — statistical & array aggregation built-ins.
   IF name IS "VARIANCE" OR name IS "STDDEV" OR name IS "PRODUCT" OR name IS "MODE",
     GIVE "1".

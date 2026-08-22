@@ -925,6 +925,26 @@ SHOW JOIN(RANGE(2, 6), ",").   # 2,3,4,5  (scalar form builds lists)
 Empty inputs default to `"0"` (product `"1"`, mode `""`);
 non-parsable elements are filtered before aggregating.
 
+### Matrix & Linear Algebra (v0.49.22)
+
+Matrices are nested lists (LIST of LIST); vectors are flat lists.
+
+```
+SHOW DOT([2, 3], [4, 1]).              # 11
+SHOW NORM([3, 4]).                     # 5
+SHOW CROSS([1, 0, 0], [0, 1, 0]).      # [0, 0, 1]
+CREATE M(LIST) TO [[1, 2], [3, 4]].
+SHOW JOIN(FLATTEN(TRANSPOSE(M)), ","). # 1,3,2,4
+SHOW DET(M).                           # -2
+SHOW JOIN(FLATTEN(INVERSE(M)), ",").   # -2,1,1.5,-0.5
+SHOW JOIN(FLATTEN(MATRIX_MULT(M, M)), ",").  # 7,10,15,22
+```
+
+Dimension violations (ragged rows, mismatched dot lengths, cross on
+non-3-vectors, MATRIX_MULT inner-dimension mismatch, non-square
+DET/INVERSE input, singular inverse) return the string "ERR";
+determinants of singular matrices return "0".
+
 ### std/time
 
 ```

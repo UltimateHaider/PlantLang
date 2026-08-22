@@ -1,0 +1,38 @@
+# v0.49.22 - matrix & linear algebra built-ins:
+# DOT CROSS NORM TRANSPOSE MATRIX_MULT INVERSE DET over nested
+# lists. Dimension/rectangularity violations, non-parsable cells
+# and singular inverses return "ERR". Results are asserted via
+# FLATTEN + JOIN for deterministic row rendering.
+ACTION main(),
+  SHOW "== vectors ==".
+  SHOW DOT([2, 3], [4, 1]).
+  SHOW NORM([3, 4]).
+  SHOW JOIN(CROSS([1, 0, 0], [0, 1, 0]), ",").
+  SHOW CROSS([1, 2, 3], [4, 5, 6])[0].
+  SHOW "== transpose ==".
+  CREATE M(LIST) TO [[1, 2], [3, 4]].
+  SHOW JOIN(FLATTEN(TRANSPOSE(M)), ",").
+  SHOW JOIN(FLATTEN(TRANSPOSE([[1, 2, 3]])), ",").
+  SHOW "== det ==".
+  SHOW DET(M).
+  SHOW DET([[1, 2, 3], [4, 5, 6], [7, 8, 10]]).
+  SHOW DET([[2, 1], [1, 3]]).
+  SHOW "== inverse ==".
+  SHOW JOIN(FLATTEN(INVERSE(M)), ",").
+  SHOW JOIN(FLATTEN(INVERSE([[2, 0], [0, 2]])), ",").
+  SHOW "== matrix_mult ==".
+  SHOW JOIN(FLATTEN(MATRIX_MULT(M, M)), ",").
+  SHOW JOIN(FLATTEN(MATRIX_MULT([[1, 2, 3]], [[4], [5], [6]])), ",").
+  SHOW "== errors ==".
+  SHOW DOT([1, 2], [1, 2, 3]).
+  SHOW CROSS([1, 2], [3, 4]).
+  SHOW MATRIX_MULT([[1, 2]], [[1, 2]]).
+  SHOW DET([[1, 2, 3], [4, 5, 6]]).
+  SHOW INVERSE([[1, 2], [2, 4]]).
+  SHOW INVERSE([[1, 2], [3]]).
+  SHOW NORM("nope").
+  SHOW DOT("a", "b").
+  SHOW "== scalar roundtrip ==".
+  SHOW ROUND(DET(M)).
+  GIVE 0.
+/GIVE main.

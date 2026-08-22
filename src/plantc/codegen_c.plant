@@ -2982,6 +2982,14 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     REAP e FROM _math_func_paren, e, "STDDEV", "plant_list_stddev".
     REAP e FROM _math_func_paren, e, "PRODUCT", "plant_list_product".
     REAP e FROM _math_func_paren, e, "MODE", "plant_list_mode".
+    # v0.49.22 — linear algebra (nested-list matrices/vectors).
+    REAP e FROM _math_func_paren, e, "DOT", "plant_dot".
+    REAP e FROM _math_func_paren, e, "CROSS", "plant_cross".
+    REAP e FROM _math_func_paren, e, "NORM", "plant_norm".
+    REAP e FROM _math_func_paren, e, "TRANSPOSE", "plant_transpose".
+    REAP e FROM _math_func_paren, e, "MATRIX_MULT", "plant_matrix_mult".
+    REAP e FROM _math_func_paren, e, "INVERSE", "plant_inverse".
+    REAP e FROM _math_func_paren, e, "DET", "plant_det".
     REAP e FROM _math_func_paren, e, "LOG", "math_log".
     # v0.49.20 — Option/Result monadic constructors (underscore
     # compounds; no collision with dot-notation field access).
