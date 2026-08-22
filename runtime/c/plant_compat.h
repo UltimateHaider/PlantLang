@@ -543,6 +543,19 @@ tx_t math_log2(tx_t x);
 tx_t math_log1p(tx_t x);
 tx_t math_hypot(tx_t x, tx_t y);
 
+/* ── v0.49.18 Advanced math library ──────────────────────────── */
+tx_t math_sec(tx_t x);
+tx_t math_csc(tx_t x);
+tx_t math_asinh(tx_t x);
+tx_t math_acosh(tx_t x);
+tx_t math_atanh(tx_t x);
+tx_t math_erf(tx_t x);
+tx_t math_erfc(tx_t x);
+tx_t math_gamma(tx_t x);
+tx_t math_lgamma(tx_t x);
+tx_t math_exp2(tx_t x);
+tx_t math_log_base(tx_t x, tx_t b);
+
 /* ── std/io FFI bindings (v0.48.28) ── */
 static tx_t io_SHOWLN(tx_t s)          { return io_showln(s); }
 static tx_t io_FLUSH(void)             { return io_flush(); }

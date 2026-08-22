@@ -165,6 +165,18 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "LOG2", GIVE "LOG2". /IF.
   IF wrd IS "LOG1P", GIVE "LOG1P". /IF.
   IF wrd IS "HYPOT", GIVE "HYPOT". /IF.
+  # v0.49.18 — advanced math built-ins.
+  IF wrd IS "SEC", GIVE "SEC". /IF.
+  IF wrd IS "CSC", GIVE "CSC". /IF.
+  IF wrd IS "ASINH", GIVE "ASINH". /IF.
+  IF wrd IS "ACOSH", GIVE "ACOSH". /IF.
+  IF wrd IS "ATANH", GIVE "ATANH". /IF.
+  IF wrd IS "ERF", GIVE "ERF". /IF.
+  IF wrd IS "ERFC", GIVE "ERFC". /IF.
+  IF wrd IS "GAMMA", GIVE "GAMMA". /IF.
+  IF wrd IS "LGAMMA", GIVE "LGAMMA". /IF.
+  IF wrd IS "EXP2", GIVE "EXP2". /IF.
+  IF wrd IS "LOG_BASE", GIVE "LOG_BASE". /IF.
   IF wrd IS "ENUM", GIVE "ENUM". /IF.
   IF wrd IS "CONST", GIVE "CONST". /IF.
   IF wrd IS "ROOT", GIVE "ROOT". /IF.

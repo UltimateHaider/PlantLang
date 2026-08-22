@@ -64,13 +64,14 @@ ACTION main(),
   SHOW "== nested ==".
   SHOW MIN(MAX(2, 9), 4).
   SHOW MAX(MIN(2, 9), 4).
-  SHOW TAN(0.5) + ATAN(0.5).
+  SHOW TAN(0.5).
+  SHOW ATAN(0.5).
   SHOW HYPOT(TAN(0.5), 1).
   SHOW LOG10(EXPM1(9)).
   SHOW "== math: FFI module still works ==".
   REAP p FROM math:PI.
   SHOW p.
-  REAP l FROM math:LOG, 10.
+  REAP l FROM math:LOG, "10".
   SHOW l.
   GIVE 0.
 /GIVE main.

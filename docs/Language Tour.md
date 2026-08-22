@@ -843,6 +843,38 @@ All 17 are also available via the `math:` FFI module
 ints and are decoded safely — `MIN(3, 5)` with integer literals no
 longer segfaults (the legacy `math_min`/`math_max` helpers were patched
 in v0.49.17 to use `_plant_math_num`).
+### Advanced Math Library (v0.49.18)
+
+11 further built-ins complete the math subsystem — same coercion and
+rendering rules as the extended library; domain violations report
+`-nan`.
+
+```
+# Reciprocal trig
+SHOW SEC(0).                         # → 1   (1/cos)
+SHOW CSC(1).                         # → 1.188395106
+
+# Inverse hyperbolics (domain-guarded)
+SHOW ASINH(1).                       # → 0.881373587
+SHOW ACOSH(2).                       # → 1.316957897
+SHOW ACOSH(0.5).                     # → -nan (x >= 1 required)
+SHOW ATANH(0.5).                     # → 0.5493061443
+SHOW ATANH(1).                       # → -nan (|x| < 1 required)
+
+# Special functions
+SHOW ERF(1).                         # → 0.8427007929
+SHOW ERFC(1).                        # → 0.1572992071
+SHOW GAMMA(5).                       # → 24  (tgamma)
+SHOW LGAMMA(5).                      # → 3.17805383
+
+# Utilities
+SHOW EXP2(3).                        # → 8   (2^x)
+SHOW LOG_BASE(8, 2).                 # → 3   (x > 0, b > 0, b != 1)
+SHOW LOG_BASE(8, 1).                 # → -nan
+
+# Nesting works anywhere an expression does
+SHOW EXP2(LOG_BASE(8, 2)).           # → 8
+```
 
 ### std/time
 

@@ -1,5 +1,71 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.49.18 — 2026 (Advanced math library — 11 built-ins; math subsystem mature)
+
+### Language
+- **Advanced math built-ins (v0.49.18)**: 11 functions shipped as bare
+  expression built-ins with FFI extern declarations — completing the
+  math subsystem:
+  - **Reciprocal trig**: `SEC(x)` = 1/cos(x), `CSC(x)` = 1/sin(x)
+    (zero divisors report `-nan`).
+  - **Inverse hyperbolics**: `ASINH`, `ACOSH` (domain x >= 1),
+    `ATANH` (domain |x| < 1) — violations report `-nan`.
+  - **Special functions**: `ERF`, `ERFC` (error functions),
+    `GAMMA` (tgamma), `LGAMMA` (log-gamma; domain x > 0).
+  - **Utilities**: `EXP2(x)` = 2^x, `LOG_BASE(x, b)` =
+    log(x)/log(b) with domain checks x > 0, b > 0, b != 1
+    (violations report `-nan`; no silent ln fallback).
+
+### Compiler fixes surfaced by this release (all verified by the new suites)
+- **Decimal-literal crash fix (`_wrap_math_args`)**: expression-path
+  numeric literal args of the math built-ins now wrap in
+  `_from_double(...)` via a depth-aware arg scanner
+  (`_math_func_paren`). Previously `MIN(2.5, 1.5)`/`TAN(0.5)` emitted
+  raw C doubles against tx_t parameters — a hard compile error
+  (integers only worked through the tagged-int accident; ints beyond
+  ±4096 were also unsafe).
+- **Tagged-long index corruption fix**: `_wrap_math_args` consumes the
+  REAP'd result of `_find_substr`, whose GIVE lowers to a raw tagged
+  long; arithmetic on it must go through the tagged-safe converter
+  `plant_rw_arg_long` (now whitelisted as a known numeric call in
+  `seg_is_numeric`). The previous `_to_long` attempt dereferenced
+  small pointer values (`atol(*(char*)1)`) and segfaulted the
+  compiler whenever a match offset was nonzero.
+- **Keyword-shadow order guard**: ASINH/ACOSH/ATANH/LGAMMA and
+  ASIN/ACOS/ATAN rows moved ahead of SINH/COSH/TANH/GAMMA/SIN/COS/TAN
+  in `translate_expr` — `_handle_func_paren` splits on plain
+  substrings, so `"SINH ("` carved `"ASINH ("` into
+  `"A"+"math_sinh(...)"` (`Amath_sinh` link errors). Rewritten
+  lowercase C can never rematch an uppercase needle.
+- **`LOG_BASE` domain tightened**: removed the silent natural-log
+  fallback for invalid bases — all domain violations report `-nan`.
+
+### Tests
+- New `tests/regression/math_final.plant` (+ `.expected`): 33
+  assertions — sec/csc values, inverse-hyperbolic domains
+  (`ACOSH(0.5)`, `ATANH(1)` → `-nan`), erf/erfc/gamma/lgamma,
+  exp2, log_base domain matrix (x=0, b=1, b=0 → `-nan`), and nested
+  compositions (`EXP2(LOG_BASE(8, 2))` → 8,
+  `MIN(MAX(GAMMA(5), 1), 30)` → 24).
+- `tests/regression/math_extra.plant` (v0.49.17) finally wired in:
+  `.expected` generated and the suite passes — it had never been
+  linked before (missing fixture + decimal/shadow compile failures).
+- Regression suite: 159 → **161** passing files.
+
+### Internal
+- Runtime helpers in `runtime/c/plant_runtime.c` (after `math_hypot`);
+  extern declarations in `runtime/c/plant_compat.h`
+  ("v0.49.18 Advanced math library" block). Codegen: `_is_num_literal`,
+  `_wrap_math_args`, `_math_func_paren` helpers + shadow-order guard
+  rows in `src/plantc/codegen_c.plant`; lexer keywords in
+  `src/plantc/lexer.plant` (`keyword_to_type`); REAP ingestion chains
+  in `is_reap_builtin` (`src/plantc/parser.plant`) covering both the
+  v0.49.17 names (previously missing) and the 11 new ones.
+- Version markers moved to v0.49.18 (`Makefile`,
+  `src/plantc/main.plant` banner, `tests/native/run_native_tests.sh`).
+- Verification: regression 161/161, native 20/20, generics 7/7,
+  closures 6/6, `make self` converged (433540 bytes).
+
 ## v0.49.16 — 2026 (List Built-ins, Batch 2 — Lists Complete)
 
 ### Language

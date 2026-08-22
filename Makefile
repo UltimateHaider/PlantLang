@@ -14,7 +14,7 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.49.17
+VERSION    ?= 0.49.18
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
@@ -93,18 +93,11 @@ $(V5_C): $(ALL_PLANT) $(V4_BIN)
 	@$(V4_BIN) $(ALL_PLANT) $@ >/dev/null 2>&1
 
 # ── test: native + generics + closures integration suites ─────
-test: $(NATIVE_BIN) test-math-extra
+test: $(NATIVE_BIN) ## Run native + generics + closures + regression suites
 	@sh tests/native/run_native_tests.sh $(NATIVE_BIN)
 	@sh tests/generics/run_generics_tests.sh $(NATIVE_BIN)
 	@sh tests/closures/run_closures_tests.sh $(NATIVE_BIN)
 	@sh tests/regression/run_regression_tests.sh $(NATIVE_BIN)
-
-# Extended math test target
-test-math-extra: $(NATIVE_BIN) tests/regression/math_extra.plant
-	@$(NATIVE_BIN) tests/regression/math_extra.plant /tmp/math_extra.c >/dev/null 2>&1
-	@gcc -w -O0 -include tests/native/mock_ffi.h -Iruntime/c -I. -o /tmp/math_extra /tmp/math_extra.c runtime/c/plant_runtime.c tests/native/mock_ffi.c -lm 2>/dev/null
-	@/tmp/math_extra >/tmp/math_extra.out 2>&1
-	@diff -u tests/regression/math_extra.expected /tmp/math_extra.out && echo "math_extra test: PASS"
 
 perf: $(NATIVE_BIN) ## Compile + run benchmarks, write perf_results.md
 	@sh tests/perf/run_perf.sh $(NATIVE_BIN)

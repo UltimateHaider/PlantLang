@@ -2425,6 +2425,95 @@ tx_t math_hypot(tx_t x, tx_t y) {
     return _plant_math_result(hypot(a, b));
 }
 
+/* ── v0.49.18 Advanced math library ──────────────────────────── */
+// Reciprocal trigonometric functions
+tx_t math_sec(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    // 1/cos(x) — handle cos(x) == 0 gracefully
+    double cv = cos(v);
+    if (cv == 0.0) return strdup("-nan");
+    return _plant_math_result(1.0 / cv);
+}
+
+tx_t math_csc(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    // 1/sin(x) — handle sin(x) == 0 gracefully
+    double sv = sin(v);
+    if (sv == 0.0) return strdup("-nan");
+    return _plant_math_result(1.0 / sv);
+}
+
+// Inverse hyperbolic functions
+tx_t math_asinh(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    return _plant_math_result(asinh(v));
+}
+
+tx_t math_acosh(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    // acosh domain: x >= 1; return -nan otherwise
+    if (v < 1.0) return strdup("-nan");
+    return _plant_math_result(acosh(v));
+}
+
+tx_t math_atanh(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    // atanh domain: |x| < 1; return -nan otherwise
+    if (v <= -1.0 || v >= 1.0) return strdup("-nan");
+    return _plant_math_result(atanh(v));
+}
+
+// Special functions
+tx_t math_erf(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    return _plant_math_result(erf(v));
+}
+
+tx_t math_erfc(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    return _plant_math_result(erfc(v));
+}
+
+// Statistical functions
+tx_t math_gamma(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    // gamma domain: x > 0; return -nan otherwise
+    if (v <= 0.0) return strdup("-nan");
+    return _plant_math_result(tgamma(v));
+}
+
+tx_t math_lgamma(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    // lgamma domain: x > 0; return -nan otherwise
+    if (v <= 0.0) return strdup("-nan");
+    return _plant_math_result(lgamma(v));
+}
+
+// Computational utilities
+tx_t math_exp2(tx_t x) {
+    double v = NAN;
+    _plant_math_num(x, &v);
+    return _plant_math_result(exp2(v));
+}
+
+tx_t math_log_base(tx_t x, tx_t b) {
+    double a = NAN, c = NAN;
+    _plant_math_num(x, &a);
+    _plant_math_num(b, &c);
+    /* domain: x > 0, b > 0, b != 1 — violations yield "-nan" */
+    if (a <= 0.0 || c <= 0.0 || c == 1.0) return strdup("-nan");
+    return _plant_math_result(log(a) / log(c));
+}
+
 /* ── std/time ────────────────────────────────────────────────── */
 
 tx_t time_now(void) {

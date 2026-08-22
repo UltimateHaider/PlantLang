@@ -1,0 +1,49 @@
+# v0.49.18 — advanced math library (11 built-ins): SEC CSC ASINH
+# ACOSH ATANH ERF ERFC GAMMA LGAMMA EXP2 LOG_BASE as bare expression
+# built-ins. Domain guards live in the runtime (zero divisors, acosh
+# x >= 1, atanh |x| < 1, gamma x > 0, log_base x > 0 /\ b > 0 /\
+# b != 1) and report "-nan". Numeric literal args are wrapped in
+# _from_double by the codegen's _wrap_math_args pass.
+ACTION main(),
+  SHOW "== sec/csc ==".
+  SHOW SEC(0).
+  SHOW SEC(1).
+  SHOW CSC(1).
+  SHOW CSC(0.5).
+  SHOW "== inverse hyperbolics ==".
+  SHOW ASINH(0).
+  SHOW ASINH(1).
+  SHOW ACOSH(1).
+  SHOW ACOSH(2).
+  SHOW ACOSH(0.5).
+  SHOW ATANH(0).
+  SHOW ATANH(0.5).
+  SHOW ATANH(1).
+  SHOW "== erf/erfc ==".
+  SHOW ERF(0).
+  SHOW ERF(1).
+  SHOW ERFC(0).
+  SHOW ERFC(1).
+  SHOW "== gamma/lgamma ==".
+  SHOW GAMMA(1).
+  SHOW GAMMA(5).
+  SHOW GAMMA(0.5).
+  SHOW LGAMMA(1).
+  SHOW LGAMMA(5).
+  SHOW "== exp2 ==".
+  SHOW EXP2(0).
+  SHOW EXP2(3).
+  SHOW EXP2(0.5).
+  SHOW "== log_base ==".
+  SHOW LOG_BASE(8, 2).
+  SHOW LOG_BASE(100, 10).
+  SHOW LOG_BASE(0, 2).
+  SHOW LOG_BASE(8, 1).
+  SHOW LOG_BASE(8, 0).
+  SHOW "== nested ==".
+  SHOW EXP2(LOG_BASE(8, 2)).
+  SHOW LOG_BASE(EXP2(10), 2).
+  SHOW SEC(ACOSH(2)).
+  SHOW MIN(MAX(GAMMA(5), 1), 30).
+  GIVE 0.
+/GIVE main.

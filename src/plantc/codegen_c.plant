@@ -62,6 +62,122 @@ ACTION _handle_func_paren(expr(TX), kw(TX), cfn(TX)),
     GIVE res.
 /ACTION.
 
+# _is_num_literal — "1" when s (spaces ignored) is a bare numeric
+# literal: optional single leading '-', digits with at most one '.'.
+# Used by _wrap_math_args to decide which call arguments need a
+# tx_t constructor.
+ACTION _is_num_literal(s(TX)),
+  CREATE comp(TX) TO "".
+  CREATE q(NUM) TO 0.
+  CREATE n(NUM) TO LEN(s).
+  SEASON q < n,
+    REAP cq FROM char_at, s, q.
+    IF cq ISNT " ", SET comp TO comp + cq. /IF.
+    SET q TO q + 1.
+  /SEASON.
+  CREATE m(NUM) TO LEN(comp).
+  IF m IS 0, GIVE "0". /IF.
+  CREATE i(NUM) TO 0.
+  IF char_at(comp, 0) IS "-",
+    SET i TO 1.
+    IF m IS 1, GIVE "0". /IF.
+  /IF.
+  CREATE digits(NUM) TO 0.
+  CREATE dots(NUM) TO 0.
+  CREATE ok(NUM) TO 1.
+  SEASON i < m,
+    REAP c3 FROM char_at, comp, i.
+    IF c3 IS ".",
+      SET dots TO dots + 1.
+      IF dots GREATER THAN 1, SET ok TO 0. /IF.
+    /IF.
+    IF c3 ISNT "." AND (c3 LESS THAN "0" OR c3 GREATER THAN "9"), SET ok TO 0. /IF.
+    IF c3 GREATER THAN OR EQUAL "0" AND c3 LESS THAN OR EQUAL "9", SET digits TO digits + 1. /IF.
+    SET i TO i + 1.
+  /SEASON.
+  IF ok IS 1 AND digits GREATER THAN 0 AND dots LESS THAN 2, GIVE "1". /IF.
+  GIVE "0".
+/ACTION.
+
+# _wrap_math_args — for every occurrence of cfn( ... ) in e (depth-
+# aware scan), split the argument list on top-level commas and wrap
+# bare numeric literal arguments in _from_double(...) so decimal
+# literals and integers beyond the tagged-int range arrive as valid
+# tx_t values. Non-numeric args (variables, nested calls, strings)
+# pass through untouched; recurses on the tail so multiple
+# occurrences in one expression are all rewritten.
+ACTION _wrap_math_args(e(TX), cfn(TX)),
+  REAP hpos FROM _find_substr, e, cfn + "(".
+  IF hpos IS -1, GIVE e. /IF.
+  # _to_long: hpos arrives from a REAP'd user action, so the numeric
+  # analyzer cannot prove its type — without the coercion the '+'
+  # below lowers to _cat (string concat) and poisons every index
+  # computed from it.
+  # plant_rw_arg_long: hpos arrives from a REAP'd user action whose
+  # GIVE lowers to a raw tagged long — _to_long would deref small
+  # pointer values (hpos=1 → atol(*(char*)1) → segfault). The compat
+  # converter checks (uintptr_t)v < 4096 first; registered as a known
+  # numeric call in seg_is_numeric so '+' stays arithmetic.
+  CREATE open(NUM) TO plant_rw_arg_long(hpos) + LEN(cfn).
+  CREATE i(NUM) TO open + 1.
+  CREATE dep(NUM) TO 1.
+  CREATE close(NUM) TO -1.
+  SEASON i < LEN(e),
+    REAP ch FROM char_at, e, i.
+    IF ch IS "(", SET dep TO dep + 1. /IF.
+    IF ch IS ")",
+      SET dep TO dep - 1.
+      IF dep IS 0, SET close TO i. /IF.
+      IF dep IS 0, BREAK 0. /IF.
+    /IF.
+    SET i TO i + 1.
+  /SEASON.
+  IF close IS -1, GIVE e. /IF.
+  REAP inner FROM substring, e, open + 1, close.
+  CREATE parts(LIST) TO plant_list_make(0).
+  CREATE cur(TX) TO "".
+  CREATE d2(NUM) TO 0.
+  CREATE k(NUM) TO 0.
+  CREATE mm(NUM) TO LEN(inner).
+  SEASON k < mm,
+    REAP ck FROM char_at, inner, k.
+    IF ck IS "(" OR ck IS "[", SET d2 TO d2 + 1. /IF.
+    IF ck IS ")" OR ck IS "]", SET d2 TO d2 - 1. /IF.
+    IF ck IS "," AND d2 IS 0,
+      PUT cur INTO parts.
+      SET cur TO "".
+    /IF.
+    IF ck ISNT "," OR d2 ISNT 0, SET cur TO cur + ck. /IF.
+    SET k TO k + 1.
+  /SEASON.
+  PUT cur INTO parts.
+  CREATE res(TX) TO "".
+  CREATE idx(NUM) TO 0.
+  CREATE cn(NUM) TO COUNT parts.
+  SEASON idx < cn,
+    REAP p FROM plant_list_get, parts, idx.
+    REAP isnum FROM _is_num_literal, p.
+    IF idx GREATER THAN 0, SET res TO res + ", ". /IF.
+    IF isnum IS "1", SET res TO res + "_from_double(" + p + ")". /IF.
+    IF isnum ISNT "1", SET res TO res + p. /IF.
+    SET idx TO idx + 1.
+  /SEASON.
+  REAP head FROM substring, e, 0, open + 1.
+  REAP tail FROM substring, e, close, LEN(e).
+  REAP rest FROM _wrap_math_args, tail, cfn.
+  GIVE head + res + rest.
+/ACTION.
+
+# _math_func_paren — math built-ins route through the textual paren
+# mapper, then get their bare numeric literal arguments wrapped in
+# _from_double(...) (the math_* runtime helpers take tx_t; raw C
+# doubles do not compile against them).
+ACTION _math_func_paren(expr(TX), kw(TX), cfn(TX)),
+  REAP e2 FROM _handle_func_paren, expr, kw, cfn.
+  REAP e3 FROM _wrap_math_args, e2, cfn.
+  GIVE e3.
+/ACTION.
+
 # _find_substr — position of the first occurrence of the substring
 # needle inside s, or -1 when absent. (find_any only searches for a
 # single character of its delimiter set — NOT a substring — so a
@@ -797,6 +913,8 @@ ACTION seg_is_numeric(seg(TX), nums(LIST)),
   IF pre7 IS "stack_size(", GIVE 1. /IF.
   REAP pre8 FROM substring, sb, 0, 14.
   IF pre8 IS "ffi_last_error(", GIVE 1. /IF.
+  REAP pre9 FROM substring, sb, 0, 18.
+  IF pre9 IS "plant_rw_arg_long(", GIVE 1. /IF.
   CREATE si(NUM) TO 0.
   CREATE sc(TX) TO "".
   CREATE tok(TX) TO "".
@@ -2660,6 +2778,20 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     REAP e FROM strings:REPLACE, e, "NOT ", "!".
     REAP e FROM strings:REPLACE, e, " IS ", " == ".
     REAP e FROM _handle_func, e, "COUNT", "plant_array_length".
+    # v0.49.18 shadow-order guard: these seven must
+    # rewrite BEFORE their shorter substrings (SINH/COSH/TANH/GAMMA,
+    # SIN/COS/TAN) — the paren mapper splits
+    # on plain substrings, so "SINH (" would otherwise carve
+    # "ASINH (" into "A"+"math_sinh(...)". Rewritten (lowercase) C
+    # can never rematch an uppercase needle.
+    REAP e FROM _math_func_paren, e, "ASINH", "math_asinh".
+    REAP e FROM _math_func_paren, e, "ACOSH", "math_acosh".
+    REAP e FROM _math_func_paren, e, "ATANH", "math_atanh".
+    REAP e FROM _math_func_paren, e, "LGAMMA", "math_lgamma".
+    REAP e FROM _math_func_paren, e, "ASIN", "math_asin".
+    REAP e FROM _math_func_paren, e, "ACOS", "math_acos".
+    REAP e FROM _math_func_paren, e, "ATAN", "math_atan".
+
     REAP e FROM _handle_func_paren, e, "LEN", "strlen".
     REAP e FROM _handle_func_paren, e, "JOIN", "plant_join".
     REAP e FROM _handle_func_paren, e, "FIRST", "plant_first".
@@ -2738,23 +2870,33 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     # mapper to their C math runtime helpers (math_*). Numeric args
     # arrive as tagged small ints and are decoded safely by
     # _plant_math_num; domain errors return "-nan" (ASIN/ACOS/LOG*).
-    REAP e FROM _handle_func_paren, e, "MIN", "math_min".
-    REAP e FROM _handle_func_paren, e, "MAX", "math_max".
-    REAP e FROM _handle_func_paren, e, "TAN", "math_tan".
-    REAP e FROM _handle_func_paren, e, "ATAN", "math_atan".
-    REAP e FROM _handle_func_paren, e, "COT", "math_cot".
-    REAP e FROM _handle_func_paren, e, "ASIN", "math_asin".
-    REAP e FROM _handle_func_paren, e, "ACOS", "math_acos".
-    REAP e FROM _handle_func_paren, e, "ATAN2", "math_atan2".
-    REAP e FROM _handle_func_paren, e, "SINH", "math_sinh".
-    REAP e FROM _handle_func_paren, e, "COSH", "math_cosh".
-    REAP e FROM _handle_func_paren, e, "TANH", "math_tanh".
-    REAP e FROM _handle_func_paren, e, "EXP", "math_exp".
-    REAP e FROM _handle_func_paren, e, "EXPM1", "math_expm1".
-    REAP e FROM _handle_func_paren, e, "LOG10", "math_log10".
-    REAP e FROM _handle_func_paren, e, "LOG2", "math_log2".
-    REAP e FROM _handle_func_paren, e, "LOG1P", "math_log1p".
-    REAP e FROM _handle_func_paren, e, "HYPOT", "math_hypot".
+    REAP e FROM _math_func_paren, e, "MIN", "math_min".
+    REAP e FROM _math_func_paren, e, "MAX", "math_max".
+    REAP e FROM _math_func_paren, e, "TAN", "math_tan".
+    REAP e FROM _math_func_paren, e, "COT", "math_cot".
+    REAP e FROM _math_func_paren, e, "ATAN2", "math_atan2".
+    REAP e FROM _math_func_paren, e, "SINH", "math_sinh".
+    REAP e FROM _math_func_paren, e, "COSH", "math_cosh".
+    REAP e FROM _math_func_paren, e, "TANH", "math_tanh".
+    REAP e FROM _math_func_paren, e, "EXP", "math_exp".
+    REAP e FROM _math_func_paren, e, "EXPM1", "math_expm1".
+    REAP e FROM _math_func_paren, e, "LOG10", "math_log10".
+    REAP e FROM _math_func_paren, e, "LOG2", "math_log2".
+    REAP e FROM _math_func_paren, e, "LOG1P", "math_log1p".
+    REAP e FROM _math_func_paren, e, "HYPOT", "math_hypot".
+    # v0.49.18 — advanced math library (11 built-ins): SEC / CSC /
+    # ASINH / ACOSH / ATANH / ERF / ERFC / GAMMA / LGAMMA / EXP2 /
+    # LOG_BASE map through the paren mapper to their C math runtime
+    # helpers (math_*). Domain guards live in the runtime (zero
+    # divisors → "-nan", acosh x >= 1, atanh |x| < 1, gamma x > 0,
+    # log_base x > 0 /\ b > 0 /\ b != 1).
+    REAP e FROM _math_func_paren, e, "SEC", "math_sec".
+    REAP e FROM _math_func_paren, e, "CSC", "math_csc".
+    REAP e FROM _math_func_paren, e, "ERF", "math_erf".
+    REAP e FROM _math_func_paren, e, "ERFC", "math_erfc".
+    REAP e FROM _math_func_paren, e, "GAMMA", "math_gamma".
+    REAP e FROM _math_func_paren, e, "EXP2", "math_exp2".
+    REAP e FROM _math_func_paren, e, "LOG_BASE", "math_log_base".
     # v0.48.38k — VEIN resource management: TAP / INFUSE use the
     # paren form; ABSORB / SEAL accept both the paren form (used by
     # the test suite) and the space form (the _handle_func pattern).

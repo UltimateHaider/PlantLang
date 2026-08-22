@@ -1585,6 +1585,14 @@ ACTION is_reap_builtin(name(TX)),
   IF name IS "LEN" OR name IS "JOIN" OR name IS "FIRST" OR name IS "LAST" OR name IS "SUM" OR name IS "UPPER" OR name IS "LOWER" OR name IS "TRIM" OR name IS "REVERSE" OR name IS "ABS" OR name IS "ROUND" OR name IS "POW" OR name IS "CEIL" OR name IS "FLOOR" OR name IS "RANDOM" OR name IS "SIN" OR name IS "COS" OR name IS "SQRT" OR name IS "HAS" OR name IS "ANY" OR name IS "ALL" OR name IS "PICK" OR name IS "FIND" OR name IS "COUNT_OF" OR name IS "SLICE" OR name IS "TAP" OR name IS "INFUSE" OR name IS "ABSORB" OR name IS "SEAL" OR name IS "TEST" OR name IS "COUNT" OR name IS "NOW" OR name IS "ANALYZE" OR name IS "TYPEOF" OR name IS "INCLUDES" OR name IS "STARTS_WITH" OR name IS "ENDS_WITH" OR name IS "REPEAT" OR name IS "PAD" OR name IS "PAD_LEFT" OR name IS "REVERSE" OR name IS "RANGE" OR name IS "SORT" OR name IS "INDEX_OF" OR name IS "UNIQUE" OR name IS "AVERAGE" OR name IS "MEDIAN" OR name IS "FLATTEN" OR name IS "CHUNK" OR name IS "ZIP" OR name IS "FILTER_GT" OR name IS "FILTER_LT",
     GIVE "1".
   /IF.
+  # v0.49.17 — extended math built-ins (REAP ingestion).
+  IF name IS "MIN" OR name IS "MAX" OR name IS "TAN" OR name IS "ATAN" OR name IS "COT" OR name IS "ASIN" OR name IS "ACOS" OR name IS "ATAN2" OR name IS "SINH" OR name IS "COSH" OR name IS "TANH" OR name IS "EXP" OR name IS "EXPM1" OR name IS "LOG10" OR name IS "LOG2" OR name IS "LOG1P" OR name IS "HYPOT",
+    GIVE "1".
+  /IF.
+  # v0.49.18 — advanced math built-ins (REAP ingestion).
+  IF name IS "SEC" OR name IS "CSC" OR name IS "ASINH" OR name IS "ACOSH" OR name IS "ATANH" OR name IS "ERF" OR name IS "ERFC" OR name IS "GAMMA" OR name IS "LGAMMA" OR name IS "EXP2" OR name IS "LOG_BASE",
+    GIVE "1".
+  /IF.
   GIVE "0".
 /ACTION.
 
