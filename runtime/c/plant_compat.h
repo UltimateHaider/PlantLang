@@ -575,6 +575,13 @@ tx_t plant_matrix_mult(tx_t m1, tx_t m2);
 tx_t plant_inverse(tx_t m);
 tx_t plant_det(tx_t m);
 
+/* -- v0.49.23 numerical analysis ------------------------------- */
+tx_t plant_lu(tx_t m);
+tx_t plant_eigen(tx_t m);
+tx_t plant_svd(tx_t m);
+tx_t plant_solve(tx_t m, tx_t b);
+tx_t plant_cond(tx_t m);
+
 /* ── std/math FFI bindings (v0.49.19 — full module namespace) ──
    Every math-family endpoint is reachable as REAP … FROM math:FUNC.
    Legacy-eight endpoints route to their tagged-int-safe plant_*

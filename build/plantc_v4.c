@@ -661,6 +661,21 @@ tx_t keyword_to_type(tx_t wrd) {
     if (strcmp(wrd,"EXPM1") == 0) {
         return "EXPM1";
     }
+    if (strcmp(wrd,"LU") == 0) {
+        return "LU";
+    }
+    if (strcmp(wrd,"EIGEN") == 0) {
+        return "EIGEN";
+    }
+    if (strcmp(wrd,"SVD") == 0) {
+        return "SVD";
+    }
+    if (strcmp(wrd,"SOLVE") == 0) {
+        return "SOLVE";
+    }
+    if (strcmp(wrd,"COND") == 0) {
+        return "COND";
+    }
     if (strcmp(wrd,"DOT") == 0) {
         return "DOT";
     }
@@ -3187,6 +3202,9 @@ tx_t is_reap_builtin(tx_t name) {
         return "1";
     }
     if (strcmp(name,"LOG") == 0) {
+        return "1";
+    }
+    if (strcmp(name,"LU") == 0 || strcmp(name,"EIGEN") == 0 || strcmp(name,"SVD") == 0 || strcmp(name,"SOLVE") == 0 || strcmp(name,"COND") == 0) {
         return "1";
     }
     if (strcmp(name,"DOT") == 0 || strcmp(name,"CROSS") == 0 || strcmp(name,"NORM") == 0 || strcmp(name,"TRANSPOSE") == 0 || strcmp(name,"MATRIX_MULT") == 0 || strcmp(name,"INVERSE") == 0 || strcmp(name,"DET") == 0) {
@@ -8596,6 +8614,11 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars) {
     e = _math_func_paren(e, "MATRIX_MULT", "plant_matrix_mult");
     e = _math_func_paren(e, "INVERSE", "plant_inverse");
     e = _math_func_paren(e, "DET", "plant_det");
+    e = _math_func_paren(e, "LU", "plant_lu");
+    e = _math_func_paren(e, "EIGEN", "plant_eigen");
+    e = _math_func_paren(e, "SVD", "plant_svd");
+    e = _math_func_paren(e, "SOLVE", "plant_solve");
+    e = _math_func_paren(e, "COND", "plant_cond");
     e = _math_func_paren(e, "LOG", "math_log");
     e = _handle_func_paren(e, "Option_Some", "plant_option_some");
     e = _handle_func_paren(e, "Option_None", "plant_option_none");
@@ -13198,7 +13221,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.22 (pure native)");
+      plant_print("Chloroplast 0.49.23 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

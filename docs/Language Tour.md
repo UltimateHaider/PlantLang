@@ -945,6 +945,24 @@ non-3-vectors, MATRIX_MULT inner-dimension mismatch, non-square
 DET/INVERSE input, singular inverse) return the string "ERR";
 determinants of singular matrices return "0".
 
+### Numerical Analysis (v0.49.23)
+
+```
+CREATE A(LIST) TO [[4, 3], [6, 3]].
+CREATE f(LIST) TO LU(A).               # [L, U]; PA = LU (row-pivoted)
+SHOW JOIN(FLATTEN(f[0]), ",").         # L = 1,0,0.6666666667,1
+CREATE S(LIST) TO [[2, 1], [1, 2]].
+CREATE eg(LIST) TO EIGEN(S).           # symmetric only; values desc
+SHOW JOIN(eg[0], ",").                 # 3,1
+CREATE sd(LIST) TO SVD([[3, 0], [0, 2]]).
+SHOW JOIN(sd[1], ",").                 # singular values: 3,2
+SHOW JOIN(SOLVE([[2, 1], [1, 3]], [5, 10]), ",").   # 1,3
+SHOW COND([[2, 0], [0, 2]]).           # 2
+```
+
+EIGEN accepts symmetric matrices (Jacobi rotations); SVD decomposes
+any shape via A^T A; SOLVE rejects singular systems ("ERR").
+
 ### std/time
 
 ```

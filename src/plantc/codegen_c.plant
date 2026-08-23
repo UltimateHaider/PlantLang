@@ -2990,6 +2990,12 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     REAP e FROM _math_func_paren, e, "MATRIX_MULT", "plant_matrix_mult".
     REAP e FROM _math_func_paren, e, "INVERSE", "plant_inverse".
     REAP e FROM _math_func_paren, e, "DET", "plant_det".
+    # v0.49.23 — numerical analysis (factorization/eigen/solver).
+    REAP e FROM _math_func_paren, e, "LU", "plant_lu".
+    REAP e FROM _math_func_paren, e, "EIGEN", "plant_eigen".
+    REAP e FROM _math_func_paren, e, "SVD", "plant_svd".
+    REAP e FROM _math_func_paren, e, "SOLVE", "plant_solve".
+    REAP e FROM _math_func_paren, e, "COND", "plant_cond".
     REAP e FROM _math_func_paren, e, "LOG", "math_log".
     # v0.49.20 — Option/Result monadic constructors (underscore
     # compounds; no collision with dot-notation field access).

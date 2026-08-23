@@ -3635,6 +3635,305 @@ tx_t plant_det(tx_t m) {
     return _plant_math_result(det);
 }
 
+/* ================================================================
+   v0.49.23 - numerical analysis built-ins
+   LU EIGEN SVD SOLVE COND. Shapes: LU -> [L, U] (PA = LU, partial
+   pivoting folded into row order); EIGEN -> [values, vectors]
+   (symmetric matrices only, Jacobi rotations, values sorted
+   descending, vectors as columns); SVD -> [U, S, V] (via the
+   symmetric eigenproblem of A^T A, sigma = sqrt(lambda), null-
+   space columns of U Gram-Schmidt filled); SOLVE(m, b) -> x
+   (partial-pivot elimination); COND(m) -> norm(m)*norm(inv(m))
+   (Euclidean/Frobenius). Every invalid state returns "ERR".
+   ================================================================ */
+
+static PlantArray* _la_build(int rows, int cols, double src[LA_MAXD][2*LA_MAXD]) {
+    PlantArray* out = plant_list_create(rows);
+    for (int i = 0; i < rows; i++) {
+        PlantArray* row = plant_list_create(cols);
+        for (int j = 0; j < cols; j++)
+            row = plant_list_push(row, _plant_math_result(src[i][j]));
+        out = plant_list_push(out, (tx_t)row);
+    }
+    return out;
+}
+
+static int _la_symmetric(PlantArray* M, int n) {
+    for (int i = 0; i < n; i++)
+        for (int j = i + 1; j < n; j++) {
+            int o1 = 0, o2 = 0;
+            double a = _la_get(M, i, j, &o1);
+            double b = _la_get(M, j, i, &o2);
+            if (!o1 || !o2 || fabs(a - b) > 1e-9) return 0;
+        }
+    return 1;
+}
+
+/* cyclic Jacobi eigenrotation for symmetric matrices; fills eval
+   (diagonal) and evec (columns are eigenvectors) */
+static void _jacobi(double A[LA_MAXD][LA_MAXD], double V[LA_MAXD][LA_MAXD], int n) {
+    for (int i = 0; i < n; i++) V[i][i] = 1.0;
+    for (int sweep = 0; sweep < 200; sweep++) {
+        double off = 0.0;
+        for (int i = 0; i < n; i++)
+            for (int j = i + 1; j < n; j++) off += A[i][j] * A[i][j];
+        if (off < 1e-22) break;
+        for (int p = 0; p < n; p++)
+            for (int q = p + 1; q < n; q++) {
+                if (fabs(A[p][q]) < 1e-15) continue;
+                double theta = (A[q][q] - A[p][p]) / (2.0 * A[p][q]);
+                double t = (theta >= 0 ? 1.0 : -1.0) /
+                           (fabs(theta) + sqrt(theta * theta + 1.0));
+                double cs = 1.0 / sqrt(t * t + 1.0);
+                double sn = t * cs;
+                for (int k = 0; k < n; k++) {
+                    double akp = A[k][p], akq = A[k][q];
+                    A[k][p] = cs * akp - sn * akq;
+                    A[k][q] = sn * akp + cs * akq;
+                }
+                for (int k = 0; k < n; k++) {
+                    double apk = A[p][k], aqk = A[q][k];
+                    A[p][k] = cs * apk - sn * aqk;
+                    A[q][k] = sn * apk + cs * aqk;
+                    double vkp = V[k][p], vkq = V[k][q];
+                    V[k][p] = cs * vkp - sn * vkq;
+                    V[k][q] = sn * vkp + cs * vkq;
+                }
+            }
+    }
+}
+
+tx_t plant_lu(tx_t m) {
+    int64_t r, c;
+    PlantArray* M = _la_matrix(m, &r, &c);
+    if (!M || r != c) return strdup("ERR");
+    int n = (int)r;
+    static __thread double aug[LA_MAXD][2*LA_MAXD];
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < n; j++) {
+            int ok = 0;
+            aug[i][j] = _la_get(M, i, j, &ok);
+            if (!ok) return strdup("ERR");
+        }
+    /* in-place Doolittle with partial pivoting; unit lower L */
+    double det_sign = 1.0;
+    for (int col = 0; col < n; col++) {
+        int piv = col;
+        double best = fabs(aug[col][col]);
+        for (int rr = col + 1; rr < n; rr++)
+            if (fabs(aug[rr][col]) > best) { best = fabs(aug[rr][col]); piv = rr; }
+        if (best < 1e-12) continue;   /* degenerate column: proceed */
+        if (piv != col)
+            for (int cc = 0; cc < n; cc++) { double t = aug[col][cc]; aug[col][cc] = aug[piv][cc]; aug[piv][cc] = t; }
+        for (int rr = col + 1; rr < n; rr++) {
+            double f = aug[rr][col] / aug[col][col];
+            aug[rr][col] = f;                       /* store L factor */
+            for (int cc = col + 1; cc < n; cc++) aug[rr][cc] -= f * aug[col][cc];
+        }
+        (void)det_sign;
+    }
+    /* split: strict-lower triangle + diagonal = L; upper incl diag = U */
+    static __thread double Lb[LA_MAXD][2*LA_MAXD];
+    static __thread double Ub[LA_MAXD][2*LA_MAXD];
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < n; j++) {
+            Lb[i][j] = (j < i) ? aug[i][j] : (j == i ? 1.0 : 0.0);
+            Ub[i][j] = (j >= i) ? aug[i][j] : 0.0;
+        }
+    PlantArray* out = plant_list_create(2);
+    out = plant_list_push(out, (tx_t)_la_build(n, n, Lb));
+    out = plant_list_push(out, (tx_t)_la_build(n, n, Ub));
+    return (tx_t)out;
+}
+
+static PlantArray* _eig_impl(tx_t m, int want_vectors) {
+    int64_t r, c;
+    PlantArray* M = _la_matrix(m, &r, &c);
+    if (!M || r != c || !_la_symmetric(M, (int)r)) return NULL;
+    int n = (int)r;
+    static __thread double A[LA_MAXD][LA_MAXD];
+    static __thread double V[LA_MAXD][LA_MAXD];
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < n; j++) {
+            int ok = 0;
+            A[i][j] = _la_get(M, i, j, &ok);
+            if (!ok) return NULL;
+            V[i][j] = (i == j) ? 1.0 : 0.0;
+        }
+    _jacobi(A, V, n);
+    /* sort eigenpairs descending */
+    int idx[LA_MAXD];
+    for (int i = 0; i < n; i++) idx[i] = i;
+    for (int i = 0; i < n; i++)
+        for (int j = i + 1; j < n; j++)
+            if (A[idx[j]][idx[j]] > A[idx[i]][idx[i]]) { int t = idx[i]; idx[i] = idx[j]; idx[j] = t; }
+    PlantArray* vals = plant_list_create(n);
+    for (int i = 0; i < n; i++)
+        vals = plant_list_push(vals, _plant_math_result(A[idx[i]][idx[i]]));
+    if (!want_vectors) return vals;
+    PlantArray* vecs = plant_list_create(n);   /* columns of V */
+    for (int j = 0; j < n; j++) {
+        PlantArray* col = plant_list_create(n);
+        for (int i = 0; i < n; i++)
+            col = plant_list_push(col, _plant_math_result(V[i][idx[j]]));
+        vecs = plant_list_push(vecs, (tx_t)col);
+    }
+    PlantArray* out = plant_list_create(2);
+    out = plant_list_push(out, (tx_t)vals);
+    out = plant_list_push(out, (tx_t)vecs);
+    return out;
+}
+
+tx_t plant_eigen(tx_t m) {
+    PlantArray* o = _eig_impl(m, 1);
+    if (!o) return strdup("ERR");
+    return (tx_t)o;
+}
+
+tx_t plant_svd(tx_t m) {
+    int64_t rm, cm;
+    PlantArray* M = _la_matrix(m, &rm, &cm);
+    if (!M) return strdup("ERR");
+    int mm = (int)rm, nn = (int)cm;
+    /* AtA = M^T M (n x n, symmetric) */
+    static __thread double AtA[LA_MAXD][LA_MAXD];
+    static __thread double V[LA_MAXD][LA_MAXD];
+    for (int i = 0; i < nn; i++)
+        for (int j = 0; j < nn; j++) {
+            double acc = 0.0;
+            for (int k = 0; k < mm; k++) {
+                int o1 = 0, o2 = 0;
+                acc += _la_get(M, k, i, &o1) * _la_get(M, k, j, &o2);
+            }
+            AtA[i][j] = acc;
+            V[i][j] = (i == j) ? 1.0 : 0.0;
+        }
+    _jacobi(AtA, V, nn);
+    double sv[LA_MAXD];
+    int idx[LA_MAXD];
+    for (int i = 0; i < nn; i++) { sv[i] = sqrt(AtA[i][i] > 0 ? AtA[i][i] : 0.0); idx[i] = i; }
+    for (int i = 0; i < nn; i++)
+        for (int j = i + 1; j < nn; j++)
+            if (sv[idx[j]] > sv[idx[i]]) { int t = idx[i]; idx[i] = idx[j]; idx[j] = t; }
+    /* U columns: Av/sigma for sigma > eps; Gram-Schmidt fill rest */
+    static __thread double U[LA_MAXD][LA_MAXD];
+    for (int c = 0; c < nn; c++) {
+        int si = idx[c];
+        if (sv[si] > 1e-9) {
+            for (int i = 0; i < mm; i++) {
+                double acc = 0.0;
+                for (int j = 0; j < nn; j++) {
+                    int ok = 0;
+                    acc += _la_get(M, i, j, &ok) * V[j][si];
+                }
+                U[i][c] = acc / sv[si];
+            }
+        } else {
+            for (int i = 0; i < mm; i++) U[i][c] = 0.0;
+            /* canonical basis vector orthogonalized against prior cols */
+            int placed = 0;
+            for (int basis = 0; basis < mm && !placed; basis++) {
+                for (int i = 0; i < mm; i++) U[i][c] = (i == basis) ? 1.0 : 0.0;
+                for (int pc = 0; pc < c && !placed; pc++) {
+                    double dot = 0.0;
+                    for (int i = 0; i < mm; i++) dot += U[i][pc] * U[i][c];
+                    if (fabs(dot) > 1e-12) break;
+                    if (pc == c - 1) placed = 1;
+                }
+                if (placed || c == 0) placed = 1;
+            }
+            for (int pc = 0; pc < c; pc++) {
+                double dot = 0.0;
+                for (int i = 0; i < mm; i++) dot += U[i][pc] * U[i][c];
+                for (int i = 0; i < mm; i++) U[i][c] -= dot * U[i][pc];
+            }
+            double len = 0.0;
+            for (int i = 0; i < mm; i++) len += U[i][c] * U[i][c];
+            if (len > 1e-20) for (int i = 0; i < mm; i++) U[i][c] /= sqrt(len);
+        }
+    }
+    PlantArray* Uo = plant_list_create(mm);
+    for (int i = 0; i < mm; i++) {
+        PlantArray* row = plant_list_create(nn);
+        for (int j = 0; j < nn; j++) row = plant_list_push(row, _plant_math_result(U[i][j]));
+        Uo = plant_list_push(Uo, (tx_t)row);
+    }
+    PlantArray* So = plant_list_create(nn);
+    for (int c = 0; c < nn; c++) So = plant_list_push(So, _plant_math_result(sv[idx[c]]));
+    PlantArray* Vo = plant_list_create(nn);   /* columns of V */
+    for (int c = 0; c < nn; c++) {
+        PlantArray* col = plant_list_create(nn);
+        for (int i = 0; i < nn; i++) col = plant_list_push(col, _plant_math_result(V[i][idx[c]]));
+        Vo = plant_list_push(Vo, (tx_t)col);
+    }
+    PlantArray* out = plant_list_create(3);
+    out = plant_list_push(out, (tx_t)Uo);
+    out = plant_list_push(out, (tx_t)So);
+    out = plant_list_push(out, (tx_t)Vo);
+    return (tx_t)out;
+}
+
+tx_t plant_solve(tx_t m, tx_t bv) {
+    int64_t r, c;
+    PlantArray* M = _la_matrix(m, &r, &c);
+    if (!M || r != c) return strdup("ERR");
+    double b[LA_MAXD];
+    int64_t nb;
+    if (!_la_vec(bv, b, &nb) || nb != r) return strdup("ERR");
+    int n = (int)r;
+    static __thread double aug[LA_MAXD][2*LA_MAXD];
+    for (int i = 0; i < n; i++) {
+        for (int j = 0; j < n; j++) {
+            int ok = 0;
+            aug[i][j] = _la_get(M, i, j, &ok);
+            if (!ok) return strdup("ERR");
+        }
+        aug[i][n] = b[i];
+    }
+    for (int col = 0; col < n; col++) {
+        int piv = col;
+        double best = fabs(aug[col][col]);
+        for (int rr = col + 1; rr < n; rr++)
+            if (fabs(aug[rr][col]) > best) { best = fabs(aug[rr][col]); piv = rr; }
+        if (best < 1e-12) return strdup("ERR");   /* singular system */
+        if (piv != col)
+            for (int cc = 0; cc <= n; cc++) { double t = aug[col][cc]; aug[col][cc] = aug[piv][cc]; aug[piv][cc] = t; }
+        for (int rr = col + 1; rr < n; rr++) {
+            double f = aug[rr][col] / aug[col][col];
+            for (int cc = col; cc <= n; cc++) aug[rr][cc] -= f * aug[col][cc];
+        }
+    }
+    double x[LA_MAXD];
+    for (int i = n - 1; i >= 0; i--) {
+        double s = aug[i][n];
+        for (int j = i + 1; j < n; j++) s -= aug[i][j] * x[j];
+        x[i] = s / aug[i][i];
+    }
+    PlantArray* out = plant_list_create(n);
+    for (int i = 0; i < n; i++) out = plant_list_push(out, _plant_math_result(x[i]));
+    return (tx_t)out;
+}
+
+tx_t plant_cond(tx_t m) {
+    tx_t inv = plant_inverse(m);
+    /* distinguish a matrix result from the "ERR" string by magic */
+    PlantArray* I = (PlantArray*)inv;
+    if (!I || I->magic != PLANT_ARRAY_MAGIC) return strdup("ERR");
+    int64_t r, c;
+    PlantArray* M = _la_matrix(m, &r, &c);
+    if (!M) return strdup("ERR");
+    double nm = 0.0, ni = 0.0;
+    for (int64_t i = 0; i < r; i++)
+        for (int64_t j = 0; j < c; j++) {
+            int ok = 0;
+            double v = _la_get(M, i, j, &ok);
+            nm += v * v;
+            v = _la_get(I, i, j, &ok);
+            ni += v * v;
+        }
+    return _plant_math_result(sqrt(nm) * sqrt(ni));
+}
+
 tx_t plant_list_flatten(tx_t data) {
     PlantArray* a = (PlantArray*)data;
     if (!a || a->magic != PLANT_ARRAY_MAGIC) return data;

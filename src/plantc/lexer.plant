@@ -161,6 +161,12 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "TANH", GIVE "TANH". /IF.
   IF wrd IS "EXP", GIVE "EXP". /IF.
   IF wrd IS "EXPM1", GIVE "EXPM1". /IF.
+  # v0.49.23 — numerical analysis built-ins.
+  IF wrd IS "LU", GIVE "LU". /IF.
+  IF wrd IS "EIGEN", GIVE "EIGEN". /IF.
+  IF wrd IS "SVD", GIVE "SVD". /IF.
+  IF wrd IS "SOLVE", GIVE "SOLVE". /IF.
+  IF wrd IS "COND", GIVE "COND". /IF.
   # v0.49.22 — linear algebra built-ins.
   IF wrd IS "DOT", GIVE "DOT". /IF.
   IF wrd IS "CROSS", GIVE "CROSS". /IF.
