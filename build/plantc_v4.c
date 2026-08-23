@@ -4979,6 +4979,12 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
   tx_t after_lx = "";
   tx_t com_pair = "";
   tx_t dot_pair = "";
+  tx_t lb2_pair = "";
+  tx_t tk2 = "";
+  tx_t ty2 = "";
+  tx_t tk9 = "";
+  tx_t ty9 = "";
+  tx_t rb9_pair = "";
   tx_t tok4 = "";
   tx_t lx4 = "";
   tx_t slash = "";
@@ -4996,6 +5002,8 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
     tx_t clv = "";
     tx_t prio = "1";
     tx_t mission_mode = "BALANCED";
+    tx_t bracemode = "0";
+    long closep = - 1;
     PlantArray* generics = plant_list_make ( 0 );
     ga_tok = peek(tokens, p3);
     ga_lx = tok_lex(ga_tok);
@@ -5225,10 +5233,43 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
         }
         return plant_list_make ( 2 , plant_list_make ( 16 , "type" , "action_decl" , "name" , aname , "generics" , generics , "params" , params , "body" , plant_list_make ( 0 ) , "prio" , prio , "ret" , ret , "mission_mode" , mission_mode ) , p5 );
     }
+    if (strcmp(after_lx,"{") == 0) {
+        lb2_pair = consume(tokens, p5);
+        p5 = _second(lb2_pair);
+        bracemode = "1";
+        long bd2 = 1;
+        long sp2 = p5;
+        while (sp2 < plant_array_length(tokens)) {
+            tk2 = peek(tokens, sp2);
+            ty2 = tok_type(tk2);
+            if (strcmp(ty2,"LBRACE") == 0) {
+                bd2 = bd2+1;
+            }
+            if (strcmp(ty2,"RBRACE") == 0) {
+                bd2 = bd2 - 1;
+                if (bd2 == 0) {
+                    closep = sp2;
+                }
+                if (bd2 == 0) {
+                                      break;
+                }
+            }
+            sp2 = sp2+1;
+        }
+    }
     PlantArray* ctab = plant_list_make ( 0 );
     long bstart = p5;
     PlantArray* body = plant_list_make ( 0 );
     while (1) {
+        if (strcmp(bracemode,"1") == 0) {
+            tk9 = peek(tokens, p5);
+            ty9 = tok_type(tk9);
+            if (strcmp(ty9,"RBRACE") == 0) {
+                rb9_pair = consume(tokens, p5);
+                p5 = _second(rb9_pair);
+                return plant_list_make ( 2 , plant_list_make ( 16 , "type" , "action_decl" , "name" , aname , "generics" , generics , "params" , params , "body" , body , "prio" , prio , "ret" , ret , "mission_mode" , mission_mode ) , p5 );
+            }
+        }
         is_eof_flag = is_eof(tokens, p5);
         if (is_eof_flag) {
             return plant_list_make ( 2 , plant_list_make ( 16 , "type" , "action_decl" , "name" , aname , "generics" , generics , "params" , params , "body" , body , "prio" , prio , "ret" , ret , "mission_mode" , mission_mode ) , p5 );
@@ -10308,7 +10349,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
                 if (strcmp(drn2,"1") == 0) {
                     bcode = _cat(bcode, "  plant_async_drain();\n");
                 }
-                bcode = _cat4(bcode, "  return ", fnname, ";\n");
+                bcode = _cat(bcode, "  return \"\";\n");
             }
             if (( plant_array_length(bd) ) > 0) {
                 long bd_count = plant_array_length(bd);
@@ -13221,7 +13262,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.23 (pure native)");
+      plant_print("Chloroplast 0.49.24 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

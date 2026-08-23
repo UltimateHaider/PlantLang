@@ -1200,3 +1200,27 @@ benchmark suite (`make perf`, results in `perf_results.md`).
 
 MIT — see the repository root. Chloroplast is self-hosted, pure native,
 and MIT licensed.
+
+
+### Brace-form Action Bodies (v0.49.24)
+
+Actions may use curly-brace blocks instead of the comma/`/ACTION.`
+form; both coexist freely:
+
+```
+ACTION main() {
+  SHOW "hello".
+  SHOW double(21).
+  GIVE 0.
+}
+
+ACTION double(n(NUM)) -> NUM {
+  GIVE n * 2.
+}
+
+ACTION noop() {
+}
+```
+
+Inner statements keep the standard forms (`IF cond,` ... `/IF.`);
+empty blocks return ""; numeric returns need `-> NUM` as usual.

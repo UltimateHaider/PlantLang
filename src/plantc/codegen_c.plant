@@ -4848,7 +4848,9 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP drn2 FROM _map_get, node, "drain_after".
         IF (COUNT bd) IS 0,
             IF drn2 IS "1", SET bcode TO bcode + "  plant_async_drain();\n". /IF.
-            SET bcode TO bcode + "  return " + fnname + ";\n".
+            # v0.49.24: empty bodies must return a valid tx_t, not the
+            # function designator (fnname decays to a pointer here).
+            SET bcode TO bcode + "  return \"\";\n".
         /IF.
         IF (COUNT bd) > 0,
             CREATE bd_count(NUM) TO COUNT bd.

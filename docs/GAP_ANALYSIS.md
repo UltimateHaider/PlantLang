@@ -305,7 +305,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 8. **`CONST`/`ROOT` immutables** — shipped v0.48.35 (`CONST`/`ROOT`/`ROOT_SCOPE`).
 
 **Low effort / niche**
-8. **SPLIT/JOIN statement forms** (SORT/SHAKE shipped v0.48.29; BRAID/LINK shipped v0.48.31; **`JOIN(list, delim)` function shipped v0.48.38c**), `PICK` (**shipped v0.48.38h**), `STOP IF` (shipped v0.48.25), `WAIT n.` statement (**shipped v0.48.37e**; `LOCK var.` synchronization also shipped v0.48.37e), `ANY/ALL/HAS` conditions (**shipped v0.48.38g**; `IS_A` remains M), `LOCATE`/`NOTE` comments, brace-form ACTION bodies, TYPE aliases, single-quoted strings.
+8. **SPLIT/JOIN statement forms** (SORT/SHAKE shipped v0.48.29; BRAID/LINK shipped v0.48.31; **`JOIN(list, delim)` function shipped v0.48.38c**), `PICK` (**shipped v0.48.38h**), `STOP IF` (shipped v0.48.25), `WAIT n.` statement (**shipped v0.48.37e**; `LOCK var.` synchronization also shipped v0.48.37e), `ANY/ALL/HAS` conditions (**shipped v0.48.38g**; `IS_A` remains M), `LOCATE`/`NOTE` comments, brace-form ACTION bodies (**shipped v0.49.24**), TYPE aliases, single-quoted strings (**shipped v0.49.20**).
 9. **Legacy `N\` depth-prefixed syntax** — **resolved by removal**: the DEPTH token machinery was deleted in v0.48.38l, closing this item permanently; no drop-in compatibility is planned.
 
 **Intentionally out of scope (D)**
