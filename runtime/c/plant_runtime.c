@@ -1264,6 +1264,11 @@ skip_line:
     return 1;
 }
 
+long plant_unique_seq(void) {
+    static long seq = 0;
+    return ++seq;
+}
+
 tx_t plant_import_load(tx_t entry) {
     static char errbuf[1024];
     errbuf[0] = '\0';

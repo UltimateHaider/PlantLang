@@ -52,6 +52,7 @@ tx_t parse_fast_reset_stmt(PlantArray* tokens, long pos);
 tx_t parse_give_stmt(PlantArray* tokens, long pos, tx_t clv);
 tx_t parse_set_stmt(PlantArray* tokens, long pos);
 tx_t parse_incdec_stmt(PlantArray* tokens, long pos, tx_t op);
+tx_t _parse_ds_pattern(PlantArray* tokens, long pos);
 tx_t parse_let_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode);
 tx_t parse_closure(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode);
 tx_t _is_type_text(tx_t t, PlantArray* rtab);
@@ -152,6 +153,7 @@ tx_t async_emit_state(tx_t name, PlantArray* vars);
 tx_t async_emit_entry(tx_t name, PlantArray* params, tx_t prio, tx_t mmode);
 tx_t async_emit_step(tx_t name, PlantArray* phases, PlantArray* vars, PlantArray* sigs, PlantArray* subst, PlantArray* clmap, PlantArray* stvars, PlantArray* evars);
 tx_t _ni_replace(tx_t e);
+tx_t _emit_ds(PlantArray* items, tx_t kind, tx_t base, tx_t isel, tx_t tag);
 tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars);
 tx_t indent_str(long level);
 tx_t _gb_dump(PlantArray* bd);
@@ -2445,9 +2447,120 @@ tx_t parse_incdec_stmt(PlantArray* tokens, long pos, tx_t op) {
     tx_t nty = _cat(op, "_stmt");
     return plant_list_make ( 2 , plant_list_make ( 6 , "type" , nty , "target" , id_name , "value" , expr ) , p5 );
 }
+tx_t _parse_ds_pattern(PlantArray* tokens, long pos) {
+  tx_t op_pair = "";
+  tx_t oty = "";
+  tx_t p = "";
+  tx_t tk = "";
+  tx_t ty = "";
+  tx_t cp = "";
+  tx_t kp = "";
+  tx_t key = "";
+  tx_t ctok = "";
+  tx_t clx = "";
+  tx_t cp_pair = "";
+  tx_t ntok = "";
+  tx_t nty = "";
+  tx_t spair = "";
+  tx_t subn = "";
+  tx_t npair = "";
+  tx_t bn = "";
+  tx_t etok = "";
+  tx_t ety = "";
+  tx_t en = "";
+  tx_t stok = "";
+  tx_t slx = "";
+  tx_t cmpair = "";
+    op_pair = consume(tokens, pos);
+    oty = tok_type(plant_list_get(op_pair ,  0 ));
+    p = _second(op_pair);
+    tx_t kind = "array";
+    tx_t closek = "RBRACKET";
+    if (strcmp(oty,"LBRACE") == 0) {
+        kind = "object";
+        closek = "RBRACE";
+    }
+    PlantArray* items = plant_list_make ( 0 );
+    tx_t nm = "";
+    tx_t sub = "";
+    while (1) {
+        tk = peek(tokens, p);
+        ty = tok_type(tk);
+        if (ty == closek) {
+            cp = consume(tokens, p);
+            p = _second(cp);
+                      break;
+        }
+        if (strcmp(kind,"object") == 0) {
+            kp = consume(tokens, p);
+            key = tok_lex(plant_list_get(kp ,  0 ));
+            p = _second(kp);
+            nm = key;
+            sub = "";
+            ctok = peek(tokens, p);
+            clx = tok_lex(ctok);
+            if (strcmp(clx,":") == 0) {
+                cp_pair = consume(tokens, p);
+                p = _second(cp_pair);
+                ntok = peek(tokens, p);
+                nty = tok_type(ntok);
+                if (strcmp(nty,"LBRACE") == 0 || strcmp(nty,"LBRACKET") == 0) {
+                    spair = _parse_ds_pattern(tokens, p);
+                    subn = _first(spair);
+                    sub = subn;
+                    p = _second(spair);
+                }
+                if (strcmp(nty,"LBRACE") != 0 && strcmp(nty,"LBRACKET") != 0) {
+                    npair = consume(tokens, p);
+                    bn = tok_lex(plant_list_get(npair ,  0 ));
+                    p = _second(npair);
+                    nm = bn;
+                }
+            }
+            items = plant_list_add(items, plant_list_make ( 6 , "key" , key , "name" , nm , "sub" , sub ));
+        }
+        if (strcmp(kind,"object") != 0) {
+            etok = peek(tokens, p);
+            ety = tok_type(etok);
+            if (strcmp(ety,"LBRACE") == 0 || strcmp(ety,"LBRACKET") == 0) {
+                spair = _parse_ds_pattern(tokens, p);
+                subn = _first(spair);
+                sub = subn;
+                p = _second(spair);
+                items = plant_list_add(items, plant_list_make ( 6 , "key" , "" , "name" , "_" , "sub" , sub ));
+            }
+            if (strcmp(ety,"LBRACE") != 0 && strcmp(ety,"LBRACKET") != 0) {
+                npair = consume(tokens, p);
+                en = tok_lex(plant_list_get(npair ,  0 ));
+                p = _second(npair);
+                items = plant_list_add(items, plant_list_make ( 6 , "key" , "" , "name" , en , "sub" , "" ));
+            }
+        }
+        stok = peek(tokens, p);
+        slx = tok_lex(stok);
+        if (strcmp(slx,",") == 0) {
+            cmpair = consume(tokens, p);
+            p = _second(cmpair);
+        }
+    }
+    return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "ds_pat" , "kind" , kind , "items" , items ) , p );
+}
 tx_t parse_let_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) {
   tx_t pair = "";
   tx_t p2 = "";
+  tx_t dtk = "";
+  tx_t dty = "";
+  tx_t dpat_pair = "";
+  tx_t dnode = "";
+  tx_t ditems = "";
+  tx_t dkind = "";
+  tx_t p3d = "";
+  tx_t eqtok = "";
+  tx_t eqlx = "";
+  tx_t eqpair = "";
+  tx_t p4d = "";
+  tx_t dvpair = "";
+  tx_t p5d = "";
   tx_t id_pair = "";
   tx_t id_name = "";
   tx_t p3 = "";
@@ -2473,6 +2586,27 @@ tx_t parse_let_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) 
   tx_t to_pair = "";
     pair = consume(tokens, pos);
     p2 = _second(pair);
+    dtk = peek(tokens, p2);
+    dty = tok_type(dtk);
+    if (strcmp(dty,"LBRACE") == 0 || strcmp(dty,"LBRACKET") == 0) {
+        dpat_pair = _parse_ds_pattern(tokens, p2);
+        dnode = _first(dpat_pair);
+        ditems = _map_get(dnode, "items");
+        dkind = _map_get(dnode, "kind");
+        p3d = _second(dpat_pair);
+        eqtok = peek(tokens, p3d);
+        eqlx = tok_lex(eqtok);
+        if (strcmp(eqlx,"=") != 0) {
+            tx_t dderr = "destructuring requires = expression";
+            return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , dderr ) , p3d );
+        }
+        eqpair = consume(tokens, p3d);
+        p4d = _second(eqpair);
+        dvpair = collect_value(tokens, p4d);
+        tx_t dsrc = plant_list_get(dvpair ,  0 );
+        p5d = _second(dvpair);
+        return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "let_destructure" , "pattern" , dkind , "vars" , ditems , "source" , dsrc ) , p5d );
+    }
     id_pair = consume(tokens, p2);
     id_name = tok_lex(plant_list_get(id_pair ,  0 ));
     p3 = _second(id_pair);
@@ -8637,6 +8771,51 @@ tx_t _ni_replace(tx_t e) {
     }
     return out;
 }
+tx_t _emit_ds(PlantArray* items, tx_t kind, tx_t base, tx_t isel, tx_t tag) {
+  tx_t it = "";
+  tx_t key = "";
+  tx_t nm = "";
+  tx_t sub = "";
+  tx_t skind = "";
+  tx_t sitems = "";
+    tx_t code = "";
+    long i = 0;
+    while (i < plant_array_length(items)) {
+        it = plant_list_get(items, i);
+        key = _map_get(it, "key");
+        nm = _map_get(it, "name");
+        sub = _map_get(it, "sub");
+        tx_t ex = "";
+        if (strcmp(kind,"object") == 0) {
+            ex = _cat(ex, "_map_get(");
+            ex = _cat(ex, base);
+            ex = _cat(ex, ", \"");
+            ex = _cat(ex, key);
+            ex = _cat(ex, "\")");
+        }
+        if (strcmp(kind,"object") != 0) {
+            ex = _cat(ex, "plant_list_get(");
+            ex = _cat(ex, base);
+            ex = _cat(ex, ", ");
+            ex = _cat(ex, _from_long ( i ));
+            ex = _cat(ex, ")");
+        }
+        if (strcmp(sub,"") == 0) {
+            if (strcmp(nm,"_") != 0) {
+                code = _cat4(_cat4(code, isel, "  tx_t ", nm), " = ", ex, ";\n");
+            }
+        }
+        if (strcmp(sub,"") != 0) {
+            tx_t tname = _cat3(_cat4("_ds_", tag, "_", _from_long ( plant_unique_seq ( ) )), "_", _from_long ( i ));
+            code = _cat4(_cat4(code, isel, "  tx_t ", tname), " = ", ex, ";\n");
+            skind = _map_get(sub, "kind");
+            sitems = _map_get(sub, "items");
+            code = _cat(code, _emit_ds ( sitems , skind , tname , isel , tag ));
+        }
+        i = i+1;
+    }
+    return code;
+}
 tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars) {
   tx_t e0 = "";
   tx_t e1 = "";
@@ -9018,6 +9197,10 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t vct2 = "";
   tx_t vst3 = "";
   tx_t isnc = "";
+  tx_t dsrc = "";
+  tx_t ditems = "";
+  tx_t dkind = "";
+  tx_t srcc = "";
   tx_t vst4 = "";
   tx_t vct4 = "";
   tx_t vst5 = "";
@@ -9292,6 +9475,20 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
             return _cat3(_cat4(isel, "  ", target, " += "), cval, ";\n");
         }
         return _cat3(_cat4(isel, "  ", target, " -= "), cval, ";\n");
+    }
+    if (strcmp(ntype,"let_destructure") == 0) {
+        dsrc = _map_get(node, "source");
+        ditems = _map_get(node, "vars");
+        dkind = _map_get(node, "pattern");
+        srcc = translate_expr(dsrc, nums, evars);
+        isel = indent_str(indent);
+        tx_t tag = _from_long ( plant_unique_seq ( ) );
+        tx_t dsbase = "(";
+        dsbase = _cat(dsbase, srcc);
+        dsbase = _cat(dsbase, ")");
+        tx_t dcode = "";
+        dcode = _emit_ds(ditems, dkind, dsbase, isel, tag);
+        return dcode;
     }
     if (strcmp(ntype,"let_stmt") == 0) {
         target = _map_get(node, "target");
@@ -13314,7 +13511,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.25 (pure native)");
+      plant_print("Chloroplast 0.49.26 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

@@ -1,0 +1,31 @@
+# v0.49.26 - LET destructuring:
+#   LET {x, y} = m            object keys bind same-named vars
+#   LET {a: bx} = m           key bound to renamed var
+#   LET [a, b, c] = l         indexed list elements
+#   LET [_ , s] = l           "_" wildcard skips a position
+#   LET {pt: {x, y}} = n      nested patterns (object/object,
+#                             object/array, array/array)
+# Values are tx_t; SHOW of var+var concatenates (deterministic).
+ACTION main(),
+  CREATE m(LIST) TO { "x": 10, "y": 20 }.
+  LET {x, y} = m.
+  SHOW x.
+  SHOW y.
+  SHOW x + y.
+  LET {x: rx, y: ry} = m.
+  SHOW rx + "/" + ry.
+  CREATE l(LIST) TO [7, 8, 9].
+  LET [a, b, c] = l.
+  SHOW JOIN([a, b, c], ",").
+  LET [_ , second] = l.
+  SHOW second.
+  CREATE nested(LIST) TO { "pt": { "px": 1, "py": 2 }, "name": "P" }.
+  LET {pt: {px, py}, name: nm} = nested.
+  SHOW px + "|" + py + "|" + nm.
+  CREATE deep(LIST) TO [[1, 2], [3, 4]].
+  LET [[d1, d2], [d3, d4]] = deep.
+  SHOW JOIN([d1, d2, d3, d4], "-").
+  LET {pt: {py: onlyY}} = nested.
+  SHOW onlyY.
+  GIVE 0.
+/GIVE main.

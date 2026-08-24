@@ -2926,6 +2926,52 @@ ACTION _ni_replace(e(TX)),
     GIVE out.
 /ACTION.
 
+# _emit_ds - recursive code generator for let_destructure patterns.
+# base is the C expression holding the current value; object entries
+# extract via _map_get(base, "key"), array entries via
+# plant_list_get(base, index). Nested patterns get a uniquely named
+# intermediate (plant_unique_seq) and recurse; "_" bindings are
+# skipped unless they carry a nested pattern.
+ACTION _emit_ds(items(LIST), kind(TX), base(TX), isel(TX), tag(TX)),
+  CREATE code(TX) TO "".
+  CREATE i(NUM) TO 0.
+  SEASON i < COUNT items,
+    REAP it FROM plant_list_get, items, i.
+    REAP key FROM _map_get, it, "key".
+    REAP nm FROM _map_get, it, "name".
+    REAP sub FROM _map_get, it, "sub".
+    CREATE ex(TX) TO "".
+    IF kind IS "object",
+      SET ex TO ex + "_map_get(".
+      SET ex TO ex + base.
+      SET ex TO ex + ", \"".
+      SET ex TO ex + key.
+      SET ex TO ex + "\")".
+    /IF.
+    IF kind ISNT "object",
+      SET ex TO ex + "plant_list_get(".
+      SET ex TO ex + base.
+      SET ex TO ex + ", ".
+      SET ex TO ex + _from_long(i).
+      SET ex TO ex + ")".
+    /IF.
+    IF sub IS "",
+      IF nm ISNT "_",
+        SET code TO code + isel + "  tx_t " + nm + " = " + ex + ";\n".
+      /IF.
+    /IF.
+    IF sub ISNT "",
+      CREATE tname(TX) TO "_ds_" + tag + "_" + _from_long(plant_unique_seq()) + "_" + _from_long(i).
+      SET code TO code + isel + "  tx_t " + tname + " = " + ex + ";\n".
+      REAP skind FROM _map_get, sub, "kind".
+      REAP sitems FROM _map_get, sub, "items".
+      SET code TO code + _emit_ds(sitems, skind, tname, isel, tag).
+    /IF.
+    SET i TO i + 1.
+  /SEASON.
+  GIVE code.
+/ACTION.
+
 ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     CREATE e(TX) TO expr.
     # ── v0.48.36 — temporal queries / introspection in expression
@@ -3509,6 +3555,22 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
   
     # ── let_stmt: LET var AS TYPE IS val. → type var = val; ──
     #    async step phases: assignment into the state-backed local.
+    # v0.49.26 - LET destructuring
+    IF ntype IS "let_destructure",
+        REAP dsrc FROM _map_get, node, "source".
+        REAP ditems FROM _map_get, node, "vars".
+        REAP dkind FROM _map_get, node, "pattern".
+        REAP srcc FROM translate_expr, dsrc, nums, evars.
+        REAP isel FROM indent_str, indent.
+        CREATE tag(TX) TO _from_long(plant_unique_seq()).
+        CREATE dsbase(TX) TO "(".
+        SET dsbase TO dsbase + srcc.
+        SET dsbase TO dsbase + ")".
+        CREATE dcode(TX) TO "".
+        REAP dcode FROM _emit_ds, ditems, dkind, dsbase, isel, tag.
+        GIVE dcode.
+    /IF.
+
     IF ntype IS "let_stmt",
         REAP target FROM _map_get, node, "target".
         REAP vtype FROM _map_get, node, "var_type".

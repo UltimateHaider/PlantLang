@@ -963,9 +963,108 @@ ACTION parse_incdec_stmt(tokens(LIST), pos(NUM), op(TX)),
   GIVE plant_list_make(2, plant_list_make(6, "type", nty, "target", id_name, "value", expr), p5).
 /ACTION.
 
+# _parse_ds_pattern - destructuring pattern for LET (v0.49.26).
+ACTION _parse_ds_pattern(tokens(LIST), pos(NUM)),
+  REAP op_pair FROM consume, tokens, pos.
+  REAP oty FROM tok_type, op_pair[0].
+  REAP p FROM _second, op_pair.
+  CREATE kind(TX) TO "array".
+  CREATE closek(TX) TO "RBRACKET".
+  IF oty IS "LBRACE",
+    SET kind TO "object".
+    SET closek TO "RBRACE".
+  /IF.
+  CREATE items(LIST) TO plant_list_make(0).
+  CREATE nm(TX) TO "".
+  CREATE sub(TX) TO "".
+  SEASON TRUE,
+    REAP tk FROM peek, tokens, p.
+    REAP ty FROM tok_type, tk.
+    IF ty IS closek,
+      REAP cp FROM consume, tokens, p.
+      REAP p FROM _second, cp.
+      BREAK 0.
+    /IF.
+    IF kind IS "object",
+      REAP kp FROM consume, tokens, p.
+      REAP key FROM tok_lex, kp[0].
+      REAP p FROM _second, kp.
+      SET nm TO key.
+      SET sub TO "".
+      REAP ctok FROM peek, tokens, p.
+      REAP clx FROM tok_lex, ctok.
+      IF clx IS ":",
+        REAP cp_pair FROM consume, tokens, p.
+        REAP p FROM _second, cp_pair.
+        REAP ntok FROM peek, tokens, p.
+        REAP nty FROM tok_type, ntok.
+        IF nty IS "LBRACE" OR nty IS "LBRACKET",
+          REAP spair FROM _parse_ds_pattern, tokens, p.
+          REAP subn FROM _first, spair.
+          SET sub TO subn.
+          REAP p FROM _second, spair.
+        /IF.
+        IF nty ISNT "LBRACE" AND nty ISNT "LBRACKET",
+          REAP npair FROM consume, tokens, p.
+          REAP bn FROM tok_lex, npair[0].
+          REAP p FROM _second, npair.
+          SET nm TO bn.
+        /IF.
+      /IF.
+      PUT plant_list_make(6, "key", key, "name", nm, "sub", sub) INTO items.
+    /IF.
+    IF kind ISNT "object",
+      REAP etok FROM peek, tokens, p.
+      REAP ety FROM tok_type, etok.
+      IF ety IS "LBRACE" OR ety IS "LBRACKET",
+        REAP spair FROM _parse_ds_pattern, tokens, p.
+        REAP subn FROM _first, spair.
+        SET sub TO subn.
+        REAP p FROM _second, spair.
+        PUT plant_list_make(6, "key", "", "name", "_", "sub", sub) INTO items.
+      /IF.
+      IF ety ISNT "LBRACE" AND ety ISNT "LBRACKET",
+        REAP npair FROM consume, tokens, p.
+        REAP en FROM tok_lex, npair[0].
+        REAP p FROM _second, npair.
+        PUT plant_list_make(6, "key", "", "name", en, "sub", "") INTO items.
+      /IF.
+    /IF.
+    REAP stok FROM peek, tokens, p.
+    REAP slx FROM tok_lex, stok.
+    IF slx IS ",",
+      REAP cmpair FROM consume, tokens, p.
+      REAP p FROM _second, cmpair.
+    /IF.
+  /SEASON.
+  GIVE plant_list_make(2, plant_list_make(8, "type", "ds_pat", "kind", kind, "items", items), p).
+/ACTION.
+
 ACTION parse_let_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
+  # v0.49.26 - destructuring patterns
+  REAP dtk FROM peek, tokens, p2.
+  REAP dty FROM tok_type, dtk.
+  IF dty IS "LBRACE" OR dty IS "LBRACKET",
+    REAP dpat_pair FROM _parse_ds_pattern, tokens, p2.
+    REAP dnode FROM _first, dpat_pair.
+    REAP ditems FROM _map_get, dnode, "items".
+    REAP dkind FROM _map_get, dnode, "kind".
+    REAP p3d FROM _second, dpat_pair.
+    REAP eqtok FROM peek, tokens, p3d.
+    REAP eqlx FROM tok_lex, eqtok.
+    IF eqlx ISNT "=",
+      CREATE dderr(TX) TO "destructuring requires = expression".
+      GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", dderr), p3d).
+    /IF.
+    REAP eqpair FROM consume, tokens, p3d.
+    REAP p4d FROM _second, eqpair.
+    REAP dvpair FROM collect_value, tokens, p4d.
+    CREATE dsrc TO dvpair[0].
+    REAP p5d FROM _second, dvpair.
+    GIVE plant_list_make(2, plant_list_make(10, "type", "let_destructure", "pattern", dkind, "vars", ditems, "source", dsrc), p5d).
+  /IF.
   REAP id_pair FROM consume, tokens, p2.
   REAP id_name FROM tok_lex, id_pair[0].
   REAP p3 FROM _second, id_pair.

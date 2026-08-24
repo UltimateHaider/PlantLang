@@ -1240,3 +1240,20 @@ Each file is expanded exactly once per compilation; circular imports
 abort with "Error: import cycle detected: <path>", unreadable targets
 with "Error: cannot read import: <path>". The compiler's own sources
 keep using build-time concatenation.
+
+
+### LET Destructuring (v0.49.26)
+
+```
+CREATE m(LIST) TO { "x": 10, "y": 20 }.
+LET {x, y} = m.            # binds x=10, y=20
+LET {x: rx} = m.           # rename: key x -> var rx
+CREATE l(LIST) TO [7, 8, 9].
+LET [a, b, c] = l.         # positional
+LET [_, s] = l.            # "_" skips a position
+LET {pt: {px, py}} = nested.   # nested patterns recurse
+LET [[d1, d2], [d3, d4]] = deep.
+```
+
+Objects extract via map lookups, lists via indices; "_" ignores a
+binding; nesting is unlimited.
