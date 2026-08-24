@@ -963,6 +963,33 @@ ACTION parse_incdec_stmt(tokens(LIST), pos(NUM), op(TX)),
   GIVE plant_list_make(2, plant_list_make(6, "type", nty, "target", id_name, "value", expr), p5).
 /ACTION.
 
+# parse_bloom_stmt - BLOOM Species AS var. (v0.49.28)
+ACTION parse_bloom_stmt(tokens(LIST), pos(NUM)),
+  REAP kw_pair FROM consume, tokens, pos.
+  REAP p FROM _second, kw_pair.
+  REAP spair FROM consume, tokens, p.
+  REAP species FROM tok_lex, spair[0].
+  REAP p FROM _second, spair.
+  REAP aspair FROM consume, tokens, p.
+  REAP aslx FROM tok_lex, aspair[0].
+  IF aslx ISNT "AS",
+    CREATE berr(TX) TO "BLOOM requires AS var".
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", berr), p).
+  /IF.
+  REAP p FROM _second, aspair.
+  REAP vpair FROM consume, tokens, p.
+  REAP vty FROM tok_type, vpair[0].
+  IF vty ISNT "IDENT",
+    CREATE berr2(TX) TO "BLOOM requires a variable name".
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", berr2), p).
+  /IF.
+  REAP var FROM tok_lex, vpair[0].
+  REAP p FROM _second, vpair.
+  REAP dtp FROM consume, tokens, p.
+  REAP p FROM _second, dtp.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "bloom_stmt", "species", species, "var", var), p).
+/ACTION.
+
 # _parse_ds_pattern - destructuring pattern for LET (v0.49.26).
 ACTION _parse_ds_pattern(tokens(LIST), pos(NUM)),
   REAP op_pair FROM consume, tokens, pos.
@@ -2665,6 +2692,11 @@ ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), 
     REAP r FROM parse_type_decl, tokens, pos.
     GIVE r.
   /IF.
+  # v0.49.28 - BLOOM Species AS var.
+  IF lx IS "BLOOM",
+    REAP r FROM parse_bloom_stmt, tokens, pos.
+    GIVE r.
+  /IF.
   IF lx IS "CONST",
     REAP r FROM parse_const_like, tokens, pos, ctab, rtab, bstart, emode, "const_stmt".
     GIVE r.
@@ -3433,6 +3465,43 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM), rtab(LIST)),
   /SEASON.
 /ACTION.
 
+# parse_species_decl - SPECIES name { field: TYPE, ... } (v0.49.28)
+ACTION parse_species_decl(tokens(LIST), pos(NUM)),
+  REAP kw_pair FROM consume, tokens, pos.
+  REAP p FROM _second, kw_pair.
+  REAP npair FROM consume, tokens, p.
+  REAP nty FROM tok_type, npair[0].
+  IF nty ISNT "IDENT",
+    CREATE serr(TX) TO "SPECIES requires a name".
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", serr), p).
+  /IF.
+  REAP sname FROM tok_lex, npair[0].
+  REAP p FROM _second, npair.
+  REAP lb FROM consume, tokens, p.
+  REAP p FROM _second, lb.
+  CREATE fields(LIST) TO plant_list_make(0).
+  SEASON TRUE,
+    REAP tk FROM peek, tokens, p.
+    REAP ty FROM tok_type, tk.
+    IF ty IS "RBRACE",
+      REAP rb FROM consume, tokens, p.
+      REAP p FROM _second, rb.
+      BREAK 0.
+    /IF.
+    REAP fpair FROM consume, tokens, p.
+    REAP fname FROM tok_lex, fpair[0].
+    REAP p FROM _second, fpair.
+    # type text ends at the closing brace (fields are whitespace
+    # separated, mirroring STRUCT)
+    REAP ftv FROM collect_type_text, tokens, p, "}", 0.
+    REAP ftype FROM _first, ftv.
+    REAP p FROM _second, ftv.
+    REAP ftt FROM trim, ftype.
+    PUT plant_list_make(4, "name", fname, "type", ftt) INTO fields.
+  /SEASON.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "species_decl", "name", sname, "fields", fields), p).
+/ACTION.
+
 # parse_type_decl - TYPE alias = target. (v0.49.27)
 ACTION parse_type_decl(tokens(LIST), pos(NUM)),
   REAP kw_pair FROM consume, tokens, pos.
@@ -3475,6 +3544,11 @@ ACTION parse_declaration(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST)
   # v0.49.27 - TYPE alias = target.
   IF lx IS "TYPE",
     REAP r FROM parse_type_decl, tokens, pos.
+    GIVE r.
+  /IF.
+  # v0.49.28 - SPECIES name { field: TYPE, ... }
+  IF lx IS "SPECIES",
+    REAP r FROM parse_species_decl, tokens, pos.
     GIVE r.
   /IF.
   # v0.49.25 - IMPORT "path". The compiler's loader (main.plant)

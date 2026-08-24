@@ -46,6 +46,7 @@ tx_t parse_fast_reset_stmt(PlantArray* tokens, long pos);
 tx_t parse_give_stmt(PlantArray* tokens, long pos, tx_t clv);
 tx_t parse_set_stmt(PlantArray* tokens, long pos);
 tx_t parse_incdec_stmt(PlantArray* tokens, long pos, tx_t op);
+tx_t parse_bloom_stmt(PlantArray* tokens, long pos);
 tx_t _parse_ds_pattern(PlantArray* tokens, long pos);
 tx_t parse_let_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode);
 tx_t parse_closure(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode);
@@ -75,6 +76,7 @@ tx_t parse_listen_stmt(PlantArray* tokens, long pos);
 tx_t parse_enum_decl(PlantArray* tokens, long pos);
 tx_t parse_struct_decl(PlantArray* tokens, long pos);
 tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab);
+tx_t parse_species_decl(PlantArray* tokens, long pos);
 tx_t parse_type_decl(PlantArray* tokens, long pos);
 tx_t parse_declaration(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab, PlantArray* rtab, long bstart);
 tx_t map_add(PlantArray* m, tx_t k, tx_t v);
@@ -661,6 +663,12 @@ tx_t keyword_to_type(tx_t wrd) {
     }
     if (strcmp(wrd,"EXPM1") == 0) {
         return "EXPM1";
+    }
+    if (strcmp(wrd,"SPECIES") == 0) {
+        return "SPECIES";
+    }
+    if (strcmp(wrd,"BLOOM") == 0) {
+        return "BLOOM";
     }
     if (strcmp(wrd,"LU") == 0) {
         return "LU";
@@ -2444,6 +2452,41 @@ tx_t parse_incdec_stmt(PlantArray* tokens, long pos, tx_t op) {
     p5 = _second(vpair);
     tx_t nty = _cat(op, "_stmt");
     return plant_list_make ( 2 , plant_list_make ( 6 , "type" , nty , "target" , id_name , "value" , expr ) , p5 );
+}
+tx_t parse_bloom_stmt(PlantArray* tokens, long pos) {
+  tx_t kw_pair = "";
+  tx_t p = "";
+  tx_t spair = "";
+  tx_t species = "";
+  tx_t aspair = "";
+  tx_t aslx = "";
+  tx_t vpair = "";
+  tx_t vty = "";
+  tx_t var = "";
+  tx_t dtp = "";
+    kw_pair = consume(tokens, pos);
+    p = _second(kw_pair);
+    spair = consume(tokens, p);
+    species = tok_lex(plant_list_get(spair,  0 ));
+    p = _second(spair);
+    aspair = consume(tokens, p);
+    aslx = tok_lex(plant_list_get(aspair,  0 ));
+    if (strcmp(aslx,"AS") != 0) {
+        tx_t berr = "BLOOM requires AS var";
+        return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , berr ) , p );
+    }
+    p = _second(aspair);
+    vpair = consume(tokens, p);
+    vty = tok_type(plant_list_get(vpair,  0 ));
+    if (strcmp(vty,"IDENT") != 0) {
+        tx_t berr2 = "BLOOM requires a variable name";
+        return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , berr2 ) , p );
+    }
+    var = tok_lex(plant_list_get(vpair,  0 ));
+    p = _second(vpair);
+    dtp = consume(tokens, p);
+    p = _second(dtp);
+    return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "bloom_stmt" , "species" , species , "var" , var ) , p );
 }
 tx_t _parse_ds_pattern(PlantArray* tokens, long pos) {
   tx_t op_pair = "";
@@ -4500,6 +4543,10 @@ tx_t parse_statement(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab, P
         r = parse_type_decl(tokens, pos);
         return r;
     }
+    if (strcmp(lx,"BLOOM") == 0) {
+        r = parse_bloom_stmt(tokens, pos);
+        return r;
+    }
     if (strcmp(lx,"CONST") == 0) {
         r = parse_const_like(tokens, pos, ctab, rtab, bstart, emode, "const_stmt");
         return r;
@@ -5439,6 +5486,53 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
     }
   return parse_action_decl;
 }
+tx_t parse_species_decl(PlantArray* tokens, long pos) {
+  tx_t kw_pair = "";
+  tx_t p = "";
+  tx_t npair = "";
+  tx_t nty = "";
+  tx_t sname = "";
+  tx_t lb = "";
+  tx_t tk = "";
+  tx_t ty = "";
+  tx_t rb = "";
+  tx_t fpair = "";
+  tx_t fname = "";
+  tx_t ftv = "";
+  tx_t ftype = "";
+  tx_t ftt = "";
+    kw_pair = consume(tokens, pos);
+    p = _second(kw_pair);
+    npair = consume(tokens, p);
+    nty = tok_type(plant_list_get(npair,  0 ));
+    if (strcmp(nty,"IDENT") != 0) {
+        tx_t serr = "SPECIES requires a name";
+        return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , serr ) , p );
+    }
+    sname = tok_lex(plant_list_get(npair,  0 ));
+    p = _second(npair);
+    lb = consume(tokens, p);
+    p = _second(lb);
+    PlantArray* fields = plant_list_make ( 0 );
+    while (1) {
+        tk = peek(tokens, p);
+        ty = tok_type(tk);
+        if (strcmp(ty,"RBRACE") == 0) {
+            rb = consume(tokens, p);
+            p = _second(rb);
+            break;
+        }
+        fpair = consume(tokens, p);
+        fname = tok_lex(plant_list_get(fpair,  0 ));
+        p = _second(fpair);
+        ftv = collect_type_text(tokens, p, "}", 0);
+        ftype = _first(ftv);
+        p = _second(ftv);
+        ftt = trim(ftype);
+        fields = plant_list_push(fields, plant_list_make ( 4 , "name" , fname , "type" , ftt ));
+    }
+    return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "species_decl" , "name" , sname , "fields" , fields ) , p );
+}
 tx_t parse_type_decl(PlantArray* tokens, long pos) {
   tx_t kw_pair = "";
   tx_t p = "";
@@ -5509,6 +5603,10 @@ tx_t parse_declaration(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab,
     }
     if (strcmp(lx,"TYPE") == 0) {
         r = parse_type_decl(tokens, pos);
+        return r;
+    }
+    if (strcmp(lx,"SPECIES") == 0) {
+        r = parse_species_decl(tokens, pos);
         return r;
     }
     if (strcmp(lx,"IMPORT") == 0) {
@@ -9025,7 +9123,6 @@ tx_t _gb_dump(PlantArray* bd) {
 }
 tx_t generate_body(PlantArray* bd, long indent, PlantArray* sigs, PlantArray* subst, PlantArray* clmap, tx_t actx, PlantArray* nums, PlantArray* stvars, PlantArray* evars, tx_t rty, tx_t mexit, tx_t wexit) {
   tx_t node_code = "";
-    plant_print(_cat("GBLEN:", _from_long ( plant_array_length(bd) )));
     tx_t res = "";
     long i = 0;
     tx_t node_el = "";
@@ -9240,6 +9337,9 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t vct2 = "";
   tx_t vst3 = "";
   tx_t isnc = "";
+  tx_t bsp = "";
+  tx_t bvar = "";
+  tx_t bisel = "";
   tx_t dsrc = "";
   tx_t ditems = "";
   tx_t dkind = "";
@@ -9521,6 +9621,14 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
     }
     if (strcmp(ntype,"type_decl") == 0) {
         return "";
+    }
+    if (strcmp(ntype,"bloom_stmt") == 0) {
+        bsp = _map_get(node, "species");
+        bvar = _map_get(node, "var");
+        bisel = indent_str(indent);
+        tx_t bb9 = "";
+        bb9 = _cat(_cat(_cat(_cat(_cat(_cat(bb9, bisel), "  tx_t "), bvar), " = plant_species_create_by_name(\""), bsp), "\");\n");
+        return bb9;
     }
     if (strcmp(ntype,"let_destructure") == 0) {
         dsrc = _map_get(node, "source");
@@ -12307,6 +12415,10 @@ tx_t generate_c(PlantArray* ast) {
   tx_t rp55 = "";
   tx_t ntype = "";
   tx_t sname = "";
+  tx_t sn7 = "";
+  tx_t sf7 = "";
+  tx_t fe9 = "";
+  tx_t fn9 = "";
   tx_t fpel = "";
   tx_t fpty = "";
   tx_t fk7 = "";
@@ -12384,6 +12496,8 @@ tx_t generate_c(PlantArray* ast) {
     PlantArray* sigs = plant_list_make ( 0 );
     PlantArray* templates = plant_list_make ( 0 );
     PlantArray* structs = plant_list_make ( 0 );
+    PlantArray* species = plant_list_make ( 0 );
+    tx_t sp_init_code = "";
     PlantArray* safe_acts = plant_list_make ( 0 );
     PlantArray* eregs = build_enum_registry ( ast );
     PlantArray* roots = collect_roots ( ast , plant_list_make ( 0 ) );
@@ -12433,6 +12547,24 @@ tx_t generate_c(PlantArray* ast) {
             sname = _map_get(node_el, "name");
             PlantArray* sgens2 = _map_get ( node_el , "generics" );
             PlantArray* sfields2 = _map_get ( node_el , "fields" );
+            if (strcmp(ntype,"species_decl") == 0) {
+                sn7 = _map_get(node_el, "name");
+                sf7 = _map_get(node_el, "fields");
+                species = plant_list_push(species, plant_list_make ( 4 , "name" , sn7 , "fields" , sf7 ));
+                tx_t regl = "_from_long(";
+                regl = regl+plant_array_length(sf7);
+                regl = _cat(regl, ")");
+                long fj9 = 0;
+                while (fj9 < plant_array_length(sf7)) {
+                    fe9 = plant_list_get(sf7, fj9);
+                    fn9 = _map_get(fe9, "name");
+                    regl = _cat(_cat(_cat(regl, ", \""), fn9), "\"");
+                    fj9 = fj9+1;
+                }
+                regl = _cat(regl, ")");
+                regl = _cat("plant_list_make(", substring ( regl , 11 , strlen( regl ) ));
+                sp_init_code = _cat(_cat(_cat(_cat(_cat(sp_init_code, "  plant_species_register(\""), sn7), "\", "), regl), ");\n");
+            }
             structs = plant_list_push(structs, plant_list_make ( 6 , "name" , sname , "generics" , sgens2 , "fields" , sfields2 ));
         }
         i = i+1;
@@ -12942,7 +13074,7 @@ tx_t generate_c(PlantArray* ast) {
         if (strcmp(ntype,"enum_decl") == 0) {
             has_decl = 1;
         }
-        if (strcmp(ntype,"action_decl") != 0 && strcmp(ntype,"enum_decl") != 0 && strcmp(ntype,"external_decl") != 0 && strcmp(ntype,"struct_decl") != 0 && strcmp(ntype,"import_stmt") != 0 && strcmp(ntype,"type_decl") != 0) {
+        if (strcmp(ntype,"action_decl") != 0 && strcmp(ntype,"enum_decl") != 0 && strcmp(ntype,"external_decl") != 0 && strcmp(ntype,"struct_decl") != 0 && strcmp(ntype,"import_stmt") != 0 && strcmp(ntype,"type_decl") != 0 && strcmp(ntype,"species_decl") != 0) {
             ns_code = generate_node(node_el, 0, sigs, esub, plant_list_make ( 0 ), "", plant_list_make ( 0 ), plant_list_make ( 0 ), eregs, "", "", "");
             stmt_code = _cat(stmt_code, ns_code);
             has_stmt = 1;
@@ -13016,7 +13148,7 @@ tx_t generate_c(PlantArray* ast) {
         if (strcmp(has_plain_main,"1") == 0) {
             stmt_code = _cat(stmt_code, "  plant_main();\n");
         }
-        stmt_code = _cat(_cat(_cat("int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n", dcode), stmt_code), "  plant_async_drain();\n  return 0;\n}\n");
+        stmt_code = _cat(_cat(_cat(_cat("int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n", sp_init_code), dcode), stmt_code), "  plant_async_drain();\n  return 0;\n}\n");
     }
     tx_t td_code = "";
     i = 0;
@@ -13686,7 +13818,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.27 (pure native)");
+      plant_print("Chloroplast 0.49.28 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

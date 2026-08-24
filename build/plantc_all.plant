@@ -161,6 +161,9 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "TANH", GIVE "TANH". /IF.
   IF wrd IS "EXP", GIVE "EXP". /IF.
   IF wrd IS "EXPM1", GIVE "EXPM1". /IF.
+  # v0.49.28 - SPECIES/BLOOM object model.
+  IF wrd IS "SPECIES", GIVE "SPECIES". /IF.
+  IF wrd IS "BLOOM", GIVE "BLOOM". /IF.
   # v0.49.23 — numerical analysis built-ins.
   IF wrd IS "LU", GIVE "LU". /IF.
   IF wrd IS "EIGEN", GIVE "EIGEN". /IF.
@@ -1535,6 +1538,33 @@ ACTION parse_incdec_stmt(tokens(LIST), pos(NUM), op(TX)),
   REAP p5 FROM _second, vpair.
   CREATE nty(TX) TO op + "_stmt".
   GIVE plant_list_make(2, plant_list_make(6, "type", nty, "target", id_name, "value", expr), p5).
+/ACTION.
+
+# parse_bloom_stmt - BLOOM Species AS var. (v0.49.28)
+ACTION parse_bloom_stmt(tokens(LIST), pos(NUM)),
+  REAP kw_pair FROM consume, tokens, pos.
+  REAP p FROM _second, kw_pair.
+  REAP spair FROM consume, tokens, p.
+  REAP species FROM tok_lex, spair[0].
+  REAP p FROM _second, spair.
+  REAP aspair FROM consume, tokens, p.
+  REAP aslx FROM tok_lex, aspair[0].
+  IF aslx ISNT "AS",
+    CREATE berr(TX) TO "BLOOM requires AS var".
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", berr), p).
+  /IF.
+  REAP p FROM _second, aspair.
+  REAP vpair FROM consume, tokens, p.
+  REAP vty FROM tok_type, vpair[0].
+  IF vty ISNT "IDENT",
+    CREATE berr2(TX) TO "BLOOM requires a variable name".
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", berr2), p).
+  /IF.
+  REAP var FROM tok_lex, vpair[0].
+  REAP p FROM _second, vpair.
+  REAP dtp FROM consume, tokens, p.
+  REAP p FROM _second, dtp.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "bloom_stmt", "species", species, "var", var), p).
 /ACTION.
 
 # _parse_ds_pattern - destructuring pattern for LET (v0.49.26).
@@ -3239,6 +3269,11 @@ ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), 
     REAP r FROM parse_type_decl, tokens, pos.
     GIVE r.
   /IF.
+  # v0.49.28 - BLOOM Species AS var.
+  IF lx IS "BLOOM",
+    REAP r FROM parse_bloom_stmt, tokens, pos.
+    GIVE r.
+  /IF.
   IF lx IS "CONST",
     REAP r FROM parse_const_like, tokens, pos, ctab, rtab, bstart, emode, "const_stmt".
     GIVE r.
@@ -4007,6 +4042,43 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM), rtab(LIST)),
   /SEASON.
 /ACTION.
 
+# parse_species_decl - SPECIES name { field: TYPE, ... } (v0.49.28)
+ACTION parse_species_decl(tokens(LIST), pos(NUM)),
+  REAP kw_pair FROM consume, tokens, pos.
+  REAP p FROM _second, kw_pair.
+  REAP npair FROM consume, tokens, p.
+  REAP nty FROM tok_type, npair[0].
+  IF nty ISNT "IDENT",
+    CREATE serr(TX) TO "SPECIES requires a name".
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", serr), p).
+  /IF.
+  REAP sname FROM tok_lex, npair[0].
+  REAP p FROM _second, npair.
+  REAP lb FROM consume, tokens, p.
+  REAP p FROM _second, lb.
+  CREATE fields(LIST) TO plant_list_make(0).
+  SEASON TRUE,
+    REAP tk FROM peek, tokens, p.
+    REAP ty FROM tok_type, tk.
+    IF ty IS "RBRACE",
+      REAP rb FROM consume, tokens, p.
+      REAP p FROM _second, rb.
+      BREAK 0.
+    /IF.
+    REAP fpair FROM consume, tokens, p.
+    REAP fname FROM tok_lex, fpair[0].
+    REAP p FROM _second, fpair.
+    # type text ends at the closing brace (fields are whitespace
+    # separated, mirroring STRUCT)
+    REAP ftv FROM collect_type_text, tokens, p, "}", 0.
+    REAP ftype FROM _first, ftv.
+    REAP p FROM _second, ftv.
+    REAP ftt FROM trim, ftype.
+    PUT plant_list_make(4, "name", fname, "type", ftt) INTO fields.
+  /SEASON.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "species_decl", "name", sname, "fields", fields), p).
+/ACTION.
+
 # parse_type_decl - TYPE alias = target. (v0.49.27)
 ACTION parse_type_decl(tokens(LIST), pos(NUM)),
   REAP kw_pair FROM consume, tokens, pos.
@@ -4049,6 +4121,11 @@ ACTION parse_declaration(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST)
   # v0.49.27 - TYPE alias = target.
   IF lx IS "TYPE",
     REAP r FROM parse_type_decl, tokens, pos.
+    GIVE r.
+  /IF.
+  # v0.49.28 - SPECIES name { field: TYPE, ... }
+  IF lx IS "SPECIES",
+    REAP r FROM parse_species_decl, tokens, pos.
     GIVE r.
   /IF.
   # v0.49.25 - IMPORT "path". The compiler's loader (main.plant)
@@ -7560,7 +7637,6 @@ ACTION _gb_dump(bd(LIST)),
 /ACTION.
 
 ACTION generate_body(bd(LIST), indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST), rty(TX), mexit(TX), wexit(TX)),
-  SHOW "GBLEN:" + _from_long(COUNT bd).
   CREATE res(TX) TO "".
   CREATE i(NUM) TO 0.
   CREATE node_el(TX) TO "".
@@ -7894,6 +7970,16 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     # by the parser-side rewrite pass above and the C typedef block.
     IF ntype IS "type_decl",
         GIVE "".
+    /IF.
+
+    # v0.49.28 - BLOOM Species AS var -> registered record
+    IF ntype IS "bloom_stmt",
+        REAP bsp FROM _map_get, node, "species".
+        REAP bvar FROM _map_get, node, "var".
+        REAP bisel FROM indent_str, indent.
+        CREATE bb9(TX) TO "".
+        SET bb9 TO bb9 + bisel + "  tx_t " + bvar + " = plant_species_create_by_name(\"" + bsp + "\");\n".
+        GIVE bb9.
     /IF.
 
     # v0.49.26 - LET destructuring
@@ -10901,6 +10987,8 @@ ACTION generate_c(ast(LIST)),
     CREATE sigs(LIST) TO plant_list_make(0).
     CREATE templates(LIST) TO plant_list_make(0).
     CREATE structs(LIST) TO plant_list_make(0).
+    CREATE species(LIST) TO plant_list_make(0).
+    CREATE sp_init_code(TX) TO "".
     CREATE safe_acts(LIST) TO plant_list_make(0).
     CREATE eregs(LIST) TO build_enum_registry(ast).
     # pass 0r: first-pass ROOT constant collection (v0.48.35). The
@@ -10954,6 +11042,24 @@ ACTION generate_c(ast(LIST)),
             REAP sname FROM _map_get, node_el, "name".
             CREATE sgens2(LIST) TO _map_get(node_el, "generics").
             CREATE sfields2(LIST) TO _map_get(node_el, "fields").
+        IF ntype IS "species_decl",
+            REAP sn7 FROM _map_get, node_el, "name".
+            REAP sf7 FROM _map_get, node_el, "fields".
+            PUT plant_list_make(4, "name", sn7, "fields", sf7) INTO species.
+            CREATE regl(TX) TO "_from_long(" .
+            SET regl TO regl + COUNT sf7.
+            SET regl TO regl + ")".
+            CREATE fj9(NUM) TO 0.
+            SEASON fj9 < COUNT sf7,
+              REAP fe9 FROM plant_list_get, sf7, fj9.
+              REAP fn9 FROM _map_get, fe9, "name".
+              SET regl TO regl + ", \"" + fn9 + "\"".
+              SET fj9 TO fj9 + 1.
+            /SEASON.
+            SET regl TO regl + ")".
+            SET regl TO "plant_list_make(" + substring(regl, 11, LEN(regl)).
+            SET sp_init_code TO sp_init_code + "  plant_species_register(\"" + sn7 + "\", " + regl + ");\n".
+        /IF.
             PUT plant_list_make(6, "name", sname, "generics", sgens2, "fields", sfields2) INTO structs.
         /IF.
         SET i TO i + 1.
@@ -11468,7 +11574,7 @@ ACTION generate_c(ast(LIST)),
         /IF.
         # v0.49.25: import_stmt nodes are loader-level no-ops and must
         # not flip has_stmt (which would force a duplicate CLI main).
-        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "import_stmt" AND ntype ISNT "type_decl",
+        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "import_stmt" AND ntype ISNT "type_decl" AND ntype ISNT "species_decl",
             REAP ns_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "", "", "". "".
             SET stmt_code TO stmt_code + ns_code.
             SET has_stmt TO 1.
@@ -11545,7 +11651,7 @@ ACTION generate_c(ast(LIST)),
         IF has_plain_main IS "1",
             SET stmt_code TO stmt_code + "  plant_main();\n".
         /IF.
-        SET stmt_code TO "int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n" + dcode + stmt_code + "  plant_async_drain();\n  return 0;\n}\n".
+        SET stmt_code TO "int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n" + sp_init_code + dcode + stmt_code + "  plant_async_drain();\n  return 0;\n}\n".
     /IF.
     # v0.49.27 - C typedefs for TYPE aliases
     CREATE td_code(TX) TO "".
@@ -12187,7 +12293,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.49.27 (pure native)".
+  SHOW "Chloroplast 0.49.28 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

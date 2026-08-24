@@ -161,6 +161,9 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "TANH", GIVE "TANH". /IF.
   IF wrd IS "EXP", GIVE "EXP". /IF.
   IF wrd IS "EXPM1", GIVE "EXPM1". /IF.
+  # v0.49.28 - SPECIES/BLOOM object model.
+  IF wrd IS "SPECIES", GIVE "SPECIES". /IF.
+  IF wrd IS "BLOOM", GIVE "BLOOM". /IF.
   # v0.49.23 — numerical analysis built-ins.
   IF wrd IS "LU", GIVE "LU". /IF.
   IF wrd IS "EIGEN", GIVE "EIGEN". /IF.

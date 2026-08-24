@@ -3225,7 +3225,6 @@ ACTION _gb_dump(bd(LIST)),
 /ACTION.
 
 ACTION generate_body(bd(LIST), indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST), rty(TX), mexit(TX), wexit(TX)),
-  SHOW "GBLEN:" + _from_long(COUNT bd).
   CREATE res(TX) TO "".
   CREATE i(NUM) TO 0.
   CREATE node_el(TX) TO "".
@@ -3559,6 +3558,16 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     # by the parser-side rewrite pass above and the C typedef block.
     IF ntype IS "type_decl",
         GIVE "".
+    /IF.
+
+    # v0.49.28 - BLOOM Species AS var -> registered record
+    IF ntype IS "bloom_stmt",
+        REAP bsp FROM _map_get, node, "species".
+        REAP bvar FROM _map_get, node, "var".
+        REAP bisel FROM indent_str, indent.
+        CREATE bb9(TX) TO "".
+        SET bb9 TO bb9 + bisel + "  tx_t " + bvar + " = plant_species_create_by_name(\"" + bsp + "\");\n".
+        GIVE bb9.
     /IF.
 
     # v0.49.26 - LET destructuring
@@ -6566,6 +6575,8 @@ ACTION generate_c(ast(LIST)),
     CREATE sigs(LIST) TO plant_list_make(0).
     CREATE templates(LIST) TO plant_list_make(0).
     CREATE structs(LIST) TO plant_list_make(0).
+    CREATE species(LIST) TO plant_list_make(0).
+    CREATE sp_init_code(TX) TO "".
     CREATE safe_acts(LIST) TO plant_list_make(0).
     CREATE eregs(LIST) TO build_enum_registry(ast).
     # pass 0r: first-pass ROOT constant collection (v0.48.35). The
@@ -6619,6 +6630,24 @@ ACTION generate_c(ast(LIST)),
             REAP sname FROM _map_get, node_el, "name".
             CREATE sgens2(LIST) TO _map_get(node_el, "generics").
             CREATE sfields2(LIST) TO _map_get(node_el, "fields").
+        IF ntype IS "species_decl",
+            REAP sn7 FROM _map_get, node_el, "name".
+            REAP sf7 FROM _map_get, node_el, "fields".
+            PUT plant_list_make(4, "name", sn7, "fields", sf7) INTO species.
+            CREATE regl(TX) TO "_from_long(" .
+            SET regl TO regl + COUNT sf7.
+            SET regl TO regl + ")".
+            CREATE fj9(NUM) TO 0.
+            SEASON fj9 < COUNT sf7,
+              REAP fe9 FROM plant_list_get, sf7, fj9.
+              REAP fn9 FROM _map_get, fe9, "name".
+              SET regl TO regl + ", \"" + fn9 + "\"".
+              SET fj9 TO fj9 + 1.
+            /SEASON.
+            SET regl TO regl + ")".
+            SET regl TO "plant_list_make(" + substring(regl, 11, LEN(regl)).
+            SET sp_init_code TO sp_init_code + "  plant_species_register(\"" + sn7 + "\", " + regl + ");\n".
+        /IF.
             PUT plant_list_make(6, "name", sname, "generics", sgens2, "fields", sfields2) INTO structs.
         /IF.
         SET i TO i + 1.
@@ -7133,7 +7162,7 @@ ACTION generate_c(ast(LIST)),
         /IF.
         # v0.49.25: import_stmt nodes are loader-level no-ops and must
         # not flip has_stmt (which would force a duplicate CLI main).
-        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "import_stmt" AND ntype ISNT "type_decl",
+        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "import_stmt" AND ntype ISNT "type_decl" AND ntype ISNT "species_decl",
             REAP ns_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "", "", "". "".
             SET stmt_code TO stmt_code + ns_code.
             SET has_stmt TO 1.
@@ -7210,7 +7239,7 @@ ACTION generate_c(ast(LIST)),
         IF has_plain_main IS "1",
             SET stmt_code TO stmt_code + "  plant_main();\n".
         /IF.
-        SET stmt_code TO "int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n" + dcode + stmt_code + "  plant_async_drain();\n  return 0;\n}\n".
+        SET stmt_code TO "int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n" + sp_init_code + dcode + stmt_code + "  plant_async_drain();\n  return 0;\n}\n".
     /IF.
     # v0.49.27 - C typedefs for TYPE aliases
     CREATE td_code(TX) TO "".

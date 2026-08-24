@@ -1,0 +1,25 @@
+# v0.49.28 - SPECIES + BLOOM object model:
+#   SPECIES Name { field: TYPE ... }   (whitespace-separated fields)
+#   BLOOM Name AS var                  -> map-backed record; fields
+#   default to "" and are read/written via existing obj.field access
+#   and .put(...) method calls.
+SPECIES Person {
+  name: TX
+  age: NUM
+}
+SPECIES Empty { }
+ACTION main(),
+  BLOOM Person AS p.
+  SHOW "[" + p.name + "]".
+  SHOW "[" + p.age + "]".
+  CALL p.put("name", "Ada").
+  CALL p.put("age", "36").
+  SHOW p.name.
+  SHOW p.age.
+  BLOOM Empty AS e.
+  SHOW COUNT e.
+  CREATE other(LIST) TO { "age": 50 }.
+  CALL p.put("age", "40").
+  SHOW p.age.
+  GIVE 0.
+/GIVE main.

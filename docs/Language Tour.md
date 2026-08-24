@@ -1273,3 +1273,21 @@ CREATE xs(IntList) TO [1, 2].
 
 Aliases may be declared at file scope or inside ACTION bodies; they
 lower to C typedefs and resolve in CREATE/LET type positions.
+
+
+### SPECIES + BLOOM (v0.49.28)
+
+```
+SPECIES Person {
+  name: TX
+  age: NUM
+}
+
+BLOOM Person AS p.
+SHOW "[" + p.name + "]".      # [] - fields default to ""
+CALL p.put("name", "Ada").
+SHOW p.name.                  # Ada
+```
+
+Species are map-backed records; fields default to "" and work with
+the existing obj.field selector and .put(...) method.

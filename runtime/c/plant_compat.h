@@ -130,6 +130,9 @@ static tx_t get_cli_arg(int i) { if(i+1<_cli_argc) return _cli_argv[i+1]; return
 static tx_t fs_EXISTS(tx_t p) { FILE*f=fopen(_S(p),"rb"); if(!f)return"0"; fclose(f);return"1"; }
 tx_t plant_import_load(tx_t entry);   /* v0.49.25 IMPORT expansion */
 long plant_unique_seq(void);   /* v0.49.26 destructuring temp names */
+tx_t plant_species_create(tx_t names);   /* v0.49.28 SPECIES/BLOOM */
+void plant_species_register(tx_t name, tx_t fields);
+tx_t plant_species_create_by_name(tx_t name);
 static tx_t fs_READ(tx_t p) { FILE*f=fopen(_S(p),"rb"); if(!f)return""; fseek(f,0,SEEK_END);long sz=ftell(f);rewind(f);char*b=malloc(sz+1);if(!b){fclose(f);return"";}fread(b,1,sz,f);b[sz]=0;fclose(f);return b; }
 static tx_t fs_WRITE(tx_t p, tx_t c) { FILE*f=fopen(_S(p),"w"); if(f){fputs(_S(c),f);fclose(f);return"1";}return"0"; }
 static tx_t strings_LENGTH(tx_t s) { if(!s)return"0";char b[64];snprintf(b,64,"%zu",strlen(_S(s)));return strdup(b); }
