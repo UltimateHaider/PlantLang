@@ -1,0 +1,11 @@
+# v0.49.25 - IMPORT: single import of a helper module (.plnt),
+# deduplication of repeated imports of the same file, relative path
+# resolution against the importing file, and cycle/missing guards
+# (covered by the negative variants).
+IMPORT "import_helper.plnt".
+IMPORT "import_helper.plnt".
+ACTION main(),
+  CALL helper().
+  SHOW "after imports".
+  GIVE 0.
+/GIVE main.

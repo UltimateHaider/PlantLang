@@ -3340,6 +3340,31 @@ ACTION parse_declaration(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST)
     REAP r FROM parse_struct_decl, tokens, pos.
     GIVE r.
   /IF.
+  # v0.49.25 - IMPORT "path". The compiler's loader (main.plant)
+  # expands imports textually before tokenization; this parser rule
+  # recognizes any residual IMPORT statement so it becomes a typed
+  # no-op node instead of falling into unknown-token tolerance.
+  IF lx IS "IMPORT",
+    REAP im_pair FROM consume, tokens, pos.
+    REAP im_p2 FROM _second, im_pair.
+    REAP stok FROM peek, tokens, im_p2.
+    REAP sty2 FROM tok_type, stok.
+    IF sty2 ISNT "STRING",
+      CREATE ierr(TX) TO "IMPORT requires a quoted path string".
+      GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", ierr), im_p2).
+    /IF.
+    REAP spair FROM consume, tokens, im_p2.
+    REAP ipath FROM tok_lex, spair.
+    REAP im_p3 FROM _second, spair.
+    REAP dtok FROM peek, tokens, im_p3.
+    REAP dlx FROM tok_lex, dtok.
+    IF dlx IS ".",
+      REAP dpair FROM consume, tokens, im_p3.
+      REAP im_p4 FROM _second, dpair.
+      GIVE plant_list_make(2, plant_list_make(6, "type", "import_stmt", "path", ipath), im_p4).
+    /IF.
+    GIVE plant_list_make(2, plant_list_make(6, "type", "import_stmt", "path", ipath), im_p3).
+  /IF.
   IF lx IS "ACTION",
     REAP r FROM parse_action_decl, tokens, pos, rtab.
     GIVE r.

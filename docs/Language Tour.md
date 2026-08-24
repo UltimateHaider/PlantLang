@@ -1224,3 +1224,19 @@ ACTION noop() {
 
 Inner statements keep the standard forms (`IF cond,` ... `/IF.`);
 empty blocks return ""; numeric returns need `-> NUM` as usual.
+
+
+### File Imports (v0.49.25)
+
+```
+IMPORT "lib/helpers.plnt".   # relative to this file
+IMPORT "/abs/path/mod.plant".
+IMPORT "stdlib/stringutil".  # .plant appended when missing
+
+# then use imported ACTIONs directly
+```
+
+Each file is expanded exactly once per compilation; circular imports
+abort with "Error: import cycle detected: <path>", unreadable targets
+with "Error: cannot read import: <path>". The compiler's own sources
+keep using build-time concatenation.

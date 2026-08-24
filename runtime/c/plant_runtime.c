@@ -1162,6 +1162,135 @@ void plant_entity_set_species(void* entity, const char* species_name) {
 
 #include <sys/stat.h>
 
+/* ================================================================
+   v0.49.25 - IMPORT loader (user-level file imports)
+   plant_import_load(entry) returns the fully expanded program text:
+     - IMPORT "path". lines are replaced by the target file's text
+     - paths resolve against the importing file's directory; ".plant"
+       is appended when missing; absolute paths pass through
+     - each file is expanded exactly once (dedup by canonical path)
+     - a reference to a file that is still being expanded (i.e., a
+       cycle) yields the sentinel-prefixed diagnostic
+         "@@E@@Error: import cycle detected: <path>"
+       unreadable files yield "@@E@@Error: cannot read import: <path>"
+   ================================================================ */
+
+typedef struct { char** v; long n, cap; } _ImpList;
+static void _imp_list_push(_ImpList* l, const char* s) {
+    if (l->n == l->cap) { l->cap = l->cap ? l->cap * 2 : 8; l->v = (char**)realloc(l->v, sizeof(char*) * l->cap); }
+    l->v[l->n++] = strdup(s);
+}
+static int _imp_list_has(_ImpList* l, const char* s) {
+    for (long i = 0; i < l->n; i++) if (strcmp(l->v[i], s) == 0) return 1;
+    return 0;
+}
+static void _imp_list_remove(_ImpList* l, const char* s) {
+    for (long i = 0; i < l->n; i++) if (strcmp(l->v[i], s) == 0) { free(l->v[i]); memmove(&l->v[i], &l->v[i+1], sizeof(char*)*(l->n-i-1)); l->n--; return; }
+}
+
+typedef struct { char* buf; size_t len, cap; } _ImpBuf;
+static void _imp_buf_add(_ImpBuf* b, const char* s, size_t n) {
+    if (b->len + n + 1 > b->cap) { b->cap = (b->len + n + 1) * 2 + 64; b->buf = (char*)realloc(b->buf, b->cap); }
+    memcpy(b->buf + b->len, s, n); b->len += n; b->buf[b->len] = '\0';
+}
+
+static char* _imp_dirname(const char* p) {
+    const char* slash = strrchr(p, '/');
+    if (!slash) return strdup("");
+    return strndup(p, slash - p);
+}
+
+static char* _imp_resolve(const char* dir, const char* rel) {
+    char full[4096];
+    snprintf(full, sizeof(full), "%s", rel);
+    size_t fl = strlen(full);
+    const char* base = strrchr(full, '/');
+    base = base ? base + 1 : full;
+    if (strchr(base, '.') == NULL) snprintf(full + fl, sizeof(full) - fl, ".plant");
+    if (dir[0] && full[0] != '/') { char tmp[4600]; snprintf(tmp, sizeof(tmp), "%s/%s", dir, full); snprintf(full, sizeof(full), "%s", tmp); }
+    return strdup(full);
+}
+
+/* forward decl for mutual recursion */
+static int _imp_expand(const char* text, const char* curdir, _ImpList* pending, _ImpList* done, _ImpBuf* out, char* err, size_t errsz);
+
+static int _imp_scan_file(const char* path, _ImpList* pending, _ImpList* done, _ImpBuf* out, char* err, size_t errsz) {
+    char* body = plant_file_read(path);
+    if (!body) { snprintf(err, errsz, "Error: cannot read import: %s", path); return 0; }
+    int ok = _imp_expand(body, _imp_dirname(path), pending, done, out, err, errsz);
+    free(body);
+    return ok;
+}
+
+static int _imp_expand(const char* text, const char* curdir, _ImpList* pending, _ImpList* done, _ImpBuf* out, char* err, size_t errsz) {
+    const char* p = text;
+    while (*p) {
+        const char* eol = strchr(p, '\n');
+        size_t linelen = eol ? (size_t)(eol - p) : strlen(p);
+        int is_import = (linelen >= 7 && strncmp(p, "IMPORT ", 7) == 0);
+        if (is_import) {
+            const char* q1 = memchr(p + 7, '"', linelen - 7);
+            if (q1) {
+                const char* q2 = q1 + 1;
+                while (q2 < p + linelen && *q2 != '"') q2++;
+                if (q2 < p + linelen) {
+                    char rel[1024];
+                    size_t rl = (size_t)(q2 - q1 - 1);
+                    if (rl >= sizeof(rel)) rl = sizeof(rel) - 1;
+                    memcpy(rel, q1 + 1, rl); rel[rl] = '\0';
+                    char* full = _imp_resolve(curdir, rel);
+                    if (_imp_list_has(done, full)) { free(full); goto emit_line; }
+                    if (_imp_list_has(pending, full)) {
+                        snprintf(err, errsz, "Error: import cycle detected: %s", full);
+                        free(full); return 0;
+                    }
+                    _imp_list_push(pending, full);
+                    int okr = _imp_scan_file(full, pending, done, out, err, errsz);
+                    _imp_list_remove(pending, full);
+                    if (!okr) { free(full); return 0; }
+                    _imp_list_push(done, full);
+                    free(full);
+                    goto skip_line;   /* import line replaced by file text */
+                }
+            }
+        }
+emit_line:
+        _imp_buf_add(out, p, linelen);
+        _imp_buf_add(out, "\n", 1);
+skip_line:
+        if (!eol) break;
+        p = eol + 1;
+    }
+    return 1;
+}
+
+tx_t plant_import_load(tx_t entry) {
+    static char errbuf[1024];
+    errbuf[0] = '\0';
+    _ImpList pending = {0}, done = {0};
+    _ImpBuf out = {0};
+    const char* ep = _S(entry);
+    char* dir = _imp_dirname(ep);
+    char* body = plant_file_read(ep);
+    if (!body) { free(dir); return strdup("@@E@@Error: cannot read import: entry file"); }
+    _imp_list_push(&pending, ep);
+    int ok = _imp_expand(body, dir, &pending, &done, &out, errbuf, sizeof(errbuf));
+    _imp_list_remove(&pending, ep);
+    free(body); free(dir);
+    for (long i = 0; i < pending.n; i++) free(pending.v[i]);
+    free(pending.v);
+    for (long i = 0; i < done.n; i++) free(done.v[i]);
+    free(done.v);
+    if (!ok) {
+        char msg[1200];
+        snprintf(msg, sizeof(msg), "@@E@@%s", errbuf);
+        free(out.buf);
+        return strdup(msg);
+    }
+    if (!out.buf) return strdup("");
+    return out.buf;   /* NUL-terminated by _imp_buf_add */
+}
+
 char* plant_file_read(const char* filepath) {
     if (!filepath) return NULL;
     FILE* f = fopen(filepath, "rb");

@@ -67,7 +67,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `TYPE alias = target.` | S | M | |
 | `MISSION : mode.` (set mode) | S | **P** | `MISSION CONFIG KEY = VALUE.` only |
 | `PLANT lib [AS alias].` | S | M | replaced by direct `module:func` calls |
-| `IMPORT "path".` (user programs) | S | **P** | IMPORT only for the compiler's own sources; no runtime program imports |
+| `IMPORT "path".` (user programs) | S | **S** | v0.49.25: runtime loader in plant_import_load (relative/absolute paths, .plant inference, dedup, cycle + missing-file errors); compiler self-host still uses build-time concat |
 | `LET {a,b} = …` / `LET [h,t] = …` destructuring | S | M | |
 
 ### 3.2 Statements

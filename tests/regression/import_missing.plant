@@ -1,0 +1,4 @@
+IMPORT "no_such_module".
+ACTION main(),
+  GIVE 0.
+/GIVE main.

@@ -1,0 +1,4 @@
+IMPORT "import_cyc_b.plnt".
+ACTION cyc_a(),
+  GIVE 0.
+/ACTION.

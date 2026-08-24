@@ -13,6 +13,7 @@ PLANT strings.
 
 ACTION get_cli_arg(idx(NUM)) -> external.
 
+
 # ═══════════════════════════════════════════════════════════
 #  Compiler Pipeline — Stage 0 self-hosting driver
 # ═══════════════════════════════════════════════════════════
@@ -28,7 +29,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.49.24 (pure native)".
+  SHOW "Chloroplast 0.49.25 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.
@@ -43,6 +44,17 @@ IF exists ISNT "1",
 
 # 3. Read
 REAP source_text FROM fs:READ, source_path.
+
+# 3b. v0.49.25 - expand IMPORT directives (dedupe + cycle guard)
+REAP merged_text FROM plant_import_load, source_path.
+CREATE err_head(TX) TO substring(merged_text, 0, 5).
+REAP is_err FROM str_eq, err_head, "@@E@@".
+IF is_err IS "1",
+  REAP emsg FROM substring, merged_text, 5, LEN(merged_text).
+  SHOW emsg.
+  GIVE 1.
+/IF.
+SET source_text TO merged_text.
 
 # 4. Tokenize
 SHOW "tokenizing...".

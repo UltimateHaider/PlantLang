@@ -1,0 +1,4 @@
+ACTION helper(),
+  SHOW "from helper".
+  GIVE 0.
+/ACTION.

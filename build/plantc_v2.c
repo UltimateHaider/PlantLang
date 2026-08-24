@@ -148,6 +148,7 @@ tx_t async_emit_step(tx_t name, PlantArray* phases, PlantArray* vars, PlantArray
 tx_t _ni_replace(tx_t e);
 tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars);
 tx_t indent_str(long level);
+tx_t _gb_dump(PlantArray* bd);
 tx_t generate_body(PlantArray* bd, long indent, PlantArray* sigs, PlantArray* subst, PlantArray* clmap, tx_t actx, PlantArray* nums, PlantArray* stvars, PlantArray* evars, tx_t rty, tx_t mexit, tx_t wexit);
 tx_t _is_digit(tx_t c);
 tx_t _st_num(tx_t s, long p);
@@ -5299,6 +5300,17 @@ tx_t parse_declaration(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab,
   tx_t tok = "";
   tx_t lx = "";
   tx_t r = "";
+  tx_t im_pair = "";
+  tx_t im_p2 = "";
+  tx_t stok = "";
+  tx_t sty2 = "";
+  tx_t spair = "";
+  tx_t ipath = "";
+  tx_t im_p3 = "";
+  tx_t dtok = "";
+  tx_t dlx = "";
+  tx_t dpair = "";
+  tx_t im_p4 = "";
   tx_t pair = "";
   tx_t nx = "";
   tx_t nd = "";
@@ -5314,6 +5326,27 @@ tx_t parse_declaration(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab,
     if (strcmp(lx,"STRUCT") == 0) {
         r = parse_struct_decl(tokens, pos);
         return r;
+    }
+    if (strcmp(lx,"IMPORT") == 0) {
+        im_pair = consume(tokens, pos);
+        im_p2 = _second(im_pair);
+        stok = peek(tokens, im_p2);
+        sty2 = tok_type(stok);
+        if (strcmp(sty2,"STRING") != 0) {
+            tx_t ierr = "IMPORT requires a quoted path string";
+            return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , ierr ) , im_p2 );
+        }
+        spair = consume(tokens, im_p2);
+        ipath = tok_lex(spair);
+        im_p3 = _second(spair);
+        dtok = peek(tokens, im_p3);
+        dlx = tok_lex(dtok);
+        if (strcmp(dlx,".") == 0) {
+            dpair = consume(tokens, im_p3);
+            im_p4 = _second(dpair);
+            return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "import_stmt" , "path" , ipath ) , im_p4 );
+        }
+        return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "import_stmt" , "path" , ipath ) , im_p3 );
     }
     if (strcmp(lx,"ACTION") == 0) {
         r = parse_action_decl(tokens, pos, rtab);
@@ -8749,8 +8782,21 @@ tx_t indent_str(long level) {
     }
     return res;
 }
+tx_t _gb_dump(PlantArray* bd) {
+  tx_t nd = "";
+  tx_t ty = "";
+    long i = 0;
+    while (i < plant_array_length(bd)) {
+        nd = plant_list_get(bd, i);
+        ty = _map_get(nd, "type");
+        plant_print(_cat("GB:", ty));
+        i = i+1;
+    }
+    return 0;
+}
 tx_t generate_body(PlantArray* bd, long indent, PlantArray* sigs, PlantArray* subst, PlantArray* clmap, tx_t actx, PlantArray* nums, PlantArray* stvars, PlantArray* evars, tx_t rty, tx_t mexit, tx_t wexit) {
   tx_t node_code = "";
+    plant_print(_cat("GBLEN:", _from_long ( plant_array_length(bd) )));
     tx_t res = "";
     long i = 0;
     tx_t node_el = "";
@@ -9918,6 +9964,9 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
             return _cat(_cat("#error ", cname), " CONST value must be a quoted string literal\n");
         }
         return _cat(_cat(_cat(_cat(_cat(isel, "  static const char *"), cname), " = "), cval), ";\n");
+    }
+    if (strcmp(ntype,"import_stmt") == 0) {
+        return "";
     }
     if (strcmp(ntype,"root_stmt") == 0) {
         return "";
@@ -12524,7 +12573,7 @@ tx_t generate_c(PlantArray* ast) {
         if (strcmp(ntype,"enum_decl") == 0) {
             has_decl = 1;
         }
-        if (strcmp(ntype,"action_decl") != 0 && strcmp(ntype,"enum_decl") != 0 && strcmp(ntype,"external_decl") != 0 && strcmp(ntype,"struct_decl") != 0) {
+        if (strcmp(ntype,"action_decl") != 0 && strcmp(ntype,"enum_decl") != 0 && strcmp(ntype,"external_decl") != 0 && strcmp(ntype,"struct_decl") != 0 && strcmp(ntype,"import_stmt") != 0) {
             ns_code = generate_node(node_el, 0, sigs, esub, plant_list_make ( 0 ), "", plant_list_make ( 0 ), plant_list_make ( 0 ), eregs, "", "", "");
             stmt_code = _cat(stmt_code, ns_code);
             has_stmt = 1;
@@ -13237,6 +13286,9 @@ int main(int argc, char **argv) {
   tx_t source_path = "";
   tx_t exists = "";
   tx_t source_text = "";
+  tx_t merged_text = "";
+  tx_t is_err = "";
+  tx_t emsg = "";
   tx_t tokens = "";
   tx_t program_ast = "";
   tx_t perr = "";
@@ -13255,7 +13307,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.24 (pure native)");
+      plant_print("Chloroplast 0.49.25 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);
@@ -13266,6 +13318,15 @@ int main(int argc, char **argv) {
       return 1;
   }
   source_text = fs_READ(source_path);
+  merged_text = plant_import_load(source_path);
+  tx_t err_head = substring ( merged_text , 0 , 5 );
+  is_err = str_eq(err_head, "@@E@@");
+  if (strcmp(is_err,"1") == 0) {
+      emsg = substring(merged_text, 5, strlen( merged_text ));
+      plant_print(emsg);
+      return 1;
+  }
+  source_text = merged_text;
   plant_print("tokenizing...");
   tokens = scan_tokens(source_text);
   plant_print("parsing...");

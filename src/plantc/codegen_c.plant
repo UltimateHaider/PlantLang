@@ -3167,7 +3167,19 @@ ACTION indent_str(level(NUM)),
 #  for implicit returns / async steps / closures); gen_give_stmt
 #  uses it to wrap NUM-typed returns in _from_long (v0.48.13).
 # ──────────────────────────────────────────────────────────────
+ACTION _gb_dump(bd(LIST)),
+  CREATE i(NUM) TO 0.
+  SEASON i < COUNT bd,
+    REAP nd FROM plant_list_get, bd, i.
+    REAP ty FROM _map_get, nd, "type".
+    SHOW "GB:" + ty.
+    SET i TO i + 1.
+  /SEASON.
+  GIVE 0.
+/ACTION.
+
 ACTION generate_body(bd(LIST), indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST), rty(TX), mexit(TX), wexit(TX)),
+  SHOW "GBLEN:" + _from_long(COUNT bd).
   CREATE res(TX) TO "".
   CREATE i(NUM) TO 0.
   CREATE node_el(TX) TO "".
@@ -4283,6 +4295,12 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     # ── root_stmt: ROOT name TO "lit". → no inline code ───────────
     #    (file-scope static const emitted at the top by the first
     #    pass). The statement position is a no-op.
+    # v0.49.25: import_stmt is expanded by the loader (main.plant);
+    # residual nodes generate nothing.
+    IF ntype IS "import_stmt",
+        GIVE "".
+    /IF.
+
     IF ntype IS "root_stmt",
         GIVE "".
     /IF.
@@ -6938,7 +6956,9 @@ ACTION generate_c(ast(LIST)),
         IF ntype IS "enum_decl",
             SET has_decl TO 1.
         /IF.
-        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl",
+        # v0.49.25: import_stmt nodes are loader-level no-ops and must
+        # not flip has_stmt (which would force a duplicate CLI main).
+        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "import_stmt",
             REAP ns_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "", "", "". "".
             SET stmt_code TO stmt_code + ns_code.
             SET has_stmt TO 1.
