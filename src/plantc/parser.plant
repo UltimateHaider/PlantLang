@@ -93,7 +93,8 @@ ACTION escape_string(s(TX)),
 # new statement — the dot stays a terminator. At depth 0 the target
 # is the whole accumulated text; inside parens/brackets (dpth "1")
 # only a bare IDENT target is supported (f(a.b), [a.b, c]).
-ACTION parse_field_access(tokens(LIST), pos(NUM), text(TX), dpth(TX)),
+ACTION parse_field_access(tokens(LIST), pos(NUM), text(TX), dpth(TX)),  SHOW "DBG-FA text=[" + text + "]".
+
   REAP ftok FROM peek, tokens, pos + 1.
   REAP flx FROM tok_lex, ftok.
   REAP fty FROM tok_type, ftok.
@@ -185,7 +186,12 @@ ACTION parse_method_call(tokens(LIST), pos(NUM), text(TX)),
   IF mname IS "get", SET mfn TO "plant_map_get". /IF.
   IF mname IS "put", SET mfn TO "plant_map_set". /IF.
   IF mname IS "has", SET mfn TO "plant_map_has". /IF.
-  IF mfn IS "", GIVE plant_list_make(3, "0", text, pos). /IF.
+  # v0.49.29 - unknown methods dispatch as user functions taking
+  # the receiver as their leading argument (SPECIES methods lift to
+  # exactly this shape).
+  IF mfn IS "",
+    SET mfn TO mname.
+  /IF.
   # consume ".", the method name, and the opening "("
   REAP mcp FROM consume, tokens, pos.
   REAP mpp FROM _second, mcp.
@@ -891,7 +897,99 @@ ACTION parse_fast_reset_stmt(tokens(LIST), pos(NUM)),
 #   replies on the active LISTEN request (respond_stmt node; the req
 #   slot is filled with the request variable tracked by the statement
 #   loops, or stays empty when no LISTEN is bound in the block).
+ACTION _is_idch(c(TX)),
+  REAP r1 FROM str_eq, c, "_".
+  IF r1 IS "1", GIVE "1". /IF.
+  IF c GREATER THAN OR EQUAL "a" AND c LESS THAN OR EQUAL "z", GIVE "1". /IF.
+  IF c GREATER THAN OR EQUAL "A" AND c LESS THAN OR EQUAL "Z", GIVE "1". /IF.
+  IF c GREATER THAN OR EQUAL "0" AND c LESS THAN OR EQUAL "9", GIVE "1". /IF.
+  GIVE "0".
+/ACTION.
+
+# _lower_dots - textual IDENT.IDENT[.IDENT...] -> _map_get chains,
+# outside string literals. Used by GIVE (legacy collector has no
+# token-level field lowering).
+ACTION _lower_dots(e(TX)),
+  CREATE out(TX) TO "".
+  CREATE res(TX) TO "".
+  CREATE i(NUM) TO 0.
+  CREATE n(NUM) TO LEN(e).
+  CREATE q(TX) TO "".
+  SEASON i < n,
+    REAP ch FROM char_at, e, i.
+    IF q IS "",
+      IF ch IS "\"" OR ch IS "'", SET q TO ch. /IF.
+    /IF.
+    IF q ISNT "",
+      SET out TO out + ch.
+      IF ch IS q, SET q TO "". /IF.
+      SET i TO i + 1.
+      CONTINUE.
+    /IF.
+    IF ch IS "." AND i > 0 AND i + 1 < n,
+      REAP pv FROM char_at, e, i - 1.
+      REAP nx FROM char_at, e, i + 1.
+      REAP pid FROM _is_idch, pv.
+      REAP nid0 FROM _is_idch, nx.
+      REAP nz FROM str_eq, nx, "_".
+      IF pid IS "1" AND (nid0 IS "1" OR nz IS "1"),
+        # gather base backwards
+        CREATE js(NUM) TO i - 1.
+        SEASON js > 0,
+          REAP pj FROM char_at, e, js - 1.
+          REAP pjok FROM _is_idch, pj.
+          IF pjok ISNT "1", BREAK 0. /IF.
+          SET js TO js - 1.
+        /SEASON.
+        REAP base FROM substring, e, js, i.
+        # gather chain identifiers
+        CREATE ids(LIST) TO plant_list_make(0).
+        CREATE pending(TX) TO base.
+        CREATE k(NUM) TO i + 1.
+        SEASON k < n,
+          REAP kid FROM char_at, e, k.
+          REAP kok FROM _is_idch, kid.
+          IF kok ISNT "1", BREAK 0. /IF.
+          CREATE w(TX) TO "".
+          SEASON k < n,
+            REAP kc FROM char_at, e, k.
+            REAP kcok FROM _is_idch, kc.
+            IF kcok ISNT "1", BREAK 0. /IF.
+            SET w TO w + kc.
+            SET k TO k + 1.
+          /SEASON.
+          PUT w INTO ids.
+          REAP dchk FROM char_at, e, k.
+          REAP disdot FROM str_eq, dchk, ".".
+          IF disdot IS "1",
+            SET k TO k + 1.
+          /IF.
+          IF disdot ISNT "1", BREAK 0. /IF.
+        /SEASON.
+        CREATE mi(NUM) TO 0.
+        SEASON mi < COUNT ids,
+          REAP idv FROM plant_list_get, ids, mi.
+          SET res TO "_map_get(".
+          SET res TO res + pending.
+          SET res TO res + ", \"".
+          SET res TO res + idv.
+          SET res TO res + "\")".
+          SET pending TO res.
+          SET mi TO mi + 1.
+        /SEASON.
+        SET out TO out + res.
+        SET i TO k.
+        CONTINUE.
+      /IF.
+    /IF.
+    SET out TO out + ch.
+    SET i TO i + 1.
+  /SEASON.
+  GIVE out.
+/ACTION.
+
 ACTION parse_give_stmt(tokens(LIST), pos(NUM), clv(TX)),
+
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
   CREATE gkws(LIST) TO plant_list_make(3, "AS", ")", ".").
@@ -921,6 +1019,8 @@ ACTION parse_give_stmt(tokens(LIST), pos(NUM), clv(TX)),
       GIVE plant_list_make(2, plant_list_make(8, "type", "respond_stmt", "content", expr, "req", clv, "json", rjson), p6).
     /IF.
   /IF.
+  REAP lexpr FROM _lower_dots, expr.
+  SET expr TO lexpr.
   GIVE plant_list_make(2, plant_list_make(4, "type", "give_stmt", "value", expr), p3).
 /ACTION.
 
@@ -2903,6 +3003,7 @@ ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), 
 # terminator is a list of keywords instead of a single delimiter
 # (v0.48.32, for HARVEST options).
 ACTION collect_until_keyword(tokens(LIST), start(NUM), kws(LIST)),
+
   CREATE text(TX) TO "".
   CREATE p2(NUM) TO start.
   CREATE depth(NUM) TO 0.
@@ -2927,9 +3028,6 @@ ACTION collect_until_keyword(tokens(LIST), start(NUM), kws(LIST)),
       /IF.
       SET ki TO ki + 1.
     /SEASON.
-    IF kw_hit IS "1",
-      GIVE plant_list_make(2, text, p2).
-    /IF.
     # v0.49.10 — field access before a keyword terminator
     IF lx IS "." AND text > "",
       REAP fpp FROM parse_field_access, tokens, p2, text, _from_long(depth).
@@ -2941,6 +3039,9 @@ ACTION collect_until_keyword(tokens(LIST), start(NUM), kws(LIST)),
         SET p2 TO fpp2.
         CONTINUE 0.
       /IF.
+    /IF.
+    IF kw_hit IS "1",
+      GIVE plant_list_make(2, text, p2).
     /IF.
     IF lx IS "(", SET depth TO depth + 1. /IF.
     IF lx IS ")", SET depth TO depth - 1. /IF.
@@ -3467,6 +3568,8 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM), rtab(LIST)),
 
 # parse_species_decl - SPECIES name { field: TYPE, ... } (v0.49.28)
 ACTION parse_species_decl(tokens(LIST), pos(NUM)),
+  CREATE srtab(LIST) TO plant_list_make(0).
+
   REAP kw_pair FROM consume, tokens, pos.
   REAP p FROM _second, kw_pair.
   REAP npair FROM consume, tokens, p.
@@ -3480,26 +3583,71 @@ ACTION parse_species_decl(tokens(LIST), pos(NUM)),
   REAP lb FROM consume, tokens, p.
   REAP p FROM _second, lb.
   CREATE fields(LIST) TO plant_list_make(0).
+  CREATE methods(LIST) TO plant_list_make(0).
   SEASON TRUE,
     REAP tk FROM peek, tokens, p.
     REAP ty FROM tok_type, tk.
+    REAP slx FROM tok_lex, tk.
     IF ty IS "RBRACE",
       REAP rb FROM consume, tokens, p.
       REAP p FROM _second, rb.
       BREAK 0.
     /IF.
+    # v0.49.29 - embedded ACTION members (brace-form bodies)
+    IF slx IS "ACTION",
+          REAP mpair FROM parse_action_decl, tokens, p, srtab.
+
+      REAP mnode FROM _first, mpair.
+      REAP p FROM _second, mpair.
+      REAP mnty FROM _map_get, mnode, "type".
+      IF mnty IS "action_decl",
+        REAP mn FROM _map_get, mnode, "name".
+        # v0.49.29: lift under the BARE method name (must be unique
+        # across species) so receiver.method() dispatch resolves.
+        REAP onm FROM _map_replace, mnode, "name", mn.
+        REAP oldp FROM _map_get, onm, "params".
+        CREATE np2(LIST) TO plant_list_make(0).
+        PUT plant_list_make(4, "name", "self", "type", "TX") INTO np2.
+        CREATE ci2(NUM) TO 0.
+        SEASON ci2 < COUNT oldp,
+          REAP pel FROM plant_list_get, oldp, ci2.
+          PUT pel INTO np2.
+          SET ci2 TO ci2 + 1.
+        /SEASON.
+        REAP nn2 FROM _map_replace, onm, "params", np2.
+        PUT nn2 INTO methods.
+      /IF.
+      REAP stk9 FROM peek, tokens, p.
+      REAP sty9 FROM tok_type, stk9.
+      IF sty9 IS "RBRACE",
+        REAP rb9 FROM consume, tokens, p.
+        REAP p FROM _second, rb9.
+        BREAK 0.
+      /IF.
+      CONTINUE.
+    /IF.
     REAP fpair FROM consume, tokens, p.
     REAP fname FROM tok_lex, fpair[0].
     REAP p FROM _second, fpair.
-    # type text ends at the closing brace (fields are whitespace
-    # separated, mirroring STRUCT)
-    REAP ftv FROM collect_type_text, tokens, p, "}", 0.
-    REAP ftype FROM _first, ftv.
-    REAP p FROM _second, ftv.
-    REAP ftt FROM trim, ftype.
+    # v0.49.29: type = single IDENT with optional [T] group, so that
+    # embedded ACTION members after the fields are left untouched.
+    REAP ttok FROM consume, tokens, p.
+    REAP ftt FROM tok_lex, ttok[0].
+    REAP p FROM _second, ttok.
+    REAP btk FROM peek, tokens, p.
+    REAP blx FROM tok_lex, btk.
+    IF blx IS "[",
+      REAP btv FROM collect_type_text, tokens, p, "]", 0.
+      REAP btx FROM _first, btv.
+      REAP p FROM _second, btv.
+      SET ftt TO ftt + btx + "]".
+      REAP brb FROM consume, tokens, p.
+      REAP p FROM _second, brb.
+    /IF.
     PUT plant_list_make(4, "name", fname, "type", ftt) INTO fields.
   /SEASON.
-  GIVE plant_list_make(2, plant_list_make(6, "type", "species_decl", "name", sname, "fields", fields), p).
+  SHOW "DBG species end methods=" + _from_long(COUNT methods).
+  GIVE plant_list_make(2, plant_list_make(8, "type", "species_decl", "name", sname, "fields", fields, "methods", methods), p).
 /ACTION.
 
 # parse_type_decl - TYPE alias = target. (v0.49.27)
@@ -3831,7 +3979,21 @@ ACTION parse_program(tokens(LIST)),
     /IF.
     SET pos TO pos2.
     IF decl > "",
-      PUT decl INTO nodes.
+      REAP dsplice FROM _map_get, decl, "type".
+      REAP is_sp FROM str_eq, dsplice, "species_decl".
+      IF is_sp IS "1",
+        PUT decl INTO nodes.
+        REAP ml FROM _map_get, decl, "methods".
+        CREATE mi9(NUM) TO 0.
+        SEASON mi9 < COUNT ml,
+          REAP mn9 FROM plant_list_get, ml, mi9.
+          PUT mn9 INTO nodes.
+          SET mi9 TO mi9 + 1.
+        /SEASON.
+      /IF.
+      IF is_sp ISNT "1",
+        PUT decl INTO nodes.
+      /IF.
     /IF.
   /SEASON.
 /ACTION.

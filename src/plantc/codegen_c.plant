@@ -2972,7 +2972,54 @@ ACTION _emit_ds(items(LIST), kind(TX), base(TX), isel(TX), tag(TX)),
   GIVE code.
 /ACTION.
 
+# _swap_self - v0.49.29: rewrite standalone SELF tokens to self
+# (word-boundary aware so SELFISH etc. are untouched).
+ACTION _swap_self(e(TX)),
+  # standalone-word rewrite only: SELF -> self. Member access uses
+  # the modern dot form (self.field, self.method()); the legacy
+  # colon form (SELF:field) is not rewritten here.
+  CREATE out2(TX) TO "".
+  CREATE i(NUM) TO 0.
+  CREATE n(NUM) TO LEN(e).
+  SEASON i < n,
+    REAP c FROM char_at, e, i.
+    IF c IS "S" AND i + 3 < n,
+      REAP s4 FROM substring, e, i, i + 4.
+      REAP isself FROM str_eq, s4, "SELF".
+      IF isself IS "1",
+        CREATE okL(NUM) TO 1.
+        CREATE okR(NUM) TO 1.
+        IF i > 0,
+          REAP pc FROM char_at, e, i - 1.
+          IF pc GREATER THAN OR EQUAL "a" AND pc LESS THAN OR EQUAL "z", SET okL TO 0. /IF.
+          IF pc GREATER THAN OR EQUAL "A" AND pc LESS THAN OR EQUAL "Z", SET okL TO 0. /IF.
+          IF pc GREATER THAN OR EQUAL "0" AND pc LESS THAN OR EQUAL "9", SET okL TO 0. /IF.
+          IF pc IS "_", SET okL TO 0. /IF.
+        /IF.
+        IF i + 4 < n,
+          REAP nc FROM char_at, e, i + 4.
+          IF nc GREATER THAN OR EQUAL "a" AND nc LESS THAN OR EQUAL "z", SET okR TO 0. /IF.
+          IF nc GREATER THAN OR EQUAL "A" AND nc LESS THAN OR EQUAL "Z", SET okR TO 0. /IF.
+          IF nc GREATER THAN OR EQUAL "0" AND nc LESS THAN OR EQUAL "9", SET okR TO 0. /IF.
+          IF nc IS "_", SET okR TO 0. /IF.
+        /IF.
+        IF okL IS 1 AND okR IS 1,
+          REAP out2 FROM plant_str_concat, out2, "self".
+          SET i TO i + 4.
+          CONTINUE.
+        /IF.
+      /IF.
+    /IF.
+    REAP out2 FROM plant_str_concat, out2, c.
+    SET i TO i + 1.
+  /SEASON.
+  GIVE out2.
+/ACTION.
+
+
+
 ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
+    REAP expr FROM _swap_self, expr.
     CREATE e(TX) TO expr.
     # ── v0.48.36 — temporal queries / introspection in expression
     #    position: NOW [FORMAT : x] → plant_now("x"), ANALYZE x →
@@ -4028,11 +4075,23 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    with the full ffi/struct/varargs arg handling. ─
     IF ntype IS "call_stmt",
         REAP ca2 FROM _map_get, node, "action".
+        REAP ca2 FROM _swap_self, ca2.
         CREATE cargs2(LIST) TO _map_get(node, "args").
         CREATE ccl2(LIST) TO _map_get(node, "clargs").
         IF ccl2 IS "",
             SET ccl2 TO plant_list_make(0).
         /IF.
+        REAP ca2s FROM _swap_self, ca2.
+        SET ca2 TO ca2s.
+        CREATE cargs3(LIST) TO plant_list_make(0).
+        CREATE cai(NUM) TO 0.
+        SEASON cai < COUNT cargs2,
+          REAP ael FROM plant_list_get, cargs2, cai.
+          REAP asw FROM _swap_self, ael.
+          PUT asw INTO cargs3.
+          SET cai TO cai + 1.
+        /SEASON.
+        SET cargs2 TO cargs3.
         CREATE cnode2(LIST) TO plant_list_make(10, "type", "reap_stmt", "target", "_", "action", ca2, "args", cargs2, "clargs", ccl2).
         REAP ccode3 FROM generate_node, cnode2, indent, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
         GIVE ccode3.
@@ -6634,7 +6693,7 @@ ACTION generate_c(ast(LIST)),
             REAP sn7 FROM _map_get, node_el, "name".
             REAP sf7 FROM _map_get, node_el, "fields".
             PUT plant_list_make(4, "name", sn7, "fields", sf7) INTO species.
-            CREATE regl(TX) TO "_from_long(" .
+            CREATE regl(TX) TO "_from_long(".
             SET regl TO regl + COUNT sf7.
             SET regl TO regl + ")".
             CREATE fj9(NUM) TO 0.

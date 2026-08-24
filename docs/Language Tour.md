@@ -1291,3 +1291,30 @@ SHOW p.name.                  # Ada
 
 Species are map-backed records; fields default to "" and work with
 the existing obj.field selector and .put(...) method.
+
+
+### Species Methods + SELF (v0.49.29)
+
+```
+SPECIES Person {
+  name: TX
+  age: NUM
+
+  ACTION greet() -> TX {
+    GIVE "Hello, " + self.name + "!".
+  }
+  ACTION haveBirthday() {
+    CALL self.put("age", "37").
+  }
+}
+
+BLOOM Person AS p.
+CALL p.put("name", "Ada").
+SHOW p.greet().            # Hello, Ada!
+CALL p.haveBirthday().
+SHOW p.age.                # 37
+```
+
+Methods lift to functions whose first parameter is the instance;
+`SELF` (case-exact) inside bodies becomes that parameter. Use the dot
+form for field/method access. Method names are global-unique.

@@ -1,0 +1,39 @@
+# v0.49.29 - SPECIES methods + SELF binding:
+#   ACTION members inside SPECIES lift to top-level functions whose
+#   first parameter is the instance (self); SELF rewrites to self and
+#   obj.method(args) dispatches with the receiver prepended.
+SPECIES Person {
+  name: TX
+  age: NUM
+
+  ACTION greet() -> TX {
+    GIVE "Hello, " + self.name + "!".
+  }
+
+  ACTION haveBirthday() {
+    CALL self.put("age", "37").
+  }
+
+  ACTION isAdult() -> TX {
+    IF self.age GREATER THAN OR EQUAL "18",
+      GIVE "yes".
+    /IF.
+    GIVE "no".
+  }
+
+  ACTION describe() -> TX {
+    GIVE self.name + "/" + self.age.
+  }
+}
+ACTION main(),
+  BLOOM Person AS p.
+  CALL p.put("name", "Ada").
+  CALL p.put("age", "30").
+  SHOW p.greet().
+  SHOW p.isAdult().
+  SHOW p.describe().
+  CALL p.haveBirthday().
+  SHOW p.describe().
+  SHOW p.isAdult().
+  GIVE 0.
+/GIVE main.
