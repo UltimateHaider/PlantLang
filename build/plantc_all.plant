@@ -3234,6 +3234,11 @@ ACTION parse_weather_stmt(tokens(LIST), pos(NUM), clv(TX), rtab(LIST), emode(TX)
 ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), bstart(NUM), emode(TX)),
   REAP tok FROM peek, tokens, pos.
   REAP lx FROM tok_lex, tok.
+  # v0.49.27 - TYPE aliases inside action bodies
+  IF lx IS "TYPE",
+    REAP r FROM parse_type_decl, tokens, pos.
+    GIVE r.
+  /IF.
   IF lx IS "CONST",
     REAP r FROM parse_const_like, tokens, pos, ctab, rtab, bstart, emode, "const_stmt".
     GIVE r.
@@ -4002,6 +4007,34 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM), rtab(LIST)),
   /SEASON.
 /ACTION.
 
+# parse_type_decl - TYPE alias = target. (v0.49.27)
+ACTION parse_type_decl(tokens(LIST), pos(NUM)),
+  REAP kw_pair FROM consume, tokens, pos.
+  REAP p FROM _second, kw_pair.
+  REAP apair FROM consume, tokens, p.
+  REAP aty FROM tok_type, apair[0].
+  IF aty ISNT "IDENT",
+    CREATE terr(TX) TO "TYPE requires an alias name".
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", terr), p).
+  /IF.
+  REAP alias FROM tok_lex, apair[0].
+  REAP p FROM _second, apair.
+  REAP eqtok FROM peek, tokens, p.
+  REAP eqlx FROM tok_lex, eqtok.
+  IF eqlx ISNT "=",
+    CREATE terr2(TX) TO "TYPE requires = target".
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", terr2), p).
+  /IF.
+  REAP eqpair FROM consume, tokens, p.
+  REAP p FROM _second, eqpair.
+  REAP tv FROM collect_type_text, tokens, p, ".", 0.
+  REAP target FROM _first, tv.
+  REAP p FROM _second, tv.
+  REAP dpair FROM consume, tokens, p.
+  REAP p FROM _second, dpair.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "type_decl", "alias", alias, "target", target), p).
+/ACTION.
+
 ACTION parse_declaration(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), bstart(NUM)),
   REAP tok FROM peek, tokens, pos.
   REAP lx FROM tok_lex, tok.
@@ -4011,6 +4044,11 @@ ACTION parse_declaration(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST)
   /IF.
   IF lx IS "STRUCT",
     REAP r FROM parse_struct_decl, tokens, pos.
+    GIVE r.
+  /IF.
+  # v0.49.27 - TYPE alias = target.
+  IF lx IS "TYPE",
+    REAP r FROM parse_type_decl, tokens, pos.
     GIVE r.
   /IF.
   # v0.49.25 - IMPORT "path". The compiler's loader (main.plant)
@@ -7852,6 +7890,12 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
   
     # ── let_stmt: LET var AS TYPE IS val. → type var = val; ──
     #    async step phases: assignment into the state-backed local.
+    # v0.49.27: type_decl is compile-time only; aliases are applied
+    # by the parser-side rewrite pass above and the C typedef block.
+    IF ntype IS "type_decl",
+        GIVE "".
+    /IF.
+
     # v0.49.26 - LET destructuring
     IF ntype IS "let_destructure",
         REAP dsrc FROM _map_get, node, "source".
@@ -10734,6 +10778,108 @@ ACTION collect_roots(bd(LIST), acc(LIST)),
   GIVE acc.
 /ACTION.
 
+# _map_replace - rebuild a pairs-list map with one value replaced.
+ACTION _map_replace(m(LIST), k(TX), v(TX)),
+  CREATE out(LIST) TO plant_list_make(0).
+  CREATE i(NUM) TO 0.
+  SEASON i + 1 < COUNT m,
+    REAP mk FROM plant_list_get, m, i.
+    REAP mv FROM plant_list_get, m, i + 1.
+    REAP samek FROM str_eq, mk, k.
+    IF samek IS "1",
+      PUT mk INTO out.
+      PUT v INTO out.
+    /IF.
+    IF samek ISNT "1",
+      PUT mk INTO out.
+      PUT mv INTO out.
+    /IF.
+    SET i TO i + 2.
+  /SEASON.
+  GIVE out.
+/ACTION.
+
+# _ts_resolve - chase alias chains (bounded) through the tsub table.
+# _ta_rw_list - v0.49.27: return a copy of lst where CREATE/LET
+# var_type fields are resolved through the TYPE alias table; descends
+# into ACTION bodies so declarations inside actions resolve too.
+# _ta_collect_list - collect TYPE aliases from lst (recursing into
+# ACTION bodies) into the tsub pairs-list.
+ACTION _ta_collect_list(lst(LIST), tsub(LIST)),
+  CREATE i(NUM) TO 0.
+  SEASON i < COUNT lst,
+    REAP tn FROM plant_list_get, lst, i.
+    REAP tt FROM _map_get, tn, "type".
+    IF tt IS "type_decl",
+      REAP tal FROM _map_get, tn, "alias".
+      REAP trg FROM _map_get, tn, "target".
+      PUT tal INTO tsub.
+      PUT trg INTO tsub.
+    /IF.
+    IF tt IS "action_decl",
+      REAP obd FROM _map_get, tn, "body".
+      REAP x FROM _ta_collect_list, obd, tsub.
+    /IF.
+    SET i TO i + 1.
+  /SEASON.
+  GIVE 0.
+/ACTION.
+
+ACTION _ta_rw_list(lst(LIST), tsub(LIST)),
+  CREATE out2(LIST) TO plant_list_make(0).
+  CREATE i(NUM) TO 0.
+  SEASON i < COUNT lst,
+    REAP tn FROM plant_list_get, lst, i.
+    REAP tt FROM _map_get, tn, "type".
+    IF tt IS "create_stmt" OR tt IS "let_stmt",
+      REAP vt FROM _map_get, tn, "var_type".
+      IF vt > "",
+        REAP rv FROM _ts_resolve, tsub, vt.
+        REAP chg FROM str_eq, rv, vt.
+        IF chg ISNT "1",
+          REAP nn FROM _map_replace, tn, "var_type", rv.
+          SET tn TO nn.
+        /IF.
+      /IF.
+    /IF.
+    IF tt IS "action_decl",
+      REAP obd FROM _map_get, tn, "body".
+      REAP nbd FROM _ta_rw_list, obd, tsub.
+      REAP an2 FROM _map_replace, tn, "body", nbd.
+      SET tn TO an2.
+    /IF.
+    PUT tn INTO out2.
+    SET i TO i + 1.
+  /SEASON.
+  GIVE out2.
+/ACTION.
+
+ACTION _ts_resolve(tsub(LIST), name(TX)),
+  CREATE cur(TX) TO name.
+  CREATE hops(NUM) TO 0.
+  SEASON hops < 16,
+    CREATE found(TX) TO "".
+    CREATE i(NUM) TO 0.
+    SEASON i + 1 < COUNT tsub,
+      REAP an FROM plant_list_get, tsub, i.
+      REAP at FROM plant_list_get, tsub, i + 1.
+      REAP samean FROM str_eq, an, cur.
+      IF samean IS "1",
+        SET found TO at.
+        BREAK 0.
+      /IF.
+      SET i TO i + 2.
+    /SEASON.
+    IF found IS "", BREAK 0. /IF.
+    SET cur TO found.
+    SET hops TO hops + 1.
+  /SEASON.
+  GIVE cur.
+/ACTION.
+
+# _map_replace - rebuild a pairs-list map with one value replaced.
+
+
 ACTION generate_c(ast(LIST)),
     CREATE header(TX) TO "#include <plant_compat.h>\n\n".
     CREATE decl_code(TX) TO "".
@@ -10860,6 +11006,11 @@ ACTION generate_c(ast(LIST)),
     # collect_insts with the proper type substitution, never bare)
     CREATE insts(LIST) TO plant_list_make(0).
     CREATE esub(LIST) TO plant_list_make(0).
+    # pass 0a2 - v0.49.27 TYPE aliases: collect + rewrite (recursive)
+    CREATE tsub(LIST) TO plant_list_make(0).
+    REAP tcx FROM _ta_collect_list, ast, tsub.
+    REAP ast FROM _ta_rw_list, ast, tsub.
+
     SET i TO 0.
     SEASON i < COUNT ast,
         REAP node_el FROM plant_list_get, ast, i.
@@ -11317,7 +11468,7 @@ ACTION generate_c(ast(LIST)),
         /IF.
         # v0.49.25: import_stmt nodes are loader-level no-ops and must
         # not flip has_stmt (which would force a duplicate CLI main).
-        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "import_stmt",
+        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "import_stmt" AND ntype ISNT "type_decl",
             REAP ns_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "", "", "". "".
             SET stmt_code TO stmt_code + ns_code.
             SET has_stmt TO 1.
@@ -11396,7 +11547,18 @@ ACTION generate_c(ast(LIST)),
         /IF.
         SET stmt_code TO "int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n" + dcode + stmt_code + "  plant_async_drain();\n  return 0;\n}\n".
     /IF.
-    GIVE header + roots_code + struct_code + ffi_topo + cltype_code + pro_code + cb_code + clfwd_code + "\n" + cldef_code + "\n" + decl_code + adapter_code + stmt_code.
+    # v0.49.27 - C typedefs for TYPE aliases
+    CREATE td_code(TX) TO "".
+    SET i TO 0.
+    SEASON i + 1 < COUNT tsub,
+        REAP tal FROM plant_list_get, tsub, i.
+        REAP trg FROM plant_list_get, tsub, i + 1.
+        REAP rv2 FROM _ts_resolve, tsub, trg.
+        REAP ct2 FROM plant_ctype, rv2.
+        SET td_code TO td_code + "typedef " + ct2 + " " + tal + ";\n".
+        SET i TO i + 2.
+    /SEASON.
+    GIVE header + roots_code + struct_code + td_code + ffi_topo + cltype_code + pro_code + cb_code + clfwd_code + "\n" + cldef_code + "\n" + decl_code + adapter_code + stmt_code.
 /ACTION.
 
 # ═══════════════════════════════════════════════════════════════
@@ -12025,7 +12187,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.49.26 (pure native)".
+  SHOW "Chloroplast 0.49.27 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

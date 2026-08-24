@@ -1,0 +1,26 @@
+# v0.49.27 - TYPE aliases:
+#   TYPE MyInt = NUM.            simple base types
+#   TYPE Name = TX.              text
+#   TYPE IntList = LIST[NUM].    composite generics
+#   TYPE SameList = IntList.     chained aliases resolve transitively
+# Aliases resolve in CREATE and LET var_type positions (variables
+# behave exactly as if declared with the underlying type).
+ACTION main(),
+  TYPE MyInt = NUM.
+  TYPE Name = TX.
+  TYPE IntList = LIST[NUM].
+  TYPE SameList = IntList.
+  CREATE n(MyInt) TO 7.
+  SHOW n.
+  CREATE nm(Name) TO "ada".
+  SHOW nm.
+  CREATE xs(IntList) TO [1, 2].
+  SHOW JOIN(xs, ",").
+  CREATE ys(SameList) TO [5, 6].
+  SHOW JOIN(ys, "-").
+  LET v(MyInt) TO 42.
+  SHOW v.
+  LET w(Name) TO "grace".
+  SHOW w.
+  GIVE 0.
+/GIVE main.

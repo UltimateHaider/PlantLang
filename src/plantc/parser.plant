@@ -2660,6 +2660,11 @@ ACTION parse_weather_stmt(tokens(LIST), pos(NUM), clv(TX), rtab(LIST), emode(TX)
 ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), bstart(NUM), emode(TX)),
   REAP tok FROM peek, tokens, pos.
   REAP lx FROM tok_lex, tok.
+  # v0.49.27 - TYPE aliases inside action bodies
+  IF lx IS "TYPE",
+    REAP r FROM parse_type_decl, tokens, pos.
+    GIVE r.
+  /IF.
   IF lx IS "CONST",
     REAP r FROM parse_const_like, tokens, pos, ctab, rtab, bstart, emode, "const_stmt".
     GIVE r.
@@ -3428,6 +3433,34 @@ ACTION parse_action_decl(tokens(LIST), pos(NUM), rtab(LIST)),
   /SEASON.
 /ACTION.
 
+# parse_type_decl - TYPE alias = target. (v0.49.27)
+ACTION parse_type_decl(tokens(LIST), pos(NUM)),
+  REAP kw_pair FROM consume, tokens, pos.
+  REAP p FROM _second, kw_pair.
+  REAP apair FROM consume, tokens, p.
+  REAP aty FROM tok_type, apair[0].
+  IF aty ISNT "IDENT",
+    CREATE terr(TX) TO "TYPE requires an alias name".
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", terr), p).
+  /IF.
+  REAP alias FROM tok_lex, apair[0].
+  REAP p FROM _second, apair.
+  REAP eqtok FROM peek, tokens, p.
+  REAP eqlx FROM tok_lex, eqtok.
+  IF eqlx ISNT "=",
+    CREATE terr2(TX) TO "TYPE requires = target".
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", terr2), p).
+  /IF.
+  REAP eqpair FROM consume, tokens, p.
+  REAP p FROM _second, eqpair.
+  REAP tv FROM collect_type_text, tokens, p, ".", 0.
+  REAP target FROM _first, tv.
+  REAP p FROM _second, tv.
+  REAP dpair FROM consume, tokens, p.
+  REAP p FROM _second, dpair.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "type_decl", "alias", alias, "target", target), p).
+/ACTION.
+
 ACTION parse_declaration(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), bstart(NUM)),
   REAP tok FROM peek, tokens, pos.
   REAP lx FROM tok_lex, tok.
@@ -3437,6 +3470,11 @@ ACTION parse_declaration(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST)
   /IF.
   IF lx IS "STRUCT",
     REAP r FROM parse_struct_decl, tokens, pos.
+    GIVE r.
+  /IF.
+  # v0.49.27 - TYPE alias = target.
+  IF lx IS "TYPE",
+    REAP r FROM parse_type_decl, tokens, pos.
     GIVE r.
   /IF.
   # v0.49.25 - IMPORT "path". The compiler's loader (main.plant)

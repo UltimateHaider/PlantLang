@@ -1257,3 +1257,19 @@ LET [[d1, d2], [d3, d4]] = deep.
 
 Objects extract via map lookups, lists via indices; "_" ignores a
 binding; nesting is unlimited.
+
+
+### TYPE Aliases (v0.49.27)
+
+```
+TYPE MyInt = NUM.
+TYPE Name = TX.
+TYPE IntList = LIST[NUM].
+TYPE SameList = IntList.      # chains resolve transitively
+
+CREATE n(MyInt) TO 7.         # behaves exactly like NUM
+CREATE xs(IntList) TO [1, 2].
+```
+
+Aliases may be declared at file scope or inside ACTION bodies; they
+lower to C typedefs and resolve in CREATE/LET type positions.

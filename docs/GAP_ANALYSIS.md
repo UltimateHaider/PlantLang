@@ -64,7 +64,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `CHOICE Variant(TYPE)` + `Option`/`Result` | S | **P** | no CHOICE; `Option`/`Result`/`is_some` etc. exist only as runtime helpers |
 | `ENUM` | S | **S** | members as `NAME.MEMBER`, `_to_enum`/`_from_enum` |
 | `CONST`, `ROOT`, `ROOT_SCOPE` | S | **S** | v0.48.35 (block-scoped/global string constants; ROOT_SCOPE auto-elevates CONST to ROOT; values must be quoted literals) |
-| `TYPE alias = target.` | S | M | |
+| `TYPE alias = target.` | S | **S** | v0.49.27: parse_type_decl + C typedef emission + CREATE/LET resolution (chained aliases, composite targets); valid at file scope and inside actions |
 | `MISSION : mode.` (set mode) | S | **P** | `MISSION CONFIG KEY = VALUE.` only |
 | `PLANT lib [AS alias].` | S | M | replaced by direct `module:func` calls |
 | `IMPORT "path".` (user programs) | S | **S** | v0.49.25: runtime loader in plant_import_load (relative/absolute paths, .plant inference, dedup, cycle + missing-file errors); compiler self-host still uses build-time concat |
