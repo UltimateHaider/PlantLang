@@ -1308,8 +1308,40 @@ static tx_t _sp_build(const char* want) {
     }
     return plant_map_create();
 }
+/* v0.49.33 - interface conformance */
+static char* g_impl_sp[PLANT_SPECIES_MAX];
+static char* g_impl_if[PLANT_SPECIES_MAX];
+static long g_impl_n = 0;
+void plant_impl_iface(tx_t sp, tx_t iface) {
+    if (g_impl_n >= PLANT_SPECIES_MAX) return;
+    g_impl_sp[g_impl_n] = strdup(_S(sp));
+    g_impl_if[g_impl_n] = strdup(_S(iface));
+    g_impl_n++;
+}
+tx_t plant_is_a(tx_t obj, tx_t iface_name) {
+    PlantArray* m = (PlantArray*)obj;
+    if (!m || m->magic != PLANT_ARRAY_MAGIC) return "0";
+    const char* sp_name = "";
+    for (int64_t k = 0; k + 1 < m->count; k += 2)
+        if (strcmp(m->items[k], "__species") == 0) { sp_name = _S(m->items[k+1]); break; }
+    if (!sp_name[0]) return "0";
+    for (long round = 0; round < 16; round++) {
+        for (long i2 = 0; i2 < g_impl_n; i2++) {
+            if (strcmp(g_impl_sp[i2], sp_name) == 0 && strcmp(g_impl_if[i2], _S(iface_name)) == 0)
+                return "1";
+        }
+        const char* par = NULL;
+        for (long i3 = 0; i3 < g_sp_n; i3++) {
+            if (strcmp(g_sp_names[i3], sp_name) == 0) { par = g_sp_parents[i3]; break; }
+        }
+        if (!par || !par[0]) break;
+        sp_name = par;
+    }
+    return "0";
+}
 tx_t plant_species_create_by_name(tx_t name) {
-    return _sp_build(_S(name));
+    tx_t o = _sp_build(_S(name));
+    return plant_map_set(o, "__species", name);
 }
 
 long plant_unique_seq(void) {

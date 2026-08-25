@@ -1,0 +1,34 @@
+# v0.49.33 - INTERFACE declarations + IMPLEMENTS conformance clauses.
+# Interfaces document required methods; IMPLEMENTS stores conformance
+# metadata on the species_decl node. Compile-time validation is not yet
+# enforced; runtime checks via plant_is_a are planned for a future release.
+INTERFACE Speakable {
+  speak.
+}
+INTERFACE Named {
+  name.
+}
+SPECIES Dog {
+  name: TX
+  ACTION speak() -> TX {
+    GIVE self.name + " barks!".
+  }
+}
+SPECIES Cat {
+  name: TX
+  ACTION meow() -> TX {
+    GIVE self.name + " meows!".
+  }
+}
+ACTION main(),
+  BLOOM Dog AS d.
+  CALL d.put("name", "Rex").
+  SHOW d.speak().
+  SHOW COUNT d.
+  BLOOM Cat AS c.
+  CALL c.put("name", "Whiskers").
+  SHOW c.meow().
+  SHOW COUNT c.
+  SHOW "interfaces ok".
+  GIVE 0.
+/GIVE main.

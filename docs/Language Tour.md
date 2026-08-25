@@ -1382,3 +1382,24 @@ SHOW d.speak().   # Rex barks! (child wins)
 ```
 
 Non-overridden methods are inherited normally.
+
+
+### Interfaces (v0.49.33)
+
+```
+INTERFACE Speakable {
+  speak.
+}
+
+SPECIES Dog {
+  name: TX
+  ACTION speak() -> TX { GIVE self.name + " barks!". }
+}
+
+BLOOM Dog AS d.
+REAP r FROM plant_is_a, d, "Speakable".
+SHOW r.   # runtime check (requires manual registration)
+```
+
+Interfaces are documentation-only declarations; runtime checks use
+the plant_is_a helper which reads the __species metadata tag.

@@ -3603,6 +3603,12 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    async step phases: assignment into the state-backed local.
     # v0.49.27: type_decl is compile-time only; aliases are applied
     # by the parser-side rewrite pass above and the C typedef block.
+    # v0.49.33: interface_decl is documentation-only; conformance
+    # checks happen at runtime via plant_is_a.
+    IF ntype IS "interface_decl",
+        GIVE "".
+    /IF.
+
     IF ntype IS "type_decl",
         GIVE "".
     /IF.
@@ -6690,6 +6696,8 @@ ACTION generate_c(ast(LIST)),
             REAP sname FROM _map_get, node_el, "name".
             CREATE sgens2(LIST) TO _map_get(node_el, "generics").
             CREATE sfields2(LIST) TO _map_get(node_el, "fields").
+            PUT plant_list_make(6, "name", sname, "generics", sgens2, "fields", sfields2) INTO structs.
+        /IF.
         IF ntype IS "species_decl",
             REAP sn7 FROM _map_get, node_el, "name".
             REAP sf7 FROM _map_get, node_el, "fields".
@@ -6708,8 +6716,6 @@ ACTION generate_c(ast(LIST)),
             SET regl TO regl + ")".
             SET regl TO "plant_list_make(" + substring(regl, 11, LEN(regl)).
             SET sp_init_code TO sp_init_code + "  plant_species_register(\"" + sn7 + "\", " + regl + ", \"" + sp9 + "\");\n".
-        /IF.
-            PUT plant_list_make(6, "name", sname, "generics", sgens2, "fields", sfields2) INTO structs.
         /IF.
         SET i TO i + 1.
     /SEASON.
@@ -7223,7 +7229,7 @@ ACTION generate_c(ast(LIST)),
         /IF.
         # v0.49.25: import_stmt nodes are loader-level no-ops and must
         # not flip has_stmt (which would force a duplicate CLI main).
-        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "import_stmt" AND ntype ISNT "type_decl" AND ntype ISNT "species_decl",
+        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "import_stmt" AND ntype ISNT "type_decl" AND ntype ISNT "species_decl" AND ntype ISNT "interface_decl",
             REAP ns_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "", "", "". "".
             SET stmt_code TO stmt_code + ns_code.
             SET has_stmt TO 1.

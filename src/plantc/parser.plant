@@ -3709,11 +3709,48 @@ ACTION parse_type_decl(tokens(LIST), pos(NUM)),
   GIVE plant_list_make(2, plant_list_make(6, "type", "type_decl", "alias", alias, "target", target), p).
 /ACTION.
 
+# parse_interface_decl - INTERFACE Name { method_sig. ... } (v0.49.33)
+ACTION parse_interface_decl(tokens(LIST), pos(NUM)),
+  REAP kw_pair FROM consume, tokens, pos.
+  REAP p FROM _second, kw_pair.
+  REAP npair FROM consume, tokens, p.
+  REAP iname FROM tok_lex, npair[0].
+  REAP p FROM _second, npair.
+  REAP lb FROM consume, tokens, p.
+  REAP p FROM _second, lb.
+  CREATE imethods(LIST) TO plant_list_make(0).
+  SEASON TRUE,
+    REAP tk9 FROM peek, tokens, p.
+    REAP ty9 FROM tok_type, tk9.
+    IF ty9 IS "RBRACE",
+      REAP rb9 FROM consume, tokens, p.
+      REAP p FROM _second, rb9.
+      BREAK 0.
+    /IF.
+    REAP mpair FROM consume, tokens, p.
+    REAP mnine FROM tok_lex, mpair[0].
+    REAP p FROM _second, mpair.
+    PUT mnine INTO imethods.
+    REAP dtok FROM peek, tokens, p.
+    REAP dlx FROM tok_lex, dtok.
+    IF dlx IS ".",
+      REAP dcon FROM consume, tokens, p.
+      REAP p FROM _second, dcon.
+      BREAK 0.
+    /IF.
+  /SEASON.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "interface_decl", "name", iname, "methods", imethods), p).
+/ACTION.
+
 ACTION parse_declaration(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), bstart(NUM)),
   REAP tok FROM peek, tokens, pos.
   REAP lx FROM tok_lex, tok.
   IF lx IS "ENUM",
     REAP r FROM parse_enum_decl, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "INTERFACE",
+    REAP r FROM parse_interface_decl, tokens, pos.
     GIVE r.
   /IF.
   IF lx IS "STRUCT",
