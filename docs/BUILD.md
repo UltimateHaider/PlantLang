@@ -158,3 +158,15 @@ Installs the compiler binary and the C runtime headers
   automatically.
 - Generated code is not yet clang-formatted; only the grammar subset used by
   the compiler itself is covered by the integration suite.
+
+
+## Bootstrap Seed
+
+`dist/Chloroplast` is the pre-built compiler used to start the self-hosting
+chain. Update it after each stable release:
+
+    cp bin/Chloroplast dist/Chloroplast
+    # or: make bootstrap-update
+
+Then verify: make clean && make all && make self && make test
+

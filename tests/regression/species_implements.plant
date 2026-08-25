@@ -1,0 +1,18 @@
+# v0.49.36 - interface conformance via runtime registration.
+# NOTE: IMPLEMENTS clause parsing is deferred; interfaces are registered
+# manually via plant_impl_iface and checked via plant_is_a.
+SPECIES Dog {
+  name: TX
+  ACTION speak() -> TX {
+    GIVE self.name + " barks!".
+  }
+}
+ACTION main(),
+  CALL plant_impl_iface("Dog", "Speakable").
+  BLOOM Dog AS d.
+  CALL d.put("name", "Rex").
+  SHOW d.speak().
+  REAP chk FROM plant_is_a, d, "Speakable".
+  SHOW chk.
+  GIVE 0.
+/GIVE main.

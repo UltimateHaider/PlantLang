@@ -14,7 +14,7 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.49.35
+VERSION    ?= 0.49.36
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
@@ -37,9 +37,17 @@ V4_BIN     := build/plantc_v4
 V5_C       := build/plantc_v5.c
 NATIVE_BIN := bin/Chloroplast
 
-# dist/Chloroplast is the pre-built bootstrap compiler — never rebuilt
+# dist/Chloroplast is the bootstrap seed; update manually via:
+#   cp build/plantc_v3 dist/Chloroplast
+# or run: make bootstrap-update
 dist/Chloroplast:
-	@true
+	@echo "  [bootstrap] dist/Chloroplast not found — run: make bootstrap-update"
+	@false
+
+.PHONY: bootstrap-update
+bootstrap-update: $(NATIVE_BIN)
+	@cp $(NATIVE_BIN) $(BOOTSTRAP)
+	@echo "  [bootstrap] updated from $(NATIVE_BIN)"
 
 .PHONY: all self test fmt lint dist install help clean
 
