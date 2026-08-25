@@ -3603,8 +3603,26 @@ ACTION parse_species_decl(tokens(LIST), pos(NUM)),
   IF impl_lx IS "IMPLEMENTS",
     REAP impl_c1 FROM consume, tokens, p.
     REAP p FROM _second, impl_c1.
-    REAP impl_c2 FROM consume, tokens, p.
-    REAP p FROM _second, impl_c2.
+    REAP impl_n1 FROM consume, tokens, p.
+    REAP p FROM _second, impl_n1.
+    REAP cm1t FROM peek, tokens, p.
+    REAP cm1l FROM tok_lex, cm1t.
+    IF cm1l IS ",",
+      REAP cc9a FROM consume, tokens, p.
+      REAP p FROM _second, cc9a.
+      REAP in9a FROM consume, tokens, p.
+      REAP p FROM _second, in9a.
+      PUT in9a INTO implifs.
+      REAP cm2t FROM peek, tokens, p.
+      REAP cm2l FROM tok_lex, cm2t.
+      IF cm2l IS ",",
+        REAP cc9b FROM consume, tokens, p.
+        REAP p FROM _second, cc9b.
+        REAP in9b FROM consume, tokens, p.
+        REAP p FROM _second, in9b.
+        PUT in9b INTO implifs.
+      /IF.
+    /IF.
   /IF.
   # v0.49.30 - optional FROM Parent clause
   CREATE parent(TX) TO "".

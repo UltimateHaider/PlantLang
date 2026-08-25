@@ -1,0 +1,16 @@
+SPECIES Dog IMPLEMENTS Speakable, Movable {
+  name: TX
+  ACTION speak() -> TX {
+    GIVE self.name + " barks!".
+  }
+  ACTION move() -> TX {
+    GIVE self.name + " runs!".
+  }
+}
+ACTION main(),
+  BLOOM Dog AS d.
+  CALL d.put("name", "Rex").
+  SHOW d.speak().
+  SHOW d.move().
+  GIVE 0.
+/GIVE main.
