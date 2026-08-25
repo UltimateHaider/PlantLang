@@ -1339,3 +1339,24 @@ SHOW d.fetch().     # Dog's own method
 ```
 
 Child fields merge with parent fields at creation time.
+
+
+### Species Inheritance + Methods + SELF (v0.49.29-31)
+
+```
+SPECIES Animal { name: TX }
+SPECIES Dog FROM Animal {
+  breed: TX
+}
+ACTION speak(self(TX)) -> TX {
+  GIVE self.name + " speaks".
+}
+
+BLOOM Dog AS d.
+CALL d.put("name", "Rex").
+SHOW COUNT d.       # 2 (name + breed merged)
+SHOW speak(d).      # Rex speaks
+```
+
+Methods can also be embedded in SPECIES bodies; they lift to
+top-level functions with an implicit self first parameter.

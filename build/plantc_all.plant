@@ -1565,6 +1565,23 @@ ACTION _lower_dots(e(TX)),
   GIVE out.
 /ACTION.
 
+# _swap_super_prefix - v0.49.31: rewrite SUPER_ to <Parent>_ prefix
+# inside all string-valued fields of every statement node in a body list.
+ACTION _swap_super_prefix(bd(LIST), parent(TX)),
+  CREATE i(NUM) TO 0.
+  SEASON i < COUNT bd,
+    REAP nd FROM plant_list_get, bd, i.
+    REAP vx FROM _map_get, nd, "value".
+    IF vx > "",
+      REAP nvx FROM strings:REPLACE, vx, "SUPER_", parent + "_".
+      REAP nnx FROM _map_replace, nd, "value", nvx.
+      REAP bd FROM _map_replace, bd, i, nnx.
+    /IF.
+    SET i TO i + 1.
+  /SEASON.
+  GIVE bd.
+/ACTION.
+
 ACTION parse_give_stmt(tokens(LIST), pos(NUM), clv(TX)),
 
   REAP pair FROM consume, tokens, pos.
@@ -11200,6 +11217,7 @@ ACTION _ts_resolve(tsub(LIST), name(TX)),
 # _map_replace - rebuild a pairs-list map with one value replaced.
 
 
+
 ACTION generate_c(ast(LIST)),
     CREATE header(TX) TO "#include <plant_compat.h>\n\n".
     CREATE decl_code(TX) TO "".
@@ -12528,7 +12546,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.49.30 (pure native)".
+  SHOW "Chloroplast 0.49.31 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

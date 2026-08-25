@@ -51,6 +51,7 @@ tx_t parse_arc_stmt(PlantArray* tokens, long pos);
 tx_t parse_fast_reset_stmt(PlantArray* tokens, long pos);
 tx_t _is_idch(tx_t c);
 tx_t _lower_dots(tx_t e);
+tx_t _swap_super_prefix(PlantArray* bd, tx_t parent);
 tx_t parse_give_stmt(PlantArray* tokens, long pos, tx_t clv);
 tx_t parse_set_stmt(PlantArray* tokens, long pos);
 tx_t parse_incdec_stmt(PlantArray* tokens, long pos, tx_t op);
@@ -2484,6 +2485,24 @@ tx_t _lower_dots(tx_t e) {
         i = i+1;
     }
     return out;
+}
+tx_t _swap_super_prefix(PlantArray* bd, tx_t parent) {
+  tx_t nd = "";
+  tx_t vx = "";
+  tx_t nvx = "";
+  tx_t nnx = "";
+    long i = 0;
+    while (i < plant_array_length(bd)) {
+        nd = plant_list_get(bd, i);
+        vx = _map_get(nd, "value");
+        if (strcmp(vx,"") > 0) {
+            nvx = strings_REPLACE((tx_t)vx, "SUPER_", _cat(parent, "_"));
+            nnx = _map_replace(nd, "value", nvx);
+            bd = _map_replace(bd, i, nnx);
+        }
+        i = i+1;
+    }
+    return bd;
 }
 tx_t parse_give_stmt(PlantArray* tokens, long pos, tx_t clv) {
   tx_t pair = "";
@@ -14123,7 +14142,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.30 (pure native)");
+      plant_print("Chloroplast 0.49.31 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

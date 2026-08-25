@@ -988,6 +988,23 @@ ACTION _lower_dots(e(TX)),
   GIVE out.
 /ACTION.
 
+# _swap_super_prefix - v0.49.31: rewrite SUPER_ to <Parent>_ prefix
+# inside all string-valued fields of every statement node in a body list.
+ACTION _swap_super_prefix(bd(LIST), parent(TX)),
+  CREATE i(NUM) TO 0.
+  SEASON i < COUNT bd,
+    REAP nd FROM plant_list_get, bd, i.
+    REAP vx FROM _map_get, nd, "value".
+    IF vx > "",
+      REAP nvx FROM strings:REPLACE, vx, "SUPER_", parent + "_".
+      REAP nnx FROM _map_replace, nd, "value", nvx.
+      REAP bd FROM _map_replace, bd, i, nnx.
+    /IF.
+    SET i TO i + 1.
+  /SEASON.
+  GIVE bd.
+/ACTION.
+
 ACTION parse_give_stmt(tokens(LIST), pos(NUM), clv(TX)),
 
   REAP pair FROM consume, tokens, pos.

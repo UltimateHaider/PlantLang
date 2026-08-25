@@ -1,0 +1,31 @@
+# v0.49.31 - SPECIES FROM + methods + SELF:
+#   Dog FROM Animal inherits name field and speak() method.
+#   fetch() is a child-only method using self.field access.
+SPECIES Animal {
+  name: TX
+  ACTION speak() -> TX {
+    GIVE self.name + " makes a sound".
+  }
+  ACTION describe() -> TX {
+    GIVE "I am " + self.name.
+  }
+}
+SPECIES Dog FROM Animal {
+  breed: TX
+  ACTION fetch() -> TX {
+    GIVE self.name + " the " + self.breed + " fetches!".
+  }
+}
+ACTION main(),
+  BLOOM Animal AS a.
+  CALL a.put("name", "Generic").
+  SHOW a.speak().
+  BLOOM Dog AS d.
+  CALL d.put("name", "Rex").
+  CALL d.put("breed", "Lab").
+  SHOW COUNT d.
+  SHOW d.speak().
+  SHOW d.fetch().
+  SHOW d.describe().
+  GIVE 0.
+/GIVE main.
