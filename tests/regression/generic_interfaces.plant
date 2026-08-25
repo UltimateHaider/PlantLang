@@ -1,0 +1,19 @@
+INTERFACE Container[T] {
+  get_item.
+  set_item.
+}
+SPECIES Box[T] IMPLEMENTS Container[T] {
+  value: TX
+  ACTION get_item() -> TX {
+    GIVE self.value.
+  }
+  ACTION set_item(v(TX)) {
+    CALL self.put("value", v).
+  }
+}
+ACTION main(),
+  BLOOM Box AS b.
+  CALL b.put("value", "hello").
+  SHOW b.get_item().
+  GIVE 0.
+/GIVE main.

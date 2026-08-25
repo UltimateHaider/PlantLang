@@ -5652,6 +5652,15 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
   tx_t npair = "";
   tx_t nty = "";
   tx_t sname = "";
+  tx_t sgtk = "";
+  tx_t sglx = "";
+  tx_t sglb = "";
+  tx_t sgv = "";
+  tx_t sgt = "";
+  tx_t sgrb = "";
+  tx_t sgparts = "";
+  tx_t sge = "";
+  tx_t sget = "";
   tx_t impl_tk = "";
   tx_t impl_lx = "";
   tx_t impl_c1 = "";
@@ -5705,6 +5714,28 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
     }
     sname = tok_lex(plant_list_get(npair ,  0 ));
     p = _second(npair);
+    PlantArray* stparams = plant_list_make ( 0 );
+    sgtk = peek(tokens, p);
+    sglx = tok_lex(sgtk);
+    if (strcmp(sglx,"[") == 0) {
+        sglb = consume(tokens, p);
+        p = _second(sglb);
+        sgv = collect_type_text(tokens, p, "]", 0);
+        p = _second(sgv);
+        sgt = _first(sgv);
+        sgrb = consume(tokens, p);
+        p = _second(sgrb);
+        sgparts = strings_SPLIT(sgt, ",");
+        long sgi = 0;
+        while (sgi < plant_array_length(sgparts)) {
+            sge = plant_list_get(sgparts, sgi);
+            sget = trim(sge);
+            if (strcmp(sget,"") > 0) {
+                stparams = plant_list_add(stparams, sget);
+            }
+            sgi = sgi+1;
+        }
+    }
     PlantArray* implifs = plant_list_make ( 0 );
     impl_tk = peek(tokens, p);
     impl_lx = tok_lex(impl_tk);
@@ -5805,7 +5836,7 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
         }
         fields = plant_list_add(fields, plant_list_make ( 4 , "name" , fname , "type" , ftt ));
     }
-    return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "species_decl" , "name" , sname , "parent" , parent , "fields" , fields , "methods" , methods ) , p );
+    return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "species_decl" , "name" , sname , "type_params" , stparams , "parent" , parent , "fields" , fields , "methods" , methods ) , p );
 }
 tx_t parse_type_decl(PlantArray* tokens, long pos) {
   tx_t kw_pair = "";
@@ -5849,6 +5880,15 @@ tx_t parse_interface_decl(PlantArray* tokens, long pos) {
   tx_t p = "";
   tx_t npair = "";
   tx_t iname = "";
+  tx_t igtk = "";
+  tx_t iglx = "";
+  tx_t iglb = "";
+  tx_t igv = "";
+  tx_t igt = "";
+  tx_t igrb = "";
+  tx_t igparts = "";
+  tx_t ige = "";
+  tx_t iget = "";
   tx_t iftk = "";
   tx_t iflx = "";
   tx_t ifp = "";
@@ -5871,6 +5911,28 @@ tx_t parse_interface_decl(PlantArray* tokens, long pos) {
     npair = consume(tokens, p);
     iname = tok_lex(plant_list_get(npair ,  0 ));
     p = _second(npair);
+    PlantArray* itparams = plant_list_make ( 0 );
+    igtk = peek(tokens, p);
+    iglx = tok_lex(igtk);
+    if (strcmp(iglx,"[") == 0) {
+        iglb = consume(tokens, p);
+        p = _second(iglb);
+        igv = collect_type_text(tokens, p, "]", 0);
+        p = _second(igv);
+        igt = _first(igv);
+        igrb = consume(tokens, p);
+        p = _second(igrb);
+        igparts = strings_SPLIT(igt, ",");
+        long igi = 0;
+        while (igi < plant_array_length(igparts)) {
+            ige = plant_list_get(igparts, igi);
+            iget = trim(ige);
+            if (strcmp(iget,"") > 0) {
+                itparams = plant_list_add(itparams, iget);
+            }
+            igi = igi+1;
+        }
+    }
     PlantArray* iparents = plant_list_make ( 0 );
     iftk = peek(tokens, p);
     iflx = tok_lex(iftk);
@@ -5915,7 +5977,7 @@ tx_t parse_interface_decl(PlantArray* tokens, long pos) {
                       break;
         }
     }
-    return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "interface_decl" , "name" , iname , "parents" , iparents , "methods" , imethods ) , p );
+    return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "interface_decl" , "name" , iname , "type_params" , itparams , "parents" , iparents , "methods" , imethods ) , p );
 }
 tx_t parse_declaration(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab, PlantArray* rtab, long bstart) {
   tx_t tok = "";
@@ -14302,7 +14364,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.41 (pure native)");
+      plant_print("Chloroplast 0.49.42 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

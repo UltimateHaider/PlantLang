@@ -3597,6 +3597,26 @@ ACTION parse_species_decl(tokens(LIST), pos(NUM)),
   /IF.
   REAP sname FROM tok_lex, npair[0].
   REAP p FROM _second, npair.
+  CREATE stparams(LIST) TO plant_list_make(0).
+  REAP sgtk FROM peek, tokens, p.
+  REAP sglx FROM tok_lex, sgtk.
+  IF sglx IS "[",
+    REAP sglb FROM consume, tokens, p.
+    REAP p FROM _second, sglb.
+    REAP sgv FROM collect_type_text, tokens, p, "]", 0.
+    REAP p FROM _second, sgv.
+    REAP sgt FROM _first, sgv.
+    REAP sgrb FROM consume, tokens, p.
+    REAP p FROM _second, sgrb.
+    REAP sgparts FROM strings:SPLIT, sgt, ",".
+    CREATE sgi(NUM) TO 0.
+    SEASON sgi < COUNT sgparts,
+      REAP sge FROM plant_list_get, sgparts, sgi.
+      REAP sget FROM trim, sge.
+      IF sget > "", PUT sget INTO stparams. /IF.
+      SET sgi TO sgi + 1.
+    /SEASON.
+  /IF.
   CREATE implifs(LIST) TO plant_list_make(0).
   REAP impl_tk FROM peek, tokens, p.
   REAP impl_lx FROM tok_lex, impl_tk.
@@ -3704,7 +3724,7 @@ ACTION parse_species_decl(tokens(LIST), pos(NUM)),
     /IF.
     PUT plant_list_make(4, "name", fname, "type", ftt) INTO fields.
   /SEASON.
-  GIVE plant_list_make(2, plant_list_make(10, "type", "species_decl", "name", sname, "parent", parent, "fields", fields, "methods", methods), p).
+  GIVE plant_list_make(2, plant_list_make(12, "type", "species_decl", "name", sname, "type_params", stparams, "parent", parent, "fields", fields, "methods", methods), p).
 /ACTION.
 
 # parse_type_decl - TYPE alias = target. (v0.49.27)
@@ -3742,6 +3762,26 @@ ACTION parse_interface_decl(tokens(LIST), pos(NUM)),
   REAP npair FROM consume, tokens, p.
   REAP iname FROM tok_lex, npair[0].
   REAP p FROM _second, npair.
+  CREATE itparams(LIST) TO plant_list_make(0).
+  REAP igtk FROM peek, tokens, p.
+  REAP iglx FROM tok_lex, igtk.
+  IF iglx IS "[",
+    REAP iglb FROM consume, tokens, p.
+    REAP p FROM _second, iglb.
+    REAP igv FROM collect_type_text, tokens, p, "]", 0.
+    REAP p FROM _second, igv.
+    REAP igt FROM _first, igv.
+    REAP igrb FROM consume, tokens, p.
+    REAP p FROM _second, igrb.
+    REAP igparts FROM strings:SPLIT, igt, ",".
+    CREATE igi(NUM) TO 0.
+    SEASON igi < COUNT igparts,
+      REAP ige FROM plant_list_get, igparts, igi.
+      REAP iget FROM trim, ige.
+      IF iget > "", PUT iget INTO itparams. /IF.
+      SET igi TO igi + 1.
+    /SEASON.
+  /IF.
   CREATE iparents(LIST) TO plant_list_make(0).
   REAP iftk FROM peek, tokens, p.
   REAP iflx FROM tok_lex, iftk.
@@ -3784,7 +3824,7 @@ ACTION parse_interface_decl(tokens(LIST), pos(NUM)),
       BREAK 0.
     /IF.
   /SEASON.
-  GIVE plant_list_make(2, plant_list_make(8, "type", "interface_decl", "name", iname, "parents", iparents, "methods", imethods), p).
+  GIVE plant_list_make(2, plant_list_make(10, "type", "interface_decl", "name", iname, "type_params", itparams, "parents", iparents, "methods", imethods), p).
 /ACTION.
 
 ACTION parse_declaration(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), bstart(NUM)),
