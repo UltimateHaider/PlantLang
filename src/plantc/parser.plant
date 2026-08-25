@@ -3742,6 +3742,25 @@ ACTION parse_interface_decl(tokens(LIST), pos(NUM)),
   REAP npair FROM consume, tokens, p.
   REAP iname FROM tok_lex, npair[0].
   REAP p FROM _second, npair.
+  CREATE iparents(LIST) TO plant_list_make(0).
+  REAP iftk FROM peek, tokens, p.
+  REAP iflx FROM tok_lex, iftk.
+  IF iflx IS "FROM",
+    REAP ifp FROM consume, tokens, p.
+    REAP p FROM _second, ifp.
+    SEASON TRUE,
+      REAP pip FROM consume, tokens, p.
+      REAP pin FROM tok_lex, pip[0].
+      PUT pin INTO iparents.
+      REAP pctk FROM peek, tokens, p.
+      REAP pclx FROM tok_lex, pctk.
+      IF pclx IS ",",
+        REAP pcc FROM consume, tokens, p.
+        REAP p FROM _second, pcc.
+      /IF.
+      IF pclx ISNT ",", BREAK 0. /IF.
+    /SEASON.
+  /IF.
   REAP lb FROM consume, tokens, p.
   REAP p FROM _second, lb.
   CREATE imethods(LIST) TO plant_list_make(0).
@@ -3765,7 +3784,7 @@ ACTION parse_interface_decl(tokens(LIST), pos(NUM)),
       BREAK 0.
     /IF.
   /SEASON.
-  GIVE plant_list_make(2, plant_list_make(6, "type", "interface_decl", "name", iname, "methods", imethods), p).
+  GIVE plant_list_make(2, plant_list_make(8, "type", "interface_decl", "name", iname, "parents", iparents, "methods", imethods), p).
 /ACTION.
 
 ACTION parse_declaration(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), bstart(NUM)),

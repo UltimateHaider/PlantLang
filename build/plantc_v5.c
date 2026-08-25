@@ -5849,6 +5849,14 @@ tx_t parse_interface_decl(PlantArray* tokens, long pos) {
   tx_t p = "";
   tx_t npair = "";
   tx_t iname = "";
+  tx_t iftk = "";
+  tx_t iflx = "";
+  tx_t ifp = "";
+  tx_t pip = "";
+  tx_t pin = "";
+  tx_t pctk = "";
+  tx_t pclx = "";
+  tx_t pcc = "";
   tx_t lb = "";
   tx_t tk9 = "";
   tx_t ty9 = "";
@@ -5863,6 +5871,27 @@ tx_t parse_interface_decl(PlantArray* tokens, long pos) {
     npair = consume(tokens, p);
     iname = tok_lex(plant_list_get(npair ,  0 ));
     p = _second(npair);
+    PlantArray* iparents = plant_list_make ( 0 );
+    iftk = peek(tokens, p);
+    iflx = tok_lex(iftk);
+    if (strcmp(iflx,"FROM") == 0) {
+        ifp = consume(tokens, p);
+        p = _second(ifp);
+        while (1) {
+            pip = consume(tokens, p);
+            pin = tok_lex(plant_list_get(pip ,  0 ));
+            iparents = plant_list_add(iparents, pin);
+            pctk = peek(tokens, p);
+            pclx = tok_lex(pctk);
+            if (strcmp(pclx,",") == 0) {
+                pcc = consume(tokens, p);
+                p = _second(pcc);
+            }
+            if (strcmp(pclx,",") != 0) {
+                              break;
+            }
+        }
+    }
     lb = consume(tokens, p);
     p = _second(lb);
     PlantArray* imethods = plant_list_make ( 0 );
@@ -5886,7 +5915,7 @@ tx_t parse_interface_decl(PlantArray* tokens, long pos) {
                       break;
         }
     }
-    return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "interface_decl" , "name" , iname , "methods" , imethods ) , p );
+    return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "interface_decl" , "name" , iname , "parents" , iparents , "methods" , imethods ) , p );
 }
 tx_t parse_declaration(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab, PlantArray* rtab, long bstart) {
   tx_t tok = "";
@@ -14273,7 +14302,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.40 (pure native)");
+      plant_print("Chloroplast 0.49.41 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

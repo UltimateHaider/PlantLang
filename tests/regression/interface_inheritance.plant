@@ -1,0 +1,24 @@
+INTERFACE Vocal {
+  speak.
+}
+INTERFACE Movable {
+  move.
+}
+INTERFACE SpeakingMover FROM Vocal, Movable {
+}
+SPECIES Robot IMPLEMENTS SpeakingMover {
+  name: TX
+  ACTION speak() -> TX {
+    GIVE self.name + " beeps!".
+  }
+  ACTION move() -> TX {
+    GIVE self.name + " rolls!".
+  }
+}
+ACTION main(),
+  BLOOM Robot AS r.
+  CALL r.put("name", "Bot").
+  SHOW r.speak().
+  SHOW r.move().
+  GIVE 0.
+/GIVE main.
