@@ -70,6 +70,64 @@ IF perr > "",
 /IF.
 REAP body FROM _map_get, program_ast, "body".
 
+# v0.49.39 - compile-time interface conformance validation
+CREATE iface_names(LIST) TO plant_list_make(0).
+CREATE iface_meths(LIST) TO plant_list_make(0).
+CREATE ci99(NUM) TO 0.
+SEASON ci99 < COUNT body,
+  REAP nd99 FROM plant_list_get, body, ci99.
+  REAP ty99 FROM _map_get, nd99, "type".
+  IF ty99 IS "interface_decl",
+    REAP inm99 FROM _map_get, nd99, "name".
+    REAP imth99 FROM _map_get, nd99, "methods".
+    PUT inm99 INTO iface_names.
+    PUT imth99 INTO iface_meths.
+  /IF.
+  SET ci99 TO ci99 + 1.
+/SEASON.
+CREATE spi99(NUM) TO 0.
+SEASON spi99 < COUNT body,
+  REAP snd99 FROM plant_list_get, body, spi99.
+  REAP sty99 FROM _map_get, snd99, "type".
+  IF sty99 IS "species_decl",
+    REAP simp99 FROM _map_get, snd99, "implements".
+    IF simp99 > "",
+      REAP snm99 FROM _map_get, snd99, "name".
+      CREATE ii999(NUM) TO 0.
+      SEASON ii999 < COUNT simp99,
+        REAP ifn999 FROM plant_list_get(simp99, ii999).
+        CREATE mi999(NUM) TO 0.
+        SEASON mi999 < COUNT iface_names,
+          REAP ifnm999 FROM plant_list_get(iface_names, mi999).
+          REAP feq999 FROM str_eq, ifn999, ifnm999.
+          IF feq999 IS "1",
+            REAP reqmth FROM plant_list_get(iface_meths, mi999).
+            CREATE fnd999(NUM) TO 0.
+            CREATE ai999(NUM) TO 0.
+            SEASON ai999 < COUNT body,
+              REAP and99 FROM plant_list_get(body, ai999).
+              REAP aty999 FROM _map_get(and99, "type").
+              IF aty999 IS "action_decl",
+                REAP anm999 FROM _map_get, and99, "name".
+                REAP meq999 FROM str_eq, anm999, reqmth.
+                IF meq999 IS "1", SET fnd999 TO 1. /IF.
+              /IF.
+              SET ai999 TO ai999 + 1.
+            /SEASON.
+            IF fnd999 IS 0,
+              SHOW "Error: species '" + snm99 + "' does not implement method '" + reqmth + "' from interface '" + ifn999 + "'".
+              GIVE 1.
+            /IF.
+          /IF.
+          SET mi999 TO mi999 + 1.
+        /SEASON.
+        SET ii999 TO ii999 + 1.
+      /SEASON.
+    /IF.
+  /IF.
+  SET spi99 TO spi99 + 1.
+/SEASON.
+
 # v0.49.32 - polymorphic dispatch: dedup action_decls keeping the
 # LAST definition for each name (child overrides parent). Uses a
 # pairs-map for O(1) lookup; each unique action appears once in the

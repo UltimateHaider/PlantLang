@@ -1,0 +1,28 @@
+SPECIES Dog IMPLEMENTS Speakable {
+  name: TX
+  ACTION speak() -> TX {
+    GIVE self.name + " barks!".
+  }
+}
+INTERFACE Movable {
+  move.
+}
+SPECIES Robot IMPLEMENTS Movable {
+  name: TX
+  ACTION speak() -> TX {
+    GIVE self.name + " beeps!".
+  }
+  ACTION move() -> TX {
+    GIVE self.name + " rolls!".
+  }
+}
+ACTION main(),
+  BLOOM Dog AS d.
+  CALL d.put("name", "Rex").
+  SHOW d.speak().
+  BLOOM Robot AS r.
+  CALL r.put("name", "Bot").
+  SHOW r.speak().
+  SHOW r.move().
+  GIVE 0.
+/GIVE main.

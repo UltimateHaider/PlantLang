@@ -14235,6 +14235,22 @@ int main(int argc, char **argv) {
   tx_t program_ast = "";
   tx_t perr = "";
   tx_t body = "";
+  tx_t nd99 = "";
+  tx_t ty99 = "";
+  tx_t inm99 = "";
+  tx_t imth99 = "";
+  tx_t snd99 = "";
+  tx_t sty99 = "";
+  tx_t simp99 = "";
+  tx_t snm99 = "";
+  tx_t ifn999 = "";
+  tx_t ifnm999 = "";
+  tx_t feq999 = "";
+  tx_t reqmth = "";
+  tx_t and99 = "";
+  tx_t aty999 = "";
+  tx_t anm999 = "";
+  tx_t meq999 = "";
   tx_t en9 = "";
   tx_t ety9 = "";
   tx_t enm9 = "";
@@ -14287,6 +14303,64 @@ int main(int argc, char **argv) {
       return 1;
   }
   body = _map_get(program_ast, "body");
+  PlantArray* iface_names = plant_list_make ( 0 );
+  PlantArray* iface_meths = plant_list_make ( 0 );
+  long ci99 = 0;
+  while (ci99 < plant_array_length(body)) {
+      nd99 = plant_list_get(body, ci99);
+      ty99 = _map_get(nd99, "type");
+      if (strcmp(ty99,"interface_decl") == 0) {
+          inm99 = _map_get(nd99, "name");
+          imth99 = _map_get(nd99, "methods");
+          iface_names = plant_list_add(iface_names, inm99);
+          iface_meths = plant_list_add(iface_meths, imth99);
+      }
+      ci99 = ci99+1;
+  }
+  long spi99 = 0;
+  while (spi99 < plant_array_length(body)) {
+      snd99 = plant_list_get(body, spi99);
+      sty99 = _map_get(snd99, "type");
+      if (strcmp(sty99,"species_decl") == 0) {
+          simp99 = _map_get(snd99, "implements");
+          if (strcmp(simp99,"") > 0) {
+              snm99 = _map_get(snd99, "name");
+              long ii999 = 0;
+              while (ii999 < plant_array_length(simp99)) {
+                  ifn999 = plant_list_get(simp99, ii999);
+                  long mi999 = 0;
+                  while (mi999 < plant_array_length(iface_names)) {
+                      ifnm999 = plant_list_get(iface_names, mi999);
+                      feq999 = str_eq(ifn999, ifnm999);
+                      if (strcmp(feq999,"1") == 0) {
+                          reqmth = plant_list_get(iface_meths, mi999);
+                          long fnd999 = 0;
+                          long ai999 = 0;
+                          while (ai999 < plant_array_length(body)) {
+                              and99 = plant_list_get(body, ai999);
+                              aty999 = _map_get(and99, "type");
+                              if (strcmp(aty999,"action_decl") == 0) {
+                                  anm999 = _map_get(and99, "name");
+                                  meq999 = str_eq(anm999, reqmth);
+                                  if (strcmp(meq999,"1") == 0) {
+                                      fnd999 = 1;
+                                  }
+                              }
+                              ai999 = ai999+1;
+                          }
+                          if (fnd999 == 0) {
+                              plant_print(_cat4(_cat4("Error: species '", snm99, "' does not implement method '", reqmth), "' from interface '", ifn999, "'"));
+                              return 1;
+                          }
+                      }
+                      mi999 = mi999+1;
+                  }
+                  ii999 = ii999+1;
+              }
+          }
+      }
+      spi99 = spi99+1;
+  }
   PlantArray* ad_map = plant_map_create ( );
   PlantArray* ad_out = plant_list_make ( 0 );
   PlantArray* ad_emitted = plant_map_create ( );
