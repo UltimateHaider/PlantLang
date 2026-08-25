@@ -8263,3 +8263,55 @@ tx_t plant_ws_close(tx_t conn_id) {
     send(g_ws_fd[slot],close_frame,2,0);close(g_ws_fd[slot]);
     g_ws_act[slot]=0;return strdup("1");
 }
+
+/* v0.49.47 - WebSocket server (minimal RFC 6455) */
+#define WS_GUID "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
+static int g_ws_lfd[WS_MAX];
+static int g_ws_lact[WS_MAX];
+
+tx_t plant_net_listen_ws(tx_t port) {
+    int port_num=(int)_to_long(port);
+    int slot=-1;
+    for(int i=0;i<WS_MAX;i++)if(!g_ws_lact[i]){slot=i;break;}
+    if(slot<0)return strdup("-1");
+    int fd=socket(AF_INET,SOCK_STREAM,0);
+    struct sockaddr_in a;memset(&a,0,sizeof(a));a.sin_family=AF_INET;
+    a.sin_addr.s_addr=INADDR_ANY;a.sin_port=htons(port_num);
+    if(bind(fd,(struct sockaddr*)&a,sizeof(a))<0||listen(fd,10)<0){close(fd);return strdup("-2");}
+    g_ws_lfd[slot]=fd;g_ws_lact[slot]=1;
+    return strdup(_from_long(slot));
+}
+tx_t plant_net_ws_accept(tx_t listener) {
+    long lslot=_to_long(listener);
+    if(lslot<0||lslot>=WS_MAX||!g_ws_lact[lslot])return strdup("");
+    struct sockaddr_in cli;socklen_t clen=sizeof(cli);
+    int cfd=accept(g_ws_lfd[lslot],(struct sockaddr*)&cli,&clen);
+    if(cfd<0)return strdup("");
+    /* read HTTP upgrade request */
+    char req[4096];size_t got=0;
+    while(got<sizeof(req)-1){char c;if(recv(cfd,&c,1,0)<=0){close(cfd);return strdup("");}req[got++]=c;
+    if(got>=4&&memcmp(req+got-4,"\r\n\r\n",4)==0)break;}
+    req[got]=0;
+    /* extract Sec-WebSocket-Key */
+    char*key_start=strstr(req,"Sec-WebSocket-Key:");
+    if(!key_start){close(cfd);return strdup("");}
+    key_start+=18;
+    while(*key_start==' ')key_start++;
+    char*key_end=strstr(key_start,"\r\n");
+    if(!key_end){close(cfd);return strdup("");}
+    size_t klen=key_end-key_start;
+    char ws_key[128];if(klen>=sizeof(ws_key))klen=127;memcpy(ws_key,key_start,klen);ws_key[klen]=0;
+    /* compute accept = b64(sha1(key + GUID)) */
+    char concat[256];snprintf(concat,sizeof(concat),"%s%s",ws_key,WS_GUID);
+    unsigned char sha[20];_ws_sha1((unsigned char*)concat,strlen(concat),sha);
+    char*accept_b64=_ws_b64(sha,20);
+    /* send 101 */
+    char resp[512];snprintf(resp,sizeof(resp),
+        "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n\r\n",
+        accept_b64);
+    free(accept_b64);
+    send(cfd,resp,strlen(resp),0);
+    /* store as active connection */
+    for(int i=0;i<WS_MAX;i++)if(!g_ws_act[i]){g_ws_fd[i]=cfd;g_ws_act[i]=1;return strdup(_from_long(i));}
+    close(cfd);return strdup("");
+}
