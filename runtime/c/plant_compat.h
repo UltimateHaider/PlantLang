@@ -942,3 +942,8 @@ void  plant_msleep(long ms);                          /* sleep helper */
 
 tx_t plant_net_harvest_https_url(tx_t url, tx_t method);
 
+
+tx_t plant_ws_connect(tx_t url);
+tx_t plant_ws_send(tx_t conn_id, tx_t msg);
+tx_t plant_ws_recv(tx_t conn_id);
+tx_t plant_ws_close(tx_t conn_id);

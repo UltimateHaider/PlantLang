@@ -8179,3 +8179,87 @@ tx_t plant_net_harvest_https_url(tx_t url, tx_t method) {
     free(esc_body);
     return result;
 }
+
+/* v0.49.46 - WebSocket minimal client (RFC 6455) */
+static void _ws_sha1(const unsigned char*d,size_t l,unsigned char*h){
+    uint32_t H[5]={0x67452301,0xEFCDAB89,0x98BADCFE,0x10325476,0xC3D2E1F0};
+    size_t pl=((l+8)/64+1)*64;unsigned char*m=calloc(pl,1);memcpy(m,d,l);m[l]=0x80;
+    uint64_t bl=(uint64_t)l*8;for(int i=0;i<8;i++)m[pl-1-i]=(bl>>(i*8))&0xFF;
+    uint32_t w[80];
+    for(size_t o=0;o<pl;o+=64){for(int j=0;j<16;j++)w[j]=(m[o+j*4]<<24)|(m[o+j*4+1]<<16)|(m[o+j*4+2]<<8)|m[o+j*4+3];
+    for(int j=16;j<80;j++)w[j]=w[j-3]^w[j-8]^w[j-14]^w[j-16];
+    uint32_t a=H[0],b=H[1],c=H[2],d=H[3],e=H[4],f,k,t;
+    for(int j=0;j<80;j++){if(j<20){f=(b&c)|((~b)&d);k=0x5A827999;}else if(j<40){f=b^c^d;k=0x6ED9EBA1;}
+    else if(j<60){f=(b&c)|(b&d)|(c&d);k=0x8F1BBCDC;}else{f=b^c^d;k=0xCA62C1D6;}
+    t=(a<<5|a>>27)+f+e+k+w[j];e=d;d=c;c=(b<<30|b>>2)|0;b=a;a=t;}
+    H[0]+=a;H[1]+=b;H[2]+=c;H[3]+=d;H[4]+=e;}
+    for(int i=0;i<4;i++){h[i]=(H[0]>>(24-i*8))&0xFF;h[4+i]=(H[1]>>(24-i*8))&0xFF;
+    h[8+i]=(H[2]>>(24-i*8))&0xFF;h[12+i]=(H[3]>>(24-i*8))&0xFF;h[16+i]=(H[4]>>(24-i*8))&0xFF;}
+    free(m);
+}
+static char*_ws_b64(const unsigned char*d,size_t l){
+    static const char*T="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    char*o=malloc(4*((l+2)/3)+1);size_t oi=0;
+    for(size_t i=0;i<l;i+=3){uint32_t n=d[i]<<16|(i+1<l?d[i+1]:0)<<8|(i+2<l?d[i+2]:0);
+    o[oi++]=T[(n>>18)&63];o[oi++]=T[(n>>12)&63];o[oi++]=(i+1<l)?T[(n>>6)&63]:'=';o[oi++]=(i+2<l)?T[n&63]:'=';}
+    o[oi]=0;return o;}
+#define WS_MAX 16
+static int g_ws_fd[WS_MAX];
+static int g_ws_act[WS_MAX];
+
+tx_t plant_ws_connect(tx_t url) {
+    const char*u=_S(url);const char*hp=strstr(u,"://");
+    if(!hp)return strdup("-1");hp+=3;
+    char host[256]="";int port=80;char path[256]="/";
+    if(sscanf(hp,"%255[^:/]:%d/%255s",host,&port,path+1)<1)
+        sscanf(hp,"%255[^/]/%255s",host,path);
+    struct hostent*he=gethostbyname(host);
+    if(!he)return strdup("-2");
+    int fd=socket(AF_INET,SOCK_STREAM,0);
+    struct sockaddr_in a;memset(&a,0,sizeof(a));a.sin_family=AF_INET;a.sin_port=htons(port);
+    memcpy(&a.sin_addr,he->h_addr_list[0],he->h_length);
+    if(connect(fd,(struct sockaddr*)&a,sizeof(a))<0){close(fd);return strdup("-3");}
+    unsigned char key[16];for(int i=0;i<16;i++)key[i]=rand()&0xFF;
+    unsigned char sha[20];_ws_sha1(key,16,sha);
+    char*b64=_ws_b64(sha,20);
+    char req[2048];snprintf(req,sizeof(req),
+        "GET /%s HTTP/1.1\r\nHost: %s\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: %s\r\nSec-WebSocket-Version: 13\r\n\r\n",path,host,b64);
+    send(fd,req,strlen(req),0);
+    char resp[4096];size_t got=0;
+    while(got<sizeof(resp)-1){char c;if(recv(fd,&c,1,0)<=0){close(fd);return strdup("-4");}resp[got++]=c;
+    if(got>=4&&memcmp(resp+got-4,"\r\n\r\n",4)==0)break;}
+    resp[got]=0;
+    if(!strstr(resp,"101")){close(fd);return strdup("-5");}
+    for(int i=0;i<WS_MAX;i++)if(!g_ws_act[i]){g_ws_fd[i]=fd;g_ws_act[i]=1;return strdup(_from_long(i));}
+    close(fd);return strdup("-6");
+}
+tx_t plant_ws_send(tx_t conn_id, tx_t msg) {
+    long slot=_to_long(conn_id);if(slot<0||slot>=WS_MAX||!g_ws_act[slot])return strdup("0");
+    size_t len=strlen(_S(msg));
+    unsigned char hdr[10];size_t hl=0;hdr[hl++]=0x81;
+    if(len<=125){hdr[hl++]=(unsigned char)(len|0x80);}
+    else{hdr[hl++]=126|0x80;hdr[hl++]=(len>>8)&0xFF;hdr[hl++]=len&0xFF;}
+    unsigned char mask[4]={1,2,3,4};memcpy(hdr+hl,mask,4);hl+=4;
+    send(g_ws_fd[slot],hdr,hl,0);
+    char*mc=malloc(len);for(size_t i=0;i<len;i++)mc[i]=((char*)_S(msg))[i]^mask[i%4];
+    send(g_ws_fd[slot],mc,len,0);free(mc);
+    return strdup("1");
+}
+tx_t plant_ws_recv(tx_t conn_id) {
+    long slot=_to_long(conn_id);if(slot<0||slot>=WS_MAX||!g_ws_act[slot])return strdup("");
+    unsigned char h[2];if(recv(g_ws_fd[slot],h,2,MSG_WAITALL)!=2)return strdup("");
+    if((h[0]&0x0F)==0x8)return strdup("__CLOSED__");
+    int masked=(h[1]&0x80)!=0;size_t len=h[1]&0x7F;unsigned char mask[4];
+    if(len==126){unsigned char e[2];recv(g_ws_fd[slot],e,2,MSG_WAITALL);len=(e[0]<<8)|e[1];}
+    if(masked)recv(g_ws_fd[slot],mask,4,MSG_WAITALL);
+    char*buf=malloc(len+1);size_t got=0;
+    while(got<len){int n=recv(g_ws_fd[slot],buf+got,len-got,0);if(n<=0){free(buf);return strdup("");}got+=n;}
+    buf[len]=0;if(masked)for(size_t i=0;i<len;i++)buf[i]^=mask[i%4];
+    tx_t result=strdup(buf);free(buf);return result;
+}
+tx_t plant_ws_close(tx_t conn_id) {
+    long slot=_to_long(conn_id);if(slot<0||slot>=WS_MAX||!g_ws_act[slot])return strdup("0");
+    unsigned char close_frame[]={0x88,0x00};
+    send(g_ws_fd[slot],close_frame,2,0);close(g_ws_fd[slot]);
+    g_ws_act[slot]=0;return strdup("1");
+}

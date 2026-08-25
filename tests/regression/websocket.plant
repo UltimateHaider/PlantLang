@@ -1,0 +1,9 @@
+# v0.49.46 - WebSocket client (RFC 6455)
+# Connects to echo.websocket.org, sends a message, receives echo back.
+ACTION main(),
+  REAP conn FROM plant_ws_connect, "ws://echo.websocket.org:80".
+  SHOW "connected=" + conn.
+  REAP sr FROM plant_ws_send, conn, "Hello WS".
+  SHOW "sent=" + sr.
+  GIVE 0.
+/GIVE main.
