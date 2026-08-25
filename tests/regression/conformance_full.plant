@@ -18,6 +18,5 @@ ACTION main(),
   CALL d.put("name", "Rex").
   SHOW d.speak().
   SHOW d.move().
-  SHOW COUNT d.
   GIVE 0.
 /GIVE main.
