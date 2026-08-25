@@ -5627,6 +5627,11 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
   tx_t npair = "";
   tx_t nty = "";
   tx_t sname = "";
+  tx_t ftk = "";
+  tx_t flx9 = "";
+  tx_t fpair = "";
+  tx_t ppair = "";
+  tx_t pnm = "";
   tx_t lb = "";
   tx_t tk = "";
   tx_t ty = "";
@@ -5643,8 +5648,8 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
   tx_t stk9 = "";
   tx_t sty9 = "";
   tx_t rb9 = "";
-  tx_t fpair = "";
   tx_t fname = "";
+  tx_t cpa9 = "";
   tx_t ttok = "";
   tx_t ftt = "";
   tx_t btk = "";
@@ -5663,6 +5668,17 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
     }
     sname = tok_lex(plant_list_get(npair ,  0 ));
     p = _second(npair);
+    tx_t parent = "";
+    ftk = peek(tokens, p);
+    flx9 = tok_lex(ftk);
+    if (strcmp(flx9,"FROM") == 0) {
+        fpair = consume(tokens, p);
+        p = _second(fpair);
+        ppair = consume(tokens, p);
+        pnm = tok_lex(plant_list_get(ppair ,  0 ));
+        parent = pnm;
+        p = _second(ppair);
+    }
     lb = consume(tokens, p);
     p = _second(lb);
     PlantArray* fields = plant_list_make ( 0 );
@@ -5708,6 +5724,8 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
         fpair = consume(tokens, p);
         fname = tok_lex(plant_list_get(fpair ,  0 ));
         p = _second(fpair);
+        cpa9 = consume(tokens, p);
+        p = _second(cpa9);
         ttok = consume(tokens, p);
         ftt = tok_lex(plant_list_get(ttok ,  0 ));
         p = _second(ttok);
@@ -5724,7 +5742,7 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
         fields = plant_list_add(fields, plant_list_make ( 4 , "name" , fname , "type" , ftt ));
     }
     plant_print(_cat("DBG species end methods=", _from_long ( plant_array_length(methods) )));
-    return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "species_decl" , "name" , sname , "fields" , fields , "methods" , methods ) , p );
+    return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "species_decl" , "name" , sname , "parent" , parent , "fields" , fields , "methods" , methods ) , p );
 }
 tx_t parse_type_decl(PlantArray* tokens, long pos) {
   tx_t kw_pair = "";
@@ -6074,7 +6092,6 @@ tx_t parse_program(PlantArray* tokens) {
             dsplice = _map_get(decl, "type");
             is_sp = str_eq(dsplice, "species_decl");
             if (strcmp(is_sp,"1") == 0) {
-                nodes = plant_list_add(nodes, decl);
                 ml = _map_get(decl, "methods");
                 long mi9 = 0;
                 while (mi9 < plant_array_length(ml)) {
@@ -12703,6 +12720,7 @@ tx_t generate_c(PlantArray* ast) {
   tx_t sname = "";
   tx_t sn7 = "";
   tx_t sf7 = "";
+  tx_t sp9 = "";
   tx_t fe9 = "";
   tx_t fn9 = "";
   tx_t fpel = "";
@@ -12836,7 +12854,8 @@ tx_t generate_c(PlantArray* ast) {
             if (strcmp(ntype,"species_decl") == 0) {
                 sn7 = _map_get(node_el, "name");
                 sf7 = _map_get(node_el, "fields");
-                species = plant_list_add(species, plant_list_make ( 4 , "name" , sn7 , "fields" , sf7 ));
+                sp9 = _map_get(node_el, "parent");
+                species = plant_list_add(species, plant_list_make ( 6 , "name" , sn7 , "fields" , sf7 , "parent" , sp9 ));
                 tx_t regl = "_from_long(";
                 regl = regl+plant_array_length(sf7);
                 regl = _cat(regl, ")");
@@ -12849,7 +12868,7 @@ tx_t generate_c(PlantArray* ast) {
                 }
                 regl = _cat(regl, ")");
                 regl = _cat("plant_list_make(", substring ( regl , 11 , strlen( regl ) ));
-                sp_init_code = _cat3(_cat4(sp_init_code, "  plant_species_register(\"", sn7, "\", "), regl, ");\n");
+                sp_init_code = _cat(_cat4(_cat4(sp_init_code, "  plant_species_register(\"", sn7, "\", "), regl, ", \"", sp9), "\");\n");
             }
             structs = plant_list_add(structs, plant_list_make ( 6 , "name" , sname , "generics" , sgens2 , "fields" , sfields2 ));
         }
@@ -14104,7 +14123,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.29 (pure native)");
+      plant_print("Chloroplast 0.49.30 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

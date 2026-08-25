@@ -1279,19 +1279,37 @@ tx_t plant_species_create(tx_t names) {
 #define PLANT_SPECIES_MAX 64
 static char* g_sp_names[PLANT_SPECIES_MAX];
 static tx_t g_sp_fields[PLANT_SPECIES_MAX];
+static char* g_sp_parents[PLANT_SPECIES_MAX];
 static long g_sp_n = 0;
-void plant_species_register(tx_t name, tx_t fields) {
+static char* g_sp_parents[PLANT_SPECIES_MAX];
+void plant_species_register(tx_t name, tx_t fields, tx_t parent) {
     if (g_sp_n >= PLANT_SPECIES_MAX) return;
     g_sp_names[g_sp_n] = strdup(_S(name));
     g_sp_fields[g_sp_n] = fields;
+    g_sp_parents[g_sp_n] = _S(parent)[0] ? strdup(_S(parent)) : NULL;
     g_sp_n++;
 }
-tx_t plant_species_create_by_name(tx_t name) {
-    const char* want = _S(name);
-    for (long i = 0; i < g_sp_n; i++)
-        if (strcmp(g_sp_names[i], want) == 0)
-            return plant_species_create(g_sp_fields[i]);
+static tx_t _sp_build(const char* want) {
+    for (long i = 0; i < g_sp_n; i++) {
+        if (strcmp(g_sp_names[i], want) != 0) continue;
+        tx_t o = plant_map_create();
+        if (g_sp_parents[i]) {
+            tx_t po = _sp_build(g_sp_parents[i]);
+            PlantArray* pa = (PlantArray*)po;
+            if (pa && pa->magic == PLANT_ARRAY_MAGIC)
+                for (int64_t k = 0; k + 1 < pa->count; k += 2)
+                    o = plant_map_set(o, pa->items[k], pa->items[k+1]);
+        }
+        PlantArray* fa = (PlantArray*)g_sp_fields[i];
+        if (fa && fa->magic == PLANT_ARRAY_MAGIC)
+            for (int64_t k = 0; k < fa->count; k++)
+                o = plant_map_set(o, fa->items[k], "");
+        return o;
+    }
     return plant_map_create();
+}
+tx_t plant_species_create_by_name(tx_t name) {
+    return _sp_build(_S(name));
 }
 
 long plant_unique_seq(void) {

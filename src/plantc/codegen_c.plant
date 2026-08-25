@@ -6692,7 +6692,8 @@ ACTION generate_c(ast(LIST)),
         IF ntype IS "species_decl",
             REAP sn7 FROM _map_get, node_el, "name".
             REAP sf7 FROM _map_get, node_el, "fields".
-            PUT plant_list_make(4, "name", sn7, "fields", sf7) INTO species.
+            REAP sp9 FROM _map_get, node_el, "parent".
+            PUT plant_list_make(6, "name", sn7, "fields", sf7, "parent", sp9) INTO species.
             CREATE regl(TX) TO "_from_long(".
             SET regl TO regl + COUNT sf7.
             SET regl TO regl + ")".
@@ -6705,7 +6706,7 @@ ACTION generate_c(ast(LIST)),
             /SEASON.
             SET regl TO regl + ")".
             SET regl TO "plant_list_make(" + substring(regl, 11, LEN(regl)).
-            SET sp_init_code TO sp_init_code + "  plant_species_register(\"" + sn7 + "\", " + regl + ");\n".
+            SET sp_init_code TO sp_init_code + "  plant_species_register(\"" + sn7 + "\", " + regl + ", \"" + sp9 + "\");\n".
         /IF.
             PUT plant_list_make(6, "name", sname, "generics", sgens2, "fields", sfields2) INTO structs.
         /IF.

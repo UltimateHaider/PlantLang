@@ -1,0 +1,27 @@
+# v0.49.30 - SPECIES inheritance (FROM / PARENT):
+#   SPECIES Child FROM Parent { extra: TYPE }
+# Fields merge (parent first, child overwrites), methods inherit via
+# bare-name dispatch, and child overrides replace parent impls.
+SPECIES Animal {
+  name: TX
+  ACTION speak() -> TX {
+    GIVE self.name + " makes a sound".
+  }
+}
+SPECIES Dog FROM Animal {
+  breed: TX
+  ACTION fetch() -> TX {
+    GIVE self.name + " fetches!".
+  }
+}
+ACTION main(),
+  BLOOM Animal AS a.
+  CALL a.put("name", "Generic").
+  SHOW a.speak().
+  BLOOM Dog AS d.
+  CALL d.put("name", "Rex").
+  CALL d.put("breed", "Lab").
+  SHOW COUNT d.
+  SHOW d.fetch().
+  GIVE 0.
+/GIVE main.

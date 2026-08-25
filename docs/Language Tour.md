@@ -1318,3 +1318,24 @@ SHOW p.age.                # 37
 Methods lift to functions whose first parameter is the instance;
 `SELF` (case-exact) inside bodies becomes that parameter. Use the dot
 form for field/method access. Method names are global-unique.
+
+
+### Species Inheritance (v0.49.30)
+
+```
+SPECIES Animal {
+  name: TX
+  ACTION speak() -> TX { GIVE self.name + " makes a sound". }
+}
+SPECIES Dog FROM Animal {
+  breed: TX
+  ACTION fetch() -> TX { GIVE self.name + " fetches!". }
+}
+
+BLOOM Dog AS d.
+CALL d.put("name", "Rex").
+SHOW d.speak().     # inherited from Animal
+SHOW d.fetch().     # Dog's own method
+```
+
+Child fields merge with parent fields at creation time.

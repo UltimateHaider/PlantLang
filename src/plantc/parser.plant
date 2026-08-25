@@ -3580,6 +3580,18 @@ ACTION parse_species_decl(tokens(LIST), pos(NUM)),
   /IF.
   REAP sname FROM tok_lex, npair[0].
   REAP p FROM _second, npair.
+  # v0.49.30 - optional FROM Parent clause
+  CREATE parent(TX) TO "".
+  REAP ftk FROM peek, tokens, p.
+  REAP flx9 FROM tok_lex, ftk.
+  IF flx9 IS "FROM",
+    REAP fpair FROM consume, tokens, p.
+    REAP p FROM _second, fpair.
+    REAP ppair FROM consume, tokens, p.
+    REAP pnm FROM tok_lex, ppair[0].
+    SET parent TO pnm.
+    REAP p FROM _second, ppair.
+  /IF.
   REAP lb FROM consume, tokens, p.
   REAP p FROM _second, lb.
   CREATE fields(LIST) TO plant_list_make(0).
@@ -3629,6 +3641,8 @@ ACTION parse_species_decl(tokens(LIST), pos(NUM)),
     REAP fpair FROM consume, tokens, p.
     REAP fname FROM tok_lex, fpair[0].
     REAP p FROM _second, fpair.
+    REAP cpa9 FROM consume, tokens, p.
+    REAP p FROM _second, cpa9.
     # v0.49.29: type = single IDENT with optional [T] group, so that
     # embedded ACTION members after the fields are left untouched.
     REAP ttok FROM consume, tokens, p.
@@ -3647,7 +3661,7 @@ ACTION parse_species_decl(tokens(LIST), pos(NUM)),
     PUT plant_list_make(4, "name", fname, "type", ftt) INTO fields.
   /SEASON.
   SHOW "DBG species end methods=" + _from_long(COUNT methods).
-  GIVE plant_list_make(2, plant_list_make(8, "type", "species_decl", "name", sname, "fields", fields, "methods", methods), p).
+  GIVE plant_list_make(2, plant_list_make(10, "type", "species_decl", "name", sname, "parent", parent, "fields", fields, "methods", methods), p).
 /ACTION.
 
 # parse_type_decl - TYPE alias = target. (v0.49.27)
@@ -3982,7 +3996,6 @@ ACTION parse_program(tokens(LIST)),
       REAP dsplice FROM _map_get, decl, "type".
       REAP is_sp FROM str_eq, dsplice, "species_decl".
       IF is_sp IS "1",
-        PUT decl INTO nodes.
         REAP ml FROM _map_get, decl, "methods".
         CREATE mi9(NUM) TO 0.
         SEASON mi9 < COUNT ml,
