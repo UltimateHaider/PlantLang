@@ -5652,6 +5652,10 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
   tx_t npair = "";
   tx_t nty = "";
   tx_t sname = "";
+  tx_t impl_tk = "";
+  tx_t impl_lx = "";
+  tx_t impl_c1 = "";
+  tx_t impl_c2 = "";
   tx_t ftk = "";
   tx_t flx9 = "";
   tx_t fpair = "";
@@ -5693,6 +5697,15 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
     }
     sname = tok_lex(plant_list_get(npair ,  0 ));
     p = _second(npair);
+    PlantArray* implifs = plant_list_make ( 0 );
+    impl_tk = peek(tokens, p);
+    impl_lx = tok_lex(impl_tk);
+    if (strcmp(impl_lx,"IMPLEMENTS") == 0) {
+        impl_c1 = consume(tokens, p);
+        p = _second(impl_c1);
+        impl_c2 = consume(tokens, p);
+        p = _second(impl_c2);
+    }
     tx_t parent = "";
     ftk = peek(tokens, p);
     flx9 = tok_lex(ftk);
@@ -14218,7 +14231,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.36 (pure native)");
+      plant_print("Chloroplast 0.49.37 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

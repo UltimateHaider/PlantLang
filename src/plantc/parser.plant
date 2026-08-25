@@ -3597,6 +3597,15 @@ ACTION parse_species_decl(tokens(LIST), pos(NUM)),
   /IF.
   REAP sname FROM tok_lex, npair[0].
   REAP p FROM _second, npair.
+  CREATE implifs(LIST) TO plant_list_make(0).
+  REAP impl_tk FROM peek, tokens, p.
+  REAP impl_lx FROM tok_lex, impl_tk.
+  IF impl_lx IS "IMPLEMENTS",
+    REAP impl_c1 FROM consume, tokens, p.
+    REAP p FROM _second, impl_c1.
+    REAP impl_c2 FROM consume, tokens, p.
+    REAP p FROM _second, impl_c2.
+  /IF.
   # v0.49.30 - optional FROM Parent clause
   CREATE parent(TX) TO "".
   REAP ftk FROM peek, tokens, p.

@@ -59,7 +59,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `ACTION (self(Type)) method` receiver binding | S | M | no method model |
 | `ACTION … WITH MISSION <mode>.` | S | **S** | FAST/SAFE/SMART/PERSISTENT/BALANCED |
 | `ACTION` generics `<T>`, prio, `Result<T,E>` ret | M (legacy had none) | **S** | new in v0.48.1+ |
-| `SPECIES name {f: T}` + `BLOOM` | S | **P** | v0.49.28: map-backed records (fields default "", obj.field read + .put write); no VAR syntax (D); ACTION members + SELF shipped v0.49.29; FROM inheritance shipped v0.49.30; ACTION members + SELF v0.49.31; polymorphic dispatch v0.49.32; INTERFACE declarations + plant_impl_iface/plant_is_a runtime conformance v0.49.35 (compile-time validation D) |
+| `SPECIES name {f: T}` + `BLOOM` | S | **P** | v0.49.28: map-backed records (fields default "", obj.field read + .put write); no VAR syntax (D); ACTION members + SELF shipped v0.49.29; FROM inheritance shipped v0.49.30; ACTION members + SELF v0.49.31; polymorphic dispatch v0.49.32; INTERFACE declarations + plant_impl_iface/plant_is_a runtime conformance v0.49.35; IMPLEMENTS clause parsing enabled v0.49.37 (compile-time validation D) |
 | `STRUCT` / `SHAPE` | S | **P** | STRUCT with typed fields only (map-backed); no SHAPE |
 | `CHOICE Variant(TYPE)` + `Option`/`Result` | S | **P** | no CHOICE; `Option`/`Result`/`is_some` etc. exist only as runtime helpers |
 | `ENUM` | S | **S** | members as `NAME.MEMBER`, `_to_enum`/`_from_enum` |

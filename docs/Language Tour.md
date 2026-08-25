@@ -1403,3 +1403,19 @@ SHOW r.   # runtime check (requires manual registration)
 
 Interfaces are documentation-only declarations; runtime checks use
 the plant_is_a helper which reads the __species metadata tag.
+
+
+### IMPLEMENTS Clause (v0.49.37)
+
+```
+SPECIES Dog IMPLEMENTS Speakable {
+  name: TX
+  ACTION speak() -> TX {
+    GIVE self.name + " barks!".
+  }
+}
+```
+
+The IMPLEMENTS keyword and interface name are consumed during species
+declaration. Runtime conformance checking via `plant_is_a` requires
+manual registration via `plant_impl_iface`.

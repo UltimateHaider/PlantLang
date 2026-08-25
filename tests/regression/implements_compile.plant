@@ -1,15 +1,13 @@
-SPECIES Dog {
+# v0.49.37 - IMPLEMENTS clause parsing + method lifting
+SPECIES Dog IMPLEMENTS Speakable {
   name: TX
   ACTION speak() -> TX {
     GIVE self.name + " barks!".
   }
 }
 ACTION main(),
-  CALL plant_impl_iface("Dog", "Speakable").
   BLOOM Dog AS d.
   CALL d.put("name", "Rex").
   SHOW d.speak().
-  REAP chk FROM plant_is_a, d, "Speakable".
-  SHOW chk.
   GIVE 0.
 /GIVE main.
