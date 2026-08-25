@@ -9985,6 +9985,9 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
     if (strcmp(ntype,"interface_decl") == 0) {
         return "";
     }
+    if (strcmp(ntype,"interface_decl") == 0) {
+        return "";
+    }
     if (strcmp(ntype,"type_decl") == 0) {
         return "";
     }
@@ -12798,6 +12801,8 @@ tx_t generate_c(PlantArray* ast) {
   tx_t sp9 = "";
   tx_t fe9 = "";
   tx_t fn9 = "";
+  tx_t imps = "";
+  tx_t iv9 = "";
   tx_t fpel = "";
   tx_t fpty = "";
   tx_t fk7 = "";
@@ -12946,6 +12951,13 @@ tx_t generate_c(PlantArray* ast) {
             regl = _cat(regl, ")");
             regl = _cat("plant_list_make(", substring ( regl , 11 , strlen( regl ) ));
             sp_init_code = _cat(_cat4(_cat4(sp_init_code, "  plant_species_register(\"", sn7, "\", "), regl, ", \"", sp9), "\");\n");
+            imps = _map_get(node_el, "implements");
+            long ii9 = 0;
+            while (ii9 < plant_array_length(imps)) {
+                iv9 = plant_list_get(imps, ii9);
+                sp_init_code = _cat3(_cat4(sp_init_code, "  plant_impl_iface(\"", sn7, "\", \""), iv9, "\");\n");
+                ii9 = ii9+1;
+            }
         }
         i = i+1;
     }
@@ -14206,7 +14218,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.33 (pure native)");
+      plant_print("Chloroplast 0.49.34 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

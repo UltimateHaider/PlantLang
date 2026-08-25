@@ -3609,6 +3609,11 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         GIVE "".
     /IF.
 
+    # v0.49.34: interface_decl is compile-time documentation only.
+    IF ntype IS "interface_decl",
+        GIVE "".
+    /IF.
+
     IF ntype IS "type_decl",
         GIVE "".
     /IF.
@@ -6716,6 +6721,14 @@ ACTION generate_c(ast(LIST)),
             SET regl TO regl + ")".
             SET regl TO "plant_list_make(" + substring(regl, 11, LEN(regl)).
             SET sp_init_code TO sp_init_code + "  plant_species_register(\"" + sn7 + "\", " + regl + ", \"" + sp9 + "\");\n".
+            # v0.49.34: register implemented interfaces
+            REAP imps FROM _map_get, node_el, "implements".
+            CREATE ii9(NUM) TO 0.
+            SEASON ii9 < COUNT imps,
+              REAP iv9 FROM plant_list_get, imps, ii9.
+              SET sp_init_code TO sp_init_code + "  plant_impl_iface(\"" + sn7 + "\", \"" + iv9 + "\");\n".
+              SET ii9 TO ii9 + 1.
+            /SEASON.
         /IF.
         SET i TO i + 1.
     /SEASON.
