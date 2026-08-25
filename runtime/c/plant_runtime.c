@@ -8148,3 +8148,34 @@ tx_t plant_safe_call(const char* name, long argc, ...) {
     free(pbuf);
     return g_safe_regs[idx].fn((int)argc, args);
 }
+
+/* ================================================================
+   v0.49.43 - TLS/HTTPS support via curl subprocess
+   Uses the system curl binary for HTTPS client operations.
+   No OpenSSL headers required at compile time.
+   Returns JSON-like result map: {body, status, ok}
+   ================================================================ */
+tx_t plant_net_harvest_https_url(tx_t url, tx_t method) {
+    char cmd[8192];
+    snprintf(cmd, sizeof(cmd),
+        "curl -s -w '\\n%%{http_code}' -X %.100s --max-time 30 '%.4000s' 2>/dev/null",
+        _S(method), _S(url));
+    FILE *fp = popen(cmd, "r");
+    if (!fp) return strdup("{\"ok\":\"0\"}");
+    char body[65536];
+    size_t n = fread(body, 1, sizeof(body)-1, fp);
+    int rc = pclose(fp);
+    body[n] = 0;
+    /* split last line as status code */
+    char *last_nl = strrchr(body, '\n');
+    char status[16] = "0";
+    if (last_nl) { snprintf(status, sizeof(status), "%s", last_nl+1); *last_nl = 0; }
+    /* escape body for JSON string value */
+    tx_t esc_body = strdup(body);
+    tx_t result = plant_map_create();
+    result = plant_map_set(result, "body", esc_body);
+    result = plant_map_set(result, "status", status);
+    result = plant_map_set(result, "ok", strstr(status, "2") == status ? "1" : "0");
+    free(esc_body);
+    return result;
+}
