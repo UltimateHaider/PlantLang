@@ -14128,6 +14128,14 @@ int main(int argc, char **argv) {
   tx_t program_ast = "";
   tx_t perr = "";
   tx_t body = "";
+  tx_t en9 = "";
+  tx_t ety9 = "";
+  tx_t enm9 = "";
+  tx_t en9b = "";
+  tx_t ety9b = "";
+  tx_t enm9b = "";
+  tx_t alr9 = "";
+  tx_t resolved = "";
   tx_t c_code = "";
   tx_t out_path = "";
   tx_t written = "";
@@ -14142,7 +14150,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.31 (pure native)");
+      plant_print("Chloroplast 0.49.32 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);
@@ -14172,6 +14180,38 @@ int main(int argc, char **argv) {
       return 1;
   }
   body = _map_get(program_ast, "body");
+  PlantArray* ad_map = plant_map_create ( );
+  PlantArray* ad_out = plant_list_make ( 0 );
+  PlantArray* ad_emitted = plant_map_create ( );
+  long adi = 0;
+  while (adi < plant_array_length(body)) {
+      en9 = plant_list_get(body, adi);
+      ety9 = _map_get(en9, "type");
+      if (strcmp(ety9,"action_decl") == 0) {
+          enm9 = _map_get(en9, "name");
+          ad_map = plant_map_set ( ad_map , enm9 , en9 );
+      }
+      adi = adi+1;
+  }
+  long adi2 = 0;
+  while (adi2 < plant_array_length(body)) {
+      en9b = plant_list_get(body, adi2);
+      ety9b = _map_get(en9b, "type");
+      if (strcmp(ety9b,"action_decl") == 0) {
+          enm9b = _map_get(en9b, "name");
+          alr9 = _map_get(ad_emitted, enm9b);
+          if (strcmp(alr9,"") == 0) {
+              resolved = _map_get(ad_map, enm9b);
+              ad_out = plant_list_add(ad_out, resolved);
+              ad_emitted = plant_map_set ( ad_emitted , enm9b , "1" );
+          }
+      }
+      if (strcmp(ety9b,"action_decl") != 0) {
+          ad_out = plant_list_add(ad_out, en9b);
+      }
+      adi2 = adi2+1;
+  }
+  body = ad_out;
   plant_print("generating C...");
   c_code = generate_c(body);
   out_path = get_cli_arg(1);

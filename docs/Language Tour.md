@@ -1360,3 +1360,25 @@ SHOW speak(d).      # Rex speaks
 
 Methods can also be embedded in SPECIES bodies; they lift to
 top-level functions with an implicit self first parameter.
+
+
+### Polymorphic Dispatch (v0.49.32)
+
+When both parent and child species define the same method, the
+child's implementation takes precedence:
+
+```
+SPECIES Animal {
+  name: TX
+  ACTION speak() -> TX { GIVE self.name + " makes a sound". }
+}
+SPECIES Dog FROM Animal {
+  breed: TX
+  ACTION speak() -> TX { GIVE self.name + " barks!". }
+}
+
+BLOOM Dog AS d.
+SHOW d.speak().   # Rex barks! (child wins)
+```
+
+Non-overridden methods are inherited normally.

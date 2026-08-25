@@ -12546,7 +12546,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.49.31 (pure native)".
+  SHOW "Chloroplast 0.49.32 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.
@@ -12586,6 +12586,41 @@ IF perr > "",
   GIVE 1.
 /IF.
 REAP body FROM _map_get, program_ast, "body".
+
+# v0.49.32 - polymorphic dispatch: dedup action_decls keeping the
+# LAST definition for each name (child overrides parent). Uses a
+# pairs-map for O(1) lookup; each unique action appears once in the
+# output at its first original position.
+CREATE ad_map(LIST) TO plant_map_create().
+CREATE ad_out(LIST) TO plant_list_make(0).
+CREATE ad_emitted(LIST) TO plant_map_create().
+CREATE adi(NUM) TO 0.
+SEASON adi < COUNT body,
+  REAP en9 FROM plant_list_get, body, adi.
+  REAP ety9 FROM _map_get, en9, "type".
+  IF ety9 IS "action_decl",
+    REAP enm9 FROM _map_get, en9, "name".
+    SET ad_map TO plant_map_set(ad_map, enm9, en9).
+  /IF.
+  SET adi TO adi + 1.
+/SEASON.
+CREATE adi2(NUM) TO 0.
+SEASON adi2 < COUNT body,
+  REAP en9b FROM plant_list_get, body, adi2.
+  REAP ety9b FROM _map_get, en9b, "type".
+  IF ety9b IS "action_decl",
+    REAP enm9b FROM _map_get, en9b, "name".
+    REAP alr9 FROM _map_get, ad_emitted, enm9b.
+    IF alr9 IS "",
+      REAP resolved FROM _map_get, ad_map, enm9b.
+      PUT resolved INTO ad_out.
+      SET ad_emitted TO plant_map_set(ad_emitted, enm9b, "1").
+    /IF.
+  /IF.
+  IF ety9b ISNT "action_decl", PUT en9b INTO ad_out. /IF.
+  SET adi2 TO adi2 + 1.
+/SEASON.
+SET body TO ad_out.
 
 # 6. Code generate
 SHOW "generating C...".

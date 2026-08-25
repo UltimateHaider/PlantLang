@@ -1,0 +1,29 @@
+# v0.49.32 - polymorphic dispatch:
+#   When both parent and child define a method with the same name,
+#   the child's implementation wins (last-definition-wins).
+#   Non-overridden methods are inherited from the parent.
+SPECIES Animal {
+  name: TX
+  ACTION speak() -> TX {
+    GIVE self.name + " makes a sound".
+  }
+  ACTION describe() -> TX {
+    GIVE "I am " + self.name.
+  }
+}
+SPECIES Dog FROM Animal {
+  breed: TX
+  ACTION speak() -> TX {
+    GIVE self.name + " barks!".
+  }
+}
+ACTION main(),
+  BLOOM Dog AS d.
+  CALL d.put("name", "Rex").
+  CALL d.put("breed", "Lab").
+  SHOW d.speak().
+  SHOW d.describe().
+  SHOW COUNT d.
+  SHOW d.breed.
+  GIVE 0.
+/GIVE main.
