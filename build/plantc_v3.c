@@ -1409,7 +1409,6 @@ tx_t parse_field_access(PlantArray* tokens, long pos, tx_t text, tx_t dpth) {
   tx_t ttail = "";
   tx_t lt_lx = "";
   tx_t cut = "";
-    plant_print(_cat3("DBG-FA text=[", text, "]"));
     ftok = peek(tokens, pos+1);
     flx = tok_lex(ftok);
     fty = tok_type(ftok);
@@ -5767,7 +5766,6 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
         }
         fields = plant_list_add(fields, plant_list_make ( 4 , "name" , fname , "type" , ftt ));
     }
-    plant_print(_cat("DBG species end methods=", _from_long ( plant_array_length(methods) )));
     return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "species_decl" , "name" , sname , "parent" , parent , "fields" , fields , "methods" , methods ) , p );
 }
 tx_t parse_type_decl(PlantArray* tokens, long pos) {

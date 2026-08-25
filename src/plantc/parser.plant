@@ -93,7 +93,7 @@ ACTION escape_string(s(TX)),
 # new statement — the dot stays a terminator. At depth 0 the target
 # is the whole accumulated text; inside parens/brackets (dpth "1")
 # only a bare IDENT target is supported (f(a.b), [a.b, c]).
-ACTION parse_field_access(tokens(LIST), pos(NUM), text(TX), dpth(TX)),  SHOW "DBG-FA text=[" + text + "]".
+ACTION parse_field_access(tokens(LIST), pos(NUM), text(TX), dpth(TX)),
 
   REAP ftok FROM peek, tokens, pos + 1.
   REAP flx FROM tok_lex, ftok.
@@ -3677,7 +3677,6 @@ ACTION parse_species_decl(tokens(LIST), pos(NUM)),
     /IF.
     PUT plant_list_make(4, "name", fname, "type", ftt) INTO fields.
   /SEASON.
-  SHOW "DBG species end methods=" + _from_long(COUNT methods).
   GIVE plant_list_make(2, plant_list_make(10, "type", "species_decl", "name", sname, "parent", parent, "fields", fields, "methods", methods), p).
 /ACTION.
 
