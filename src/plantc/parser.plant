@@ -2910,6 +2910,7 @@ ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), 
     REAP r FROM parse_throw_stmt, tokens, pos.
     GIVE r.
   /IF.
+
   IF lx IS "STOP",
     REAP r FROM parse_stop_if_stmt, tokens, pos.
     GIVE r.
@@ -4149,3 +4150,5 @@ ACTION parse_program(tokens(LIST)),
     /IF.
   /SEASON.
 /ACTION.
+
+
