@@ -28,6 +28,8 @@ ACTION is_keyword(wrd(TX)),
   IF wrd IS "CALM", GIVE TRUE. /IF.
   IF wrd IS "AND", GIVE TRUE. /IF.
   IF wrd IS "OR", GIVE TRUE. /IF.
+  IF wrd IS "verify", GIVE TRUE. /IF.
+  IF wrd IS "suite", GIVE TRUE. /IF.
   IF wrd IS "NOT", GIVE TRUE. /IF.
   IF wrd IS "IS", GIVE TRUE. /IF.
   IF wrd IS "TRUE", GIVE TRUE. /IF.

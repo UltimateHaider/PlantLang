@@ -950,3 +950,7 @@ tx_t plant_ws_close(tx_t conn_id);
 
 tx_t plant_net_listen_ws(tx_t port);
 tx_t plant_net_ws_accept(tx_t listener);
+
+extern void plant_verify(tx_t label, tx_t cond);
+extern void plant_verify_begin(void);
+extern void plant_verify_end(void);

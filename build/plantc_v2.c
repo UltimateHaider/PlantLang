@@ -310,6 +310,12 @@ tx_t is_keyword(tx_t wrd) {
     if (strcmp(wrd,"OR") == 0) {
         return 1;
     }
+    if (strcmp(wrd,"verify") == 0) {
+        return 1;
+    }
+    if (strcmp(wrd,"suite") == 0) {
+        return 1;
+    }
     if (strcmp(wrd,"NOT") == 0) {
         return 1;
     }

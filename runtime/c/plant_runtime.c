@@ -20,6 +20,8 @@
    real globals defined in this file, not per-TU statics in the header. */
 char* g_cli_argv0 = 0;
 int g_cli_worker_mode = 0;
+static int verify_failures = 0;
+static int verify_total = 0;
 
 /* ── v0.42.0: djb2 hash for string keys ── */
 static size_t _plant_hash_str(const char* str) {
@@ -8314,4 +8316,29 @@ tx_t plant_net_ws_accept(tx_t listener) {
     /* store as active connection */
     for(int i=0;i<WS_MAX;i++)if(!g_ws_act[i]){g_ws_fd[i]=cfd;g_ws_act[i]=1;return strdup(_from_long(i));}
     close(cfd);return strdup("");
+}
+
+void plant_verify(tx_t label, tx_t cond) {
+    extern int verify_failures, verify_total;
+    verify_total++;
+    if (!cond) {
+        verify_failures++;
+        fprintf(stderr, "VERIFY FAILED: %s\n", label);
+    }
+}
+
+void plant_verify_begin(void) {
+    extern int verify_failures, verify_total;
+    verify_failures = 0;
+    verify_total = 0;
+}
+
+void plant_verify_end(void) {
+    extern int verify_failures, verify_total;
+    if (verify_failures == 0) {
+        printf("All %d assertions passed.\n", verify_total);
+    } else {
+        fprintf(stderr, "%d assertions failed out of %d.\n", verify_failures, verify_total);
+        exit(1);
+    }
 }
