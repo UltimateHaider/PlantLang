@@ -1,0 +1,17 @@
+# v0.49.50 - Multi-interface IMPLEMENTS
+# Tests that a species can implement multiple interfaces.
+SPECIES Dog IMPLEMENTS A, B {
+  name: TX
+  ACTION make_sound() -> TX {
+    GIVE self.name + " makes sound!".
+  }
+}
+ACTION main(),
+  BLOOM Dog AS d.
+  CALL d.put("name", "Rex").
+  REAP chk1 FROM plant_is_a, d, "A".
+  REAP chk2 FROM plant_is_a, d, "B".
+  SHOW "is A: " + chk1.
+  SHOW "is B: " + chk2.
+  GIVE 0.
+/GIVE main.

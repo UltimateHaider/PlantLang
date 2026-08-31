@@ -1,0 +1,17 @@
+# v0.49.50 - Basic IMPLEMENTS clause
+# Tests that SPECIES with IMPLEMENTS clause is recognized and interface
+# conformance can be checked at runtime.
+SPECIES Dog IMPLEMENTS Speakable {
+  name: TX
+  ACTION speak() -> TX {
+    GIVE self.name + " barks!".
+  }
+}
+ACTION main(),
+  BLOOM Dog AS d.
+  CALL d.put("name", "Rex").
+  SHOW d.speak().
+  REAP chk FROM plant_is_a, d, "Speakable".
+  SHOW "is Speakable: " + chk.
+  GIVE 0.
+/GIVE main.

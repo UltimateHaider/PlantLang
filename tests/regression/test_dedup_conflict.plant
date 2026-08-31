@@ -1,0 +1,26 @@
+# v0.49.50 - Dedup mechanism conflict resolution
+# Tests that duplicate method names are handled correctly in inheritance.
+SPECIES Animal {
+  name: TX
+  ACTION make_sound() -> TX {
+    GIVE self.name + " makes sound!".
+  }
+}
+# Child overrides the parent's make_sound with a different signature
+SPECIES Dog FROM Animal {
+  breed: TX
+  ACTION make_sound() -> TX {  # Same name, compatible signature
+    GIVE self.name + " the " + self.breed + " barks!".
+  }
+}
+ACTION main(),
+  BLOOM Dog AS d.
+  CALL d.put("name", "Rex").
+  CALL d.put("breed", "Lab").
+  REAP s1 FROM plant_is_a, d, "Animal".
+  REAP s2 FROM plant_is_a, d, "Dog".
+  SHOW "is Animal: " + s1.
+  SHOW "is Dog: " + s2.
+  # The dog should be both Animal and have its own make_sound
+  GIVE 0.
+/GIVE main.

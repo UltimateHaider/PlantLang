@@ -1,0 +1,24 @@
+# v0.49.50 - Combined FROM inheritance + IMPLEMENTS
+# Tests that a species can inherit from a parent AND implement interfaces.
+SPECIES Animal {
+  name: TX
+  ACTION make_sound() -> TX {
+    GIVE self.name + " makes sound!".
+  }
+}
+SPECIES Dog FROM Animal IMPLEMENTS Speakable {
+  breed: TX
+  ACTION speak() -> TX {
+    GIVE self.name + " barks!".
+  }
+}
+ACTION main(),
+  BLOOM Dog AS d.
+  CALL d.put("name", "Rex").
+  CALL d.put("breed", "Lab").
+  REAP chk1 FROM plant_is_a, d, "Speakable".
+  REAP chk2 FROM plant_is_a, d, "Animal".
+  SHOW "is Speakable: " + chk1.
+  SHOW "is Animal: " + chk2.
+  GIVE 0.
+/GIVE main.

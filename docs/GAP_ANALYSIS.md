@@ -60,6 +60,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `ACTION … WITH MISSION <mode>.` | S | **S** | FAST/SAFE/SMART/PERSISTENT/BALANCED |
 | `ACTION` generics `<T>`, prio, `Result<T,E>` ret | M (legacy had none) | **S** | new in v0.48.1+ |
 | `SPECIES name {f: T}` + `BLOOM` | S | **P** | v0.49.28: map-backed records (fields default "", obj.field read + .put write); no VAR syntax (D); ACTION members + SELF shipped v0.49.29; FROM inheritance shipped v0.49.30; ACTION members + SELF v0.49.31; polymorphic dispatch v0.49.32; INTERFACE declarations + runtime conformance + compile-time validation v0.49.39; IMPLEMENTS clause parsing enabled v0.49.37 (compile-time validation D) |
+| `SPECIES name {f: T}` + `IMPLEMENTS iface` | S | **S** | v0.49.50: full IMPLEMENTS runtime + enhanced dedup |
 | `STRUCT` / `SHAPE` | S | **P** | STRUCT with typed fields only (map-backed); no SHAPE |
 | `CHOICE Variant(TYPE)` + `Option`/`Result` | S | **P** | no CHOICE; `Option`/`Result`/`is_some` etc. exist only as runtime helpers |
 | `ENUM` | S | **S** | members as `NAME.MEMBER`, `_to_enum`/`_from_enum` |

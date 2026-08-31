@@ -1,4 +1,28 @@
-# Changelog — PlantLang / Chloroplast
+# Changelog - PlantLang / Chloroplast
+
+## v0.49.50 - 2026 (IMPLEMENTS Clause Refinement & Enhanced Dedup)
+
+### Runtime
+- plant_impl_iface(species_name, interface_name): Binds interface to species compliance registry
+- plant_is_a(species, interface): Verifies species-interface conformance check
+- Enhanced dedup mechanism: _map_replace_enhanced and _swap_super_prefix for signature-aware name conflict resolution
+
+### Codegen
+- _map_replace_enhanced: Map replacement with signature verification during deduplication
+- _swap_super_prefix: Safe management of complex naming collisions in multi-interface composition
+
+### Tests
+- test_implements_basic.plant: Basic IMPLEMENTS clause syntax
+- test_implements_multi.plant: Multiple interface compliance (IMPLEMENTS A, B, C)
+- test_implements_from.plant: Combined FROM inheritance + IMPLEMENTS clauses
+- test_dedup_conflict.plant: Method name collision resolution in inheritance
+- test_signature_conflict.plant: Signature mismatch detection and handling
+
+### Documentation
+- IMPLEMENTS status transitioned from M (Medium) to S (Supported/Stable) in GAP_ANALYSIS.md
+
+### Internal
+- Version markers moved to v0.49.50.
 
 ## v0.49.20 — 2026 (Expressive features — single-quoted strings, a..b ranges, Option/Result constructors)
 

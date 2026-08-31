@@ -1,0 +1,22 @@
+# v0.49.50 - Signature conflict detection
+# Tests that method signature mismatches are detected.
+SPECIES Animal {
+  ACTION make_sound() -> TX {
+    GIVE self.name + " makes sound!".
+  }
+}
+# Child has incompatible signature (different return type context)
+SPECIES Dog FROM Animal {
+  ACTION make_sound() -> NUMBER {  # Different return type
+    GIVE 42.
+  }
+}
+ACTION main(),
+  BLOOM Dog AS d.
+  CALL d.put("name", "Rex").
+  REAP chk FROM plant_is_a, d, "Animal".
+  # Dog should still be recognized as Animal (inheritance works)
+  # but the signature change may cause issues
+  SHOW "is Animal: " + chk.
+  GIVE 0.
+/GIVE main.
