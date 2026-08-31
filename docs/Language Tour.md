@@ -1419,3 +1419,17 @@ SPECIES Dog IMPLEMENTS Speakable {
 The IMPLEMENTS keyword and interface name are consumed during species
 declaration. Runtime conformance checking via `plant_is_a` requires
 manual registration via `plant_impl_iface`.
+
+## Memory Management and Deep Inheritance
+
+- **String Length Limits**: PLANT_MAX_STRING_LEN (4096) prevents runaway string growth
+- **Allocation Tracking**: g_mallocs and g_frees counters log allocation/deallocation differentials
+- **Leak Audit**: Runtime warnings trigger when free differential exceeds thresholds
+- **_swap_super_prefix Deduplication**: Substituted string values are tracked to prevent redundant re-allocations
+- **Defensive NULL Checks**: All malloc results validated to prevent segmentation faults
+
+- **Deep Inheritance Safety**: 10-level inheritance chains are supported with bounded memory consumption
+- **Wide Method Lists**: Species with 100+ methods are supported with optimized traversal routines
+- **Combined FROM + IMPLEMENTS**: Combined inheritance and interface compliance is supported with bounded memory
+
+

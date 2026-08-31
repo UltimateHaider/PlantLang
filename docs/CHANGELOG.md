@@ -1,4 +1,28 @@
-# Changelog - PlantLang / Chloroplast
+## v0.49.51 - 2026 (OOM Resolution & Memory Safeguards)
+
+### Runtime
+- g_mallocs and g_frees: global allocation counters for memory auditing
+- PLANT_MAX_STRING_LEN (4096): strict string length limit enforced
+- Leak audit warnings: differential checks for malloc/free mismatches
+- Defensive NULL checks: validated malloc results across core functions
+
+### Codegen
+- _swap_super_prefix deduplication: tracked substituted values to prevent redundant allocations
+- Length pre-check: skip string substitution for strings exceeding 4096 chars
+- Loop efficiency: optimized traversal for large method lists (50+ methods)
+
+### Stress Tests
+- stress_deep_inheritance.plant: 10-level inheritance with 50 methods per level
+- stress_large_methods.plant: single species with 100+ methods
+- stress_from_implements.plant: combined FROM + IMPLEMENTS under heavy load
+- stress_memory_pressure.plant: rapid creation/destruction cycles to detect leaks
+
+### Documentation
+- Memory safeguards and bounds documented in GAP_ANALYSIS.md
+- Memory management patterns documented in Language Tour.md
+
+### Internal
+- Version markers moved to v0.49.51.
 
 ## v0.49.50 - 2026 (IMPLEMENTS Clause Refinement & Enhanced Dedup)
 
