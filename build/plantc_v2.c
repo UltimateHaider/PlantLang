@@ -41,6 +41,7 @@ tx_t parse_trace_stmt(PlantArray* tokens, long pos);
 tx_t parse_mission_stmt(PlantArray* tokens, long pos);
 tx_t parse_create_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode);
 tx_t parse_show_stmt(PlantArray* tokens, long pos);
+tx_t parse_verify_stmt(PlantArray* tokens, long pos);
 tx_t parse_now_stmt(PlantArray* tokens, long pos);
 tx_t parse_analyze_stmt(PlantArray* tokens, long pos);
 tx_t parse_typeof_stmt(PlantArray* tokens, long pos);
@@ -308,6 +309,12 @@ tx_t is_keyword(tx_t wrd) {
         return 1;
     }
     if (strcmp(wrd,"OR") == 0) {
+        return 1;
+    }
+    if (strcmp(wrd,"suite") == 0) {
+        return 1;
+    }
+    if (strcmp(wrd,"suite") == 0) {
         return 1;
     }
     if (strcmp(wrd,"verify") == 0) {
@@ -2163,6 +2170,44 @@ tx_t parse_show_stmt(PlantArray* tokens, long pos) {
     tx_t expr = plant_list_get(vpair ,  0 );
     p3 = _second(vpair);
     return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "show_stmt" , "value" , expr ) , p3 );
+}
+tx_t parse_verify_stmt(PlantArray* tokens, long pos) {
+  tx_t pair = "";
+  tx_t p2 = "";
+  tx_t lbl_tok = "";
+  tx_t lbl_ty = "";
+  tx_t lbl_lx = "";
+  tx_t lbl_pair = "";
+  tx_t p3 = "";
+  tx_t lbl = "";
+  tx_t vp = "";
+  tx_t cond = "";
+  tx_t p4 = "";
+  tx_t sep_tok = "";
+  tx_t sep_ty = "";
+  tx_t sp = "";
+    pair = consume(tokens, pos);
+    p2 = _second(pair);
+    lbl_tok = peek(tokens, p2);
+    lbl_ty = tok_type(lbl_tok);
+    if (strcmp(lbl_ty,"STRING") == 0) {
+        lbl_lx = tok_lex(lbl_tok);
+        lbl_lx = escape_string(lbl_lx);
+        lbl_pair = consume(tokens, p2);
+        p3 = _second(lbl_pair);
+        lbl = _cat("\"", lbl_lx);
+        lbl = _cat((tx_t)lbl, "\"");
+    }
+    vp = collect_value(tokens, p3);
+    cond = _first(vp);
+    p4 = _second(vp);
+    sep_tok = peek(tokens, p4);
+    sep_ty = tok_type(sep_tok);
+    if (strcmp(sep_ty,"PERIOD") == 0) {
+        sp = consume(tokens, p4);
+        p4 = _second(sp);
+    }
+    return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "verify_stmt" , "label" , lbl , "cond" , cond ) , p4 );
 }
 tx_t parse_now_stmt(PlantArray* tokens, long pos) {
   tx_t pair = "";
@@ -4871,6 +4916,10 @@ tx_t parse_statement(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab, P
     }
     if (strcmp(lx,"HARVEST") == 0) {
         r = parse_harvest_stmt(tokens, pos);
+        return r;
+    }
+    if (strcmp(lx,"VERIFY") == 0) {
+        r = parse_verify_stmt(tokens, pos);
         return r;
     }
     if (strcmp(lx,"LISTEN") == 0) {
@@ -9821,6 +9870,10 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t snm2 = "";
   tx_t sl0 = "";
   tx_t isel = "";
+  tx_t lbl = "";
+  tx_t cond = "";
+  tx_t ccond = "";
+  tx_t isn = "";
   tx_t target = "";
   tx_t vtype = "";
   tx_t cnd = "";
@@ -9950,9 +10003,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
   tx_t lv2 = "";
   tx_t lcv2 = "";
   tx_t isnl2 = "";
-  tx_t cond = "";
   tx_t bd = "";
-  tx_t ccond = "";
   tx_t bcode = "";
   tx_t elif = "";
   tx_t econd = "";
@@ -10021,6 +10072,20 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
         }
         isel = indent_str(indent);
         return _cat4(isel, "  plant_print(", cval, ");\n");
+    }
+    if (strcmp(ntype,"verify_stmt") == 0) {
+        lbl = _map_get(node, "label");
+        cond = _map_get(node, "cond");
+        lbl = translate_expr(lbl, nums, evars);
+        lbl = _handle_cat(lbl, nums, evars);
+        ccond = translate_expr(cond, nums, evars);
+        ccond = _handle_cat(ccond, nums, evars);
+        isn = expr_is_numeric(ccond, nums);
+        if (isn == 1) {
+            ccond = _cat3("_from_long(", ccond, ")");
+        }
+        isel = indent_str(indent);
+        return _cat3(_cat4(isel, "  plant_verify(", lbl, ", "), ccond, ");\n");
     }
     if (strcmp(ntype,"create_stmt") == 0) {
         target = _map_get(node, "target");
@@ -11225,6 +11290,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
                 mexit = "  plant_persist_exit();\n";
             }
             bcode = generate_body(bd, 1, sigs, subst, clmap, actx, nums_a, stvars_a, evars_a, rty_a, mexit, "");
+            bcode = _cat("  plant_verify_begin();\n", bcode);
             if (strcmp(mmode,"FAST") == 0) {
                 bcode = _cat3(_cat4("  if (plant_boundary_block(\"", aname, "\", \"FAST\")) return \"\";\n  plant_fast_enter(\"", aname), "\");\n", bcode);
             }
@@ -11266,7 +11332,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
                 if (strcmp(drn2,"1") == 0) {
                     bcode = _cat(bcode, "  plant_async_drain();\n");
                 }
-                bcode = _cat(bcode, "  return \"\";\n");
+                bcode = _cat(bcode, "  plant_verify_end();\n  return \"\";\n");
             }
             if (( plant_array_length(bd) ) > 0) {
                 long bd_count = plant_array_length(bd);
@@ -11277,7 +11343,7 @@ tx_t generate_node(tx_t node, long indent, PlantArray* sigs, PlantArray* subst, 
                     bcode = _cat(bcode, "  plant_async_drain();\n");
                 }
                 if (strcmp(last_ty,"give_stmt") != 0) {
-                    bcode = _cat4(bcode, "  return ", fnname, ";\n");
+                    bcode = _cat4(bcode, "  plant_verify_end();\n  return ", fnname, ";\n");
                 }
             }
             ccode = _cat4(ccode, dcode, bcode, "}\n");
@@ -12626,7 +12692,7 @@ tx_t callees_of(PlantArray* bd) {
                 acc = callee_add(acc, cact);
             }
         }
-        if (strcmp(cty,"set_stmt") == 0 || strcmp(cty,"create_stmt") == 0 || strcmp(cty,"let_stmt") == 0 || strcmp(cty,"give_stmt") == 0 || strcmp(cty,"show_stmt") == 0 || strcmp(cty,"put_stmt") == 0 || strcmp(cty,"cancel_stmt") == 0 || strcmp(cty,"trace_stmt") == 0 || strcmp(cty,"config_stmt") == 0) {
+        if (strcmp(cty,"set_stmt") == 0 || strcmp(cty,"create_stmt") == 0 || strcmp(cty,"let_stmt") == 0 || strcmp(cty,"give_stmt") == 0 || strcmp(cty,"show_stmt") == 0 || strcmp(cty,"put_stmt") == 0 || strcmp(cty,"verify_stmt") == 0 || strcmp(cty,"cancel_stmt") == 0 || strcmp(cty,"trace_stmt") == 0 || strcmp(cty,"config_stmt") == 0) {
             cval = _map_get(cnd, "value");
             if (strcmp(cval,"") > 0) {
                 acc = callee_from_value(acc, cval);
@@ -14370,7 +14436,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.51 (pure native)");
+      plant_print("Chloroplast 0.49.53 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

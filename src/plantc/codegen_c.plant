@@ -8,7 +8,7 @@
 #    show_stmt, create_stmt, let_stmt, set_stmt, give_stmt,
 #    reap_stmt, put_stmt, break_stmt, continue_stmt,
 #    if_stmt, season_stmt, cycle_stmt, match_stmt,
-#    action_decl, enum_decl, program
+#    action_decl, enum_decl, program, verify_stmt
 # ═══════════════════════════════════════════════════════════════
 
 IMPORT "ast.plant".
@@ -3485,7 +3485,24 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP isel FROM indent_str, indent.
         GIVE isel + "  plant_print(" + cval + ");\n".
     /IF.
-  
+
+    # -- verify_stmt: VERIFY "label" cond. → plant_verify(label, cond); --
+    # v0.49.53: emits plant_verify call with colorized output from runtime.
+    IF ntype IS "verify_stmt",
+        REAP lbl FROM _map_get, node, "label".
+        REAP cond FROM _map_get, node, "cond".
+        REAP lbl FROM translate_expr, lbl, nums, evars.
+        REAP lbl FROM _handle_cat, lbl, nums, evars.
+        REAP ccond FROM translate_expr, cond, nums, evars.
+        REAP ccond FROM _handle_cat, ccond, nums, evars.
+        REAP isn FROM expr_is_numeric, ccond, nums.
+        IF isn IS 1,
+            SET ccond TO "_from_long(" + ccond + ")".
+        /IF.
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  plant_verify(" + lbl + ", " + ccond + ");\n".
+    /IF.
+    
     # ── create_stmt: CREATE var(TYPE) TO val. → long/TX var = val; ─
     #    In async step phases the variable lives in the state struct,
     #    restored as a local at step entry → plain assignment, no decl.
@@ -4954,6 +4971,8 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF mmode IS "SMART", SET mexit TO "  plant_smart_exit(\"" + aname + "\");\n". /IF.
         IF mmode IS "PERSISTENT", SET mexit TO "  plant_persist_exit();\n". /IF.
         REAP bcode FROM generate_body, bd, 1, sigs, subst, clmap, actx, nums_a, stvars_a, evars_a, rty_a, mexit, "".
+        # v0.49.53: wrap action body with verify begin/end for colorized output
+        SET bcode TO "  plant_verify_begin();\n" + bcode.
         # v0.48.15: Mission Mode binding — FAST actions bind the bump
         # heap (plant_fast_enter resets it at every scope enter);
         # SAFE actions carry the Boundary Handshake guard so FAST
@@ -5015,7 +5034,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             IF drn2 IS "1", SET bcode TO bcode + "  plant_async_drain();\n". /IF.
             # v0.49.24: empty bodies must return a valid tx_t, not the
             # function designator (fnname decays to a pointer here).
-            SET bcode TO bcode + "  return \"\";\n".
+            SET bcode TO bcode + "  plant_verify_end();\n  return \"\";\n".
         /IF.
         IF (COUNT bd) > 0,
             CREATE bd_count(NUM) TO COUNT bd.
@@ -5025,7 +5044,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             IF drn2 IS "1" AND last_ty ISNT "give_stmt",
                 SET bcode TO bcode + "  plant_async_drain();\n".
             /IF.
-            IF last_ty ISNT "give_stmt", SET bcode TO bcode + "  return " + fnname + ";\n". /IF.
+            IF last_ty ISNT "give_stmt", SET bcode TO bcode + "  plant_verify_end();\n  return " + fnname + ";\n". /IF.
         /IF.
         SET ccode TO ccode + dcode + bcode + "\}\n".
         GIVE ccode.
@@ -6324,7 +6343,7 @@ ACTION callees_of(bd(LIST)),
         REAP acc FROM callee_add, acc, cact.
       /IF.
     /IF.
-    IF cty IS "set_stmt" OR cty IS "create_stmt" OR cty IS "let_stmt" OR cty IS "give_stmt" OR cty IS "show_stmt" OR cty IS "put_stmt" OR cty IS "cancel_stmt" OR cty IS "trace_stmt" OR cty IS "config_stmt",
+    IF cty IS "set_stmt" OR cty IS "create_stmt" OR cty IS "let_stmt" OR cty IS "give_stmt" OR cty IS "show_stmt" OR cty IS "put_stmt" OR cty IS "verify_stmt" OR cty IS "cancel_stmt" OR cty IS "trace_stmt" OR cty IS "config_stmt",
       REAP cval FROM _map_get, cnd, "value".
       IF cval > "",
         REAP acc FROM callee_from_value, acc, cval.

@@ -14,6 +14,22 @@
 #include <dlfcn.h>
 #include <limits.h>
 
+/* ANSI color macros for terminal output */
+#define COLOR_RESET   "\033[0m"
+#define COLOR_GREEN   "\033[32m"
+#define COLOR_RED     "\033[31m"
+#define COLOR_YELLOW  "\033[33m"
+#define COLOR_BLUE    "\033[34m"
+#define COLOR_CYAN    "\033[36m"
+#define COLOR_BOLD    "\033[1m"
+
+/* Safe text colorizer utility */
+char* plant_colorize(const char* text, const char* color) {
+    static char buffer[1024];
+    snprintf(buffer, sizeof(buffer), "%s%s%s", color, text, COLOR_RESET);
+    return buffer;
+}
+
 /* v0.48.37c: cross-TU CLI state — plant_init_cli() runs in the generated
    program's own translation unit (via plant_compat.h), while
    plant_rw_spawn()/plant_maybe_run_worker() live here, so these must be
@@ -8321,9 +8337,10 @@ tx_t plant_net_ws_accept(tx_t listener) {
 void plant_verify(tx_t label, tx_t cond) {
     extern int verify_failures, verify_total;
     verify_total++;
-    if (!cond) {
+    const char* cs = (const char*)cond;
+    if (!cs || strcmp(cs, "0") == 0 || strcmp(cs, "") == 0) {
         verify_failures++;
-        fprintf(stderr, "VERIFY FAILED: %s\n", label);
+        fprintf(stderr, "%sVERIFY FAILED: %s%s\n", COLOR_RED, (const char*)label, COLOR_RESET);
     }
 }
 
@@ -8335,10 +8352,11 @@ void plant_verify_begin(void) {
 
 void plant_verify_end(void) {
     extern int verify_failures, verify_total;
+    if (verify_total == 0) return;
     if (verify_failures == 0) {
-        printf("All %d assertions passed.\n", verify_total);
+        printf("%sAll %d assertions passed.%s\n", COLOR_GREEN, verify_total, COLOR_RESET);
     } else {
-        fprintf(stderr, "%d assertions failed out of %d.\n", verify_failures, verify_total);
+        fprintf(stderr, "%s%d assertions failed out of %d.%s\n", COLOR_RED, verify_failures, verify_total, COLOR_RESET);
         exit(1);
     }
 }

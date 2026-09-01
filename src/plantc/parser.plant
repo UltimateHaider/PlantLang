@@ -699,14 +699,41 @@ ACTION parse_create_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
   REAP p4 FROM _second, vpair.
   GIVE plant_list_make(2, plant_list_make(8, "type", "create_stmt", "target", id_name, "var_type", vtype, "value", expr), p4).
 /ACTION.
-
 ACTION parse_show_stmt(tokens(LIST), pos(NUM)),
+
   REAP pair FROM consume, tokens, pos.
   REAP p2 FROM _second, pair.
   REAP vpair FROM collect_value, tokens, p2.
   CREATE expr TO vpair[0].
   REAP p3 FROM _second, vpair.
   GIVE plant_list_make(2, plant_list_make(4, "type", "show_stmt", "value", expr), p3).
+/ACTION.
+
+# v0.49.53 — VERIFY "label" condition. → emits plant_verify(label, cond).
+# The label is a string literal, the condition is any expression.
+ACTION parse_verify_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP lbl_tok FROM peek, tokens, p2.
+  REAP lbl_ty FROM tok_type, lbl_tok.
+  IF lbl_ty IS "STRING",
+    REAP lbl_lx FROM tok_lex, lbl_tok.
+    REAP lbl_lx FROM escape_string, lbl_lx.
+    REAP lbl_pair FROM consume, tokens, p2.
+    REAP p3 FROM _second, lbl_pair.
+    REAP lbl FROM _cat, '"', lbl_lx.
+    REAP lbl FROM _cat, lbl, '"'.
+  /IF.
+  REAP vp FROM collect_value, tokens, p3.
+  REAP cond FROM _first, vp.
+  REAP p4 FROM _second, vp.
+  REAP sep_tok FROM peek, tokens, p4.
+  REAP sep_ty FROM tok_type, sep_tok.
+  IF sep_ty IS "PERIOD",
+    REAP sp FROM consume, tokens, p4.
+    REAP p4 FROM _second, sp.
+  /IF.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "verify_stmt", "label", lbl, "cond", cond), p4).
 /ACTION.
 
 # v0.48.36 — NOW [FORMAT:x]. — temporal query statement. The format
@@ -2973,6 +3000,10 @@ ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), 
   /IF.
   IF lx IS "HARVEST",
     REAP r FROM parse_harvest_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "VERIFY",
+    REAP r FROM parse_verify_stmt, tokens, pos.
     GIVE r.
   /IF.
   IF lx IS "LISTEN",

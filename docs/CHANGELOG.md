@@ -1,3 +1,28 @@
+## v0.49.53 - 2026 (ANSI Color-Coded Output Subsystem)
+
+### Runtime
+- ANSI color macros: COLOR_RESET, COLOR_GREEN, COLOR_RED, COLOR_YELLOW, COLOR_BLUE, COLOR_CYAN, COLOR_BOLD
+- plant_colorize(text, color): Safe text colorizer utility using static buffer
+- plant_verify: Green/red colored VERIFY FAILED messages
+- plant_verify_end: Green "All N assertions passed." / Red failure summary
+- plant_compat.h: Exposed plant_colorize prototype
+
+### Codegen
+- verify_stmt: VERIFY "label" condition. → plant_verify("label", cond);
+- Automatic plant_verify_begin()/plant_verify_end() wrapping in action bodies
+- _from_long() wrapping for numeric boolean conditions
+
+### Parser
+- VERIFY keyword routing in parse_statement
+- parse_verify_stmt: Consumes string literal label + expression condition
+- "verify" keyword added to lexer is_keyword check
+
+### Tests
+- test_colors.plant: Color-coded VERIFY output regression test
+
+### Internal
+- Version markers moved to v0.49.53.
+
 ## v0.49.51 - 2026 (OOM Resolution & Memory Safeguards)
 
 ### Runtime

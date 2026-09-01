@@ -1,0 +1,7 @@
+# v0.49.53: color-coded VERIFY output.
+# Passing assertions produce green output; failing ones produce red.
+ACTION main(),
+  VERIFY "one equals one" 1 == 1.
+  VERIFY "two equals two" 2 == 2.
+  VERIFY "three equals three" 3 == 3.
+/GIVE main.
