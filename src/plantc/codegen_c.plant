@@ -1000,8 +1000,21 @@ ACTION _map_literal(expr(TX), nums(LIST), evars(LIST)),
 #  is_identifier — 1 when the text is a C/PlantLang identifier
 #  (letter or _ first, then letters/digits/_). Digit literals like
 #  "2" or "0x10" are NOT identifiers. Used by seg_is_numeric so
-#  identifiers that merely contain digits (eb2, n2) are never
-#  mistaken for raw numeric literals (v0.48.20-patch).
+# ═══════════════════════════════════════════════════════════════
+#  SHARED UTILITIES
+#  These functions are called by both parser.plant and codegen_c.plant.
+#  They live in the codegen module by convention (they were originally
+#  codegen helpers), but they are NOT codegen implementation details —
+#  they are the shared utility layer. In v0.49.57 these will be extracted
+#  to a dedicated utils.plant module.
+#    Identifiers: is_identifier, _step_sign, _st_expr, _st_term
+#    String ops:  trim, _first, _second, _third, str_eq, find_any
+#    List ops:    _map_get, _map_replace, plant_list_get
+#  ═══════════════════════════════════════════════════════════════
+
+# is_identifier: checks if a token text is a valid identifier
+# (v0.48.20-patch: identifiers that merely contain digits (eb2, n2)
+# are never mistaken for raw numeric literals)
 # ──────────────────────────────────────────────────────────────
 ACTION is_identifier(tok(TX)),
   CREATE i0(NUM) TO 0.
@@ -3286,13 +3299,28 @@ ACTION generate_body(bd(LIST), indent(NUM), sigs(LIST), subst(LIST), clmap(LIST)
   GIVE res.
 /ACTION.
 
-# ──────────────────────────────────────────────────────────────
+# ═══════════════════════════════════════════════════════════════
 #  generate_node — dispatch AST node by type
-#  clmap: closure-var map (flat [varname, closurenode]) for the
-#  current C function scope; "" (missing key) → empty list.
-#  actx: "" = normal body, "a" = async step phase body.
-#  nums: names of numeric scalar vars in scope (_handle_cat).
-#  rty: enclosing action's substituted return type ("" if implicit).
+#  v0.49.56c: This is the EXCLUSIVE parser-to-codegen interface.
+#  The parser (parser.plant) builds AST nodes and hands them to
+#  generate_node for C code emission — no direct codegen calls
+#  from the parser are permitted.
+#
+#  Parameters:
+#    node  — AST node (flat key-value LIST) produced by the parser
+#    env   — contextual environment bundle:
+#      indent  — current indentation level (NUM)
+#      sigs    — action signature map for call resolution (LIST)
+#      subst   — type substitution map (LIST)
+#      clmap   — closure-var map (flat [varname, closurenode])
+#      actx    — "" = normal body, "a" = async step phase body (TX)
+#      nums    — names of numeric scalar vars in scope (LIST)
+#      stvars   — state variables for async step phases (LIST)
+#      evars   — expression-local temp variables (LIST)
+#      rty     — enclosing action's substituted return type (TX)
+#      mexit   — mid-exit code for async step phases (TX)
+#      wexit   — wrap-exit code for async step phases (TX)
+#  Returns: C code string (TX) for the given node
 # ──────────────────────────────────────────────────────────────
 
 # ──────────────────────────────────────────────────────────────

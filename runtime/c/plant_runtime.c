@@ -8333,7 +8333,7 @@ void plant_verify(tx_t label, tx_t cond) {
     const char* cs = (const char*)cond;
     if (!cs || strcmp(cs, "0") == 0 || strcmp(cs, "") == 0) {
         verify_failures++;
-        fprintf(stderr, "%sVERIFY FAILED: %s%s\n", COLOR_RED, (const char*)label, COLOR_RESET);
+        plant_log(PLANT_ERROR, "VERIFY FAILED: %s", (const char*)label);
     }
 }
 
@@ -8350,7 +8350,7 @@ void plant_verify_end(void) {
         printf("%sAll %d assertions passed.%s\n", COLOR_GREEN, verify_total, COLOR_RESET);
     } else {
         char _vrb[256]; snprintf(_vrb, 256, "%d assertions failed out of %d.", verify_failures, verify_total);
-        fprintf(stderr, "%s%s%s\n", COLOR_RED, _vrb, COLOR_RESET);
+        plant_log(PLANT_ERROR, "%s", _vrb);
         plant_error("verification failed");
     }
 }

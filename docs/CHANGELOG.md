@@ -1,3 +1,23 @@
+## v0.49.56c - 2026 (Full Code Generation Decoupling)
+
+### Architecture
+- **Parser-to-codegen boundary formalized**: `generate_node(node, env)`
+  is now documented as the **exclusive** parser-to-codegen interface.
+  The parser builds AST nodes and hands them to `generate_node` for
+  C emission — no direct codegen calls from the parser are permitted.
+- **Shared utilities section added** in `codegen_c.plant`: Clearly
+  delineates the 9 shared utility functions (`is_identifier`,
+  `_step_sign`, `str_eq`, `trim`, `_map_get`, `_map_replace`,
+  `plant_list_get`, `char_at`, `find_any`) that both parser and
+  codegen call as non-codegen implementation details.
+- **`plant_compat.h` updated**: Added compiler layered architecture
+  documentation (Lexer → Parser → Codegen boundaries).
+
+### Internal
+- Version markers moved to v0.49.56c (Makefile, src/plantc/main.plant,
+  tests/native/run_native_tests.sh).
+- Verification: self-hosting converged, all compatibility tests pass.
+
 ## v0.49.56b - 2026 (Exit(1) Elimination & plant_fatal Introduction)
 
 ### Architecture

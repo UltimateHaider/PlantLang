@@ -1,9 +1,19 @@
 #ifndef PLANT_COMPAT_H
 #define PLANT_COMPAT_H
 
-/* v0.49.55: plant_compat.h exposes the runtime interface boundaries
-   that generated C code calls into. Functions are organized into
-   clearly delineated sections by subsystem.
+/* v0.49.56c: plant_compat.h exposes the runtime interface boundaries
+   that generated C code calls into, plus documentation of the
+   compiler architecture's layered boundaries.
+   ───────────────────────────────────────────────────────────────
+   Compiler Layers:
+     1. Lexer        (lexer.plant)       — tokenize(source)
+     2. Parser       (parser.plant)      — parse_program(tokens) → AST
+     3. Codegen      (codegen_c.plant)   — generate_node(node, env) → C code
+   The parser builds AST nodes and hands them to generate_node for
+   C emission. No direct codegen calls from the parser are permitted.
+   Shared utilities (is_identifier, trim, _map_get, etc.) are defined
+   in codegen_c.plant's SHARED UTILITIES section but are not codegen
+   implementation details.
    ─────────────────────────────────────────────────────────────── */
 
 /* v0.48.29: tx_t lives in plant_types.h (pulled in via
