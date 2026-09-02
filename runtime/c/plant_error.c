@@ -53,16 +53,16 @@ void plant_log(PlantLogLevel level, const char* format, ...) {
 }
 
 void plant_error(const char* msg) {
-    plant_log(PLANT_ERROR, "%s", msg);
+    fprintf(stderr, "%s%s%s\n", COLOR_RED, msg, COLOR_RESET);
     exit(1);
 }
 
 void plant_warning(const char* msg) {
-    plant_log(PLANT_WARNING, "%s", msg);
+    fprintf(stderr, "%s%s%s\n", COLOR_YELLOW, msg, COLOR_RESET);
 }
 
 void plant_info(const char* msg) {
-    plant_log(PLANT_INFO, "%s", msg);
+    fprintf(stderr, "%s%s%s\n", COLOR_BLUE, msg, COLOR_RESET);
 }
 
 void plant_debug(const char* msg) {

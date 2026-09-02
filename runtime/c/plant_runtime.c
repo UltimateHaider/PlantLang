@@ -72,7 +72,7 @@ long g_bal_bytes = 0;   /* v0.48.37: BALANCED allocation counter */
 /* Heap allocation wrapper */
 void* plant_alloc(size_t size) {
     void* ptr = malloc(size);
-    if (!ptr) { fprintf(stderr, "plant_alloc: out of memory\n"); exit(1); }
+    if (!ptr) { plant_error("plant_alloc: out of memory"); }
     g_bal_bytes += (long)size;   /* v0.48.37: BALANCED counter */
     return ptr;
 }
@@ -103,13 +103,13 @@ int64_t* plant_array_create(int64_t capacity) {
 
 int64_t plant_array_get(int64_t* arr, int64_t index) {
     int64_t cap = arr[0];
-    if (index < 0 || index >= cap) { fprintf(stderr, "plant_array_get: index %lld out of bounds (cap %lld)\n", (long long)index, (long long)cap); exit(1); }
+    if (index < 0 || index >= cap) { char _eb[256]; snprintf(_eb, 256, "plant_array_get: index %lld out of bounds (cap %lld)", (long long)index, (long long)cap); plant_error(_eb); }
     return arr[index + 1];
 }
 
 void plant_array_set(int64_t* arr, int64_t index, int64_t value) {
     int64_t cap = arr[0];
-    if (index < 0 || index >= cap) { fprintf(stderr, "plant_array_set: index %lld out of bounds (cap %lld)\n", (long long)index, (long long)cap); exit(1); }
+    if (index < 0 || index >= cap) { char _eb[256]; snprintf(_eb, 256, "plant_array_set: index %lld out of bounds (cap %lld)", (long long)index, (long long)cap); plant_error(_eb); }
     arr[index + 1] = value;
 }
 
@@ -1136,8 +1136,9 @@ void plant_throw(const char* type, const char* msg) {
     PlantWeather* w = _plant_weather_head;
     if (msg == NULL) msg = plant_storm_default_message(type);
     if (w == NULL) {
-        fprintf(stderr, "[WEATHER] unhandled storm: %s %s\n",
+        char _wb[256]; snprintf(_wb, 256, "[WEATHER] unhandled storm: %s %s",
                 type ? type : "(none)", msg ? msg : "");
+        plant_warning(_wb);
         fflush(stderr);
         abort();
     }
@@ -1787,7 +1788,7 @@ int plant_is_none(PlantTagged* t) {
 void* plant_unwrap(PlantTagged* t) {
     if (!t) return NULL;
     if ((t->kind == 0 && t->tag == 1) || (t->kind == 1 && t->tag == 2)) {
-        fprintf(stderr, "plant_unwrap: called on None/Err\n");
+        plant_warning("plant_unwrap: called on None/Err");
         return NULL;
     }
     return t->payload;
@@ -4546,7 +4547,7 @@ void plant_ffi_debug_print(tx_t msg) {
         const char* e = getenv("PLANT_FFI_DEBUG");
         on = (e && *e && strcmp(e, "0") != 0) ? 1 : 0;
     }
-    if (on) fprintf(stderr, "[ffi] %s\n", _S(msg));
+    if (on) { char _fb[256]; snprintf(_fb, 256, "[ffi] %s", _S(msg)); plant_info(_fb); }
 }
 
 /* callback registry: tag → fn; tags are plain C strings */
@@ -7080,7 +7081,8 @@ void plant_throw_obj(tx_t obj) {
         if (m && _S(m)[0] != '\0') msg = _S(m);
     }
     if (w == NULL) {
-        fprintf(stderr, "[WEATHER] unhandled storm: %s %s\n", type, msg);
+        char _wb[256]; snprintf(_wb, 256, "[WEATHER] unhandled storm: %s %s", type, msg);
+        plant_warning(_wb);
         fflush(stderr);
         abort();
     }
@@ -8331,7 +8333,8 @@ void plant_verify(tx_t label, tx_t cond) {
     const char* cs = (const char*)cond;
     if (!cs || strcmp(cs, "0") == 0 || strcmp(cs, "") == 0) {
         verify_failures++;
-        fprintf(stderr, "%sVERIFY FAILED: %s%s\n", COLOR_RED, (const char*)label, COLOR_RESET);
+        char _vb[256]; snprintf(_vb, 256, "VERIFY FAILED: %s", (const char*)label);
+        plant_warning(_vb);
     }
 }
 
@@ -8347,23 +8350,26 @@ void plant_verify_end(void) {
     if (verify_failures == 0) {
         printf("%sAll %d assertions passed.%s\n", COLOR_GREEN, verify_total, COLOR_RESET);
     } else {
-        fprintf(stderr, "%s%d assertions failed out of %d.%s\n", COLOR_RED, verify_failures, verify_total, COLOR_RESET);
+        char _vrb[256]; snprintf(_vrb, 256, "%d assertions failed out of %d.", verify_failures, verify_total);
+        plant_warning(_vrb);
         exit(1);
     }
 }
 
 void plant_suite_setup(void) {
-    fprintf(stderr, "%s[SETUP] Initializing test suite.%s\n", COLOR_BLUE, COLOR_RESET);
+    plant_info("[SETUP] Initializing test suite.");
 }
 
 void plant_suite_teardown(void) {
-    fprintf(stderr, "%s[TEARDOWN] Cleaning up test suite.%s\n", COLOR_BLUE, COLOR_RESET);
+    plant_info("[TEARDOWN] Cleaning up test suite.");
 }
 
 void plant_suite_setup_hook(tx_t expr) {
-    fprintf(stderr, "%s[SETUP] %s%s\n", COLOR_BLUE, (const char*)expr, COLOR_RESET);
+    char _shb[256]; snprintf(_shb, 256, "[SETUP] %s", (const char*)expr);
+    plant_info(_shb);
 }
 
 void plant_suite_teardown_hook(tx_t expr) {
-    fprintf(stderr, "%s[TEARDOWN] %s%s\n", COLOR_BLUE, (const char*)expr, COLOR_RESET);
+    char _thb[256]; snprintf(_thb, 256, "[TEARDOWN] %s", (const char*)expr);
+    plant_info(_thb);
 }

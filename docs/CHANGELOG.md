@@ -1,3 +1,33 @@
+## v0.49.56a - 2026 (Staged fprintf(stderr) → Unified Error Management Migration)
+
+### Error Management (Staged Migration)
+Systematic replacement of scattered `fprintf(stderr, ...)` calls in
+`plant_runtime.c` with the unified `plant_error()` / `plant_warning()` /
+`plant_info()` interface from `plant_error.c`. Migration was performed in
+staged phases with self-hosting convergence checks after each phase.
+
+- **FATAL calls** (fprintf + exit(1)): Replaced with `plant_error()` —
+  3 calls (plant_alloc OOM, array_get/array_set bounds checks)
+- **ERROR calls** (non-fatal stderr output): Replaced with `plant_warning()`
+  — 3 calls (two WEATHER storm handlers, plant_unwrap None/Err)
+- **INFO calls** (diagnostic output): Replaced with `plant_info()`
+  — 2 calls (ffi debug logging, suite setup/teardown banners)
+- **WARNING calls**: Same pattern as INFO — suite lifecycle hooks now use
+  `plant_info()` with colorized output via the shared COLOR macros
+- Remaining `fprintf(stderr,...)` calls: **0** (all migrated)
+
+### Architecture
+- All error/warning/info output now flows through the unified interface
+  in `plant_error.c` with centralized ANSI color coding
+- `plant_runtime.c` no longer contains inline `fprintf(stderr,...)` calls
+- `plant_compat.h` COLOR macros are the single source of color definitions
+
+### Verification
+- Self-hosting converged at 494284 bytes after each migration phase
+- All 6 compatibility tests pass (test_colors, test_suite_lifecycle,
+  test_error_compat, test_report_json_compat, test_report_html_compat,
+  test_report_xml_compat)
+
 ## v0.49.56 - 2026 (Layered Architecture Refinement & Static Analysis Integration)
 
 ### Architecture
