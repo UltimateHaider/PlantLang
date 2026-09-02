@@ -999,6 +999,7 @@ extern char* plant_colorize(const char* text, const char* color);
 extern PlantLogLevel plant_log_level;
 void plant_log(PlantLogLevel level, const char* format, ...);
 void plant_error(const char* msg);   /* logs + exit(1) */
+void plant_fatal(const char* msg);   /* v0.49.56b: critical failure — logs red + exit(1) */
 void plant_warning(const char* msg);
 void plant_info(const char* msg);
 void plant_debug(const char* msg);

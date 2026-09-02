@@ -7829,7 +7829,7 @@ static void plant_rw_worker_loop(void) {
     /* handshake: this worker is up and its registry is populated */
     plant_rw_send_simple(PLANT_RW_READY);
     char* buf = malloc(PLANT_RW_BUFSZ);
-    if (!buf) _exit(1);
+    if (!buf) plant_fatal("plant_rw_worker_loop: malloc failed for buf");
     for (;;) {
         struct iovec iov = { buf, PLANT_RW_BUFSZ };
         char cmsg_b[CMSG_SPACE(sizeof(int) * PLANT_RW_MAXFD)];
@@ -7885,7 +7885,7 @@ static void plant_rw_worker_loop(void) {
         int rfds[PLANT_RW_MAXFD];
         long rnfd = 0;
         char* rbuf = malloc(PLANT_RW_BUFSZ);
-        if (!rbuf) { _exit(1); }
+        if (!rbuf) { plant_fatal("plant_rw_worker_loop: malloc failed for rbuf"); }
         long rsz = plant_rw_encode(rbuf + sizeof(plant_rw_hdr), res, 0,
                                    rfds, &rnfd, g_safe_channel_threshold);
         plant_rw_hdr rh;
@@ -8333,8 +8333,7 @@ void plant_verify(tx_t label, tx_t cond) {
     const char* cs = (const char*)cond;
     if (!cs || strcmp(cs, "0") == 0 || strcmp(cs, "") == 0) {
         verify_failures++;
-        char _vb[256]; snprintf(_vb, 256, "VERIFY FAILED: %s", (const char*)label);
-        plant_warning(_vb);
+        fprintf(stderr, "%sVERIFY FAILED: %s%s\n", COLOR_RED, (const char*)label, COLOR_RESET);
     }
 }
 
@@ -8351,8 +8350,8 @@ void plant_verify_end(void) {
         printf("%sAll %d assertions passed.%s\n", COLOR_GREEN, verify_total, COLOR_RESET);
     } else {
         char _vrb[256]; snprintf(_vrb, 256, "%d assertions failed out of %d.", verify_failures, verify_total);
-        plant_warning(_vrb);
-        exit(1);
+        fprintf(stderr, "%s%s%s\n", COLOR_RED, _vrb, COLOR_RESET);
+        plant_error("verification failed");
     }
 }
 

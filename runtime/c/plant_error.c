@@ -1,14 +1,19 @@
 /*
- * plant_error.c — v0.49.56: Unified Error Management & Logging
+ * plant_error.c — v0.49.56 / v0.49.56b: Unified Error Management & Logging
  *
  * Centralized logging and error-handling utility with severity levels.
  * This module is intentionally lightweight: it wraps fprintf to stderr
  * with color-coded severity prefixes and provides a variadic printf-
  * style interface for structured error reporting.
  *
- * Existing error handling in plant_runtime.c (inline fprintf+exit)
- * is preserved unchanged — this module provides the *new* layered
- * interface for code that opts in.
+ * plant_error():  logs a message in red, then exits (1)
+ * plant_fatal():  same visual as plant_error — reserved for critical
+ *                 system-level failures (malloc failures, corrupted
+ *                 state) where the semantic distinction matters to
+ *                 callers and static analysis tooling.
+ * plant_warning(): logs a message in yellow (non-fatal)
+ * plant_info():    logs a message in blue (diagnostic)
+ * plant_log():     general-purpose severity-filtered logger
  */
 
 #include "plant_compat.h"
@@ -53,6 +58,11 @@ void plant_log(PlantLogLevel level, const char* format, ...) {
 }
 
 void plant_error(const char* msg) {
+    fprintf(stderr, "%s%s%s\n", COLOR_RED, msg, COLOR_RESET);
+    exit(1);
+}
+
+void plant_fatal(const char* msg) {
     fprintf(stderr, "%s%s%s\n", COLOR_RED, msg, COLOR_RESET);
     exit(1);
 }

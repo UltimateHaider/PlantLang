@@ -1,3 +1,24 @@
+## v0.49.56b - 2026 (Exit(1) Elimination & plant_fatal Introduction)
+
+### Architecture
+- **`plant_fatal()` introduced**: New critical error handler in
+  `plant_error.c` that logs a red-colored message and calls `exit(1)`.
+  Semantically distinguishes critical system-level failures (malloc
+  failures, corrupted state) from general errors handled by `plant_error()`.
+- **All direct `exit(1)` and `_exit(1)` calls eliminated from
+  `plant_runtime.c`**: 3 calls migrated:
+  - 2x `_exit(1)` in `plant_rw_worker_loop` (malloc failures for buf/rbuf) →
+    `plant_fatal("...: malloc failed for ...")`
+  - 1x `exit(1)` in `plant_verify_end` (assertion failures) →
+    `plant_error("verification failed")`
+- **`plant_compat.h` updated**: Added `plant_fatal` prototype and updated
+  documentation comments for all error management functions.
+
+### Internal
+- Version markers moved to v0.49.56b (Makefile, src/plantc/main.plant,
+  tests/native/run_native_tests.sh).
+- Verification: self-hosting converged, all compatibility tests pass.
+
 ## v0.49.56a - 2026 (Staged fprintf(stderr) → Unified Error Management Migration)
 
 ### Error Management (Staged Migration)
