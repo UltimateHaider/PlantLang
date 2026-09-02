@@ -1,3 +1,16 @@
+## v0.49.57a - 2026 (Codegen Environment Documentation)
+
+### Architecture
+- **Codegen environment interface documented**: `plant_compat.h` now includes
+  forward-declaration documentation for the planned `generate_node(node, env)`
+  interface, including `env_make()` and `env_*()` accessor helpers that bundle
+  the 11 auxiliary state parameters (indent, sigs, subst, clmap, actx, nums,
+  stvars, evars, rty, mexit, wexit) into a single aggregated environment.
+- Full runtime refactoring of `codegen_c.plant` to use the env-based signature
+  is deferred due to self-hosting memory constraints — `env_make()` allocates
+  11-element lists on every recursive call, causing OOM during bootstrap
+  compilation. The C-level inline documentation serves as the migration path.
+
 ## v0.49.57 - 2026 (Layered Architecture Integration & Stability Subsystem)
 
 ### Architecture

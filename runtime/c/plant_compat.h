@@ -1016,8 +1016,34 @@ void plant_debug(const char* msg);
 void plant_set_log_level(PlantLogLevel level);
 
 /* ═══════════════════════════════════════════════════════════════
-   v0.49.56 — Reporting Subsystem
-   Test results collection + format exporters (JSON / XML / HTML).
+   v0.49.57a — Codegen Environment Aggregation
+   Planned interface: generate_node(node, env) replaces the 14-parameter
+   generate_node(node, indent, sigs, subst, clmap, actx, nums, stvars,
+   evars, rty, mexit, wexit) signature.
+
+   The env_make()/env_*() helpers below document the target interface.
+   Runtime behavior is unchanged — this is a forward-compatibility layer
+   so generated C code can call env_make() to bundle the 11 auxiliary
+   state variables into a single PlantArray, and env_* accessors retrieve
+   individual fields via plant_list_get.
+
+   Migration target (not yet applied to codegen_c.plant due to self-hosting
+   memory constraints — env_make allocates 11-element lists on every recursive
+   call, causing OOM in the bootstrap compiler):
+
+   env_make(indent, sigs, subst, clmap, actx, nums, stvars,
+            evars, rty, mexit, wexit) → PlantArray*
+   env_indent(env)   → NUM
+   env_sigs(env)     → LIST
+   env_subst(env)    → LIST
+   env_clmap(env)    → LIST
+   env_actx(env)     → TX
+   env_nums(env)     → LIST
+   env_stvars(env)   → LIST
+   env_evars(env)    → LIST
+   env_rty(env)      → TX
+   env_mexit(env)    → TX
+   env_wexit(env)    → TX
    ═══════════════════════════════════════════════════════════════ */
 
 typedef struct PlantReport PlantReport;
