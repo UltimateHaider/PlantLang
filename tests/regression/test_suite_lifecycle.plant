@@ -1,0 +1,10 @@
+# v0.49.54: SUITE lifecycle hooks (SETUP/TEARDOWN).
+# VERIFY assertions inside a SUITE produce green output; SETUP and
+# TEARDOWN execute in declared order with blue banners.
+ACTION main(),
+  SUITE "lifecycle",
+    SETUP "init".
+    VERIFY "assert true" 1 == 1.
+    TEARDOWN "cleanup".
+  /SUITE .
+/GIVE main.

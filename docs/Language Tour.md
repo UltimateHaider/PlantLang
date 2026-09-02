@@ -475,6 +475,34 @@ CYCLE i FROM 5 TO 1 STEP -2,  # 5 3 1 (descending)
   iteration (the index increment still runs).
 - Loops must be inside an `ACTION` body.
 
+### SUITE / Lifecycle Hooks (v0.49.54)
+
+`SUITE` groups assertions into a named test block with explicit SETUP and
+TEARDOWN phases. Inside a SUITE, `VERIFY` assertions are automatically
+wrapped with verify-begin and verify-end markers. SETUP and TEARDOWN run
+once at entry and exit respectively, emitting blue-colored status banners.
+
+```
+ACTION main(),
+  SUITE "login_tests",
+    SETUP "connect_db".
+    VERIFY "user can log in" 1 == 1.
+    VERIFY "session token is valid" token IS "valid".
+    TEARDOWN "close_db".
+  /SUITE .
+/GIVE main.
+```
+
+- `SETUP expr.` — runs `expr` once at suite entry; emits
+  `plant_suite_setup_hook(expr)`.
+- `TEARDOWN expr.` — runs `expr` once at suite exit; emits
+  `plant_suite_teardown_hook(expr)`.
+- Suites without SETUP/TEARDOWN omit the corresponding hook calls.
+- The `plant_verify_begin()` / `plant_verify_end()` calls are emitted
+  automatically only when the suite body contains at least one VERIFY.
+- Runtime output: blue `[SETUP]` / `[TEARDOWN]` banners on stderr;
+  green/red VERIFY output as with standalone assertions.
+
 ### Lists
 
 **List literals (v0.49.4):** `[e1, e2, ...]` declares and initializes a

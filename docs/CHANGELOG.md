@@ -1,3 +1,46 @@
+## v0.49.54 - 2026 (SUITE Lifecycle Hooks: SETUP/TEARDOWN/SUITE)
+
+### Language
+- **SUITE lifecycle hooks**: `SUITE "name", SETUP expr. ... TEARDOWN expr. ... /SUITE .`
+  introduces a named test-suite block with explicit setup and teardown phases.
+  - `SETUP "label"` emits `plant_suite_setup_hook("label")` — runs once at suite entry.
+  - `TEARDOWN "label"` emits `plant_suite_teardown_hook("label")` — runs once at suite exit.
+  - `VERIFY` assertions inside a SUITE are automatically wrapped with
+    `plant_verify_begin()`/`plant_verify_end()`.
+  - Suites without SETUP emit no setup call; suites without TEARDOWN emit no teardown call.
+  - Suites with no VERIFY assertions emit neither begin nor end markers.
+
+### Runtime
+- `plant_suite_setup()`: Blue banner "Initializing test suite."
+- `plant_suite_teardown()`: Blue banner "Cleaning up test suite."
+- `plant_suite_setup_hook(tx_t)`: Blue banner with hook expression
+- `plant_suite_teardown_hook(tx_t)`: Blue banner with hook expression
+- All four declared in `plant_compat.h`
+
+### Parser
+- SUITE keyword added to lexer (`is_keyword`/`keyword_to_type`)
+- `parse_suite_stmt`: Parses optional suite name, body loop with SETUP/TEARDOWN/statement
+  handling, `/SUITE .` terminator; returns `[suite_node, end_pos]` pair
+- `parse_setup_stmt` and `parse_teardown_stmt`: Parse expression value, return node pairs
+
+### Codegen
+- `suite_stmt` codegen: Scans body for setup_stmt (sets `has_st`) and verify_stmt
+  (sets `has_verify`); conditionally wraps body with setup/teardown/verify_begin/end calls
+- `setup_stmt` codegen: `plant_suite_setup_hook(expr)`
+- `teardown_stmt` codegen: `plant_suite_teardown_hook(expr)`
+- `action_decl`: Conditional `plant_verify_begin/end` wrapping based on `has_verify`
+  scan of body nodes (not always-on)
+
+### Tests
+- `test_suite_lifecycle.plant` + `.expected`: SUITE with SETUP/TEARDOWN/VERIFY producing
+  blue banners and green assertion summary
+
+### Internal
+- Version markers moved to v0.49.54 (Makefile, src/plantc/main.plant banner,
+  tests/native/run_native_tests.sh).
+- Verification: regression 186→187 passing, native 20/20, generics 7/7,
+  closures 6/6, `make self` converged (494199 bytes).
+
 ## v0.49.53 - 2026 (ANSI Color-Coded Output Subsystem)
 
 ### Runtime

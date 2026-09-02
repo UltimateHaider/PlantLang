@@ -28,10 +28,10 @@ ACTION is_keyword(wrd(TX)),
   IF wrd IS "CALM", GIVE TRUE. /IF.
   IF wrd IS "AND", GIVE TRUE. /IF.
   IF wrd IS "OR", GIVE TRUE. /IF.
-  IF wrd IS "suite", GIVE TRUE. /IF.
-  IF wrd IS "suite", GIVE TRUE. /IF.
-  IF wrd IS "verify", GIVE TRUE. /IF.
-  IF wrd IS "suite", GIVE TRUE. /IF.
+  IF wrd IS "SUITE", GIVE TRUE. /IF.
+  IF wrd IS "VERIFY", GIVE TRUE. /IF.
+  IF wrd IS "SETUP", GIVE TRUE. /IF.
+  IF wrd IS "TEARDOWN", GIVE TRUE. /IF.
   IF wrd IS "NOT", GIVE TRUE. /IF.
   IF wrd IS "IS", GIVE TRUE. /IF.
   IF wrd IS "TRUE", GIVE TRUE. /IF.
@@ -237,6 +237,11 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "INTO", GIVE "INTO". /IF.
   IF wrd IS "WAIT", GIVE "WAIT". /IF.
   IF wrd IS "LOCK", GIVE "LOCK". /IF.
+  # v0.49.52/v0.49.54 — SUITE lifecycle hooks and VERIFY assertion
+  IF wrd IS "SUITE", GIVE "SUITE". /IF.
+  IF wrd IS "VERIFY", GIVE "VERIFY". /IF.
+  IF wrd IS "SETUP", GIVE "SETUP". /IF.
+  IF wrd IS "TEARDOWN", GIVE "TEARDOWN". /IF.
   GIVE "IDENT".
 /ACTION.
 

@@ -733,7 +733,101 @@ ACTION parse_verify_stmt(tokens(LIST), pos(NUM)),
     REAP sp FROM consume, tokens, p4.
     REAP p4 FROM _second, sp.
   /IF.
-  GIVE plant_list_make(2, plant_list_make(6, "type", "verify_stmt", "label", lbl, "cond", cond), p4).
+  GIVE plant_list_make(2, plant_list_make(8, "type", "verify_stmt", "label", lbl, "cond", cond, "end_pos", _from_long(p4)), p4).
+/ACTION.
+
+# v0.49.54 — SETUP statement (suite lifecycle hook).
+ACTION parse_setup_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP vp FROM collect_value, tokens, p2.
+  REAP val FROM _first, vp.
+  REAP p3 FROM _second, vp.
+  REAP sep_tok FROM peek, tokens, p3.
+  REAP sep_ty FROM tok_type, sep_tok.
+  IF sep_ty IS "PERIOD",
+    REAP sp FROM consume, tokens, p3.
+    REAP p3 FROM _second, sp.
+  /IF.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "setup_stmt", "value", val, "end_pos", _from_long(p3)), p3).
+/ACTION.
+
+# v0.49.54 — TEARDOWN statement (suite lifecycle hook).
+ACTION parse_teardown_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP vp FROM collect_value, tokens, p2.
+  REAP val FROM _first, vp.
+  REAP p3 FROM _second, vp.
+  REAP sep_tok FROM peek, tokens, p3.
+  REAP sep_ty FROM tok_type, sep_tok.
+  IF sep_ty IS "PERIOD",
+    REAP sp FROM consume, tokens, p3.
+    REAP p3 FROM _second, sp.
+  /IF.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "teardown_stmt", "value", val, "end_pos", _from_long(p3)), p3).
+/ACTION.
+
+# v0.49.54 — SUITE "name", SETUP ... TEARDOWN ... statements /SUITE .
+ACTION parse_suite_stmt(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), bstart(NUM), emode(TX)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  CREATE sname(TX) TO "".
+  CREATE body(LIST) TO plant_list_make(0).
+  # v0.49.54: Optional suite name: SUITE "name", ... /SUITE .
+  REAP ntok FROM peek, tokens, p2.
+  REAP nty FROM tok_type, ntok.
+  IF nty IS "STRING",
+    REAP nl FROM tok_lex, ntok.
+    REAP nl FROM escape_string, nl.
+    REAP ncons FROM consume, tokens, p2.
+    REAP p2 FROM _second, ncons.
+    SET sname TO nl.
+    REAP ctok FROM peek, tokens, p2.
+    REAP clx FROM tok_lex, ctok.
+    IF clx IS ",",
+      REAP ccons FROM consume, tokens, p2.
+      REAP p2 FROM _second, ccons.
+    /IF.
+  /IF.
+  SEASON TRUE,
+    REAP is_eof_flag FROM is_eof, tokens, p2.
+    IF is_eof_flag,
+      GIVE plant_list_make(6, "type", "syntax_error", "msg", "unterminated SUITE", "pos", _from_long(p2)).
+    /IF.
+    REAP tok FROM peek, tokens, p2.
+    REAP lx FROM tok_lex, tok.
+    REAP tt FROM tok_type, tok.
+    IF lx IS "/",
+      REAP slash FROM consume, tokens, p2.
+      REAP p3 FROM _second, slash.
+      REAP kw FROM consume, tokens, p3.
+      REAP p4 FROM _second, kw.
+      REAP dot FROM consume, tokens, p4.
+      REAP p5 FROM _second, dot.
+      GIVE plant_list_make(2, plant_list_make(6, "type", "suite_stmt", "name", sname, "body", body), _from_long(p5)).
+    /IF.
+    IF tt IS "SETUP",
+      REAP sb_pair FROM parse_setup_stmt, tokens, p2.
+      REAP sb_node FROM _first, sb_pair.
+      PUT sb_node INTO body.
+      REAP p2 FROM _second, sb_pair.
+      CONTINUE 0.
+    /IF.
+    IF tt IS "TEARDOWN",
+      REAP td_pair FROM parse_teardown_stmt, tokens, p2.
+      REAP td_node FROM _first, td_pair.
+      PUT td_node INTO body.
+      REAP p2 FROM _second, td_pair.
+      CONTINUE 0.
+    /IF.
+    REAP stmt_pair FROM parse_statement, tokens, p2, clv, ctab, rtab, bstart, emode.
+    REAP stmt FROM _first, stmt_pair.
+    IF stmt > "",
+      PUT stmt INTO body.
+    /IF.
+    REAP p2 FROM _second, stmt_pair.
+  /SEASON.
 /ACTION.
 
 # v0.48.36 — NOW [FORMAT:x]. — temporal query statement. The format
@@ -3008,6 +3102,19 @@ ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), 
   /IF.
   IF lx IS "LISTEN",
     REAP r FROM parse_listen_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  # v0.49.54 — SUITE ... SETUP/TEARDOWN ... /SUITE
+  IF lx IS "SUITE",
+    REAP r FROM parse_suite_stmt, tokens, pos, clv, ctab, rtab, bstart, emode.
+    GIVE r.
+  /IF.
+  IF lx IS "SETUP",
+    REAP r FROM parse_setup_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "TEARDOWN",
+    REAP r FROM parse_teardown_stmt, tokens, pos.
     GIVE r.
   /IF.
   # bare call: IDENT( or module:IDENT( → call_stmt (void FFI calls)

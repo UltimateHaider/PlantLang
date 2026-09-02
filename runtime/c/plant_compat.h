@@ -954,4 +954,8 @@ tx_t plant_net_ws_accept(tx_t listener);
 extern void plant_verify(tx_t label, tx_t cond);
 extern void plant_verify_begin(void);
 extern void plant_verify_end(void);
+extern void plant_suite_setup(void);
+extern void plant_suite_teardown(void);
+extern void plant_suite_setup_hook(tx_t expr);
+extern void plant_suite_teardown_hook(tx_t expr);
 extern char* plant_colorize(const char* text, const char* color);

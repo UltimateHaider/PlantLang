@@ -114,7 +114,8 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `ANALYZE x.` / `NOW FORMAT:*` / `TYPEOF x.` | S | **S** | v0.48.36 (structural runtime classifier `_plant_val_kind`, uniform `{type = …, size = …, keys = […]}` report, `bad-format:<NAME>` fallback, implicit null for undeclared targets) |
 | `FREE` / `ARC LINK|UNLINK` / `FAST RESET.` | S | **S** | v0.48.37a (slab-aware `plant_mem_free` with NULL-back write, ARC edge statements over `plant_arc_link`/`plant_arc_unlink`, mid-scope bump release; `FREE` of a literal is a user error as in C) |
 | PERSISTENT GC/lease tuning | S | **S** | v0.48.37b (`PERSIST_GC_INTERVAL` dynamic scheduling, `lease_evict()` pressure-driven reclamation with `PERSIST_PRESSURE`/`PERSIST_LEASE_MS`, deferred-free queue, `plant_persist_status` MAP with `live_objects`/`gc_runs`/`leased_count`/`pending_frees`) |
-| `VERIFY "label", assertion.` / `SUITE … SUITE/.` / `STORMS`/`GIVES` | S | M | replaced by test-script harnesses |
+| `VERIFY "label", assertion.` | S | **S** | v0.49.53 (`plant_verify` with ANSI color output, automatic `plant_verify_begin`/`end` wrapping in action bodies; v0.49.54 adds SUITE lifecycle) |
+| `SUITE … SUITE/.` / `SETUP`/`TEARDOWN` | S | **S** | v0.49.54 (`SUITE "name"` with `SETUP expr.` / `TEARDOWN expr.` lifecycle hooks; blue-colored banners, automatic verify wrapping) |
 | `SHOW_VERIFY_SUMMARY` | S | M | |
 | `AWAIT` / `START` / `ASYNC IN` / `CANCEL` / `TRACE` | M (legacy had none) | **S** | new async engine, v0.48.3+ |
 | `MISSION CONFIG KEY = VALUE.` | M | **S** | new |
@@ -261,7 +262,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 3. **No exception machinery.** WEATHER/SHELTER and storms are the biggest *semantic* loss: compiled C has no unwinding; the compiler instead returns errno/`ffi_last_error` strings. Implementing storms would require setjmp/longjmp or explicit propagation — a major roadmap item.
 4. **Node dependency removal.** HTTP (client+server), VEIN FS, worker threads, locale formatting, ANSI diagnostics all died with Node. The C runtime retains v0.41-era POSIX sockets (`plant_net_harvest`, `plant_net_listen_*`) that predate the gap and are **unreachable from the language** — re-wiring them is cheap compared to writing them.
 5. **Scope model.** PULSE watchers, LOCK/EVAPORATE, ROOT globals and `SELF` bindings need runtime scope objects; compiled scopes are static, so these features would need runtime scope tables.
-6. **Test philosophy.** VERIFY/SUITE moved out of the language into shell harnesses (`.expected` diffs), which is why the statements were not ported.
+6. **Test philosophy.** VERIFY/SUITE were reintroduced as language features: VERIFY (v0.49.53, ANSI color output) and SUITE/SETUP/TEARDOWN (v0.49.54, lifecycle hooks). They coexist with shell harnesses for additional test patterns.
 7. **Legacy dead-ends.** Several "legacy" features were already stubs or regex-only in v0.45 (INFUSE/ABSORB/SEAL/EMPTY parse throws, CONVERT/FLOW/MATCH-YIELD/PICK regex-only, missing `require`d modules in the regex path). These are counted as unsupported but were not first-class even at v0.45.
 
 ---
@@ -283,7 +284,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `WEATHER … SHELTER` | errno checks: `REAP e FROM ffi_last_error, ….` + `IF` |
 | `HARVEST "url" …` | `HARVEST url AS resp [METHOD m] [BODY b] [HEADERS h] [TIMEOUT t] [MAP|JSON].` (v0.48.32/34, formalized v0.49.0, JSON v0.49.3) |
 | `WAIT n.` | `WAIT n.` statement (v0.48.37e) / `CALL ffi_sleep(n).` (test FFI) / `plant_msleep` external |
-| `VERIFY`/`SUITE` | regression harness `.plant` + `.expected` files |
+| `VERIFY`/`SUITE` | `VERIFY` statements (v0.49.53); `SUITE` blocks with `SETUP`/`TEADOWN` lifecycle hooks (v0.49.54) — both emit native runtime calls; regression harness `.plant` + `.expected` files for additional coverage |
 | `IMPORT "std/io".` | direct `plant_print`/SHOW; externals for the rest |
 | `MISSION : SAFE.` | `ACTION x() WITH MISSION SAFE,` or `MISSION CONFIG` keys |
 

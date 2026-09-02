@@ -28,10 +28,10 @@ ACTION is_keyword(wrd(TX)),
   IF wrd IS "CALM", GIVE TRUE. /IF.
   IF wrd IS "AND", GIVE TRUE. /IF.
   IF wrd IS "OR", GIVE TRUE. /IF.
-  IF wrd IS "suite", GIVE TRUE. /IF.
-  IF wrd IS "suite", GIVE TRUE. /IF.
-  IF wrd IS "verify", GIVE TRUE. /IF.
-  IF wrd IS "suite", GIVE TRUE. /IF.
+  IF wrd IS "SUITE", GIVE TRUE. /IF.
+  IF wrd IS "VERIFY", GIVE TRUE. /IF.
+  IF wrd IS "SETUP", GIVE TRUE. /IF.
+  IF wrd IS "TEARDOWN", GIVE TRUE. /IF.
   IF wrd IS "NOT", GIVE TRUE. /IF.
   IF wrd IS "IS", GIVE TRUE. /IF.
   IF wrd IS "TRUE", GIVE TRUE. /IF.
@@ -237,6 +237,11 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "INTO", GIVE "INTO". /IF.
   IF wrd IS "WAIT", GIVE "WAIT". /IF.
   IF wrd IS "LOCK", GIVE "LOCK". /IF.
+  # v0.49.52/v0.49.54 — SUITE lifecycle hooks and VERIFY assertion
+  IF wrd IS "SUITE", GIVE "SUITE". /IF.
+  IF wrd IS "VERIFY", GIVE "VERIFY". /IF.
+  IF wrd IS "SETUP", GIVE "SETUP". /IF.
+  IF wrd IS "TEARDOWN", GIVE "TEARDOWN". /IF.
   GIVE "IDENT".
 /ACTION.
 
@@ -1317,7 +1322,101 @@ ACTION parse_verify_stmt(tokens(LIST), pos(NUM)),
     REAP sp FROM consume, tokens, p4.
     REAP p4 FROM _second, sp.
   /IF.
-  GIVE plant_list_make(2, plant_list_make(6, "type", "verify_stmt", "label", lbl, "cond", cond), p4).
+  GIVE plant_list_make(2, plant_list_make(8, "type", "verify_stmt", "label", lbl, "cond", cond, "end_pos", _from_long(p4)), p4).
+/ACTION.
+
+# v0.49.54 — SETUP statement (suite lifecycle hook).
+ACTION parse_setup_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP vp FROM collect_value, tokens, p2.
+  REAP val FROM _first, vp.
+  REAP p3 FROM _second, vp.
+  REAP sep_tok FROM peek, tokens, p3.
+  REAP sep_ty FROM tok_type, sep_tok.
+  IF sep_ty IS "PERIOD",
+    REAP sp FROM consume, tokens, p3.
+    REAP p3 FROM _second, sp.
+  /IF.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "setup_stmt", "value", val, "end_pos", _from_long(p3)), p3).
+/ACTION.
+
+# v0.49.54 — TEARDOWN statement (suite lifecycle hook).
+ACTION parse_teardown_stmt(tokens(LIST), pos(NUM)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP vp FROM collect_value, tokens, p2.
+  REAP val FROM _first, vp.
+  REAP p3 FROM _second, vp.
+  REAP sep_tok FROM peek, tokens, p3.
+  REAP sep_ty FROM tok_type, sep_tok.
+  IF sep_ty IS "PERIOD",
+    REAP sp FROM consume, tokens, p3.
+    REAP p3 FROM _second, sp.
+  /IF.
+  GIVE plant_list_make(2, plant_list_make(6, "type", "teardown_stmt", "value", val, "end_pos", _from_long(p3)), p3).
+/ACTION.
+
+# v0.49.54 — SUITE "name", SETUP ... TEARDOWN ... statements /SUITE .
+ACTION parse_suite_stmt(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), bstart(NUM), emode(TX)),
+  REAP pair FROM consume, tokens, pos.
+  REAP p2 FROM _second, pair.
+  CREATE sname(TX) TO "".
+  CREATE body(LIST) TO plant_list_make(0).
+  # v0.49.54: Optional suite name: SUITE "name", ... /SUITE .
+  REAP ntok FROM peek, tokens, p2.
+  REAP nty FROM tok_type, ntok.
+  IF nty IS "STRING",
+    REAP nl FROM tok_lex, ntok.
+    REAP nl FROM escape_string, nl.
+    REAP ncons FROM consume, tokens, p2.
+    REAP p2 FROM _second, ncons.
+    SET sname TO nl.
+    REAP ctok FROM peek, tokens, p2.
+    REAP clx FROM tok_lex, ctok.
+    IF clx IS ",",
+      REAP ccons FROM consume, tokens, p2.
+      REAP p2 FROM _second, ccons.
+    /IF.
+  /IF.
+  SEASON TRUE,
+    REAP is_eof_flag FROM is_eof, tokens, p2.
+    IF is_eof_flag,
+      GIVE plant_list_make(6, "type", "syntax_error", "msg", "unterminated SUITE", "pos", _from_long(p2)).
+    /IF.
+    REAP tok FROM peek, tokens, p2.
+    REAP lx FROM tok_lex, tok.
+    REAP tt FROM tok_type, tok.
+    IF lx IS "/",
+      REAP slash FROM consume, tokens, p2.
+      REAP p3 FROM _second, slash.
+      REAP kw FROM consume, tokens, p3.
+      REAP p4 FROM _second, kw.
+      REAP dot FROM consume, tokens, p4.
+      REAP p5 FROM _second, dot.
+      GIVE plant_list_make(2, plant_list_make(6, "type", "suite_stmt", "name", sname, "body", body), _from_long(p5)).
+    /IF.
+    IF tt IS "SETUP",
+      REAP sb_pair FROM parse_setup_stmt, tokens, p2.
+      REAP sb_node FROM _first, sb_pair.
+      PUT sb_node INTO body.
+      REAP p2 FROM _second, sb_pair.
+      CONTINUE 0.
+    /IF.
+    IF tt IS "TEARDOWN",
+      REAP td_pair FROM parse_teardown_stmt, tokens, p2.
+      REAP td_node FROM _first, td_pair.
+      PUT td_node INTO body.
+      REAP p2 FROM _second, td_pair.
+      CONTINUE 0.
+    /IF.
+    REAP stmt_pair FROM parse_statement, tokens, p2, clv, ctab, rtab, bstart, emode.
+    REAP stmt FROM _first, stmt_pair.
+    IF stmt > "",
+      PUT stmt INTO body.
+    /IF.
+    REAP p2 FROM _second, stmt_pair.
+  /SEASON.
 /ACTION.
 
 # v0.48.36 — NOW [FORMAT:x]. — temporal query statement. The format
@@ -3592,6 +3691,19 @@ ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), 
   /IF.
   IF lx IS "LISTEN",
     REAP r FROM parse_listen_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  # v0.49.54 — SUITE ... SETUP/TEARDOWN ... /SUITE
+  IF lx IS "SUITE",
+    REAP r FROM parse_suite_stmt, tokens, pos, clv, ctab, rtab, bstart, emode.
+    GIVE r.
+  /IF.
+  IF lx IS "SETUP",
+    REAP r FROM parse_setup_stmt, tokens, pos.
+    GIVE r.
+  /IF.
+  IF lx IS "TEARDOWN",
+    REAP r FROM parse_teardown_stmt, tokens, pos.
     GIVE r.
   /IF.
   # bare call: IDENT( or module:IDENT( → call_stmt (void FFI calls)
@@ -8269,6 +8381,77 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP isel FROM indent_str, indent.
         GIVE isel + "  plant_verify(" + lbl + ", " + ccond + ");\n".
     /IF.
+
+    # -- suite_stmt: SUITE "name", body /SUITE . --
+    # v0.49.54: wraps body with plant_suite_setup/teardown calls.
+    IF ntype IS "suite_stmt",
+        REAP body_nodes FROM _map_get, node, "body".
+        CREATE body_code(TX) TO "".
+        CREATE bi(NUM) TO 0.
+        SEASON bi < COUNT body_nodes,
+            REAP bnode FROM plant_list_get, body_nodes, bi.
+            REAP bnode_code FROM generate_node, bnode, indent, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
+            SET body_code TO body_code + bnode_code.
+            SET bi TO bi + 1.
+        /SEASON.
+        REAP isel FROM indent_str, indent.
+        CREATE has_st(TX) TO "0".
+        CREATE bdi(NUM) TO 0.
+        SEASON bdi < COUNT body_nodes,
+            REAP bsn FROM _map_get, plant_list_get(body_nodes, bdi), "type".
+            IF bsn IS "setup_stmt", SET has_st TO "1". /IF.
+            SET bdi TO bdi + 1.
+        /SEASON.
+        CREATE has_verify(TX) TO "0".
+        CREATE vdi(NUM) TO 0.
+        SEASON vdi < COUNT body_nodes,
+            REAP vsn FROM _map_get, plant_list_get(body_nodes, vdi), "type".
+            IF vsn IS "verify_stmt", SET has_verify TO "1". /IF.
+            SET vdi TO vdi + 1.
+        /SEASON.
+        IF has_st IS "1",
+            IF has_verify IS "1",
+                GIVE isel + "  plant_suite_setup();\n" + "  plant_verify_begin();\n" + body_code + "  plant_verify_end();\n" + "  plant_suite_teardown();\n".
+            /IF.
+            IF has_verify IS "0",
+                GIVE isel + "  plant_suite_setup();\n" + body_code + "  plant_suite_teardown();\n".
+            /IF.
+        /IF.
+        IF has_st IS "0",
+            IF has_verify IS "1",
+                GIVE isel + "  plant_verify_begin();\n" + body_code + "  plant_verify_end();\n".
+            /IF.
+            IF has_verify IS "0",
+                GIVE body_code.
+            /IF.
+        /IF.
+    /IF.
+
+    # -- setup_stmt: SETUP expr. --> plant_suite_setup_hook(expr);
+    IF ntype IS "setup_stmt",
+        REAP val FROM _map_get, node, "value".
+        REAP cval FROM translate_expr, val, nums, evars.
+        REAP cval FROM _handle_cat, cval, nums, evars.
+        REAP isn FROM expr_is_numeric, cval, nums.
+        IF isn IS 1,
+            SET cval TO "_from_long(" + cval + ")".
+        /IF.
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  plant_suite_setup_hook(" + cval + ");\n".
+    /IF.
+
+    # -- teardown_stmt: TEARDOWN expr. --> plant_suite_teardown_hook(expr);
+    IF ntype IS "teardown_stmt",
+        REAP val FROM _map_get, node, "value".
+        REAP cval FROM translate_expr, val, nums, evars.
+        REAP cval FROM _handle_cat, cval, nums, evars.
+        REAP isn FROM expr_is_numeric, cval, nums.
+        IF isn IS 1,
+            SET cval TO "_from_long(" + cval + ")".
+        /IF.
+        REAP isel FROM indent_str, indent.
+        GIVE isel + "  plant_suite_teardown_hook(" + cval + ");\n".
+    /IF.
     
     # ── create_stmt: CREATE var(TYPE) TO val. → long/TX var = val; ─
     #    In async step phases the variable lives in the state struct,
@@ -9738,8 +9921,18 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF mmode IS "SMART", SET mexit TO "  plant_smart_exit(\"" + aname + "\");\n". /IF.
         IF mmode IS "PERSISTENT", SET mexit TO "  plant_persist_exit();\n". /IF.
         REAP bcode FROM generate_body, bd, 1, sigs, subst, clmap, actx, nums_a, stvars_a, evars_a, rty_a, mexit, "".
-        # v0.49.53: wrap action body with verify begin/end for colorized output
-        SET bcode TO "  plant_verify_begin();\n" + bcode.
+        # v0.49.53: scan body for verify_stmt nodes; wrap with
+        # plant_verify_begin/end only for actions that contain VERIFY
+        # assertions (test actions).
+        CREATE has_verify(FACT) TO FALSE.
+        CREATE vbdi(NUM) TO 0.
+        SEASON vbdi < COUNT bd,
+            REAP vbnd FROM plant_list_get, bd, vbdi.
+            REAP vbnd_ty FROM _map_get, vbnd, "type".
+            IF vbnd_ty IS "verify_stmt", SET has_verify TO TRUE. /IF.
+            SET vbdi TO vbdi + 1.
+        /SEASON.
+        IF has_verify IS TRUE, SET bcode TO "  plant_verify_begin();\n" + bcode. /IF.
         # v0.48.15: Mission Mode binding — FAST actions bind the bump
         # heap (plant_fast_enter resets it at every scope enter);
         # SAFE actions carry the Boundary Handshake guard so FAST
@@ -9801,7 +9994,8 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             IF drn2 IS "1", SET bcode TO bcode + "  plant_async_drain();\n". /IF.
             # v0.49.24: empty bodies must return a valid tx_t, not the
             # function designator (fnname decays to a pointer here).
-            SET bcode TO bcode + "  plant_verify_end();\n  return \"\";\n".
+            IF has_verify IS TRUE, SET bcode TO bcode + "  plant_verify_end();\n". /IF.
+            SET bcode TO bcode + "  return \"\";\n".
         /IF.
         IF (COUNT bd) > 0,
             CREATE bd_count(NUM) TO COUNT bd.
@@ -9811,7 +10005,10 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             IF drn2 IS "1" AND last_ty ISNT "give_stmt",
                 SET bcode TO bcode + "  plant_async_drain();\n".
             /IF.
-            IF last_ty ISNT "give_stmt", SET bcode TO bcode + "  plant_verify_end();\n  return " + fnname + ";\n". /IF.
+            IF last_ty ISNT "give_stmt",
+                IF has_verify IS TRUE, SET bcode TO bcode + "  plant_verify_end();\n". /IF.
+                SET bcode TO bcode + "  return " + fnname + ";\n".
+            /IF.
         /IF.
         SET ccode TO ccode + dcode + bcode + "\}\n".
         GIVE ccode.
@@ -11110,7 +11307,7 @@ ACTION callees_of(bd(LIST)),
         REAP acc FROM callee_add, acc, cact.
       /IF.
     /IF.
-    IF cty IS "set_stmt" OR cty IS "create_stmt" OR cty IS "let_stmt" OR cty IS "give_stmt" OR cty IS "show_stmt" OR cty IS "put_stmt" OR cty IS "verify_stmt" OR cty IS "cancel_stmt" OR cty IS "trace_stmt" OR cty IS "config_stmt",
+    IF cty IS "set_stmt" OR cty IS "create_stmt" OR cty IS "let_stmt" OR cty IS "give_stmt" OR cty IS "show_stmt" OR cty IS "put_stmt" OR cty IS "verify_stmt" OR cty IS "setup_stmt" OR cty IS "teardown_stmt" OR cty IS "cancel_stmt" OR cty IS "trace_stmt" OR cty IS "config_stmt",
       REAP cval FROM _map_get, cnd, "value".
       IF cval > "",
         REAP acc FROM callee_from_value, acc, cval.
@@ -12749,7 +12946,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.49.53 (pure native)".
+  SHOW "Chloroplast 0.49.54 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

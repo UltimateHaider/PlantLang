@@ -8360,3 +8360,19 @@ void plant_verify_end(void) {
         exit(1);
     }
 }
+
+void plant_suite_setup(void) {
+    fprintf(stderr, "%s[SETUP] Initializing test suite.%s\n", COLOR_BLUE, COLOR_RESET);
+}
+
+void plant_suite_teardown(void) {
+    fprintf(stderr, "%s[TEARDOWN] Cleaning up test suite.%s\n", COLOR_BLUE, COLOR_RESET);
+}
+
+void plant_suite_setup_hook(tx_t expr) {
+    fprintf(stderr, "%s[SETUP] %s%s\n", COLOR_BLUE, (const char*)expr, COLOR_RESET);
+}
+
+void plant_suite_teardown_hook(tx_t expr) {
+    fprintf(stderr, "%s[TEARDOWN] %s%s\n", COLOR_BLUE, (const char*)expr, COLOR_RESET);
+}
