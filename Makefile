@@ -14,13 +14,19 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.49.55
+VERSION    ?= 0.49.56
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
 CFLAGS     ?= -w -O0
 CPPFLAGS   += -I runtime/c
 RUNTIME    := runtime/c/plant_runtime.c
+ERROR      := runtime/c/plant_error.c
+REPORT     := runtime/c/plant_report.c
+REPORT_JSON:= runtime/c/plant_report_json.c
+REPORT_XML := runtime/c/plant_report_xml.c
+REPORT_HTML:= runtime/c/plant_report_html.c
+RUNTIME_C  := $(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) $(REPORT_HTML)
 COMPAT     := runtime/c/plant_compat.h
 
 SRC_DIR    := src/plantc
@@ -76,25 +82,25 @@ $(V2_C): $(ALL_PLANT) $(BOOTSTRAP)
 	@echo "  [v1->v2] $(BOOTSTRAP)"
 	@$(BOOTSTRAP) $(ALL_PLANT) $@ >/dev/null 2>&1
 
-$(V2_BIN): $(V2_C) $(RUNTIME) $(COMPAT)
+$(V2_BIN): $(V2_C) $(RUNTIME_C) $(COMPAT)
 	@echo "  [gcc]    $(V2_BIN)"
-	@$(CC) $(CFLAGS) $(CPPFLAGS) $< $(RUNTIME) -lm -ldl -o $@
+	@$(CC) $(CFLAGS) $(CPPFLAGS) $< $(RUNTIME_C) -lm -ldl -o $@
 
 $(V3_C): $(ALL_PLANT) $(V2_BIN)
 	@echo "  [v2->v3] $(V2_BIN)"
 	@$(V2_BIN) $(ALL_PLANT) $@ >/dev/null 2>&1
 
-$(V3_BIN): $(V3_C) $(RUNTIME) $(COMPAT)
+$(V3_BIN): $(V3_C) $(RUNTIME_C) $(COMPAT)
 	@echo "  [gcc]    $(V3_BIN)"
-	@$(CC) $(CFLAGS) $(CPPFLAGS) $< $(RUNTIME) -lm -ldl -o $@
+	@$(CC) $(CFLAGS) $(CPPFLAGS) $< $(RUNTIME_C) -lm -ldl -o $@
 
 $(V4_C): $(ALL_PLANT) $(V3_BIN)
 	@echo "  [v3->v4] $(V3_BIN)"
 	@$(V3_BIN) $(ALL_PLANT) $@ >/dev/null 2>&1
 
-$(V4_BIN): $(V4_C) $(RUNTIME) $(COMPAT)
+$(V4_BIN): $(V4_C) $(RUNTIME_C) $(COMPAT)
 	@echo "  [gcc]    $(V4_BIN)"
-	@$(CC) $(CFLAGS) $(CPPFLAGS) $< $(RUNTIME) -lm -ldl -o $@
+	@$(CC) $(CFLAGS) $(CPPFLAGS) $< $(RUNTIME_C) -lm -ldl -o $@
 
 $(V5_C): $(ALL_PLANT) $(V4_BIN)
 	@echo "  [v4->v5] $(V4_BIN)"
@@ -127,6 +133,41 @@ lint: ## Static-analyze generated C with cppcheck (skips if missing)
 		echo "lint: skipped (cppcheck not found)"; \
 	fi
 
+# ── tidy: clang-tidy static analysis (skips if missing) ───────
+tidy: $(V3_BIN) ## Static-analyze compiled C with clang-tidy (skips if missing)
+	@if command -v clang-tidy >/dev/null 2>&1; then \
+		echo "tidy: running clang-tidy on $(RUNTIME_C)"; \
+		clang-tidy -p . \
+			--extra-arg=-Iruntime/c \
+			--extra-arg=-I. \
+			--checks=bugprone-*,performance-*,readability-* \
+			$(RUNTIME_C) 2>&1 || true; \
+	else \
+		echo "tidy: skipped (clang-tidy not found)"; \
+	fi
+
+# ── cppcheck: comprehensive static analysis (skips if missing) ─
+cppcheck: $(V3_BIN) ## Full static analysis with cppcheck (skips if missing)
+	@if command -v cppcheck >/dev/null 2>&1; then \
+		echo "cppcheck: analyzing $(RUNTIME_C)"; \
+		cppcheck --enable=all --suppress=missingIncludeSystem -I runtime/c \
+			$(V3_C) $(RUNTIME_C) 2>&1 || true; \
+	else \
+		echo "cppcheck: skipped (cppcheck not found)"; \
+	fi
+
+# ── valgrind: memory leak and invalid access audit ────────────
+valgrind: $(V3_BIN) ## Run regression suite under valgrind (skips if missing)
+	@if command -v valgrind >/dev/null 2>&1; then \
+		echo "valgrind: auditing runtime memory safety"; \
+		mkdir -p build/valgrind; \
+		$(CC) $(CFLAGS) $(CPPFLAGS) $(V3_C) $(RUNTIME_C) -lm -ldl -o build/valgrind/chloroplast 2>&1; \
+		valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 \
+			./build/valgrind/chloroplast tests/native/hello.plant /tmp/vg_test.c 2>&1 || true; \
+	else \
+		echo "valgrind: skipped (valgrind not found)"; \
+	fi
+
 # ── dist: versioned tarball + validation ──────────────────────
 dist: all self test ## Build versioned tarball + unpack/build/test validation
 	@mkdir -p release
@@ -138,7 +179,7 @@ dist: all self test ## Build versioned tarball + unpack/build/test validation
 		release/plantlang-$(VERSION)/ 2>/dev/null || cp Makefile README.md LICENSE.txt CHANGELOG.md release/plantlang-$(VERSION)/
 	@cp src/plantc/lexer.plant src/plantc/parser.plant src/plantc/codegen_c.plant src/plantc/main.plant \
 		release/plantlang-$(VERSION)/src/plantc/
-	@cp $(RUNTIME) $(COMPAT) runtime/c/plant_runtime.h runtime/c/plant_types.h release/plantlang-$(VERSION)/runtime/c/
+	@cp $(RUNTIME_C) $(COMPAT) runtime/c/plant_runtime.h runtime/c/plant_types.h release/plantlang-$(VERSION)/runtime/c/
 	@cp tests/native/*.plant tests/native/*.expected tests/native/*.c tests/native/*.h tests/native/run_native_tests.sh \
 		release/plantlang-$(VERSION)/tests/native/
 	@mkdir -p release/plantlang-$(VERSION)/tests/generics
@@ -163,7 +204,7 @@ dist: all self test ## Build versioned tarball + unpack/build/test validation
 install: all ## Install to $(PREFIX) (default ~/.local)
 	@mkdir -p $(PREFIX)/bin $(PREFIX)/include/plantlang
 	@cp $(NATIVE_BIN) $(PREFIX)/bin/Chloroplast
-	@cp $(COMPAT) $(RUNTIME) $(PREFIX)/include/plantlang/
+	@cp $(COMPAT) $(RUNTIME_C) $(PREFIX)/include/plantlang/
 	@echo "== installed: $(PREFIX)/bin/Chloroplast =="
 	@$(PREFIX)/bin/Chloroplast --version
 

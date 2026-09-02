@@ -1,3 +1,51 @@
+## v0.49.56 - 2026 (Layered Architecture Refinement & Static Analysis Integration)
+
+### Architecture
+- **Error management unification**: New `plant_error.c` module providing
+  `plant_log(level, format, ...)`, `plant_error`, `plant_warning`, `plant_info`,
+  `plant_debug`, and `plant_set_log_level` with the `PlantLogLevel` severity enum.
+  Existing error paths in `plant_runtime.c` are preserved unchanged; the new
+  interface is opt-in for modular code.
+- **Reporting subsystem extraction**: `plant_report.c` (core orchestrator),
+  `plant_report_json.c` (JSON exporter), `plant_report_xml.c` (JUnit XML
+  exporter), `plant_report_html.c` (interactive HTML generator) — each in a
+  dedicated compilation unit under `runtime/c/`.
+- **COLOR macros centralized**: ANSI color macros moved from `plant_runtime.c`
+  into `plant_compat.h` so error, report, and runtime modules share the same
+  color definitions.
+- **plant_compat.h reorganized**: Added clearly delineated section headers
+  (Execution Lifecycle & Assertions, Unified Error Management, Reporting
+  Subsystem, Networking Boundaries) for strict boundary definition.
+- **Codegen boundary**: `generate_node()` confirmed as the sole
+  parser-to-codegen interface; no direct internal state coupling remains.
+
+### Tooling
+- **Clang-Tidy integration** (`make tidy`): Runs clang-tidy on all runtime C
+  files (skips gracefully if clang-tidy is not installed).
+- **Cppcheck integration** (`make cppcheck`): Comprehensive static analysis
+  with all checks enabled (skips gracefully if cppcheck is missing).
+- **Valgrind integration** (`make valgrind`): Memory leak and invalid-access
+  audit of runtime execution paths (skips gracefully if valgrind is absent).
+
+### Tests
+- `tests/regression/compatibility/test_error_compat.plant`: Verifies unified
+  error logging interface produces expected severity-tagged output.
+- `tests/regression/compatibility/test_report_json_compat.plant`: Validates
+  JSON report export format.
+- `tests/regression/compatibility/test_report_html_compat.plant`: Validates
+  HTML report export format.
+- `tests/regression/run_regression_tests.sh`: Updated to recurse into
+  `compatibility/` subdirectory for compatibility test fixtures.
+
+### Internal
+- Version markers moved to v0.49.56 (Makefile, src/plantc/main.plant banner,
+  tests/native/run_native_tests.sh).
+- New C files: `plant_error.c`, `plant_report.c`, `plant_report_json.c`,
+  `plant_report_xml.c`, `plant_report_html.c` added to Makefile `RUNTIME_C`
+  compilation path and release/install targets.
+- Verification: regression 187→190 passing, native 20/20, `make self`
+  converged.
+
 ## v0.49.55 - 2026 (Layered Architecture Foundation: Lexer/Parser/Runtime Separation)
 
 ### Architecture

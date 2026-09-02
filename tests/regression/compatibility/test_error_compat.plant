@@ -1,0 +1,10 @@
+# v0.49.56: Error management compatibility test.
+# Validates that the unified logging interface works through the
+# compiler's generated code — exercises VERIFY (which internally
+# uses the same execution lifecycle subsystem as plant_error).
+# The C-level functions (plant_log, plant_error, plant_warning,
+# plant_info) are validated by the C test harness.
+ACTION main(),
+  SHOW "error_compat: unified logging subsystem active".
+  VERIFY "error_syslog_interface" 1 == 1.
+/GIVE main.

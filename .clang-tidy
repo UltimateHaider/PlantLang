@@ -1,0 +1,15 @@
+# v0.49.56: clang-tidy configuration for static analysis.
+# Run with: make tidy (or: clang-tidy -p . --checks='*' runtime/c/*.c)
+
+Checks: >
+  bugprone-*,
+  performance-*,
+  readability-*,
+  -bugprone-reserved-identifiers,
+  -readability-magic-numbers
+
+CheckOptions:
+  - key: readability-identifier-naming.VariableCase
+    value: camelBack
+  - key: readability-identifier-naming.FunctionCase
+    value: camelBack

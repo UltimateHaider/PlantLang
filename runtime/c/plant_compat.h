@@ -18,6 +18,24 @@
 #include <stdlib.h>
 #include <errno.h>
 
+/* v0.49.53: ANSI color macros for terminal output (shared across
+   runtime, error, and report modules). */
+#define COLOR_RESET   "\033[0m"
+#define COLOR_GREEN   "\033[32m"
+#define COLOR_RED     "\033[31m"
+#define COLOR_YELLOW  "\033[33m"
+#define COLOR_BLUE    "\033[34m"
+#define COLOR_CYAN    "\033[36m"
+#define COLOR_BOLD    "\033[1m"
+
+/* v0.49.56: Unified error management — severity levels for plant_log */
+typedef enum {
+    PLANT_ERROR   = 0,
+    PLANT_WARNING = 1,
+    PLANT_INFO    = 2,
+    PLANT_DEBUG   = 3
+} PlantLogLevel;
+
 #define _S(x) ((const char*)(x))
 #define _P(x) ((PlantArray*)(x))
 #define _L(x) ((long)(x))
@@ -972,5 +990,37 @@ extern void plant_suite_teardown(void);
 extern void plant_suite_setup_hook(tx_t expr);
 extern void plant_suite_teardown_hook(tx_t expr);
 extern char* plant_colorize(const char* text, const char* color);
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.49.56 — Unified Error Management
+   Centralized logging interface with severity levels.
+   ═══════════════════════════════════════════════════════════════ */
+
+extern PlantLogLevel plant_log_level;
+void plant_log(PlantLogLevel level, const char* format, ...);
+void plant_error(const char* msg);   /* logs + exit(1) */
+void plant_warning(const char* msg);
+void plant_info(const char* msg);
+void plant_debug(const char* msg);
+void plant_set_log_level(PlantLogLevel level);
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.49.56 — Reporting Subsystem
+   Test results collection + format exporters (JSON / XML / HTML).
+   ═══════════════════════════════════════════════════════════════ */
+
+typedef struct PlantReport PlantReport;
+typedef struct PlantReportEntry PlantReportEntry;
+
+PlantReport* plant_report_create(const char* suite_name);
+void plant_report_add(PlantReport* r, const char* test_name, int passed, const char* message);
+int plant_report_total(PlantReport* r);
+int plant_report_passed(PlantReport* r);
+int plant_report_failed(PlantReport* r);
+void plant_report_free(PlantReport* r);
+
+void plant_report_json_emit(PlantReport* r, const char* path);
+void plant_report_xml_emit(PlantReport* r, const char* path);
+void plant_report_html_emit(PlantReport* r, const char* path);
 
 #endif
