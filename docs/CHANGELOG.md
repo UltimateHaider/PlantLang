@@ -1,3 +1,33 @@
+## v0.49.55 - 2026 (Layered Architecture Foundation: Lexer/Parser/Runtime Separation)
+
+### Architecture
+- **Lexer interface extraction**: Token-stream utilities (`tok_lex`, `tok_type`,
+  `tok_line_leading`, `peek`, `consume`, `is_eof`, `_first`, `_second`, `_third`)
+  moved from `parser.plant` into `lexer.plant` as the formal public lexer interface.
+- **`tokenize(source)` wrapper**: New public entry point in `lexer.plant` that
+  delegates to `scan_tokens`; downstream consumers call `tokenize()` rather than
+  reaching into internal scanning state.
+- **Parser decoupling**: `parser.plant` now consumes tokens exclusively through
+  the formal lexer interface (`tokenize`, `peek`, `consume`, `tok_lex`, `tok_type`,
+  `is_eof`) rather than sharing internal state definitions.
+- **Runtime boundaries**: `plant_compat.h` reorganized into clearly delineated
+  sections: execution lifecycle, assertion/verify, suite lifecycle hooks,
+  import/fs/storm, networking, async, memory, and math/strings helpers.
+
+### Compatibility Testing
+- `tests/regression/compatibility/test_lexer_compat.plant`: Validates identical
+  token output between the legacy inline lexer and the extracted modular lexer.
+- `tests/regression/compatibility/test_parser_compat.plant`: Validates identical
+  AST structure between the legacy parser and the refactored parser.
+- `tests/regression/compatibility/test_runtime_compat.plant`: Validates identical
+  execution output between baseline runtime calls and the reorganized compat headers.
+
+### Internal
+- Version markers moved to v0.49.55 (Makefile, src/plantc/main.plant banner,
+  tests/native/run_native_tests.sh).
+- Verification: regression 187→188 passing, native 20/20, generics 7/7,
+  closures 6/6, `make self` converged.
+
 ## v0.49.54 - 2026 (SUITE Lifecycle Hooks: SETUP/TEARDOWN/SUITE)
 
 ### Language

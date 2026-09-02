@@ -17,15 +17,16 @@ tx_t match_string(tx_t src, long i, long n);
 tx_t match_string_i(tx_t src, long i, long n);
 tx_t skip_comment(tx_t src, long i, long n);
 tx_t scan_tokens(tx_t src);
+tx_t tokenize(tx_t src);
 tx_t tok_lex(PlantArray* tok);
 tx_t tok_type(PlantArray* tok);
 tx_t tok_line_leading(PlantArray* tok);
 tx_t peek(PlantArray* tokens, long pos);
 tx_t consume(PlantArray* tokens, long pos);
+tx_t is_eof(PlantArray* tokens, long pos);
 tx_t _first(PlantArray* pair);
 tx_t _second(PlantArray* pair);
 tx_t _third(PlantArray* pair);
-tx_t is_eof(PlantArray* tokens, long pos);
 tx_t escape_string(tx_t s);
 tx_t parse_field_access(PlantArray* tokens, long pos, tx_t text, tx_t dpth);
 tx_t parse_method_call(PlantArray* tokens, long pos, tx_t text);
@@ -1349,6 +1350,9 @@ tx_t scan_tokens(tx_t src) {
     tokens = plant_list_add(tokens, plant_list_make ( 2 , "EOF" , "" ));
     return tokens;
 }
+tx_t tokenize(tx_t src) {
+    return scan_tokens ( src );
+}
 tx_t tok_lex(PlantArray* tok) {
     return plant_list_get(tok ,  1 );
 }
@@ -1367,15 +1371,6 @@ tx_t peek(PlantArray* tokens, long pos) {
 tx_t consume(PlantArray* tokens, long pos) {
     return plant_list_make ( 2 , plant_list_get(tokens ,  pos ) , pos + 1 );
 }
-tx_t _first(PlantArray* pair) {
-    return plant_list_get(pair ,  0 );
-}
-tx_t _second(PlantArray* pair) {
-    return plant_list_get(pair ,  1 );
-}
-tx_t _third(PlantArray* pair) {
-    return plant_list_get(pair ,  2 );
-}
 tx_t is_eof(PlantArray* tokens, long pos) {
   tx_t tok = "";
   tx_t tp = "";
@@ -1388,6 +1383,15 @@ tx_t is_eof(PlantArray* tokens, long pos) {
         return 1;
     }
     return 0;
+}
+tx_t _first(PlantArray* pair) {
+    return plant_list_get(pair ,  0 );
+}
+tx_t _second(PlantArray* pair) {
+    return plant_list_get(pair ,  1 );
+}
+tx_t _third(PlantArray* pair) {
+    return plant_list_get(pair ,  2 );
 }
 tx_t escape_string(tx_t s) {
     tx_t r = "";
@@ -14685,7 +14689,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.54 (pure native)");
+      plant_print("Chloroplast 0.49.55 (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

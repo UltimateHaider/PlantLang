@@ -589,3 +589,86 @@ ACTION scan_tokens(src(TX)),
   PUT plant_list_make(2, "EOF", "") INTO tokens.
   GIVE tokens.
 /ACTION.
+
+# ═══════════════════════════════════════════════════════════════
+#  Lexer Interface (v0.49.55)
+#  Public token-stream consumption API for the parser layer.
+# ═══════════════════════════════════════════════════════════════
+
+# ── tokenize(source) ──────────────────────────────────────────
+# v0.49.55: Public entry point to the lexer. Wraps scan_tokens so
+# downstream consumers call one function rather than reaching into
+# internal scanning state.
+ACTION tokenize(src(TX)),
+  GIVE scan_tokens(src).
+/ACTION.
+
+# ── tok_lex(tok) ──────────────────────────────────────────────
+# v0.49.55: Token literal accessor — returns the lexeme/value of a
+# token pair (3-element: type, value, line_leading).
+ACTION tok_lex(tok(LIST)),
+  GIVE tok[1].
+/ACTION.
+
+# ── tok_type(tok) ─────────────────────────────────────────────
+# v0.49.55: Token type accessor — returns the classification string.
+ACTION tok_type(tok(LIST)),
+  GIVE tok[0].
+/ACTION.
+
+# ── tok_line_leading(tok) ─────────────────────────────────────
+# v0.49.11: 3rd element of the lexer token pair marks the first token
+# on a line ("1"); 2-element tokens ("") are never line-leading.
+# v0.49.55: Moved here from parser.plant as part of lexer interface.
+ACTION tok_line_leading(tok(LIST)),
+  GIVE tok[2].
+/ACTION.
+
+# ── peek(tokens, pos) ─────────────────────────────────────────
+# v0.49.55: Inspect the token at position `pos` without advancing.
+# Returns a 2-element sentinel [null, ""] at EOF.
+ACTION peek(tokens(LIST), pos(NUM)),
+  IF pos < COUNT tokens,
+    GIVE tokens[pos].
+  /IF.
+  GIVE plant_list_make(2, null, "").
+/ACTION.
+
+# ── consume(tokens, pos) ──────────────────────────────────────
+# v0.49.55: Advance position and return the token at the old position.
+# Returns [tok, pos+1] so the caller carries its own cursor.
+ACTION consume(tokens(LIST), pos(NUM)),
+  GIVE plant_list_make(2, tokens[pos], pos + 1).
+/ACTION.
+
+# ── is_eof(tokens, pos) ───────────────────────────────────────
+# v0.49.55: True if `pos` is past the token list or the token is EOF.
+ACTION is_eof(tokens(LIST), pos(NUM)),
+  IF pos >= COUNT tokens,
+    GIVE TRUE.
+  /IF.
+  REAP tok FROM peek, tokens, pos.
+  REAP tp FROM tok_type, tok.
+  IF tp IS "EOF",
+    GIVE TRUE.
+  /IF.
+  GIVE FALSE.
+/ACTION.
+
+# ── _first(pair) ──────────────────────────────────────────────
+# Returns the 0-th element of a pair/list.
+ACTION _first(pair(LIST)),
+  GIVE pair[0].
+/ACTION.
+
+# ── _second(pair) ────────────────────────────────────────────
+# Returns the 1-st element of a pair/list.
+ACTION _second(pair(LIST)),
+  GIVE pair[1].
+/ACTION.
+
+# ── _third(pair) ─────────────────────────────────────────────
+# Returns the 2-nd element of a pair/list (line-leading flag).
+ACTION _third(pair(LIST)),
+  GIVE pair[2].
+/ACTION.

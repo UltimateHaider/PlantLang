@@ -29,7 +29,7 @@ fi
 pass=0
 fail=0
 
-for src in "$DIR"/*.plant; do
+for src in "$DIR"/*.plant "$DIR"/compatibility/*.plant; do
   name=$(basename "$src" .plant)
   [ -f "$DIR/$name.expected" ] || continue
   if [ -f "$DIR/$name.invalid" ]; then

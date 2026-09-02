@@ -1,0 +1,9 @@
+# v0.49.55: Runtime compatibility test.
+# Verifies that the reorganized plant_compat.h runtime boundaries
+# correctly expose execution lifecycle, assertion, and suite hooks.
+ACTION main(),
+  plant_verify_begin.
+  VERIFY "runtime_compat_check" 1 == 1.
+  plant_verify_end.
+  SHOW "runtime_ok".
+/GIVE main.

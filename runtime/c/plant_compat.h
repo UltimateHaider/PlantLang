@@ -1,6 +1,11 @@
 #ifndef PLANT_COMPAT_H
 #define PLANT_COMPAT_H
 
+/* v0.49.55: plant_compat.h exposes the runtime interface boundaries
+   that generated C code calls into. Functions are organized into
+   clearly delineated sections by subsystem.
+   ─────────────────────────────────────────────────────────────── */
+
 /* v0.48.29: tx_t lives in plant_types.h (pulled in via
    plant_runtime.h below and explicitly for standalone inclusion);
    plant_compat.h holds only FFI bindings and compatibility
@@ -938,10 +943,12 @@ tx_t  plant_persist_status(void);                     /* heap telemetry (text) *
 tx_t  plant_arc_finalize_count(void);                 /* finalize counter */
 void  plant_msleep(long ms);                          /* sleep helper */
 
-#endif
+/* ═══════════════════════════════════════════════════════════════
+   v0.48.32+ — Networking Boundaries
+   HTTP client (HARVEST), HTTP server (LISTEN), WebSocket client/server.
+   ═══════════════════════════════════════════════════════════════ */
 
 tx_t plant_net_harvest_https_url(tx_t url, tx_t method);
-
 
 tx_t plant_ws_connect(tx_t url);
 tx_t plant_ws_send(tx_t conn_id, tx_t msg);
@@ -949,7 +956,13 @@ tx_t plant_ws_recv(tx_t conn_id);
 tx_t plant_ws_close(tx_t conn_id);
 
 tx_t plant_net_listen_ws(tx_t port);
-tx_t plant_net_ws_accept(tx_t listener);
+tx_t plant_ws_accept(tx_t listener);
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.49.53 / v0.49.54 — Execution Lifecycle & Assertions
+   Strict boundaries for verify/suite lifecycle hooks and
+   colorized output.
+   ═══════════════════════════════════════════════════════════════ */
 
 extern void plant_verify(tx_t label, tx_t cond);
 extern void plant_verify_begin(void);
@@ -959,3 +972,5 @@ extern void plant_suite_teardown(void);
 extern void plant_suite_setup_hook(tx_t expr);
 extern void plant_suite_teardown_hook(tx_t expr);
 extern char* plant_colorize(const char* text, const char* color);
+
+#endif

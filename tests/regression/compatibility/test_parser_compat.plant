@@ -1,0 +1,17 @@
+# v0.49.55: Parser compatibility test.
+# Exercises the parser's consumption of tokens through the formal
+# lexer interface (peek/consume/tok_lex/tok_type) by parsing a
+# complete program structure with all statement types.
+ACTION main(),
+  CREATE x(NUM) TO 1.
+  SET x TO x + 1.
+  SHOW "x=" + x.
+  IF x == 2,
+    SHOW "equal".
+  /IF.
+  SEASON x < 5,
+    SHOW "loop=" + x.
+    SET x TO x + 1.
+  /SEASON.
+  GIVE "done".
+/GIVE main.

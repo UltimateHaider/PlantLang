@@ -12,57 +12,13 @@ IMPORT "ast.plant".
 
 #── Utility actions ────────────────────────────────────────────
 
-ACTION tok_lex(tok(LIST)),
-  GIVE tok[1].
-/ACTION.
+#── Token interface (v0.49.55) ──────────────────────────────
+# The parser consumes tokens exclusively through the public
+# lexer interface: tokenize(), peek(), consume(), is_eof(),
+# tok_lex(), tok_type(). These are defined in lexer.plant and
+# available to the concatenated compiler source.
+#────────────────────────────────────────────────────────────
 
-ACTION tok_type(tok(LIST)),
-  GIVE tok[0].
-/ACTION.
-
-ACTION tok_line_leading(tok(LIST)),
-  # v0.49.11 — 3rd element of the lexer token pair marks the first
-  # token on a line ("1"); 2-element tokens ("") are never line-leading
-  GIVE tok[2].
-/ACTION.
-
-ACTION peek(tokens(LIST), pos(NUM)),
-  IF pos < COUNT tokens,
-    GIVE tokens[pos].
-  /IF.
-  GIVE plant_list_make(2, null, "").
-/ACTION.
-
-ACTION consume(tokens(LIST), pos(NUM)),
-  GIVE plant_list_make(2, tokens[pos], pos + 1).
-/ACTION.
-
-ACTION _first(pair(LIST)),
-  GIVE pair[0].
-/ACTION.
-
-ACTION _second(pair(LIST)),
-  GIVE pair[1].
-/ACTION.
-
-ACTION _third(pair(LIST)),
-  GIVE pair[2].
-/ACTION.
-
-ACTION is_eof(tokens(LIST), pos(NUM)),
-  IF pos >= COUNT tokens,
-    GIVE TRUE.
-  /IF.
-  REAP tok FROM peek, tokens, pos.
-  REAP tp FROM tok_type, tok.
-  IF tp IS "EOF",
-    GIVE TRUE.
-  /IF.
-  GIVE FALSE.
-/ACTION.
-
-# collect_value: collects text until "." or EOF (consumes the dot)
-# escape_string — re-escape C-unsafe characters in string content for emission
 ACTION escape_string(s(TX)),
   CREATE r(TX) TO "".
   CREATE ei(NUM) TO 0.

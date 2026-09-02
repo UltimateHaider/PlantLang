@@ -1,0 +1,15 @@
+# v0.49.55: Lexer compatibility test.
+# Exercises the extracted modular lexer (scan_tokens/tokenize in
+# lexer.plant) by compiling a program that exercises all lexer token types.
+ACTION main(),
+  CREATE x(NUM) TO 1.
+  SHOW "id=" + x.
+  IF x > 0 AND x GREATER THAN 0,
+    SHOW "numeric".
+  /IF.
+  REAP r FROM "hello " + "world".
+  SHOW r.
+  CREATE arr(LIST) TO [1, 2, 3].
+  SHOW "count=" + COUNT arr.
+  SHOW "first=" + arr[0].
+/GIVE main.
