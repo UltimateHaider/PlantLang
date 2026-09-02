@@ -1,5 +1,5 @@
 /*
- * plant_error.c — v0.49.56 / v0.49.56b: Unified Error Management & Logging
+ * plant_error.c — v0.49.56/57: Unified Error Management & Logging
  *
  * Centralized logging and error-handling utility with severity levels.
  * This module is intentionally lightweight: it wraps fprintf to stderr

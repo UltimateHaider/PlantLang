@@ -1,5 +1,5 @@
 /*
- * plant_report.c — v0.49.56: Reporting Subsystem Core
+ * plant_report.c — v0.49.57: Reporting Subsystem Core
  *
  * Central orchestrator for test results reporting. Delegates to
  * format-specific generators (JSON, HTML, XML). The report
@@ -62,6 +62,34 @@ void plant_report_add(PlantReport* r, const char* test_name, int passed, const c
 int plant_report_total(PlantReport* r) { return r ? r->total : 0; }
 int plant_report_passed(PlantReport* r) { return r ? r->passed : 0; }
 int plant_report_failed(PlantReport* r) { return r ? r->failed : 0; }
+
+/* v0.49.57: Entry iteration accessors for modular exporters.
+   The entry struct is defined here (not in the header) so exporters
+   only see an opaque handle. */
+
+PlantReportEntry* plant_report_head(PlantReport* r) {
+    return r ? r->head : NULL;
+}
+
+PlantReportEntry* plant_report_next(PlantReportEntry* e) {
+    return e ? e->next : NULL;
+}
+
+const char* plant_report_entry_name(PlantReportEntry* e) {
+    return e ? (e->name ? e->name : "") : "";
+}
+
+int plant_report_entry_passed(PlantReportEntry* e) {
+    return e ? e->passed : 0;
+}
+
+const char* plant_report_entry_message(PlantReportEntry* e) {
+    return e ? (e->message ? e->message : "") : "";
+}
+
+const char* plant_report_suite_name(PlantReport* r) {
+    return r ? (r->suite_name ? r->suite_name : "unnamed") : "unnamed";
+}
 
 void plant_report_free(PlantReport* r) {
     if (!r) return;

@@ -60,8 +60,10 @@ for src in "$DIR"/*.plant "$DIR"/compatibility/*.plant; do
        "$BUILD/$name.c" | sed '1d;$d' > "$types"
   if ! gcc -w -O0 -include "$ROOT/tests/native/mock_ffi.h" \
         -include "$types" -I "$ROOT/runtime/c" "$BUILD/$name.c" \
-        "$ROOT/runtime/c/plant_runtime.c" "$ROOT/tests/native/mock_ffi.c" \
-        -lm -ldl -o "$BUILD/$name" \
+        "$ROOT/runtime/c/plant_runtime.c" "$ROOT/runtime/c/plant_error.c" \
+        "$ROOT/runtime/c/plant_report.c" "$ROOT/runtime/c/plant_report_json.c" \
+        "$ROOT/runtime/c/plant_report_xml.c" "$ROOT/runtime/c/plant_report_html.c" \
+        "$ROOT/tests/native/mock_ffi.c" -lm -ldl -o "$BUILD/$name" \
         >>"$BUILD/$name.compile.log" 2>&1; then
     echo "FAIL  $name (gcc)"; fail=$((fail+1)); continue
   fi

@@ -14,7 +14,7 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.49.56c
+VERSION    ?= 0.49.57
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
@@ -55,7 +55,7 @@ bootstrap-update: $(NATIVE_BIN)
 	@cp $(NATIVE_BIN) $(BOOTSTRAP)
 	@echo "  [bootstrap] updated from $(NATIVE_BIN)"
 
-.PHONY: all self test fmt lint dist install help clean
+.PHONY: all self test fmt lint dist install help clean rollback benchmark smoke
 
 .DEFAULT_GOAL := all
 
@@ -207,6 +207,32 @@ install: all ## Install to $(PREFIX) (default ~/.local)
 	@cp $(COMPAT) $(RUNTIME_C) $(PREFIX)/include/plantlang/
 	@echo "== installed: $(PREFIX)/bin/Chloroplast =="
 	@$(PREFIX)/bin/Chloroplast --version
+
+# ── rollback: revert to a tagged prior release ──────────────────
+# Usage: make rollback VERSION=v0.49.56b
+# Reverts all tracked files to the specified tag and rebuilds.
+rollback: ## Revert to a tagged release: make rollback VERSION=v0.49.56b
+	@if [ -z "$(VERSION)" ]; then echo "Usage: make rollback VERSION=<tag>"; exit 1; fi
+	@if ! git rev-parse "$(VERSION)" >/dev/null 2>&1; then \
+		echo "ERROR: tag '$(VERSION)' not found"; \
+		git tag -l | sed 's/^/Available tags: /'; \
+		exit 1; \
+	fi
+	@echo "== Rolling back to $(VERSION) =="
+	@git checkout -- "$(VERSION)" 2>&1 || true
+	@git clean -fdq 2>/dev/null || true
+	@git reset --hard "$(VERSION)"
+	@$(MAKE) -s clean >/dev/null 2>&1 || true
+	@$(MAKE) -s all 2>&1 | tail -3
+	@echo "== Rollback complete: now at $(VERSION) =="
+
+# ── benchmark: timing metrics for build + test cycles ────────────
+benchmark: ## Run performance benchmark for build targets
+	@sh scripts/benchmark.sh
+
+# ── smoke: rapid core feature validation ────────────────────────
+smoke: $(NATIVE_BIN) ## Run smoke tests for core language features
+	@sh tests/smoke/run_smoke_tests.sh $(NATIVE_BIN)
 
 # ── clean ──────────────────────────────────────────────────────
 clean: ## Remove build artifacts (keeps dist/Chloroplast bootstrap)

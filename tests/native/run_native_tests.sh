@@ -23,7 +23,7 @@ fi
 
 out=$("$PLANTC" --version 2>&1)
 rc=$?
-if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '0.49.56c'; then
+  if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '0.49.57'; then
   echo "PASS  cli --version"; pass=$((pass+1))
 else
   echo "FAIL  cli --version"; fail=$((fail+1))
@@ -50,7 +50,10 @@ for src in "$DIR"/*.plant; do
        "$BUILD/$name.c" | sed '1d;$d' > "$types"
   if ! gcc -w -O0 -include "$ROOT/tests/native/mock_ffi.h" \
         -include "$types" -I "$ROOT/runtime/c" "$BUILD/$name.c" \
-        "$ROOT/runtime/c/plant_runtime.c" "$ROOT/tests/native/mock_ffi.c" \
+        "$ROOT/runtime/c/plant_runtime.c" "$ROOT/runtime/c/plant_error.c" \
+        "$ROOT/runtime/c/plant_report.c" "$ROOT/runtime/c/plant_report_json.c" \
+        "$ROOT/runtime/c/plant_report_xml.c" "$ROOT/runtime/c/plant_report_html.c" \
+        "$ROOT/tests/native/mock_ffi.c" \
         -lm -ldl -o "$BUILD/$name" \
         >>"$BUILD/$name.compile.log" 2>&1; then
     echo "FAIL  $name (gcc)"; fail=$((fail+1)); continue
@@ -69,8 +72,11 @@ echo "== type header (plant_types.h) =="
 # statics) with no conflicts; linking against the real runtime also
 # proves the runtime implementation resolves the same typedef.
 if gcc -w -O0 -I "$ROOT/runtime/c" "$DIR/tx_types.c" \
-      "$ROOT/runtime/c/plant_runtime.c" "$ROOT/tests/native/mock_ffi.c" \
-      -lm -ldl -o "$BUILD/tx_types" \
+    "$ROOT/runtime/c/plant_runtime.c" "$ROOT/runtime/c/plant_error.c" \
+    "$ROOT/runtime/c/plant_report.c" "$ROOT/runtime/c/plant_report_json.c" \
+    "$ROOT/runtime/c/plant_report_xml.c" "$ROOT/runtime/c/plant_report_html.c" \
+    "$ROOT/tests/native/mock_ffi.c" \
+    -lm -ldl -o "$BUILD/tx_types" \
       >"$BUILD/tx_types.compile.log" 2>&1 \
    && "$BUILD/tx_types" >/dev/null 2>&1; then
   echo "PASS  tx_types header decoupling"; pass=$((pass+1))

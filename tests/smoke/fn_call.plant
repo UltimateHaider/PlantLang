@@ -1,0 +1,8 @@
+ACTION twice(n(NUM)) -> NUM {
+  GIVE n * 2.
+}
+ACTION main(),
+  REAP r FROM twice, 21.
+  SHOW r.
+  GIVE 0.
+/GIVE main.

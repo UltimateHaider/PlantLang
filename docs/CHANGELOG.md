@@ -1,3 +1,31 @@
+## v0.49.57 - 2026 (Layered Architecture Integration & Stability Subsystem)
+
+### Architecture
+- **Modular Reporting Subsystem**: Reporting exporters are fully decoupled in dedicated files under `runtime/c/`:
+  `plant_report.c` (core orchestrator), `plant_report_json.c` (JSON exporter), `plant_report_html.c` (interactive HTML with embedded CSS), `plant_report_xml.c` (JUnit-compliant XML).
+- **Entry iteration support**: `plant_report` now exposes `plant_report_head/next` and accessors
+  (`plant_report_entry_name/passed/message`, `plant_report_suite_name`) so modular exporters can iterate results.
+- **Parser-to-codegen boundary**: `generate_node(node, env)` documented as the exclusive interface.
+- **Compiler layered architecture**: Lexer → Parser → Codegen boundaries documented in `plant_compat.h`.
+
+### Error Management
+- All `exit(1)` and `_exit(1)` calls eliminated from `plant_runtime.c` (0 remaining).
+- All `fprintf(stderr,...)` calls eliminated from `plant_runtime.c` (0 remaining).
+- Unified logging via `plant_error()`, `plant_fatal()`, `plant_warning()`, `plant_info()`, `plant_log()`.
+
+### Tooling
+- **Rollback framework**: `make rollback VERSION=v0.49.56b` reverts tracked files to any tagged release.
+- **Performance benchmarking**: `scripts/benchmark.sh` tracks `make all`/`make self`/`make test` timing.
+- **Smoke test suite**: Rapid core feature validation in `tests/smoke/` (hello world, function calls, control flow).
+
+### Tests
+- `tests/smoke/`: 3 smoke tests for immediate stability feedback.
+- `tests/regression/compatibility/`: 6 compatibility tests verify no output regressions.
+
+### Internal
+- Version markers moved to v0.49.57 (Makefile, src/plantc/main.plant, tests/native/run_native_tests.sh).
+- Self-hosting converged, all tests pass.
+
 ## v0.49.56c - 2026 (Full Code Generation Decoupling)
 
 ### Architecture

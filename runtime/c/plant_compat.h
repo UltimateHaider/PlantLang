@@ -1034,4 +1034,13 @@ void plant_report_json_emit(PlantReport* r, const char* path);
 void plant_report_xml_emit(PlantReport* r, const char* path);
 void plant_report_html_emit(PlantReport* r, const char* path);
 
+/* Entry iteration (opaque accessor — entries are heap-allocated,
+   do NOT mutate or free via this pointer). */
+PlantReportEntry* plant_report_head(PlantReport* r);
+PlantReportEntry* plant_report_next(PlantReportEntry* e);
+const char*       plant_report_entry_name(PlantReportEntry* e);
+int               plant_report_entry_passed(PlantReportEntry* e);
+const char*       plant_report_entry_message(PlantReportEntry* e);
+const char*       plant_report_suite_name(PlantReport* r);
+
 #endif

@@ -1,0 +1,4 @@
+ACTION main(),
+  SHOW "hello world".
+  GIVE 0.
+/GIVE main.

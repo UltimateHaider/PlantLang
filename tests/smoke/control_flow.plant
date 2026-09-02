@@ -1,0 +1,11 @@
+ACTION main(),
+  CREATE x(NUM) TO 10.
+  IF x > 5,
+    SHOW "greater".
+  /IF.
+  CREATE i(NUM) TO 0.
+  CYCLE j FROM 0 TO 3,
+    SHOW j.
+  /CYCLE.
+  GIVE 0.
+/GIVE main.
