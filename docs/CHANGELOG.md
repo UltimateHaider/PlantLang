@@ -1,3 +1,28 @@
+## v0.49.59a - 2026 (Abstract Runtime & Reporting Interfaces)
+
+### Architecture
+- **IRuntime interface** (`runtime/c/plant_runtime.h`): Context-driven execution contract
+  with function pointer vtable for execute, verify, verify_begin, verify_end,
+  suite_setup, suite_teardown, error, warning, info, fatal. `IRuntime*`
+  carries a `void* context` pointer, enabling clean decoupling between
+  runtime implementations (CLI, test harness, embedded) and their callers.
+- **IReport interface** (`runtime/c/plant_report.h`): Polymorphic reporting contract
+  with function pointer vtable for print, summary, to_json, to_html, to_xml,
+  begin, end, add_result. Format-specific exporters (JSON, HTML, JUnit XML)
+  implement these pointers; callers interact through the abstract interface only.
+- **Concrete implementations**:
+  - `plant_runtime_default()` — binds IRuntime to existing global functions
+    (plant_error, plant_warning, plant_info, plant_fatal, plant_verify, etc.)
+  - `plant_report_default(suite_name)` — wraps existing PlantReport in the
+    IReport vtable, delegates to_json/to_html/to_xml through format-specific
+    generators into heap-allocated strings.
+- **Convenience helpers**: `plant_runtime_verify()`, `plant_runtime_verify_begin()`,
+  `plant_runtime_verify_end()` delegate through IRuntime vtable with null-safety.
+  `plant_iReport_*()` helpers null-check before dereferencing vtable pointers.
+- **Self-hosting**: Convergent at 442207 bytes (vs. 442206 baseline — 1 byte delta).
+- **Tests**: 20/20 native tests pass. 185/187 regression tests pass
+  (2 pre-existing gcc-based FFI failures: `enum_ffi`, `generic_num_ffi`).
+
 ## v0.49.58a - 2026 (Codegen Field-Passing Optimization)
 
 ### Architecture

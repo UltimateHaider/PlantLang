@@ -23,6 +23,7 @@
 #include <plant_types.h>
 #define _GNU_SOURCE
 #include <plant_runtime.h>
+#include <plant_report.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1050,6 +1051,16 @@ void plant_set_log_level(PlantLogLevel level);
      env_mexit(env)   → TX    (idx 9)
      env_wexit(env)   → TX    (idx 10)
      env_indent_num(env) → NUM (idx 11)
+
+   v0.49.59a — Abstract Runtime & Reporting Interfaces:
+     IRuntime (plant_runtime.h): Context-driven execution contract with
+     void* context and function pointers (execute, verify, verify_begin,
+     verify_end, suite_setup, suite_teardown, error, warning, info, fatal).
+     IReport (plant_report.h): Polymorphic reporting contract with void* context
+     and function pointers (print, summary, to_json, to_html, to_xml, begin,
+     end, add_result). Concrete implementations wrap existing global functions
+     and PlantReport infrastructure. plant_runtime_default() and
+     plant_report_default() provide ready-to-use instances.
    ═══════════════════════════════════════════════════════════════ */
 
 typedef struct PlantReport PlantReport;

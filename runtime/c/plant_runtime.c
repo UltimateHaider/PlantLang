@@ -8372,3 +8372,102 @@ void plant_suite_teardown_hook(tx_t expr) {
     char _thb[256]; snprintf(_thb, 256, "[TEARDOWN] %s", (const char*)expr);
     plant_info(_thb);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.49.59a — Abstract Runtime Interface (IRuntime) Implementation
+   Binds the IRuntime vtable to the concrete global functions so
+   callers can interact through the abstract interface without
+   coupling to a particular runtime backend.
+   ═══════════════════════════════════════════════════════════════ */
+
+static void _iruntime_execute(void* ctx, const char* code) {
+    (void)ctx; (void)code;
+    /* Stub — execution requires the full compiler pipeline.
+       Provided so the vtable is non-NULL for test harnesses. */
+}
+
+static void _iruntime_verify(void* ctx, const char* label, int condition) {
+    (void)ctx;
+    plant_verify((tx_t)label, condition ? "1" : "0");
+}
+
+static void _iruntime_verify_begin(void* ctx) {
+    (void)ctx;
+    plant_verify_begin();
+}
+
+static void _iruntime_verify_end(void* ctx) {
+    (void)ctx;
+    plant_verify_end();
+}
+
+static void _iruntime_suite_setup(void* ctx) {
+    (void)ctx;
+    plant_suite_setup();
+}
+
+static void _iruntime_suite_teardown(void* ctx) {
+    (void)ctx;
+    plant_suite_teardown();
+}
+
+static void _iruntime_error(void* ctx, const char* msg) {
+    (void)ctx;
+    plant_error(msg);
+}
+
+static void _iruntime_warning(void* ctx, const char* msg) {
+    (void)ctx;
+    plant_warning(msg);
+}
+
+static void _iruntime_info(void* ctx, const char* msg) {
+    (void)ctx;
+    plant_info(msg);
+}
+
+static void _iruntime_fatal(void* ctx, const char* msg) {
+    (void)ctx;
+    plant_fatal(msg);
+}
+
+IRuntime* plant_runtime_default(void) {
+    static IRuntime _default_rt = {0};
+    static int initialized = 0;
+    if (!initialized) {
+        _default_rt.context        = NULL;
+        _default_rt.execute        = _iruntime_execute;
+        _default_rt.verify         = _iruntime_verify;
+        _default_rt.verify_begin   = _iruntime_verify_begin;
+        _default_rt.verify_end     = _iruntime_verify_end;
+        _default_rt.suite_setup    = _iruntime_suite_setup;
+        _default_rt.suite_teardown = _iruntime_suite_teardown;
+        _default_rt.error          = _iruntime_error;
+        _default_rt.warning        = _iruntime_warning;
+        _default_rt.info           = _iruntime_info;
+        _default_rt.fatal          = _iruntime_fatal;
+        initialized = 1;
+    }
+    return &_default_rt;
+}
+
+void plant_runtime_free(IRuntime* rt) {
+    if (!rt) return;
+    /* Default runtime is static — only free heap-allocated instances */
+    if (rt != plant_runtime_default()) free(rt);
+}
+
+void plant_runtime_verify(IRuntime* rt, const char* label, int condition) {
+    if (rt && rt->verify) rt->verify(rt->context, label, condition);
+    else plant_verify((tx_t)label, condition ? "1" : "0");
+}
+
+void plant_runtime_verify_begin(IRuntime* rt) {
+    if (rt && rt->verify_begin) rt->verify_begin(rt->context);
+    else plant_verify_begin();
+}
+
+void plant_runtime_verify_end(IRuntime* rt) {
+    if (rt && rt->verify_end) rt->verify_end(rt->context);
+    else plant_verify_end();
+}

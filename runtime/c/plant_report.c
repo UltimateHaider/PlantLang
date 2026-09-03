@@ -104,3 +104,170 @@ void plant_report_free(PlantReport* r) {
     free(r->suite_name);
     free(r);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.49.59a — Abstract Reporting Interface (IReport) Implementation
+   Wraps the concrete PlantReport in the IReport vtable so callers
+   can interact through the abstract interface without coupling to
+   a particular exporter format.
+   ═══════════════════════════════════════════════════════════════ */
+
+#include <stdio.h>
+
+/* Forward declarations for format-specific generators */
+extern void plant_report_json_emit(PlantReport* r, const char* path);
+extern void plant_report_html_emit(PlantReport* r, const char* path);
+extern void plant_report_xml_emit(PlantReport* r, const char* path);
+
+static void _ireport_print(void* ctx, const char* message) {
+    PlantReport* r = (PlantReport*)ctx;
+    if (!r || !message) return;
+    printf("[%s] %s\n", plant_report_suite_name(r), message);
+}
+
+static void _ireport_summary(void* ctx, int total, int passed, int failed) {
+    (void)ctx;
+    printf("Total: %d  Passed: %d  Failed: %d\n", total, passed, failed);
+}
+
+static void _ireport_begin(void* ctx) {
+    PlantReport* r = (PlantReport*)ctx;
+    if (r) plant_report_add(r, "__begin__", 1, "suite started");
+}
+
+static void _ireport_end(void* ctx) {
+    PlantReport* r = (PlantReport*)ctx;
+    if (r) plant_report_add(r, "__end__", 1, "suite completed");
+}
+
+static void _ireport_add_result(void* ctx, const char* name, int passed, double time) {
+    PlantReport* r = (PlantReport*)ctx;
+    if (!r || !name) return;
+    char buf[128];
+    snprintf(buf, sizeof(buf), "%.4fs", time);
+    plant_report_add(r, name, passed, buf);
+}
+
+/* Helper: write report to a file via the format-specific generator,
+   then read the entire file into a heap-allocated string. Returns
+   NULL on any failure. */
+static char* _report_to_string(PlantReport* r, void (*emit_fn)(PlantReport*, const char*)) {
+    if (!r || !emit_fn) return NULL;
+    char* buf = NULL;
+    size_t buflen = 0;
+    FILE* f = open_memstream(&buf, &buflen);
+    if (!f) return NULL;
+
+    /* Redirect: write to a temp path, then read back.
+       open_memstream is simpler — but the emit functions expect
+       a path. Use a temp file approach. */
+    fclose(f);
+    free(buf);
+
+    const char* tmpl = "/tmp/plant_report_XXXXXX";
+    char tmppath[256];
+    snprintf(tmppath, sizeof(tmppath), "%s", tmpl);
+    int fd = mkstemp(tmppath);
+    if (fd < 0) return NULL;
+    close(fd);
+
+    emit_fn(r, tmppath);
+
+    /* Read the file into a heap string */
+    FILE* rf = fopen(tmppath, "rb");
+    if (!rf) { unlink(tmppath); return NULL; }
+    fseek(rf, 0, SEEK_END);
+    long sz = ftell(rf);
+    fseek(rf, 0, SEEK_SET);
+    char* result = NULL;
+    if (sz > 0) {
+        result = (char*)malloc((size_t)sz + 1);
+        if (result) {
+            size_t rd = fread(result, 1, (size_t)sz, rf);
+            result[rd] = '\0';
+        }
+    } else {
+        result = strdup("");
+    }
+    fclose(rf);
+    unlink(tmppath);
+    return result;
+}
+
+static char* _ireport_to_json(void* ctx) {
+    PlantReport* r = (PlantReport*)ctx;
+    return _report_to_string(r, plant_report_json_emit);
+}
+
+static char* _ireport_to_html(void* ctx) {
+    PlantReport* r = (PlantReport*)ctx;
+    return _report_to_string(r, plant_report_html_emit);
+}
+
+static char* _ireport_to_xml(void* ctx) {
+    PlantReport* r = (PlantReport*)ctx;
+    return _report_to_string(r, plant_report_xml_emit);
+}
+
+IReport* plant_report_default(const char* suite_name) {
+    PlantReport* r = plant_report_create(suite_name);
+    if (!r) return NULL;
+
+    IReport* rp = (IReport*)malloc(sizeof(IReport));
+    if (!rp) { plant_report_free(r); return NULL; }
+
+    rp->context    = r;
+    rp->print      = _ireport_print;
+    rp->summary    = _ireport_summary;
+    rp->to_json    = _ireport_to_json;
+    rp->to_html    = _ireport_to_html;
+    rp->to_xml     = _ireport_to_xml;
+    rp->begin      = _ireport_begin;
+    rp->end        = _ireport_end;
+    rp->add_result = _ireport_add_result;
+
+    return rp;
+}
+
+void plant_report_interface_free(IReport* rp) {
+    if (!rp) return;
+    if (rp->context) plant_report_free((PlantReport*)rp->context);
+    free(rp);
+}
+
+/* ── Convenience helpers with null-safety ── */
+
+void plant_iReport_print(IReport* rp, const char* message) {
+    if (rp && rp->print) rp->print(rp->context, message);
+}
+
+void plant_iReport_summary(IReport* rp, int total, int passed, int failed) {
+    if (rp && rp->summary) rp->summary(rp->context, total, passed, failed);
+}
+
+char* plant_iReport_to_json(IReport* rp) {
+    if (rp && rp->to_json) return rp->to_json(rp->context);
+    return NULL;
+}
+
+char* plant_iReport_to_html(IReport* rp) {
+    if (rp && rp->to_html) return rp->to_html(rp->context);
+    return NULL;
+}
+
+char* plant_iReport_to_xml(IReport* rp) {
+    if (rp && rp->to_xml) return rp->to_xml(rp->context);
+    return NULL;
+}
+
+void plant_iReport_begin(IReport* rp) {
+    if (rp && rp->begin) rp->begin(rp->context);
+}
+
+void plant_iReport_end(IReport* rp) {
+    if (rp && rp->end) rp->end(rp->context);
+}
+
+void plant_iReport_add_result(IReport* rp, const char* name, int passed, double time) {
+    if (rp && rp->add_result) rp->add_result(rp->context, name, passed, time);
+}

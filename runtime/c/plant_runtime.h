@@ -330,4 +330,39 @@ tx_t plant_lock_release(tx_t key);   /* release a held lock */
 tx_t plant_lock_held(tx_t key);      /* probe protection status */
 tx_t plant_lock_status(void);        /* MAP: locked_count telemetry */
 
+/* ═══════════════════════════════════════════════════════════════
+   v0.49.59a — Abstract Runtime Interface (IRuntime)
+   Context-driven execution contract. Standardizes execution,
+   verification, error handling, and lifecycle management through
+   function pointer structs bound to a shared execution context.
+   Concrete runtimes (CLI, test harness, embedded) implement these
+   pointers; callers interact through the abstract interface only.
+   ═══════════════════════════════════════════════════════════════ */
+
+typedef struct IRuntime IRuntime;
+struct IRuntime {
+    void* context;
+    void (*execute)(void* ctx, const char* code);
+    void (*verify)(void* ctx, const char* label, int condition);
+    void (*verify_begin)(void* ctx);
+    void (*verify_end)(void* ctx);
+    void (*suite_setup)(void* ctx);
+    void (*suite_teardown)(void* ctx);
+    void (*error)(void* ctx, const char* msg);
+    void (*warning)(void* ctx, const char* msg);
+    void (*info)(void* ctx, const char* msg);
+    void (*fatal)(void* ctx, const char* msg);
+};
+
+/* Default runtime: binds context to NULL, delegates to the global
+   plant_error / plant_warning / plant_info / plant_fatal / plant_log
+   implementations and the standard test-suite hooks. */
+IRuntime* plant_runtime_default(void);
+void      plant_runtime_free(IRuntime* rt);
+
+/* Verify helpers that delegate through the IRuntime vtable */
+void plant_runtime_verify(IRuntime* rt, const char* label, int condition);
+void plant_runtime_verify_begin(IRuntime* rt);
+void plant_runtime_verify_end(IRuntime* rt);
+
 #endif
