@@ -1,3 +1,23 @@
+## v0.49.57c - 2026 (Codegen Interface Modernization — Phase 1)
+
+### Architecture
+- **`gen_create_stmt(node, env)`**: Refactored from inline `generate_node` handler
+  to standalone ACTION with `(node, env(LIST))` signature. Uses `env_indent`,
+  `env_subst`, `env_actx`, `env_nums`, `env_evars` accessors. Handles closure
+  creation, async step phases, type-dispatched declarations (NUM, FACT, LIST,
+  struct, tx_t).
+- **`gen_set_stmt(node, env)`**: Refactored from inline handler to standalone
+  ACTION with `(node, env(LIST))` signature. Uses `env_indent`, `env_nums`,
+  `env_evars` accessors.
+- **Dispatcher update**: `generate_node` now delegates `create_stmt` and
+  `set_stmt` to env-based ACTIONs (pre-compute `indent_str(indent)` as isel0,
+  pack env, call gen_*, free env), matching the established `gen_show_stmt`
+  pattern.
+
+### Self-Hosting
+- Convergent build verified: v2→v3→v4→v5 produces identical C output
+  (498091 bytes). 20/20 native tests pass.
+
 ## v0.49.57b - 2026 (Scoped Environment Subsystem — Phase 1)
 
 ### Architecture
