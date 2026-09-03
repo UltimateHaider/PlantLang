@@ -1,0 +1,12 @@
+# v0.49.57b: Environment container regression test.
+# Verifies that the env_new/env_set/env_get primitives and env_*
+# accessors work correctly through the gen_show_stmt pilot path.
+# Uses SHOW statements which exercise the refactored gen_show_stmt
+# (node, env) codegen path.
+ACTION main(),
+  SHOW "env_test_start".
+  # Simple expression to exercise gen_show_stmt env path
+  SHOW 1 + 2.
+  SHOW 3 * 4.
+  SHOW "env_test_end".
+/GIVE main.

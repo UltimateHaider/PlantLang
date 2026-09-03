@@ -1,3 +1,29 @@
+## v0.49.57b - 2026 (Scoped Environment Subsystem — Phase 1)
+
+### Architecture
+- **Core environment primitives implemented** as PlantLang ACTIONs in `codegen_c.plant`:
+  `env_new()` (11-slot zero-initialized container), `env_set(env, idx, value)`,
+  `env_get(env, idx)`, and 11 semantic accessor helpers (`env_indent`,
+  `env_sigs`, `env_subst`, `env_clmap`, `env_actx`, `env_nums`, `env_stvars`,
+  `env_evars`, `env_rty`, `env_mexit`, `env_wexit`).
+- **Pilot integration**: `gen_show_stmt(node, env)` consumes the new `(node, env)`
+  signature as a proof-of-concept. `generate_node`'s `show_stmt` handler now
+  constructs an env from the 11 params via `env_new` + `env_set` and delegates
+  to `gen_show_stmt`. All other node types still use the original 14-parameter
+  path.
+- **Type-safety fix**: `indent` (long/NUM) is pre-computed via `indent_str(indent)`
+  before storage in the env to avoid long→tx_t pointer reinterpretation that
+  caused infinite loops in `indent_str` when retrieved via `env_indent`.
+- **plant_compat.h**: Updated env subsystem documentation reflecting actual
+  Phase 1 implementation (env_new/env_set/env_get + accessors) vs. the
+  forward-compatible v0.49.57a planning notes.
+
+### Tests
+- **test_env.plant**: New compatibility regression test validating env container
+  operations through the `gen_show_stmt` codegen path (SHOW 1+2, SHOW 3*4, etc.)
+- **Self-hosting verified**: v2→v3→v4→v5→bin/Chloroplast chain completes with
+  convergent C output (v3≡v4). 20/20 native tests pass.
+
 ## v0.49.57a - 2026 (Codegen Environment Documentation)
 
 ### Architecture

@@ -1016,34 +1016,33 @@ void plant_debug(const char* msg);
 void plant_set_log_level(PlantLogLevel level);
 
 /* ═══════════════════════════════════════════════════════════════
-   v0.49.57a — Codegen Environment Aggregation
-   Planned interface: generate_node(node, env) replaces the 14-parameter
-   generate_node(node, indent, sigs, subst, clmap, actx, nums, stvars,
-   evars, rty, mexit, wexit) signature.
+   v0.49.57b — Environment Container Subsystem (Phase 1)
+   env_new / env_set / env_get implemented as PlantLang ACTION primitives
+   in codegen_c.plant. env_* accessors (env_indent, env_sigs, etc.)
+   provide semantic field retrieval. Pilot integration: gen_show_stmt
+   accepts (node, env) while generate_node still uses the 14-parameter
+   signature — env is constructed via env_new + env_set at call site.
 
-   The env_make()/env_*() helpers below document the target interface.
-   Runtime behavior is unchanged — this is a forward-compatibility layer
-   so generated C code can call env_make() to bundle the 11 auxiliary
-   state variables into a single PlantArray, and env_* accessors retrieve
-   individual fields via plant_list_get.
+   v0.49.57a — Forward compatibility documentation (superseded by b):
+     The env_make()/env_*() helpers documented the target interface.
+     Migration target (full refactor deferred due to self-hosting memory
+     constraints — env_make allocates 11-element lists on every recursive
+     call, causing OOM in the bootstrap compiler):
 
-   Migration target (not yet applied to codegen_c.plant due to self-hosting
-   memory constraints — env_make allocates 11-element lists on every recursive
-   call, causing OOM in the bootstrap compiler):
-
-   env_make(indent, sigs, subst, clmap, actx, nums, stvars,
-            evars, rty, mexit, wexit) → PlantArray*
-   env_indent(env)   → NUM
-   env_sigs(env)     → LIST
-   env_subst(env)    → LIST
-   env_clmap(env)    → LIST
-   env_actx(env)     → TX
-   env_nums(env)     → LIST
-   env_stvars(env)   → LIST
-   env_evars(env)    → LIST
-   env_rty(env)      → TX
-   env_mexit(env)    → TX
-   env_wexit(env)    → TX
+     env_new()                              → PlantArray* (11 zero-slots)
+     env_set(env, idx, value)               → sets slot, returns env
+     env_get(env, idx)                      → TX
+     env_indent(env)  → NUM   (idx 0)
+     env_sigs(env)    → LIST  (idx 1)
+     env_subst(env)   → LIST  (idx 2)
+     env_clmap(env)   → LIST  (idx 3)
+     env_actx(env)    → TX    (idx 4)
+     env_nums(env)    → LIST  (idx 5)
+     env_stvars(env)  → LIST  (idx 6)
+     env_evars(env)   → LIST  (idx 7)
+     env_rty(env)     → TX    (idx 8)
+     env_mexit(env)   → TX    (idx 9)
+     env_wexit(env)   → TX    (idx 10)
    ═══════════════════════════════════════════════════════════════ */
 
 typedef struct PlantReport PlantReport;

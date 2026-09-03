@@ -3284,6 +3284,98 @@ ACTION _gb_dump(bd(LIST)),
   GIVE 0.
 /ACTION.
 
+# ──────────────────────────────────────────────────────────────
+# v0.49.57b: Environment Container Primitives
+# Bundle the 11 auxiliary generate_node parameters into a single env(LIST).
+# Index mapping: 0=indent, 1=sigs, 2=subst, 3=clmap, 4=actx, 5=nums,
+# 6=stvars, 7=evars, 8=rty, 9=mexit, 10=wexit
+# ──────────────────────────────────────────────────────────────
+ACTION env_new(),
+  GIVE plant_list_create(11).
+/ACTION.
+
+ACTION env_set(env(LIST), idx(NUM), value(TX)),
+  REAP _ FROM plant_list_set, env, idx, value.
+  GIVE env.
+/ACTION.
+
+ACTION env_get(env(LIST), idx(NUM)),
+  GIVE plant_list_get(env, idx).
+/ACTION.
+
+ACTION env_indent(env(LIST)),
+  GIVE env_get(env, 0).
+/ACTION.
+
+ACTION env_sigs(env(LIST)),
+  GIVE env_get(env, 1).
+/ACTION.
+
+ACTION env_subst(env(LIST)),
+  GIVE env_get(env, 2).
+/ACTION.
+
+ACTION env_clmap(env(LIST)),
+  GIVE env_get(env, 3).
+/ACTION.
+
+ACTION env_actx(env(LIST)),
+  GIVE env_get(env, 4).
+/ACTION.
+
+ACTION env_nums(env(LIST)),
+  GIVE env_get(env, 5).
+/ACTION.
+
+ACTION env_stvars(env(LIST)),
+  GIVE env_get(env, 6).
+/ACTION.
+
+ACTION env_evars(env(LIST)),
+  GIVE env_get(env, 7).
+/ACTION.
+
+ACTION env_rty(env(LIST)),
+  GIVE env_get(env, 8).
+/ACTION.
+
+ACTION env_mexit(env(LIST)),
+  GIVE env_get(env, 9).
+/ACTION.
+
+ACTION env_wexit(env(LIST)),
+  GIVE env_get(env, 10).
+/ACTION.
+
+ACTION env_free(env),
+  REAP _ FROM plant_free, env.
+  GIVE 0.
+/ACTION.
+
+ACTION gen_show_stmt(node, env(LIST)),
+  REAP val FROM _map_get, node, "value".
+  REAP nums FROM env_nums, env.
+  REAP evars FROM env_evars, env.
+  REAP cval FROM translate_expr, val, nums, evars.
+  REAP cval FROM _handle_cat, cval, nums, evars.
+  REAP isn2 FROM expr_is_numeric, cval, nums.
+  IF isn2 IS 1,
+      SET cval TO "_from_long(" + cval + ")".
+  /IF.
+  REAP snm2 FROM enum_expr_of, evars, cval.
+  IF isn2 IS 0 AND snm2 ISNT "",
+      SET cval TO "_from_enum(" + cval + ", \"" + snm2 + "\")".
+  /IF.
+  IF isn2 IS 0,
+      REAP sl0 FROM substring, cval, 0, 12.
+      IF sl0 IS "plant_slice(",
+          SET cval TO "plant_map_to_string(" + cval + ")".
+      /IF.
+  /IF.
+  REAP isel FROM env_indent, env.
+  GIVE isel + "  plant_print(" + cval + ");\n".
+/ACTION.
+
 ACTION generate_body(bd(LIST), indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST), rty(TX), mexit(TX), wexit(TX)),
   CREATE res(TX) TO "".
   CREATE i(NUM) TO 0.
@@ -3491,27 +3583,22 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    NUM var / arithmetic / numeric reader prints its value
     #    instead of raw long-as-pointer bits (v0.48.5).
     IF ntype IS "show_stmt",
-        REAP val FROM _map_get, node, "value".
-        REAP cval FROM translate_expr, val, nums, evars.
-        REAP cval FROM _handle_cat, cval, nums, evars.
-        REAP isn2 FROM expr_is_numeric, cval, nums.
-        IF isn2 IS 1,
-            SET cval TO "_from_long(" + cval + ")".
-        /IF.
-        REAP snm2 FROM enum_expr_of, evars, cval.
-        IF isn2 IS 0 AND snm2 ISNT "",
-            SET cval TO "_from_enum(" + cval + ", \"" + snm2 + "\")".
-        /IF.
-        # v0.48.38i — SHOW of a SLICE(...) list result serializes via
-        # plant_map_to_string; _cat/_S cannot stringify a PlantArray.
-        IF isn2 IS 0,
-            REAP sl0 FROM substring, cval, 0, 12.
-            IF sl0 IS "plant_slice(",
-                SET cval TO "plant_map_to_string(" + cval + ")".
-            /IF.
-        /IF.
-        REAP isel FROM indent_str, indent.
-        GIVE isel + "  plant_print(" + cval + ");\n".
+        REAP isel0 FROM indent_str, indent.
+        REAP env FROM env_new().
+        REAP _ FROM env_set, env, 0, isel0.
+        REAP _ FROM env_set, env, 1, sigs.
+        REAP _ FROM env_set, env, 2, subst.
+        REAP _ FROM env_set, env, 3, clmap.
+        REAP _ FROM env_set, env, 4, actx.
+        REAP _ FROM env_set, env, 5, nums.
+        REAP _ FROM env_set, env, 6, stvars.
+        REAP _ FROM env_set, env, 7, evars.
+        REAP _ FROM env_set, env, 8, rty.
+        REAP _ FROM env_set, env, 9, mexit.
+        REAP _ FROM env_set, env, 10, wexit.
+        REAP code FROM gen_show_stmt, node, env.
+        REAP _ FROM env_free, env.
+        GIVE code.
     /IF.
 
     # -- verify_stmt: VERIFY "label" cond. → plant_verify(label, cond); --
