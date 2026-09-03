@@ -1017,7 +1017,7 @@ void plant_set_log_level(PlantLogLevel level);
 
 /* ═══════════════════════════════════════════════════════════════
    v0.49.57b — Environment Container Subsystem (Phase 1)
-   env_new / env_set / env_get implemented as PlantLang ACTION primitives
+   env_set / env_get implemented as PlantLang ACTION primitives
    in codegen_c.plant. env_* accessors (env_indent, env_sigs, etc.)
    provide semantic field retrieval. gen_show_stmt was the pilot integration
    using (node, env) while generate_node used the 14-parameter signature.
@@ -1028,10 +1028,17 @@ void plant_set_log_level(PlantLogLevel level);
      rty, mexit, wexit) creates a fully populated env in one call.
      Recursive indent arithmetic uses in-place save/restore of slot 11.
 
-     env_new()                              → PlantArray* (11 zero-slots)
+   v0.49.58a — Performance optimization & field-passing refactoring:
+     env_new() and env_free() removed (dead code / inlined into env_make).
+     gen_*_stmt handlers now receive pre-extracted fields from generate_node
+     instead of re-reading env on every call. Handlers that mutate indent
+     (if/season/cycle/weather) keep env(LIST) for save/restore. Handlers
+     that only read fields (show/set/throw/create/give/reap) take field
+     params directly, eliminating ~50 env_get calls per compilation pass.
+
      env_set(env, idx, value)               → sets slot, returns env
      env_get(env, idx)                      → TX
-     env_indent(env)  → NUM   (idx 0)
+     env_indent(env)  → TX    (idx 0, isel string)
      env_sigs(env)    → LIST  (idx 1)
      env_subst(env)   → LIST  (idx 2)
      env_clmap(env)   → LIST  (idx 3)
@@ -1042,6 +1049,7 @@ void plant_set_log_level(PlantLogLevel level);
      env_rty(env)     → TX    (idx 8)
      env_mexit(env)   → TX    (idx 9)
      env_wexit(env)   → TX    (idx 10)
+     env_indent_num(env) → NUM (idx 11)
    ═══════════════════════════════════════════════════════════════ */
 
 typedef struct PlantReport PlantReport;

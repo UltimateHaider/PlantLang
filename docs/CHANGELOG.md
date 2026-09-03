@@ -1,3 +1,20 @@
+## v0.49.58a - 2026 (Codegen Field-Passing Optimization)
+
+### Architecture
+- **Performance optimization**: gen_*_stmt handlers now receive pre-extracted fields
+  directly from generate_node instead of re-reading from env on every call.
+  - Simple handlers (show/set/throw): take field params directly, no env needed.
+  - Medium handlers (create/give/reap): take all needed fields directly.
+  - Hybrid handlers (if/season/cycle/weather): take frequently-used fields (nums,
+    evars, isel, indent_num) as params + keep env for save/restore of indent.
+- **Dead code removal**: Removed `env_new()` (0 call sites, inlined into env_make)
+  and `env_free()` (0 call sites). env_make now calls plant_list_create(12) directly.
+- **Bug fix**: Removed incorrect `_to_long(indent_num)` calls in hybrid handlers
+  where indent_num was already a NUM (long), not a TX (string). This caused segfaults
+  when processing any file containing IF/SEASON/CYCLE/WEATHER statements.
+- **Generated code**: Self-hosting output reduced from 443460 → 442206 bytes (-0.28%).
+- **Tests**: 20/20 native tests pass. Self-hosting convergence verified.
+
 ## v0.49.58 - 2026 (Codegen Interface Modernization — Phase 4)
 
 ### Architecture

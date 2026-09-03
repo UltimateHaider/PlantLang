@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-# PlantLang — Chloroplast Pure Native Self-Hosting Toolchain
+# PlantLang — Chloroplast Pure Native Self-Hosting Toolchain (v0.49.58a)
 #
 # Targets:
 #   make            build the native compiler (bin/Chloroplast)
