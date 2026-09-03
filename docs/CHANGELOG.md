@@ -1,3 +1,23 @@
+## v0.49.57d - 2026 (Codegen Interface Modernization — Phase 2)
+
+### Architecture
+- **`gen_give_stmt(node, env)`**: Refactored from inline handler to standalone
+  ACTION with `(node, env(LIST))` signature. Uses `env_nums`, `env_evars`,
+  `env_rty`, `env_actx`, `env_mexit` accessors. Handles async step returns,
+  mission-mode exit lines, numeric/enum type wrapping.
+- **`gen_if_stmt(node, env)`**: Refactored from inline handler to standalone
+  ACTION with `(node, env(LIST))` signature. Uses all 11 env accessors for
+  recursive `generate_body` calls. Handles ORIF chains and ELSE branches.
+- **Env slot 11**: Added `env_indent_num` accessor for numeric indent values
+  (stored via `_from_long`, retrieved via `_to_long`) to avoid tx_t/long type
+  mismatches in arithmetic and `generate_body` calls.
+- **Dispatcher update**: `generate_node` now delegates `give_stmt` and
+  `if_stmt` to env-based ACTIONs.
+
+### Self-Hosting
+- Convergent build verified: v2→v3→v4→v5 produces identical C output
+  (500337 bytes). 20/20 native tests pass.
+
 ## v0.49.57c - 2026 (Codegen Interface Modernization — Phase 1)
 
 ### Architecture
