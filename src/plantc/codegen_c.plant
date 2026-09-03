@@ -3568,6 +3568,456 @@ ACTION gen_if_stmt(node, env(LIST)),
   GIVE ccode.
 /ACTION.
 
+# ──────────────────────────────────────────────────────────────
+#  gen_reap_stmt — env-based REAP handler
+#  Env slots: 0=indent(isel), 1=sigs, 2=subst, 3=clmap,
+#  5=nums, 6=stvars, 7=evars, 11=indent_num
+# ──────────────────────────────────────────────────────────────
+ACTION gen_reap_stmt(node, env(LIST)),
+  REAP tgt FROM _map_get, node, "target".
+  REAP act FROM _map_get, node, "action".
+  REAP act FROM strings:REPLACE, act, ":", "_".
+  IF act IS "storm", SET act TO "plant_storm". /IF.
+  CREATE callname(TX) TO act.
+  CREATE fparams(LIST) TO plant_list_make(0).
+  CREATE gi(NUM) TO -1.
+  REAP gi FROM find_any, act, "[".
+  REAP sigs FROM env_sigs, env.
+  REAP subst FROM env_subst, env.
+  IF gi ISNT -1,
+      REAP sact FROM subst_reap_act, act, subst.
+      REAP base FROM base_of, sact.
+      REAP gargs FROM parse_type_args, sact.
+      REAP mname FROM mangle, base, gargs.
+      SET callname TO mname.
+      REAP fparams FROM find_params, sigs, base.
+  /IF.
+  IF gi IS -1,
+      REAP fparams FROM find_params, sigs, act.
+  /IF.
+  REAP clmap FROM env_clmap, env.
+  REAP cvar FROM _cl_map_get, clmap, act.
+  CREATE clcall(TX) TO "".
+  IF cvar > "",
+      REAP cfn FROM _map_get, cvar, "fnname".
+      SET callname TO cfn.
+      SET clcall TO "(tx_t)" + act + ", ".
+  /IF.
+  CREATE args(LIST) TO _map_get(node, "args").
+  CREATE clargs(LIST) TO plant_list_make(0).
+  REAP clargs FROM _map_get, node, "clargs".
+  IF clargs IS "",
+      SET clargs TO plant_list_make(0).
+  /IF.
+  CREATE argstr(TX) TO "".
+  CREATE clpre(TX) TO "".
+  CREATE clclears(TX) TO "".
+  CREATE ai(NUM) TO 0.
+  CREATE arg_el(TX) TO "".
+  REAP isel FROM env_indent, env.
+  REAP nums FROM env_nums, env.
+  REAP stvars FROM env_stvars, env.
+  REAP evars FROM env_evars, env.
+  CREATE safm(TX) TO "".
+  REAP sfz2 FROM find_sig, sigs, act.
+  IF COUNT sfz2 > 0,
+      REAP safm FROM _map_get, sfz2, "mission_mode".
+  /IF.
+  CREATE safe_call(TX) TO "0".
+  IF safm IS "SAFE", SET safe_call TO "1". /IF.
+  CREATE sargstr(TX) TO "".
+  CREATE sarg_el(TX) TO "".
+  CREATE sarcn(NUM) TO 0.
+  SEASON ai < COUNT args,
+      REAP arg_el FROM plant_list_get, args, ai.
+      CREATE aexpr(TX) TO arg_el.
+      CREATE cl_ok(TX) TO "0".
+      REAP cl_ok FROM _cl_is_arg, arg_el.
+      IF cl_ok IS "1",
+          REAP cnd FROM plant_list_get, clargs, ai.
+          CREATE cndok(TX) TO "0".
+          IF cnd > "",
+              SET cndok TO "1".
+          /IF.
+          IF cndok IS "1",
+              REAP envname FROM _map_get, cnd, "envname".
+              REAP caps FROM _map_get, cnd, "clcaps".
+              REAP moved FROM _map_get, cnd, "moved".
+              SET clpre TO clpre + isel + "  tx_t __carg_" + ai + ";\n".
+              SET clpre TO clpre + isel + "  { " + envname + "* __env_" + ai + " = (" + envname + "*)plant_env_alloc(sizeof(" + envname + "));\n".
+              CREATE cpi(NUM) TO 0.
+              CREATE capn(TX) TO "".
+              CREATE capi(TX) TO "".
+              SEASON cpi + 1 < COUNT caps,
+                  REAP capn FROM plant_list_get, caps, cpi.
+                  REAP capi FROM plant_list_get, caps, cpi + 1.
+                  SET clpre TO clpre + isel + "    __env_" + ai + "->" + capn + " = " + capi + ";\n".
+                  SET cpi TO cpi + 2.
+              /SEASON.
+              SET clpre TO clpre + isel + "    __carg_" + ai + " = (tx_t)__env_" + ai + ";\n".
+              SET clpre TO clpre + isel + "  }\n".
+              CREATE cmi(NUM) TO 0.
+              CREATE cmv(TX) TO "".
+              SEASON cmi < COUNT moved,
+                  REAP cmv FROM plant_list_get, moved, cmi.
+                  SET clclears TO clclears + isel + "  " + cmv + " = 0;\n".
+                  SET cmi TO cmi + 1.
+              /SEASON.
+              SET aexpr TO "__carg_" + ai.
+          /IF.
+          IF cndok IS "0",
+              SET aexpr TO arg_el.
+          /IF.
+      /IF.
+      IF cl_ok IS "0",
+          REAP arg0 FROM substring, arg_el, 0, 1.
+          IF arg0 ISNT "\"",
+             REAP aexpr FROM translate_expr, arg_el, nums, evars.
+             REAP aexpr FROM _handle_cat, aexpr, nums, evars.
+          /IF.
+          IF safe_call IS "1",
+              SET sarg_el TO aexpr.
+          /IF.
+          CREATE fp_ty(TX) TO "".
+          IF ai < COUNT fparams,
+              REAP fp_el FROM plant_list_get, fparams, ai.
+              REAP fp_ty FROM _map_get, fp_el, "type".
+          /IF.
+          IF safe_call IS "1" AND cl_ok IS "0",
+              REAP sct2 FROM ffi_ctype, fp_ty.
+              IF sct2 IS "long" OR sct2 IS "int",
+                  SET sarg_el TO "_from_long(" + sarg_el + ")".
+              /IF.
+          /IF.
+          REAP fk2 FROM ffi_param_kind, fp_ty.
+          IF fk2 IS "struct_val",
+              REAP fpx FROM is_bare_id, arg_el.
+              REAP fpk2 FROM stvar_kind, stvars, arg_el.
+              IF fpx IS "1" AND fpk2 IS "struct_ref", SET aexpr TO "*" + aexpr. /IF.
+              IF fpx IS "0" OR fpk2 IS "",
+                  REAP e0 FROM substring, arg_el, 0, 1.
+                  IF e0 ISNT "\"",
+                      REAP cnm4 FROM ffi_struct_cname, fp_ty.
+                      SET aexpr TO "plant_map_to_" + cnm4 + "(" + aexpr + ")".
+                  /IF.
+              /IF.
+          /IF.
+          IF fk2 IS "struct_ref",
+              REAP fpx FROM is_bare_id, arg_el.
+              REAP fpk2 FROM stvar_kind, stvars, arg_el.
+              REAP amp0 FROM substring, aexpr, 0, 1.
+              IF amp0 IS "&", SET aexpr TO substring(aexpr, 1, LEN(aexpr)). /IF.
+              IF fpx IS "1" AND fpk2 IS "struct_val", SET aexpr TO "&" + aexpr. /IF.
+              IF fpx IS "0" OR fpk2 IS "",
+                  REAP e0 FROM substring, arg_el, 0, 1.
+                  IF e0 ISNT "\"",
+                      REAP cnm4 FROM ffi_struct_cname, fp_ty.
+                      SET aexpr TO "plant_map_to_ref_" + cnm4 + "(" + aexpr + ")".
+                  /IF.
+              /IF.
+          /IF.
+          IF fk2 IS "callback",
+              REAP fpx FROM is_bare_id, arg_el.
+              IF fpx IS "1",
+                  REAP fpk2 FROM stvar_kind, stvars, arg_el.
+                  IF fpk2 IS "",
+                      REAP fs2 FROM find_sig, sigs, arg_el.
+                      IF COUNT fs2 > 0,
+                          SET aexpr TO "plant_cb_ensure(\"" + arg_el + "\", plant_cbw_" + arg_el + ")".
+                      /IF.
+                  /IF.
+              /IF.
+          /IF.
+          IF fk2 IS "plain",
+              CREATE fty0(TX) TO fp_ty.
+              REAP fp0 FROM substring, fty0, 0, 4.
+              IF fp0 IS "REF ", SET fty0 TO substring(fty0, 4, LEN(fty0)). /IF.
+              REAP fp0 FROM substring, fty0, 0, 5.
+              IF fp0 IS "ENUM ", SET fty0 TO substring(fty0, 5, LEN(fty0)). /IF.
+              REAP fcsv2 FROM enum_in_table, evars, fty0.
+              IF fcsv2 ISNT "",
+                  SET aexpr TO "_to_enum(" + aexpr + ", \"" + fty0 + "\")".
+              /IF.
+              REAP rp3 FROM is_ref_at, fparams, ai.
+              IF rp3 IS "1",
+                  SET aexpr TO "&" + aexpr.
+              /IF.
+          /IF.
+          IF fk2 IS "voidptr",
+              SET aexpr TO "(void*)" + aexpr.
+          /IF.
+      /IF.
+      IF ai IS 0,
+          SET argstr TO aexpr.
+      /IF.
+      IF ai > 0,
+          SET argstr TO argstr + ", " + aexpr.
+      /IF.
+      IF safe_call IS "1" AND cl_ok IS "0",
+          IF sarcn IS 0,
+              SET sargstr TO sarg_el.
+          /IF.
+          IF sarcn > 0,
+              SET sargstr TO sargstr + ", " + sarg_el.
+          /IF.
+          SET sarcn TO sarcn + 1.
+      /IF.
+      SET ai TO ai + 1.
+  /SEASON.
+  # FFI extension return handling
+  CREATE ffi_ret(TX) TO "".
+  CREATE ffi_rtk(TX) TO "".
+  REAP sig2 FROM find_sig, sigs, act.
+  IF COUNT sig2 > 0,
+      REAP ffi_ret FROM _map_get, sig2, "ret".
+      REAP fp9 FROM substring, ffi_ret, 0, 5.
+      IF fp9 IS "ENUM ", SET ffi_ret TO substring(ffi_ret, 5, LEN(ffi_ret)). /IF.
+      REAP ffi_rtk FROM ffi_param_kind, ffi_ret.
+  /IF.
+  CREATE call_expr(TX) TO callname + "(" + clcall + argstr + ")".
+  REAP asy3 FROM _map_get, sig2, "async".
+  IF asy3 IS "1",
+      REAP reap_ctx FROM _map_get, node, "ctx".
+      IF reap_ctx IS "" OR reap_ctx IS "null", SET reap_ctx TO "0". /IF.
+      IF argstr > "",
+          SET call_expr TO callname + "(0, " + reap_ctx + ", " + clcall + argstr + ")".
+      /IF.
+      IF argstr IS "",
+          SET call_expr TO callname + "(0, " + reap_ctx + ")".
+      /IF.
+  /IF.
+  IF safe_call IS "1",
+      IF sarcn > 0,
+          SET call_expr TO "plant_safe_call(\"" + act + "\", " + sarcn + ", " + sargstr + ")".
+      /IF.
+      IF sarcn IS 0,
+          SET call_expr TO "plant_safe_call(\"" + act + "\", 0)".
+      /IF.
+  /IF.
+  CREATE ffi_pref(TX) TO "".
+  IF ffi_rtk IS "struct_val",
+      REAP rcnm FROM ffi_struct_cname, ffi_ret.
+      SET ffi_pref TO ffi_pref + isel + "  plant_ffi_errno = 0;\n".
+      IF tgt IS "_",
+          GIVE clpre + ffi_pref + isel + "  " + call_expr + ";\n" + clclears.
+      /IF.
+      REAP stk2 FROM stvar_kind, stvars, tgt.
+      IF stk2 > "",
+          GIVE clpre + ffi_pref + isel + "  " + tgt + " = plant_" + rcnm + "_to_map(" + call_expr + ");\n" + clclears.
+      /IF.
+      GIVE clpre + ffi_pref + isel + "  " + tgt + " = plant_" + rcnm + "_to_map(" + call_expr + ");\n" + clclears.
+  /IF.
+  IF ffi_rtk ISNT "struct_val",
+      IF ffi_rtk IS "voidptr" OR ffi_rtk IS "struct_ref",
+          SET ffi_pref TO ffi_pref + isel + "  plant_ffi_errno = 0;\n".
+      /IF.
+      IF tgt IS "_",
+          GIVE clpre + ffi_pref + isel + "  " + call_expr + ";\n" + clclears.
+      /IF.
+      IF tgt ISNT "_",
+          REAP ffr2 FROM enum_in_table, evars, ffi_ret.
+          IF ffr2 ISNT "",
+              REAP rtg2 FROM enum_in_table, evars, tgt.
+              IF rtg2 ISNT "",
+                  SET call_expr TO "_from_enum(" + call_expr + ", \"" + rtg2 + "\")".
+              /IF.
+          /IF.
+          GIVE clpre + ffi_pref + isel + "  " + tgt + " = " + call_expr + ";\n" + clclears.
+      /IF.
+  /IF.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
+#  gen_season_stmt — env-based SEASON (while) handler
+#  Env slots: 0=indent(isel), 1=sigs, 2=subst, 3=clmap, 4=actx,
+#  5=nums, 6=stvars, 7=evars, 8=rty, 9=mexit, 10=wexit, 11=indent_num
+# ──────────────────────────────────────────────────────────────
+ACTION gen_season_stmt(node, env(LIST)),
+  REAP cond FROM _map_get, node, "cond".
+  REAP bd FROM _map_get, node, "body".
+  REAP nums FROM env_nums, env.
+  REAP evars FROM env_evars, env.
+  REAP ccond FROM translate_expr, cond, nums, evars.
+  REAP ccond FROM handle_strcmp, ccond.
+  REAP isel FROM env_indent, env.
+  CREATE ccode(TX) TO isel + "  while (" + ccond + ") \{\n".
+  REAP indent_s FROM env_indent_num, env.
+  REAP indent FROM _to_long, indent_s.
+  REAP sigs FROM env_sigs, env.
+  REAP subst FROM env_subst, env.
+  REAP clmap FROM env_clmap, env.
+  REAP actx FROM env_actx, env.
+  REAP stvars FROM env_stvars, env.
+  REAP rty FROM env_rty, env.
+  REAP mexit FROM env_mexit, env.
+  REAP wexit FROM env_wexit, env.
+  REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
+  SET ccode TO ccode + bcode + isel + "  \}\n".
+  GIVE ccode.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
+#  gen_cycle_stmt — env-based CYCLE (for) handler
+#  Env slots: 0=indent(isel), 1=sigs, 2=subst, 3=clmap, 4=actx,
+#  5=nums, 6=stvars, 7=evars, 8=rty, 9=mexit, 10=wexit, 11=indent_num
+# ──────────────────────────────────────────────────────────────
+ACTION gen_cycle_stmt(node, env(LIST)),
+  REAP ivar FROM _map_get, node, "iterVar".
+  REAP fromExpr FROM _map_get, node, "fromExpr".
+  REAP toExpr FROM _map_get, node, "toExpr".
+  REAP stepExpr FROM _map_get, node, "stepExpr".
+  REAP listExpr FROM _map_get, node, "listExpr".
+  REAP indexVar FROM _map_get, node, "indexVar".
+  REAP bd FROM _map_get, node, "body".
+  REAP isel FROM env_indent, env.
+  CREATE ccode(TX) TO "".
+  REAP nums FROM env_nums, env.
+  REAP evars FROM env_evars, env.
+  REAP indent_s FROM env_indent_num, env.
+  REAP indent FROM _to_long, indent_s.
+  REAP sigs FROM env_sigs, env.
+  REAP subst FROM env_subst, env.
+  REAP clmap FROM env_clmap, env.
+  REAP actx FROM env_actx, env.
+  REAP stvars FROM env_stvars, env.
+  REAP rty FROM env_rty, env.
+  REAP mexit FROM env_mexit, env.
+  REAP wexit FROM env_wexit, env.
+  IF fromExpr ISNT "",
+      REAP cfrom FROM translate_expr, fromExpr, nums, evars.
+      REAP cto FROM translate_expr, toExpr, nums, evars.
+      CREATE stepstr(TX) TO "1".
+      IF stepExpr > "" AND stepExpr ISNT "null",
+          REAP cstep FROM translate_expr, stepExpr, nums, evars.
+          SET stepstr TO cstep.
+      /IF.
+      REAP sgn FROM _step_sign, stepstr.
+      IF sgn IS "0",
+          GIVE "#error STEP cannot be 0\n".
+      /IF.
+      CREATE bound(TX) TO ivar + " <= " + cto.
+      IF sgn IS "-",
+          SET bound TO ivar + " >= " + cto.
+      /IF.
+      IF sgn IS "?",
+          SET bound TO "((" + stepstr + " != 0) && (((" + stepstr + " > 0) && (" + ivar + " <= " + cto + ")) || ((" + stepstr + " <= 0) && (" + ivar + " >= " + cto + "))))".
+      /IF.
+      SET ccode TO isel + "  for (long " + ivar + " = " + cfrom + "; " + bound + "; " + ivar + " += " + stepstr + ") \{\n".
+      REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
+      SET ccode TO ccode + bcode + isel + "  \}\n".
+      GIVE ccode.
+  /IF.
+  IF listExpr ISNT "",
+      CREATE idxvar(TX) TO "__cycle_i".
+      IF indexVar ISNT "" AND indexVar ISNT "null",
+          SET idxvar TO indexVar.
+      /IF.
+      REAP clist FROM translate_expr, listExpr, nums, evars.
+      SET ccode TO isel + "  for (long " + idxvar + " = 0; " + idxvar + " < plant_array_length(" + clist + "); " + idxvar + "++) \{\n".
+      SET ccode TO ccode + isel + "    tx_t " + ivar + " = plant_list_get(" + clist + ", " + idxvar + ");\n".
+      REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
+      SET ccode TO ccode + bcode + isel + "  \}\n".
+      GIVE ccode.
+  /IF.
+  GIVE "".
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
+#  gen_weather_stmt — env-based WEATHER handler
+#  Env slots: 0=indent(isel), 1=sigs, 2=subst, 3=clmap, 4=actx,
+#  5=nums, 6=stvars, 7=evars, 8=rty, 9=mexit, 10=wexit, 11=indent_num
+# ──────────────────────────────────────────────────────────────
+ACTION gen_weather_stmt(node, env(LIST)),
+  REAP bd FROM _map_get, node, "body".
+  REAP sh FROM _map_get, node, "shelters".
+  REAP cb FROM _map_get, node, "calm".
+  REAP isel FROM env_indent, env.
+  REAP indent_s FROM env_indent_num, env.
+  REAP indent FROM _to_long, indent_s.
+  CREATE wnm(TX) TO "__w" + _from_long(indent).
+  REAP wexit FROM env_wexit, env.
+  REAP mexit FROM env_mexit, env.
+  REAP sigs FROM env_sigs, env.
+  REAP subst FROM env_subst, env.
+  REAP clmap FROM env_clmap, env.
+  REAP actx FROM env_actx, env.
+  REAP nums FROM env_nums, env.
+  REAP stvars FROM env_stvars, env.
+  REAP evars FROM env_evars, env.
+  REAP rty FROM env_rty, env.
+  CREATE wx0(TX) TO wexit + "  plant_calm(&" + wnm + ");\n".
+  CREATE mx0(TX) TO mexit + "  plant_calm(&" + wnm + ");\n".
+  REAP cbcode FROM generate_body, cb, indent + 1, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx0, wx0.
+  CREATE wx(TX) TO wexit + cbcode + "  plant_calm(&" + wnm + ");\n".
+  CREATE mx2(TX) TO mexit + cbcode + "  plant_calm(&" + wnm + ");\n".
+  CREATE ccode(TX) TO isel + "  \{\n".
+  SET ccode TO ccode + isel + "    PlantWeather " + wnm + " = \{0\};\n".
+  SET ccode TO ccode + isel + "    plant_weather_enter(&" + wnm + ", " + _from_long(COUNT sh / 3) + ");\n".
+  SET ccode TO ccode + isel + "    if (setjmp(" + wnm + ".buf) == 0) \{\n".
+  REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx.
+  SET ccode TO ccode + bcode + isel + "    \} else \{\n".
+  SET ccode TO ccode + isel + "      const char* __et = plant_exc_type();\n".
+  SET ccode TO ccode + isel + "      const char* __em = plant_exc_msg();\n".
+  SET ccode TO ccode + isel + "      tx_t __ev = plant_exc_val();\n".
+  SET ccode TO ccode + isel + "      plant_weather_leave(&" + wnm + ");\n".
+  SET ccode TO ccode + isel + "      plant_weather_handling_begin(&" + wnm + ");\n".
+  CREATE si2(NUM) TO 0.
+  CREATE wty2(TX) TO "".
+  CREATE wbd2(TX) TO "".
+  CREATE wbind2(TX) TO "".
+  SEASON si2 < COUNT sh,
+      REAP wty2 FROM plant_list_get, sh, si2.
+      REAP wbind2 FROM plant_list_get, sh, si2 + 1.
+      REAP wbd2 FROM plant_list_get, sh, si2 + 2.
+      IF si2 IS 0,
+          SET ccode TO ccode + isel + "      if (plant_storm_match(__et, \"" + wty2 + "\")) \{\n".
+      /IF.
+      IF si2 > 0,
+          SET ccode TO ccode + isel + "      \} else if (plant_storm_match(__et, \"" + wty2 + "\")) \{\n".
+      /IF.
+      SET ccode TO ccode + isel + "        plant_weather_shelter_enter(&" + wnm + ");\n".
+      SET ccode TO ccode + isel + "        " + wnm + ".handled = 1;\n".
+      IF wbind2 ISNT "" AND wbind2 ISNT "null",
+          SET ccode TO ccode + isel + "        tx_t " + wbind2 + " = __ev;\n".
+      /IF.
+      REAP hcode FROM generate_body, wbd2, indent + 3, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx.
+      SET ccode TO ccode + hcode.
+      SET ccode TO ccode + isel + "        plant_storm_release(__ev);\n".
+      SET ccode TO ccode + isel + "        plant_weather_shelter_leave(&" + wnm + ");\n".
+      SET si2 TO si2 + 3.
+  /SEASON.
+  IF COUNT sh > 0,
+      SET ccode TO ccode + isel + "      \}\n".
+  /IF.
+  SET ccode TO ccode + isel + "      plant_weather_handling_end(&" + wnm + ");\n".
+  SET ccode TO ccode + isel + "    \}\n".
+  SET ccode TO ccode + cbcode.
+  SET ccode TO ccode + isel + "    plant_calm(&" + wnm + ");\n".
+  SET ccode TO ccode + isel + "  \}\n".
+  GIVE ccode.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
+#  gen_throw_stmt — env-based THROW handler
+#  Env slots: 0=indent(isel), 5=nums, 7=evars
+# ──────────────────────────────────────────────────────────────
+ACTION gen_throw_stmt(node, env(LIST)),
+  REAP wtype2 FROM _map_get, node, "storm".
+  REAP wmsg2 FROM _map_get, node, "msg".
+  REAP isel FROM env_indent, env.
+  REAP nums FROM env_nums, env.
+  REAP evars FROM env_evars, env.
+  CREATE cmsg(TX) TO "NULL".
+  IF wmsg2 > "",
+      REAP cmsg FROM translate_expr, wmsg2, nums, evars.
+      REAP cmsg FROM _handle_cat, cmsg, nums, evars.
+  /IF.
+  IF wtype2 IS "",
+      GIVE isel + "  plant_throw_obj(" + cmsg + ");\n".
+  /IF.
+  GIVE isel + "  plant_throw(\"" + wtype2 + "\", " + cmsg + ");\n".
+/ACTION.
+
 ACTION generate_body(bd(LIST), indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST), rty(TX), mexit(TX), wexit(TX)),
   CREATE res(TX) TO "".
   CREATE i(NUM) TO 0.
@@ -4439,287 +4889,23 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     # ── reap_stmt: REAP var FROM action, args. → var = action(…); ─
     # Generic calls (action[T1, T2]) emit the mangled monomorphized name.
     IF ntype IS "reap_stmt",
-        REAP tgt FROM _map_get, node, "target".
-        REAP act FROM _map_get, node, "action".
-        REAP act FROM strings:REPLACE, act, ":", "_".
-        IF act IS "storm", SET act TO "plant_storm". /IF.
-        CREATE callname(TX) TO act.
-        CREATE fparams(LIST) TO plant_list_make(0).
-        CREATE gi(NUM) TO -1.
-        REAP gi FROM find_any, act, "[".
-        IF gi ISNT -1,
-            REAP sact FROM subst_reap_act, act, subst.
-            REAP base FROM base_of, sact.
-            REAP gargs FROM parse_type_args, sact.
-            REAP mname FROM mangle, base, gargs.
-            SET callname TO mname.
-            REAP fparams FROM find_params, sigs, base.
-        /IF.
-        IF gi IS -1,
-            REAP fparams FROM find_params, sigs, act.
-        /IF.
-        # closure-var invocation: REAP r FROM f, … where f holds a
-        # closure created in this scope → r = plant_Closure_N_fn((tx_t)f, …)
-        REAP cvar FROM _cl_map_get, clmap, act.
-        CREATE clcall(TX) TO "".
-        IF cvar > "",
-            REAP cfn FROM _map_get, cvar, "fnname".
-            SET callname TO cfn.
-            SET clcall TO "(tx_t)" + act + ", ".
-        /IF.
-        CREATE args(LIST) TO _map_get(node, "args").
-        CREATE clargs(LIST) TO plant_list_make(0).
-        REAP clargs FROM _map_get, node, "clargs".
-        IF clargs IS "",
-            SET clargs TO plant_list_make(0).
-        /IF.
-        CREATE argstr(TX) TO "".
-        CREATE clpre(TX) TO "".
-        CREATE clclears(TX) TO "".
-        CREATE ai(NUM) TO 0.
-        CREATE arg_el(TX) TO "".
-        REAP isel FROM indent_str, indent.
-        # v0.48.37c: SAFE callees are dispatched to a real worker
-        # process through plant_safe_call (the boundary handshake +
-        # MODE_ENTER audit happen parent-side at the call site). Only
-        # the raw translated values cross the wire — FFI marshalling
-        # (&, (void*), _to_enum, struct wrappers) is skipped for them.
-        CREATE safm(TX) TO "".
-        REAP sfz2 FROM find_sig, sigs, act.
-        IF COUNT sfz2 > 0,
-            REAP safm FROM _map_get, sfz2, "mission_mode".
-        /IF.
-        CREATE safe_call(TX) TO "0".
-        IF safm IS "SAFE", SET safe_call TO "1". /IF.
-        CREATE sargstr(TX) TO "".
-        CREATE sarg_el(TX) TO "".
-        CREATE sarcn(NUM) TO 0.
-        SEASON ai < COUNT args,
-            REAP arg_el FROM plant_list_get, args, ai.
-            CREATE aexpr(TX) TO arg_el.
-            # closure argument: emit the env-init prelude, pass the env
-            CREATE cl_ok(TX) TO "0".
-            REAP cl_ok FROM _cl_is_arg, arg_el.
-            IF cl_ok IS "1",
-                REAP cnd FROM plant_list_get, clargs, ai.
-                CREATE cndok(TX) TO "0".
-                IF cnd > "",
-                    SET cndok TO "1".
-                /IF.
-                IF cndok IS "1",
-                    REAP envname FROM _map_get, cnd, "envname".
-                    REAP caps FROM _map_get, cnd, "clcaps".
-                    REAP moved FROM _map_get, cnd, "moved".
-                    SET clpre TO clpre + isel + "  tx_t __carg_" + ai + ";\n".
-                    SET clpre TO clpre + isel + "  { " + envname + "* __env_" + ai + " = (" + envname + "*)plant_env_alloc(sizeof(" + envname + "));\n".
-                    CREATE cpi(NUM) TO 0.
-                    CREATE capn(TX) TO "".
-                    CREATE capi(TX) TO "".
-                    SEASON cpi + 1 < COUNT caps,
-                        REAP capn FROM plant_list_get, caps, cpi.
-                        REAP capi FROM plant_list_get, caps, cpi + 1.
-                        SET clpre TO clpre + isel + "    __env_" + ai + "->" + capn + " = " + capi + ";\n".
-                        SET cpi TO cpi + 2.
-                    /SEASON.
-                    SET clpre TO clpre + isel + "    __carg_" + ai + " = (tx_t)__env_" + ai + ";\n".
-                    SET clpre TO clpre + isel + "  }\n".
-                    CREATE cmi(NUM) TO 0.
-                    CREATE cmv(TX) TO "".
-                    SEASON cmi < COUNT moved,
-                        REAP cmv FROM plant_list_get, moved, cmi.
-                        SET clclears TO clclears + isel + "  " + cmv + " = 0;\n".
-                        SET cmi TO cmi + 1.
-                    /SEASON.
-                    SET aexpr TO "__carg_" + ai.
-                /IF.
-                IF cndok IS "0",
-                    SET aexpr TO arg_el.
-                /IF.
-            /IF.
-            # plain argument: translate + REF handling + FFI
-            # extension marshalling (STRUCT by value/ref, void*,
-            # CALLBACK, varargs cast)
-             IF cl_ok IS "0",
-                 REAP arg0 FROM substring, arg_el, 0, 1.
-                 IF arg0 ISNT "\"",
-                    REAP aexpr FROM translate_expr, arg_el, nums, evars.
-                    REAP aexpr FROM _handle_cat, aexpr, nums, evars.
-                /IF.
-                IF safe_call IS "1",
-                    SET sarg_el TO aexpr.
-                /IF.
-                CREATE fp_ty(TX) TO "".
-                IF ai < COUNT fparams,
-                    REAP fp_el FROM plant_list_get, fparams, ai.
-                    REAP fp_ty FROM _map_get, fp_el, "type".
-                /IF.
-                # v0.48.37c: SAFE call args of numeric type cross the
-                # wire as TX strings. A raw C literal >= 4096 would be
-                # misread by the wire codec as a pointer (its small-int
-                # heuristic is (uintptr_t)v < 4096) and crash the encode
-                # on dereference; the worker adapter parses the string
-                # back with _to_long.
-                IF safe_call IS "1" AND cl_ok IS "0",
-                    REAP sct2 FROM ffi_ctype, fp_ty.
-                    IF sct2 IS "long" OR sct2 IS "int",
-                        SET sarg_el TO "_from_long(" + sarg_el + ")".
-                    /IF.
-                /IF.
-                REAP fk2 FROM ffi_param_kind, fp_ty.
-                IF fk2 IS "struct_val",
-                    REAP fpx FROM is_bare_id, arg_el.
-                    REAP fpk2 FROM stvar_kind, stvars, arg_el.
-                    IF fpx IS "1" AND fpk2 IS "struct_ref", SET aexpr TO "*" + aexpr. /IF.
-                    IF fpx IS "0" OR fpk2 IS "",
-                        REAP e0 FROM substring, arg_el, 0, 1.
-                        IF e0 ISNT "\"",
-                            REAP cnm4 FROM ffi_struct_cname, fp_ty.
-                            SET aexpr TO "plant_map_to_" + cnm4 + "(" + aexpr + ")".
-                        /IF.
-                    /IF.
-                /IF.
-                IF fk2 IS "struct_ref",
-                    REAP fpx FROM is_bare_id, arg_el.
-                    REAP fpk2 FROM stvar_kind, stvars, arg_el.
-                    REAP amp0 FROM substring, aexpr, 0, 1.
-                    IF amp0 IS "&", SET aexpr TO substring(aexpr, 1, LEN(aexpr)). /IF.
-                    IF fpx IS "1" AND fpk2 IS "struct_val", SET aexpr TO "&" + aexpr. /IF.
-                    IF fpx IS "0" OR fpk2 IS "",
-                        REAP e0 FROM substring, arg_el, 0, 1.
-                        IF e0 ISNT "\"",
-                            REAP cnm4 FROM ffi_struct_cname, fp_ty.
-                            SET aexpr TO "plant_map_to_ref_" + cnm4 + "(" + aexpr + ")".
-                        /IF.
-                    /IF.
-                /IF.
-                IF fk2 IS "callback",
-                    REAP fpx FROM is_bare_id, arg_el.
-                    IF fpx IS "1",
-                        REAP fpk2 FROM stvar_kind, stvars, arg_el.
-                        IF fpk2 IS "",
-                            REAP fs2 FROM find_sig, sigs, arg_el.
-                            IF COUNT fs2 > 0,
-                                SET aexpr TO "plant_cb_ensure(\"" + arg_el + "\", plant_cbw_" + arg_el + ")".
-                            /IF.
-                        /IF.
-                    /IF.
-                /IF.
-                IF fk2 IS "plain",
-                    # ENUM-typed FFI params: C expects the raw member
-                    # int; _to_enum passes small ints through and maps
-                    # member-name strings (from enum-typed function
-                    # boundaries) back to their index (v0.48.12)
-                    CREATE fty0(TX) TO fp_ty.
-                    REAP fp0 FROM substring, fty0, 0, 4.
-                    IF fp0 IS "REF ", SET fty0 TO substring(fty0, 4, LEN(fty0)). /IF.
-                    REAP fp0 FROM substring, fty0, 0, 5.
-                    IF fp0 IS "ENUM ", SET fty0 TO substring(fty0, 5, LEN(fty0)). /IF.
-                    REAP fcsv2 FROM enum_in_table, evars, fty0.
-                    IF fcsv2 ISNT "",
-                        SET aexpr TO "_to_enum(" + aexpr + ", \"" + fcsv2 + "\")".
-                    /IF.
-                    REAP rp3 FROM is_ref_at, fparams, ai.
-                    IF rp3 IS "1",
-                        SET aexpr TO "&" + aexpr.
-                    /IF.
-                /IF.
-                IF fk2 IS "voidptr",
-                    SET aexpr TO "(void*)" + aexpr.
-                /IF.
-                IF ai >= COUNT fparams,
-                    REAP sv2 FROM expr_is_stringlike, aexpr.
-                    IF sv2 IS "0",
-                        REAP sf2 FROM list_contains, nums, arg_el.
-                        IF sf2 IS 0, SET aexpr TO "(tx_t)" + aexpr. /IF.
-                    /IF.
-                /IF.
-            /IF.
-            IF safe_call IS "1",
-                IF cl_ok IS "1",
-                    SET safe_call TO "0".
-                /IF.
-                IF cl_ok IS "0",
-                    IF sarcn > 0, SET sargstr TO sargstr + ", ". /IF.
-                    SET sargstr TO sargstr + sarg_el.
-                    SET sarcn TO sarcn + 1.
-                /IF.
-            /IF.
-            IF ai > 0, SET argstr TO argstr + ", ". /IF.
-            SET argstr TO argstr + aexpr.
-            SET ai TO ai + 1.
-        /SEASON.
-        # FFI extension return handling: STRUCT X → plant_X_to_map
-        # wrapper; void* → direct (tx_t is void*); Result/"" → direct.
-        CREATE ffi_ret(TX) TO "".
-        CREATE ffi_rtk(TX) TO "".
-        REAP sig2 FROM find_sig, sigs, act.
-        IF COUNT sig2 > 0,
-            REAP ffi_ret FROM _map_get, sig2, "ret".
-            REAP fp9 FROM substring, ffi_ret, 0, 5.
-            IF fp9 IS "ENUM ", SET ffi_ret TO substring(ffi_ret, 5, LEN(ffi_ret)). /IF.
-            REAP ffi_rtk FROM ffi_param_kind, ffi_ret.
-        /IF.
-        CREATE call_expr(TX) TO callname + "(" + clcall + argstr + ")".
-        # v0.48.14: REAP of an ASYNC ACTION returns the task handle —
-        # the entry ABI is (tx_t __parent, tx_t __ctx, params…), so
-        # prepend (0, ctx); REAP … IN ctx spawns into that context.
-        REAP asy3 FROM _map_get, sig2, "async".
-        IF asy3 IS "1",
-            REAP reap_ctx FROM _map_get, node, "ctx".
-            IF reap_ctx IS "" OR reap_ctx IS "null", SET reap_ctx TO "0". /IF.
-            IF argstr > "",
-                SET call_expr TO callname + "(0, " + reap_ctx + ", " + clcall + argstr + ")".
-            /IF.
-            IF argstr IS "",
-                SET call_expr TO callname + "(0, " + reap_ctx + ")".
-            /IF.
-        /IF.
-        # v0.48.37c: SAFE callee → dispatch to a real worker process.
-        # The FFI return machinery below still applies (the worker's
-        # reply comes back as a plain tx_t).
-        IF safe_call IS "1",
-            IF sarcn > 0,
-                SET call_expr TO "plant_safe_call(\"" + act + "\", " + sarcn + ", " + sargstr + ")".
-            /IF.
-            IF sarcn IS 0,
-                SET call_expr TO "plant_safe_call(\"" + act + "\", 0)".
-            /IF.
-        /IF.
-        CREATE ffi_pref(TX) TO "".
-        IF ffi_rtk IS "struct_val",
-            REAP rcnm FROM ffi_struct_cname, ffi_ret.
-            SET ffi_pref TO ffi_pref + isel + "  plant_ffi_errno = 0;\n".
-            IF tgt IS "_",
-                GIVE clpre + ffi_pref + isel + "  " + call_expr + ";\n" + clclears.
-            /IF.
-            REAP stk2 FROM stvar_kind, stvars, tgt.
-            IF stk2 > "",
-                GIVE clpre + ffi_pref + isel + "  " + tgt + " = plant_" + rcnm + "_to_map(" + call_expr + ");\n" + clclears.
-            /IF.
-            GIVE clpre + ffi_pref + isel + "  " + tgt + " = plant_" + rcnm + "_to_map(" + call_expr + ");\n" + clclears.
-        /IF.
-        IF ffi_rtk ISNT "struct_val",
-            IF ffi_rtk IS "voidptr" OR ffi_rtk IS "struct_ref",
-                SET ffi_pref TO ffi_pref + isel + "  plant_ffi_errno = 0;\n".
-            /IF.
-            IF tgt IS "_",
-                GIVE clpre + ffi_pref + isel + "  " + call_expr + ";\n" + clclears.
-            /IF.
-            IF tgt ISNT "_",
-                # ENUM-typed FFI reap targets (registered by
-                # collect_enums_walk): raw member int from C → member
-                # name string; idempotent for already-wrapped values
-                # (v0.48.12)
-                REAP ffr2 FROM enum_in_table, evars, ffi_ret.
-                IF ffr2 ISNT "",
-                    REAP rtg2 FROM enum_in_table, evars, tgt.
-                    IF rtg2 ISNT "",
-                        SET call_expr TO "_from_enum(" + call_expr + ", \"" + rtg2 + "\")".
-                    /IF.
-                /IF.
-                GIVE clpre + ffi_pref + isel + "  " + tgt + " = " + call_expr + ";\n" + clclears.
-            /IF.
-        /IF.
+        REAP isel0 FROM indent_str, indent.
+        REAP env FROM env_new().
+        REAP _ FROM env_set, env, 0, isel0.
+        REAP _ FROM env_set, env, 1, sigs.
+        REAP _ FROM env_set, env, 2, subst.
+        REAP _ FROM env_set, env, 3, clmap.
+        REAP _ FROM env_set, env, 4, actx.
+        REAP _ FROM env_set, env, 5, nums.
+        REAP _ FROM env_set, env, 6, stvars.
+        REAP _ FROM env_set, env, 7, evars.
+        REAP _ FROM env_set, env, 8, rty.
+        REAP _ FROM env_set, env, 9, mexit.
+        REAP _ FROM env_set, env, 10, wexit.
+        REAP _ FROM env_set, env, 11, _from_long(indent).
+        REAP code FROM gen_reap_stmt, node, env.
+        REAP _ FROM env_free, env.
+        GIVE code.
     /IF.
 
     # ── reap_expr_stmt: REAP x FROM a[0]. — direct ingestion from an
@@ -4913,83 +5099,44 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
   
     # ── season_stmt: SEASON cond, body /SEASON. → while(cond) {…} ─
     IF ntype IS "season_stmt",
-        REAP cond FROM _map_get, node, "cond".
-        REAP bd FROM _map_get, node, "body".
-        REAP ccond FROM translate_expr, cond, nums, evars.
-        REAP ccond FROM handle_strcmp, ccond.
-        REAP isel FROM indent_str, indent.
-        CREATE ccode(TX) TO isel + "  while (" + ccond + ") \{\n".
-        REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
-        SET ccode TO ccode + bcode + isel + "  \}\n".
-        GIVE ccode.
+        REAP isel0 FROM indent_str, indent.
+        REAP env FROM env_new().
+        REAP _ FROM env_set, env, 0, isel0.
+        REAP _ FROM env_set, env, 1, sigs.
+        REAP _ FROM env_set, env, 2, subst.
+        REAP _ FROM env_set, env, 3, clmap.
+        REAP _ FROM env_set, env, 4, actx.
+        REAP _ FROM env_set, env, 5, nums.
+        REAP _ FROM env_set, env, 6, stvars.
+        REAP _ FROM env_set, env, 7, evars.
+        REAP _ FROM env_set, env, 8, rty.
+        REAP _ FROM env_set, env, 9, mexit.
+        REAP _ FROM env_set, env, 10, wexit.
+        REAP _ FROM env_set, env, 11, _from_long(indent).
+        REAP code FROM gen_season_stmt, node, env.
+        REAP _ FROM env_free, env.
+        GIVE code.
     /IF.
   
     # ── cycle_stmt: FROM/TO → for(iter=from; iter<=to; iter+=step) ─
     IF ntype IS "cycle_stmt",
-        REAP ivar FROM _map_get, node, "iterVar".
-        REAP fromExpr FROM _map_get, node, "fromExpr".
-        REAP toExpr FROM _map_get, node, "toExpr".
-        REAP stepExpr FROM _map_get, node, "stepExpr".
-        REAP listExpr FROM _map_get, node, "listExpr".
-        REAP indexVar FROM _map_get, node, "indexVar".
-        REAP bd FROM _map_get, node, "body".
-        REAP isel FROM indent_str, indent.
-        CREATE ccode(TX) TO "".
-    
-        # FROM/TO form: for (long i = lo; i <= hi; i += step), with the
-        # bound operator flipped for negative steps (STEP -1 → >=) so
-        # descending ranges work; a runtime step emits a sign test in
-        # the middle clause (v0.48.21).
-        IF fromExpr ISNT "",
-            REAP cfrom FROM translate_expr, fromExpr, nums, evars.
-            REAP cto FROM translate_expr, toExpr, nums, evars.
-            CREATE stepstr(TX) TO "1".
-            IF stepExpr > "" AND stepExpr ISNT "null",
-                REAP cstep FROM translate_expr, stepExpr, nums, evars.
-                SET stepstr TO cstep.
-            /IF.
-            # v0.48.22-patch3: fold the resolved step to its sign. A
-            # zero step is a compile-time error (backstop for the
-            # parser-level intercept), and the bound operator follows
-            # the folded sign instead of the first character, so
-            # expression steps like "0 - 2" or "1 + 1" pick the right
-            # direction. Runtime steps get a sign-aware bound plus a
-            # != 0 guard so a zero-valued runtime step cannot spin
-            # forever.
-            REAP sgn FROM _step_sign, stepstr.
-            IF sgn IS "0",
-                GIVE "#error STEP cannot be 0\n".
-            /IF.
-            CREATE bound(TX) TO ivar + " <= " + cto.
-            IF sgn IS "-",
-                SET bound TO ivar + " >= " + cto.
-            /IF.
-            IF sgn IS "?",
-                SET bound TO "((" + stepstr + " != 0) && (((" + stepstr + " > 0) && (" + ivar + " <= " + cto + ")) || ((" + stepstr + " <= 0) && (" + ivar + " >= " + cto + "))))".
-            /IF.
-            SET ccode TO isel + "  for (long " + ivar + " = " + cfrom + "; " + bound + "; " + ivar + " += " + stepstr + ") \{\n".
-            REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
-            SET ccode TO ccode + bcode + isel + "  \}\n".
-            GIVE ccode.
-        /IF.
-    
-        # IN list form (CYCLE var IN list): a C for loop so CONTINUE
-        # still runs the index increment (a while with a trailing
-        # idx++ skips it — infinite loop, fixed v0.48.22)
-        IF listExpr ISNT "",
-            CREATE idxvar(TX) TO "__cycle_i".
-            IF indexVar ISNT "" AND indexVar ISNT "null",
-                SET idxvar TO indexVar.
-            /IF.
-            REAP clist FROM translate_expr, listExpr, nums, evars.
-            SET ccode TO isel + "  for (long " + idxvar + " = 0; " + idxvar + " < plant_array_length(" + clist + "); " + idxvar + "++) \{\n".
-            SET ccode TO ccode + isel + "    tx_t " + ivar + " = plant_list_get(" + clist + ", " + idxvar + ");\n".
-            REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
-            SET ccode TO ccode + bcode + isel + "  \}\n".
-            GIVE ccode.
-        /IF.
-    
-        GIVE "".
+        REAP isel0 FROM indent_str, indent.
+        REAP env FROM env_new().
+        REAP _ FROM env_set, env, 0, isel0.
+        REAP _ FROM env_set, env, 1, sigs.
+        REAP _ FROM env_set, env, 2, subst.
+        REAP _ FROM env_set, env, 3, clmap.
+        REAP _ FROM env_set, env, 4, actx.
+        REAP _ FROM env_set, env, 5, nums.
+        REAP _ FROM env_set, env, 6, stvars.
+        REAP _ FROM env_set, env, 7, evars.
+        REAP _ FROM env_set, env, 8, rty.
+        REAP _ FROM env_set, env, 9, mexit.
+        REAP _ FROM env_set, env, 10, wexit.
+        REAP _ FROM env_set, env, 11, _from_long(indent).
+        REAP code FROM gen_cycle_stmt, node, env.
+        REAP _ FROM env_free, env.
+        GIVE code.
     /IF.
   
     # ── weather_stmt: WEATHER … SHELTER … CALM … /WEATHER. ──
@@ -5021,94 +5168,44 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    after each handler body runs (prior to exiting the shelter
     #    scope). plant_weather_handling_end closes the dispatch.
     IF ntype IS "weather_stmt",
-        REAP bd FROM _map_get, node, "body".
-        REAP sh FROM _map_get, node, "shelters".
-        REAP cb FROM _map_get, node, "calm".
-        REAP isel FROM indent_str, indent.
-        CREATE wnm(TX) TO "__w" + _from_long(indent).
-        # v0.48.25 — plant_calm finalization wiring. The CALM body is
-        # the block's finalizer and is generated exactly once with
-        # "clean" exit lines (wx0/mx0: frame-pop only, no finalizer
-        # re-entry), then embedded three ways: (1) in the wx/mx2 exit
-        # chains so BREAK/CONTINUE/GIVE inside the protected body or
-        # a shelter still run the finalizer; (2) inline after the
-        # setjmp dispatch for the normal and handled paths. The
-        # unmatched-storm rethrow is delegated to plant_calm, which
-        # pops the frame and re-raises when raised && !handled.
-        CREATE wx0(TX) TO wexit + "  plant_calm(&" + wnm + ");\n".
-        CREATE mx0(TX) TO mexit + "  plant_calm(&" + wnm + ");\n".
-        REAP cbcode FROM generate_body, cb, indent + 1, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx0, wx0.
-        CREATE wx(TX) TO wexit + cbcode + "  plant_calm(&" + wnm + ");\n".
-        CREATE mx2(TX) TO mexit + cbcode + "  plant_calm(&" + wnm + ");\n".
-        CREATE ccode(TX) TO isel + "  \{\n".
-        SET ccode TO ccode + isel + "    PlantWeather " + wnm + " = \{0\};\n".
-        SET ccode TO ccode + isel + "    plant_weather_enter(&" + wnm + ", " + _from_long(COUNT sh / 3) + ");\n".
-        SET ccode TO ccode + isel + "    if (setjmp(" + wnm + ".buf) == 0) \{\n".
-        REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx.
-        SET ccode TO ccode + bcode + isel + "    \} else \{\n".
-        SET ccode TO ccode + isel + "      const char* __et = plant_exc_type();\n".
-        SET ccode TO ccode + isel + "      const char* __em = plant_exc_msg();\n".
-        SET ccode TO ccode + isel + "      tx_t __ev = plant_exc_val();\n".
-        SET ccode TO ccode + isel + "      plant_weather_leave(&" + wnm + ");\n".
-        SET ccode TO ccode + isel + "      plant_weather_handling_begin(&" + wnm + ");\n".
-        CREATE si2(NUM) TO 0.
-        CREATE wty2(TX) TO "".
-        CREATE wbd2(TX) TO "".
-        CREATE wbind2(TX) TO "".
-        SEASON si2 < COUNT sh,
-            REAP wty2 FROM plant_list_get, sh, si2.
-            REAP wbind2 FROM plant_list_get, sh, si2 + 1.
-            REAP wbd2 FROM plant_list_get, sh, si2 + 2.
-            IF si2 IS 0,
-                SET ccode TO ccode + isel + "      if (plant_storm_match(__et, \"" + wty2 + "\")) \{\n".
-            /IF.
-            IF si2 > 0,
-                SET ccode TO ccode + isel + "      \} else if (plant_storm_match(__et, \"" + wty2 + "\")) \{\n".
-            /IF.
-            SET ccode TO ccode + isel + "        plant_weather_shelter_enter(&" + wnm + ");\n".
-            SET ccode TO ccode + isel + "        " + wnm + ".handled = 1;\n".
-            IF wbind2 ISNT "" AND wbind2 ISNT "null",
-                SET ccode TO ccode + isel + "        tx_t " + wbind2 + " = __ev;\n".
-            /IF.
-            REAP hcode FROM generate_body, wbd2, indent + 3, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx.
-            SET ccode TO ccode + hcode.
-            # v0.48.38a — factory storm lifecycle: the captured binding
-            # value is the ARC-managed object when the storm was raised
-            # as one; releasing it here returns the object to the ARC
-            # heap once the handler logic has run. Classic storms bind
-            # the message string and release is a safe no-op.
-            SET ccode TO ccode + isel + "        plant_storm_release(__ev);\n".
-            SET ccode TO ccode + isel + "        plant_weather_shelter_leave(&" + wnm + ");\n".
-            SET si2 TO si2 + 3.
-        /SEASON.
-        IF COUNT sh > 0,
-            SET ccode TO ccode + isel + "      \}\n".
-        /IF.
-        SET ccode TO ccode + isel + "      plant_weather_handling_end(&" + wnm + ");\n".
-        SET ccode TO ccode + isel + "    \}\n".
-        SET ccode TO ccode + cbcode.
-        SET ccode TO ccode + isel + "    plant_calm(&" + wnm + ");\n".
-        SET ccode TO ccode + isel + "  \}\n".
-        GIVE ccode.
+        REAP isel0 FROM indent_str, indent.
+        REAP env FROM env_new().
+        REAP _ FROM env_set, env, 0, isel0.
+        REAP _ FROM env_set, env, 1, sigs.
+        REAP _ FROM env_set, env, 2, subst.
+        REAP _ FROM env_set, env, 3, clmap.
+        REAP _ FROM env_set, env, 4, actx.
+        REAP _ FROM env_set, env, 5, nums.
+        REAP _ FROM env_set, env, 6, stvars.
+        REAP _ FROM env_set, env, 7, evars.
+        REAP _ FROM env_set, env, 8, rty.
+        REAP _ FROM env_set, env, 9, mexit.
+        REAP _ FROM env_set, env, 10, wexit.
+        REAP _ FROM env_set, env, 11, _from_long(indent).
+        REAP code FROM gen_weather_stmt, node, env.
+        REAP _ FROM env_free, env.
+        GIVE code.
     /IF.
   
     # ── throw_stmt: THROW <storm> "msg". → plant_throw(type, msg) ─
     IF ntype IS "throw_stmt",
-        REAP wtype2 FROM _map_get, node, "storm".
-        REAP wmsg2 FROM _map_get, node, "msg".
-        REAP isel FROM indent_str, indent.
-        CREATE cmsg(TX) TO "NULL".
-        IF wmsg2 > "",
-            REAP cmsg FROM translate_expr, wmsg2, nums, evars.
-            REAP cmsg FROM _handle_cat, cmsg, nums, evars.
-        /IF.
-        IF wtype2 IS "",
-            # v0.48.38a — factory storm object: the payload text is the
-            # storm(...) call, rewritten to plant_storm(...) above, and
-            # ownership of the ARC-managed object transfers to the frame.
-            GIVE isel + "  plant_throw_obj(" + cmsg + ");\n".
-        /IF.
-        GIVE isel + "  plant_throw(\"" + wtype2 + "\", " + cmsg + ");\n".
+        REAP isel0 FROM indent_str, indent.
+        REAP env FROM env_new().
+        REAP _ FROM env_set, env, 0, isel0.
+        REAP _ FROM env_set, env, 1, sigs.
+        REAP _ FROM env_set, env, 2, subst.
+        REAP _ FROM env_set, env, 3, clmap.
+        REAP _ FROM env_set, env, 4, actx.
+        REAP _ FROM env_set, env, 5, nums.
+        REAP _ FROM env_set, env, 6, stvars.
+        REAP _ FROM env_set, env, 7, evars.
+        REAP _ FROM env_set, env, 8, rty.
+        REAP _ FROM env_set, env, 9, mexit.
+        REAP _ FROM env_set, env, 10, wexit.
+        REAP _ FROM env_set, env, 11, _from_long(indent).
+        REAP code FROM gen_throw_stmt, node, env.
+        REAP _ FROM env_free, env.
+        GIVE code.
     /IF.
   
     # ── stop_if_stmt: STOP IF cond. → if(cond) STOP_STORM ──

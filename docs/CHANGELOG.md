@@ -1,3 +1,25 @@
+## v0.49.57e - 2026 (Codegen Interface Modernization — Phase 3)
+
+### Architecture
+- **`gen_reap_stmt(node, env)`**: Refactored from inline handler to standalone
+  ACTION with `(node, env(LIST))` signature. Handles action calls, closure args,
+  FFI marshalling (struct_val/struct_ref/callback/plain), REF parameter `&`
+  prefixing, async actions, safe calls, and enum return wrapping.
+- **`gen_season_stmt(node, env)`**: Refactored from inline handler. Uses
+  `env_indent_num` for `indent + 2` arithmetic in `generate_body` calls.
+- **`gen_cycle_stmt(node, env)`**: Refactored from inline handler. Handles
+  both FROM/TO and IN list forms with proper step-sign folding.
+- **`gen_weather_stmt(node, env)`**: Refactored from inline handler. Handles
+  WEATHER/SHELTER/CALM exception management with setjmp/longjmp frames.
+- **`gen_throw_stmt(node, env)`**: Refactored from inline handler. Handles
+  typed storms and factory storm objects.
+- **Dispatcher finalization**: All five statement types now route through
+  the unified `(node, env)` pattern in `generate_node`.
+
+### Self-Hosting
+- Convergent build verified: v2→v3→v4→v5 produces identical C output
+  (503804 bytes). 20/20 native tests pass (including FFI with REF params).
+
 ## v0.49.57d - 2026 (Codegen Interface Modernization — Phase 2)
 
 ### Architecture
