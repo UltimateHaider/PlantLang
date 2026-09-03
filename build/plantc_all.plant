@@ -7720,7 +7720,7 @@ ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIS
         PUT ls INTO lead.
         SET lj TO lj + 1.
       /SEASON.
-      REAP lcode FROM generate_body, lead, 1, sigs, subst, clmap, "a", nums_s, stvars, evars, "", "", "".
+      REAP lcode FROM generate_body, lead, env_make(1, sigs, subst, clmap, "a", nums_s, stvars, evars, "", "", "").
       SET code TO code + lcode.
       CREATE aw_last(NUM) TO nst - 1.
       REAP awnd FROM plant_list_get, phd, aw_last.
@@ -7752,7 +7752,7 @@ ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIS
       /IF.
     /IF.
     IF nxt IS nph,
-      REAP tcode FROM generate_body, phd, 1, sigs, subst, clmap, "a", nums_s, stvars, evars, "", "", "".
+      REAP tcode FROM generate_body, phd, env_make(1, sigs, subst, clmap, "a", nums_s, stvars, evars, "", "", "").
       SET code TO code + tcode.
     /IF.
     SET ph2 TO ph2 + 1.
@@ -8274,6 +8274,29 @@ ACTION env_free(env),
   GIVE 0.
 /ACTION.
 
+# ──────────────────────────────────────────────────────────────
+#  env_make — create and populate an env in one call
+#  Takes numeric indent (pre-computed into isel string for slot 0
+#  and _from_long for slot 11) plus all 11 state params.
+# ──────────────────────────────────────────────────────────────
+ACTION env_make(indent_num(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST), rty(TX), mexit(TX), wexit(TX)),
+  REAP isel FROM indent_str, indent_num.
+  REAP env FROM env_new().
+  REAP _ FROM env_set, env, 0, isel.
+  REAP _ FROM env_set, env, 1, sigs.
+  REAP _ FROM env_set, env, 2, subst.
+  REAP _ FROM env_set, env, 3, clmap.
+  REAP _ FROM env_set, env, 4, actx.
+  REAP _ FROM env_set, env, 5, nums.
+  REAP _ FROM env_set, env, 6, stvars.
+  REAP _ FROM env_set, env, 7, evars.
+  REAP _ FROM env_set, env, 8, rty.
+  REAP _ FROM env_set, env, 9, mexit.
+  REAP _ FROM env_set, env, 10, wexit.
+  REAP _ FROM env_set, env, 11, _from_long(indent_num).
+  GIVE env.
+/ACTION.
+
 ACTION gen_show_stmt(node, env(LIST)),
   REAP val FROM _map_get, node, "value".
   REAP nums FROM env_nums, env.
@@ -8460,7 +8483,9 @@ ACTION gen_if_stmt(node, env(LIST)),
   REAP rty FROM env_rty, env.
   REAP mexit FROM env_mexit, env.
   REAP wexit FROM env_wexit, env.
-  REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
+  REAP _ FROM env_set, env, 11, _from_long(indent + 2).
+  REAP bcode FROM generate_body, bd, env.
+  REAP _ FROM env_set, env, 11, _from_long(indent).
   SET ccode TO ccode + bcode.
   REAP elif FROM _map_get, node, "elif".
   IF COUNT elif > 0,
@@ -8471,7 +8496,9 @@ ACTION gen_if_stmt(node, env(LIST)),
           REAP ecc FROM translate_expr, econd, nums, evars.
           REAP ecc FROM handle_strcmp, ecc.
           SET ccode TO ccode + isel + "  \} else if (" + ecc + ") \{\n".
-          REAP ebc FROM generate_body, ebd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
+          REAP _ FROM env_set, env, 11, _from_long(indent + 2).
+          REAP ebc FROM generate_body, ebd, env.
+          REAP _ FROM env_set, env, 11, _from_long(indent).
           SET ccode TO ccode + ebc.
           SET ei2 TO ei2 + 2.
       /SEASON.
@@ -8479,7 +8506,9 @@ ACTION gen_if_stmt(node, env(LIST)),
   REAP ebody FROM _map_get, node, "else".
   IF COUNT ebody > 0,
       SET ccode TO ccode + isel + "  \} else \{\n".
-      REAP ebod FROM generate_body, ebody, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
+      REAP _ FROM env_set, env, 11, _from_long(indent + 2).
+      REAP ebod FROM generate_body, ebody, env.
+      REAP _ FROM env_set, env, 11, _from_long(indent).
       SET ccode TO ccode + ebod.
   /IF.
   SET ccode TO ccode + isel + "  \}\n".
@@ -8769,7 +8798,9 @@ ACTION gen_season_stmt(node, env(LIST)),
   REAP rty FROM env_rty, env.
   REAP mexit FROM env_mexit, env.
   REAP wexit FROM env_wexit, env.
-  REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
+  REAP _ FROM env_set, env, 11, _from_long(indent + 2).
+  REAP bcode FROM generate_body, bd, env.
+  REAP _ FROM env_set, env, 11, _from_long(indent).
   SET ccode TO ccode + bcode + isel + "  \}\n".
   GIVE ccode.
 /ACTION.
@@ -8821,7 +8852,9 @@ ACTION gen_cycle_stmt(node, env(LIST)),
           SET bound TO "((" + stepstr + " != 0) && (((" + stepstr + " > 0) && (" + ivar + " <= " + cto + ")) || ((" + stepstr + " <= 0) && (" + ivar + " >= " + cto + "))))".
       /IF.
       SET ccode TO isel + "  for (long " + ivar + " = " + cfrom + "; " + bound + "; " + ivar + " += " + stepstr + ") \{\n".
-      REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
+      REAP _ FROM env_set, env, 11, _from_long(indent + 2).
+      REAP bcode FROM generate_body, bd, env.
+      REAP _ FROM env_set, env, 11, _from_long(indent).
       SET ccode TO ccode + bcode + isel + "  \}\n".
       GIVE ccode.
   /IF.
@@ -8833,7 +8866,9 @@ ACTION gen_cycle_stmt(node, env(LIST)),
       REAP clist FROM translate_expr, listExpr, nums, evars.
       SET ccode TO isel + "  for (long " + idxvar + " = 0; " + idxvar + " < plant_array_length(" + clist + "); " + idxvar + "++) \{\n".
       SET ccode TO ccode + isel + "    tx_t " + ivar + " = plant_list_get(" + clist + ", " + idxvar + ");\n".
-      REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
+      REAP _ FROM env_set, env, 11, _from_long(indent + 2).
+      REAP bcode FROM generate_body, bd, env.
+      REAP _ FROM env_set, env, 11, _from_long(indent).
       SET ccode TO ccode + bcode + isel + "  \}\n".
       GIVE ccode.
   /IF.
@@ -8865,14 +8900,26 @@ ACTION gen_weather_stmt(node, env(LIST)),
   REAP rty FROM env_rty, env.
   CREATE wx0(TX) TO wexit + "  plant_calm(&" + wnm + ");\n".
   CREATE mx0(TX) TO mexit + "  plant_calm(&" + wnm + ");\n".
-  REAP cbcode FROM generate_body, cb, indent + 1, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx0, wx0.
+  REAP _ FROM env_set, env, 11, _from_long(indent + 1).
+  REAP _ FROM env_set, env, 9, mx0.
+  REAP _ FROM env_set, env, 10, wx0.
+  REAP cbcode FROM generate_body, cb, env.
+  REAP _ FROM env_set, env, 11, _from_long(indent).
+  REAP _ FROM env_set, env, 9, mexit.
+  REAP _ FROM env_set, env, 10, wexit.
   CREATE wx(TX) TO wexit + cbcode + "  plant_calm(&" + wnm + ");\n".
   CREATE mx2(TX) TO mexit + cbcode + "  plant_calm(&" + wnm + ");\n".
   CREATE ccode(TX) TO isel + "  \{\n".
   SET ccode TO ccode + isel + "    PlantWeather " + wnm + " = \{0\};\n".
   SET ccode TO ccode + isel + "    plant_weather_enter(&" + wnm + ", " + _from_long(COUNT sh / 3) + ");\n".
   SET ccode TO ccode + isel + "    if (setjmp(" + wnm + ".buf) == 0) \{\n".
-  REAP bcode FROM generate_body, bd, indent + 2, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx.
+  REAP _ FROM env_set, env, 11, _from_long(indent + 2).
+  REAP _ FROM env_set, env, 9, mx2.
+  REAP _ FROM env_set, env, 10, wx.
+  REAP bcode FROM generate_body, bd, env.
+  REAP _ FROM env_set, env, 11, _from_long(indent).
+  REAP _ FROM env_set, env, 9, mexit.
+  REAP _ FROM env_set, env, 10, wexit.
   SET ccode TO ccode + bcode + isel + "    \} else \{\n".
   SET ccode TO ccode + isel + "      const char* __et = plant_exc_type();\n".
   SET ccode TO ccode + isel + "      const char* __em = plant_exc_msg();\n".
@@ -8898,7 +8945,13 @@ ACTION gen_weather_stmt(node, env(LIST)),
       IF wbind2 ISNT "" AND wbind2 ISNT "null",
           SET ccode TO ccode + isel + "        tx_t " + wbind2 + " = __ev;\n".
       /IF.
-      REAP hcode FROM generate_body, wbd2, indent + 3, sigs, subst, clmap, actx, nums, stvars, evars, rty, mx2, wx.
+      REAP _ FROM env_set, env, 11, _from_long(indent + 3).
+      REAP _ FROM env_set, env, 9, mx2.
+      REAP _ FROM env_set, env, 10, wx.
+      REAP hcode FROM generate_body, wbd2, env.
+      REAP _ FROM env_set, env, 11, _from_long(indent).
+      REAP _ FROM env_set, env, 9, mexit.
+      REAP _ FROM env_set, env, 10, wexit.
       SET ccode TO ccode + hcode.
       SET ccode TO ccode + isel + "        plant_storm_release(__ev);\n".
       SET ccode TO ccode + isel + "        plant_weather_shelter_leave(&" + wnm + ");\n".
@@ -8936,13 +8989,13 @@ ACTION gen_throw_stmt(node, env(LIST)),
   GIVE isel + "  plant_throw(\"" + wtype2 + "\", " + cmsg + ");\n".
 /ACTION.
 
-ACTION generate_body(bd(LIST), indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST), rty(TX), mexit(TX), wexit(TX)),
+ACTION generate_body(bd(LIST), env(LIST)),
   CREATE res(TX) TO "".
   CREATE i(NUM) TO 0.
   CREATE node_el(TX) TO "".
   SEASON i < COUNT bd,
     REAP node_el FROM plant_list_get, bd, i.
-    REAP node_code FROM generate_node, node_el, indent, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
+    REAP node_code FROM generate_node, node_el, env.
     IF node_code > "",
       SET res TO res + node_code.
     /IF.
@@ -9129,8 +9182,20 @@ ACTION _step_sign(e(TX)),
   GIVE "0".
 /ACTION.
 
-ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST), rty(TX), mexit(TX), wexit(TX)),
+ACTION generate_node(node, env(LIST)),
     REAP ntype FROM _map_get, node, "type".
+    REAP indent_num FROM _to_long(env_indent_num(env)).
+    REAP sigs FROM env_sigs, env.
+    REAP subst FROM env_subst, env.
+    REAP clmap FROM env_clmap, env.
+    REAP actx FROM env_actx, env.
+    REAP nums FROM env_nums, env.
+    REAP stvars FROM env_stvars, env.
+    REAP evars FROM env_evars, env.
+    REAP rty FROM env_rty, env.
+    REAP mexit FROM env_mexit, env.
+    REAP wexit FROM env_wexit, env.
+    REAP isel0 FROM env_indent, env.
     IF clmap IS "",
         SET clmap TO plant_list_make(0).
     /IF.
@@ -9143,22 +9208,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    NUM var / arithmetic / numeric reader prints its value
     #    instead of raw long-as-pointer bits (v0.48.5).
     IF ntype IS "show_stmt",
-        REAP isel0 FROM indent_str, indent.
-        REAP env FROM env_new().
-        REAP _ FROM env_set, env, 0, isel0.
-        REAP _ FROM env_set, env, 1, sigs.
-        REAP _ FROM env_set, env, 2, subst.
-        REAP _ FROM env_set, env, 3, clmap.
-        REAP _ FROM env_set, env, 4, actx.
-        REAP _ FROM env_set, env, 5, nums.
-        REAP _ FROM env_set, env, 6, stvars.
-        REAP _ FROM env_set, env, 7, evars.
-        REAP _ FROM env_set, env, 8, rty.
-        REAP _ FROM env_set, env, 9, mexit.
-        REAP _ FROM env_set, env, 10, wexit.
-        REAP _ FROM env_set, env, 11, _from_long(indent).
         REAP code FROM gen_show_stmt, node, env.
-        REAP _ FROM env_free, env.
         GIVE code.
     /IF.
 
@@ -9175,7 +9225,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF isn IS 1,
             SET ccond TO "_from_long(" + ccond + ")".
         /IF.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         GIVE isel + "  plant_verify(" + lbl + ", " + ccond + ");\n".
     /IF.
 
@@ -9187,11 +9237,11 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         CREATE bi(NUM) TO 0.
         SEASON bi < COUNT body_nodes,
             REAP bnode FROM plant_list_get, body_nodes, bi.
-            REAP bnode_code FROM generate_node, bnode, indent, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
+            REAP bnode_code FROM generate_node, bnode, env.
             SET body_code TO body_code + bnode_code.
             SET bi TO bi + 1.
         /SEASON.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         CREATE has_st(TX) TO "0".
         CREATE bdi(NUM) TO 0.
         SEASON bdi < COUNT body_nodes,
@@ -9233,7 +9283,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF isn IS 1,
             SET cval TO "_from_long(" + cval + ")".
         /IF.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         GIVE isel + "  plant_suite_setup_hook(" + cval + ");\n".
     /IF.
 
@@ -9246,7 +9296,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF isn IS 1,
             SET cval TO "_from_long(" + cval + ")".
         /IF.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         GIVE isel + "  plant_suite_teardown_hook(" + cval + ");\n".
     /IF.
     
@@ -9254,43 +9304,13 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    In async step phases the variable lives in the state struct,
     #    restored as a local at step entry → plain assignment, no decl.
     IF ntype IS "create_stmt",
-        REAP isel0 FROM indent_str, indent.
-        REAP env FROM env_new().
-        REAP _ FROM env_set, env, 0, isel0.
-        REAP _ FROM env_set, env, 1, sigs.
-        REAP _ FROM env_set, env, 2, subst.
-        REAP _ FROM env_set, env, 3, clmap.
-        REAP _ FROM env_set, env, 4, actx.
-        REAP _ FROM env_set, env, 5, nums.
-        REAP _ FROM env_set, env, 6, stvars.
-        REAP _ FROM env_set, env, 7, evars.
-        REAP _ FROM env_set, env, 8, rty.
-        REAP _ FROM env_set, env, 9, mexit.
-        REAP _ FROM env_set, env, 10, wexit.
-        REAP _ FROM env_set, env, 11, _from_long(indent).
         REAP code FROM gen_create_stmt, node, env.
-        REAP _ FROM env_free, env.
         GIVE code.
     /IF.
   
     # ── set_stmt: SET target TO val. → target = val; ──────────
     IF ntype IS "set_stmt",
-        REAP isel0 FROM indent_str, indent.
-        REAP env FROM env_new().
-        REAP _ FROM env_set, env, 0, isel0.
-        REAP _ FROM env_set, env, 1, sigs.
-        REAP _ FROM env_set, env, 2, subst.
-        REAP _ FROM env_set, env, 3, clmap.
-        REAP _ FROM env_set, env, 4, actx.
-        REAP _ FROM env_set, env, 5, nums.
-        REAP _ FROM env_set, env, 6, stvars.
-        REAP _ FROM env_set, env, 7, evars.
-        REAP _ FROM env_set, env, 8, rty.
-        REAP _ FROM env_set, env, 9, mexit.
-        REAP _ FROM env_set, env, 10, wexit.
-        REAP _ FROM env_set, env, 11, _from_long(indent).
         REAP code FROM gen_set_stmt, node, env.
-        REAP _ FROM env_free, env.
         GIVE code.
     /IF.
   
@@ -9305,7 +9325,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP val FROM _map_get, node, "value".
         REAP cval FROM translate_expr, val, nums, evars.
         REAP cval FROM _handle_cat, cval, nums, evars.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         REAP isnc FROM list_contains, nums, target.
         IF isnc IS 0,
             GIVE "#error " + target + " is not a numeric variable; INCREASE/DECREASE require a NUM variable\n".
@@ -9339,7 +9359,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     IF ntype IS "bloom_stmt",
         REAP bsp FROM _map_get, node, "species".
         REAP bvar FROM _map_get, node, "var".
-        REAP bisel FROM indent_str, indent.
+        REAP bisel FROM indent_str, indent_num.
         CREATE bb9(TX) TO "".
         SET bb9 TO bb9 + bisel + "  tx_t " + bvar + " = plant_species_create_by_name(\"" + bsp + "\");\n".
         GIVE bb9.
@@ -9351,7 +9371,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP ditems FROM _map_get, node, "vars".
         REAP dkind FROM _map_get, node, "pattern".
         REAP srcc FROM translate_expr, dsrc, nums, evars.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         CREATE tag(TX) TO _from_long(plant_unique_seq()).
         CREATE dsbase(TX) TO "(".
         SET dsbase TO dsbase + srcc.
@@ -9365,7 +9385,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP target FROM _map_get, node, "target".
         REAP vtype FROM _map_get, node, "var_type".
         REAP vtype FROM subst_type, vtype, subst.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         REAP cnd FROM _map_get, node, "closure".
         IF cnd > "",
             REAP envname FROM _map_get, cnd, "envname".
@@ -9431,22 +9451,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    (v0.48.13); implicit-return actions keep the raw-bit
     #    convention so existing callers are unaffected.
     IF ntype IS "give_stmt",
-        REAP isel0 FROM indent_str, indent.
-        REAP env FROM env_new().
-        REAP _ FROM env_set, env, 0, isel0.
-        REAP _ FROM env_set, env, 1, sigs.
-        REAP _ FROM env_set, env, 2, subst.
-        REAP _ FROM env_set, env, 3, clmap.
-        REAP _ FROM env_set, env, 4, actx.
-        REAP _ FROM env_set, env, 5, nums.
-        REAP _ FROM env_set, env, 6, stvars.
-        REAP _ FROM env_set, env, 7, evars.
-        REAP _ FROM env_set, env, 8, rty.
-        REAP _ FROM env_set, env, 9, mexit.
-        REAP _ FROM env_set, env, 10, wexit.
-        REAP _ FROM env_set, env, 11, _from_long(indent).
         REAP code FROM gen_give_stmt, node, env.
-        REAP _ FROM env_free, env.
         GIVE code.
     /IF.
   
@@ -9454,13 +9459,13 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    v0.48.23: WEATHER frames enclosing the loop are popped by
     #    wexit lines before the jump so no checkpoint goes stale.
     IF ntype IS "break_stmt",
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         GIVE isel + wexit + isel + "  break;\n".
     /IF.
    
     # ── continue_stmt → continue; ─────────────────────────────
     IF ntype IS "continue_stmt",
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         GIVE isel + wexit + isel + "  continue;\n".
     /IF.
   
@@ -9472,7 +9477,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP target FROM _map_get, node, "target".
         REAP citem FROM translate_expr, item, nums, evars.
         REAP citem FROM _handle_cat, citem, nums, evars.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         GIVE isel + "  " + target + " = plant_list_add(" + target + ", " + citem + ");\n".
     /IF.
 
@@ -9482,7 +9487,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP target FROM _map_get, node, "target".
         REAP citem FROM translate_expr, item, nums, evars.
         REAP citem FROM _handle_cat, citem, nums, evars.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         GIVE isel + "  " + target + " = plant_list_remove(" + target + ", " + citem + ");\n".
     /IF.
 
@@ -9493,7 +9498,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP left FROM _map_get, node, "left".
         REAP right FROM _map_get, node, "right".
         REAP target FROM _map_get, node, "target".
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         GIVE isel + "  PlantArray* " + target + " = plant_braid(" + left + ", " + right + ");\n".
     /IF.
 
@@ -9502,7 +9507,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP left FROM _map_get, node, "left".
         REAP right FROM _map_get, node, "right".
         REAP target FROM _map_get, node, "target".
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         GIVE isel + "  PlantArray* " + target + " = plant_braid_map(" + left + ", " + right + ");\n".
     /IF.
 
@@ -9515,7 +9520,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP ckey FROM _handle_cat, ckey, nums, evars.
         REAP cval FROM translate_expr, value, nums, evars.
         REAP cval FROM _handle_cat, cval, nums, evars.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         GIVE isel + "  " + target + " = plant_link(" + target + ", " + ckey + ", " + cval + ");\n".
     /IF.
 
@@ -9545,7 +9550,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF hmap IS "1",
             SET hfn TO "plant_net_harvest_map".
         /IF.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         REAP hcurl FROM translate_expr, hurl, nums, evars.
         CREATE hmethod(TX) TO hmeth.
         IF hmethod > "",
@@ -9586,7 +9591,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP ls_port FROM _map_get, node, "port".
         REAP ls_resp FROM _map_get, node, "resp".
         REAP ls_tmo FROM _map_get, node, "timeout".
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         CREATE lsp(TX) TO ls_port.
         IF lsp > "",
             REAP lsp0 FROM substring, lsp, 0, 1.
@@ -9626,7 +9631,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF rs_req IS "",
             GIVE "".
         /IF.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         CREATE rsb(TX) TO rs_body.
         IF rsb > "",
             REAP rsb0 FROM substring, rsb, 0, 1.
@@ -9652,7 +9657,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP fields FROM _map_get, node, "fields".
         REAP dirs FROM _map_get, node, "dirs".
         CREATE spec(TX) TO "".
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         IF COUNT fields IS 0,
             IF gdir IS "DESC", SET spec TO "DESC". /IF.
         /IF.
@@ -9678,7 +9683,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     # ── shake_stmt: SHAKE l. → l = plant_shuffle(l); ─
     IF ntype IS "shake_stmt",
         REAP target FROM _map_get, node, "target".
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         GIVE isel + "  " + target + " = plant_shuffle(" + target + ");\n".
     /IF.
 
@@ -9704,7 +9709,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         CREATE args_s(LIST) TO _map_get(node, "args").
         CREATE argstr_s(TX) TO "".
         REAP argstr_s FROM async_argstr, args_s, sigs, act, nums, stvars, evars.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         REAP kind_s FROM _map_get, node, "kind".
         IF ctx_n ISNT "" AND ctx_n ISNT "null",
             CREATE spawn_fn(TX) TO "plant_async_start_in".
@@ -9731,7 +9736,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP val FROM _map_get, node, "value".
         REAP cval FROM translate_expr, val, nums, evars.
         REAP cctx FROM _map_get, node, "ctx".
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         IF cctx ISNT "" AND cctx ISNT "null",
             GIVE isel + "  plant_async_cancel_in(" + cctx + ", " + cval + ");\n".
         /IF.
@@ -9752,7 +9757,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     REAP cval FROM translate_expr, val, nums, evars.
     REAP cval FROM _handle_cat, cval, nums, evars.
     REAP tctx FROM _map_get, node, "ctx".
-    REAP isel FROM indent_str, indent.
+    REAP isel FROM indent_str, indent_num.
     IF tctx ISNT "" AND tctx ISNT "null",
         GIVE isel + "  plant_async_trace_in(" + tctx + ", " + lvnum + ", " + cval + ");\n".
     /IF.
@@ -9765,7 +9770,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     IF ntype IS "config_stmt",
         REAP key FROM _map_get, node, "key".
         REAP val FROM _map_get, node, "value".
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         GIVE isel + "  plant_async_config(\"" + key + "\", \"" + val + "\");\n".
     /IF.
   
@@ -9773,7 +9778,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    calls like l.push("d"). → plant_list_push(l, "d");) ─
     IF ntype IS "emit_stmt",
         REAP ec2 FROM _map_get, node, "code".
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         GIVE isel + ec2 + ";\n".
     /IF.
 
@@ -9800,29 +9805,14 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         /SEASON.
         SET cargs2 TO cargs3.
         CREATE cnode2(LIST) TO plant_list_make(10, "type", "reap_stmt", "target", "_", "action", ca2, "args", cargs2, "clargs", ccl2).
-        REAP ccode3 FROM generate_node, cnode2, indent, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
+        REAP ccode3 FROM generate_node, cnode2, env.
         GIVE ccode3.
     /IF.
 
     # ── reap_stmt: REAP var FROM action, args. → var = action(…); ─
     # Generic calls (action[T1, T2]) emit the mangled monomorphized name.
     IF ntype IS "reap_stmt",
-        REAP isel0 FROM indent_str, indent.
-        REAP env FROM env_new().
-        REAP _ FROM env_set, env, 0, isel0.
-        REAP _ FROM env_set, env, 1, sigs.
-        REAP _ FROM env_set, env, 2, subst.
-        REAP _ FROM env_set, env, 3, clmap.
-        REAP _ FROM env_set, env, 4, actx.
-        REAP _ FROM env_set, env, 5, nums.
-        REAP _ FROM env_set, env, 6, stvars.
-        REAP _ FROM env_set, env, 7, evars.
-        REAP _ FROM env_set, env, 8, rty.
-        REAP _ FROM env_set, env, 9, mexit.
-        REAP _ FROM env_set, env, 10, wexit.
-        REAP _ FROM env_set, env, 11, _from_long(indent).
         REAP code FROM gen_reap_stmt, node, env.
-        REAP _ FROM env_free, env.
         GIVE code.
     /IF.
 
@@ -9843,7 +9833,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF isnum2 IS 1,
             SET cval2 TO "_from_long(" + cval2 + ")".
         /IF.
-        REAP isel2 FROM indent_str, indent.
+        REAP isel2 FROM indent_str, indent_num.
         GIVE isel2 + "  " + tgt2 + " = " + cval2 + ";\n".
     /IF.
   
@@ -9863,7 +9853,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF croot IS "1",
             GIVE "".
         /IF.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         REAP cpre FROM substring, cval, 0, 1.
         IF cpre ISNT "\"",
             GIVE "#error " + cname + " CONST value must be a quoted string literal\n".
@@ -9890,14 +9880,14 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    (elevated const_stmt/root_stmt nodes are no-ops there).
     IF ntype IS "root_scope",
         REAP bd8 FROM _map_get, node, "body".
-        REAP bcode8 FROM generate_body, bd8, indent, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
+        REAP bcode8 FROM generate_body, bd8, env.
         GIVE bcode8.
     /IF.
 
     # ── now_stmt: NOW [FORMAT:x]. → plant_print(plant_now(fmt)); ──
     IF ntype IS "now_stmt",
         REAP fmt0 FROM _map_get, node, "fmt".
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         GIVE isel + "  plant_print(plant_now(\"" + fmt0 + "\"));\n".
     /IF.
 
@@ -9910,7 +9900,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF isn2 IS 1,
             SET cval TO "_from_long(" + cval + ")".
         /IF.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         GIVE isel + "  plant_print(plant_map_to_string(plant_analyze(" + cval + ")));\n".
     /IF.
 
@@ -9923,7 +9913,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF isn3 IS 1,
             SET cval2 TO "_from_long(" + cval2 + ")".
         /IF.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         GIVE isel + "  plant_print(plant_typeof(" + cval2 + "));\n".
     /IF.
 
@@ -9931,7 +9921,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     IF ntype IS "free_stmt",
         REAP ftgt FROM _map_get, node, "target".
         REAP fcv FROM translate_expr, ftgt, nums, evars.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         GIVE isel + "  " + fcv + " = plant_mem_free((tx_t)" + fcv + ");\n".
     /IF.
 
@@ -9949,7 +9939,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF isnc IS 1,
             SET avc TO "_from_long(" + avc + ")".
         /IF.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         IF ntype IS "arc_link_stmt",
             GIVE isel + "  plant_arc_link((tx_t)" + avp + ", (tx_t)" + avc + ");\n".
         /IF.
@@ -9958,7 +9948,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
 
     # ── fast_reset_stmt: FAST RESET. → plant_fast_reset(); ──
     IF ntype IS "fast_reset_stmt",
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         GIVE isel + "  plant_fast_reset();\n".
     /IF.
 
@@ -9969,7 +9959,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    runtime (plant_msleep clamps ms <= 0).
     IF ntype IS "wait_stmt",
         REAP wms FROM _map_get, node, "ms".
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         CREATE wsleep(TX) TO "0".
         IF wms > "",
             REAP wc2 FROM translate_expr, wms, nums, evars.
@@ -9989,71 +9979,26 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         IF isnl2 IS 1,
             SET lcv2 TO "_from_long(" + lcv2 + ")".
         /IF.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         GIVE isel + "  plant_lock((tx_t)" + lcv2 + ");\n".
     /IF.
 
     # ── if_stmt: IF cond, body [ORIF cond2, body2]* [ELSE, bodyE] /IF. ─
     #    → if (c) { … } else if (c2) { … } else { … }  (v0.48.20)
     IF ntype IS "if_stmt",
-        REAP isel0 FROM indent_str, indent.
-        REAP env FROM env_new().
-        REAP _ FROM env_set, env, 0, isel0.
-        REAP _ FROM env_set, env, 1, sigs.
-        REAP _ FROM env_set, env, 2, subst.
-        REAP _ FROM env_set, env, 3, clmap.
-        REAP _ FROM env_set, env, 4, actx.
-        REAP _ FROM env_set, env, 5, nums.
-        REAP _ FROM env_set, env, 6, stvars.
-        REAP _ FROM env_set, env, 7, evars.
-        REAP _ FROM env_set, env, 8, rty.
-        REAP _ FROM env_set, env, 9, mexit.
-        REAP _ FROM env_set, env, 10, wexit.
-        REAP _ FROM env_set, env, 11, _from_long(indent).
         REAP code FROM gen_if_stmt, node, env.
-        REAP _ FROM env_free, env.
         GIVE code.
     /IF.
   
     # ── season_stmt: SEASON cond, body /SEASON. → while(cond) {…} ─
     IF ntype IS "season_stmt",
-        REAP isel0 FROM indent_str, indent.
-        REAP env FROM env_new().
-        REAP _ FROM env_set, env, 0, isel0.
-        REAP _ FROM env_set, env, 1, sigs.
-        REAP _ FROM env_set, env, 2, subst.
-        REAP _ FROM env_set, env, 3, clmap.
-        REAP _ FROM env_set, env, 4, actx.
-        REAP _ FROM env_set, env, 5, nums.
-        REAP _ FROM env_set, env, 6, stvars.
-        REAP _ FROM env_set, env, 7, evars.
-        REAP _ FROM env_set, env, 8, rty.
-        REAP _ FROM env_set, env, 9, mexit.
-        REAP _ FROM env_set, env, 10, wexit.
-        REAP _ FROM env_set, env, 11, _from_long(indent).
         REAP code FROM gen_season_stmt, node, env.
-        REAP _ FROM env_free, env.
         GIVE code.
     /IF.
   
     # ── cycle_stmt: FROM/TO → for(iter=from; iter<=to; iter+=step) ─
     IF ntype IS "cycle_stmt",
-        REAP isel0 FROM indent_str, indent.
-        REAP env FROM env_new().
-        REAP _ FROM env_set, env, 0, isel0.
-        REAP _ FROM env_set, env, 1, sigs.
-        REAP _ FROM env_set, env, 2, subst.
-        REAP _ FROM env_set, env, 3, clmap.
-        REAP _ FROM env_set, env, 4, actx.
-        REAP _ FROM env_set, env, 5, nums.
-        REAP _ FROM env_set, env, 6, stvars.
-        REAP _ FROM env_set, env, 7, evars.
-        REAP _ FROM env_set, env, 8, rty.
-        REAP _ FROM env_set, env, 9, mexit.
-        REAP _ FROM env_set, env, 10, wexit.
-        REAP _ FROM env_set, env, 11, _from_long(indent).
         REAP code FROM gen_cycle_stmt, node, env.
-        REAP _ FROM env_free, env.
         GIVE code.
     /IF.
   
@@ -10086,43 +10031,13 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
     #    after each handler body runs (prior to exiting the shelter
     #    scope). plant_weather_handling_end closes the dispatch.
     IF ntype IS "weather_stmt",
-        REAP isel0 FROM indent_str, indent.
-        REAP env FROM env_new().
-        REAP _ FROM env_set, env, 0, isel0.
-        REAP _ FROM env_set, env, 1, sigs.
-        REAP _ FROM env_set, env, 2, subst.
-        REAP _ FROM env_set, env, 3, clmap.
-        REAP _ FROM env_set, env, 4, actx.
-        REAP _ FROM env_set, env, 5, nums.
-        REAP _ FROM env_set, env, 6, stvars.
-        REAP _ FROM env_set, env, 7, evars.
-        REAP _ FROM env_set, env, 8, rty.
-        REAP _ FROM env_set, env, 9, mexit.
-        REAP _ FROM env_set, env, 10, wexit.
-        REAP _ FROM env_set, env, 11, _from_long(indent).
         REAP code FROM gen_weather_stmt, node, env.
-        REAP _ FROM env_free, env.
         GIVE code.
     /IF.
   
     # ── throw_stmt: THROW <storm> "msg". → plant_throw(type, msg) ─
     IF ntype IS "throw_stmt",
-        REAP isel0 FROM indent_str, indent.
-        REAP env FROM env_new().
-        REAP _ FROM env_set, env, 0, isel0.
-        REAP _ FROM env_set, env, 1, sigs.
-        REAP _ FROM env_set, env, 2, subst.
-        REAP _ FROM env_set, env, 3, clmap.
-        REAP _ FROM env_set, env, 4, actx.
-        REAP _ FROM env_set, env, 5, nums.
-        REAP _ FROM env_set, env, 6, stvars.
-        REAP _ FROM env_set, env, 7, evars.
-        REAP _ FROM env_set, env, 8, rty.
-        REAP _ FROM env_set, env, 9, mexit.
-        REAP _ FROM env_set, env, 10, wexit.
-        REAP _ FROM env_set, env, 11, _from_long(indent).
         REAP code FROM gen_throw_stmt, node, env.
-        REAP _ FROM env_free, env.
         GIVE code.
     /IF.
   
@@ -10136,7 +10051,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP scond FROM _map_get, node, "cond".
         REAP scc FROM translate_expr, scond, nums, evars.
         REAP scc FROM handle_strcmp, scc.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         GIVE isel + "  if (" + scc + ") \{\n" + isel + "    plant_throw(\"STOP_STORM\", NULL);\n" + isel + "  \}\n".
     /IF.
   
@@ -10153,7 +10068,7 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         REAP subj FROM _map_get, node, "subjectExpr".
         CREATE clauses(LIST) TO _map_get(node, "clauses").
         REAP csubj FROM translate_expr, subj, nums, evars.
-        REAP isel FROM indent_str, indent.
+        REAP isel FROM indent_str, indent_num.
         CREATE ccode(TX) TO isel + "  \{\n" + isel + "    tx_t __mt = " + csubj + ";\n".
         CREATE ci(NUM) TO 0.
         CREATE clause(TX) TO "".
@@ -10196,7 +10111,9 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             IF binding > "" AND binding ISNT "null",
                 SET ccode TO ccode + isel + "        tx_t " + binding + " = _match_extract(__mt, \"" + vname + "\");\n".
             /IF.
-            REAP bcode FROM generate_body, cbody, indent + 4, sigs, subst, clmap, actx, nums, stvars, evars, rty, mexit, wexit.
+            REAP _ FROM env_set, env, 11, _from_long(indent_num + 4).
+            REAP bcode FROM generate_body, cbody, env.
+            REAP _ FROM env_set, env, 11, _from_long(indent_num).
             SET ccode TO ccode + bcode.
             IF ci + 1 IS COUNT clauses,
                 SET ccode TO ccode + isel + "    \}\n".
@@ -10278,12 +10195,12 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
         # emit them before the return; tail returns get them appended
         # after the body (see below).
         CREATE mmode(TX) TO _map_get(node, "mission_mode").
-        CREATE mexit(TX) TO "".
-        IF mmode IS "FAST", SET mexit TO "  plant_fast_reset();\n  plant_fast_exit();\n". /IF.
-        IF mmode IS "SAFE", SET mexit TO "  plant_safe_exit();\n". /IF.
-        IF mmode IS "SMART", SET mexit TO "  plant_smart_exit(\"" + aname + "\");\n". /IF.
-        IF mmode IS "PERSISTENT", SET mexit TO "  plant_persist_exit();\n". /IF.
-        REAP bcode FROM generate_body, bd, 1, sigs, subst, clmap, actx, nums_a, stvars_a, evars_a, rty_a, mexit, "".
+        CREATE amode_exit(TX) TO "".
+        IF mmode IS "FAST", SET amode_exit TO "  plant_fast_reset();\n  plant_fast_exit();\n". /IF.
+        IF mmode IS "SAFE", SET amode_exit TO "  plant_safe_exit();\n". /IF.
+        IF mmode IS "SMART", SET amode_exit TO "  plant_smart_exit(\"" + aname + "\");\n". /IF.
+        IF mmode IS "PERSISTENT", SET amode_exit TO "  plant_persist_exit();\n". /IF.
+        REAP bcode FROM generate_body, bd, env_make(1, sigs, subst, clmap, actx, nums_a, stvars_a, evars_a, rty_a, amode_exit, "").
         # v0.49.53: scan body for verify_stmt nodes; wrap with
         # plant_verify_begin/end only for actions that contain VERIFY
         # assertions (test actions).
@@ -10339,13 +10256,13 @@ ACTION generate_node(node, indent(NUM), sigs(LIST), subst(LIST), clmap(LIST), ac
             CREATE last_idx2(NUM) TO bd_count2 - 1.
             CREATE last_nd2(TX) TO plant_list_get(bd, last_idx2).
             CREATE last_ty2(TX) TO _map_get(last_nd2, "type").
-            IF mexit > "" AND last_ty2 ISNT "give_stmt",
-                SET bcode TO bcode + mexit.
+            IF amode_exit > "" AND last_ty2 ISNT "give_stmt",
+                SET bcode TO bcode + amode_exit.
             /IF.
         /IF.
         IF (COUNT bd) IS 0,
-            IF mexit > "",
-                SET bcode TO bcode + mexit.
+            IF amode_exit > "",
+                SET bcode TO bcode + amode_exit.
             /IF.
         /IF.
         # plant_async_drain() for ACTION main() when async is
@@ -11489,7 +11406,7 @@ ACTION emit_inst(inst(TX), templates(LIST), sigs(LIST), reg(LIST)),
         SET dcode TO dcode + "  tx_t " + dv + " = \"\";\n".
         SET di TO di + 1.
     /SEASON.
-    REAP bcode FROM generate_body, bd, 1, sigs, subst, plant_list_make(0), "", nums_m, stvars_m, evars_m, rty_m, "", "".
+    REAP bcode FROM generate_body, bd, env_make(1, sigs, subst, plant_list_make(0), "", nums_m, stvars_m, evars_m, rty_m, "", "").
     IF (COUNT bd) IS 0,
         SET bcode TO "  return " + mname + ";\n".
     /IF.
@@ -12214,7 +12131,7 @@ ACTION generate_c(ast(LIST)),
         REAP node_el FROM plant_list_get, ast, i.
         REAP ntype FROM _map_get, node_el, "type".
         IF ntype IS "enum_decl",
-            REAP nd_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "", "", "". "".
+            REAP nd_code FROM generate_node, node_el, env_make(0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "", "", "").
             SET struct_code TO struct_code + nd_code.
         /IF.
         SET i TO i + 1.
@@ -12578,7 +12495,7 @@ ACTION generate_c(ast(LIST)),
                     /IF.
                 /IF.
                 REAP cmact FROM _cl_map_get, clmaps, aname.
-                REAP nd_code FROM generate_node, node_el2, 0, sigs, esub, cmact, "", plant_list_make(0), plant_list_make(0), eregs, "", "", "".
+                REAP nd_code FROM generate_node, node_el2, env_make(0, sigs, esub, cmact, "", plant_list_make(0), plant_list_make(0), eregs, "", "", "").
                 SET decl_code TO decl_code + nd_code.
                 SET has_decl TO 1.
             /IF.
@@ -12589,7 +12506,7 @@ ACTION generate_c(ast(LIST)),
         # v0.49.25: import_stmt nodes are loader-level no-ops and must
         # not flip has_stmt (which would force a duplicate CLI main).
         IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "import_stmt" AND ntype ISNT "type_decl" AND ntype ISNT "species_decl" AND ntype ISNT "interface_decl",
-            REAP ns_code FROM generate_node, node_el, 0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "", "", "". "".
+            REAP ns_code FROM generate_node, node_el, env_make(0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "", "", "").
             SET stmt_code TO stmt_code + ns_code.
             SET has_stmt TO 1.
         /IF.
@@ -13277,7 +13194,7 @@ ACTION _cl_emit_fn(cnode(LIST), sigs(LIST), subst(LIST), reg(LIST)),
             SET di6 TO di6 + 1.
         /SEASON.
         CREATE evars_c(LIST) TO collect_enums(bb, cbpars2, subst, reg, sigs).
-        REAP bc3 FROM generate_body, bb, 1, sigs, subst, cm2, "", nums_c, stvars_c, evars_c, "", "", "".
+        REAP bc3 FROM generate_body, bb, env_make(1, sigs, subst, cm2, "", nums_c, stvars_c, evars_c, "", "", "").
         SET fnc TO fnc + bc3 + "".
     /IF.
     SET fnc TO fnc + "\}\n".
@@ -13309,7 +13226,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.49.57e (pure native)".
+  SHOW "Chloroplast 0.49.58 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

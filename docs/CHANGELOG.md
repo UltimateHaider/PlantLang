@@ -1,3 +1,28 @@
+## v0.49.58 - 2026 (Codegen Interface Modernization — Phase 4)
+
+### Architecture
+- **`generate_node(node, env)`**: Full migration from 14-parameter signature to
+  `(node, env(LIST))`. All 12 parameters extracted from env at function entry via
+  `env_indent`, `env_sigs`, `env_subst`, `env_clmap`, `env_actx`, `env_nums`,
+  `env_stvars`, `env_evars`, `env_rty`, `env_mexit`, `env_wexit`, `env_indent_num`.
+  Eliminated 10 redundant `env_new/env_set/env_free` blocks in dispatch handlers
+  (show_stmt, create_stmt, set_stmt, give_stmt, if_stmt, reap_stmt, season_stmt,
+  cycle_stmt, weather_stmt, throw_stmt).
+- **`generate_body(bd, env)`**: Migrated from 12-parameter signature to
+  `(bd(LIST), env(LIST))`. All callers updated to pass env directly.
+- **`env_make(indent_num, sigs, subst, clmap, actx, nums, stvars, evars, rty,
+  mexit, wexit)`**: New helper that creates and populates an env in one call,
+  eliminating ~30 lines of boilerplate per fresh-env creation site.
+- **Save/restore pattern**: Recursive `generate_body` calls with `indent + N`
+  arithmetic use in-place modification of slot 11 (`env_set(env, 11, ...)`)
+  with mandatory restore after the call returns, ensuring context stability.
+- **Variable name collision fix**: Renamed inner `mexit` in action_decl handler
+  to `amode_exit` to avoid hoisting conflict with the REAP'd `mexit` from env.
+
+### Self-Hosting
+- Convergent build verified: v2→v3→v4→v5 produces identical C output
+  (443461 bytes, down from 503804). 20/20 native tests pass.
+
 ## v0.49.57e - 2026 (Codegen Interface Modernization — Phase 3)
 
 ### Architecture

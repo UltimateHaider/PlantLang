@@ -1019,15 +1019,14 @@ void plant_set_log_level(PlantLogLevel level);
    v0.49.57b — Environment Container Subsystem (Phase 1)
    env_new / env_set / env_get implemented as PlantLang ACTION primitives
    in codegen_c.plant. env_* accessors (env_indent, env_sigs, etc.)
-   provide semantic field retrieval. Pilot integration: gen_show_stmt
-   accepts (node, env) while generate_node still uses the 14-parameter
-   signature — env is constructed via env_new + env_set at call site.
+   provide semantic field retrieval. gen_show_stmt was the pilot integration
+   using (node, env) while generate_node used the 14-parameter signature.
 
-   v0.49.57a — Forward compatibility documentation (superseded by b):
-     The env_make()/env_*() helpers documented the target interface.
-     Migration target (full refactor deferred due to self-hosting memory
-     constraints — env_make allocates 11-element lists on every recursive
-     call, causing OOM in the bootstrap compiler):
+   v0.49.58 — Full generate_node/generate_body (node, env) rollout:
+     Both generate_node and generate_body now accept a single env(LIST).
+     env_make(indent_num, sigs, subst, clmap, actx, nums, stvars, evars,
+     rty, mexit, wexit) creates a fully populated env in one call.
+     Recursive indent arithmetic uses in-place save/restore of slot 11.
 
      env_new()                              → PlantArray* (11 zero-slots)
      env_set(env, idx, value)               → sets slot, returns env
