@@ -26,6 +26,7 @@
 #include <plant_report.h>
 #include <plant_lexer.h>
 #include <plant_parser.h>
+#include <plant_codegen.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1073,6 +1074,14 @@ void plant_set_log_level(PlantLogLevel level);
      and function pointers (parse, parse_statement, parse_expression, parse_block).
      PlantParser_create() wraps PlantLang's parse_program/parse_statement and
      holds a reference to ILexer, enforcing compositional front-end dependency.
+
+   v0.49.59c — Abstract Code Generation Interface:
+     ICodegen (plant_codegen.h): Comprehensive translation and environment
+     management contract with void* context and function pointers for core
+     code generation (generate, emit, generate_node), environment subsystem
+     lifecycle (env_new, env_set, env_get, env_free), and configuration state
+     (set_env, get_env). PlantCodegen_create() wraps PlantLang's generate_c,
+     generate_node, env_make, env_set, env_get generated C functions.
    ═══════════════════════════════════════════════════════════════ */
 
 typedef struct PlantReport PlantReport;

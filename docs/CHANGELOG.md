@@ -1,3 +1,24 @@
+## v0.49.59c - 2026 (Abstract Code Generation Interface)
+
+### Architecture
+- **ICodegen interface** (`runtime/c/plant_codegen.h`): Comprehensive translation
+  and environment management contract with `void* context` and function pointers
+  for core code generation (`generate`, `emit`, `generate_node`), environment
+  subsystem lifecycle (`env_new`, `env_set`, `env_get`, `env_free`), and
+  configuration state (`set_env`, `get_env`).
+- **Concrete implementation** (`runtime/c/plant_codegen.c`):
+  - `PlantCodegen_create()` wraps PlantLang's `generate_c`, `generate_node`,
+    `env_make`, `env_set`, `env_get` generated C functions into the abstract vtable.
+  - Internal context carries the current environment pointer, enabling `set_env`/`get_env`
+    for execution configuration without requiring the caller to thread env through every call.
+  - `env_new()` creates a default env via `env_make(0, NULL, ...)` for blank-slate usage.
+  - `env_free()` is a no-op stub — env lifetime is managed by the PlantLang runtime.
+- **Convenience helpers**: `plant_iCodegen_*()` family null-checks before dereferencing
+  vtable pointers — safe to call with NULL.
+- **Self-hosting**: Convergent at 442207 bytes.
+- **Tests**: 20/20 native tests pass. 185/187 regression tests pass
+  (2 pre-existing gcc-based FFI failures).
+
 ## v0.49.59b - 2026 (Abstract Front-End Interfaces)
 
 ### Architecture
