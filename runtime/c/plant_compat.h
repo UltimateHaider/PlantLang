@@ -1022,6 +1022,12 @@ extern IReport*  get_report(void);
 extern void      set_runtime(IRuntime* rt);
 extern void      set_report(IReport* rep);
 
+/* v0.49.60c — Front-end DI Accessors */
+extern ILexer*   get_lexer(void);
+extern ICodegen* get_codegen(void);
+extern void      set_lexer(ILexer* lex);
+extern void      set_codegen(ICodegen* cg);
+
 /* ═══════════════════════════════════════════════════════════════
    v0.49.56 — Unified Error Management
    Centralized logging interface with severity levels.

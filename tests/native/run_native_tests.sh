@@ -23,7 +23,7 @@ fi
 
 out=$("$PLANTC" --version 2>&1)
 rc=$?
-  if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '0.49.60b'; then
+  if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '0.49.60c'; then
   echo "PASS  cli --version"; pass=$((pass+1))
 else
   echo "FAIL  cli --version"; fail=$((fail+1))

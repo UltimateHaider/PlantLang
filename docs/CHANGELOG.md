@@ -1,3 +1,29 @@
+## v0.49.60c - 2026 (Dependency Inversion in Parser)
+
+### Architecture
+- **Parser refactoring**: All 835 direct lexer calls in `parser.plant` replaced with
+  interface-bound invocations via `ILexer`: `peek(tokens, pos)` →
+  `plant_iLexer_peek_at(lexer, tokens, pos)`, `consume(tokens, pos)` →
+  `plant_iLexer_consume_at(lexer, tokens, pos)`, `tok_type(tok)` →
+  `plant_iLexer_tok_type(lexer, tok)`, `tok_lex(tok)` →
+  `plant_iLexer_tok_lex(lexer, tok)`, `is_eof(tokens, pos)` →
+  `plant_iLexer_is_eof_at(lexer, tokens, pos)`. 73 parser functions now obtain
+  the lexer via `REAP lexer FROM get_lexer.` as their first statement.
+- **ILexer extensions** (`runtime/c/plant_lexer.h/c`): New `peek_at`/`consume_at`/`is_eof_at`
+  vtable pointers and convenience helpers accept explicit `tokens`+`pos` arguments,
+  enabling random-access parsing through the abstract interface.
+- **Weak-symbol graceful degradation** (`runtime/c/plant_runtime.c`): `get_lexer()` and
+  `get_codegen()` use `__attribute__((weak))` on factory declarations so test programs
+  (which don't link `plant_lexer.c`/`plant_codegen.c`) gracefully get NULL instead of
+  linker errors. All `plant_iLexer_*` helpers are NULL-safe.
+- **Segfault root cause & fix**: The original DIP parser crashed because `REAP lexer FROM
+  get_lexer.` was inserted AFTER the first `plant_iLexer_*` call (when the ACTION line had
+  an inline statement). Fixed by ensuring `get_lexer()` is always the first statement in
+  every parser function body.
+- **Self-hosting**: Convergent at 464520 bytes (+21606 from parser interface call strings).
+- **Tests**: 20/20 native tests pass. 3/3 smoke tests pass.
+  Regression tests: same results as v0.49.60b (all failures pre-existing).
+
 ## v0.49.60b - 2026 (Dependency Inversion in Code Generation)
 
 ### Architecture

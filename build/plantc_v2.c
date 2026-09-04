@@ -1419,6 +1419,8 @@ tx_t _third(PlantArray* pair) {
     return plant_list_get(pair ,  2 );
 }
 tx_t escape_string(tx_t s) {
+  tx_t lexer = "";
+    lexer = get_lexer();
     tx_t r = "";
     long ei = 0;
     long en = strlen( s );
@@ -1448,6 +1450,7 @@ tx_t escape_string(tx_t s) {
     return r;
 }
 tx_t parse_field_access(PlantArray* tokens, long pos, tx_t text, tx_t dpth) {
+  tx_t lexer = "";
   tx_t ftok = "";
   tx_t flx = "";
   tx_t fty = "";
@@ -1466,9 +1469,10 @@ tx_t parse_field_access(PlantArray* tokens, long pos, tx_t text, tx_t dpth) {
   tx_t ttail = "";
   tx_t lt_lx = "";
   tx_t cut = "";
-    ftok = peek(tokens, pos+1);
-    flx = tok_lex(ftok);
-    fty = tok_type(ftok);
+    lexer = get_lexer();
+    ftok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)pos+1);
+    flx = plant_iLexer_tok_lex((tx_t)lexer, ftok);
+    fty = plant_iLexer_tok_type((tx_t)lexer, ftok);
     if (strcmp(fty,"IDENT") != 0) {
         return plant_list_make ( 3 , "0" , text , pos );
     }
@@ -1482,8 +1486,8 @@ tx_t parse_field_access(PlantArray* tokens, long pos, tx_t text, tx_t dpth) {
     if (strcmp(flx,"SET") == 0 || strcmp(flx,"REAP") == 0 || strcmp(flx,"SHOW") == 0 || strcmp(flx,"CREATE") == 0 || strcmp(flx,"GIVE") == 0 || strcmp(flx,"IF") == 0 || strcmp(flx,"ORIF") == 0 || strcmp(flx,"SEASON") == 0 || strcmp(flx,"WHILE") == 0 || strcmp(flx,"FOR") == 0 || strcmp(flx,"CALL") == 0 || strcmp(flx,"START") == 0 || strcmp(flx,"AWAIT") == 0 || strcmp(flx,"CANCEL") == 0 || strcmp(flx,"TRACE") == 0 || strcmp(flx,"MISSION") == 0 || strcmp(flx,"FREE") == 0 || strcmp(flx,"WAIT") == 0 || strcmp(flx,"LOCK") == 0 || strcmp(flx,"ARC") == 0 || strcmp(flx,"PUT") == 0 || strcmp(flx,"TAKE") == 0 || strcmp(flx,"BRAID") == 0 || strcmp(flx,"LINK") == 0 || strcmp(flx,"SORT") == 0 || strcmp(flx,"SHAKE") == 0 || strcmp(flx,"BREAK") == 0 || strcmp(flx,"CONTINUE") == 0 || strcmp(flx,"LET") == 0 || strcmp(flx,"NOW") == 0 || strcmp(flx,"ANALYZE") == 0 || strcmp(flx,"TYPEOF") == 0 || strcmp(flx,"ROOT") == 0 || strcmp(flx,"ROOT_SCOPE") == 0 || strcmp(flx,"CONST") == 0 || strcmp(flx,"IN") == 0 || strcmp(flx,"FROM") == 0 || strcmp(flx,"TO") == 0 || strcmp(flx,"WITH") == 0 || strcmp(flx,"AS") == 0 || strcmp(flx,"INTO") == 0 || strcmp(flx,"BY") == 0 || strcmp(flx,"ASYNC") == 0 || strcmp(flx,"MATCH") == 0 || strcmp(flx,"CYCLE") == 0 || strcmp(flx,"WEATHER") == 0 || strcmp(flx,"THROW") == 0 || strcmp(flx,"STOP") == 0 || strcmp(flx,"INCREASE") == 0 || strcmp(flx,"DECREASE") == 0 || strcmp(flx,"HARVEST") == 0 || strcmp(flx,"LISTEN") == 0 || strcmp(flx,"FAST") == 0) {
         return plant_list_make ( 3 , "0" , text , pos );
     }
-    nt2 = peek(tokens, pos+2);
-    nt2_ty = tok_type(nt2);
+    nt2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)pos+2);
+    nt2_ty = plant_iLexer_tok_type((tx_t)lexer, nt2);
     if (strcmp(nt2_ty,"LPAREN") == 0) {
         mpp0 = parse_method_call(tokens, pos, text);
         mpf0 = _first(mpp0);
@@ -1495,24 +1499,24 @@ tx_t parse_field_access(PlantArray* tokens, long pos, tx_t text, tx_t dpth) {
     if (strcmp(nt2_ty,"COLON") == 0) {
         return plant_list_make ( 3 , "0" , text , pos );
     }
-    ltk = peek(tokens, pos - 1);
-    lt_ty = tok_type(ltk);
+    ltk = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)pos - 1);
+    lt_ty = plant_iLexer_tok_type((tx_t)lexer, ltk);
     if (strcmp(dpth,"0") != 0) {
         if (strcmp(lt_ty,"IDENT") != 0) {
             return plant_list_make ( 3 , "0" , text , pos );
         }
     }
-    dotp = consume(tokens, pos);
+    dotp = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(dotp);
-    fldp = consume(tokens, p2);
-    fld = tok_lex(plant_list_get(fldp ,  0 ));
+    fldp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+    fld = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(fldp ,  0 ));
     p3 = _second(fldp);
     tx_t nfld = _cat3("\"", fld, "\"");
     tx_t fin = "_map_get(";
     ttail = substring(text, strlen( text ) - 2, strlen( text ));
     if (strcmp(lt_ty,"IDENT") == 0) {
         if (strcmp(ttail,"\")") != 0) {
-            lt_lx = tok_lex(ltk);
+            lt_lx = plant_iLexer_tok_lex((tx_t)lexer, ltk);
             cut = substring(text, 0, strlen( text ) - strlen( lt_lx ));
             fin = _cat(fin, lt_lx);
             fin = _cat(cut, fin);
@@ -1530,6 +1534,7 @@ tx_t parse_field_access(PlantArray* tokens, long pos, tx_t text, tx_t dpth) {
     return plant_list_make ( 3 , "1" , fin , p3 );
 }
 tx_t parse_method_call(PlantArray* tokens, long pos, tx_t text) {
+  tx_t lexer = "";
   tx_t mtok0 = "";
   tx_t mname = "";
   tx_t ltk0 = "";
@@ -1544,16 +1549,17 @@ tx_t parse_method_call(PlantArray* tokens, long pos, tx_t text) {
   tx_t mvp = "";
   tx_t margs = "";
   tx_t mcp4 = "";
-    mtok0 = peek(tokens, pos+1);
-    mname = tok_lex(mtok0);
-    ltk0 = peek(tokens, pos - 1);
-    lt_ty0 = tok_type(ltk0);
+    lexer = get_lexer();
+    mtok0 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)pos+1);
+    mname = plant_iLexer_tok_lex((tx_t)lexer, mtok0);
+    ltk0 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)pos - 1);
+    lt_ty0 = plant_iLexer_tok_type((tx_t)lexer, ltk0);
     ttail0 = substring(text, strlen( text ) - 2, strlen( text ));
     tx_t recv = text;
     tx_t pre = "";
     if (strcmp(lt_ty0,"IDENT") == 0) {
         if (strcmp(ttail0,"\")") != 0) {
-            lt_lx0 = tok_lex(ltk0);
+            lt_lx0 = plant_iLexer_tok_lex((tx_t)lexer, ltk0);
             recv = lt_lx0;
             cut0 = substring(text, 0, strlen( text ) - strlen( lt_lx0 ));
             pre = cut0;
@@ -1578,16 +1584,16 @@ tx_t parse_method_call(PlantArray* tokens, long pos, tx_t text) {
     if (strcmp(mfn,"") == 0) {
         mfn = mname;
     }
-    mcp = consume(tokens, pos);
+    mcp = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     mpp = _second(mcp);
-    mcp2 = consume(tokens, mpp);
+    mcp2 = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)mpp);
     mpp = _second(mcp2);
-    mcp3 = consume(tokens, mpp);
+    mcp3 = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)mpp);
     mpp = _second(mcp3);
     mvp = collect_value(tokens, mpp);
     margs = _first(mvp);
     mpp = _second(mvp);
-    mcp4 = consume(tokens, mpp);
+    mcp4 = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)mpp);
     mpp = _second(mcp4);
     tx_t minner = mfn;
     minner = _cat(minner, "(");
@@ -1607,6 +1613,7 @@ tx_t parse_method_call(PlantArray* tokens, long pos, tx_t text) {
     return plant_list_make ( 3 , "1" , mres , mpp );
 }
 tx_t collect_value(PlantArray* tokens, long start) {
+  tx_t lexer = "";
   tx_t is_eof_flag = "";
   tx_t tok = "";
   tx_t lx = "";
@@ -1616,17 +1623,18 @@ tx_t collect_value(PlantArray* tokens, long start) {
   tx_t fpt = "";
   tx_t fpp2 = "";
   tx_t cpair = "";
+    lexer = get_lexer();
     tx_t text = "";
     long p2 = start;
     long depth = 0;
     while (1) {
-        is_eof_flag = is_eof(tokens, p2);
+        is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, p2);
         if (is_eof_flag) {
             return plant_list_make ( 2 , text , p2 );
         }
-        tok = peek(tokens, p2);
-        lx = tok_lex(tok);
-        tt = tok_type(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, p2);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
+        tt = plant_iLexer_tok_type((tx_t)lexer, tok);
         if (strcmp(tt,"STRING") == 0 || strcmp(tt,"INTERP") == 0) {
             lx = escape_string(lx);
             lx = _cat3("\"", lx, "\"");
@@ -1643,7 +1651,7 @@ tx_t collect_value(PlantArray* tokens, long start) {
             }
         }
         if (strcmp(lx,".") == 0 && depth == 0) {
-            cpair = consume(tokens, p2);
+            cpair = plant_iLexer_consume_at((tx_t)lexer, tokens, p2);
             p2 = _second(cpair);
             return plant_list_make ( 2 , text , p2 );
         }
@@ -1675,12 +1683,13 @@ tx_t collect_value(PlantArray* tokens, long start) {
             text = _cat(text, " ");
         }
         text = _cat(text, lx);
-        cpair = consume(tokens, p2);
+        cpair = plant_iLexer_consume_at((tx_t)lexer, tokens, p2);
         p2 = _second(cpair);
     }
   return collect_value;
 }
 tx_t collect_until(PlantArray* tokens, long start, tx_t delim) {
+  tx_t lexer = "";
   tx_t is_eof_flag = "";
   tx_t tok = "";
   tx_t lx = "";
@@ -1690,17 +1699,18 @@ tx_t collect_until(PlantArray* tokens, long start, tx_t delim) {
   tx_t fpt = "";
   tx_t fpp2 = "";
   tx_t cpair = "";
+    lexer = get_lexer();
     tx_t text = "";
     long p2 = start;
     long depth = 0;
     while (1) {
-        is_eof_flag = is_eof(tokens, p2);
+        is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, p2);
         if (is_eof_flag) {
             return plant_list_make ( 2 , text , p2 );
         }
-        tok = peek(tokens, p2);
-        lx = tok_lex(tok);
-        tt = tok_type(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, p2);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
+        tt = plant_iLexer_tok_type((tx_t)lexer, tok);
         if (strcmp(tt,"STRING") == 0 || strcmp(tt,"INTERP") == 0) {
             lx = escape_string(lx);
             lx = _cat3("\"", lx, "\"");
@@ -1741,27 +1751,29 @@ tx_t collect_until(PlantArray* tokens, long start, tx_t delim) {
             text = _cat(text, " ");
         }
         text = _cat(text, lx);
-        cpair = consume(tokens, p2);
+        cpair = plant_iLexer_consume_at((tx_t)lexer, tokens, p2);
         p2 = _second(cpair);
     }
   return collect_until;
 }
 tx_t collect_type_text(PlantArray* tokens, long start, tx_t stopc, long stopcomma) {
+  tx_t lexer = "";
   tx_t is_eof_flag = "";
   tx_t tok = "";
   tx_t lx = "";
   tx_t cpair = "";
+    lexer = get_lexer();
     tx_t text = "";
     long p2 = start;
     long pdepth = 0;
     long bdepth = 0;
     while (1) {
-        is_eof_flag = is_eof(tokens, p2);
+        is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, p2);
         if (is_eof_flag) {
             return plant_list_make ( 2 , text , p2 );
         }
-        tok = peek(tokens, p2);
-        lx = tok_lex(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, p2);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
         if (pdepth == 0 && bdepth == 0) {
             if (strcmp(_cat ( "" , lx ),_cat ( "" , stopc )) == 0) {
                 return plant_list_make ( 2 , text , p2 );
@@ -1786,12 +1798,13 @@ tx_t collect_type_text(PlantArray* tokens, long start, tx_t stopc, long stopcomm
             text = _cat(text, " ");
         }
         text = _cat(text, lx);
-        cpair = consume(tokens, p2);
+        cpair = plant_iLexer_consume_at((tx_t)lexer, tokens, p2);
         p2 = _second(cpair);
     }
   return collect_type_text;
 }
 tx_t collect_args(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t is_eof_flag = "";
   tx_t tok = "";
   tx_t lx = "";
@@ -1804,18 +1817,19 @@ tx_t collect_args(PlantArray* tokens, long pos) {
   tx_t tok2 = "";
   tx_t lx2 = "";
   tx_t com2 = "";
+    lexer = get_lexer();
     PlantArray* args = plant_list_make ( 0 );
     long p5 = pos;
     while (1) {
-        is_eof_flag = is_eof(tokens, p5);
+        is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, p5);
         if (is_eof_flag) {
             return plant_list_make ( 2 , args , p5 );
         }
-        tok = peek(tokens, p5);
-        lx = tok_lex(tok);
-        ty = tok_type(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, p5);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
+        ty = plant_iLexer_tok_type((tx_t)lexer, tok);
         if (strcmp(lx,",") == 0 && strcmp(ty,"STRING") != 0) {
-            com = consume(tokens, p5);
+            com = plant_iLexer_consume_at((tx_t)lexer, tokens, p5);
             p5 = _second(com);
         }
         if (strcmp(lx,".") == 0 && strcmp(ty,"STRING") != 0) {
@@ -1830,9 +1844,9 @@ tx_t collect_args(PlantArray* tokens, long pos) {
         tx_t arg_text = "";
         long adepth = 0;
         while (1) {
-            atok = peek(tokens, p5);
-            alx = tok_lex(atok);
-            atype = tok_type(atok);
+            atok = plant_iLexer_peek_at((tx_t)lexer, tokens, p5);
+            alx = plant_iLexer_tok_lex((tx_t)lexer, atok);
+            atype = plant_iLexer_tok_type((tx_t)lexer, atok);
             if (strcmp(atype,"STRING") == 0 || strcmp(atype,"INTERP") == 0) {
                 alx = escape_string(alx);
                 alx = _cat3("\"", alx, "\"");
@@ -1859,20 +1873,21 @@ tx_t collect_args(PlantArray* tokens, long pos) {
                 arg_text = _cat(arg_text, " ");
             }
             arg_text = _cat(arg_text, alx);
-            cp = consume(tokens, p5);
+            cp = plant_iLexer_consume_at((tx_t)lexer, tokens, p5);
             p5 = _second(cp);
         }
         args = plant_list_add(args, arg_text);
-        tok2 = peek(tokens, p5);
-        lx2 = tok_lex(tok2);
+        tok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, p5);
+        lx2 = plant_iLexer_tok_lex((tx_t)lexer, tok2);
         if (strcmp(lx2,",") == 0) {
-            com2 = consume(tokens, p5);
+            com2 = plant_iLexer_consume_at((tx_t)lexer, tokens, p5);
             p5 = _second(com2);
         }
     }
   return collect_args;
 }
 tx_t parse_await_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t act_pair = "";
@@ -1888,32 +1903,34 @@ tx_t parse_await_stmt(PlantArray* tokens, long pos) {
   tx_t p6 = "";
   tx_t dot = "";
   tx_t p7 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    act_pair = consume(tokens, p2);
-    act_name = tok_lex(plant_list_get(act_pair ,  0 ));
+    act_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+    act_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(act_pair ,  0 ));
     p3 = _second(act_pair);
     ap = collect_args(tokens, p3);
     PlantArray* args = plant_list_get(ap ,  0 );
     p4 = _second(ap);
     tx_t ctx_name = "";
-    tok = peek(tokens, p4);
-    lx = tok_lex(tok);
+    tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+    lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
     if (strcmp(lx,"IN") == 0) {
-        in_pair = consume(tokens, p4);
+        in_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
         p5 = _second(in_pair);
-        ctx_pair = consume(tokens, p5);
-        ctx_name = tok_lex(plant_list_get(ctx_pair ,  0 ));
+        ctx_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
+        ctx_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(ctx_pair ,  0 ));
         p6 = _second(ctx_pair);
-        dot = consume(tokens, p6);
+        dot = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p6);
         p7 = _second(dot);
         return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "await_stmt" , "action" , act_name , "args" , args , "ctx" , ctx_name ) , p7 );
     }
-    dot = consume(tokens, p4);
+    dot = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
     p5 = _second(dot);
     return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "await_stmt" , "action" , act_name , "args" , args , "ctx" , ctx_name ) , p5 );
 }
 tx_t parse_start_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t act_pair = "";
@@ -1929,32 +1946,34 @@ tx_t parse_start_stmt(PlantArray* tokens, long pos) {
   tx_t p6 = "";
   tx_t dot = "";
   tx_t p7 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    act_pair = consume(tokens, p2);
-    act_name = tok_lex(plant_list_get(act_pair ,  0 ));
+    act_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+    act_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(act_pair ,  0 ));
     p3 = _second(act_pair);
     ap = collect_args(tokens, p3);
     PlantArray* args = plant_list_get(ap ,  0 );
     p4 = _second(ap);
     tx_t ctx_name = "";
-    tok = peek(tokens, p4);
-    lx = tok_lex(tok);
+    tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+    lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
     if (strcmp(lx,"IN") == 0) {
-        in_pair = consume(tokens, p4);
+        in_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
         p5 = _second(in_pair);
-        ctx_pair = consume(tokens, p5);
-        ctx_name = tok_lex(plant_list_get(ctx_pair ,  0 ));
+        ctx_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
+        ctx_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(ctx_pair ,  0 ));
         p6 = _second(ctx_pair);
-        dot = consume(tokens, p6);
+        dot = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p6);
         p7 = _second(dot);
         return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "start_stmt" , "action" , act_name , "args" , args , "ctx" , ctx_name ) , p7 );
     }
-    dot = consume(tokens, p4);
+    dot = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
     p5 = _second(dot);
     return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "start_stmt" , "action" , act_name , "args" , args , "ctx" , ctx_name ) , p5 );
 }
 tx_t parse_async_in_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t in_pair = "";
@@ -1971,26 +1990,28 @@ tx_t parse_async_in_stmt(PlantArray* tokens, long pos) {
   tx_t p7 = "";
   tx_t dot = "";
   tx_t p8 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    in_pair = consume(tokens, p2);
+    in_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
     p3 = _second(in_pair);
-    ctx_pair = consume(tokens, p3);
-    ctx_name = tok_lex(plant_list_get(ctx_pair ,  0 ));
+    ctx_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
+    ctx_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(ctx_pair ,  0 ));
     p4 = _second(ctx_pair);
-    com = consume(tokens, p4);
+    com = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
     p5 = _second(com);
-    act_pair = consume(tokens, p5);
-    act_name = tok_lex(plant_list_get(act_pair ,  0 ));
+    act_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
+    act_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(act_pair ,  0 ));
     p6 = _second(act_pair);
     ap = collect_args(tokens, p6);
     PlantArray* args = plant_list_get(ap ,  0 );
     p7 = _second(ap);
-    dot = consume(tokens, p7);
+    dot = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p7);
     p8 = _second(dot);
     return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "start_stmt" , "action" , act_name , "args" , args , "ctx" , ctx_name , "kind" , "async_in" ) , p8 );
 }
 tx_t parse_cancel_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t vpair = "";
@@ -2003,27 +2024,29 @@ tx_t parse_cancel_stmt(PlantArray* tokens, long pos) {
   tx_t p5 = "";
   tx_t dot = "";
   tx_t p6 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     vpair = collect_value(tokens, p2);
     tx_t expr = plant_list_get(vpair ,  0 );
     p3 = _second(vpair);
     tx_t ctx_name = "";
-    tok = peek(tokens, p3);
-    lx = tok_lex(tok);
+    tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p3);
+    lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
     if (strcmp(lx,"IN") == 0) {
-        in_pair = consume(tokens, p3);
+        in_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
         p4 = _second(in_pair);
-        ctx_pair = consume(tokens, p4);
-        ctx_name = tok_lex(plant_list_get(ctx_pair ,  0 ));
+        ctx_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
+        ctx_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(ctx_pair ,  0 ));
         p5 = _second(ctx_pair);
-        dot = consume(tokens, p5);
+        dot = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
         p6 = _second(dot);
         return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "cancel_stmt" , "value" , expr , "ctx" , ctx_name ) , p6 );
     }
     return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "cancel_stmt" , "value" , expr , "ctx" , ctx_name ) , p3 );
 }
 tx_t parse_trace_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t lv_pair = "";
@@ -2039,30 +2062,32 @@ tx_t parse_trace_stmt(PlantArray* tokens, long pos) {
   tx_t p6 = "";
   tx_t dot = "";
   tx_t p7 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    lv_pair = consume(tokens, p2);
-    lv = tok_lex(plant_list_get(lv_pair ,  0 ));
+    lv_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+    lv = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(lv_pair ,  0 ));
     p3 = _second(lv_pair);
     vpair = collect_value(tokens, p3);
     tx_t expr = plant_list_get(vpair ,  0 );
     p4b = _second(vpair);
     tx_t ctx_name = "";
-    tok = peek(tokens, p4b);
-    lx = tok_lex(tok);
+    tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4b);
+    lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
     if (strcmp(lx,"IN") == 0) {
-        in_pair = consume(tokens, p4b);
+        in_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4b);
         p5 = _second(in_pair);
-        ctx_pair = consume(tokens, p5);
-        ctx_name = tok_lex(plant_list_get(ctx_pair ,  0 ));
+        ctx_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
+        ctx_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(ctx_pair ,  0 ));
         p6 = _second(ctx_pair);
-        dot = consume(tokens, p6);
+        dot = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p6);
         p7 = _second(dot);
         return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "trace_stmt" , "level" , lv , "value" , expr , "ctx" , ctx_name ) , p7 );
     }
     return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "trace_stmt" , "level" , lv , "value" , expr , "ctx" , ctx_name ) , p4b );
 }
 tx_t parse_mission_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t cfg_pair = "";
@@ -2079,31 +2104,33 @@ tx_t parse_mission_stmt(PlantArray* tokens, long pos) {
   tx_t p5 = "";
   tx_t dot = "";
   tx_t p6 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    cfg_pair = consume(tokens, p2);
+    cfg_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
     p3 = _second(cfg_pair);
-    key_pair = consume(tokens, p3);
-    cfg_key = tok_lex(plant_list_get(key_pair ,  0 ));
+    key_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
+    cfg_key = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(key_pair ,  0 ));
     p4 = _second(key_pair);
-    eq_tok = peek(tokens, p4);
-    eq_lx = tok_lex(eq_tok);
+    eq_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+    eq_lx = plant_iLexer_tok_lex((tx_t)lexer, eq_tok);
     if (strcmp(eq_lx,"=") == 0 || strcmp(eq_lx,"IS") == 0) {
-        eq_pair = consume(tokens, p4);
+        eq_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
         p4 = _second(eq_pair);
     }
-    val_pair = consume(tokens, p4);
-    cfg_val = tok_lex(plant_list_get(val_pair ,  0 ));
-    vty = tok_type(plant_list_get(val_pair ,  0 ));
+    val_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
+    cfg_val = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(val_pair ,  0 ));
+    vty = plant_iLexer_tok_type((tx_t)lexer, plant_list_get(val_pair ,  0 ));
     if (strcmp(vty,"STRING") == 0) {
         cfg_val = escape_string(cfg_val);
     }
     p5 = _second(val_pair);
-    dot = consume(tokens, p5);
+    dot = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
     p6 = _second(dot);
     return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "config_stmt" , "key" , cfg_key , "value" , cfg_val ) , p6 );
 }
 tx_t parse_create_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t id_pair = "";
@@ -2129,32 +2156,33 @@ tx_t parse_create_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emod
   tx_t dotp = "";
   tx_t vpair = "";
   tx_t to_pair = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    id_pair = consume(tokens, p2);
-    id_name = tok_lex(plant_list_get(id_pair ,  0 ));
+    id_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+    id_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(id_pair ,  0 ));
     p3 = _second(id_pair);
-    tok = peek(tokens, p3);
-    lx = tok_lex(tok);
+    tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p3);
+    lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
     tx_t vtype = "";
     if (strcmp(lx,"(") == 0) {
-        lp = consume(tokens, p3);
+        lp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
         p4 = _second(lp);
         tv = collect_type_text(tokens, p4, ")", 0);
         tt = _first(tv);
         p5 = _second(tv);
-        rp = consume(tokens, p5);
+        rp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
         p6 = _second(rp);
         vtype = tt;
         p3 = p6;
     }
-    tok2 = peek(tokens, p3);
-    lx2 = tok_lex(tok2);
+    tok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p3);
+    lx2 = plant_iLexer_tok_lex((tx_t)lexer, tok2);
     if (strcmp(lx2,"=") == 0) {
-        eq_pair = consume(tokens, p3);
+        eq_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
         p4 = _second(eq_pair);
-        cb_tok = peek(tokens, p4);
-        cb_lx = tok_lex(cb_tok);
+        cb_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+        cb_lx = plant_iLexer_tok_lex((tx_t)lexer, cb_tok);
         if (strcmp(cb_lx,"[") == 0) {
             clp = parse_closure(tokens, p4, rtab, emode);
             cnode = _first(clp);
@@ -2164,7 +2192,7 @@ tx_t parse_create_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emod
                 return plant_list_make ( 2 , cnode , p5 );
             }
             if (plant_array_length(cnode) > 0) {
-                dotp = consume(tokens, p5);
+                dotp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
                 p6 = _second(dotp);
                 return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "create_stmt" , "target" , id_name , "var_type" , vtype , "value" , "" , "closure" , cnode ) , p6 );
             }
@@ -2175,10 +2203,10 @@ tx_t parse_create_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emod
         return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "create_stmt" , "target" , id_name , "var_type" , vtype , "value" , expr ) , p5 );
     }
     if (strcmp(lx2,"TO") == 0) {
-        to_pair = consume(tokens, p3);
+        to_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
         p4 = _second(to_pair);
-        cb_tok = peek(tokens, p4);
-        cb_lx = tok_lex(cb_tok);
+        cb_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+        cb_lx = plant_iLexer_tok_lex((tx_t)lexer, cb_tok);
         if (strcmp(cb_lx,"[") == 0) {
             clp = parse_closure(tokens, p4, rtab, emode);
             cnode = _first(clp);
@@ -2188,7 +2216,7 @@ tx_t parse_create_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emod
                 return plant_list_make ( 2 , cnode , p5 );
             }
             if (plant_array_length(cnode) > 0) {
-                dotp = consume(tokens, p5);
+                dotp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
                 p6 = _second(dotp);
                 return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "create_stmt" , "target" , id_name , "var_type" , vtype , "value" , "" , "closure" , cnode ) , p6 );
             }
@@ -2204,11 +2232,13 @@ tx_t parse_create_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emod
     return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "create_stmt" , "target" , id_name , "var_type" , vtype , "value" , expr ) , p4 );
 }
 tx_t parse_show_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t vpair = "";
   tx_t p3 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     vpair = collect_value(tokens, p2);
     tx_t expr = plant_list_get(vpair ,  0 );
@@ -2216,6 +2246,7 @@ tx_t parse_show_stmt(PlantArray* tokens, long pos) {
     return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "show_stmt" , "value" , expr ) , p3 );
 }
 tx_t parse_verify_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t lbl_tok = "";
@@ -2230,14 +2261,15 @@ tx_t parse_verify_stmt(PlantArray* tokens, long pos) {
   tx_t sep_tok = "";
   tx_t sep_ty = "";
   tx_t sp = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    lbl_tok = peek(tokens, p2);
-    lbl_ty = tok_type(lbl_tok);
+    lbl_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+    lbl_ty = plant_iLexer_tok_type((tx_t)lexer, lbl_tok);
     if (strcmp(lbl_ty,"STRING") == 0) {
-        lbl_lx = tok_lex(lbl_tok);
+        lbl_lx = plant_iLexer_tok_lex((tx_t)lexer, lbl_tok);
         lbl_lx = escape_string(lbl_lx);
-        lbl_pair = consume(tokens, p2);
+        lbl_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
         p3 = _second(lbl_pair);
         lbl = _cat("\"", lbl_lx);
         lbl = _cat((tx_t)lbl, "\"");
@@ -2245,15 +2277,16 @@ tx_t parse_verify_stmt(PlantArray* tokens, long pos) {
     vp = collect_value(tokens, p3);
     cond = _first(vp);
     p4 = _second(vp);
-    sep_tok = peek(tokens, p4);
-    sep_ty = tok_type(sep_tok);
+    sep_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+    sep_ty = plant_iLexer_tok_type((tx_t)lexer, sep_tok);
     if (strcmp(sep_ty,"PERIOD") == 0) {
-        sp = consume(tokens, p4);
+        sp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
         p4 = _second(sp);
     }
     return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "verify_stmt" , "label" , lbl , "cond" , cond , "end_pos" , _from_long ( p4 ) ) , p4 );
 }
 tx_t parse_setup_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t vp = "";
@@ -2262,20 +2295,22 @@ tx_t parse_setup_stmt(PlantArray* tokens, long pos) {
   tx_t sep_tok = "";
   tx_t sep_ty = "";
   tx_t sp = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     vp = collect_value(tokens, p2);
     val = _first(vp);
     p3 = _second(vp);
-    sep_tok = peek(tokens, p3);
-    sep_ty = tok_type(sep_tok);
+    sep_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p3);
+    sep_ty = plant_iLexer_tok_type((tx_t)lexer, sep_tok);
     if (strcmp(sep_ty,"PERIOD") == 0) {
-        sp = consume(tokens, p3);
+        sp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
         p3 = _second(sp);
     }
     return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "setup_stmt" , "value" , val , "end_pos" , _from_long ( p3 ) ) , p3 );
 }
 tx_t parse_teardown_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t vp = "";
@@ -2284,20 +2319,22 @@ tx_t parse_teardown_stmt(PlantArray* tokens, long pos) {
   tx_t sep_tok = "";
   tx_t sep_ty = "";
   tx_t sp = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     vp = collect_value(tokens, p2);
     val = _first(vp);
     p3 = _second(vp);
-    sep_tok = peek(tokens, p3);
-    sep_ty = tok_type(sep_tok);
+    sep_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p3);
+    sep_ty = plant_iLexer_tok_type((tx_t)lexer, sep_tok);
     if (strcmp(sep_ty,"PERIOD") == 0) {
-        sp = consume(tokens, p3);
+        sp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
         p3 = _second(sp);
     }
     return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "teardown_stmt" , "value" , val , "end_pos" , _from_long ( p3 ) ) , p3 );
 }
 tx_t parse_suite_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab, PlantArray* rtab, long bstart, tx_t emode) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t ntok = "";
@@ -2323,39 +2360,40 @@ tx_t parse_suite_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab, 
   tx_t td_node = "";
   tx_t stmt_pair = "";
   tx_t stmt = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     tx_t sname = "";
     PlantArray* body = plant_list_make ( 0 );
-    ntok = peek(tokens, p2);
-    nty = tok_type(ntok);
+    ntok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+    nty = plant_iLexer_tok_type((tx_t)lexer, ntok);
     if (strcmp(nty,"STRING") == 0) {
-        nl = tok_lex(ntok);
+        nl = plant_iLexer_tok_lex((tx_t)lexer, ntok);
         nl = escape_string(nl);
-        ncons = consume(tokens, p2);
+        ncons = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
         p2 = _second(ncons);
         sname = nl;
-        ctok = peek(tokens, p2);
-        clx = tok_lex(ctok);
+        ctok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+        clx = plant_iLexer_tok_lex((tx_t)lexer, ctok);
         if (strcmp(clx,",") == 0) {
-            ccons = consume(tokens, p2);
+            ccons = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
             p2 = _second(ccons);
         }
     }
     while (1) {
-        is_eof_flag = is_eof(tokens, p2);
+        is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, (tx_t)p2);
         if (is_eof_flag) {
             return plant_list_make ( 6 , "type" , "syntax_error" , "msg" , "unterminated SUITE" , "pos" , _from_long ( p2 ) );
         }
-        tok = peek(tokens, p2);
-        lx = tok_lex(tok);
-        tt = tok_type(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
+        tt = plant_iLexer_tok_type((tx_t)lexer, tok);
         if (strcmp(lx,"/") == 0) {
-            slash = consume(tokens, p2);
+            slash = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
             p3 = _second(slash);
-            kw = consume(tokens, p3);
+            kw = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
             p4 = _second(kw);
-            dot = consume(tokens, p4);
+            dot = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p5 = _second(dot);
             return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "suite_stmt" , "name" , sname , "body" , body ) , _from_long ( p5 ) );
         }
@@ -2383,6 +2421,7 @@ tx_t parse_suite_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab, 
   return parse_suite_stmt;
 }
 tx_t parse_now_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t ntok = "";
@@ -2397,32 +2436,33 @@ tx_t parse_now_stmt(PlantArray* tokens, long pos) {
   tx_t dpair = "";
   tx_t dlx = "";
   tx_t p3 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     tx_t fmt = "";
-    ntok = peek(tokens, p2);
-    nlx = tok_lex(ntok);
+    ntok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+    nlx = plant_iLexer_tok_lex((tx_t)lexer, ntok);
     if (strcmp(nlx,"FORMAT") == 0) {
-        fpair = consume(tokens, p2);
+        fpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
         p2 = _second(fpair);
-        ctok = peek(tokens, p2);
-        cty = tok_type(ctok);
+        ctok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+        cty = plant_iLexer_tok_type((tx_t)lexer, ctok);
         if (strcmp(cty,"COLON") != 0) {
             return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "NOW FORMAT requires ':' before the format name" ) , p2 );
         }
-        cpair = consume(tokens, p2);
+        cpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
         p2 = _second(cpair);
-        qpair = consume(tokens, p2);
-        qlx = tok_lex(plant_list_get(qpair ,  0 ));
-        qty = tok_type(plant_list_get(qpair ,  0 ));
+        qpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+        qlx = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(qpair ,  0 ));
+        qty = plant_iLexer_tok_type((tx_t)lexer, plant_list_get(qpair ,  0 ));
         p2 = _second(qpair);
         if (strcmp(qty,"IDENT") != 0) {
             return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "NOW FORMAT expects a format name after ':'" ) , p2 );
         }
         fmt = qlx;
     }
-    dpair = consume(tokens, p2);
-    dlx = tok_lex(plant_list_get(dpair ,  0 ));
+    dpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+    dlx = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(dpair ,  0 ));
     p3 = _second(dpair);
     if (strcmp(dlx,".") != 0) {
         return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "NOW expects '.' after the format" ) , p2 );
@@ -2430,11 +2470,13 @@ tx_t parse_now_stmt(PlantArray* tokens, long pos) {
     return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "now_stmt" , "fmt" , fmt ) , p3 );
 }
 tx_t parse_analyze_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t vpair = "";
   tx_t p3 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     vpair = collect_value(tokens, p2);
     tx_t expr = plant_list_get(vpair ,  0 );
@@ -2445,11 +2487,13 @@ tx_t parse_analyze_stmt(PlantArray* tokens, long pos) {
     return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "analyze_stmt" , "target" , expr ) , p3 );
 }
 tx_t parse_typeof_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t vpair = "";
   tx_t p3 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     vpair = collect_value(tokens, p2);
     tx_t expr = plant_list_get(vpair ,  0 );
@@ -2460,6 +2504,7 @@ tx_t parse_typeof_stmt(PlantArray* tokens, long pos) {
     return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "typeof_stmt" , "target" , expr ) , p3 );
 }
 tx_t parse_free_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t id_pair = "";
@@ -2468,21 +2513,23 @@ tx_t parse_free_stmt(PlantArray* tokens, long pos) {
   tx_t p3 = "";
   tx_t dot_pair = "";
   tx_t p4 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    id_pair = consume(tokens, p2);
-    id_name = tok_lex(plant_list_get(id_pair ,  0 ));
-    id_type = tok_type(plant_list_get(id_pair ,  0 ));
+    id_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+    id_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(id_pair ,  0 ));
+    id_type = plant_iLexer_tok_type((tx_t)lexer, plant_list_get(id_pair ,  0 ));
     p3 = _second(id_pair);
     if (strcmp(id_type,"IDENT") != 0) {
         tx_t dmsg = "FREE requires an identifier target";
         return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , dmsg ) , p3 );
     }
-    dot_pair = consume(tokens, p3);
+    dot_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
     p4 = _second(dot_pair);
     return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "free_stmt" , "target" , id_name ) , p4 );
 }
 tx_t parse_wait_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t mpair = "";
@@ -2491,23 +2538,25 @@ tx_t parse_wait_stmt(PlantArray* tokens, long pos) {
   tx_t mty = "";
   tx_t dot_pair = "";
   tx_t p4 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     mpair = collect_until(tokens, p2, ".");
     tx_t ms = plant_list_get(mpair ,  0 );
     p3 = _second(mpair);
     if (strcmp(ms,"") > 0) {
-        mtok = peek(tokens, p2);
-        mty = tok_type(mtok);
+        mtok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+        mty = plant_iLexer_tok_type((tx_t)lexer, mtok);
         if (strcmp(mty,"STRING") == 0) {
             return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "WAIT expects a numeric duration in milliseconds" ) , p2 );
         }
     }
-    dot_pair = consume(tokens, p3);
+    dot_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
     p4 = _second(dot_pair);
     return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "wait_stmt" , "ms" , ms ) , p4 );
 }
 tx_t parse_lock_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t id_pair = "";
@@ -2516,21 +2565,23 @@ tx_t parse_lock_stmt(PlantArray* tokens, long pos) {
   tx_t p3 = "";
   tx_t dot_pair = "";
   tx_t p4 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    id_pair = consume(tokens, p2);
-    id_name = tok_lex(plant_list_get(id_pair ,  0 ));
-    id_type = tok_type(plant_list_get(id_pair ,  0 ));
+    id_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+    id_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(id_pair ,  0 ));
+    id_type = plant_iLexer_tok_type((tx_t)lexer, plant_list_get(id_pair ,  0 ));
     p3 = _second(id_pair);
     if (strcmp(id_type,"IDENT") != 0) {
         tx_t dmsg = "LOCK requires an identifier target";
         return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , dmsg ) , p3 );
     }
-    dot_pair = consume(tokens, p3);
+    dot_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
     p4 = _second(dot_pair);
     return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "lock_stmt" , "var" , id_name ) , p4 );
 }
 tx_t parse_arc_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t k_pair = "";
@@ -2547,34 +2598,36 @@ tx_t parse_arc_stmt(PlantArray* tokens, long pos) {
   tx_t dot_pair = "";
   tx_t p7 = "";
   tx_t f_pair = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    k_pair = consume(tokens, p2);
-    k_lx = tok_lex(plant_list_get(k_pair ,  0 ));
+    k_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+    k_lx = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(k_pair ,  0 ));
     p3 = _second(k_pair);
-    a_pair = consume(tokens, p3);
-    a_name = tok_lex(plant_list_get(a_pair ,  0 ));
+    a_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
+    a_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(a_pair ,  0 ));
     p4 = _second(a_pair);
     if (strcmp(k_lx,"LINK") == 0) {
-        t_pair = consume(tokens, p4);
+        t_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
         p5 = _second(t_pair);
-        c_pair = consume(tokens, p5);
-        c_name = tok_lex(plant_list_get(c_pair ,  0 ));
+        c_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
+        c_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(c_pair ,  0 ));
         p6 = _second(c_pair);
-        dot_pair = consume(tokens, p6);
+        dot_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p6);
         p7 = _second(dot_pair);
         return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "arc_link_stmt" , "parent" , a_name , "child" , c_name ) , p7 );
     }
-    f_pair = consume(tokens, p4);
+    f_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
     p5 = _second(f_pair);
-    c_pair = consume(tokens, p5);
-    c_name = tok_lex(plant_list_get(c_pair ,  0 ));
+    c_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
+    c_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(c_pair ,  0 ));
     p6 = _second(c_pair);
-    dot_pair = consume(tokens, p6);
+    dot_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p6);
     p7 = _second(dot_pair);
     return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "arc_unlink_stmt" , "parent" , a_name , "child" , c_name ) , p7 );
 }
 tx_t parse_fast_reset_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t r_pair = "";
@@ -2582,21 +2635,24 @@ tx_t parse_fast_reset_stmt(PlantArray* tokens, long pos) {
   tx_t p3 = "";
   tx_t dot_pair = "";
   tx_t p4 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    r_pair = consume(tokens, p2);
-    r_lx = tok_lex(plant_list_get(r_pair ,  0 ));
+    r_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+    r_lx = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(r_pair ,  0 ));
     p3 = _second(r_pair);
     if (strcmp(r_lx,"RESET") != 0) {
         tx_t dmsg = "FAST requires RESET";
         return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , dmsg ) , p3 );
     }
-    dot_pair = consume(tokens, p3);
+    dot_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
     p4 = _second(dot_pair);
     return plant_list_make ( 2 , plant_list_make ( 2 , "type" , "fast_reset_stmt" ) , p4 );
 }
 tx_t _is_idch(tx_t c) {
+  tx_t lexer = "";
   tx_t r1 = "";
+    lexer = get_lexer();
     r1 = str_eq(c, "_");
     if (strcmp(r1,"1") == 0) {
         return "1";
@@ -2613,6 +2669,7 @@ tx_t _is_idch(tx_t c) {
     return "0";
 }
 tx_t _lower_dots(tx_t e) {
+  tx_t lexer = "";
   tx_t ch = "";
   tx_t pv = "";
   tx_t nx = "";
@@ -2629,6 +2686,7 @@ tx_t _lower_dots(tx_t e) {
   tx_t dchk = "";
   tx_t disdot = "";
   tx_t idv = "";
+    lexer = get_lexer();
     tx_t out = "";
     tx_t res = "";
     long i = 0;
@@ -2717,10 +2775,12 @@ tx_t _lower_dots(tx_t e) {
     return out;
 }
 tx_t _swap_super_prefix(PlantArray* bd, tx_t parent) {
+  tx_t lexer = "";
   tx_t nd = "";
   tx_t vx = "";
   tx_t nvx = "";
   tx_t nnx = "";
+    lexer = get_lexer();
     long i = 0;
     while (i < plant_array_length(bd)) {
         nd = plant_list_get(bd, i);
@@ -2735,6 +2795,7 @@ tx_t _swap_super_prefix(PlantArray* bd, tx_t parent) {
     return bd;
 }
 tx_t parse_give_stmt(PlantArray* tokens, long pos, tx_t clv) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t vpair = "";
@@ -2753,31 +2814,32 @@ tx_t parse_give_stmt(PlantArray* tokens, long pos, tx_t clv) {
   tx_t dot_pair = "";
   tx_t p6 = "";
   tx_t lexpr = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     PlantArray* gkws = plant_list_make ( 3 , "AS" , ")" , "." );
     vpair = collect_until_keyword(tokens, p2, gkws);
     tx_t expr = plant_list_get(vpair ,  0 );
     p3 = _second(vpair);
-    gtok = peek(tokens, p3);
-    glx = tok_lex(gtok);
+    gtok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p3);
+    glx = plant_iLexer_tok_lex((tx_t)lexer, gtok);
     if (strcmp(glx,"AS") == 0) {
-        gtok2 = peek(tokens, p3+1);
-        glx2 = tok_lex(gtok2);
+        gtok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p3+1);
+        glx2 = plant_iLexer_tok_lex((tx_t)lexer, gtok2);
         if (strcmp(glx2,"RESPONSE") == 0) {
-            as_pair = consume(tokens, p3);
+            as_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
             p4 = _second(as_pair);
-            rs_pair = consume(tokens, p4);
+            rs_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p5 = _second(rs_pair);
             tx_t rjson = "";
-            rtok = peek(tokens, p5);
-            rlx = tok_lex(rtok);
+            rtok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+            rlx = plant_iLexer_tok_lex((tx_t)lexer, rtok);
             if (strcmp(rlx,"JSON") == 0) {
-                drop_rj = consume(tokens, p5);
+                drop_rj = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
                 p5 = _second(drop_rj);
                 rjson = "1";
             }
-            dot_pair = consume(tokens, p5);
+            dot_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p6 = _second(dot_pair);
             return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "respond_stmt" , "content" , expr , "req" , clv , "json" , rjson ) , p6 );
         }
@@ -2787,6 +2849,7 @@ tx_t parse_give_stmt(PlantArray* tokens, long pos, tx_t clv) {
     return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "give_stmt" , "value" , expr ) , p3 );
 }
 tx_t parse_set_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t id_pair = "";
@@ -2796,12 +2859,13 @@ tx_t parse_set_stmt(PlantArray* tokens, long pos) {
   tx_t p4 = "";
   tx_t vpair = "";
   tx_t p5 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    id_pair = consume(tokens, p2);
-    id_name = tok_lex(plant_list_get(id_pair ,  0 ));
+    id_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+    id_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(id_pair ,  0 ));
     p3 = _second(id_pair);
-    eq = consume(tokens, p3);
+    eq = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
     p4 = _second(eq);
     vpair = collect_value(tokens, p4);
     tx_t expr = plant_list_get(vpair ,  0 );
@@ -2809,6 +2873,7 @@ tx_t parse_set_stmt(PlantArray* tokens, long pos) {
     return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "set_stmt" , "target" , id_name , "value" , expr ) , p5 );
 }
 tx_t parse_incdec_stmt(PlantArray* tokens, long pos, tx_t op) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t id_pair = "";
@@ -2819,13 +2884,14 @@ tx_t parse_incdec_stmt(PlantArray* tokens, long pos, tx_t op) {
   tx_t p4 = "";
   tx_t vpair = "";
   tx_t p5 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    id_pair = consume(tokens, p2);
-    id_name = tok_lex(plant_list_get(id_pair ,  0 ));
+    id_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+    id_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(id_pair ,  0 ));
     p3 = _second(id_pair);
-    by_pair = consume(tokens, p3);
-    by_lx = tok_lex(plant_list_get(by_pair ,  0 ));
+    by_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
+    by_lx = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(by_pair ,  0 ));
     p4 = _second(by_pair);
     if (strcmp(by_lx,"BY") != 0) {
         tx_t dmsg = _cat3("Expected BY in ", op, " statement");
@@ -2838,6 +2904,7 @@ tx_t parse_incdec_stmt(PlantArray* tokens, long pos, tx_t op) {
     return plant_list_make ( 2 , plant_list_make ( 6 , "type" , nty , "target" , id_name , "value" , expr ) , p5 );
 }
 tx_t parse_bloom_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t kw_pair = "";
   tx_t p = "";
   tx_t spair = "";
@@ -2848,31 +2915,33 @@ tx_t parse_bloom_stmt(PlantArray* tokens, long pos) {
   tx_t vty = "";
   tx_t var = "";
   tx_t dtp = "";
-    kw_pair = consume(tokens, pos);
+    lexer = get_lexer();
+    kw_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p = _second(kw_pair);
-    spair = consume(tokens, p);
-    species = tok_lex(plant_list_get(spair ,  0 ));
+    spair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
+    species = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(spair ,  0 ));
     p = _second(spair);
-    aspair = consume(tokens, p);
-    aslx = tok_lex(plant_list_get(aspair ,  0 ));
+    aspair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
+    aslx = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(aspair ,  0 ));
     if (strcmp(aslx,"AS") != 0) {
         tx_t berr = "BLOOM requires AS var";
         return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , berr ) , p );
     }
     p = _second(aspair);
-    vpair = consume(tokens, p);
-    vty = tok_type(plant_list_get(vpair ,  0 ));
+    vpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
+    vty = plant_iLexer_tok_type((tx_t)lexer, plant_list_get(vpair ,  0 ));
     if (strcmp(vty,"IDENT") != 0) {
         tx_t berr2 = "BLOOM requires a variable name";
         return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , berr2 ) , p );
     }
-    var = tok_lex(plant_list_get(vpair ,  0 ));
+    var = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(vpair ,  0 ));
     p = _second(vpair);
-    dtp = consume(tokens, p);
+    dtp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
     p = _second(dtp);
     return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "bloom_stmt" , "species" , species , "var" , var ) , p );
 }
 tx_t _parse_ds_pattern(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t op_pair = "";
   tx_t oty = "";
   tx_t p = "";
@@ -2896,8 +2965,9 @@ tx_t _parse_ds_pattern(PlantArray* tokens, long pos) {
   tx_t stok = "";
   tx_t slx = "";
   tx_t cmpair = "";
-    op_pair = consume(tokens, pos);
-    oty = tok_type(plant_list_get(op_pair ,  0 ));
+    lexer = get_lexer();
+    op_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
+    oty = plant_iLexer_tok_type((tx_t)lexer, plant_list_get(op_pair ,  0 ));
     p = _second(op_pair);
     tx_t kind = "array";
     tx_t closek = "RBRACKET";
@@ -2909,26 +2979,26 @@ tx_t _parse_ds_pattern(PlantArray* tokens, long pos) {
     tx_t nm = "";
     tx_t sub = "";
     while (1) {
-        tk = peek(tokens, p);
-        ty = tok_type(tk);
+        tk = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p);
+        ty = plant_iLexer_tok_type((tx_t)lexer, tk);
         if (ty == closek) {
-            cp = consume(tokens, p);
+            cp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
             p = _second(cp);
                       break;
         }
         if (strcmp(kind,"object") == 0) {
-            kp = consume(tokens, p);
-            key = tok_lex(plant_list_get(kp ,  0 ));
+            kp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
+            key = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(kp ,  0 ));
             p = _second(kp);
             nm = key;
             sub = "";
-            ctok = peek(tokens, p);
-            clx = tok_lex(ctok);
+            ctok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p);
+            clx = plant_iLexer_tok_lex((tx_t)lexer, ctok);
             if (strcmp(clx,":") == 0) {
-                cp_pair = consume(tokens, p);
+                cp_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
                 p = _second(cp_pair);
-                ntok = peek(tokens, p);
-                nty = tok_type(ntok);
+                ntok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p);
+                nty = plant_iLexer_tok_type((tx_t)lexer, ntok);
                 if (strcmp(nty,"LBRACE") == 0 || strcmp(nty,"LBRACKET") == 0) {
                     spair = _parse_ds_pattern(tokens, p);
                     subn = _first(spair);
@@ -2936,8 +3006,8 @@ tx_t _parse_ds_pattern(PlantArray* tokens, long pos) {
                     p = _second(spair);
                 }
                 if (strcmp(nty,"LBRACE") != 0 && strcmp(nty,"LBRACKET") != 0) {
-                    npair = consume(tokens, p);
-                    bn = tok_lex(plant_list_get(npair ,  0 ));
+                    npair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
+                    bn = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(npair ,  0 ));
                     p = _second(npair);
                     nm = bn;
                 }
@@ -2945,8 +3015,8 @@ tx_t _parse_ds_pattern(PlantArray* tokens, long pos) {
             items = plant_list_add(items, plant_list_make ( 6 , "key" , key , "name" , nm , "sub" , sub ));
         }
         if (strcmp(kind,"object") != 0) {
-            etok = peek(tokens, p);
-            ety = tok_type(etok);
+            etok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p);
+            ety = plant_iLexer_tok_type((tx_t)lexer, etok);
             if (strcmp(ety,"LBRACE") == 0 || strcmp(ety,"LBRACKET") == 0) {
                 spair = _parse_ds_pattern(tokens, p);
                 subn = _first(spair);
@@ -2955,22 +3025,23 @@ tx_t _parse_ds_pattern(PlantArray* tokens, long pos) {
                 items = plant_list_add(items, plant_list_make ( 6 , "key" , "" , "name" , "_" , "sub" , sub ));
             }
             if (strcmp(ety,"LBRACE") != 0 && strcmp(ety,"LBRACKET") != 0) {
-                npair = consume(tokens, p);
-                en = tok_lex(plant_list_get(npair ,  0 ));
+                npair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
+                en = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(npair ,  0 ));
                 p = _second(npair);
                 items = plant_list_add(items, plant_list_make ( 6 , "key" , "" , "name" , en , "sub" , "" ));
             }
         }
-        stok = peek(tokens, p);
-        slx = tok_lex(stok);
+        stok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p);
+        slx = plant_iLexer_tok_lex((tx_t)lexer, stok);
         if (strcmp(slx,",") == 0) {
-            cmpair = consume(tokens, p);
+            cmpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
             p = _second(cmpair);
         }
     }
     return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "ds_pat" , "kind" , kind , "items" , items ) , p );
 }
 tx_t parse_let_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t dtk = "";
@@ -3009,53 +3080,54 @@ tx_t parse_let_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) 
   tx_t dotp = "";
   tx_t vpair = "";
   tx_t to_pair = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    dtk = peek(tokens, p2);
-    dty = tok_type(dtk);
+    dtk = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+    dty = plant_iLexer_tok_type((tx_t)lexer, dtk);
     if (strcmp(dty,"LBRACE") == 0 || strcmp(dty,"LBRACKET") == 0) {
         dpat_pair = _parse_ds_pattern(tokens, p2);
         dnode = _first(dpat_pair);
         ditems = _map_get(dnode, "items");
         dkind = _map_get(dnode, "kind");
         p3d = _second(dpat_pair);
-        eqtok = peek(tokens, p3d);
-        eqlx = tok_lex(eqtok);
+        eqtok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p3d);
+        eqlx = plant_iLexer_tok_lex((tx_t)lexer, eqtok);
         if (strcmp(eqlx,"=") != 0) {
             tx_t dderr = "destructuring requires = expression";
             return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , dderr ) , p3d );
         }
-        eqpair = consume(tokens, p3d);
+        eqpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3d);
         p4d = _second(eqpair);
         dvpair = collect_value(tokens, p4d);
         tx_t dsrc = plant_list_get(dvpair ,  0 );
         p5d = _second(dvpair);
         return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "let_destructure" , "pattern" , dkind , "vars" , ditems , "source" , dsrc ) , p5d );
     }
-    id_pair = consume(tokens, p2);
-    id_name = tok_lex(plant_list_get(id_pair ,  0 ));
+    id_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+    id_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(id_pair ,  0 ));
     p3 = _second(id_pair);
-    tok = peek(tokens, p3);
-    lx = tok_lex(tok);
+    tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p3);
+    lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
     tx_t vtype = "";
     if (strcmp(lx,"(") == 0) {
-        lp = consume(tokens, p3);
+        lp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
         p4 = _second(lp);
         tv = collect_type_text(tokens, p4, ")", 0);
         tt = _first(tv);
         p5 = _second(tv);
-        rp = consume(tokens, p5);
+        rp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
         p6 = _second(rp);
         vtype = tt;
         p3 = p6;
     }
-    tok2 = peek(tokens, p3);
-    lx2 = tok_lex(tok2);
+    tok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p3);
+    lx2 = plant_iLexer_tok_lex((tx_t)lexer, tok2);
     if (strcmp(lx2,"=") == 0) {
-        eq_pair = consume(tokens, p3);
+        eq_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
         p4 = _second(eq_pair);
-        cb_tok = peek(tokens, p4);
-        cb_lx = tok_lex(cb_tok);
+        cb_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+        cb_lx = plant_iLexer_tok_lex((tx_t)lexer, cb_tok);
         if (strcmp(cb_lx,"[") == 0) {
             clp = parse_closure(tokens, p4, rtab, emode);
             cnode = _first(clp);
@@ -3065,7 +3137,7 @@ tx_t parse_let_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) 
                 return plant_list_make ( 2 , cnode , p5 );
             }
             if (plant_array_length(cnode) > 0) {
-                dotp = consume(tokens, p5);
+                dotp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
                 p6 = _second(dotp);
                 return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "let_stmt" , "target" , id_name , "var_type" , vtype , "value" , "" , "closure" , cnode ) , p6 );
             }
@@ -3076,10 +3148,10 @@ tx_t parse_let_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) 
         return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "let_stmt" , "target" , id_name , "var_type" , vtype , "value" , expr ) , p5 );
     }
     if (strcmp(lx2,"TO") == 0) {
-        to_pair = consume(tokens, p3);
+        to_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
         p4 = _second(to_pair);
-        cb_tok = peek(tokens, p4);
-        cb_lx = tok_lex(cb_tok);
+        cb_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+        cb_lx = plant_iLexer_tok_lex((tx_t)lexer, cb_tok);
         if (strcmp(cb_lx,"[") == 0) {
             clp = parse_closure(tokens, p4, rtab, emode);
             cnode = _first(clp);
@@ -3089,7 +3161,7 @@ tx_t parse_let_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) 
                 return plant_list_make ( 2 , cnode , p5 );
             }
             if (plant_array_length(cnode) > 0) {
-                dotp = consume(tokens, p5);
+                dotp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
                 p6 = _second(dotp);
                 return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "let_stmt" , "target" , id_name , "var_type" , vtype , "value" , "" , "closure" , cnode ) , p6 );
             }
@@ -3105,6 +3177,7 @@ tx_t parse_let_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) 
     return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "let_stmt" , "target" , id_name , "var_type" , vtype , "value" , expr ) , p4 );
 }
 tx_t parse_closure(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) {
+  tx_t lexer = "";
   tx_t lb = "";
   tx_t p2 = "";
   tx_t is_eof_flag = "";
@@ -3164,46 +3237,47 @@ tx_t parse_closure(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) {
   tx_t elx = "";
   tx_t ety = "";
   tx_t ep = "";
+    lexer = get_lexer();
     long start_pos = pos;
-    lb = consume(tokens, pos);
+    lb = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(lb);
     PlantArray* captures = plant_list_make ( 0 );
     PlantArray* entries = plant_list_make ( 0 );
     tx_t had_comma = "0";
     while (1) {
-        is_eof_flag = is_eof(tokens, p2);
+        is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, (tx_t)p2);
         if (is_eof_flag) {
             return plant_list_make ( 2 , plant_list_make ( 0 ) , start_pos );
         }
-        tok = peek(tokens, p2);
-        lx = tok_lex(tok);
-        ty = tok_type(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
+        ty = plant_iLexer_tok_type((tx_t)lexer, tok);
         if (strcmp(lx,"]") == 0) {
-            rb = consume(tokens, p2);
+            rb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
             p2 = _second(rb);
                       break;
         }
         if (strcmp(lx,"(") == 0) {
             return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "Mixed closure parameter syntax" ) , p2 );
         }
-        ent_pair = consume(tokens, p2);
-        en0 = tok_lex(plant_list_get(ent_pair ,  0 ));
+        ent_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+        en0 = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(ent_pair ,  0 ));
         p2 = _second(ent_pair);
         tx_t en_mode = "";
         tx_t en_name = "";
         if (strcmp(en0,"MOVE") == 0 || strcmp(en0,"REF") == 0) {
             en_mode = en0;
-            ntok = peek(tokens, p2);
-            nlx = tok_lex(ntok);
-            nty = tok_type(ntok);
+            ntok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+            nlx = plant_iLexer_tok_lex((tx_t)lexer, ntok);
+            nty = plant_iLexer_tok_type((tx_t)lexer, ntok);
             if (strcmp(nlx,"(") == 0) {
                 return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "Mixed closure parameter syntax" ) , p2 );
             }
             if (strcmp(nty,"IDENT") != 0) {
                 return plant_list_make ( 2 , plant_list_make ( 0 ) , start_pos );
             }
-            npair = consume(tokens, p2);
-            en_name = tok_lex(plant_list_get(npair ,  0 ));
+            npair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+            en_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(npair ,  0 ));
             p2 = _second(npair);
         }
         if (strcmp(en_mode,"") == 0) {
@@ -3213,16 +3287,16 @@ tx_t parse_closure(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) {
             en_name = en0;
         }
         entries = plant_list_add(entries, plant_list_make ( 2 , en_mode , en_name ));
-        tok2 = peek(tokens, p2);
-        lx2 = tok_lex(tok2);
+        tok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+        lx2 = plant_iLexer_tok_lex((tx_t)lexer, tok2);
         if (strcmp(lx2,",") == 0) {
             had_comma = "1";
-            com = consume(tokens, p2);
+            com = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
             p2 = _second(com);
         }
     }
-    ptok = peek(tokens, p2);
-    plx = tok_lex(ptok);
+    ptok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+    plx = plant_iLexer_tok_lex((tx_t)lexer, ptok);
     PlantArray* params = plant_list_make ( 0 );
     if (strcmp(plx,"(") == 0) {
         if (strcmp(had_comma,"0") == 0) {
@@ -3241,32 +3315,32 @@ tx_t parse_closure(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) {
             captures = plant_list_add(captures, plant_list_make ( 4 , "name" , cn2 , "mode" , cm2 ));
             ci2 = ci2+1;
         }
-        lp = consume(tokens, p2);
+        lp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
         p3 = _second(lp);
         while (1) {
-            is_eof_flag = is_eof(tokens, p3);
+            is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, (tx_t)p3);
             if (is_eof_flag) {
                 return plant_list_make ( 2 , plant_list_make ( 0 ) , start_pos );
             }
-            tok = peek(tokens, p3);
-            lx = tok_lex(tok);
+            tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p3);
+            lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
             if (strcmp(lx,")") == 0) {
-                rp = consume(tokens, p3);
+                rp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
                 p4 = _second(rp);
                               break;
             }
-            pn_pair = consume(tokens, p3);
-            pn = tok_lex(plant_list_get(pn_pair ,  0 ));
+            pn_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
+            pn = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(pn_pair ,  0 ));
             p4 = _second(pn_pair);
-            tok2 = peek(tokens, p4);
-            lx2 = tok_lex(tok2);
+            tok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+            lx2 = plant_iLexer_tok_lex((tx_t)lexer, tok2);
             if (strcmp(lx2,"(") == 0) {
-                lp2 = consume(tokens, p4);
+                lp2 = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
                 p5 = _second(lp2);
                 ptv = collect_type_text(tokens, p5, ")", 1);
                 pt = _first(ptv);
                 p5 = _second(ptv);
-                rp2 = consume(tokens, p5);
+                rp2 = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
                 p5 = _second(rp2);
                 params = plant_list_add(params, plant_list_make ( 4 , "name" , pn , "type" , pt ));
                 p4 = p5;
@@ -3274,10 +3348,10 @@ tx_t parse_closure(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) {
             if (strcmp(lx2,"(") != 0) {
                 params = plant_list_add(params, plant_list_make ( 4 , "name" , pn , "type" , "" ));
             }
-            tok3 = peek(tokens, p4);
-            lx3 = tok_lex(tok3);
+            tok3 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+            lx3 = plant_iLexer_tok_lex((tx_t)lexer, tok3);
             if (strcmp(lx3,",") == 0) {
-                com2 = consume(tokens, p4);
+                com2 = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
                 p4 = _second(com2);
             }
             p3 = p4;
@@ -3293,43 +3367,43 @@ tx_t parse_closure(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) {
         }
         p4 = p2;
     }
-    atok = peek(tokens, p4);
-    alx = tok_lex(atok);
+    atok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+    alx = plant_iLexer_tok_lex((tx_t)lexer, atok);
     if (strcmp(alx,"->") != 0) {
         return plant_list_make ( 2 , plant_list_make ( 0 ) , start_pos );
     }
-    ap = consume(tokens, p4);
+    ap = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
     p5 = _second(ap);
-    stok = peek(tokens, p5);
-    sty = tok_type(stok);
+    stok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+    sty = plant_iLexer_tok_type((tx_t)lexer, stok);
     if (strcmp(sty,"MINUS") == 0) {
-        sp = consume(tokens, p5);
+        sp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
         p5 = _second(sp);
     }
     tx_t body_kind = "expr";
-    btok = peek(tokens, p5);
-    blx = tok_lex(btok);
+    btok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+    blx = plant_iLexer_tok_lex((tx_t)lexer, btok);
     PlantArray* body = plant_list_make ( 0 );
     if (strcmp(blx,"(") == 0) {
-        btok2 = peek(tokens, p5+1);
-        blx2 = tok_lex(btok2);
+        btok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5+1);
+        blx2 = plant_iLexer_tok_lex((tx_t)lexer, btok2);
         if (strcmp(blx2,"CREATE") == 0 || strcmp(blx2,"SHOW") == 0 || strcmp(blx2,"GIVE") == 0 || strcmp(blx2,"SET") == 0 || strcmp(blx2,"LET") == 0 || strcmp(blx2,"IF") == 0 || strcmp(blx2,"SEASON") == 0 || strcmp(blx2,"REAP") == 0 || strcmp(blx2,"PUT") == 0 || strcmp(blx2,"TAKE") == 0 || strcmp(blx2,"BREAK") == 0 || strcmp(blx2,"CONTINUE") == 0 || strcmp(blx2,"SORT") == 0 || strcmp(blx2,"SHAKE") == 0 || strcmp(blx2,"BRAID") == 0 || strcmp(blx2,"LINK") == 0 || strcmp(blx2,"HARVEST") == 0 || strcmp(blx2,"LISTEN") == 0 || strcmp(blx2,"CONST") == 0 || strcmp(blx2,"ROOT") == 0 || strcmp(blx2,"ROOT_SCOPE") == 0 || strcmp(blx2,"NOW") == 0 || strcmp(blx2,"ANALYZE") == 0 || strcmp(blx2,"TYPEOF") == 0 || strcmp(blx2,"FREE") == 0 || strcmp(blx2,"ARC") == 0 || strcmp(blx2,"FAST") == 0 || strcmp(blx2,"WAIT") == 0 || strcmp(blx2,"LOCK") == 0) {
             body_kind = "block";
             tx_t clv = "";
             PlantArray* ctab7 = plant_list_make ( 0 );
             long bstart7 = p6;
-            bp = consume(tokens, p5);
+            bp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p6 = _second(bp);
             PlantArray* stmts = plant_list_make ( 0 );
             while (1) {
-                is_eof_flag = is_eof(tokens, p6);
+                is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, (tx_t)p6);
                 if (is_eof_flag) {
                                       break;
                 }
-                btok3 = peek(tokens, p6);
-                blx3 = tok_lex(btok3);
+                btok3 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p6);
+                blx3 = plant_iLexer_tok_lex((tx_t)lexer, btok3);
                 if (strcmp(blx3,")") == 0) {
-                    brp = consume(tokens, p6);
+                    brp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p6);
                     p6 = _second(brp);
                                       break;
                 }
@@ -3357,13 +3431,13 @@ tx_t parse_closure(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) {
         long bd = 0;
         long pd = 0;
         while (1) {
-            is_eof_flag = is_eof(tokens, p5);
+            is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, (tx_t)p5);
             if (is_eof_flag) {
                               break;
             }
-            etok = peek(tokens, p5);
-            elx = tok_lex(etok);
-            ety = tok_type(etok);
+            etok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+            elx = plant_iLexer_tok_lex((tx_t)lexer, etok);
+            ety = plant_iLexer_tok_type((tx_t)lexer, etok);
             if (strcmp(ety,"STRING") == 0) {
                 elx = escape_string(elx);
                 elx = _cat3("\"", elx, "\"");
@@ -3390,7 +3464,7 @@ tx_t parse_closure(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) {
                 text = _cat(text, " ");
             }
             text = _cat(text, elx);
-            ep = consume(tokens, p5);
+            ep = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p5 = _second(ep);
         }
         body = text;
@@ -3399,10 +3473,12 @@ tx_t parse_closure(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) {
     return plant_list_make ( 2 , cnode , p5 );
 }
 tx_t _is_type_text(tx_t t, PlantArray* rtab) {
+  tx_t lexer = "";
   tx_t parts = "";
   tx_t refp = "";
   tx_t bi = "";
   tx_t tk = "";
+    lexer = get_lexer();
     parts = strings_SPLIT(t, ",");
     long ti = 0;
     tx_t tp = "";
@@ -3431,6 +3507,7 @@ tx_t _is_type_text(tx_t t, PlantArray* rtab) {
     return 1;
 }
 tx_t parse_reap_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t var_pair = "";
@@ -3511,34 +3588,35 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
   tx_t tok2 = "";
   tx_t lx2 = "";
   tx_t com = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    var_pair = consume(tokens, p2);
-    var_name = tok_lex(plant_list_get(var_pair ,  0 ));
+    var_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+    var_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(var_pair ,  0 ));
     p3 = _second(var_pair);
-    from_pair = consume(tokens, p3);
+    from_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
     p4 = _second(from_pair);
-    act_pair = consume(tokens, p4);
-    act_name = tok_lex(plant_list_get(act_pair ,  0 ));
-    act_ty = tok_type(plant_list_get(act_pair ,  0 ));
+    act_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
+    act_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(act_pair ,  0 ));
+    act_ty = plant_iLexer_tok_type((tx_t)lexer, plant_list_get(act_pair ,  0 ));
     p5 = _second(act_pair);
-    next_tok = peek(tokens, p5);
-    next_lx = tok_lex(next_tok);
-    next_ty = tok_type(next_tok);
+    next_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+    next_lx = plant_iLexer_tok_lex((tx_t)lexer, next_tok);
+    next_ty = plant_iLexer_tok_type((tx_t)lexer, next_tok);
     if (strcmp(next_ty,"COLON") == 0) {
         act_name = _cat(act_name, ":");
-        colon_pair = consume(tokens, p5);
+        colon_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
         p5 = _second(colon_pair);
-        func_pair = consume(tokens, p5);
-        func_name = tok_lex(plant_list_get(func_pair ,  0 ));
+        func_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
+        func_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(func_pair ,  0 ));
         act_name = _cat(act_name, func_name);
         p5 = _second(func_pair);
     }
     tx_t is_genargs = "0";
-    ga_tok = peek(tokens, p5);
-    ga_lx = tok_lex(ga_tok);
+    ga_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+    ga_lx = plant_iLexer_tok_lex((tx_t)lexer, ga_tok);
     if (strcmp(ga_lx,"[") == 0) {
-        ga_lb = consume(tokens, p5);
+        ga_lb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
         p5 = _second(ga_lb);
         gv = collect_type_text(tokens, p5, "]", 0);
         gtext = _first(gv);
@@ -3551,16 +3629,16 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
         }
         if (isgt == 1) {
             p5 = _second(gv);
-            ga_rb = consume(tokens, p5);
+            ga_rb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p5 = _second(ga_rb);
             act_name = _cat4(act_name, "[", gtext, "]");
             is_genargs = "1";
         }
     }
     if (strcmp(is_genargs,"1") != 0) {
-        ex_tok = peek(tokens, p5);
-        ex_lx = tok_lex(ex_tok);
-        ex_ty = tok_type(ex_tok);
+        ex_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+        ex_lx = plant_iLexer_tok_lex((tx_t)lexer, ex_tok);
+        ex_ty = plant_iLexer_tok_type((tx_t)lexer, ex_tok);
         if (strcmp(ex_ty,"COLON") != 0 && strcmp(ex_lx,",") != 0 && strcmp(ex_lx,"[") != 0) {
             tx_t bare_call = "0";
             if (strcmp(act_ty,"IDENT") == 0) {
@@ -3596,25 +3674,25 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
         }
     }
     tx_t has_cparen = "0";
-    cp_tok = peek(tokens, p5);
-    cp_lx = tok_lex(cp_tok);
+    cp_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+    cp_lx = plant_iLexer_tok_lex((tx_t)lexer, cp_tok);
     if (strcmp(cp_lx,"(") == 0) {
-        cp_pair = consume(tokens, p5);
+        cp_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
         p5 = _second(cp_pair);
         has_cparen = "1";
     }
     PlantArray* args = plant_list_make ( 0 );
     PlantArray* clargs = plant_list_make ( 0 );
     while (1) {
-        tok0 = peek(tokens, p5);
-        lx0 = tok_lex(tok0);
-        ty0 = tok_type(tok0);
+        tok0 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+        lx0 = plant_iLexer_tok_lex((tx_t)lexer, tok0);
+        ty0 = plant_iLexer_tok_type((tx_t)lexer, tok0);
         if (strcmp(lx0,",") == 0 && strcmp(ty0,"STRING") != 0) {
-            com0 = consume(tokens, p5);
+            com0 = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p5 = _second(com0);
         }
-        ctok = peek(tokens, p5);
-        clx = tok_lex(ctok);
+        ctok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+        clx = plant_iLexer_tok_lex((tx_t)lexer, ctok);
         if (strcmp(clx,"[") == 0) {
             clp = parse_closure(tokens, p5, rtab, emode);
             cnode = _first(clp);
@@ -3627,67 +3705,67 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
                 args = plant_list_add(args, "@@CLOSURE@@");
                 clargs = plant_list_add(clargs, cnode);
                 p5 = p6;
-                ctok2 = peek(tokens, p5);
-                clx2 = tok_lex(ctok2);
+                ctok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+                clx2 = plant_iLexer_tok_lex((tx_t)lexer, ctok2);
                 if (strcmp(clx2,",") == 0) {
-                    ccom = consume(tokens, p5);
+                    ccom = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
                     p5 = _second(ccom);
                 }
                 if (strcmp(clx2,".") == 0) {
-                    cdot = consume(tokens, p5);
+                    cdot = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
                     p6 = _second(cdot);
                     return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "reap_stmt" , "target" , var_name , "action" , act_name , "args" , args , "clargs" , clargs , "ctx" , "" ) , p6 );
                 }
             }
         }
-        is_eof_flag = is_eof(tokens, p5);
+        is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, (tx_t)p5);
         if (is_eof_flag) {
             return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "reap_stmt" , "target" , var_name , "action" , act_name , "args" , args , "clargs" , clargs , "ctx" , "" ) , p5 );
         }
-        tok = peek(tokens, p5);
-        lx = tok_lex(tok);
-        ty = tok_type(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
+        ty = plant_iLexer_tok_type((tx_t)lexer, tok);
         if (strcmp(lx,"IN") == 0 && strcmp(ty,"STRING") != 0) {
-            in_pair = consume(tokens, p5);
+            in_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p5b = _second(in_pair);
-            ctx_pair = consume(tokens, p5b);
-            ctx_name = tok_lex(plant_list_get(ctx_pair ,  0 ));
+            ctx_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5b);
+            ctx_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(ctx_pair ,  0 ));
             p6b = _second(ctx_pair);
-            dot2 = consume(tokens, p6b);
+            dot2 = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p6b);
             p7b = _second(dot2);
             return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "reap_stmt" , "target" , var_name , "action" , act_name , "args" , args , "clargs" , clargs , "ctx" , ctx_name ) , p7b );
         }
         if (strcmp(lx,".") == 0 && strcmp(ty,"STRING") != 0) {
-            dot = consume(tokens, p5);
+            dot = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p6 = _second(dot);
             return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "reap_stmt" , "target" , var_name , "action" , act_name , "args" , args , "clargs" , clargs , "ctx" , "" ) , p6 );
         }
         if (strcmp(has_cparen,"1") == 0 && strcmp(lx,")") == 0 && strcmp(ty,"STRING") != 0) {
-            rp = consume(tokens, p5);
+            rp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p5r = _second(rp);
-            in_tok = peek(tokens, p5r);
-            in_lx = tok_lex(in_tok);
-            in_ty = tok_type(in_tok);
+            in_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5r);
+            in_lx = plant_iLexer_tok_lex((tx_t)lexer, in_tok);
+            in_ty = plant_iLexer_tok_type((tx_t)lexer, in_tok);
             if (strcmp(in_lx,"IN") == 0 && strcmp(in_ty,"STRING") != 0) {
-                in_pair = consume(tokens, p5r);
+                in_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5r);
                 p5r = _second(in_pair);
-                ctx_pair = consume(tokens, p5r);
-                ctx_name = tok_lex(plant_list_get(ctx_pair ,  0 ));
+                ctx_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5r);
+                ctx_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(ctx_pair ,  0 ));
                 p5r = _second(ctx_pair);
-                dot3 = consume(tokens, p5r);
+                dot3 = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5r);
                 p5r = _second(dot3);
                 return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "reap_stmt" , "target" , var_name , "action" , act_name , "args" , args , "clargs" , clargs , "ctx" , ctx_name ) , p5r );
             }
-            dot3 = consume(tokens, p5r);
+            dot3 = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5r);
             p6r = _second(dot3);
             return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "reap_stmt" , "target" , var_name , "action" , act_name , "args" , args , "clargs" , clargs , "ctx" , "" ) , p6r );
         }
         tx_t arg_text = "";
         long adepth = 0;
         while (1) {
-            atok = peek(tokens, p5);
-            alx = tok_lex(atok);
-            atype = tok_type(atok);
+            atok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+            alx = plant_iLexer_tok_lex((tx_t)lexer, atok);
+            atype = plant_iLexer_tok_type((tx_t)lexer, atok);
             if (strcmp(atype,"STRING") == 0 || strcmp(atype,"INTERP") == 0) {
                 alx = escape_string(alx);
                 alx = _cat3("\"", alx, "\"");
@@ -3731,20 +3809,20 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
                 arg_text = _cat(arg_text, " ");
             }
             arg_text = _cat(arg_text, alx);
-            cp = consume(tokens, p5);
+            cp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p5 = _second(cp);
         }
         if (strcmp(arg_text,"( )") != 0) {
             args = plant_list_add(args, arg_text);
         }
-        tok2 = peek(tokens, p5);
-        lx2 = tok_lex(tok2);
+        tok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+        lx2 = plant_iLexer_tok_lex((tx_t)lexer, tok2);
         if (strcmp(lx2,",") == 0) {
-            com = consume(tokens, p5);
+            com = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p5 = _second(com);
         }
         if (strcmp(lx2,".") == 0) {
-            dot = consume(tokens, p5);
+            dot = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p6 = _second(dot);
             return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "reap_stmt" , "target" , var_name , "action" , act_name , "args" , args , "clargs" , clargs , "ctx" , "" ) , p6 );
         }
@@ -3752,6 +3830,8 @@ tx_t parse_reap_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
   return parse_reap_stmt;
 }
 tx_t is_reap_builtin(tx_t name) {
+  tx_t lexer = "";
+    lexer = get_lexer();
     if (strcmp(name,"LEN") == 0 || strcmp(name,"JOIN") == 0 || strcmp(name,"FIRST") == 0 || strcmp(name,"LAST") == 0 || strcmp(name,"SUM") == 0 || strcmp(name,"UPPER") == 0 || strcmp(name,"LOWER") == 0 || strcmp(name,"TRIM") == 0 || strcmp(name,"REVERSE") == 0 || strcmp(name,"ABS") == 0 || strcmp(name,"ROUND") == 0 || strcmp(name,"POW") == 0 || strcmp(name,"CEIL") == 0 || strcmp(name,"FLOOR") == 0 || strcmp(name,"RANDOM") == 0 || strcmp(name,"SIN") == 0 || strcmp(name,"COS") == 0 || strcmp(name,"SQRT") == 0 || strcmp(name,"HAS") == 0 || strcmp(name,"ANY") == 0 || strcmp(name,"ALL") == 0 || strcmp(name,"PICK") == 0 || strcmp(name,"FIND") == 0 || strcmp(name,"COUNT_OF") == 0 || strcmp(name,"SLICE") == 0 || strcmp(name,"TAP") == 0 || strcmp(name,"INFUSE") == 0 || strcmp(name,"ABSORB") == 0 || strcmp(name,"SEAL") == 0 || strcmp(name,"TEST") == 0 || strcmp(name,"COUNT") == 0 || strcmp(name,"NOW") == 0 || strcmp(name,"ANALYZE") == 0 || strcmp(name,"TYPEOF") == 0 || strcmp(name,"INCLUDES") == 0 || strcmp(name,"STARTS_WITH") == 0 || strcmp(name,"ENDS_WITH") == 0 || strcmp(name,"REPEAT") == 0 || strcmp(name,"PAD") == 0 || strcmp(name,"PAD_LEFT") == 0 || strcmp(name,"REVERSE") == 0 || strcmp(name,"RANGE") == 0 || strcmp(name,"SORT") == 0 || strcmp(name,"INDEX_OF") == 0 || strcmp(name,"UNIQUE") == 0 || strcmp(name,"AVERAGE") == 0 || strcmp(name,"MEDIAN") == 0 || strcmp(name,"FLATTEN") == 0 || strcmp(name,"CHUNK") == 0 || strcmp(name,"ZIP") == 0 || strcmp(name,"FILTER_GT") == 0 || strcmp(name,"FILTER_LT") == 0) {
         return "1";
     }
@@ -3779,6 +3859,7 @@ tx_t is_reap_builtin(tx_t name) {
     return "0";
 }
 tx_t parse_call_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) {
+  tx_t lexer = "";
   tx_t act_pair = "";
   tx_t act_name = "";
   tx_t p5 = "";
@@ -3818,46 +3899,47 @@ tx_t parse_call_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
   tx_t tok2 = "";
   tx_t lx2 = "";
   tx_t com = "";
-    act_pair = consume(tokens, pos);
-    act_name = tok_lex(plant_list_get(act_pair ,  0 ));
+    lexer = get_lexer();
+    act_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
+    act_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(act_pair ,  0 ));
     p5 = _second(act_pair);
-    next_tok = peek(tokens, p5);
-    next_ty = tok_type(next_tok);
+    next_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+    next_ty = plant_iLexer_tok_type((tx_t)lexer, next_tok);
     if (strcmp(next_ty,"COLON") == 0) {
         act_name = _cat(act_name, ":");
-        colon_pair = consume(tokens, p5);
+        colon_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
         p5 = _second(colon_pair);
-        func_pair = consume(tokens, p5);
-        func_name = tok_lex(plant_list_get(func_pair ,  0 ));
+        func_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
+        func_name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(func_pair ,  0 ));
         act_name = _cat(act_name, func_name);
         p5 = _second(func_pair);
     }
-    ga_tok = peek(tokens, p5);
-    ga_lx = tok_lex(ga_tok);
+    ga_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+    ga_lx = plant_iLexer_tok_lex((tx_t)lexer, ga_tok);
     if (strcmp(ga_lx,"[") == 0) {
-        ga_lb = consume(tokens, p5);
+        ga_lb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
         p5 = _second(ga_lb);
         gv = collect_type_text(tokens, p5, "]", 0);
         gtext = _first(gv);
         p5 = _second(gv);
-        ga_rb = consume(tokens, p5);
+        ga_rb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
         p5 = _second(ga_rb);
         act_name = _cat4(act_name, "[", gtext, "]");
     }
-    lpar = consume(tokens, p5);
+    lpar = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
     p5 = _second(lpar);
     PlantArray* args = plant_list_make ( 0 );
     PlantArray* clargs = plant_list_make ( 0 );
     while (1) {
-        tok0 = peek(tokens, p5);
-        lx0 = tok_lex(tok0);
-        ty0 = tok_type(tok0);
+        tok0 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+        lx0 = plant_iLexer_tok_lex((tx_t)lexer, tok0);
+        ty0 = plant_iLexer_tok_type((tx_t)lexer, tok0);
         if (strcmp(lx0,",") == 0 && strcmp(ty0,"STRING") != 0) {
-            com0 = consume(tokens, p5);
+            com0 = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p5 = _second(com0);
         }
-        ctok = peek(tokens, p5);
-        clx = tok_lex(ctok);
+        ctok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+        clx = plant_iLexer_tok_lex((tx_t)lexer, ctok);
         if (strcmp(clx,"[") == 0) {
             clp = parse_closure(tokens, p5, rtab, emode);
             cnode = _first(clp);
@@ -3870,29 +3952,29 @@ tx_t parse_call_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
                 args = plant_list_add(args, "@@CLOSURE@@");
                 clargs = plant_list_add(clargs, cnode);
                 p5 = p6;
-                ctok2 = peek(tokens, p5);
-                clx2 = tok_lex(ctok2);
+                ctok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+                clx2 = plant_iLexer_tok_lex((tx_t)lexer, ctok2);
                 if (strcmp(clx2,",") == 0) {
-                    ccom = consume(tokens, p5);
+                    ccom = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
                     p5 = _second(ccom);
                 }
             }
         }
-        tok = peek(tokens, p5);
-        lx = tok_lex(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
         if (strcmp(lx,")") == 0) {
-            rp = consume(tokens, p5);
+            rp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p5 = _second(rp);
-            dot = consume(tokens, p5);
+            dot = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p6 = _second(dot);
             return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "call_stmt" , "action" , act_name , "args" , args , "clargs" , clargs ) , p6 );
         }
         tx_t arg_text = "";
         long adepth = 0;
         while (1) {
-            atok = peek(tokens, p5);
-            alx = tok_lex(atok);
-            atype = tok_type(atok);
+            atok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+            alx = plant_iLexer_tok_lex((tx_t)lexer, atok);
+            atype = plant_iLexer_tok_type((tx_t)lexer, atok);
             if (strcmp(atype,"STRING") == 0 || strcmp(atype,"INTERP") == 0) {
                 alx = escape_string(alx);
                 alx = _cat3("\"", alx, "\"");
@@ -3913,20 +3995,21 @@ tx_t parse_call_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode)
                 arg_text = _cat(arg_text, " ");
             }
             arg_text = _cat(arg_text, alx);
-            cp = consume(tokens, p5);
+            cp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p5 = _second(cp);
         }
         args = plant_list_add(args, arg_text);
-        tok2 = peek(tokens, p5);
-        lx2 = tok_lex(tok2);
+        tok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+        lx2 = plant_iLexer_tok_lex((tx_t)lexer, tok2);
         if (strcmp(lx2,",") == 0) {
-            com = consume(tokens, p5);
+            com = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p5 = _second(com);
         }
     }
   return parse_call_stmt;
 }
 tx_t parse_put_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t vpair = "";
@@ -3937,21 +4020,23 @@ tx_t parse_put_stmt(PlantArray* tokens, long pos) {
   tx_t p5 = "";
   tx_t dot_pair = "";
   tx_t p6 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     vpair = collect_until(tokens, p2, "INTO");
     tx_t item = plant_list_get(vpair ,  0 );
     p3 = _second(vpair);
-    into_pair = consume(tokens, p3);
+    into_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
     p4 = _second(into_pair);
     tpair = collect_until(tokens, p4, ".");
     tx_t target = plant_list_get(tpair ,  0 );
     p5 = _second(tpair);
-    dot_pair = consume(tokens, p5);
+    dot_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
     p6 = _second(dot_pair);
     return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "put_stmt" , "item" , item , "target" , target ) , p6 );
 }
 tx_t parse_take_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t vpair = "";
@@ -3962,21 +4047,23 @@ tx_t parse_take_stmt(PlantArray* tokens, long pos) {
   tx_t p5 = "";
   tx_t dot_pair = "";
   tx_t p6 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     vpair = collect_until(tokens, p2, "FROM");
     tx_t item = plant_list_get(vpair ,  0 );
     p3 = _second(vpair);
-    from_pair = consume(tokens, p3);
+    from_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
     p4 = _second(from_pair);
     tpair = collect_until(tokens, p4, ".");
     tx_t target = plant_list_get(tpair ,  0 );
     p5 = _second(tpair);
-    dot_pair = consume(tokens, p5);
+    dot_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
     p6 = _second(dot_pair);
     return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "take_stmt" , "item" , item , "target" , target ) , p6 );
 }
 tx_t parse_braid_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t lpair = "";
@@ -3992,38 +4079,39 @@ tx_t parse_braid_stmt(PlantArray* tokens, long pos) {
   tx_t drop = "";
   tx_t dot_pair = "";
   tx_t p7 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     lpair = collect_until(tokens, p2, "WITH");
     tx_t left = plant_list_get(lpair ,  0 );
     p3 = _second(lpair);
-    with_pair = consume(tokens, p3);
+    with_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
     p4 = _second(with_pair);
     rpair = collect_until(tokens, p4, "AS");
     tx_t right = plant_list_get(rpair ,  0 );
     p5 = _second(rpair);
-    as_pair = consume(tokens, p5);
+    as_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
     p6 = _second(as_pair);
     tx_t target = "";
     while (1) {
-        tok = peek(tokens, p6);
-        lx = tok_lex(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p6);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
         if (strcmp(lx,"MAP") == 0 || strcmp(lx,".") == 0 || strcmp(lx,"") == 0) {
                       break;
         }
         target = _cat(target, lx);
-        drop = consume(tokens, p6);
+        drop = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p6);
         p6 = _second(drop);
     }
     tx_t is_map = "0";
-    tok = peek(tokens, p6);
-    lx = tok_lex(tok);
+    tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p6);
+    lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
     if (strcmp(lx,"MAP") == 0) {
         is_map = "1";
-        drop = consume(tokens, p6);
+        drop = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p6);
         p6 = _second(drop);
     }
-    dot_pair = consume(tokens, p6);
+    dot_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p6);
     p7 = _second(dot_pair);
     if (strcmp(is_map,"1") == 0) {
         return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "braid_map_stmt" , "left" , left , "right" , right , "target" , target ) , p7 );
@@ -4031,6 +4119,7 @@ tx_t parse_braid_stmt(PlantArray* tokens, long pos) {
     return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "braid_stmt" , "left" , left , "right" , right , "target" , target ) , p7 );
 }
 tx_t parse_link_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t kpair = "";
@@ -4045,26 +4134,28 @@ tx_t parse_link_stmt(PlantArray* tokens, long pos) {
   tx_t p7 = "";
   tx_t dot_pair = "";
   tx_t p8 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     kpair = collect_until(tokens, p2, "WITH");
     tx_t key = plant_list_get(kpair ,  0 );
     p3 = _second(kpair);
-    with_pair = consume(tokens, p3);
+    with_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
     p4 = _second(with_pair);
     vpair = collect_until(tokens, p4, "IN");
     tx_t value = plant_list_get(vpair ,  0 );
     p5 = _second(vpair);
-    in_pair = consume(tokens, p5);
+    in_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
     p6 = _second(in_pair);
     mpair = collect_until(tokens, p6, ".");
     tx_t target = plant_list_get(mpair ,  0 );
     p7 = _second(mpair);
-    dot_pair = consume(tokens, p7);
+    dot_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p7);
     p8 = _second(dot_pair);
     return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "link_stmt" , "key" , key , "value" , value , "target" , target ) , p8 );
 }
 tx_t parse_sort_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t tok = "";
@@ -4073,54 +4164,55 @@ tx_t parse_sort_stmt(PlantArray* tokens, long pos) {
   tx_t lx2 = "";
   tx_t dot_pair = "";
   tx_t p3 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     tx_t target = "";
     tx_t gdir = "";
     while (1) {
-        tok = peek(tokens, p2);
-        lx = tok_lex(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
         if (strcmp(lx,"BY") == 0 || strcmp(lx,"ASC") == 0 || strcmp(lx,"DESC") == 0 || strcmp(lx,".") == 0 || strcmp(lx,"") == 0) {
                       break;
         }
         target = _cat(target, lx);
-        drop = consume(tokens, p2);
+        drop = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
         p2 = _second(drop);
     }
-    tok = peek(tokens, p2);
-    lx = tok_lex(tok);
+    tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+    lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
     if (strcmp(lx,"ASC") == 0 || strcmp(lx,"DESC") == 0) {
         gdir = lx;
-        drop = consume(tokens, p2);
+        drop = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
         p2 = _second(drop);
     }
     PlantArray* fields = plant_list_make ( 0 );
     PlantArray* dirs = plant_list_make ( 0 );
-    tok = peek(tokens, p2);
-    lx = tok_lex(tok);
+    tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+    lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
     if (strcmp(lx,"BY") == 0) {
-        drop = consume(tokens, p2);
+        drop = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
         p2 = _second(drop);
         while (1) {
-            tok = peek(tokens, p2);
-            lx = tok_lex(tok);
+            tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+            lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
             if (strcmp(lx,",") == 0) {
-                drop = consume(tokens, p2);
+                drop = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
                 p2 = _second(drop);
             }
-            tok = peek(tokens, p2);
-            lx = tok_lex(tok);
+            tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+            lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
             if (strcmp(lx,".") == 0 || strcmp(lx,"") == 0 || strcmp(lx,",") == 0) {
                               break;
             }
             fields = plant_list_push ( fields , lx );
-            drop = consume(tokens, p2);
+            drop = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
             p2 = _second(drop);
-            tok = peek(tokens, p2);
-            lx2 = tok_lex(tok);
+            tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+            lx2 = plant_iLexer_tok_lex((tx_t)lexer, tok);
             if (strcmp(lx2,"ASC") == 0 || strcmp(lx2,"DESC") == 0) {
                 dirs = plant_list_push ( dirs , lx2 );
-                drop = consume(tokens, p2);
+                drop = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
                 p2 = _second(drop);
             }
             if (strcmp(lx2,"ASC") != 0 && strcmp(lx2,"DESC") != 0) {
@@ -4128,27 +4220,30 @@ tx_t parse_sort_stmt(PlantArray* tokens, long pos) {
             }
         }
     }
-    dot_pair = consume(tokens, p2);
+    dot_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
     p3 = _second(dot_pair);
     return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "sort_stmt" , "target" , target , "gdir" , gdir , "fields" , fields , "dirs" , dirs ) , p3 );
 }
 tx_t parse_shake_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t tpair = "";
   tx_t p3 = "";
   tx_t dot_pair = "";
   tx_t p4 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     tpair = collect_until(tokens, p2, ".");
     tx_t target = plant_list_get(tpair ,  0 );
     p3 = _second(tpair);
-    dot_pair = consume(tokens, p3);
+    dot_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
     p4 = _second(dot_pair);
     return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "shake_stmt" , "target" , target ) , p4 );
 }
 tx_t parse_break_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t tok = "";
@@ -4156,32 +4251,36 @@ tx_t parse_break_stmt(PlantArray* tokens, long pos) {
   tx_t drop = "";
   tx_t dot_pair = "";
   tx_t p3 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     if (p2 < plant_array_length(tokens)) {
-        tok = peek(tokens, p2);
-        lx = tok_lex(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
         if (strcmp(lx,"0") == 0) {
-            drop = consume(tokens, p2);
+            drop = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
             p2 = _second(drop);
         }
     }
-    dot_pair = consume(tokens, p2);
+    dot_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
     p3 = _second(dot_pair);
     return plant_list_make ( 2 , plant_list_make ( 2 , "type" , "break_stmt" ) , p3 );
 }
 tx_t parse_continue_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t dot_pair = "";
   tx_t p3 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    dot_pair = consume(tokens, p2);
+    dot_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
     p3 = _second(dot_pair);
     return plant_list_make ( 2 , plant_list_make ( 2 , "type" , "continue_stmt" ) , p3 );
 }
 tx_t parse_if_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, tx_t emode) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t cpair = "";
@@ -4204,12 +4303,13 @@ tx_t parse_if_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, tx_
   tx_t e_pair = "";
   tx_t stmt_pair = "";
   tx_t sty = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     cpair = collect_until(tokens, p2, ",");
     tx_t cond = plant_list_get(cpair ,  0 );
     p3 = _second(cpair);
-    com = consume(tokens, p3);
+    com = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
     p4 = _second(com);
     PlantArray* ctab = plant_list_make ( 0 );
     long bstart = p4;
@@ -4221,7 +4321,7 @@ tx_t parse_if_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, tx_
     tx_t in_elif = "0";
     tx_t in_else = "0";
     while (1) {
-        is_eof_flag = is_eof(tokens, p4);
+        is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, (tx_t)p4);
         if (is_eof_flag) {
             if (strcmp(in_elif,"1") == 0) {
                 elif = plant_list_add(elif, cur_cond);
@@ -4229,14 +4329,14 @@ tx_t parse_if_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, tx_
             }
             return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "if_stmt" , "cond" , cond , "body" , body , "elif" , elif , "else" , else_body ) , p4 );
         }
-        tok = peek(tokens, p4);
-        lx = tok_lex(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
         if (strcmp(lx,"/") == 0) {
-            slash = consume(tokens, p4);
+            slash = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p5 = _second(slash);
-            if_close = consume(tokens, p5);
+            if_close = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p6 = _second(if_close);
-            dot = consume(tokens, p6);
+            dot = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p6);
             p7 = _second(dot);
             if (strcmp(in_elif,"1") == 0) {
                 elif = plant_list_add(elif, cur_cond);
@@ -4249,12 +4349,12 @@ tx_t parse_if_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, tx_
                 elif = plant_list_add(elif, cur_cond);
                 elif = plant_list_add(elif, cur_body);
             }
-            o_pair = consume(tokens, p4);
+            o_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p5 = _second(o_pair);
             ocp = collect_until(tokens, p5, ",");
             ocond = _first(ocp);
             p6 = _second(ocp);
-            ocom = consume(tokens, p6);
+            ocom = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p6);
             p7 = _second(ocom);
             cur_cond = ocond;
             cur_body = plant_list_make ( 0 );
@@ -4270,7 +4370,7 @@ tx_t parse_if_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, tx_
                 elif = plant_list_add(elif, cur_cond);
                 elif = plant_list_add(elif, cur_body);
             }
-            e_pair = consume(tokens, p4);
+            e_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p5 = _second(e_pair);
             in_else = "1";
             p4 = p5;
@@ -4302,6 +4402,7 @@ tx_t parse_if_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, tx_
   return parse_if_stmt;
 }
 tx_t parse_match_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, tx_t emode) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t spair = "";
@@ -4339,7 +4440,8 @@ tx_t parse_match_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, 
   tx_t dotok = "";
   tx_t dotlx = "";
   tx_t dcons = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     spair = collect_until_keyword(tokens, p2, plant_list_make ( 1 , "{" ));
     tx_t subj = plant_list_get(spair ,  0 );
@@ -4347,20 +4449,20 @@ tx_t parse_match_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, 
     if (strcmp(subj,"") == 0) {
         return plant_list_make ( 2 , NULL , p3 );
     }
-    lb = consume(tokens, p3);
+    lb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
     p4 = _second(lb);
     PlantArray* clauses = plant_list_make ( 0 );
     tx_t wild_seen = "0";
     while (1) {
-        is_eof_flag = is_eof(tokens, p4);
+        is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, (tx_t)p4);
         if (is_eof_flag) {
             return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "match_stmt" , "subjectExpr" , subj , "clauses" , clauses ) , p4 );
         }
-        tok = peek(tokens, p4);
-        lx = tok_lex(tok);
-        tt = tok_type(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
+        tt = plant_iLexer_tok_type((tx_t)lexer, tok);
         if (strcmp(lx,"}") == 0) {
-            rb = consume(tokens, p4);
+            rb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p5 = _second(rb);
             return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "match_stmt" , "subjectExpr" , subj , "clauses" , clauses ) , p5 );
         }
@@ -4380,31 +4482,31 @@ tx_t parse_match_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, 
             if (strcmp(tt,_cat ( "FA" , "LSE" )) == 0) {
                 ptext = _cat ( "\"F" , "ALSE\"" );
             }
-            pcons = consume(tokens, p4);
+            pcons = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p4 = _second(pcons);
         }
         if (strcmp(tt,"WILDCARD") == 0) {
             ptext = "_";
-            pcons = consume(tokens, p4);
+            pcons = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p4 = _second(pcons);
         }
         if (strcmp(tt,"IDENT") == 0) {
-            pcons = consume(tokens, p4);
+            pcons = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p4 = _second(pcons);
-            ntok = peek(tokens, p4);
-            ntt = tok_type(ntok);
+            ntok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+            ntt = plant_iLexer_tok_type((tx_t)lexer, ntok);
             if (strcmp(ntt,"LPAREN") == 0) {
-                ntok2 = peek(tokens, p4+1);
-                ntt2 = tok_type(ntok2);
+                ntok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4+1);
+                ntt2 = plant_iLexer_tok_type((tx_t)lexer, ntok2);
                 if (strcmp(ntt2,"IDENT") != 0) {
                     return plant_list_make ( 2 , NULL , p4 );
                 }
                 tx_t bnd = plant_list_get(ntok2 ,  1 );
-                lpair = consume(tokens, p4);
+                lpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
                 p4b = _second(lpair);
-                bpair = consume(tokens, p4b);
+                bpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4b);
                 p4c = _second(bpair);
-                rpair = consume(tokens, p4c);
+                rpair = plant_iLexer_consume_at((tx_t)lexer, tokens, p4c);
                 p4 = _second(rpair);
                 ptext = lx;
                 pbind = bnd;
@@ -4425,30 +4527,30 @@ tx_t parse_match_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, 
         if (strcmp(wild_seen,"1") == 0 && strcmp(ptext,"_") != 0) {
             return plant_list_make ( 2 , NULL , p4 );
         }
-        atok = peek(tokens, p4);
-        alx = tok_lex(atok);
+        atok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+        alx = plant_iLexer_tok_lex((tx_t)lexer, atok);
         if (strcmp(alx,"->") != 0) {
             return plant_list_make ( 2 , NULL , p4 );
         }
-        ar = consume(tokens, p4);
+        ar = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
         p4 = _second(ar);
         PlantArray* ctab = plant_list_make ( 0 );
         long bstart = p4;
         PlantArray* cbody = plant_list_make ( 0 );
-        btok = peek(tokens, p4);
-        blx = tok_lex(btok);
+        btok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+        blx = plant_iLexer_tok_lex((tx_t)lexer, btok);
         if (strcmp(blx,"{") == 0) {
-            lbg = consume(tokens, p4);
+            lbg = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p4 = _second(lbg);
             while (1) {
-                is_eof2 = is_eof(tokens, p4);
+                is_eof2 = plant_iLexer_is_eof_at((tx_t)lexer, tokens, (tx_t)p4);
                 if (is_eof2) {
                                       break;
                 }
-                btok2 = peek(tokens, p4);
-                blx2 = tok_lex(btok2);
+                btok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+                blx2 = plant_iLexer_tok_lex((tx_t)lexer, btok2);
                 if (strcmp(blx2,"}") == 0) {
-                    rbg = consume(tokens, p4);
+                    rbg = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
                     p4 = _second(rbg);
                                       break;
                 }
@@ -4468,10 +4570,10 @@ tx_t parse_match_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, 
                 cbody = plant_list_add(cbody, bstmt);
             }
         }
-        dotok = peek(tokens, p4);
-        dotlx = tok_lex(dotok);
+        dotok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+        dotlx = plant_iLexer_tok_lex((tx_t)lexer, dotok);
         if (strcmp(dotlx,".") == 0) {
-            dcons = consume(tokens, p4);
+            dcons = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p4 = _second(dcons);
         }
         clauses = plant_list_add(clauses, plant_list_make ( 12 , "variantName" , ptext , "binding" , pbind , "bodyStatements" , cbody ));
@@ -4479,6 +4581,7 @@ tx_t parse_match_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, 
   return parse_match_stmt;
 }
 tx_t parse_season_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, tx_t emode) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t cpair = "";
@@ -4496,29 +4599,30 @@ tx_t parse_season_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab,
   tx_t p7 = "";
   tx_t stmt_pair = "";
   tx_t sty = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     cpair = collect_until(tokens, p2, ",");
     tx_t cond = plant_list_get(cpair ,  0 );
     p3 = _second(cpair);
-    com = consume(tokens, p3);
+    com = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
     p4 = _second(com);
     PlantArray* ctab = plant_list_make ( 0 );
     long bstart = p4;
     PlantArray* body = plant_list_make ( 0 );
     while (1) {
-        is_eof_flag = is_eof(tokens, p4);
+        is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, (tx_t)p4);
         if (is_eof_flag) {
             return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "season_stmt" , "cond" , cond , "body" , body ) , p4 );
         }
-        tok = peek(tokens, p4);
-        lx = tok_lex(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
         if (strcmp(lx,"/") == 0) {
-            slash = consume(tokens, p4);
+            slash = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p5 = _second(slash);
-            season_close = consume(tokens, p5);
+            season_close = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p6 = _second(season_close);
-            dot = consume(tokens, p6);
+            dot = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p6);
             p7 = _second(dot);
             return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "season_stmt" , "cond" , cond , "body" , body ) , p7 );
         }
@@ -4536,6 +4640,7 @@ tx_t parse_season_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab,
   return parse_season_stmt;
 }
 tx_t parse_cycle_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, tx_t emode) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t tok = "";
@@ -4562,34 +4667,35 @@ tx_t parse_cycle_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, 
   tx_t p7 = "";
   tx_t stmt_pair = "";
   tx_t sty = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    tok = peek(tokens, p2);
-    ivar = tok_lex(tok);
-    cpair = consume(tokens, p2);
+    tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+    ivar = plant_iLexer_tok_lex((tx_t)lexer, tok);
+    cpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
     p2 = _second(cpair);
     tx_t fromExpr = "";
     tx_t toExpr = "";
     tx_t stepExpr = "";
     tx_t listExpr = "";
     tx_t indexVar = "";
-    tok = peek(tokens, p2);
-    lx = tok_lex(tok);
+    tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+    lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
     if (strcmp(lx,"FROM") == 0) {
-        cpair = consume(tokens, p2);
+        cpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
         p2 = _second(cpair);
         cpair = collect_until(tokens, p2, "TO");
         fromExpr = plant_list_get(cpair ,  0 );
         p3 = _second(cpair);
-        cpair = consume(tokens, p3);
+        cpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
         p3 = _second(cpair);
         cpair = collect_until_keyword(tokens, p3, plant_list_make ( 2 , "STEP" , "," ));
         toExpr = plant_list_get(cpair ,  0 );
         p4 = _second(cpair);
-        stok = peek(tokens, p4);
-        slx = tok_lex(stok);
+        stok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+        slx = plant_iLexer_tok_lex((tx_t)lexer, stok);
         if (strcmp(slx,"STEP") == 0) {
-            cpair = consume(tokens, p4);
+            cpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p4 = _second(cpair);
             cpair = collect_until(tokens, p4, ",");
             stepExpr = plant_list_get(cpair ,  0 );
@@ -4623,36 +4729,36 @@ tx_t parse_cycle_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, 
                 return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "#error STEP cannot be 0" ) , p4 );
             }
         }
-        cpair = consume(tokens, p4);
+        cpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
         p4 = _second(cpair);
     }
     if (strcmp(lx,"IN") == 0) {
-        cpair = consume(tokens, p2);
+        cpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
         p2 = _second(cpair);
         cpair = collect_until(tokens, p2, ",");
         listExpr = plant_list_get(cpair ,  0 );
         p3 = _second(cpair);
-        cpair = consume(tokens, p3);
+        cpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
         p4 = _second(cpair);
     }
     if (strcmp(lx,",") == 0) {
-        cpair = consume(tokens, p2);
+        cpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
         p2 = _second(cpair);
-        tok = peek(tokens, p2);
-        indexVar = tok_lex(tok);
-        cpair = consume(tokens, p2);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+        indexVar = plant_iLexer_tok_lex((tx_t)lexer, tok);
+        cpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
         p2 = _second(cpair);
-        tok = peek(tokens, p2);
-        lx2 = tok_lex(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+        lx2 = plant_iLexer_tok_lex((tx_t)lexer, tok);
         if (strcmp(lx2,"IN") != 0) {
             return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "Expected IN in CYCLE header" ) , p2 );
         }
-        cpair = consume(tokens, p2);
+        cpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
         p2 = _second(cpair);
         cpair = collect_until(tokens, p2, ",");
         listExpr = plant_list_get(cpair ,  0 );
         p3 = _second(cpair);
-        cpair = consume(tokens, p3);
+        cpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
         p4 = _second(cpair);
     }
     if (strcmp(lx,"FROM") != 0 && strcmp(lx,"IN") != 0 && strcmp(lx,",") != 0) {
@@ -4662,18 +4768,18 @@ tx_t parse_cycle_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, 
     long bstart = p4;
     PlantArray* body = plant_list_make ( 0 );
     while (1) {
-        is_eof_flag = is_eof(tokens, p4);
+        is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, (tx_t)p4);
         if (is_eof_flag) {
             return plant_list_make ( 2 , plant_list_make ( 16 , "type" , "cycle_stmt" , "iterVar" , ivar , "fromExpr" , fromExpr , "toExpr" , toExpr , "stepExpr" , stepExpr , "listExpr" , listExpr , "indexVar" , indexVar , "body" , body ) , p4 );
         }
-        tok = peek(tokens, p4);
-        lx = tok_lex(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
         if (strcmp(lx,"/") == 0) {
-            slash = consume(tokens, p4);
+            slash = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p5 = _second(slash);
-            cclose = consume(tokens, p5);
+            cclose = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p6 = _second(cclose);
-            dot = consume(tokens, p6);
+            dot = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p6);
             p7 = _second(dot);
             return plant_list_make ( 2 , plant_list_make ( 16 , "type" , "cycle_stmt" , "iterVar" , ivar , "fromExpr" , fromExpr , "toExpr" , toExpr , "stepExpr" , stepExpr , "listExpr" , listExpr , "indexVar" , indexVar , "body" , body ) , p7 );
         }
@@ -4691,6 +4797,7 @@ tx_t parse_cycle_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, 
   return parse_cycle_stmt;
 }
 tx_t parse_throw_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t t_pair = "";
@@ -4701,14 +4808,15 @@ tx_t parse_throw_stmt(PlantArray* tokens, long pos) {
   tx_t dot2 = "";
   tx_t dot = "";
   tx_t p4 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    t_pair = consume(tokens, p2);
+    t_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
     p3 = _second(t_pair);
-    stype = tok_lex(plant_list_get(t_pair ,  0 ));
+    stype = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(t_pair ,  0 ));
     tx_t msg = "";
-    tok = peek(tokens, p3);
-    lx = tok_lex(tok);
+    tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p3);
+    lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
     if (strcmp(lx,"(") == 0) {
         dot2 = collect_until(tokens, p2, ".");
         msg = _first(dot2);
@@ -4720,11 +4828,12 @@ tx_t parse_throw_stmt(PlantArray* tokens, long pos) {
         msg = _first(dot2);
         p3 = _second(dot2);
     }
-    dot = consume(tokens, p3);
+    dot = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
     p4 = _second(dot);
     return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "throw_stmt" , "storm" , stype , "msg" , msg ) , p4 );
 }
 tx_t parse_stop_if_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t if_pair = "";
@@ -4734,10 +4843,11 @@ tx_t parse_stop_if_stmt(PlantArray* tokens, long pos) {
   tx_t p4 = "";
   tx_t dot = "";
   tx_t p5 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    if_pair = consume(tokens, p2);
-    if_lx = tok_lex(plant_list_get(if_pair ,  0 ));
+    if_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+    if_lx = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(if_pair ,  0 ));
     p3 = _second(if_pair);
     if (strcmp(if_lx,"IF") != 0) {
         return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "Expected IF after STOP" ) , p2 );
@@ -4748,11 +4858,12 @@ tx_t parse_stop_if_stmt(PlantArray* tokens, long pos) {
     if (strcmp(cond,"") == 0 || cond == NULL) {
         return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "STOP IF requires a condition expression" ) , p3 );
     }
-    dot = consume(tokens, p4);
+    dot = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
     p5 = _second(dot);
     return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "stop_if_stmt" , "cond" , cond ) , p5 );
 }
 tx_t parse_weather_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, tx_t emode) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t tok = "";
@@ -4779,14 +4890,15 @@ tx_t parse_weather_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab
   tx_t cm_pair = "";
   tx_t stmt_pair = "";
   tx_t sty = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     PlantArray* ctab = plant_list_make ( 0 );
     long bstart = p2;
-    tok = peek(tokens, p2);
-    lx = tok_lex(tok);
+    tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+    lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
     if (strcmp(lx,",") == 0) {
-        c_pair = consume(tokens, p2);
+        c_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
         p2 = _second(c_pair);
     }
     PlantArray* body = plant_list_make ( 0 );
@@ -4797,22 +4909,22 @@ tx_t parse_weather_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab
     PlantArray* cur_body = plant_list_make ( 0 );
     tx_t phase = "body";
     while (1) {
-        is_eof_flag = is_eof(tokens, p2);
+        is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, (tx_t)p2);
         if (is_eof_flag) {
             return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "Unterminated WEATHER block (missing /WEATHER.)" ) , p2 );
         }
-        tok = peek(tokens, p2);
-        lx = tok_lex(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
         if (strcmp(lx,"/") == 0) {
-            slash = consume(tokens, p2);
+            slash = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
             p3 = _second(slash);
-            cclose = consume(tokens, p3);
+            cclose = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
             p4 = _second(cclose);
-            clx = tok_lex(plant_list_get(cclose ,  0 ));
+            clx = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(cclose ,  0 ));
             if (strcmp(clx,"WEATHER") != 0) {
                 return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "Expected /WEATHER. to close WEATHER block" ) , p2 );
             }
-            dot = consume(tokens, p4);
+            dot = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p5 = _second(dot);
             if (strcmp(phase,"calm") == 0) {
                 return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "weather_stmt" , "body" , body , "shelters" , shelters , "calm" , calm_body , "exit_list" , plant_list_make ( 0 ) ) , p5 );
@@ -4828,30 +4940,30 @@ tx_t parse_weather_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab
             if (strcmp(phase,"calm") == 0) {
                 return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "SHELTER after CALM in WEATHER block" ) , p2 );
             }
-            s_pair = consume(tokens, p2);
+            s_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
             p3 = _second(s_pair);
             tx_t stype = "ANY_STORM";
             tx_t sbind = "";
-            tok2 = peek(tokens, p3);
-            lx2 = tok_lex(tok2);
+            tok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p3);
+            lx2 = plant_iLexer_tok_lex((tx_t)lexer, tok2);
             if (strcmp(lx2,",") != 0) {
-                t_pair = consume(tokens, p3);
+                t_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
                 p3 = _second(t_pair);
-                stype = tok_lex(plant_list_get(t_pair ,  0 ));
-                tok3 = peek(tokens, p3);
-                lx3 = tok_lex(tok3);
+                stype = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(t_pair ,  0 ));
+                tok3 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p3);
+                lx3 = plant_iLexer_tok_lex((tx_t)lexer, tok3);
                 if (strcmp(lx3,"AS") == 0) {
-                    a_pair = consume(tokens, p3);
+                    a_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
                     p3 = _second(a_pair);
-                    b_pair = consume(tokens, p3);
+                    b_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
                     p3 = _second(b_pair);
-                    sbind = tok_lex(plant_list_get(b_pair ,  0 ));
+                    sbind = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(b_pair ,  0 ));
                 }
             }
-            tok4 = peek(tokens, p3);
-            lx4 = tok_lex(tok4);
+            tok4 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p3);
+            lx4 = plant_iLexer_tok_lex((tx_t)lexer, tok4);
             if (strcmp(lx4,",") == 0) {
-                cm_pair = consume(tokens, p3);
+                cm_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
                 p3 = _second(cm_pair);
             }
             cur_type = stype;
@@ -4870,12 +4982,12 @@ tx_t parse_weather_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab
             if (strcmp(phase,"calm") == 0) {
                 return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "Multiple CALM clauses in WEATHER block" ) , p2 );
             }
-            c_pair = consume(tokens, p2);
+            c_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
             p3 = _second(c_pair);
-            tok2 = peek(tokens, p3);
-            lx2 = tok_lex(tok2);
+            tok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p3);
+            lx2 = plant_iLexer_tok_lex((tx_t)lexer, tok2);
             if (strcmp(lx2,",") == 0) {
-                cm_pair = consume(tokens, p3);
+                cm_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
                 p3 = _second(cm_pair);
             }
             calm_body = plant_list_make ( 0 );
@@ -4905,6 +5017,7 @@ tx_t parse_weather_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab
   return parse_weather_stmt;
 }
 tx_t parse_statement(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab, PlantArray* rtab, long bstart, tx_t emode) {
+  tx_t lexer = "";
   tx_t tok = "";
   tx_t lx = "";
   tx_t r = "";
@@ -4921,8 +5034,9 @@ tx_t parse_statement(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab, P
   tx_t nx2_ty = "";
   tx_t nx3 = "";
   tx_t nx3_ty = "";
-    tok = peek(tokens, pos);
-    lx = tok_lex(tok);
+    lexer = get_lexer();
+    tok = plant_iLexer_peek_at((tx_t)lexer, tokens, pos);
+    lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
     if (strcmp(lx,"TYPE") == 0) {
         r = parse_type_decl(tokens, pos);
         return r;
@@ -5111,18 +5225,18 @@ tx_t parse_statement(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab, P
         r = parse_teardown_stmt(tokens, pos);
         return r;
     }
-    nx = peek(tokens, pos+1);
-    nx_ty = tok_type(nx);
+    nx = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)pos+1);
+    nx_ty = plant_iLexer_tok_type((tx_t)lexer, (tx_t)nx);
     if (strcmp(nx_ty,"LPAREN") == 0) {
         r = parse_call_stmt(tokens, pos, rtab, emode);
         return r;
     }
     if (strcmp(nx_ty,"DOT") == 0) {
-        mm1 = peek(tokens, pos+2);
-        mm1_ty = tok_type(mm1);
+        mm1 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)pos+2);
+        mm1_ty = plant_iLexer_tok_type((tx_t)lexer, (tx_t)mm1);
         if (strcmp(mm1_ty,"IDENT") == 0) {
-            mm2 = peek(tokens, pos+3);
-            mm2_ty = tok_type(mm2);
+            mm2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)pos+3);
+            mm2_ty = plant_iLexer_tok_type((tx_t)lexer, (tx_t)mm2);
             if (strcmp(mm2_ty,"LPAREN") == 0) {
                 mv1 = collect_value(tokens, pos);
                 mvt = _first(mv1);
@@ -5131,11 +5245,11 @@ tx_t parse_statement(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab, P
             }
         }
     }
-    nx2 = peek(tokens, pos+1);
-    nx2_ty = tok_type(nx2);
+    nx2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)pos+1);
+    nx2_ty = plant_iLexer_tok_type((tx_t)lexer, (tx_t)nx2);
     if (strcmp(nx2_ty,"COLON") == 0) {
-        nx3 = peek(tokens, pos+2);
-        nx3_ty = tok_type(nx3);
+        nx3 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)pos+2);
+        nx3_ty = plant_iLexer_tok_type((tx_t)lexer, (tx_t)nx3);
         if (strcmp(nx3_ty,"LPAREN") == 0) {
             r = parse_call_stmt(tokens, pos, rtab, emode);
             return r;
@@ -5144,6 +5258,7 @@ tx_t parse_statement(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab, P
     return plant_list_make ( 2 , NULL , pos + 1 );
 }
 tx_t collect_until_keyword(PlantArray* tokens, long start, PlantArray* kws) {
+  tx_t lexer = "";
   tx_t is_eof_flag = "";
   tx_t tok = "";
   tx_t lx = "";
@@ -5154,17 +5269,18 @@ tx_t collect_until_keyword(PlantArray* tokens, long start, PlantArray* kws) {
   tx_t fpt = "";
   tx_t fpp2 = "";
   tx_t drop = "";
+    lexer = get_lexer();
     tx_t text = "";
     long p2 = start;
     long depth = 0;
     while (1) {
-        is_eof_flag = is_eof(tokens, p2);
+        is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, p2);
         if (is_eof_flag) {
             return plant_list_make ( 2 , text , p2 );
         }
-        tok = peek(tokens, p2);
-        lx = tok_lex(tok);
-        tt = tok_type(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, p2);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
+        tt = plant_iLexer_tok_type((tx_t)lexer, tok);
         if (strcmp(tt,"STRING") == 0 || strcmp(tt,"INTERP") == 0) {
             lx = escape_string(lx);
             lx = _cat3("\"", lx, "\"");
@@ -5202,12 +5318,13 @@ tx_t collect_until_keyword(PlantArray* tokens, long start, PlantArray* kws) {
             text = _cat(text, " ");
         }
         text = _cat(text, lx);
-        drop = consume(tokens, p2);
+        drop = plant_iLexer_consume_at((tx_t)lexer, tokens, p2);
         p2 = _second(drop);
     }
   return collect_until_keyword;
 }
 tx_t parse_harvest_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t upair = "";
@@ -5226,12 +5343,13 @@ tx_t parse_harvest_stmt(PlantArray* tokens, long pos) {
   tx_t drop2 = "";
   tx_t dot_pair = "";
   tx_t p5 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     upair = collect_until(tokens, p2, "AS");
     tx_t url = plant_list_get(upair ,  0 );
     p3 = _second(upair);
-    as_pair = consume(tokens, p3);
+    as_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
     p4 = _second(as_pair);
     tx_t resp = "";
     tx_t method = "";
@@ -5245,25 +5363,25 @@ tx_t parse_harvest_stmt(PlantArray* tokens, long pos) {
     resp = plant_list_get(rpair ,  0 );
     p4 = _second(rpair);
     while (1) {
-        tok = peek(tokens, p4);
-        lx = tok_lex(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
         if (strcmp(lx,".") == 0 || strcmp(lx,"") == 0) {
                       break;
         }
         if (strcmp(lx,"MAP") == 0) {
-            dropm = consume(tokens, p4);
+            dropm = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p4 = _second(dropm);
             map = "1";
                       continue;
         }
         if (strcmp(lx,"JSON") == 0) {
-            dropj = consume(tokens, p4);
+            dropj = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p4 = _second(dropj);
             json = "1";
                       continue;
         }
         if (strcmp(lx,"METHOD") == 0 || strcmp(lx,"BODY") == 0 || strcmp(lx,"HEADERS") == 0 || strcmp(lx,"TIMEOUT") == 0) {
-            drop = consume(tokens, p4);
+            drop = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p4 = _second(drop);
             opair = collect_until_keyword(tokens, p4, okws);
             tx_t oval = plant_list_get(opair ,  0 );
@@ -5280,22 +5398,23 @@ tx_t parse_harvest_stmt(PlantArray* tokens, long pos) {
             if (strcmp(lx,"TIMEOUT") == 0) {
                 timeout = oval;
             }
-            tok2 = peek(tokens, p4);
-            lx2 = tok_lex(tok2);
+            tok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+            lx2 = plant_iLexer_tok_lex((tx_t)lexer, tok2);
             if (strcmp(lx2,",") == 0) {
-                drop2 = consume(tokens, p4);
+                drop2 = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
                 p4 = _second(drop2);
             }
                       continue;
         }
-        drop = consume(tokens, p4);
+        drop = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
         p4 = _second(drop);
     }
-    dot_pair = consume(tokens, p4);
+    dot_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
     p5 = _second(dot_pair);
     return plant_list_make ( 2 , plant_list_make ( 20 , "type" , "harvest_stmt" , "url" , url , "resp" , resp , "method" , method , "payload" , body , "headers" , headers , "timeout" , timeout , "map" , map , "json" , json ) , p5 );
 }
 tx_t parse_listen_stmt(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t on_pair = "";
@@ -5313,34 +5432,36 @@ tx_t parse_listen_stmt(PlantArray* tokens, long pos) {
   tx_t tpair = "";
   tx_t dot_pair = "";
   tx_t p7 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    on_pair = consume(tokens, p2);
+    on_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
     p3 = _second(on_pair);
     PlantArray* okws2 = plant_list_make ( 3 , "AS" , ")" , "." );
     opair = collect_until_keyword(tokens, p3, okws2);
     tx_t port = plant_list_get(opair ,  0 );
     p4 = _second(opair);
-    as_pair = consume(tokens, p4);
+    as_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
     p5 = _second(as_pair);
-    id_pair = consume(tokens, p5);
-    reqname = tok_lex(plant_list_get(id_pair ,  0 ));
+    id_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
+    reqname = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(id_pair ,  0 ));
     p6 = _second(id_pair);
     tx_t tmo = "";
-    tok_t = peek(tokens, p6);
-    lx_t = tok_lex(tok_t);
+    tok_t = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p6);
+    lx_t = plant_iLexer_tok_lex((tx_t)lexer, tok_t);
     if (strcmp(lx_t,"TIMEOUT") == 0) {
-        drop_t = consume(tokens, p6);
+        drop_t = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p6);
         p6 = _second(drop_t);
         tpair = collect_until_keyword(tokens, p6, okws2);
         tmo = plant_list_get(tpair ,  0 );
         p6 = _second(tpair);
     }
-    dot_pair = consume(tokens, p6);
+    dot_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p6);
     p7 = _second(dot_pair);
     return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "listen_stmt" , "port" , port , "resp" , reqname , "timeout" , tmo ) , p7 );
 }
 tx_t parse_enum_decl(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t name_pair = "";
@@ -5358,34 +5479,35 @@ tx_t parse_enum_decl(PlantArray* tokens, long pos) {
   tx_t tok2 = "";
   tx_t lx2 = "";
   tx_t com = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    name_pair = consume(tokens, p2);
-    name = tok_lex(plant_list_get(name_pair ,  0 ));
+    name_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+    name = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(name_pair ,  0 ));
     p3 = _second(name_pair);
-    lbr = consume(tokens, p3);
+    lbr = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
     p4 = _second(lbr);
     PlantArray* members = plant_list_make ( 0 );
     while (1) {
-        is_eof_flag = is_eof(tokens, p4);
+        is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, (tx_t)p4);
         if (is_eof_flag) {
             return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "enum_decl" , "name" , name , "members" , members ) , p4 );
         }
-        tok = peek(tokens, p4);
-        lx = tok_lex(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
         if (strcmp(lx,"}") == 0) {
-            rbr = consume(tokens, p4);
+            rbr = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p5 = _second(rbr);
             return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "enum_decl" , "name" , name , "members" , members ) , p5 );
         }
-        m_pair = consume(tokens, p4);
-        mname = tok_lex(plant_list_get(m_pair ,  0 ));
+        m_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
+        mname = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(m_pair ,  0 ));
         p5 = _second(m_pair);
         members = plant_list_add(members, mname);
-        tok2 = peek(tokens, p5);
-        lx2 = tok_lex(tok2);
+        tok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+        lx2 = plant_iLexer_tok_lex((tx_t)lexer, tok2);
         if (strcmp(lx2,",") == 0) {
-            com = consume(tokens, p5);
+            com = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p5 = _second(com);
         }
         p4 = p5;
@@ -5393,6 +5515,7 @@ tx_t parse_enum_decl(PlantArray* tokens, long pos) {
   return parse_enum_decl;
 }
 tx_t parse_struct_decl(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t name_pair = "";
@@ -5424,21 +5547,22 @@ tx_t parse_struct_decl(PlantArray* tokens, long pos) {
   tx_t tok2 = "";
   tx_t lx2 = "";
   tx_t com = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    name_pair = consume(tokens, p2);
-    sname = tok_lex(plant_list_get(name_pair ,  0 ));
+    name_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+    sname = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(name_pair ,  0 ));
     p3 = _second(name_pair);
     PlantArray* generics = plant_list_make ( 0 );
-    sg_tok = peek(tokens, p3);
-    sg_lx = tok_lex(sg_tok);
+    sg_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p3);
+    sg_lx = plant_iLexer_tok_lex((tx_t)lexer, sg_tok);
     if (strcmp(sg_lx,"[") == 0) {
-        sg_lb = consume(tokens, p3);
+        sg_lb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
         p3 = _second(sg_lb);
         sgv = collect_type_text(tokens, p3, "]", 0);
         sgtext = _first(sgv);
         p3 = _second(sgv);
-        sg_rb = consume(tokens, p3);
+        sg_rb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
         p3 = _second(sg_rb);
         sgparts = strings_SPLIT(sgtext, ",");
         long sgi = 0;
@@ -5452,35 +5576,35 @@ tx_t parse_struct_decl(PlantArray* tokens, long pos) {
             sgi = sgi+1;
         }
     }
-    lb = consume(tokens, p3);
+    lb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
     p4 = _second(lb);
     PlantArray* fields = plant_list_make ( 0 );
     while (1) {
-        is_eof_flag = is_eof(tokens, p4);
+        is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, (tx_t)p4);
         if (is_eof_flag) {
             return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "struct_decl" , "name" , sname , "generics" , generics , "fields" , fields ) , p4 );
         }
-        tok = peek(tokens, p4);
-        lx = tok_lex(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
         if (strcmp(lx,"}") == 0) {
-            rb = consume(tokens, p4);
+            rb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p5 = _second(rb);
             return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "struct_decl" , "name" , sname , "generics" , generics , "fields" , fields ) , p5 );
         }
-        fn_pair = consume(tokens, p4);
-        fname = tok_lex(plant_list_get(fn_pair ,  0 ));
+        fn_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
+        fname = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(fn_pair ,  0 ));
         p5 = _second(fn_pair);
-        col_pair = consume(tokens, p5);
+        col_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
         p6 = _second(col_pair);
         ftv = collect_type_text(tokens, p6, "}", 1);
         ftype = _first(ftv);
         p7 = _second(ftv);
         ftypet = trim(ftype);
         fields = plant_list_add(fields, plant_list_make ( 4 , "name" , fname , "type" , ftypet ));
-        tok2 = peek(tokens, p7);
-        lx2 = tok_lex(tok2);
+        tok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p7);
+        lx2 = plant_iLexer_tok_lex((tx_t)lexer, tok2);
         if (strcmp(lx2,",") == 0) {
-            com = consume(tokens, p7);
+            com = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p7);
             p7 = _second(com);
         }
         p4 = p7;
@@ -5488,6 +5612,7 @@ tx_t parse_struct_decl(PlantArray* tokens, long pos) {
   return parse_struct_decl;
 }
 tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t name_pair = "";
@@ -5578,10 +5703,11 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
   tx_t stmt_pair = "";
   tx_t sty = "";
   tx_t slv = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    name_pair = consume(tokens, p2);
-    aname = tok_lex(plant_list_get(name_pair ,  0 ));
+    name_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+    aname = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(name_pair ,  0 ));
     p3 = _second(name_pair);
     tx_t clv = "";
     tx_t prio = "1";
@@ -5589,15 +5715,15 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
     tx_t bracemode = "0";
     long closep = - 1;
     PlantArray* generics = plant_list_make ( 0 );
-    ga_tok = peek(tokens, p3);
-    ga_lx = tok_lex(ga_tok);
+    ga_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p3);
+    ga_lx = plant_iLexer_tok_lex((tx_t)lexer, ga_tok);
     if (strcmp(ga_lx,"[") == 0) {
-        ga_lb = consume(tokens, p3);
+        ga_lb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
         p3 = _second(ga_lb);
         gv = collect_type_text(tokens, p3, "]", 0);
         gtext = _first(gv);
         p3 = _second(gv);
-        ga_rb = consume(tokens, p3);
+        ga_rb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
         p3 = _second(ga_rb);
         gparts = strings_SPLIT(gtext, ",");
         long gi2 = 0;
@@ -5611,25 +5737,25 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
             gi2 = gi2+1;
         }
     }
-    lp = consume(tokens, p3);
+    lp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
     p4 = _second(lp);
     PlantArray* params = plant_list_make ( 0 );
     tx_t vararg = "0";
     while (1) {
-        is_eof_flag = is_eof(tokens, p4);
+        is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, (tx_t)p4);
         if (is_eof_flag) {
             return plant_list_make ( 2 , plant_list_make ( 16 , "type" , "action_decl" , "name" , aname , "generics" , generics , "params" , params , "body" , plant_list_make ( 0 ) , "prio" , prio , "ret" , "" , "mission_mode" , mission_mode ) , p4 );
         }
-        tok = peek(tokens, p4);
-        lx = tok_lex(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
         if (strcmp(lx,"..") == 0) {
-            tokv2 = peek(tokens, p4+1);
-            lxv2 = tok_lex(tokv2);
+            tokv2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4+1);
+            lxv2 = plant_iLexer_tok_lex((tx_t)lexer, tokv2);
             if (strcmp(lxv2,".") == 0) {
                 vararg = "1";
                 p4 = p4+2;
-                ctok2 = peek(tokens, p4);
-                clx2 = tok_lex(ctok2);
+                ctok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+                clx2 = plant_iLexer_tok_lex((tx_t)lexer, ctok2);
                 if (strcmp(clx2,")") == 0) {
                     p4 = p4+1;
                 }
@@ -5641,13 +5767,13 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
             }
         }
         if (strcmp(lx,".") == 0) {
-            tokv2 = peek(tokens, p4+1);
-            lxv2 = tok_lex(tokv2);
+            tokv2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4+1);
+            lxv2 = plant_iLexer_tok_lex((tx_t)lexer, tokv2);
             if (strcmp(lxv2,"..") == 0) {
                 vararg = "1";
                 p4 = p4+2;
-                ctok2 = peek(tokens, p4);
-                clx2 = tok_lex(ctok2);
+                ctok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+                clx2 = plant_iLexer_tok_lex((tx_t)lexer, ctok2);
                 if (strcmp(clx2,")") == 0) {
                     p4 = p4+1;
                 }
@@ -5658,13 +5784,13 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
                               break;
             }
             if (strcmp(lxv2,".") == 0) {
-                tokv3 = peek(tokens, p4+2);
-                lxv3 = tok_lex(tokv3);
+                tokv3 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4+2);
+                lxv3 = plant_iLexer_tok_lex((tx_t)lexer, tokv3);
                 if (strcmp(lxv3,".") == 0) {
                     vararg = "1";
                     p4 = p4+3;
-                    ctok2 = peek(tokens, p4);
-                    clx2 = tok_lex(ctok2);
+                    ctok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+                    clx2 = plant_iLexer_tok_lex((tx_t)lexer, ctok2);
                     if (strcmp(clx2,")") == 0) {
                         p4 = p4+1;
                     }
@@ -5677,25 +5803,25 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
             }
         }
         if (strcmp(lx,")") == 0) {
-            rp = consume(tokens, p4);
+            rp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p5 = _second(rp);
             long brk = 0;
                       break;
         }
-        pn_pair = consume(tokens, p4);
-        pn = tok_lex(plant_list_get(pn_pair ,  0 ));
+        pn_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
+        pn = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(pn_pair ,  0 ));
         p5 = _second(pn_pair);
-        tok2 = peek(tokens, p5);
-        lx2 = tok_lex(tok2);
+        tok2 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+        lx2 = plant_iLexer_tok_lex((tx_t)lexer, tok2);
         if (strcmp(lx2,"(") == 0) {
-            lp2 = consume(tokens, p5);
+            lp2 = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p6 = _second(lp2);
             ptv = collect_type_text(tokens, p6, ")", 1);
             pt = _first(ptv);
             p7 = _second(ptv);
             pt = strings_REPLACE(pt, " *", "*");
             pt = strings_REPLACE(pt, "* ", "*");
-            rp2 = consume(tokens, p7);
+            rp2 = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p7);
             p7 = _second(rp2);
             params = plant_list_add(params, plant_list_make ( 4 , "name" , pn , "type" , pt ));
             p5 = p7;
@@ -5703,28 +5829,28 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
         if (strcmp(lx2,"(") != 0) {
             params = plant_list_add(params, plant_list_make ( 4 , "name" , pn , "type" , "" ));
         }
-        tok3 = peek(tokens, p5);
-        lx3 = tok_lex(tok3);
+        tok3 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+        lx3 = plant_iLexer_tok_lex((tx_t)lexer, tok3);
         if (strcmp(lx3,",") == 0) {
-            com = consume(tokens, p5);
+            com = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p5 = _second(com);
         }
         p4 = p5;
     }
     tx_t ret = "";
-    arrow_tok = peek(tokens, p5);
-    arrow_lx = tok_lex(arrow_tok);
+    arrow_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+    arrow_lx = plant_iLexer_tok_lex((tx_t)lexer, arrow_tok);
     if (strcmp(arrow_lx,"->") == 0) {
-        arrow_pair = consume(tokens, p5);
+        arrow_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
         p5 = _second(arrow_pair);
-        skip_tok = peek(tokens, p5);
-        skip_ty = tok_type(skip_tok);
+        skip_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+        skip_ty = plant_iLexer_tok_type((tx_t)lexer, skip_tok);
         if (strcmp(skip_ty,"MINUS") == 0) {
-            skip_pair = consume(tokens, p5);
+            skip_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p5 = _second(skip_pair);
         }
-        ret_pair = consume(tokens, p5);
-        ret_lx = tok_lex(plant_list_get(ret_pair ,  0 ));
+        ret_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
+        ret_lx = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(ret_pair ,  0 ));
         p5 = _second(ret_pair);
         if (strcmp(ret_lx,"Result") == 0) {
             ret = "Result";
@@ -5742,27 +5868,27 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
             ret = _cat("ENUM ", rtt);
         }
         if (strcmp(ret_lx,"void") == 0) {
-            vst = peek(tokens, p5);
-            vsl = tok_lex(vst);
+            vst = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+            vsl = plant_iLexer_tok_lex((tx_t)lexer, vst);
             if (strcmp(vsl,"*") == 0) {
-                vsp = consume(tokens, p5);
+                vsp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
                 p5 = _second(vsp);
                 ret = "void*";
             }
         }
         if (strcmp(ret_lx,"Result") == 0) {
-            lt_tok = peek(tokens, p5);
-            lt_lx = tok_lex(lt_tok);
+            lt_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+            lt_lx = plant_iLexer_tok_lex((tx_t)lexer, lt_tok);
             if (strcmp(lt_lx,"<") == 0) {
-                lt_pair = consume(tokens, p5);
+                lt_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
                 p5 = _second(lt_pair);
-                rt_pair = consume(tokens, p5);
+                rt_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
                 p5 = _second(rt_pair);
-                rc_pair = consume(tokens, p5);
+                rc_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
                 p5 = _second(rc_pair);
-                re_pair = consume(tokens, p5);
+                re_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
                 p5 = _second(re_pair);
-                gt_pair = consume(tokens, p5);
+                gt_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
                 p5 = _second(gt_pair);
             }
         }
@@ -5770,13 +5896,13 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
             ret = ret_lx;
         }
     }
-    pr_tok = peek(tokens, p5);
-    pr_lx = tok_lex(pr_tok);
+    pr_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+    pr_lx = plant_iLexer_tok_lex((tx_t)lexer, pr_tok);
     if (strcmp(pr_lx,"PRIORITY") == 0) {
-        pr_pair = consume(tokens, p5);
+        pr_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
         p5 = _second(pr_pair);
-        lv_pair = consume(tokens, p5);
-        lv_lx = tok_lex(plant_list_get(lv_pair ,  0 ));
+        lv_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
+        lv_lx = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(lv_pair ,  0 ));
         p5 = _second(lv_pair);
         if (strcmp(lv_lx,"HIGH") == 0) {
             prio = "0";
@@ -5788,29 +5914,29 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
             prio = "2";
         }
     }
-    wm_tok = peek(tokens, p5);
-    wm_lx = tok_lex(wm_tok);
+    wm_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+    wm_lx = plant_iLexer_tok_lex((tx_t)lexer, wm_tok);
     if (strcmp(wm_lx,"WITH") == 0) {
-        wm_pair = consume(tokens, p5);
+        wm_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
         p5 = _second(wm_pair);
-        ms_pair = consume(tokens, p5);
-        ms_lx = tok_lex(plant_list_get(ms_pair ,  0 ));
+        ms_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
+        ms_lx = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(ms_pair ,  0 ));
         p5 = _second(ms_pair);
         if (strcmp(ms_lx,"MISSION") == 0) {
-            md_pair = consume(tokens, p5);
-            md_lx = tok_lex(plant_list_get(md_pair ,  0 ));
+            md_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
+            md_lx = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(md_pair ,  0 ));
             p5 = _second(md_pair);
             mission_mode = md_lx;
         }
     }
-    after_tok = peek(tokens, p5);
-    after_lx = tok_lex(after_tok);
+    after_tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+    after_lx = plant_iLexer_tok_lex((tx_t)lexer, after_tok);
     if (strcmp(after_lx,",") == 0) {
-        com_pair = consume(tokens, p5);
+        com_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
         p5 = _second(com_pair);
     }
     if (strcmp(after_lx,".") == 0) {
-        dot_pair = consume(tokens, p5);
+        dot_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
         p5 = _second(dot_pair);
         if (strcmp(ret_lx,"external") == 0 || strcmp(ret_lx,"Result") == 0 || strcmp(ret_lx,"STRUCT") == 0 || strcmp(ret_lx,"ENUM") == 0 || strcmp(ret,"void*") == 0) {
             return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "external_decl" , "name" , aname , "params" , params , "ret" , ret , "varargs" , vararg ) , p5 );
@@ -5818,14 +5944,14 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
         return plant_list_make ( 2 , plant_list_make ( 16 , "type" , "action_decl" , "name" , aname , "generics" , generics , "params" , params , "body" , plant_list_make ( 0 ) , "prio" , prio , "ret" , ret , "mission_mode" , mission_mode ) , p5 );
     }
     if (strcmp(after_lx,"{") == 0) {
-        lb2_pair = consume(tokens, p5);
+        lb2_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
         p5 = _second(lb2_pair);
         bracemode = "1";
         long bd2 = 1;
         long sp2 = p5;
         while (sp2 < plant_array_length(tokens)) {
-            tk2 = peek(tokens, sp2);
-            ty2 = tok_type(tk2);
+            tk2 = plant_iLexer_peek_at((tx_t)lexer, tokens, sp2);
+            ty2 = plant_iLexer_tok_type((tx_t)lexer, tk2);
             if (strcmp(ty2,"LBRACE") == 0) {
                 bd2 = bd2+1;
             }
@@ -5846,26 +5972,26 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
     PlantArray* body = plant_list_make ( 0 );
     while (1) {
         if (strcmp(bracemode,"1") == 0) {
-            tk9 = peek(tokens, p5);
-            ty9 = tok_type(tk9);
+            tk9 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+            ty9 = plant_iLexer_tok_type((tx_t)lexer, tk9);
             if (strcmp(ty9,"RBRACE") == 0) {
-                rb9_pair = consume(tokens, p5);
+                rb9_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
                 p5 = _second(rb9_pair);
                 return plant_list_make ( 2 , plant_list_make ( 16 , "type" , "action_decl" , "name" , aname , "generics" , generics , "params" , params , "body" , body , "prio" , prio , "ret" , ret , "mission_mode" , mission_mode ) , p5 );
             }
         }
-        is_eof_flag = is_eof(tokens, p5);
+        is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, (tx_t)p5);
         if (is_eof_flag) {
             return plant_list_make ( 2 , plant_list_make ( 16 , "type" , "action_decl" , "name" , aname , "generics" , generics , "params" , params , "body" , body , "prio" , prio , "ret" , ret , "mission_mode" , mission_mode ) , p5 );
         }
-        tok4 = peek(tokens, p5);
-        lx4 = tok_lex(tok4);
+        tok4 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+        lx4 = plant_iLexer_tok_lex((tx_t)lexer, tok4);
         if (strcmp(lx4,"/") == 0) {
-            slash = consume(tokens, p5);
+            slash = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
             p6 = _second(slash);
-            end = consume(tokens, p6);
+            end = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p6);
             p7 = _second(end);
-            dot = consume(tokens, p7);
+            dot = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p7);
             p8 = _second(dot);
             return plant_list_make ( 2 , plant_list_make ( 16 , "type" , "action_decl" , "name" , aname , "generics" , generics , "params" , params , "body" , body , "prio" , prio , "ret" , ret , "mission_mode" , mission_mode ) , p8 );
         }
@@ -5887,6 +6013,7 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
   return parse_action_decl;
 }
 tx_t parse_species_decl(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t kw_pair = "";
   tx_t p = "";
   tx_t npair = "";
@@ -5943,27 +6070,28 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
   tx_t btv = "";
   tx_t btx = "";
   tx_t brb = "";
+    lexer = get_lexer();
     PlantArray* srtab = plant_list_make ( 0 );
-    kw_pair = consume(tokens, pos);
+    kw_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p = _second(kw_pair);
-    npair = consume(tokens, p);
-    nty = tok_type(plant_list_get(npair ,  0 ));
+    npair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
+    nty = plant_iLexer_tok_type((tx_t)lexer, plant_list_get(npair ,  0 ));
     if (strcmp(nty,"IDENT") != 0) {
         tx_t serr = "SPECIES requires a name";
         return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , serr ) , p );
     }
-    sname = tok_lex(plant_list_get(npair ,  0 ));
+    sname = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(npair ,  0 ));
     p = _second(npair);
     PlantArray* stparams = plant_list_make ( 0 );
-    sgtk = peek(tokens, p);
-    sglx = tok_lex(sgtk);
+    sgtk = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p);
+    sglx = plant_iLexer_tok_lex((tx_t)lexer, sgtk);
     if (strcmp(sglx,"[") == 0) {
-        sglb = consume(tokens, p);
+        sglb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
         p = _second(sglb);
         sgv = collect_type_text(tokens, p, "]", 0);
         p = _second(sgv);
         sgt = _first(sgv);
-        sgrb = consume(tokens, p);
+        sgrb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
         p = _second(sgrb);
         sgparts = strings_SPLIT(sgt, ",");
         long sgi = 0;
@@ -5977,53 +6105,53 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
         }
     }
     PlantArray* implifs = plant_list_make ( 0 );
-    impl_tk = peek(tokens, p);
-    impl_lx = tok_lex(impl_tk);
+    impl_tk = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p);
+    impl_lx = plant_iLexer_tok_lex((tx_t)lexer, impl_tk);
     if (strcmp(impl_lx,"IMPLEMENTS") == 0) {
-        impl_c1 = consume(tokens, p);
+        impl_c1 = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
         p = _second(impl_c1);
-        impl_n1 = consume(tokens, p);
+        impl_n1 = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
         p = _second(impl_n1);
-        cm1t = peek(tokens, p);
-        cm1l = tok_lex(cm1t);
+        cm1t = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p);
+        cm1l = plant_iLexer_tok_lex((tx_t)lexer, cm1t);
         if (strcmp(cm1l,",") == 0) {
-            cc9a = consume(tokens, p);
+            cc9a = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
             p = _second(cc9a);
-            in9a = consume(tokens, p);
+            in9a = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
             p = _second(in9a);
             implifs = plant_list_add(implifs, in9a);
-            cm2t = peek(tokens, p);
-            cm2l = tok_lex(cm2t);
+            cm2t = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p);
+            cm2l = plant_iLexer_tok_lex((tx_t)lexer, cm2t);
             if (strcmp(cm2l,",") == 0) {
-                cc9b = consume(tokens, p);
+                cc9b = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
                 p = _second(cc9b);
-                in9b = consume(tokens, p);
+                in9b = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
                 p = _second(in9b);
                 implifs = plant_list_add(implifs, in9b);
             }
         }
     }
     tx_t parent = "";
-    ftk = peek(tokens, p);
-    flx9 = tok_lex(ftk);
+    ftk = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p);
+    flx9 = plant_iLexer_tok_lex((tx_t)lexer, ftk);
     if (strcmp(flx9,"FROM") == 0) {
-        fpair = consume(tokens, p);
+        fpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
         p = _second(fpair);
-        ppair = consume(tokens, p);
-        pnm = tok_lex(plant_list_get(ppair ,  0 ));
+        ppair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
+        pnm = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(ppair ,  0 ));
         parent = pnm;
         p = _second(ppair);
     }
-    lb = consume(tokens, p);
+    lb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
     p = _second(lb);
     PlantArray* fields = plant_list_make ( 0 );
     PlantArray* methods = plant_list_make ( 0 );
     while (1) {
-        tk = peek(tokens, p);
-        ty = tok_type(tk);
-        slx = tok_lex(tk);
+        tk = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p);
+        ty = plant_iLexer_tok_type((tx_t)lexer, tk);
+        slx = plant_iLexer_tok_lex((tx_t)lexer, tk);
         if (strcmp(ty,"RBRACE") == 0) {
-            rb = consume(tokens, p);
+            rb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
             p = _second(rb);
                       break;
         }
@@ -6047,31 +6175,31 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
                 nn2 = _map_replace(onm, "params", np2);
                 methods = plant_list_add(methods, nn2);
             }
-            stk9 = peek(tokens, p);
-            sty9 = tok_type(stk9);
+            stk9 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p);
+            sty9 = plant_iLexer_tok_type((tx_t)lexer, stk9);
             if (strcmp(sty9,"RBRACE") == 0) {
-                rb9 = consume(tokens, p);
+                rb9 = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
                 p = _second(rb9);
                               break;
             }
                       continue;
         }
-        fpair = consume(tokens, p);
-        fname = tok_lex(plant_list_get(fpair ,  0 ));
+        fpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
+        fname = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(fpair ,  0 ));
         p = _second(fpair);
-        cpa9 = consume(tokens, p);
+        cpa9 = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
         p = _second(cpa9);
-        ttok = consume(tokens, p);
-        ftt = tok_lex(plant_list_get(ttok ,  0 ));
+        ttok = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
+        ftt = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(ttok ,  0 ));
         p = _second(ttok);
-        btk = peek(tokens, p);
-        blx = tok_lex(btk);
+        btk = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p);
+        blx = plant_iLexer_tok_lex((tx_t)lexer, btk);
         if (strcmp(blx,"[") == 0) {
             btv = collect_type_text(tokens, p, "]", 0);
             btx = _first(btv);
             p = _second(btv);
             ftt = _cat3(ftt, btx, "]");
-            brb = consume(tokens, p);
+            brb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
             p = _second(brb);
         }
         fields = plant_list_add(fields, plant_list_make ( 4 , "name" , fname , "type" , ftt ));
@@ -6079,6 +6207,7 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
     return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "species_decl" , "name" , sname , "type_params" , stparams , "parent" , parent , "fields" , fields , "methods" , methods ) , p );
 }
 tx_t parse_type_decl(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t kw_pair = "";
   tx_t p = "";
   tx_t apair = "";
@@ -6090,32 +6219,34 @@ tx_t parse_type_decl(PlantArray* tokens, long pos) {
   tx_t tv = "";
   tx_t target = "";
   tx_t dpair = "";
-    kw_pair = consume(tokens, pos);
+    lexer = get_lexer();
+    kw_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p = _second(kw_pair);
-    apair = consume(tokens, p);
-    aty = tok_type(plant_list_get(apair ,  0 ));
+    apair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
+    aty = plant_iLexer_tok_type((tx_t)lexer, plant_list_get(apair ,  0 ));
     if (strcmp(aty,"IDENT") != 0) {
         tx_t terr = "TYPE requires an alias name";
         return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , terr ) , p );
     }
-    alias = tok_lex(plant_list_get(apair ,  0 ));
+    alias = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(apair ,  0 ));
     p = _second(apair);
-    eqtok = peek(tokens, p);
-    eqlx = tok_lex(eqtok);
+    eqtok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p);
+    eqlx = plant_iLexer_tok_lex((tx_t)lexer, eqtok);
     if (strcmp(eqlx,"=") != 0) {
         tx_t terr2 = "TYPE requires = target";
         return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , terr2 ) , p );
     }
-    eqpair = consume(tokens, p);
+    eqpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
     p = _second(eqpair);
     tv = collect_type_text(tokens, p, ".", 0);
     target = _first(tv);
     p = _second(tv);
-    dpair = consume(tokens, p);
+    dpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
     p = _second(dpair);
     return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "type_decl" , "alias" , alias , "target" , target ) , p );
 }
 tx_t parse_interface_decl(PlantArray* tokens, long pos) {
+  tx_t lexer = "";
   tx_t kw_pair = "";
   tx_t p = "";
   tx_t npair = "";
@@ -6146,21 +6277,22 @@ tx_t parse_interface_decl(PlantArray* tokens, long pos) {
   tx_t dtok = "";
   tx_t dlx = "";
   tx_t dcon = "";
-    kw_pair = consume(tokens, pos);
+    lexer = get_lexer();
+    kw_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p = _second(kw_pair);
-    npair = consume(tokens, p);
-    iname = tok_lex(plant_list_get(npair ,  0 ));
+    npair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
+    iname = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(npair ,  0 ));
     p = _second(npair);
     PlantArray* itparams = plant_list_make ( 0 );
-    igtk = peek(tokens, p);
-    iglx = tok_lex(igtk);
+    igtk = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p);
+    iglx = plant_iLexer_tok_lex((tx_t)lexer, igtk);
     if (strcmp(iglx,"[") == 0) {
-        iglb = consume(tokens, p);
+        iglb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
         p = _second(iglb);
         igv = collect_type_text(tokens, p, "]", 0);
         p = _second(igv);
         igt = _first(igv);
-        igrb = consume(tokens, p);
+        igrb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
         p = _second(igrb);
         igparts = strings_SPLIT(igt, ",");
         long igi = 0;
@@ -6174,19 +6306,19 @@ tx_t parse_interface_decl(PlantArray* tokens, long pos) {
         }
     }
     PlantArray* iparents = plant_list_make ( 0 );
-    iftk = peek(tokens, p);
-    iflx = tok_lex(iftk);
+    iftk = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p);
+    iflx = plant_iLexer_tok_lex((tx_t)lexer, iftk);
     if (strcmp(iflx,"FROM") == 0) {
-        ifp = consume(tokens, p);
+        ifp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
         p = _second(ifp);
         while (1) {
-            pip = consume(tokens, p);
-            pin = tok_lex(plant_list_get(pip ,  0 ));
+            pip = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
+            pin = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(pip ,  0 ));
             iparents = plant_list_add(iparents, pin);
-            pctk = peek(tokens, p);
-            pclx = tok_lex(pctk);
+            pctk = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p);
+            pclx = plant_iLexer_tok_lex((tx_t)lexer, pctk);
             if (strcmp(pclx,",") == 0) {
-                pcc = consume(tokens, p);
+                pcc = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
                 p = _second(pcc);
             }
             if (strcmp(pclx,",") != 0) {
@@ -6194,25 +6326,25 @@ tx_t parse_interface_decl(PlantArray* tokens, long pos) {
             }
         }
     }
-    lb = consume(tokens, p);
+    lb = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
     p = _second(lb);
     PlantArray* imethods = plant_list_make ( 0 );
     while (1) {
-        tk9 = peek(tokens, p);
-        ty9 = tok_type(tk9);
+        tk9 = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p);
+        ty9 = plant_iLexer_tok_type((tx_t)lexer, tk9);
         if (strcmp(ty9,"RBRACE") == 0) {
-            rb9 = consume(tokens, p);
+            rb9 = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
             p = _second(rb9);
                       break;
         }
-        mpair = consume(tokens, p);
-        mnine = tok_lex(plant_list_get(mpair ,  0 ));
+        mpair = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
+        mnine = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(mpair ,  0 ));
         p = _second(mpair);
         imethods = plant_list_add(imethods, mnine);
-        dtok = peek(tokens, p);
-        dlx = tok_lex(dtok);
+        dtok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p);
+        dlx = plant_iLexer_tok_lex((tx_t)lexer, dtok);
         if (strcmp(dlx,".") == 0) {
-            dcon = consume(tokens, p);
+            dcon = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p);
             p = _second(dcon);
                       break;
         }
@@ -6220,6 +6352,7 @@ tx_t parse_interface_decl(PlantArray* tokens, long pos) {
     return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "interface_decl" , "name" , iname , "type_params" , itparams , "parents" , iparents , "methods" , imethods ) , p );
 }
 tx_t parse_declaration(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab, PlantArray* rtab, long bstart) {
+  tx_t lexer = "";
   tx_t tok = "";
   tx_t lx = "";
   tx_t r = "";
@@ -6240,8 +6373,9 @@ tx_t parse_declaration(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab,
   tx_t np = "";
   tx_t nt = "";
   tx_t nd2 = "";
-    tok = peek(tokens, pos);
-    lx = tok_lex(tok);
+    lexer = get_lexer();
+    tok = plant_iLexer_peek_at((tx_t)lexer, tokens, pos);
+    lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
     if (strcmp(lx,"ENUM") == 0) {
         r = parse_enum_decl(tokens, pos);
         return r;
@@ -6263,21 +6397,21 @@ tx_t parse_declaration(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab,
         return r;
     }
     if (strcmp(lx,"IMPORT") == 0) {
-        im_pair = consume(tokens, pos);
+        im_pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
         im_p2 = _second(im_pair);
-        stok = peek(tokens, im_p2);
-        sty2 = tok_type(stok);
+        stok = plant_iLexer_peek_at((tx_t)lexer, tokens, im_p2);
+        sty2 = plant_iLexer_tok_type((tx_t)lexer, stok);
         if (strcmp(sty2,"STRING") != 0) {
             tx_t ierr = "IMPORT requires a quoted path string";
             return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , ierr ) , im_p2 );
         }
-        spair = consume(tokens, im_p2);
-        ipath = tok_lex(spair);
+        spair = plant_iLexer_consume_at((tx_t)lexer, tokens, im_p2);
+        ipath = plant_iLexer_tok_lex((tx_t)lexer, spair);
         im_p3 = _second(spair);
-        dtok = peek(tokens, im_p3);
-        dlx = tok_lex(dtok);
+        dtok = plant_iLexer_peek_at((tx_t)lexer, tokens, im_p3);
+        dlx = plant_iLexer_tok_lex((tx_t)lexer, dtok);
         if (strcmp(dlx,".") == 0) {
-            dpair = consume(tokens, im_p3);
+            dpair = plant_iLexer_consume_at((tx_t)lexer, tokens, im_p3);
             im_p4 = _second(dpair);
             return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "import_stmt" , "path" , ipath ) , im_p4 );
         }
@@ -6288,8 +6422,8 @@ tx_t parse_declaration(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab,
         return r;
     }
     if (strcmp(lx,"ASYNC") == 0) {
-        pair = peek(tokens, pos+1);
-        nx = tok_lex(pair);
+        pair = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)pos+1);
+        nx = plant_iLexer_tok_lex((tx_t)lexer, pair);
         if (strcmp(nx,"IN") == 0) {
             r = parse_async_in_stmt(tokens, pos);
             return r;
@@ -6312,7 +6446,9 @@ tx_t parse_declaration(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab,
     return r;
 }
 tx_t map_add(PlantArray* m, tx_t k, tx_t v) {
+  tx_t lexer = "";
   tx_t me3 = "";
+    lexer = get_lexer();
     PlantArray* out = plant_list_make ( 0 );
     long mi3 = 0;
     while (mi3 < plant_array_length(m)) {
@@ -6325,6 +6461,8 @@ tx_t map_add(PlantArray* m, tx_t k, tx_t v) {
     return out;
 }
 tx_t tab_has(PlantArray* tab, tx_t key) {
+  tx_t lexer = "";
+    lexer = get_lexer();
     long ti4 = 0;
     tx_t te4 = "";
     while (ti4 < plant_array_length(tab)) {
@@ -6337,15 +6475,17 @@ tx_t tab_has(PlantArray* tab, tx_t key) {
     return "0";
 }
 tx_t scan_ident_used(PlantArray* tokens, long start, long end, tx_t name) {
+  tx_t lexer = "";
   tx_t slx3 = "";
+    lexer = get_lexer();
     long si3 = start;
     tx_t stk3 = "";
     tx_t stt3 = "";
     while (si3 < end) {
-        stk3 = peek(tokens, si3);
-        stt3 = tok_type(stk3);
+        stk3 = plant_iLexer_peek_at((tx_t)lexer, tokens, si3);
+        stt3 = plant_iLexer_tok_type((tx_t)lexer, stk3);
         if (strcmp(stt3,"IDENT") == 0) {
-            slx3 = tok_lex(stk3);
+            slx3 = plant_iLexer_tok_lex((tx_t)lexer, stk3);
             if (strcmp(str_eq ( slx3 , name ),"1") == 0) {
                 return "1";
             }
@@ -6355,6 +6495,7 @@ tx_t scan_ident_used(PlantArray* tokens, long start, long end, tx_t name) {
     return "0";
 }
 tx_t parse_const_like(PlantArray* tokens, long pos, PlantArray* ctab, PlantArray* rtab, long bstart, tx_t elevate, tx_t ntype) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t nt = "";
@@ -6377,39 +6518,40 @@ tx_t parse_const_like(PlantArray* tokens, long pos, PlantArray* ctab, PlantArray
   tx_t dp = "";
   tx_t p6 = "";
   tx_t nd2 = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
-    nt = peek(tokens, p2);
-    nty = tok_type(nt);
+    nt = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+    nty = plant_iLexer_tok_type((tx_t)lexer, nt);
     if (strcmp(nty,"IDENT") != 0) {
         return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "CONST/ROOT requires an identifier name" ) , p2 );
     }
-    npr = consume(tokens, p2);
-    cname = tok_lex(plant_list_get(npr ,  0 ));
+    npr = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
+    cname = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(npr ,  0 ));
     p3 = _second(npr);
-    ttok = peek(tokens, p3);
-    tlx = tok_lex(ttok);
+    ttok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p3);
+    tlx = plant_iLexer_tok_lex((tx_t)lexer, ttok);
     if (strcmp(tlx,"TO") != 0) {
         return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "CONST/ROOT requires TO after the constant name" ) , p3 );
     }
-    tp = consume(tokens, p3);
+    tp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
     p4 = _second(tp);
-    vt = peek(tokens, p4);
-    vty = tok_type(vt);
+    vt = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p4);
+    vty = plant_iLexer_tok_type((tx_t)lexer, vt);
     if (strcmp(vty,"STRING") != 0) {
         return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "CONST/ROOT value must be a quoted string literal" ) , p4 );
     }
-    vp = consume(tokens, p4);
-    vraw = tok_lex(plant_list_get(vp ,  0 ));
+    vp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
+    vraw = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(vp ,  0 ));
     p5 = _second(vp);
     esc = escape_string(vraw);
     tx_t cval = _cat3("\"", esc, "\"");
-    dt = peek(tokens, p5);
-    dlx = tok_lex(dt);
+    dt = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p5);
+    dlx = plant_iLexer_tok_lex((tx_t)lexer, dt);
     if (strcmp(dlx,".") != 0) {
         return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "CONST/ROOT expects '.' after the value" ) , p5 );
     }
-    dp = consume(tokens, p5);
+    dp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p5);
     p6 = _second(dp);
     if (strcmp(elevate,"1") == 0) {
         if (strcmp(tab_has ( rtab , cname ),"1") == 0) {
@@ -6437,6 +6579,7 @@ tx_t parse_const_like(PlantArray* tokens, long pos, PlantArray* ctab, PlantArray
     return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "const_stmt" , "name" , cname , "value" , cval ) , p6 );
 }
 tx_t parse_root_scope_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab) {
+  tx_t lexer = "";
   tx_t pair = "";
   tx_t p2 = "";
   tx_t is_eof_flag = "";
@@ -6451,28 +6594,29 @@ tx_t parse_root_scope_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* r
   tx_t p5 = "";
   tx_t stmt_pair = "";
   tx_t sty = "";
-    pair = consume(tokens, pos);
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at((tx_t)lexer, tokens, pos);
     p2 = _second(pair);
     PlantArray* ctab5 = plant_list_make ( 0 );
     PlantArray* body5 = plant_list_make ( 0 );
     long bstart5 = p2;
     while (1) {
-        is_eof_flag = is_eof(tokens, p2);
+        is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, (tx_t)p2);
         if (is_eof_flag) {
             return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "root_scope" , "body" , body5 ) , p2 );
         }
-        tok = peek(tokens, p2);
-        lx = tok_lex(tok);
+        tok = plant_iLexer_peek_at((tx_t)lexer, tokens, (tx_t)p2);
+        lx = plant_iLexer_tok_lex((tx_t)lexer, tok);
         if (strcmp(lx,"/") == 0) {
-            slash = consume(tokens, p2);
+            slash = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p2);
             p3 = _second(slash);
-            kp = consume(tokens, p3);
-            klx = tok_lex(plant_list_get(kp ,  0 ));
+            kp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p3);
+            klx = plant_iLexer_tok_lex((tx_t)lexer, plant_list_get(kp ,  0 ));
             p4 = _second(kp);
             if (strcmp(klx,"ROOT_SCOPE") != 0) {
                 return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "msg" , "expected /ROOT_SCOPE. to close ROOT_SCOPE block" ) , p4 );
             }
-            dp = consume(tokens, p4);
+            dp = plant_iLexer_consume_at((tx_t)lexer, tokens, (tx_t)p4);
             p5 = _second(dp);
             return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "root_scope" , "body" , body5 ) , p5 );
         }
@@ -6490,6 +6634,7 @@ tx_t parse_root_scope_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* r
   return parse_root_scope_stmt;
 }
 tx_t parse_program(PlantArray* tokens) {
+  tx_t lexer = "";
   tx_t is_eof_flag = "";
   tx_t d_pair = "";
   tx_t pos2 = "";
@@ -6500,6 +6645,7 @@ tx_t parse_program(PlantArray* tokens) {
   tx_t is_sp = "";
   tx_t ml = "";
   tx_t mn9 = "";
+    lexer = get_lexer();
     long pos = 0;
     tx_t clv = "";
     PlantArray* rtab = plant_list_make ( 0 );
@@ -6507,7 +6653,7 @@ tx_t parse_program(PlantArray* tokens) {
     long bstart = 0;
     PlantArray* nodes = plant_list_make ( 0 );
     while (1) {
-        is_eof_flag = is_eof(tokens, pos);
+        is_eof_flag = plant_iLexer_is_eof_at((tx_t)lexer, tokens, pos);
         if (is_eof_flag) {
             return plant_list_make ( 4 , "type" , "program" , "body" , nodes );
         }
@@ -14948,7 +15094,7 @@ int main(int argc, char **argv) {
       return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-      plant_print("Chloroplast 0.49.60b (pure native)");
+      plant_print("Chloroplast 0.49.60c (pure native)");
       return 0;
   }
   source_path = get_cli_arg(0);

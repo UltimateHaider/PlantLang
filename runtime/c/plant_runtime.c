@@ -1,5 +1,7 @@
 #include "plant_runtime.h"
 #include "plant_compat.h"
+#include "plant_lexer.h"
+#include "plant_codegen.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -8584,4 +8586,37 @@ IReport* get_report(void) {
 
 void set_report(IReport* rep) {
     _global_report = rep;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.49.60c — Front-end DI Accessors
+   Provide get/set functions for global ILexer and ICodegen
+   instances used by the parser and codegen layers.
+   ═══════════════════════════════════════════════════════════════ */
+
+static ILexer*   _global_lexer   = NULL;
+static ICodegen* _global_codegen  = NULL;
+
+ILexer* get_lexer(void) {
+    if (!_global_lexer) {
+        extern ILexer* PlantLexer_create(void*) __attribute__((weak));
+        if (PlantLexer_create) _global_lexer = PlantLexer_create(NULL);
+    }
+    return _global_lexer;
+}
+
+void set_lexer(ILexer* lex) {
+    _global_lexer = lex;
+}
+
+ICodegen* get_codegen(void) {
+    if (!_global_codegen) {
+        extern ICodegen* PlantCodegen_create(void*) __attribute__((weak));
+        if (PlantCodegen_create) _global_codegen = PlantCodegen_create(NULL);
+    }
+    return _global_codegen;
+}
+
+void set_codegen(ICodegen* cg) {
+    _global_codegen = cg;
 }

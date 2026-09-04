@@ -9,6 +9,10 @@
 /* Forward declaration for IReport (defined in plant_report.h) */
 typedef struct IReport IReport;
 
+/* Forward declarations for ILexer/ICodegen (defined in plant_lexer.h/plant_codegen.h) */
+typedef struct ILexer  ILexer;
+typedef struct ICodegen ICodegen;
+
 void plnt_print_int(int64_t val);
 void plnt_print_decimal(double val);
 void plnt_print_bool(int8_t val);
@@ -389,5 +393,11 @@ IRuntime* get_runtime(void);
 void      set_runtime(IRuntime* rt);
 IReport*  get_report(void);
 void      set_report(IReport* rep);
+
+/* ── v0.49.60c: Front-end DI Accessors ── */
+ILexer*   get_lexer(void);
+void      set_lexer(ILexer* lex);
+ICodegen* get_codegen(void);
+void      set_codegen(ICodegen* cg);
 
 #endif

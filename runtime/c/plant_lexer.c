@@ -78,6 +78,23 @@ static int _ilexer_is_eof(void* ctx) {
     return is_eof(lc->tokens, lc->pos) ? 1 : 0;
 }
 
+/* v0.49.60c: random-access vtable implementations (explicit tokens+pos) */
+
+static void* _ilexer_peek_at(void* ctx, void* tokens, long pos) {
+    (void)ctx;
+    return peek((PlantArray*)tokens, pos);
+}
+
+static void* _ilexer_consume_at(void* ctx, void* tokens, long pos) {
+    (void)ctx;
+    return consume((PlantArray*)tokens, pos);
+}
+
+static int _ilexer_is_eof_at(void* ctx, void* tokens, long pos) {
+    (void)ctx;
+    return is_eof((PlantArray*)tokens, pos) ? 1 : 0;
+}
+
 /* ── Constructor / Destructor ── */
 
 ILexer* PlantLexer_create(void* context) {
@@ -90,13 +107,16 @@ ILexer* PlantLexer_create(void* context) {
     lc->tokens = NULL;
     lc->pos = 0;
 
-    lex->context   = context ? context : lc;
-    lex->tokenize  = _ilexer_tokenize;
-    lex->peek      = _ilexer_peek;
-    lex->consume   = _ilexer_consume;
-    lex->tok_type  = _ilexer_tok_type;
-    lex->tok_lex   = _ilexer_tok_lex;
-    lex->is_eof    = _ilexer_is_eof;
+    lex->context    = context ? context : lc;
+    lex->tokenize   = _ilexer_tokenize;
+    lex->peek       = _ilexer_peek;
+    lex->consume    = _ilexer_consume;
+    lex->tok_type   = _ilexer_tok_type;
+    lex->tok_lex    = _ilexer_tok_lex;
+    lex->is_eof     = _ilexer_is_eof;
+    lex->peek_at    = _ilexer_peek_at;
+    lex->consume_at = _ilexer_consume_at;
+    lex->is_eof_at  = _ilexer_is_eof_at;
 
     /* If caller provided no context, use our internal ctx */
     if (!context) lex->context = lc;
@@ -144,5 +164,22 @@ const char* plant_iLexer_tok_lex(ILexer* lex, void* token) {
 
 int plant_iLexer_is_eof(ILexer* lex) {
     if (lex && lex->is_eof) return lex->is_eof(lex->context);
+    return 1;
+}
+
+/* v0.49.60c: random-access convenience helpers */
+
+void* plant_iLexer_peek_at(ILexer* lex, void* tokens, long pos) {
+    if (lex && lex->peek_at) return lex->peek_at(lex->context, tokens, pos);
+    return NULL;
+}
+
+void* plant_iLexer_consume_at(ILexer* lex, void* tokens, long pos) {
+    if (lex && lex->consume_at) return lex->consume_at(lex->context, tokens, pos);
+    return NULL;
+}
+
+int plant_iLexer_is_eof_at(ILexer* lex, void* tokens, long pos) {
+    if (lex && lex->is_eof_at) return lex->is_eof_at(lex->context, tokens, pos);
     return 1;
 }
