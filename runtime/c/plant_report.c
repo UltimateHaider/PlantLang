@@ -271,3 +271,33 @@ void plant_iReport_end(IReport* rp) {
 void plant_iReport_add_result(IReport* rp, const char* name, int passed, double time) {
     if (rp && rp->add_result) rp->add_result(rp->context, name, passed, time);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.49.60a — IReport Factory Binding (DIP Compliance)
+   PlantReport_create() binds the plant_iReport_* helpers directly
+   to the IReport vtable, providing a clean factory pattern that
+   decouples callers from the concrete PlantReport implementation.
+   ═══════════════════════════════════════════════════════════════ */
+
+static IReport* _default_report = NULL;
+
+IReport* PlantReport_create(void* context) {
+    IReport* rep = (IReport*)malloc(sizeof(IReport));
+    if (!rep) return NULL;
+    rep->context    = context;
+    rep->print      = plant_iReport_print;
+    rep->summary    = plant_iReport_summary;
+    rep->to_json    = plant_iReport_to_json;
+    rep->to_html    = plant_iReport_to_html;
+    rep->to_xml     = plant_iReport_to_xml;
+    rep->begin      = plant_iReport_begin;
+    rep->end        = plant_iReport_end;
+    rep->add_result = plant_iReport_add_result;
+    return rep;
+}
+
+void PlantReport_destroy(IReport* rep) {
+    if (!rep) return;
+    if (rep == _default_report) _default_report = NULL;
+    free(rep);
+}

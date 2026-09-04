@@ -360,9 +360,25 @@ struct IRuntime {
 IRuntime* plant_runtime_default(void);
 void      plant_runtime_free(IRuntime* rt);
 
+/* v0.49.60a: Factory that binds plant_iRuntime_* helpers to vtable */
+IRuntime* PlantRuntime_create(void* context);
+void      PlantRuntime_destroy(IRuntime* rt);
+
 /* Verify helpers that delegate through the IRuntime vtable */
 void plant_runtime_verify(IRuntime* rt, const char* label, int condition);
 void plant_runtime_verify_begin(IRuntime* rt);
 void plant_runtime_verify_end(IRuntime* rt);
+
+/* ── v0.49.60a: IRuntime convenience helpers with null-safety ── */
+void plant_iRuntime_execute(IRuntime* rt, const char* code);
+void plant_iRuntime_verify(IRuntime* rt, const char* label, int condition);
+void plant_iRuntime_verify_begin(IRuntime* rt);
+void plant_iRuntime_verify_end(IRuntime* rt);
+void plant_iRuntime_suite_setup(IRuntime* rt);
+void plant_iRuntime_suite_teardown(IRuntime* rt);
+void plant_iRuntime_error(IRuntime* rt, const char* msg);
+void plant_iRuntime_warning(IRuntime* rt, const char* msg);
+void plant_iRuntime_info(IRuntime* rt, const char* msg);
+void plant_iRuntime_fatal(IRuntime* rt, const char* msg);
 
 #endif

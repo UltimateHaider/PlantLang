@@ -1,3 +1,27 @@
+## v0.49.60a - 2026 (Dependency Analysis & Concrete Interface Binding)
+
+### Architecture
+- **Dependency Inversion Principle (DIP)**: System-wide dependency mapping and
+  explicit concrete-to-abstract binding for `IReport` and `IRuntime`.
+- **`plant_iRuntime_*` helpers** (`runtime/c/plant_runtime.h`): 10 new convenience
+  functions with null-safety: `plant_iRuntime_execute`, `plant_iRuntime_verify`,
+  `plant_iRuntime_verify_begin`, `plant_iRuntime_verify_end`,
+  `plant_iRuntime_suite_setup`, `plant_iRuntime_suite_teardown`,
+  `plant_iRuntime_error`, `plant_iRuntime_warning`, `plant_iRuntime_info`,
+  `plant_iRuntime_fatal`.
+- **`PlantRuntime_create(context)`** (`runtime/c/plant_runtime.c`): Factory that
+  binds `plant_iRuntime_*` helpers to the `IRuntime` vtable, providing clean DIP
+  compliance. Matching `PlantRuntime_destroy()` for lifecycle management.
+- **`PlantReport_create(context)`** (`runtime/c/plant_report.c`): Factory that
+  binds `plant_iReport_*` helpers to the `IReport` vtable, mirroring the runtime
+  pattern. Matching `PlantReport_destroy()` for lifecycle management.
+- **Bidirectional coupling audit**: Verified `plant_report.c` ↔ `plant_runtime.c`
+  direct coupling through `plant_compat.h`. No circular dependencies — clean
+  unidirectional flow through the compatibility layer.
+- **Self-hosting**: Convergent at 442207 bytes.
+- **Tests**: 20/20 native tests pass. 185/187 regression tests pass
+  (2 pre-existing gcc-based FFI failures).
+
 ## v0.49.59c - 2026 (Abstract Code Generation Interface)
 
 ### Architecture

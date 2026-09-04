@@ -8471,3 +8471,86 @@ void plant_runtime_verify_end(IRuntime* rt) {
     if (rt && rt->verify_end) rt->verify_end(rt->context);
     else plant_verify_end();
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.49.60a — IRuntime Convenience Helpers & Factory Binding
+   Public helpers with null-safety, plus PlantRuntime_create()
+   factory that binds helpers to the vtable for clean DIP
+   compliance.
+   ═══════════════════════════════════════════════════════════════ */
+
+void plant_iRuntime_execute(IRuntime* rt, const char* code) {
+    if (rt && rt->execute) rt->execute(rt->context, code);
+}
+
+void plant_iRuntime_verify(IRuntime* rt, const char* label, int condition) {
+    if (rt && rt->verify) rt->verify(rt->context, label, condition);
+    else plant_verify((tx_t)label, condition ? "1" : "0");
+}
+
+void plant_iRuntime_verify_begin(IRuntime* rt) {
+    if (rt && rt->verify_begin) rt->verify_begin(rt->context);
+    else plant_verify_begin();
+}
+
+void plant_iRuntime_verify_end(IRuntime* rt) {
+    if (rt && rt->verify_end) rt->verify_end(rt->context);
+    else plant_verify_end();
+}
+
+void plant_iRuntime_suite_setup(IRuntime* rt) {
+    if (rt && rt->suite_setup) rt->suite_setup(rt->context);
+    else plant_suite_setup();
+}
+
+void plant_iRuntime_suite_teardown(IRuntime* rt) {
+    if (rt && rt->suite_teardown) rt->suite_teardown(rt->context);
+    else plant_suite_teardown();
+}
+
+void plant_iRuntime_error(IRuntime* rt, const char* msg) {
+    if (rt && rt->error) rt->error(rt->context, msg);
+    else plant_error(msg);
+}
+
+void plant_iRuntime_warning(IRuntime* rt, const char* msg) {
+    if (rt && rt->warning) rt->warning(rt->context, msg);
+    else plant_warning(msg);
+}
+
+void plant_iRuntime_info(IRuntime* rt, const char* msg) {
+    if (rt && rt->info) rt->info(rt->context, msg);
+    else plant_info(msg);
+}
+
+void plant_iRuntime_fatal(IRuntime* rt, const char* msg) {
+    if (rt && rt->fatal) rt->fatal(rt->context, msg);
+    else plant_fatal(msg);
+}
+
+/* ── Factory: bind helpers to vtable ── */
+
+static IRuntime* _default_runtime = NULL;
+
+IRuntime* PlantRuntime_create(void* context) {
+    IRuntime* rt = (IRuntime*)malloc(sizeof(IRuntime));
+    if (!rt) return NULL;
+    rt->context        = context;
+    rt->execute        = (void (*)(void*, const char*))plant_iRuntime_execute;
+    rt->verify         = (void (*)(void*, const char*, int))plant_iRuntime_verify;
+    rt->verify_begin   = (void (*)(void*))plant_iRuntime_verify_begin;
+    rt->verify_end     = (void (*)(void*))plant_iRuntime_verify_end;
+    rt->suite_setup    = (void (*)(void*))plant_iRuntime_suite_setup;
+    rt->suite_teardown = (void (*)(void*))plant_iRuntime_suite_teardown;
+    rt->error          = (void (*)(void*, const char*))plant_iRuntime_error;
+    rt->warning        = (void (*)(void*, const char*))plant_iRuntime_warning;
+    rt->info           = (void (*)(void*, const char*))plant_iRuntime_info;
+    rt->fatal          = (void (*)(void*, const char*))plant_iRuntime_fatal;
+    return rt;
+}
+
+void PlantRuntime_destroy(IRuntime* rt) {
+    if (!rt) return;
+    if (rt == _default_runtime) _default_runtime = NULL;
+    free(rt);
+}

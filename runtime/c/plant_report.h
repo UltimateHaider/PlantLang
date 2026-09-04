@@ -36,6 +36,10 @@ struct IReport {
 IReport* plant_report_default(const char* suite_name);
 void      plant_report_interface_free(IReport* rp);
 
+/* v0.49.60a: Factory that binds plant_iReport_* helpers to vtable */
+IReport* PlantReport_create(void* context);
+void      PlantReport_destroy(IReport* rep);
+
 /* Convenience helpers that null-check before dereferencing vtable
    pointers — safe to call with a NULL IReport*. */
 void  plant_iReport_print(IReport* rp, const char* message);
