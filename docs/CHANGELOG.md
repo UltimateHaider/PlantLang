@@ -1,3 +1,25 @@
+## v0.49.59b - 2026 (Abstract Front-End Interfaces)
+
+### Architecture
+- **ILexer interface** (`runtime/c/plant_lexer.h`): Lexical analysis contract with
+  `void* context` and function pointers (tokenize, peek, consume, tok_type,
+  tok_lex, is_eof). `PlantLexer_create()` wraps PlantLang's generated C lexer
+  functions into the abstract vtable. Internal context carries token buffer and
+  cursor position — state previously threaded as separate parameters.
+- **IParser interface** (`runtime/c/plant_parser.h`): Syntactic analysis contract
+  with `void* context` and function pointers (parse, parse_statement,
+  parse_expression, parse_block). `PlantParser_create()` wraps PlantLang's
+  parse_program/parse_statement and holds a reference to ILexer, enforcing the
+  compositional front-end dependency. Internal context carries parser-specific
+  state (lookup tables, scope flags).
+- **Compositional dependency**: IParser receives an ILexer* at construction time,
+  making the lexer→parser pipeline explicit at the type level.
+- **Convenience helpers**: `plant_iLexer_*()` and `plant_iParser_*()` families
+  null-check before dereferencing vtable pointers — safe to call with NULL.
+- **Self-hosting**: Convergent at 442207 bytes.
+- **Tests**: 20/20 native tests pass. 185/187 regression tests pass
+  (2 pre-existing gcc-based FFI failures).
+
 ## v0.49.59a - 2026 (Abstract Runtime & Reporting Interfaces)
 
 ### Architecture

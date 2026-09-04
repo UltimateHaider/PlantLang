@@ -24,6 +24,8 @@
 #define _GNU_SOURCE
 #include <plant_runtime.h>
 #include <plant_report.h>
+#include <plant_lexer.h>
+#include <plant_parser.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -1061,6 +1063,16 @@ void plant_set_log_level(PlantLogLevel level);
      end, add_result). Concrete implementations wrap existing global functions
      and PlantReport infrastructure. plant_runtime_default() and
      plant_report_default() provide ready-to-use instances.
+
+   v0.49.59b — Abstract Front-End Interfaces:
+     ILexer (plant_lexer.h): Lexical analysis contract with void* context
+     and function pointers (tokenize, peek, consume, tok_type, tok_lex, is_eof).
+     PlantLexer_create() wraps PlantLang's tokenize/peek/consume/tok_type/
+     tok_lex/is_eof generated C functions.
+     IParser (plant_parser.h): Syntactic analysis contract with void* context
+     and function pointers (parse, parse_statement, parse_expression, parse_block).
+     PlantParser_create() wraps PlantLang's parse_program/parse_statement and
+     holds a reference to ILexer, enforcing compositional front-end dependency.
    ═══════════════════════════════════════════════════════════════ */
 
 typedef struct PlantReport PlantReport;

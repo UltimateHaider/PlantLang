@@ -1,5 +1,5 @@
 #!/bin/sh
-# PlantLang — Performance Benchmark (v0.49.59a)
+# PlantLang — Performance Benchmark (v0.49.59b)
 # Tracks compilation times for `make all`, `make self`, and `make test`.
 # Writes results to benchmarks/bench_results.md (creates directory if missing).
 # Usage: sh scripts/benchmark.sh

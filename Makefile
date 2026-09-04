@@ -14,7 +14,7 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.49.59a
+VERSION    ?= 0.49.59b
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
@@ -26,7 +26,9 @@ REPORT     := runtime/c/plant_report.c
 REPORT_JSON:= runtime/c/plant_report_json.c
 REPORT_XML := runtime/c/plant_report_xml.c
 REPORT_HTML:= runtime/c/plant_report_html.c
-RUNTIME_C  := $(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) $(REPORT_HTML)
+LEXER      := runtime/c/plant_lexer.c
+PARSER     := runtime/c/plant_parser.c
+RUNTIME_C  := $(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) $(REPORT_HTML) $(LEXER) $(PARSER)
 COMPAT     := runtime/c/plant_compat.h
 
 SRC_DIR    := src/plantc
@@ -179,7 +181,7 @@ dist: all self test ## Build versioned tarball + unpack/build/test validation
 		release/plantlang-$(VERSION)/ 2>/dev/null || cp Makefile README.md LICENSE.txt CHANGELOG.md release/plantlang-$(VERSION)/
 	@cp src/plantc/lexer.plant src/plantc/parser.plant src/plantc/codegen_c.plant src/plantc/main.plant \
 		release/plantlang-$(VERSION)/src/plantc/
-	@cp $(RUNTIME_C) $(COMPAT) runtime/c/plant_runtime.h runtime/c/plant_report.h runtime/c/plant_types.h release/plantlang-$(VERSION)/runtime/c/
+	@cp $(RUNTIME_C) $(COMPAT) runtime/c/plant_runtime.h runtime/c/plant_report.h runtime/c/plant_lexer.h runtime/c/plant_parser.h runtime/c/plant_types.h release/plantlang-$(VERSION)/runtime/c/
 	@cp tests/native/*.plant tests/native/*.expected tests/native/*.c tests/native/*.h tests/native/run_native_tests.sh \
 		release/plantlang-$(VERSION)/tests/native/
 	@mkdir -p release/plantlang-$(VERSION)/tests/generics
