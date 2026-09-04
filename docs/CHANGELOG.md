@@ -1,3 +1,24 @@
+## v0.49.60b - 2026 (Dependency Inversion in Code Generation)
+
+### Architecture
+- **Codegen refactoring**: All direct procedural calls in `codegen_c.plant` replaced
+  with interface-bound invocations: `plant_verify` → `plant_iRuntime_verify(get_runtime())`,
+  `plant_print` → `plant_iReport_print(get_report())`, `plant_suite_setup/teardown` →
+  `plant_iRuntime_suite_setup/teardown(get_runtime())`.
+- **DI accessors** (`runtime/c/plant_runtime.c`): `get_runtime()` lazily creates default
+  `IRuntime`, `get_report()` lazily creates default `IReport` with proper `PlantReport`
+  context — fixes NULL dereference issue from v0.49.60a.
+- **Factory fix** (`runtime/c/plant_report.c`, `plant_runtime.c`): `PlantReport_create()`
+  and `PlantRuntime_create()` now bind internal `_ireport_*`/`_iruntime_*` functions
+  (not `plant_iReport_*`/`plant_iRuntime_*` helpers) to vtable — prevents infinite
+  recursion where vtable pointer called convenience wrapper which called vtable again.
+- **SETUP/TEARDOWN restoration**: Codegen emits `plant_suite_setup_hook(expr)` and
+  `plant_suite_teardown_hook(expr)` (not `plant_iRuntime_info`) to preserve `[SETUP]`
+  and `[TEARDOWN]` prefix formatting expected by regression tests.
+- **Self-hosting**: Convergent at 442913 bytes (+727 from interface-bound call strings).
+- **Tests**: 20/20 native tests pass. 185/187 regression tests pass
+  (2 pre-existing gcc-based FFI failures).
+
 ## v0.49.60a - 2026 (Dependency Analysis & Concrete Interface Binding)
 
 ### Architecture

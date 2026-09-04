@@ -994,6 +994,11 @@ tx_t plant_ws_accept(tx_t listener);
    v0.49.53 / v0.49.54 — Execution Lifecycle & Assertions
    Strict boundaries for verify/suite lifecycle hooks and
    colorized output.
+
+   v0.49.60b — DEPRECATED: These direct declarations are retained
+   for backward compatibility with existing generated code. New
+   codegen should use the DI accessors (get_runtime/get_report)
+   and interface-bound helpers (plant_iRuntime_x / plant_iReport_x).
    ═══════════════════════════════════════════════════════════════ */
 
 extern void plant_verify(tx_t label, tx_t cond);
@@ -1004,6 +1009,18 @@ extern void plant_suite_teardown(void);
 extern void plant_suite_setup_hook(tx_t expr);
 extern void plant_suite_teardown_hook(tx_t expr);
 extern char* plant_colorize(const char* text, const char* color);
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.49.60b — Dependency Injection Accessors
+   Global context accessors for IRuntime and IReport instances.
+   Generated code calls get_runtime()/get_report() to obtain
+   interface instances, then dispatches through the vtable.
+   ═══════════════════════════════════════════════════════════════ */
+
+extern IRuntime* get_runtime(void);
+extern IReport*  get_report(void);
+extern void      set_runtime(IRuntime* rt);
+extern void      set_report(IReport* rep);
 
 /* ═══════════════════════════════════════════════════════════════
    v0.49.56 — Unified Error Management
@@ -1075,13 +1092,19 @@ void plant_set_log_level(PlantLogLevel level);
      PlantParser_create() wraps PlantLang's parse_program/parse_statement and
      holds a reference to ILexer, enforcing compositional front-end dependency.
 
-   v0.49.59c — Abstract Code Generation Interface:
+   v0.49.60a — Dependency Analysis & Concrete Interface Binding:
      ICodegen (plant_codegen.h): Comprehensive translation and environment
      management contract with void* context and function pointers for core
      code generation (generate, emit, generate_node), environment subsystem
      lifecycle (env_new, env_set, env_get, env_free), and configuration state
      (set_env, get_env). PlantCodegen_create() wraps PlantLang's generate_c,
      generate_node, env_make, env_set, env_get generated C functions.
+
+   v0.49.60b — Dependency Inversion in Code Generation:
+     Codegen refactored to emit interface-bound calls via DI accessors
+     (get_runtime/get_report) instead of direct procedural calls. Generated
+     C code now dispatches through plant_iRuntime_* and plant_iReport_*
+     helpers, decoupling the codegen from concrete runtime/report backends.
    ═══════════════════════════════════════════════════════════════ */
 
 typedef struct PlantReport PlantReport;

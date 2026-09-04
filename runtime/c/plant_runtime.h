@@ -6,6 +6,9 @@
 #include <stdlib.h>
 #include <setjmp.h>
 
+/* Forward declaration for IReport (defined in plant_report.h) */
+typedef struct IReport IReport;
+
 void plnt_print_int(int64_t val);
 void plnt_print_decimal(double val);
 void plnt_print_bool(int8_t val);
@@ -380,5 +383,11 @@ void plant_iRuntime_error(IRuntime* rt, const char* msg);
 void plant_iRuntime_warning(IRuntime* rt, const char* msg);
 void plant_iRuntime_info(IRuntime* rt, const char* msg);
 void plant_iRuntime_fatal(IRuntime* rt, const char* msg);
+
+/* ── v0.49.60b: Global DI Accessors ── */
+IRuntime* get_runtime(void);
+void      set_runtime(IRuntime* rt);
+IReport*  get_report(void);
+void      set_report(IReport* rep);
 
 #endif

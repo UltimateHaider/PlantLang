@@ -8306,7 +8306,7 @@ ACTION gen_show_stmt(node, nums(LIST), evars(LIST), isel(TX)),
           SET cval TO "plant_map_to_string(" + cval + ")".
       /IF.
   /IF.
-  GIVE isel + "  plant_print(" + cval + ");\n".
+  GIVE isel + "  plant_iReport_print(get_report(), " + cval + ");\n".
 /ACTION.
 
 # ──────────────────────────────────────────────────────────────
@@ -9163,7 +9163,7 @@ ACTION generate_node(node, env(LIST)),
             SET ccond TO "_from_long(" + ccond + ")".
         /IF.
         REAP isel FROM indent_str, indent_num.
-        GIVE isel + "  plant_verify(" + lbl + ", " + ccond + ");\n".
+        GIVE isel + "  plant_iRuntime_verify(get_runtime(), " + lbl + ", " + ccond + ");\n".
     /IF.
 
     # -- suite_stmt: SUITE "name", body /SUITE . --
@@ -9195,15 +9195,15 @@ ACTION generate_node(node, env(LIST)),
         /SEASON.
         IF has_st IS "1",
             IF has_verify IS "1",
-                GIVE isel + "  plant_suite_setup();\n" + "  plant_verify_begin();\n" + body_code + "  plant_verify_end();\n" + "  plant_suite_teardown();\n".
+                GIVE isel + "  plant_iRuntime_suite_setup(get_runtime());\n" + "  plant_iRuntime_verify_begin(get_runtime());\n" + body_code + "  plant_iRuntime_verify_end(get_runtime());\n" + "  plant_iRuntime_suite_teardown(get_runtime());\n".
             /IF.
             IF has_verify IS "0",
-                GIVE isel + "  plant_suite_setup();\n" + body_code + "  plant_suite_teardown();\n".
+                GIVE isel + "  plant_iRuntime_suite_setup(get_runtime());\n" + body_code + "  plant_iRuntime_suite_teardown(get_runtime());\n".
             /IF.
         /IF.
         IF has_st IS "0",
             IF has_verify IS "1",
-                GIVE isel + "  plant_verify_begin();\n" + body_code + "  plant_verify_end();\n".
+                GIVE isel + "  plant_iRuntime_verify_begin(get_runtime());\n" + body_code + "  plant_iRuntime_verify_end(get_runtime());\n".
             /IF.
             IF has_verify IS "0",
                 GIVE body_code.
@@ -9825,7 +9825,7 @@ ACTION generate_node(node, env(LIST)),
     IF ntype IS "now_stmt",
         REAP fmt0 FROM _map_get, node, "fmt".
         REAP isel FROM indent_str, indent_num.
-        GIVE isel + "  plant_print(plant_now(\"" + fmt0 + "\"));\n".
+        GIVE isel + "  plant_iReport_print(get_report(), plant_now(\"" + fmt0 + "\"));\n".
     /IF.
 
     # ── analyze_stmt: ANALYZE x. → plant_print(plant_map_to_string(plant_analyze(x))); ─
@@ -9838,7 +9838,7 @@ ACTION generate_node(node, env(LIST)),
             SET cval TO "_from_long(" + cval + ")".
         /IF.
         REAP isel FROM indent_str, indent_num.
-        GIVE isel + "  plant_print(plant_map_to_string(plant_analyze(" + cval + ")));\n".
+        GIVE isel + "  plant_iReport_print(get_report(), plant_map_to_string(plant_analyze(" + cval + ")));\n".
     /IF.
 
     # ── typeof_stmt: TYPEOF x. → plant_print(plant_typeof(x)); ────
@@ -9851,7 +9851,7 @@ ACTION generate_node(node, env(LIST)),
             SET cval2 TO "_from_long(" + cval2 + ")".
         /IF.
         REAP isel FROM indent_str, indent_num.
-        GIVE isel + "  plant_print(plant_typeof(" + cval2 + "));\n".
+        GIVE isel + "  plant_iReport_print(get_report(), plant_typeof(" + cval2 + "));\n".
     /IF.
 
     # ── free_stmt: FREE x. → x = plant_mem_free((tx_t)x); ────
@@ -10149,7 +10149,7 @@ ACTION generate_node(node, env(LIST)),
             IF vbnd_ty IS "verify_stmt", SET has_verify TO TRUE. /IF.
             SET vbdi TO vbdi + 1.
         /SEASON.
-        IF has_verify IS TRUE, SET bcode TO "  plant_verify_begin();\n" + bcode. /IF.
+        IF has_verify IS TRUE, SET bcode TO "  plant_iRuntime_verify_begin(get_runtime());\n" + bcode. /IF.
         # v0.48.15: Mission Mode binding — FAST actions bind the bump
         # heap (plant_fast_enter resets it at every scope enter);
         # SAFE actions carry the Boundary Handshake guard so FAST
@@ -10211,7 +10211,7 @@ ACTION generate_node(node, env(LIST)),
             IF drn2 IS "1", SET bcode TO bcode + "  plant_async_drain();\n". /IF.
             # v0.49.24: empty bodies must return a valid tx_t, not the
             # function designator (fnname decays to a pointer here).
-            IF has_verify IS TRUE, SET bcode TO bcode + "  plant_verify_end();\n". /IF.
+            IF has_verify IS TRUE, SET bcode TO bcode + "  plant_iRuntime_verify_end(get_runtime());\n". /IF.
             SET bcode TO bcode + "  return \"\";\n".
         /IF.
         IF (COUNT bd) > 0,
@@ -10223,7 +10223,7 @@ ACTION generate_node(node, env(LIST)),
                 SET bcode TO bcode + "  plant_async_drain();\n".
             /IF.
             IF last_ty ISNT "give_stmt",
-                IF has_verify IS TRUE, SET bcode TO bcode + "  plant_verify_end();\n". /IF.
+                IF has_verify IS TRUE, SET bcode TO bcode + "  plant_iRuntime_verify_end(get_runtime());\n". /IF.
                 SET bcode TO bcode + "  return " + fnname + ";\n".
             /IF.
         /IF.
@@ -13163,7 +13163,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.49.59c (pure native)".
+  SHOW "Chloroplast 0.49.60b (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

@@ -9846,7 +9846,7 @@ tx_t _gb_dump(PlantArray* bd) {
     while (i < plant_array_length(bd)) {
     nd = plant_list_get(bd, i);
     ty = _map_get(nd, "type");
-    plant_print(_cat("GB:", ty));
+    plant_iReport_print(get_report(), _cat("GB:", ty));
     i = i+1;
     }
     return 0;
@@ -9938,7 +9938,7 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
     cval = _cat3("plant_map_to_string(", cval, ")");
     }
     }
-    return _cat4(isel, "  plant_print(", cval, ");\n");
+    return _cat4(isel, "  plant_iReport_print(get_report(), ", cval, ");\n");
 }
 tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray* evars, tx_t actx, tx_t isel) {
   tx_t target = "";
@@ -11022,7 +11022,7 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     ccond = _cat3("_from_long(", ccond, ")");
     }
     isel = indent_str(indent_num);
-    return _cat3(_cat4(isel, "  plant_verify(", lbl, ", "), ccond, ");\n");
+    return _cat3(_cat4(isel, "  plant_iRuntime_verify(get_runtime(), ", lbl, ", "), ccond, ");\n");
     }
     if (strcmp(ntype,"suite_stmt") == 0) {
     body_nodes = _map_get(node, "body");
@@ -11055,15 +11055,15 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     }
     if (strcmp(has_st,"1") == 0) {
     if (strcmp(has_verify,"1") == 0) {
-    return _cat3(_cat4(isel, "  plant_suite_setup();\n", "  plant_verify_begin();\n", body_code), "  plant_verify_end();\n", "  plant_suite_teardown();\n");
+    return _cat3(_cat4(isel, "  plant_iRuntime_suite_setup(get_runtime());\n", "  plant_iRuntime_verify_begin(get_runtime());\n", body_code), "  plant_iRuntime_verify_end(get_runtime());\n", "  plant_iRuntime_suite_teardown(get_runtime());\n");
     }
     if (strcmp(has_verify,"0") == 0) {
-    return _cat4(isel, "  plant_suite_setup();\n", body_code, "  plant_suite_teardown();\n");
+    return _cat4(isel, "  plant_iRuntime_suite_setup(get_runtime());\n", body_code, "  plant_iRuntime_suite_teardown(get_runtime());\n");
     }
     }
     if (strcmp(has_st,"0") == 0) {
     if (strcmp(has_verify,"1") == 0) {
-    return _cat4(isel, "  plant_verify_begin();\n", body_code, "  plant_verify_end();\n");
+    return _cat4(isel, "  plant_iRuntime_verify_begin(get_runtime());\n", body_code, "  plant_iRuntime_verify_end(get_runtime());\n");
     }
     if (strcmp(has_verify,"0") == 0) {
     return body_code;
@@ -11553,7 +11553,7 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     if (strcmp(ntype,"now_stmt") == 0) {
     fmt0 = _map_get(node, "fmt");
     isel = indent_str(indent_num);
-    return _cat4(isel, "  plant_print(plant_now(\"", fmt0, "\"));\n");
+    return _cat4(isel, "  plant_iReport_print(get_report(), plant_now(\"", fmt0, "\"));\n");
     }
     if (strcmp(ntype,"analyze_stmt") == 0) {
     tgt = _map_get(node, "target");
@@ -11564,7 +11564,7 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     cval = _cat3("_from_long(", cval, ")");
     }
     isel = indent_str(indent_num);
-    return _cat4(isel, "  plant_print(plant_map_to_string(plant_analyze(", cval, ")));\n");
+    return _cat4(isel, "  plant_iReport_print(get_report(), plant_map_to_string(plant_analyze(", cval, ")));\n");
     }
     if (strcmp(ntype,"typeof_stmt") == 0) {
     tgt2 = _map_get(node, "target");
@@ -11575,7 +11575,7 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     cval2 = _cat3("_from_long(", cval2, ")");
     }
     isel = indent_str(indent_num);
-    return _cat4(isel, "  plant_print(plant_typeof(", cval2, "));\n");
+    return _cat4(isel, "  plant_iReport_print(get_report(), plant_typeof(", cval2, "));\n");
     }
     if (strcmp(ntype,"free_stmt") == 0) {
     ftgt = _map_get(node, "target");
@@ -11795,7 +11795,7 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     vbdi = vbdi+1;
     }
     if (has_verify == 1) {
-    bcode = _cat("  plant_verify_begin();\n", bcode);
+    bcode = _cat("  plant_iRuntime_verify_begin(get_runtime());\n", bcode);
     }
     if (strcmp(mmode,"FAST") == 0) {
     bcode = _cat3(_cat4("  if (plant_boundary_block(\"", aname, "\", \"FAST\")) return \"\";\n  plant_fast_enter(\"", aname), "\");\n", bcode);
@@ -11839,7 +11839,7 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     bcode = _cat(bcode, "  plant_async_drain();\n");
     }
     if (has_verify == 1) {
-    bcode = _cat(bcode, "  plant_verify_end();\n");
+    bcode = _cat(bcode, "  plant_iRuntime_verify_end(get_runtime());\n");
     }
     bcode = _cat(bcode, "  return \"\";\n");
     }
@@ -11853,7 +11853,7 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     }
     if (strcmp(last_ty,"give_stmt") != 0) {
     if (has_verify == 1) {
-    bcode = _cat(bcode, "  plant_verify_end();\n");
+    bcode = _cat(bcode, "  plant_iRuntime_verify_end(get_runtime());\n");
     }
     bcode = _cat4(bcode, "  return ", fnname, ";\n");
     }
@@ -14940,22 +14940,22 @@ int main(int argc, char **argv) {
   tx_t c_len = "";
   arg0 = get_cli_arg(0);
   if (strcmp(arg0,"-h") == 0 || strcmp(arg0,"--help") == 0) {
-  plant_print("Chloroplast — Pure Native PlantLang compiler");
-  plant_print("usage: Chloroplast <source.plant> [out.c]");
-  plant_print("options:");
-  plant_print("  -h, --help     show this help and exit");
-  plant_print("  -v, --version  show version and exit");
+  plant_iReport_print(get_report(), "Chloroplast — Pure Native PlantLang compiler");
+  plant_iReport_print(get_report(), "usage: Chloroplast <source.plant> [out.c]");
+  plant_iReport_print(get_report(), "options:");
+  plant_iReport_print(get_report(), "  -h, --help     show this help and exit");
+  plant_iReport_print(get_report(), "  -v, --version  show version and exit");
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_print("Chloroplast 0.49.59c (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.49.60b (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);
-  plant_print(_cat("input: ", source_path));
+  plant_iReport_print(get_report(), _cat("input: ", source_path));
   exists = fs_EXISTS(source_path);
   if (strcmp(exists,"1") != 0) {
-  plant_print(_cat("Error: file not found — ", source_path));
+  plant_iReport_print(get_report(), _cat("Error: file not found — ", source_path));
   return 1;
   }
   source_text = fs_READ(source_path);
@@ -14964,17 +14964,17 @@ int main(int argc, char **argv) {
   is_err = str_eq(err_head, "@@E@@");
   if (strcmp(is_err,"1") == 0) {
   emsg = substring(merged_text, 5, strlen( merged_text ));
-  plant_print(emsg);
+  plant_iReport_print(get_report(), emsg);
   return 1;
   }
   source_text = merged_text;
-  plant_print("tokenizing...");
+  plant_iReport_print(get_report(), "tokenizing...");
   tokens = scan_tokens(source_text);
-  plant_print("parsing...");
+  plant_iReport_print(get_report(), "parsing...");
   program_ast = parse_program(tokens);
   perr = _map_get(program_ast, "error");
   if (strcmp(perr,"") > 0) {
-  plant_print(_cat3("Error: ", perr, "."));
+  plant_iReport_print(get_report(), _cat3("Error: ", perr, "."));
   return 1;
   }
   body = _map_get(program_ast, "body");
@@ -15024,7 +15024,7 @@ int main(int argc, char **argv) {
   ai999 = ai999+1;
   }
   if (fnd999 == 0) {
-  plant_print(_cat4(_cat4("Error: species '", snm99, "' does not implement method '", reqmth), "' from interface '", ifn999, "'"));
+  plant_iReport_print(get_report(), _cat4(_cat4("Error: species '", snm99, "' does not implement method '", reqmth), "' from interface '", ifn999, "'"));
   return 1;
   }
   }
@@ -15068,7 +15068,7 @@ int main(int argc, char **argv) {
   adi2 = adi2+1;
   }
   body = ad_out;
-  plant_print("generating C...");
+  plant_iReport_print(get_report(), "generating C...");
   c_code = generate_c(body);
   out_path = get_cli_arg(1);
   if (strcmp(out_path,"") == 0) {
@@ -15076,7 +15076,7 @@ int main(int argc, char **argv) {
   }
   written = fs_WRITE(out_path, c_code);
   c_len = strings_LENGTH(c_code);
-  plant_print(_cat4("output: ", c_len, " bytes to ", out_path));
+  plant_iReport_print(get_report(), _cat4("output: ", c_len, " bytes to ", out_path));
   plant_async_drain();
   return 0;
 }

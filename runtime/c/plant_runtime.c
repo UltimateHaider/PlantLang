@@ -8536,16 +8536,16 @@ IRuntime* PlantRuntime_create(void* context) {
     IRuntime* rt = (IRuntime*)malloc(sizeof(IRuntime));
     if (!rt) return NULL;
     rt->context        = context;
-    rt->execute        = (void (*)(void*, const char*))plant_iRuntime_execute;
-    rt->verify         = (void (*)(void*, const char*, int))plant_iRuntime_verify;
-    rt->verify_begin   = (void (*)(void*))plant_iRuntime_verify_begin;
-    rt->verify_end     = (void (*)(void*))plant_iRuntime_verify_end;
-    rt->suite_setup    = (void (*)(void*))plant_iRuntime_suite_setup;
-    rt->suite_teardown = (void (*)(void*))plant_iRuntime_suite_teardown;
-    rt->error          = (void (*)(void*, const char*))plant_iRuntime_error;
-    rt->warning        = (void (*)(void*, const char*))plant_iRuntime_warning;
-    rt->info           = (void (*)(void*, const char*))plant_iRuntime_info;
-    rt->fatal          = (void (*)(void*, const char*))plant_iRuntime_fatal;
+    rt->execute        = _iruntime_execute;
+    rt->verify         = (void (*)(void*, const char*, int))_iruntime_verify;
+    rt->verify_begin   = (void (*)(void*))_iruntime_verify_begin;
+    rt->verify_end     = (void (*)(void*))_iruntime_verify_end;
+    rt->suite_setup    = (void (*)(void*))_iruntime_suite_setup;
+    rt->suite_teardown = (void (*)(void*))_iruntime_suite_teardown;
+    rt->error          = (void (*)(void*, const char*))_iruntime_error;
+    rt->warning        = (void (*)(void*, const char*))_iruntime_warning;
+    rt->info           = (void (*)(void*, const char*))_iruntime_info;
+    rt->fatal          = (void (*)(void*, const char*))_iruntime_fatal;
     return rt;
 }
 
@@ -8553,4 +8553,35 @@ void PlantRuntime_destroy(IRuntime* rt) {
     if (!rt) return;
     if (rt == _default_runtime) _default_runtime = NULL;
     free(rt);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.49.60b — Global DI Accessors
+   Provide get/set functions for the global IRuntime and IReport
+   instances used by generated code. These are the entry points
+   for the Dependency Inversion pattern in the codegen layer.
+   ═══════════════════════════════════════════════════════════════ */
+
+static IRuntime* _global_runtime = NULL;
+static IReport*  _global_report  = NULL;
+
+IRuntime* get_runtime(void) {
+    if (!_global_runtime) _global_runtime = PlantRuntime_create(NULL);
+    return _global_runtime;
+}
+
+void set_runtime(IRuntime* rt) {
+    _global_runtime = rt;
+}
+
+IReport* get_report(void) {
+    if (!_global_report) {
+        PlantReport* r = plant_report_create("default");
+        if (r) _global_report = PlantReport_create(r);
+    }
+    return _global_report;
+}
+
+void set_report(IReport* rep) {
+    _global_report = rep;
 }

@@ -120,9 +120,9 @@ extern void plant_report_html_emit(PlantReport* r, const char* path);
 extern void plant_report_xml_emit(PlantReport* r, const char* path);
 
 static void _ireport_print(void* ctx, const char* message) {
-    PlantReport* r = (PlantReport*)ctx;
-    if (!r || !message) return;
-    printf("[%s] %s\n", plant_report_suite_name(r), message);
+    (void)ctx;
+    if (!message) return;
+    puts(message);
 }
 
 static void _ireport_summary(void* ctx, int total, int passed, int failed) {
@@ -285,14 +285,14 @@ IReport* PlantReport_create(void* context) {
     IReport* rep = (IReport*)malloc(sizeof(IReport));
     if (!rep) return NULL;
     rep->context    = context;
-    rep->print      = plant_iReport_print;
-    rep->summary    = plant_iReport_summary;
-    rep->to_json    = plant_iReport_to_json;
-    rep->to_html    = plant_iReport_to_html;
-    rep->to_xml     = plant_iReport_to_xml;
-    rep->begin      = plant_iReport_begin;
-    rep->end        = plant_iReport_end;
-    rep->add_result = plant_iReport_add_result;
+    rep->print      = _ireport_print;
+    rep->summary    = _ireport_summary;
+    rep->to_json    = _ireport_to_json;
+    rep->to_html    = _ireport_to_html;
+    rep->to_xml     = _ireport_to_xml;
+    rep->begin      = _ireport_begin;
+    rep->end        = _ireport_end;
+    rep->add_result = _ireport_add_result;
     return rep;
 }
 
