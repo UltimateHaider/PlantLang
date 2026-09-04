@@ -1,3 +1,26 @@
+## v0.49.61 - 2026 (Clean Architecture Stabilization)
+
+### Architecture
+- **Interface Consolidation**: All five abstract interfaces (`ILexer`, `IParser`,
+  `ICodegen`, `IRuntime`, `IReport`) unified with consistent DI accessors in
+  `plant_compat.h`. New `get_parser()`/`set_parser()` accessor added for full
+  front-end DI coverage.
+- **plant_compat.h restructuring**: Header reorganized around Clean Architecture
+  tier model with clear separation of Entities, Use Cases, Interfaces, and
+  Infrastructure layers. Legacy compatibility section retained with explicit
+  DEPRECATED markers.
+- **Weak-symbol graceful degradation**: `get_lexer()`, `get_codegen()`, and
+  `get_parser()` use `__attribute__((weak))` on factory declarations so test
+  programs gracefully get NULL instead of linker errors.
+- **Documentation**: `docs/ARCHITECTURE.md` created with full Clean Architecture
+  specification, interface contracts, and self-hosting chain documentation.
+- **Legacy purge verification**: Confirmed zero remaining legacy direct procedural
+  calls (`plant_verify`, `plant_print`, etc.) in PlantLang source files — all
+  cross-layer calls now dispatch through DI accessors.
+- **Self-hosting**: Convergent at 464520 bytes (unchanged from v0.49.60c).
+- **Tests**: 20/20 native tests pass. 3/3 smoke tests pass.
+  Regression tests: same results as v0.49.60c (all failures pre-existing).
+
 ## v0.49.60c - 2026 (Dependency Inversion in Parser)
 
 ### Architecture

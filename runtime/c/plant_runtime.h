@@ -400,4 +400,9 @@ void      set_lexer(ILexer* lex);
 ICodegen* get_codegen(void);
 void      set_codegen(ICodegen* cg);
 
+/* ── v0.49.61: Parser DI Accessor ── */
+typedef struct IParser IParser;
+IParser*  get_parser(void);
+void      set_parser(IParser* p);
+
 #endif

@@ -1,19 +1,25 @@
 #ifndef PLANT_COMPAT_H
 #define PLANT_COMPAT_H
 
-/* v0.49.56c: plant_compat.h exposes the runtime interface boundaries
-   that generated C code calls into, plus documentation of the
-   compiler architecture's layered boundaries.
+/* v0.49.61: Clean Architecture — plant_compat.h exposes the runtime
+   interface boundaries that generated C code calls into, plus
+   documentation of the compiler architecture's layered boundaries.
    ───────────────────────────────────────────────────────────────
+   Clean Architecture Tiers:
+     Entities:       AST, Token, Node — core syntax/token data
+     Use Cases:      SUITE, VERIFY, SETUP, TEARDOWN lifecycle
+     Interfaces:     ILexer, IParser, ICodegen, IRuntime, IReport
+     Infrastructure: lexer.plant, parser.plant, codegen_c.plant,
+                     plant_runtime.c, plant_report.c
+
    Compiler Layers:
      1. Lexer        (lexer.plant)       — tokenize(source)
      2. Parser       (parser.plant)      — parse_program(tokens) → AST
      3. Codegen      (codegen_c.plant)   — generate_node(node, env) → C code
-   The parser builds AST nodes and hands them to generate_node for
-   C emission. No direct codegen calls from the parser are permitted.
-   Shared utilities (is_identifier, trim, _map_get, etc.) are defined
-   in codegen_c.plant's SHARED UTILITIES section but are not codegen
-   implementation details.
+
+   All cross-layer calls dispatch through abstract interface vtables
+   via DI accessors (get_lexer/get_parser/get_codegen/get_runtime/
+   get_report). No direct procedural calls across layers.
    ─────────────────────────────────────────────────────────────── */
 
 /* v0.48.29: tx_t lives in plant_types.h (pulled in via
@@ -995,10 +1001,12 @@ tx_t plant_ws_accept(tx_t listener);
    Strict boundaries for verify/suite lifecycle hooks and
    colorized output.
 
-   v0.49.60b — DEPRECATED: These direct declarations are retained
-   for backward compatibility with existing generated code. New
-   codegen should use the DI accessors (get_runtime/get_report)
-   and interface-bound helpers (plant_iRuntime_x / plant_iReport_x).
+   v0.49.61 — LEGACY COMPATIBILITY: These direct declarations are
+   retained for backward compatibility with existing generated code
+   and internal runtime usage. New codegen MUST use the DI accessors
+   (get_runtime/get_report/get_lexer/get_codegen/get_parser) and
+   interface-bound helpers (plant_iRuntime_x / plant_iReport_x /
+   plant_iLexer_x).
    ═══════════════════════════════════════════════════════════════ */
 
 extern void plant_verify(tx_t label, tx_t cond);
@@ -1011,10 +1019,10 @@ extern void plant_suite_teardown_hook(tx_t expr);
 extern char* plant_colorize(const char* text, const char* color);
 
 /* ═══════════════════════════════════════════════════════════════
-   v0.49.60b — Dependency Injection Accessors
-   Global context accessors for IRuntime and IReport instances.
-   Generated code calls get_runtime()/get_report() to obtain
-   interface instances, then dispatches through the vtable.
+   v0.49.61 — Clean Architecture Dependency Injection Accessors
+   Global context accessors for all abstract interfaces.
+   Generated code calls get_*()/set_*() to obtain interface
+   instances, then dispatches through the vtable.
    ═══════════════════════════════════════════════════════════════ */
 
 extern IRuntime* get_runtime(void);
@@ -1027,6 +1035,10 @@ extern ILexer*   get_lexer(void);
 extern ICodegen* get_codegen(void);
 extern void      set_lexer(ILexer* lex);
 extern void      set_codegen(ICodegen* cg);
+
+/* v0.49.61 — Parser DI Accessor */
+extern IParser*  get_parser(void);
+extern void      set_parser(IParser* p);
 
 /* ═══════════════════════════════════════════════════════════════
    v0.49.56 — Unified Error Management
@@ -1107,11 +1119,21 @@ void plant_set_log_level(PlantLogLevel level);
      generate_node, env_make, env_set, env_get generated C functions.
 
    v0.49.60b — Dependency Inversion in Code Generation:
-     Codegen refactored to emit interface-bound calls via DI accessors
-     (get_runtime/get_report) instead of direct procedural calls. Generated
-     C code now dispatches through plant_iRuntime_* and plant_iReport_*
-     helpers, decoupling the codegen from concrete runtime/report backends.
-   ═══════════════════════════════════════════════════════════════ */
+      Codegen refactored to emit interface-bound calls via DI accessors
+      (get_runtime/get_report) instead of direct procedural calls. Generated
+      C code now dispatches through plant_iRuntime_* and plant_iReport_*
+      helpers, decoupling the codegen from concrete runtime/report backends.
+
+   v0.49.60c — Dependency Inversion in Parser:
+      Parser refactored to use ILexer interface for all token operations.
+      835 direct calls replaced with plant_iLexer_*_at interface-bound
+      dispatch. get_parser()/set_parser() added for full front-end DI.
+
+   v0.49.61 — Clean Architecture Stabilization:
+      All five abstract interfaces (ILexer, IParser, ICodegen, IRuntime,
+      IReport) unified with consistent DI accessors. plant_compat.h
+      restructured around Clean Architecture tier model.
+    ═══════════════════════════════════════════════════════════════ */
 
 typedef struct PlantReport PlantReport;
 typedef struct PlantReportEntry PlantReportEntry;

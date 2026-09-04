@@ -8620,3 +8620,18 @@ ICodegen* get_codegen(void) {
 void set_codegen(ICodegen* cg) {
     _global_codegen = cg;
 }
+
+/* ── v0.49.61: Parser DI Accessor ── */
+static IParser*  _global_parser = NULL;
+
+IParser* get_parser(void) {
+    if (!_global_parser) {
+        extern IParser* PlantParser_create(void*, ILexer*) __attribute__((weak));
+        if (PlantParser_create) _global_parser = PlantParser_create(NULL, NULL);
+    }
+    return _global_parser;
+}
+
+void set_parser(IParser* p) {
+    _global_parser = p;
+}
