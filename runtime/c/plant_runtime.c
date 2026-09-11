@@ -1825,6 +1825,55 @@ const char* plant_char_value(char c) {
     return buf;
 }
 
+/* ── v0.50.0b: Unsigned Numeric Primitives ── */
+
+unsigned long plant_unum_create(const char* s) {
+    if (!s) return 0;
+    return strtoul(s, NULL, 10);
+}
+
+const char* plant_unum_value(unsigned long v) {
+    static char buf[32];
+    snprintf(buf, sizeof(buf), "%lu", v);
+    return buf;
+}
+
+unsigned int plant_ufact_create(const char* s) {
+    if (!s) return 0;
+    return (unsigned int)strtoul(s, NULL, 10);
+}
+
+const char* plant_ufact_value(unsigned int v) {
+    static char buf[16];
+    snprintf(buf, sizeof(buf), "%u", v);
+    return buf;
+}
+
+/* ── v0.50.0c: Double-Precision Real Primitive ── */
+
+double plant_scl_create(const char* s) {
+    if (!s) return 0.0;
+    return strtod(s, NULL);
+}
+
+const char* plant_scl_value(double v) {
+    static char buf[64];
+    snprintf(buf, sizeof(buf), "%.17g", v);
+    return buf;
+}
+
+/* ── v0.50.0d: Union Composite Type Memory Management ── */
+
+void* plant_union_create(size_t size) {
+    return plant_alloc(size);
+}
+
+void plant_union_free(void* u) {
+    if (u != NULL) {
+        free(u);
+    }
+}
+
 /* ── v0.50.0a: Anonymous Struct Allocation ── */
 
 void* plant_anon_struct_create(size_t size) {

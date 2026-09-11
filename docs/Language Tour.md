@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.50.0a
+# 🌿 PlantLang — Chloroplast v0.50.0d
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -52,7 +52,7 @@ CLI:
 
 ```bash
 ./bin/Chloroplast --help        # usage + options
-./bin/Chloroplast --version     # Chloroplast 0.50.0a (pure native)
+./bin/Chloroplast --version     # Chloroplast 0.50.0c (pure native)
 ./bin/Chloroplast file.plant [out.c]   # default output: file.c
 ```
 
@@ -98,15 +98,18 @@ ACTION main(),
 | Type | Keyword | Example |
 |------|---------|---------|
 | Integer | `NUM` | `CREATE age(NUM) TO 25.` |
+| Unsigned integer | `UNUM` | `CREATE flags(UNUM) TO 42.` |
 | Decimal | `SCL` | `CREATE pi(SCL) TO 3.14.` |
 | Text | `TX` | `CREATE name(TX) TO "Haider".` |
 | Character | `CHAR` | `CREATE c(CHAR) TO "A".` |
 | Boolean | `FACT` | `CREATE active(FACT) TO TRUE.` |
+| Unsigned boolean | `UFACT` | `CREATE mask(UFACT) TO 255.` |
 | List | `LIST` | `CREATE parts(LIST) TO plant_list_make(0).` |
 | Generic list | `LIST[T]` | `CREATE xs(LIST[NUM]) TO plant_list_make(0).` |
 | Map | `MAP` | `CREATE m(MAP) TO { "key": "val" }.` |
 | Struct | `STRUCT` | `STRUCT Point { x: NUM, y: NUM }` |
 | Anonymous struct | `STRUCT` | `STRUCT { x: NUM, y: NUM }` (auto-named) |
+| Union | `UNION` | `UNION V { i: NUM, f: SCL }` |
 | Enum | `ENUM` | `ENUM Color { RED, GREEN, BLUE }.` |
 | Species | `SPECIES` | `SPECIES Animal { name: TX, age: NUM }.` |
 
@@ -122,6 +125,19 @@ CREATE pi(SCL) TO 3.14159.
 CREATE active(FACT) TO TRUE.
 CREATE c(CHAR) TO "A".
 CREATE fruits(LIST) TO plant_list_make(3, "apple", "banana", "kiwi").
+```
+
+### Double-Precision Arithmetic (v0.50.0c)
+
+`SCL` provides native double-precision floating-point representation with full 17-digit precision:
+
+```
+CREATE pi(SCL) TO 3.141592653589793.
+CREATE e(SCL) TO 2.718281828459045.
+CREATE x(SCL) TO "1.5".
+SHOW plant_scl_value(pi).         # → 3.141592653589793
+SHOW plant_scl_value(e).          # → 2.718281828459045
+SHOW plant_scl_value(x).          # → 1.5
 ```
 
 `LET` is an accepted alias for `CREATE` (same semantics). `SET` requires a
@@ -228,6 +244,41 @@ STRUCT Pair[T, U] { first: T, second: U }
 Each instantiation used in the program is monomorphized into a concrete
 typedef (`plant_Box_NUM`, `plant_Pair_NUM_TX`, …); uninstantiated templates
 emit nothing.
+
+### UNION (v0.50.0d)
+
+```
+UNION V {
+  i: NUM,
+  f: SCL
+}
+```
+
+`UNION` declares a tagged union type. The codegen emits a C `typedef union`
+block in the shared types section. Union values flow through the FFI as
+opaque `void*` handles:
+
+```
+UNION Value {
+  i: NUM,
+  f: SCL,
+  s: TX
+}
+
+ACTION main(),
+  CREATE v(Value) TO plant_union_create(sizeof(Value)).
+  SHOW "union allocated".
+  plant_union_free(v).
+  GIVE 0.
+/ACTION.
+```
+
+Fields are comma-separated (consistent with `STRUCT`). The `sizeof()` 
+call in C computes the correct union size for allocation.
+
+**Runtime helpers:**
+- `plant_union_create(sizeof(U))` — allocate a zero-initialized union
+- `plant_union_free(u)` — free a union allocation
 
 **Field access (v0.49.10):** `a.b.c` on a map-backed LIST reads a key
 with `_map_get` — no explicit `_map_get` call needed:

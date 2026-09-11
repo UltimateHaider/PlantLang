@@ -1166,12 +1166,12 @@ ACTION expr_is_numeric(e(TX), nums(LIST)),
 
 # ──────────────────────────────────────────────────────────────
 #  is_numeric_type — 1 when a (substituted) PlantLang type is a
-#  scalar numeric type (NUM/FACT). gen_give_stmt wraps the GIVE
-#  value of NUM-typed actions in _from_long so callers receive the
+#  scalar numeric type (NUM/FACT/UNUM/UFACT). gen_give_stmt wraps the GIVE
+#  value of numeric-typed actions in _from_long so callers receive the
 #  value as text instead of raw long bits (v0.48.13).
 # ──────────────────────────────────────────────────────────────
 ACTION is_numeric_type(t(TX)),
-  IF t IS "NUM" OR t IS "FACT", GIVE 1. /IF.
+  IF t IS "NUM" OR t IS "FACT" OR t IS "UNUM" OR t IS "UFACT" OR t IS "SCL", GIVE 1. /IF.
   GIVE 0.
 /ACTION.
 
@@ -3454,6 +3454,30 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
       # Wrap string value in plant_char_create to extract first character.
       GIVE isel + "  char " + target + " = plant_char_create(" + cval + ");\n".
   /IF.
+  # v0.50.0b — unsigned numeric primitives.
+  IF vtype IS "UNUM",
+      # Wrap numeric values in _from_long to convert to string for plant_unum_create.
+      IF isnc2 IS 1,
+          SET cval TO "_from_long(" + cval + ")".
+      /IF.
+      GIVE isel + "  unsigned long " + target + " = plant_unum_create(" + cval + ");\n".
+  /IF.
+  IF vtype IS "UFACT",
+      IF isnc2 IS 1,
+          SET cval TO "_from_long(" + cval + ")".
+      /IF.
+      GIVE isel + "  unsigned int " + target + " = plant_ufact_create(" + cval + ");\n".
+  /IF.
+  # v0.50.0c — double-precision real primitive.
+  IF vtype IS "SCL",
+      # Check if value is a string literal (starts with quote) - pass directly.
+      # Otherwise wrap numeric values in _from_double for string conversion.
+      REAP fc FROM char_at, cval, 0.
+      IF fc IS "\"",
+          GIVE isel + "  double " + target + " = plant_scl_create(" + cval + ");\n".
+      /IF.
+      GIVE isel + "  double " + target + " = plant_scl_create(_from_double(" + cval + "));\n".
+  /IF.
   IF vtype IS "LIST",
       GIVE isel + "  PlantArray* " + target + " = " + cval + ";\n".
   /IF.
@@ -3465,7 +3489,7 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
       /IF.
       GIVE isel + "  " + vct2 + " " + target + " = " + cval + ";\n".
   /IF.
-  IF vtype ISNT "NUM" AND vtype ISNT "FACT" AND vtype ISNT "CHAR" AND vtype ISNT "LIST",
+  IF vtype ISNT "NUM" AND vtype ISNT "FACT" AND vtype ISNT "CHAR" AND vtype ISNT "UNUM" AND vtype ISNT "UFACT" AND vtype ISNT "SCL" AND vtype ISNT "LIST",
       REAP vst3 FROM is_struct_type, vtype.
       IF vst3 ISNT "1",
           GIVE isel + "  tx_t " + target + " = " + cval + ";\n".
@@ -4454,6 +4478,31 @@ ACTION generate_node(node, env(LIST)),
         IF vtype IS "CHAR",
             GIVE isel + "  char " + target + " = plant_char_create(" + cval + ");\n".
         /IF.
+        # v0.50.0b — unsigned numeric primitives.
+        IF vtype IS "UNUM",
+            REAP isnc3 FROM expr_is_numeric, cval, nums.
+            IF isnc3 IS 1,
+                SET cval TO "_from_long(" + cval + ")".
+            /IF.
+            GIVE isel + "  unsigned long " + target + " = plant_unum_create(" + cval + ");\n".
+        /IF.
+        IF vtype IS "UFACT",
+            REAP isnc3 FROM expr_is_numeric, cval, nums.
+            IF isnc3 IS 1,
+                SET cval TO "_from_long(" + cval + ")".
+            /IF.
+            GIVE isel + "  unsigned int " + target + " = plant_ufact_create(" + cval + ");\n".
+        /IF.
+        # v0.50.0c — double-precision real primitive.
+        IF vtype IS "SCL",
+            # Check if value is a string literal (starts with quote) - pass directly.
+            # Otherwise wrap numeric values in _from_double for string conversion.
+            REAP fc2 FROM char_at, cval, 0.
+            IF fc2 IS "\"",
+                GIVE isel + "  double " + target + " = plant_scl_create(" + cval + ");\n".
+            /IF.
+            GIVE isel + "  double " + target + " = plant_scl_create(_from_double(" + cval + "));\n".
+        /IF.
         REAP vst4 FROM is_struct_type, vtype.
         IF vst4 IS "1",
             REAP vct4 FROM ffi_ctype, vtype.
@@ -4462,7 +4511,7 @@ ACTION generate_node(node, env(LIST)),
             /IF.
             GIVE isel + "  " + vct4 + " " + target + " = " + cval + ";\n".
         /IF.
-        IF vtype ISNT "NUM" AND vtype ISNT "CHAR",
+        IF vtype ISNT "NUM" AND vtype ISNT "CHAR" AND vtype ISNT "UNUM" AND vtype ISNT "UFACT" AND vtype ISNT "SCL",
             REAP vst5 FROM is_struct_type, vtype.
             IF vst5 ISNT "1",
                 GIVE isel + "  tx_t " + target + " = " + cval + ";\n".
@@ -5166,6 +5215,12 @@ ACTION generate_node(node, env(LIST)),
         GIVE "".
     /IF.
 
+    # ── v0.50.0d — union_decl: UNION name { field: TYPE, … } → no code here;
+    #    typedefs come from the unions table pass in generate_c.
+    IF ntype IS "union_decl",
+        GIVE "".
+    /IF.
+
     # ── action_decl: ACTION name(params), body /ACTION. → void name(…) {…} ─
     # Generic templates emit nothing here; monomorphized copies are emitted
     # separately for each instantiation (see emit_inst).
@@ -5365,12 +5420,21 @@ ACTION plant_ctype(ptype(TX)),
     IF base IS "NUM", GIVE "long". /IF.
     IF base IS "FACT", GIVE "int". /IF.
     IF base IS "CHAR", GIVE "char". /IF.
+    IF base IS "UNUM", GIVE "unsigned long". /IF.
+    IF base IS "UFACT", GIVE "unsigned int". /IF.
+    # v0.50.0c — double-precision real primitive.
+    IF base IS "SCL", GIVE "double". /IF.
     IF base IS "LIST", GIVE "PlantArray*". /IF.
     IF base IS "REF NUM", GIVE "long*". /IF.
     IF base IS "REF FACT", GIVE "int*". /IF.
     IF base IS "REF CHAR", GIVE "char*". /IF.
+    IF base IS "REF UNUM", GIVE "unsigned long*". /IF.
+    IF base IS "REF UFACT", GIVE "unsigned int*". /IF.
+    IF base IS "REF SCL", GIVE "double*". /IF.
     IF base IS "REF LIST", GIVE "PlantArray**". /IF.
     IF base IS "REF TX", GIVE "tx_t*". /IF.
+    # v0.50.0d — union type maps to void* (opaque).
+    IF base IS "UNION", GIVE "void*". /IF.
     GIVE "tx_t".
 /ACTION.
 
@@ -6998,6 +7062,10 @@ ACTION generate_c(ast(LIST)),
             CREATE sfields2(LIST) TO _map_get(node_el, "fields").
             PUT plant_list_make(6, "name", sname, "generics", sgens2, "fields", sfields2) INTO structs.
         /IF.
+        IF ntype IS "union_decl",
+            REAP uname FROM _map_get, node_el, "name".
+            CREATE ufields2(LIST) TO _map_get(node_el, "fields").
+        /IF.
         IF ntype IS "species_decl",
             REAP sn7 FROM _map_get, node_el, "name".
             REAP sf7 FROM _map_get, node_el, "fields".
@@ -7064,7 +7132,7 @@ ACTION generate_c(ast(LIST)),
                 SET cb_acts TO cb2.
             /IF.
         /IF.
-        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl",
+        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "union_decl",
             REAP cb3 FROM collect_cb_uses, plant_list_make(1, node_el), sigs, cb_acts.
             SET cb_acts TO cb3.
         /IF.
@@ -7091,7 +7159,7 @@ ACTION generate_c(ast(LIST)),
                 REAP insts FROM collect_insts, bd3, esub, templates, insts.
             /IF.
         /IF.
-        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl",
+        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "union_decl",
             REAP insts FROM collect_insts, plant_list_make(1, node_el), esub, templates, insts.
         /IF.
         SET i TO i + 1.
@@ -7126,7 +7194,7 @@ ACTION generate_c(ast(LIST)),
                 REAP structs_insts FROM scan_fields, fs6, esub, structs, structs_insts.
             /IF.
         /IF.
-        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl",
+        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "union_decl",
             REAP structs_insts FROM collect_struct_insts, plant_list_make(1, node_el), esub, structs, structs_insts.
         /IF.
         SET i TO i + 1.
@@ -7211,6 +7279,31 @@ ACTION generate_c(ast(LIST)),
                 PUT stdef INTO enT.
                 PUT enT INTO ffi_tentries.
             /IF.
+        /IF.
+        SET i TO i + 1.
+    /SEASON.
+    # v0.50.0d: union typedefs — plain union templates.
+    SET i TO 0.
+    SEASON i < COUNT ast,
+        REAP node_el FROM plant_list_get, ast, i.
+        REAP ntype FROM _map_get, node_el, "type".
+        IF ntype IS "union_decl",
+            REAP uname4 FROM _map_get, node_el, "name".
+            CREATE ufields4(LIST) TO _map_get(node_el, "fields").
+            CREATE utdef(TX) TO "typedef union \{\n  ".
+            CREATE ufi(NUM) TO 0.
+            CREATE ufld(TX) TO "".
+            SEASON ufi < COUNT ufields4,
+                REAP ufld FROM plant_list_get, ufields4, ufi.
+                REAP ufn FROM _map_get, ufld, "name".
+                REAP uft FROM _map_get, ufld, "type".
+                REAP uct FROM ffi_ctype, uft.
+                IF ufi > 0, SET utdef TO utdef + ";\n  ". /IF.
+                SET utdef TO utdef + uct + " " + ufn.
+                SET ufi TO ufi + 1.
+            /SEASON.
+            SET utdef TO utdef + ";\n\} " + uname4 + ";\n".
+            SET struct_code TO struct_code + utdef.
         /IF.
         SET i TO i + 1.
     /SEASON.
@@ -7553,9 +7646,15 @@ ACTION generate_c(ast(LIST)),
         IF ntype IS "enum_decl",
             SET has_decl TO 1.
         /IF.
+        IF ntype IS "struct_decl",
+            SET has_decl TO 1.
+        /IF.
+        IF ntype IS "union_decl",
+            SET has_decl TO 1.
+        /IF.
         # v0.49.25: import_stmt nodes are loader-level no-ops and must
         # not flip has_stmt (which would force a duplicate CLI main).
-        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "import_stmt" AND ntype ISNT "type_decl" AND ntype ISNT "species_decl" AND ntype ISNT "interface_decl",
+        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "union_decl" AND ntype ISNT "import_stmt" AND ntype ISNT "type_decl" AND ntype ISNT "species_decl" AND ntype ISNT "interface_decl",
             REAP ns_code FROM generate_node, node_el, env_make(0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "", "", "").
             SET stmt_code TO stmt_code + ns_code.
             SET has_stmt TO 1.

@@ -3437,6 +3437,50 @@ ACTION parse_struct_decl(tokens(LIST), pos(NUM)),
   /SEASON.
 /ACTION.
 
+# v0.50.0d — UNION declaration parsing.
+ACTION parse_union_decl(tokens(LIST), pos(NUM)),
+  REAP lexer FROM get_lexer.
+  REAP pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
+  REAP p2 FROM _second, pair.
+  # UNION Name { fields } — fields comma-separated like STRUCT
+  REAP name_pair FROM plant_iLexer_consume_at, lexer, tokens, p2.
+  REAP uname FROM plant_iLexer_tok_lex, lexer, name_pair[0].
+  REAP p3 FROM _second, name_pair.
+  REAP lb FROM plant_iLexer_consume_at, lexer, tokens, p3.
+  REAP p4 FROM _second, lb.
+  CREATE fields(LIST) TO plant_list_make(0).
+  SEASON TRUE,
+    REAP is_eof_flag FROM plant_iLexer_is_eof_at, lexer, tokens, p4.
+    IF is_eof_flag,
+      GIVE plant_list_make(2, plant_list_make(6, "type", "union_decl", "name", uname, "fields", fields), p4).
+    /IF.
+    REAP tok FROM plant_iLexer_peek_at, lexer, tokens, p4.
+    REAP lx FROM plant_iLexer_tok_lex, lexer, tok.
+    IF lx IS "}",
+      REAP rb FROM plant_iLexer_consume_at, lexer, tokens, p4.
+      REAP p5 FROM _second, rb.
+      GIVE plant_list_make(2, plant_list_make(6, "type", "union_decl", "name", uname, "fields", fields), p5).
+    /IF.
+    REAP fn_pair FROM plant_iLexer_consume_at, lexer, tokens, p4.
+    REAP fname FROM plant_iLexer_tok_lex, lexer, fn_pair[0].
+    REAP p5 FROM _second, fn_pair.
+    REAP col_pair FROM plant_iLexer_consume_at, lexer, tokens, p5.
+    REAP p6 FROM _second, col_pair.
+    REAP ftv FROM collect_type_text, tokens, p6, "}", 1.
+    REAP ftype FROM _first, ftv.
+    REAP p7 FROM _second, ftv.
+    REAP ftypet FROM trim, ftype.
+    PUT plant_list_make(4, "name", fname, "type", ftypet) INTO fields.
+    REAP tok2 FROM plant_iLexer_peek_at, lexer, tokens, p7.
+    REAP lx2 FROM plant_iLexer_tok_lex, lexer, tok2.
+    IF lx2 IS ",",
+      REAP com FROM plant_iLexer_consume_at, lexer, tokens, p7.
+      REAP p7 FROM _second, com.
+    /IF.
+    SET p4 TO p7.
+  /SEASON.
+/ACTION.
+
 ACTION parse_action_decl(tokens(LIST), pos(NUM), rtab(LIST)),
   REAP lexer FROM get_lexer.
   REAP pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
@@ -4008,6 +4052,11 @@ ACTION parse_declaration(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST)
   /IF.
   IF lx IS "STRUCT",
     REAP r FROM parse_struct_decl, tokens, pos.
+    GIVE r.
+  /IF.
+  # v0.50.0d — UNION composite type.
+  IF lx IS "UNION",
+    REAP r FROM parse_union_decl, tokens, pos.
     GIVE r.
   /IF.
   # v0.49.27 - TYPE alias = target.

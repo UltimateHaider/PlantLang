@@ -1,3 +1,41 @@
+## v0.50.0d - 2026 (Native `UNION` Composite Type & Memory Management)
+
+### New Language Features
+
+#### Native `UNION` Composite Type
+- **Lexer**: Registered `"union"` as keyword mapped to `"UNION"` type token.
+- **Parser**: `UNION Name { field: TYPE, ... }` declaration syntax, comma-separated fields (consistent with STRUCT).
+- **Codegen**: `union_decl` nodes generate C `typedef union { ... } Name;` in the shared types block. `UNION` type maps to `void*` in generated C (opaque handle). Added runtime helpers `plant_union_create(size_t)` and `plant_union_free(void*)` for memory management.
+- **AST**: `union_decl` nodes properly excluded from all AST walk passes (16 top-level walks verified).
+
+---
+
+## v0.50.0c - 2026 (Native Double-Precision Real Primitive)
+
+### New Language Features
+
+#### Native Double-Precision Real Primitive (`SCL`)
+- **Lexer**: Registered `"scl"` as keyword mapped to `"SCL"` type token.
+- **Parser**: Supports `CREATE pi(SCL) TO 3.14159` with both decimal literals and string initialization.
+- **Codegen**: Maps `SCL` → `double` in generated C; wraps numeric values in `_from_double()` for proper string conversion before passing to runtime helpers; string literals passed directly.
+- **Runtime**: Added `plant_scl_create(const char* s)` (string→double via `strtod`) and `plant_scl_value(double v)` (double→string with `%.17g` precision for full double-precision preservation).
+- **Reference types**: `REF SCL` → `double*`.
+
+---
+
+## v0.50.0b - 2026 (Unsigned Numeric Primitives)
+
+### New Language Features
+
+#### Unsigned Numeric Primitives
+- **Lexer**: Registered `"unum"` and `"ufact"` as keywords mapped to `"UNUM"` and `"UFACT"` type tokens.
+- **Parser**: Supports `CREATE x (UNUM) TO 42` and `LET y (UFACT) TO "255"` with both numeric literals and string initialization.
+- **Codegen**: Maps `UNUM` → `unsigned long` and `UFACT` → `unsigned int` in generated C; wraps numeric values in `_from_long()` for proper string conversion before passing to runtime helpers.
+- **Runtime**: Added `plant_unum_create(const char* s)` (string→unsigned long), `plant_unum_value(unsigned long v)` (unsigned long→string), `plant_ufact_create(const char* s)` (string→unsigned int), `plant_ufact_value(unsigned int v)` (unsigned int→string).
+- **Reference types**: `REF UNUM` → `unsigned long*`, `REF UFACT` → `unsigned int*`.
+
+---
+
 ## v0.50.0a - 2026 (Native CHAR Primitive & Anonymous Structs)
 
 ### New Language Features

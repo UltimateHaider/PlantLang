@@ -296,6 +296,16 @@ void*        plant_unwrap_err(PlantTagged* t);
 char         plant_char_create(const char* s);
 const char*  plant_char_value(char c);
 
+/* ── v0.50.0b: Unsigned Numeric Primitives ── */
+unsigned long plant_unum_create(const char* s);
+const char*   plant_unum_value(unsigned long v);
+unsigned int  plant_ufact_create(const char* s);
+const char*   plant_ufact_value(unsigned int v);
+double        plant_scl_create(const char* s);
+const char*   plant_scl_value(double v);
+void*        plant_union_create(size_t size);
+void         plant_union_free(void* u);
+
 /* ── v0.50.0a: Anonymous Struct Allocation ── */
 void*        plant_anon_struct_create(size_t size);
 
