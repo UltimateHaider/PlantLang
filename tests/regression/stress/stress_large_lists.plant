@@ -1,0 +1,42 @@
+# stress_large_lists — Progressive collection growth from 1,000 to 10,000.
+# Validates list scalability, element access, and iteration at increasing
+# magnitudes without OOM (v0.49.63).
+ACTION main(),
+  CREATE lst(LIST) TO plant_list_make(0).
+  CREATE i(NUM) TO 0.
+  SEASON i < 1000,
+    PUT _from_long(i) INTO lst.
+    SET i TO i + 1.
+  /SEASON.
+  SHOW "count1k=" + _from_long(COUNT lst).
+  CREATE total(NUM) TO 0.
+  CYCLE item IN lst,
+    SET total TO total + _to_long(item).
+  /CYCLE.
+  SHOW "sum1k=" + _from_long(total).
+  SEASON i < 2000,
+    PUT _from_long(i) INTO lst.
+    SET i TO i + 1.
+  /SEASON.
+  SHOW "count2k=" + _from_long(COUNT lst).
+  SEASON i < 5000,
+    PUT _from_long(i) INTO lst.
+    SET i TO i + 1.
+  /SEASON.
+  SHOW "count5k=" + _from_long(COUNT lst).
+  SEASON i < 10000,
+    PUT _from_long(i) INTO lst.
+    SET i TO i + 1.
+  /SEASON.
+  SHOW "count10k=" + _from_long(COUNT lst).
+  CREATE bigsum(NUM) TO 0.
+  CREATE j(NUM) TO 0.
+  SEASON j < 10000,
+    REAP v FROM plant_list_get, lst, j.
+    SET bigsum TO bigsum + _to_long(v).
+    SET j TO j + 1.
+  /SEASON.
+  SHOW "sum10k=" + _from_long(bigsum).
+  SHOW "done".
+  GIVE 0.
+/GIVE main.

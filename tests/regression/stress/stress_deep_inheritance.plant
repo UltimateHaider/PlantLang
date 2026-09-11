@@ -1,0 +1,103 @@
+# stress_deep_inheritance — 10-level SPECIES FROM chain with 5 methods per level.
+# Validates deep type hierarchies, field inheritance, and method dispatch
+# across 10 nested inheritance levels (v0.49.63).
+SPECIES L0 {
+  f0: TX
+  ACTION m0() -> TX { GIVE "L0". }
+  ACTION m1() -> TX { GIVE "L0-m1". }
+  ACTION m2() -> TX { GIVE "L0-m2". }
+  ACTION m3() -> TX { GIVE "L0-m3". }
+  ACTION m4() -> TX { GIVE "L0-m4". }
+}
+SPECIES L1 FROM L0 {
+  f1: TX
+  ACTION m0() -> TX { GIVE "L1". }
+  ACTION m5() -> TX { GIVE "L1-m5". }
+  ACTION m6() -> TX { GIVE "L1-m6". }
+  ACTION m7() -> TX { GIVE "L1-m7". }
+  ACTION m8() -> TX { GIVE "L1-m8". }
+}
+SPECIES L2 FROM L1 {
+  f2: TX
+  ACTION m0() -> TX { GIVE "L2". }
+  ACTION m9() -> TX { GIVE "L2-m9". }
+  ACTION m10() -> TX { GIVE "L2-m10". }
+  ACTION m11() -> TX { GIVE "L2-m11". }
+  ACTION m12() -> TX { GIVE "L2-m12". }
+}
+SPECIES L3 FROM L2 {
+  f3: TX
+  ACTION m0() -> TX { GIVE "L3". }
+  ACTION m13() -> TX { GIVE "L3-m13". }
+  ACTION m14() -> TX { GIVE "L3-m14". }
+  ACTION m15() -> TX { GIVE "L3-m15". }
+  ACTION m16() -> TX { GIVE "L3-m16". }
+}
+SPECIES L4 FROM L3 {
+  f4: TX
+  ACTION m0() -> TX { GIVE "L4". }
+  ACTION m17() -> TX { GIVE "L4-m17". }
+  ACTION m18() -> TX { GIVE "L4-m18". }
+  ACTION m19() -> TX { GIVE "L4-m19". }
+  ACTION m20() -> TX { GIVE "L4-m20". }
+}
+SPECIES L5 FROM L4 {
+  f5: TX
+  ACTION m0() -> TX { GIVE "L5". }
+  ACTION m21() -> TX { GIVE "L5-m21". }
+  ACTION m22() -> TX { GIVE "L5-m22". }
+  ACTION m23() -> TX { GIVE "L5-m23". }
+  ACTION m24() -> TX { GIVE "L5-m24". }
+}
+SPECIES L6 FROM L5 {
+  f6: TX
+  ACTION m0() -> TX { GIVE "L6". }
+  ACTION m25() -> TX { GIVE "L6-m25". }
+  ACTION m26() -> TX { GIVE "L6-m26". }
+  ACTION m27() -> TX { GIVE "L6-m27". }
+  ACTION m28() -> TX { GIVE "L6-m28". }
+}
+SPECIES L7 FROM L6 {
+  f7: TX
+  ACTION m0() -> TX { GIVE "L7". }
+  ACTION m29() -> TX { GIVE "L7-m29". }
+  ACTION m30() -> TX { GIVE "L7-m30". }
+  ACTION m31() -> TX { GIVE "L7-m31". }
+  ACTION m32() -> TX { GIVE "L7-m32". }
+}
+SPECIES L8 FROM L7 {
+  f8: TX
+  ACTION m0() -> TX { GIVE "L8". }
+  ACTION m33() -> TX { GIVE "L8-m33". }
+  ACTION m34() -> TX { GIVE "L8-m34". }
+  ACTION m35() -> TX { GIVE "L8-m35". }
+  ACTION m36() -> TX { GIVE "L8-m36". }
+}
+SPECIES L9 FROM L8 {
+  f9: TX
+  ACTION m0() -> TX { GIVE "L9". }
+  ACTION m37() -> TX { GIVE "L9-m37". }
+  ACTION m38() -> TX { GIVE "L9-m38". }
+  ACTION m39() -> TX { GIVE "L9-m39". }
+  ACTION m40() -> TX { GIVE "L9-m40". }
+}
+ACTION main(),
+  BLOOM L9 AS obj.
+  CALL obj.put("f0", "v0").
+  CALL obj.put("f5", "v5").
+  CALL obj.put("f9", "v9").
+  SHOW obj.f0.
+  SHOW obj.f5.
+  SHOW obj.f9.
+  SHOW obj.m0().
+  SHOW obj.m5().
+  SHOW obj.m20().
+  SHOW obj.m40().
+  REAP chk1 FROM plant_is_a, obj, "L0".
+  REAP chk2 FROM plant_is_a, obj, "L5".
+  REAP chk3 FROM plant_is_a, obj, "L9".
+  SHOW "isL0=" + chk1.
+  SHOW "isL5=" + chk2.
+  SHOW "isL9=" + chk3.
+  GIVE 0.
+/GIVE main.

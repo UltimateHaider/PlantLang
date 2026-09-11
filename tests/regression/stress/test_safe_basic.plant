@@ -1,0 +1,13 @@
+# test_safe_basic — Isolated single-worker SAFE execution validation.
+# Verifies basic SAFE worker syntax and output isolation before
+# multi-worker concurrency tests (v0.49.63).
+ACTION worker_task() WITH MISSION SAFE,
+  SHOW "worker-start".
+  SHOW "worker-done".
+/ACTION.
+ACTION main(),
+  SHOW "main-before".
+  START worker_task.
+  SHOW "main-after".
+  GIVE 0.
+/GIVE main.

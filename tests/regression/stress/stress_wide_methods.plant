@@ -1,0 +1,136 @@
+# stress_wide_methods — 100+ methods on a single SPECIES entity.
+# Validates flat type scalability under heavy method density (v0.49.63).
+SPECIES MegaType {
+  val: TX
+  ACTION m00() -> TX { GIVE "m00". }
+  ACTION m01() -> TX { GIVE "m01". }
+  ACTION m02() -> TX { GIVE "m02". }
+  ACTION m03() -> TX { GIVE "m03". }
+  ACTION m04() -> TX { GIVE "m04". }
+  ACTION m05() -> TX { GIVE "m05". }
+  ACTION m06() -> TX { GIVE "m06". }
+  ACTION m07() -> TX { GIVE "m07". }
+  ACTION m08() -> TX { GIVE "m08". }
+  ACTION m09() -> TX { GIVE "m09". }
+  ACTION m10() -> TX { GIVE "m10". }
+  ACTION m11() -> TX { GIVE "m11". }
+  ACTION m12() -> TX { GIVE "m12". }
+  ACTION m13() -> TX { GIVE "m13". }
+  ACTION m14() -> TX { GIVE "m14". }
+  ACTION m15() -> TX { GIVE "m15". }
+  ACTION m16() -> TX { GIVE "m16". }
+  ACTION m17() -> TX { GIVE "m17". }
+  ACTION m18() -> TX { GIVE "m18". }
+  ACTION m19() -> TX { GIVE "m19". }
+  ACTION m20() -> TX { GIVE "m20". }
+  ACTION m21() -> TX { GIVE "m21". }
+  ACTION m22() -> TX { GIVE "m22". }
+  ACTION m23() -> TX { GIVE "m23". }
+  ACTION m24() -> TX { GIVE "m24". }
+  ACTION m25() -> TX { GIVE "m25". }
+  ACTION m26() -> TX { GIVE "m26". }
+  ACTION m27() -> TX { GIVE "m27". }
+  ACTION m28() -> TX { GIVE "m28". }
+  ACTION m29() -> TX { GIVE "m29". }
+  ACTION m30() -> TX { GIVE "m30". }
+  ACTION m31() -> TX { GIVE "m31". }
+  ACTION m32() -> TX { GIVE "m32". }
+  ACTION m33() -> TX { GIVE "m33". }
+  ACTION m34() -> TX { GIVE "m34". }
+  ACTION m35() -> TX { GIVE "m35". }
+  ACTION m36() -> TX { GIVE "m36". }
+  ACTION m37() -> TX { GIVE "m37". }
+  ACTION m38() -> TX { GIVE "m38". }
+  ACTION m39() -> TX { GIVE "m39". }
+  ACTION m40() -> TX { GIVE "m40". }
+  ACTION m41() -> TX { GIVE "m41". }
+  ACTION m42() -> TX { GIVE "m42". }
+  ACTION m43() -> TX { GIVE "m43". }
+  ACTION m44() -> TX { GIVE "m44". }
+  ACTION m45() -> TX { GIVE "m45". }
+  ACTION m46() -> TX { GIVE "m46". }
+  ACTION m47() -> TX { GIVE "m47". }
+  ACTION m48() -> TX { GIVE "m48". }
+  ACTION m49() -> TX { GIVE "m49". }
+  ACTION m50() -> TX { GIVE "m50". }
+  ACTION m51() -> TX { GIVE "m51". }
+  ACTION m52() -> TX { GIVE "m52". }
+  ACTION m53() -> TX { GIVE "m53". }
+  ACTION m54() -> TX { GIVE "m54". }
+  ACTION m55() -> TX { GIVE "m55". }
+  ACTION m56() -> TX { GIVE "m56". }
+  ACTION m57() -> TX { GIVE "m57". }
+  ACTION m58() -> TX { GIVE "m58". }
+  ACTION m59() -> TX { GIVE "m59". }
+  ACTION m60() -> TX { GIVE "m60". }
+  ACTION m61() -> TX { GIVE "m61". }
+  ACTION m62() -> TX { GIVE "m62". }
+  ACTION m63() -> TX { GIVE "m63". }
+  ACTION m64() -> TX { GIVE "m64". }
+  ACTION m65() -> TX { GIVE "m65". }
+  ACTION m66() -> TX { GIVE "m66". }
+  ACTION m67() -> TX { GIVE "m67". }
+  ACTION m68() -> TX { GIVE "m68". }
+  ACTION m69() -> TX { GIVE "m69". }
+  ACTION m70() -> TX { GIVE "m70". }
+  ACTION m71() -> TX { GIVE "m71". }
+  ACTION m72() -> TX { GIVE "m72". }
+  ACTION m73() -> TX { GIVE "m73". }
+  ACTION m74() -> TX { GIVE "m74". }
+  ACTION m75() -> TX { GIVE "m75". }
+  ACTION m76() -> TX { GIVE "m76". }
+  ACTION m77() -> TX { GIVE "m77". }
+  ACTION m78() -> TX { GIVE "m78". }
+  ACTION m79() -> TX { GIVE "m79". }
+  ACTION m80() -> TX { GIVE "m80". }
+  ACTION m81() -> TX { GIVE "m81". }
+  ACTION m82() -> TX { GIVE "m82". }
+  ACTION m83() -> TX { GIVE "m83". }
+  ACTION m84() -> TX { GIVE "m84". }
+  ACTION m85() -> TX { GIVE "m85". }
+  ACTION m86() -> TX { GIVE "m86". }
+  ACTION m87() -> TX { GIVE "m87". }
+  ACTION m88() -> TX { GIVE "m88". }
+  ACTION m89() -> TX { GIVE "m89". }
+  ACTION m90() -> TX { GIVE "m90". }
+  ACTION m91() -> TX { GIVE "m91". }
+  ACTION m92() -> TX { GIVE "m92". }
+  ACTION m93() -> TX { GIVE "m93". }
+  ACTION m94() -> TX { GIVE "m94". }
+  ACTION m95() -> TX { GIVE "m95". }
+  ACTION m96() -> TX { GIVE "m96". }
+  ACTION m97() -> TX { GIVE "m97". }
+  ACTION m98() -> TX { GIVE "m98". }
+  ACTION m99() -> TX { GIVE "m99". }
+  ACTION m100() -> TX { GIVE "m100". }
+  ACTION m101() -> TX { GIVE "m101". }
+  ACTION m102() -> TX { GIVE "m102". }
+  ACTION m103() -> TX { GIVE "m103". }
+  ACTION m104() -> TX { GIVE "m104". }
+  ACTION m105() -> TX { GIVE "m105". }
+  ACTION m106() -> TX { GIVE "m106". }
+  ACTION m107() -> TX { GIVE "m107". }
+  ACTION m108() -> TX { GIVE "m108". }
+  ACTION m109() -> TX { GIVE "m109". }
+  ACTION m110() -> TX { GIVE "m110". }
+  ACTION m111() -> TX { GIVE "m111". }
+  ACTION m112() -> TX { GIVE "m112". }
+  ACTION m113() -> TX { GIVE "m113". }
+  ACTION m114() -> TX { GIVE "m114". }
+  ACTION m115() -> TX { GIVE "m115". }
+  ACTION m116() -> TX { GIVE "m116". }
+  ACTION m117() -> TX { GIVE "m117". }
+  ACTION m118() -> TX { GIVE "m118". }
+  ACTION m119() -> TX { GIVE "m119". }
+}
+ACTION main(),
+  BLOOM MegaType AS obj.
+  CALL obj.put("val", "test").
+  SHOW obj.val.
+  SHOW obj.m00().
+  SHOW obj.m50().
+  SHOW obj.m99().
+  SHOW obj.m100().
+  SHOW obj.m119().
+  GIVE 0.
+/GIVE main.

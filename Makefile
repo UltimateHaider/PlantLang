@@ -14,7 +14,7 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.49.62
+VERSION    ?= 0.49.63
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
@@ -115,6 +115,9 @@ test: $(NATIVE_BIN) ## Run native + generics + closures + regression suites
 	@sh tests/generics/run_generics_tests.sh $(NATIVE_BIN)
 	@sh tests/closures/run_closures_tests.sh $(NATIVE_BIN)
 	@sh tests/regression/run_regression_tests.sh $(NATIVE_BIN)
+
+test-stress: $(NATIVE_BIN) ## Run stress test suite (tests/regression/stress/)
+	@sh tests/regression/run_regression_tests.sh $(NATIVE_BIN) --stress
 
 perf: $(NATIVE_BIN) ## Compile + run benchmarks, write perf_results.md
 	@sh tests/perf/run_perf.sh $(NATIVE_BIN)

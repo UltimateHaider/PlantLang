@@ -1,3 +1,33 @@
+## v0.49.63 - 2026 (Stress Test Suite & Isolated Concurrency Architecture)
+
+### Stress Testing
+- **Stress test subsystem**: New `tests/regression/stress/` directory with 7 dedicated
+  stress test fixtures, isolated from standard regression to prevent runtime overhead.
+- **Deep inheritance test** (`stress_deep_inheritance.plant`): 10-level SPECIES FROM chain
+  with 50 methods per level, validating deep type hierarchies and method dispatch.
+- **Wide methods test** (`stress_wide_methods.plant`): 120 methods on a single entity,
+  validating flat type scalability under heavy method density.
+- **Combined inheritance test** (`stress_combined.plant`): Multi-level inheritance with
+  field inheritance and method dispatch across 2 levels.
+- **Memory stress test** (`stress_memory.plant`): 1,000 BLOOM allocations + 500
+  field mutation cycles, exercising rapid object creation/destruction churn.
+- **Large lists test** (`stress_large_lists.plant`): Progressive collection growth
+  from 1,000 to 10,000 elements with summation verification.
+- **SAFE basic test** (`test_safe_basic.plant`): Isolated single-worker SAFE execution
+  validation with START dispatch.
+- **Concurrency stress test** (`stress_concurrency.plant`): 3 concurrent SAFE workers
+  with independent iteration loops.
+
+### Build System
+- **`make test-stress`**: New Makefile target for isolated stress test execution.
+- **`--stress` flag**: Regression runner supports `--stress` argument to target
+  stress directory exclusively.
+
+### Test Results
+- 7/7 stress tests pass
+- 188/188 regression tests pass (unchanged)
+- 224/224 total suite green
+
 ## v0.49.62 - 2026 (Regression Test Resolution & Green Suite Stabilization)
 
 ### Bug Fixes

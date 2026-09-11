@@ -1,0 +1,32 @@
+# stress_concurrency — Multi-worker concurrent SAFE execution.
+# Validates thread-safe output and isolation across multiple concurrent
+# SAFE workers (v0.49.63).
+ACTION worker_a() WITH MISSION SAFE,
+  CREATE i(NUM) TO 0.
+  SEASON i < 100,
+    SET i TO i + 1.
+  /SEASON.
+  SHOW "a-done=" + _from_long(i).
+/ACTION.
+ACTION worker_b() WITH MISSION SAFE,
+  CREATE i(NUM) TO 0.
+  SEASON i < 100,
+    SET i TO i + 1.
+  /SEASON.
+  SHOW "b-done=" + _from_long(i).
+/ACTION.
+ACTION worker_c() WITH MISSION SAFE,
+  CREATE i(NUM) TO 0.
+  SEASON i < 100,
+    SET i TO i + 1.
+  /SEASON.
+  SHOW "c-done=" + _from_long(i).
+/ACTION.
+ACTION main(),
+  SHOW "concurrency-start".
+  START worker_a.
+  START worker_b.
+  START worker_c.
+  SHOW "all-dispatched".
+  GIVE 0.
+/GIVE main.

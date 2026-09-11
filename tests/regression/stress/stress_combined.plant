@@ -1,0 +1,36 @@
+# stress_combined — Multi-level inheritance stress.
+# Validates type hierarchies with field inheritance and method dispatch
+# across 3 levels (v0.49.63).
+SPECIES Shape {
+  color: TX
+  ACTION area() -> TX { GIVE "0". }
+  ACTION s0() -> TX { GIVE "S0". }
+  ACTION s1() -> TX { GIVE "S1". }
+  ACTION s2() -> TX { GIVE "S2". }
+  ACTION s3() -> TX { GIVE "S3". }
+  ACTION s4() -> TX { GIVE "S4". }
+  ACTION draw() -> TX { GIVE "draw-shape". }
+}
+SPECIES Rect FROM Shape {
+  w: TX
+  h: TX
+  ACTION r0() -> TX { GIVE "R0". }
+  ACTION r1() -> TX { GIVE "R1". }
+  ACTION r2() -> TX { GIVE "R2". }
+  ACTION r3() -> TX { GIVE "R3". }
+  ACTION r4() -> TX { GIVE "R4". }
+}
+ACTION main(),
+  BLOOM Rect AS r.
+  CALL r.put("color", "blue").
+  CALL r.put("w", "100").
+  CALL r.put("h", "50").
+  SHOW r.draw().
+  SHOW r.area().
+  SHOW r.s0().
+  SHOW r.s4().
+  REAP c1 FROM plant_is_a, r, "Shape".
+  REAP c2 FROM plant_is_a, r, "Rect".
+  SHOW "Shape=" + c1 + " Rect=" + c2.
+  GIVE 0.
+/GIVE main.

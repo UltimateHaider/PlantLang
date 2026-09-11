@@ -1,0 +1,33 @@
+# stress_memory — Rapid BLOOM allocation and field mutation cycles.
+# Exercises repeated object creation, field writes, and reads to detect
+# memory leaks or corruption under high allocation churn (v0.49.63).
+SPECIES Node {
+  id: TX
+  val: TX
+  ACTION describe() -> TX { GIVE self.id + "=" + self.val. }
+}
+ACTION main(),
+  CREATE count(NUM) TO 0.
+  SEASON count < 1000,
+    BLOOM Node AS n.
+    CALL n.put("id", _from_long(count)).
+    CALL n.put("val", "item").
+    SET count TO count + 1.
+    IF count >= 999,
+      SHOW "last=" + n.describe().
+    /IF.
+  /SEASON.
+  SHOW "allocated=" + _from_long(count).
+  CREATE round(NUM) TO 0.
+  SEASON round < 500,
+    BLOOM Node AS n.
+    CALL n.put("id", _from_long(round)).
+    CALL n.put("val", "round").
+    REAP v FROM plant_map_get, n, "val".
+    SHOW "r" + _from_long(round) + "=" + v.
+    SET round TO round + 1.
+  /SEASON.
+  SHOW "rounds=" + _from_long(round).
+  SHOW "done".
+  GIVE 0.
+/GIVE main.

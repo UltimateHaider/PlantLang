@@ -2,11 +2,18 @@
 # PlantLang numeric/FFI regression test runner (v0.48.5).
 # Compiles each tests/regression/*.plant to C, builds with the mock FFI
 # library + runtime, and diffs stdout against the .expected file.
-# Usage: sh tests/regression/run_regression_tests.sh [path-to-Chloroplast]
+# Usage: sh tests/regression/run_regression_tests.sh [path-to-Chloroplast] [--stress]
 set -u
 PLANTC=${1:-bin/Chloroplast}
+STRESS_FLAG=""
+if [ "${2:-}" = "--stress" ]; then STRESS_FLAG=1; fi
 DIR=$(dirname "$0")
 ROOT=$(cd "$DIR/../.." && pwd)
+if [ -n "$STRESS_FLAG" ]; then
+  SUITE_DIR="$DIR/stress"
+else
+  SUITE_DIR="$DIR"
+fi
 BUILD=${TMPDIR:-/tmp}/plantlang_regression_tests
 rm -rf "$BUILD"
 mkdir -p "$BUILD"
@@ -29,17 +36,17 @@ fi
 pass=0
 fail=0
 
-for src in "$DIR"/*.plant "$DIR"/compatibility/*.plant; do
+for src in "$SUITE_DIR"/*.plant; do
   name=$(basename "$src" .plant)
-  [ -f "$DIR/$name.expected" ] || continue
-  if [ -f "$DIR/$name.invalid" ]; then
+  [ -f "$SUITE_DIR/$name.expected" ] || continue
+  if [ -f "$SUITE_DIR/$name.invalid" ]; then
     # negative test: the source must FAIL to compile, and the compiler
     # log must contain every diagnostic line from the .expected file
     if ! "$PLANTC" "$src" "$BUILD/$name.c" >"$BUILD/$name.compile.log" 2>&1; then
       ok=1
       while IFS= read -r want; do
         grep -Fq -- "$want" "$BUILD/$name.compile.log" || ok=0
-      done < "$DIR/$name.expected"
+      done < "$SUITE_DIR/$name.expected"
       if [ "$ok" -eq 1 ]; then
         echo "PASS  $name"; pass=$((pass+1))
       else
@@ -86,7 +93,7 @@ for src in "$DIR"/*.plant "$DIR"/compatibility/*.plant; do
     wait "$spid" 2>/dev/null
     # v0.49.1: normalize the fixture to always end with a newline so a
     # missing trailing \n in an .expected file cannot fail the diff.
-    awk 1 "$DIR/$name.expected" > "$BUILD/$name.expected"
+    awk 1 "$SUITE_DIR/$name.expected" > "$BUILD/$name.expected"
     if cat "$BUILD/$name.out" "$BUILD/$name.client" 2>/dev/null | diff - "$BUILD/$name.expected" >/dev/null; then
       echo "PASS  $name"; pass=$((pass+1))
     else
@@ -94,7 +101,7 @@ for src in "$DIR"/*.plant "$DIR"/compatibility/*.plant; do
     fi
     continue
   fi
-  awk 1 "$DIR/$name.expected" > "$BUILD/$name.expected"
+  awk 1 "$SUITE_DIR/$name.expected" > "$BUILD/$name.expected"
   if "$BUILD/$name" 2>&1 | diff - "$BUILD/$name.expected" >/dev/null; then
     echo "PASS  $name"; pass=$((pass+1))
   else
