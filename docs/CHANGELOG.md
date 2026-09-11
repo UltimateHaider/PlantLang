@@ -1,3 +1,25 @@
+## v0.50.0a - 2026 (Native CHAR Primitive & Anonymous Structs)
+
+### New Language Features
+
+#### Native `CHAR` Single-Character Primitive
+- **Lexer**: Registered `"char"` as a keyword mapped to `"CHAR"` type token.
+- **Parser**: Supports `CREATE c (CHAR) TO "A"` and `LET c (CHAR) TO "B"` type annotations.
+- **Codegen**: Maps `CHAR` type to native C `char` declarations; wraps string values in `plant_char_create()` to extract the first character.
+- **Runtime**: Added `plant_char_create(const char* s)` (extracts first character) and `plant_char_value(char c)` (returns 1-char string).
+- **Reference types**: `REF CHAR` maps to `char*` in generated C.
+
+#### Anonymous Structures
+- **Parser**: `STRUCT { x: NUM, y: NUM }` without a name now parses successfully.
+- **Codegen**: Automatically generates unique struct identifiers (`plant_anon_struct_0`, `plant_anon_struct_1`, ...) using an incremental counter for unnamed structs.
+- **Runtime**: Added `plant_anon_struct_create(size_t size)` for safe dynamic allocation of anonymous struct layouts.
+
+### Type System Updates
+- **Complete type taxonomy**: NUM, SCL, FACT, TX, **CHAR** (new), LIST, MAP, STRUCT, ENUM, SPECIES, ACTION, CALLBACK, OPTION, RESULT, NULL, VOID, STORM, ANY, JSON, and reference types (REF NUM, REF FACT, REF CHAR, REF LIST, REF TX).
+- **C type mapping**: `CHAR` → `char`, `REF CHAR` → `char*` in `plant_ctype`.
+
+---
+
 ## v0.49.63 - 2026 (Stress Test Suite & Isolated Concurrency Architecture)
 
 ### Stress Testing

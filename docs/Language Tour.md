@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.48.4
+# 🌿 PlantLang — Chloroplast v0.50.0a
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -52,7 +52,7 @@ CLI:
 
 ```bash
 ./bin/Chloroplast --help        # usage + options
-./bin/Chloroplast --version     # Chloroplast 0.48.4 (pure native)
+./bin/Chloroplast --version     # Chloroplast 0.50.0a (pure native)
 ./bin/Chloroplast file.plant [out.c]   # default output: file.c
 ```
 
@@ -100,11 +100,15 @@ ACTION main(),
 | Integer | `NUM` | `CREATE age(NUM) TO 25.` |
 | Decimal | `SCL` | `CREATE pi(SCL) TO 3.14.` |
 | Text | `TX` | `CREATE name(TX) TO "Haider".` |
+| Character | `CHAR` | `CREATE c(CHAR) TO "A".` |
 | Boolean | `FACT` | `CREATE active(FACT) TO TRUE.` |
 | List | `LIST` | `CREATE parts(LIST) TO plant_list_make(0).` |
 | Generic list | `LIST[T]` | `CREATE xs(LIST[NUM]) TO plant_list_make(0).` |
+| Map | `MAP` | `CREATE m(MAP) TO { "key": "val" }.` |
 | Struct | `STRUCT` | `STRUCT Point { x: NUM, y: NUM }` |
+| Anonymous struct | `STRUCT` | `STRUCT { x: NUM, y: NUM }` (auto-named) |
 | Enum | `ENUM` | `ENUM Color { RED, GREEN, BLUE }.` |
+| Species | `SPECIES` | `SPECIES Animal { name: TX, age: NUM }.` |
 
 Declare a variable with `CREATE` (and re-assign with `SET`):
 
@@ -116,6 +120,7 @@ SHOW "score=" + score.   # → 100
 CREATE name(TX) TO "Haider".
 CREATE pi(SCL) TO 3.14159.
 CREATE active(FACT) TO TRUE.
+CREATE c(CHAR) TO "A".
 CREATE fruits(LIST) TO plant_list_make(3, "apple", "banana", "kiwi").
 ```
 

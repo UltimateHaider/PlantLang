@@ -92,6 +92,8 @@ ACTION is_keyword(wrd(TX)),
   IF wrd IS "INTO", GIVE TRUE. /IF.
   IF wrd IS "WAIT", GIVE TRUE. /IF.
   IF wrd IS "LOCK", GIVE TRUE. /IF.
+  # v0.50.0a — CHAR single-character primitive.
+  IF wrd IS "char", GIVE TRUE. /IF.
   GIVE FALSE.
 /ACTION.
 
@@ -237,6 +239,8 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "INTO", GIVE "INTO". /IF.
   IF wrd IS "WAIT", GIVE "WAIT". /IF.
   IF wrd IS "LOCK", GIVE "LOCK". /IF.
+  # v0.50.0a — CHAR single-character primitive.
+  IF wrd IS "char", GIVE "CHAR". /IF.
   # v0.49.52/v0.49.54 — SUITE lifecycle hooks and VERIFY assertion
   IF wrd IS "SUITE", GIVE "SUITE". /IF.
   IF wrd IS "VERIFY", GIVE "VERIFY". /IF.

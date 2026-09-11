@@ -3368,9 +3368,16 @@ ACTION parse_struct_decl(tokens(LIST), pos(NUM)),
   REAP lexer FROM get_lexer.
   REAP pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
   REAP p2 FROM _second, pair.
-  REAP name_pair FROM plant_iLexer_consume_at, lexer, tokens, p2.
-  REAP sname FROM plant_iLexer_tok_lex, lexer, name_pair[0].
-  REAP p3 FROM _second, name_pair.
+  # v0.50.0a: anonymous struct — STRUCT { ... } without a name.
+  REAP sg_tok0 FROM plant_iLexer_peek_at, lexer, tokens, p2.
+  REAP sg_lx0 FROM plant_iLexer_tok_lex, lexer, sg_tok0.
+  CREATE sname(TX) TO "".
+  CREATE p3(NUM) TO p2.
+  IF sg_lx0 ISNT "{",
+    REAP name_pair FROM plant_iLexer_consume_at, lexer, tokens, p2.
+    REAP sname FROM plant_iLexer_tok_lex, lexer, name_pair[0].
+    REAP p3 FROM _second, name_pair.
+  /IF.
   # generic type parameter list: [T, U] right after the struct name
   CREATE generics(LIST) TO plant_list_make(0).
   REAP sg_tok FROM plant_iLexer_peek_at, lexer, tokens, p3.

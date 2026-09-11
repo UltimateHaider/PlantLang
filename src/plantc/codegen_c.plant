@@ -1979,6 +1979,8 @@ ACTION build_enum_registry(ast(LIST)),
   # types, generics comma-joined, fields "name:type" comma-joined).
   # collect_enums uses them to register enum field reads of
   # struct-typed vars as plant_map_get(var, "field") keys (v0.48.10).
+  # v0.50.0a: anon_counter for anonymous struct name generation.
+  CREATE anon_counter(NUM) TO 0.
   CREATE si(NUM) TO 0.
   CREATE sn(TX) TO "".
   CREATE sty(TX) TO "".
@@ -3447,6 +3449,11 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
       /IF.
       GIVE isel + "  int " + target + " = " + cval + ";\n".
   /IF.
+  # v0.50.0a — CHAR single-character primitive.
+  IF vtype IS "CHAR",
+      # Wrap string value in plant_char_create to extract first character.
+      GIVE isel + "  char " + target + " = plant_char_create(" + cval + ");\n".
+  /IF.
   IF vtype IS "LIST",
       GIVE isel + "  PlantArray* " + target + " = " + cval + ";\n".
   /IF.
@@ -3458,7 +3465,7 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
       /IF.
       GIVE isel + "  " + vct2 + " " + target + " = " + cval + ";\n".
   /IF.
-  IF vtype ISNT "NUM" AND vtype ISNT "FACT" AND vtype ISNT "LIST",
+  IF vtype ISNT "NUM" AND vtype ISNT "FACT" AND vtype ISNT "CHAR" AND vtype ISNT "LIST",
       REAP vst3 FROM is_struct_type, vtype.
       IF vst3 ISNT "1",
           GIVE isel + "  tx_t " + target + " = " + cval + ";\n".
@@ -4443,6 +4450,10 @@ ACTION generate_node(node, env(LIST)),
         IF vtype IS "NUM",
             GIVE isel + "  long " + target + " = " + cval + ";\n".
         /IF.
+        # v0.50.0a — CHAR single-character primitive.
+        IF vtype IS "CHAR",
+            GIVE isel + "  char " + target + " = plant_char_create(" + cval + ");\n".
+        /IF.
         REAP vst4 FROM is_struct_type, vtype.
         IF vst4 IS "1",
             REAP vct4 FROM ffi_ctype, vtype.
@@ -4451,7 +4462,7 @@ ACTION generate_node(node, env(LIST)),
             /IF.
             GIVE isel + "  " + vct4 + " " + target + " = " + cval + ";\n".
         /IF.
-        IF vtype ISNT "NUM",
+        IF vtype ISNT "NUM" AND vtype ISNT "CHAR",
             REAP vst5 FROM is_struct_type, vtype.
             IF vst5 ISNT "1",
                 GIVE isel + "  tx_t " + target + " = " + cval + ";\n".
@@ -5353,9 +5364,11 @@ ACTION plant_ctype(ptype(TX)),
     REAP base FROM type_base, ptype.
     IF base IS "NUM", GIVE "long". /IF.
     IF base IS "FACT", GIVE "int". /IF.
+    IF base IS "CHAR", GIVE "char". /IF.
     IF base IS "LIST", GIVE "PlantArray*". /IF.
     IF base IS "REF NUM", GIVE "long*". /IF.
     IF base IS "REF FACT", GIVE "int*". /IF.
+    IF base IS "REF CHAR", GIVE "char*". /IF.
     IF base IS "REF LIST", GIVE "PlantArray**". /IF.
     IF base IS "REF TX", GIVE "tx_t*". /IF.
     GIVE "tx_t".
@@ -7159,6 +7172,8 @@ ACTION generate_c(ast(LIST)),
     CREATE ffi_torder(LIST) TO plant_list_make(0).
     CREATE tscnX(TX) TO "".
     CREATE tstdef(TX) TO "".
+    # v0.50.0a: counter for anonymous struct name generation.
+    CREATE anon_counter(NUM) TO 0.
     SET i TO 0.
     SEASON i < COUNT ast,
         REAP node_el FROM plant_list_get, ast, i.
@@ -7167,9 +7182,25 @@ ACTION generate_c(ast(LIST)),
             CREATE sgens4(LIST) TO _map_get(node_el, "generics").
             IF COUNT sgens4 IS 0,
                 REAP sname4 FROM _map_get, node_el, "name".
+                # v0.50.0a: assign unique name to anonymous structs.
+                IF sname4 IS "",
+                    SET sname4 TO "plant_anon_struct_" + _from_long(anon_counter).
+                    SET anon_counter TO anon_counter + 1.
+                /IF.
                 REAP scn4 FROM ffi_struct_cname, sname4.
+                # Build a new template node with the resolved name for
+                # struct_typedef (anonymous structs need the generated name).
                 CREATE eargs(LIST) TO plant_list_make(0).
-                REAP stdef FROM struct_typedef, node_el, eargs.
+                CREATE resolved_tpl(LIST) TO plant_list_make(0).
+                PUT "type" INTO resolved_tpl.
+                PUT "struct_decl" INTO resolved_tpl.
+                PUT "name" INTO resolved_tpl.
+                PUT sname4 INTO resolved_tpl.
+                PUT "generics" INTO resolved_tpl.
+                PUT _map_get(node_el, "generics") INTO resolved_tpl.
+                PUT "fields" INTO resolved_tpl.
+                PUT _map_get(node_el, "fields") INTO resolved_tpl.
+                REAP stdef FROM struct_typedef, resolved_tpl, eargs.
                 CREATE sfldsT(LIST) TO struct_fields_at(node_el, eargs).
                 CREATE enT(LIST) TO plant_list_make(0).
                 PUT "scn" INTO enT.

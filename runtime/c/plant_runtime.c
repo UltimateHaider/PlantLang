@@ -1811,6 +1811,26 @@ void* plant_unwrap_err(PlantTagged* t) {
     return t->payload;
 }
 
+/* ── v0.50.0a: CHAR Single-Character Primitive ── */
+
+char plant_char_create(const char* s) {
+    if (!s || !s[0]) return '\0';
+    return s[0];
+}
+
+const char* plant_char_value(char c) {
+    static char buf[2];
+    buf[0] = c;
+    buf[1] = '\0';
+    return buf;
+}
+
+/* ── v0.50.0a: Anonymous Struct Allocation ── */
+
+void* plant_anon_struct_create(size_t size) {
+    return plant_alloc(size);
+}
+
 /* ── v0.44.0: Array/String Slice Primitives ── */
 
 int64_t* plant_array_slice(int64_t* arr, int64_t start, int64_t end) {

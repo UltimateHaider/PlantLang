@@ -292,6 +292,13 @@ int          plant_is_ok(PlantTagged* t);
 int          plant_is_err(PlantTagged* t);
 void*        plant_unwrap_err(PlantTagged* t);
 
+/* ── v0.50.0a: CHAR Single-Character Primitive ── */
+char         plant_char_create(const char* s);
+const char*  plant_char_value(char c);
+
+/* ── v0.50.0a: Anonymous Struct Allocation ── */
+void*        plant_anon_struct_create(size_t size);
+
 /* ── v0.44.0: Array/String Slice Primitives ── */
 int64_t*     plant_array_slice(int64_t* arr, int64_t start, int64_t end);
 char*        plant_string_slice(const char* str, int64_t start, int64_t end);

@@ -1,8 +1,8 @@
 # Legacy JS Interpreter vs Self-Hosted Compiler — Gap Analysis Report
 
-**Scope:** Legacy JavaScript interpreter (PlantLang ≤ v0.45.x, `core/interpreter.js` + associated modules, recovered from git at `7f54eae` v0.45.0) vs the self-hosted native compiler (v0.49.10, `src/plantc/*.plant` → C, `runtime/c/plant_runtime.c`).
+**Scope:** Legacy JavaScript interpreter (PlantLang ≤ v0.45.x, `core/interpreter.js` + associated modules, recovered from git at `7f54eae` v0.45.0) vs the self-hosted native compiler (v0.49.63, `src/plantc/*.plant` → C, `runtime/c/plant_runtime.c`).
 
-> **Status note (v0.49.10):** the legacy side no longer exists in the
+> **Status note (v0.49.63):** the legacy side no longer exists in the
 > working tree. v0.48.38m removed `core/`, `src/**/*.js`, `service/`,
 > `webrepl/`, `std/`, `benchmarks/`, and the editor assets from the
 > repository; the legacy engine is now preserved only in git history
@@ -15,9 +15,11 @@
 
 PlantLang transitioned from a **tree-walking JavaScript interpreter** (~9,000 lines of `core/*.js` + `src/interpreter/*` + `std/*.plnt`) to a **self-hosted native compiler** (`src/plantc/*.plant` ≈ 6,700 lines of PlantLang that compiles PlantLang to C, linked against a ~3,500-line C runtime). The compiler achieved full self-hosting convergence (v0.48.19, 257,107 bytes) and ships a richer mission-mode runtime (FAST/SAFE/SMART/PERSISTENT with audit trails, capability checks, an async engine and a reference-counted ARC heap) than the interpreter ever had.
 
+Since v0.49.50, the compiler adopted a **Dependency Inversion Architecture (DIP)** with abstract interfaces (`IRuntime`, `IReport`, `ILexer`, `IParser`, `ICodegen`) using `void* context` pointers and function-pointer vtables, enabling modular testing and clean separation between the compiler frontend and runtime backend.
+
 The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 port. High-level counts:
 
-| Area | Legacy (v0.45.0) | Current (v0.49.10) | Gap |
+| Area | Legacy (v0.45.0) | Current (v0.49.63) | Gap |
 |---|---|---|---|---|
 | Statement keywords (parser dispatch) | ~40 | ~40 (incl. storms, CYCLE forms, NOW/ANALYZE/TYPEOF, FREE/ARC/FAST, WAIT/LOCK) | ~10 missing (deliberate cuts + legacy stubs) |
 | Innate/std library functions | ~60 (41 innate + 19 std/.plnt + 5 FFI stubs) | ~31 expression builtins (codegen_c.plant:2238-2292) + ~22 FFI module bindings (strings/fs/math) + ~50 declared runtime helpers | ~20 missing |
@@ -25,6 +27,7 @@ The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 
 | Network | HTTP client + server (HARVEST/LISTEN) | HARVEST client (v0.48.32, MAP-mode v0.48.34, formalized v0.49.0) + LISTEN server (v0.48.33) | low — no TLS (https: parses to port 443 but sends plaintext) |
 | Error handling | Storm exceptions (WEATHER/SHELTER, 12 storm types) | 13 kinds (v0.48.25: +STOP_STORM), STOP IF, plant_calm finalization, `storm()` factory (v0.48.38a), location backfill (v0.48.38b) | low |
 | Object model | SPECIES classes, BLOOM instantiation, SELF methods, inheritance | none | high |
+| Testing framework | none | VERIFY/SUITE (v0.49.53/54), 231/231 test suite (7 stress tests) | none — current exceeds legacy |
 
 **Key architectural differences that explain the gaps:**
 
@@ -33,6 +36,7 @@ The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 
 3. **Host capabilities vs portable C runtime.** The interpreter leaned on Node.js (`fs`, `http`, `worker_threads`, `Atomics`, locale formatting, ANSI diagnostics). The C runtime re-implements only a thin slice (stdio via `runtime_bridge.c`, POSIX file ops, and — since v0.48.32 — POSIX sockets wired as HTTP: HARVEST client with MAP/JSON modes, LISTEN server with TIMEOUT/JSON responses). Worker-thread fan-out, TLS, locale-aware time formatting and terminal diagnostics were lost with Node.
 4. **Regex + AST dual pipeline vs single AST pipeline.** The interpreter had a legacy regex execution path with many one-off forms (`CONVERT`, `FLOW`, `MATCH … YIELD`, `NOTE`, `STEADY`) that were never migrated into its own AST path; those forms are effectively dead even in the legacy engine and were simply not carried over. (Exception: `PICK` was re-implemented as a typed built-in in v0.48.38h rather than ported from the regex path.)
 5. **Interpreter-added features post-v0.45 are intentionally dropped.** The prompt excludes intentionally deprecated features; `SPECIES`/`BLOOM`, VEIN file IO and the JS `Function()` escape hatch were explicitly superseded (the Language Tour marks `core/*.js` as "historical only").
+6. **Dependency Inversion Architecture (DIP).** Since v0.49.50, the compiler uses abstract interfaces (`IRuntime`, `IReport`, `ILexer`, `IParser`, `ICodegen`) with `void* context` pointers and function-pointer vtables, enabling modular testing and clean separation between the compiler frontend and runtime backend. Self-hosting convergence at 464,520 bytes (stable since v0.49.60c).
 
 ---
 
@@ -40,7 +44,7 @@ The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 
 
 - **Legacy side** (recovered from git `7f54eae`, the last commit shipping `core/interpreter.js`; removed from the working tree in v0.48.38m — all sources below are historical):
   `core/interpreter.js` (2,828 L), `core/parser.js` (3,033 L), `core/ast.js` (1,040 L), `core/typechecker.js` (1,529 L), `core/tokenizer.js` (259 L), `core/evaluator.js` (173 L), `core/runtime.js` (64 L), `core/innate.js` (67 L), `core/dispatcher.js` (286 L), `core/matrix.js`, `core/harvest.js` + `harvest_worker.js`, `core/diagnostics.js`, `core/lexer.js`, `core/runtime_bridge.c`, `src/interpreter/{cycle_evaluator,sort_evaluator,bloom_evaluator,show_formatter}.js`, `std/{prelude,string,math,io}.plnt`.
-- **Current side** (working tree v0.49.10): `src/plantc/{lexer,parser,codegen_c,main}.plant`, `runtime/c/plant_runtime.c` (≈6,000 L), `runtime/c/plant_compat.h` (787 L), `runtime/c/plant_runtime.h`, `tests/native/mock_ffi.{h,c}`, `Language Tour.md`.
+- **Current side** (working tree v0.49.63): `src/plantc/{lexer,parser,codegen_c,main}.plant`, `runtime/c/plant_runtime.c` (≈8,634 L), `runtime/c/plant_compat.h` (1,151 L), `runtime/c/plant_runtime.h`, `runtime/c/plant_report.c`, `runtime/c/plant_report_json.c`, `runtime/c/plant_report_html.c`, `runtime/c/plant_report_xml.c`, `runtime/c/plant_lexer.h`, `runtime/c/plant_lexer.c`, `runtime/c/plant_parser.h`, `runtime/c/plant_parser.c`, `runtime/c/plant_codegen.h`, `tests/native/mock_ffi.{h,c}`, `tests/regression/stress/`, `Language Tour.md`.
 - **Verification method:** full keyword-dispatch enumeration of both parsers; complete function inventories of `plant_compat.h` and `plant_runtime.c`; spot-checks for every "missing" claim (all negative).
 
 Legend for gap tables: **S** = supported, **P** = partial (different semantics / only reachable internally), **M** = missing, **D** = intentionally deprecated / dropped by design.
@@ -69,6 +73,13 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 - _swap_super_prefix deduplication: tracked substituted values to prevent redundant allocations
 - Length pre-check: skip string substitution for strings exceeding 4096 chars
 - Loop efficiency: optimized traversal for large method lists (50+ methods)
+
+### v0.49.58a-v0.49.63 - Dependency Inversion & Stress Testing
+- **DIP Architecture (v0.49.58a-v0.49.60c):** Abstract interfaces (`IRuntime`, `IReport`, `ILexer`, `IParser`, `ICodegen`) with `void* context` pointers and function-pointer vtables; all direct procedural calls replaced with interface-bound dispatch; self-hosting convergence at 464,520 bytes
+- **Clean Architecture Stabilization (v0.49.61):** Interface consolidation, legacy purge, architecture docs, performance benchmarks
+- **Regression Test Resolution (v0.49.62):** Fixed codegen `_to_enum` binding bug (codegen_c.plant:3729), updated gcc link lines for generics/closures test suites, 224/224 green suite
+- **Stress Test Suite (v0.49.63):** 7 stress test fixtures (deep inheritance 10-levels, wide methods 120+, combined inheritance+fields, 1,000 BLOOM allocations, 1K-10K list growth, SAFE worker basics, 3 concurrent SAFE workers); `make test-stress` target; 231/231 total green suite
+- **Weak symbols:** `PlantLexer_create`, `PlantCodegen_create`, `PlantParser_create` with `__attribute__((weak))` for graceful NULL in test programs
 
 | `SPECIES name {f: T}` + `IMPLEMENTS iface` | S | **S** | v0.49.50: full IMPLEMENTS runtime + enhanced dedup |
 | `STRUCT` / `SHAPE` | S | **P** | STRUCT with typed fields only (map-backed); no SHAPE |
@@ -237,7 +248,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 - **HTTP server** (LISTEN, request MAPs, JSON bodies, `GIVE … AS RESPONSE`, SIGINT/SIGTERM lifecycle) — `LISTEN ON port AS req.` + `GIVE … AS RESPONSE` shipped in v0.48.33 (one-shot server, plain-text bodies), timeout option v0.49.2, **JSON bodies shipped v0.49.3** (`GIVE … AS RESPONSE JSON` → `plant_net_respond_json`, json_stringify with `application/json`; `HARVEST … AS resp JSON` → `plant_net_harvest_json` parses the body into a `PlantJson`). Still missing: a signal-driven request loop.
 - **HTTP client** (HARVEST via worker threads, NETWORK_STORM, `{ok,status,body,headers}` result) — **shipped and formalized v0.49.0**: `HARVEST url AS resp [METHOD m] [BODY b] [HEADERS h] [TIMEOUT t] [MAP].` maps to `plant_net_harvest` / `plant_net_harvest_map` (parser `parse_harvest_stmt`, codegen `harvest_stmt`); MAP-mode exposes the live `sock` for `plant_net_read/write/close`; **v0.49.3 adds `… AS resp JSON.`** → `plant_net_harvest_json` (body parsed into a `PlantJson`, nested access via json_get/json_at). Missing vs legacy: worker-thread fan-out and WebSocket server (listen/accept/handshake) v0.49.47; VERIFY/SUITE keyword recognition v0.49.49; full codegen deferred to v0.49.50; WebSocket client RFC 6455 v0.49.46; TLS/HTTPS client via curl v0.49.43 (verified); HTTPS LISTEN server D (requires OpenSSL headers not in build env); HTTPS LISTEN server requires OpenSSL headers (D).
 - **VEIN file handles** (TAP/ABSORB/INFUSE/SEAL) — **shipped v0.48.38k**: `plant_tap/absorb/infuse/seal` over `FILE*` handles tagged with `VEIN_MAGIC` (invalid handles return falsy/`""`; `SEAL` closes and frees). The legacy forms were parse stubs.
-- **VERIFY/SUITE** test framework + `SHOW_VERIFY_SUMMARY` (replaced by shell harnesses).
+- **VERIFY/SUITE** test framework + `SHOW_VERIFY_SUMMARY` — **shipped v0.49.53/54**: VERIFY with ANSI color output, SUITE/SETUP/TEARDOWN lifecycle hooks, automatic verify wrapping in action bodies; coexists with shell test harnesses.
 - **WAIT** synchronous sleep statement (Atomics.wait capped at 10 s) — **shipped v0.48.37e** as `WAIT n.` over POSIX `nanosleep` (`plant_msleep`); bare/zero/negative durations are no-ops. The legacy `Atomics.wait`-style capped variant is N/A in the native runtime.
 - **ANALYZE**, `NOW FORMAT:*`, `TYPEOF`, `CONVERT` in-place coercion.
 - **JS escape hatch** (`new Function` expression evaluation), `inferType`, `coerce`, `_splitArgs` runtime helpers.
@@ -262,8 +273,9 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 3. **No exception machinery.** WEATHER/SHELTER and storms are the biggest *semantic* loss: compiled C has no unwinding; the compiler instead returns errno/`ffi_last_error` strings. Implementing storms would require setjmp/longjmp or explicit propagation — a major roadmap item.
 4. **Node dependency removal.** HTTP (client+server), VEIN FS, worker threads, locale formatting, ANSI diagnostics all died with Node. The C runtime retains v0.41-era POSIX sockets (`plant_net_harvest`, `plant_net_listen_*`) that predate the gap and are **unreachable from the language** — re-wiring them is cheap compared to writing them.
 5. **Scope model.** PULSE watchers, LOCK/EVAPORATE, ROOT globals and `SELF` bindings need runtime scope objects; compiled scopes are static, so these features would need runtime scope tables.
-6. **Test philosophy.** VERIFY/SUITE were reintroduced as language features: VERIFY (v0.49.53, ANSI color output) and SUITE/SETUP/TEARDOWN (v0.49.54, lifecycle hooks). They coexist with shell harnesses for additional test patterns.
+6. **Test philosophy.** VERIFY/SUITE were reintroduced as language features: VERIFY (v0.49.53, ANSI color output) and SUITE/SETUP/TEARDOWN (v0.49.54, lifecycle hooks). They coexist with shell harnesses for additional test patterns. Stress tests (v0.49.63) validate deep inheritance, wide method dispatch, and concurrent SAFE workers.
 7. **Legacy dead-ends.** Several "legacy" features were already stubs or regex-only in v0.45 (INFUSE/ABSORB/SEAL/EMPTY parse throws, CONVERT/FLOW/MATCH-YIELD/PICK regex-only, missing `require`d modules in the regex path). These are counted as unsupported but were not first-class even at v0.45.
+8. **Dependency Inversion Architecture (DIP).** Since v0.49.50, the compiler uses abstract interfaces (`IRuntime`, `IReport`, `ILexer`, `IParser`, `ICodegen`) with `void* context` pointers and function-pointer vtables, enabling modular testing and clean separation between the compiler frontend and runtime backend. Self-hosting convergence at 464,520 bytes (stable since v0.49.60c).
 
 ---
 
@@ -321,6 +333,6 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 9. **Legacy `N\` depth-prefixed syntax** — **resolved by removal**: the DEPTH token machinery was deleted in v0.48.38l, closing this item permanently; no drop-in compatibility is planned.
 
 **Intentionally out of scope (D)**
-- SPECIES/BLOOM object model, `SELF:`/method dispatch, `PLANT` library statements, PULSE/WHENEVER watchers, JS `Function()` escape hatch, locale-specific IO formatting, VERIFY/SUITE language framework.
+- SPECIES/BLOOM object model, `SELF:`/method dispatch, `PLANT` library statements, PULSE/WHENEVER watchers, JS `Function()` escape hatch, locale-specific IO formatting.
 
-*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.49.10. As of v0.49.10 the legacy side exists only in git history — `core/`, `src/**/*.js`, `std/`, `service/`, `webrepl/`, and `benchmarks/` were removed from the working tree (commit `c17de62`).*
+*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.49.63. As of v0.49.63 the legacy side exists only in git history — `core/`, `src/**/*.js`, `std/`, `service/`, `webrepl/`, and `benchmarks/` were removed from the working tree (commit `c17de62`).*
