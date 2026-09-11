@@ -21,7 +21,10 @@ for src in "$DIR"/*.plant; do
     echo "FAIL  $name (compile)"; fail=$((fail+1)); continue
   fi
   if ! gcc -w -O0 -include "$ROOT/tests/native/mock_ffi.h" -I "$ROOT/runtime/c" "$BUILD/$name.c" \
-        "$ROOT/runtime/c/plant_runtime.c" "$ROOT/tests/native/mock_ffi.c" \
+        "$ROOT/runtime/c/plant_runtime.c" "$ROOT/runtime/c/plant_error.c" \
+        "$ROOT/runtime/c/plant_report.c" "$ROOT/runtime/c/plant_report_json.c" \
+        "$ROOT/runtime/c/plant_report_xml.c" "$ROOT/runtime/c/plant_report_html.c" \
+        "$ROOT/tests/native/mock_ffi.c" \
         -lm -ldl -o "$BUILD/$name" \
         >>"$BUILD/$name.compile.log" 2>&1; then
     echo "FAIL  $name (gcc)"; fail=$((fail+1)); continue

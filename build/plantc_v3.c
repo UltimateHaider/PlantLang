@@ -10487,7 +10487,7 @@ tx_t gen_reap_stmt(tx_t node, PlantArray* sigs, PlantArray* subst, PlantArray* c
     }
     fcsv2 = enum_in_table(evars, fty0);
     if (strcmp(fcsv2,"") != 0) {
-    aexpr = _cat(_cat4("_to_enum(", aexpr, ", \"", fty0), "\")");
+    aexpr = _cat(_cat4("_to_enum(", aexpr, ", \"", fcsv2), "\")");
     }
     rp3 = is_ref_at(fparams, ai);
     if (strcmp(rp3,"1") == 0) {
@@ -15094,7 +15094,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.49.61 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.49.62 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

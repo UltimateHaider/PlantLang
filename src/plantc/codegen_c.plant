@@ -3726,7 +3726,7 @@ ACTION gen_reap_stmt(node, sigs(LIST), subst(LIST), clmap(LIST), nums(LIST), stv
               IF fp0 IS "ENUM ", SET fty0 TO substring(fty0, 5, LEN(fty0)). /IF.
               REAP fcsv2 FROM enum_in_table, evars, fty0.
               IF fcsv2 ISNT "",
-                  SET aexpr TO "_to_enum(" + aexpr + ", \"" + fty0 + "\")".
+                  SET aexpr TO "_to_enum(" + aexpr + ", \"" + fcsv2 + "\")".
               /IF.
               REAP rp3 FROM is_ref_at, fparams, ai.
               IF rp3 IS "1",

@@ -1,3 +1,33 @@
+## v0.49.62 - 2026 (Regression Test Resolution & Green Suite Stabilization)
+
+### Bug Fixes
+- **Codegen `_to_enum` binding correction**: Fixed enum FFI parameter marshalling
+  at `codegen_c.plant:3729` — `_to_enum()` was emitted with the enum type name
+  (`"Color"`) instead of the member CSV (`"RED,GREEN,BLUE"`). This caused
+  `_to_enum(string_value, "Color")` to scan "Color" as a single name, fail to
+  match, and return the raw string pointer instead of the enum index. Fixed by
+  using `fcsv2` (member CSV from `enum_in_table`) instead of `fty0` (type name).
+  Affected tests: `enum_ffi`, `generic_num_ffi`.
+
+### Test Infrastructure
+- **Generics test runner linkage**: Updated `tests/generics/run_generics_tests.sh`
+  gcc link line to include `plant_error.c`, `plant_report.c`, `plant_report_json.c`,
+  `plant_report_xml.c`, `plant_report_html.c` — resolving 7 link-time failures
+  introduced by the v0.49.59a DI refactoring.
+- **Closures test runner linkage**: Same fix applied to
+  `tests/closures/run_closures_tests.sh` — resolving 6 link-time failures.
+- **Conformance baseline**: Generated `tests/regression/conformance_full.expected`
+  for the full interface conformance test (previously skipped due to missing file).
+
+### Test Results
+- **224/224 tests pass** (100% green suite)
+  - Regression: 188/188 (was 185/187 — fixed 2 output mismatches + 1 newly counted)
+  - Native: 20/20
+  - Smoke: 3/3
+  - Generics: 7/7 (was 0/7 — fixed linkage)
+  - Closures: 6/6 (was 0/6 — fixed linkage)
+- **Self-hosting**: Convergent at 464520 bytes (all generations identical).
+
 ## v0.49.61 - 2026 (Clean Architecture Stabilization)
 
 ### Architecture
