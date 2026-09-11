@@ -1,0 +1,8 @@
+IMPORT "ast.plant".
+CREATE a(TX) TO "hello".
+CREATE b(TX) TO "".
+SHOW "after creates".
+SHOW a.
+SHOW b.
+CREATE c(TX) TO b + "  if (" + a + ")".
+SHOW c.

@@ -1,0 +1,330 @@
+{
+  "name": "PlantLang Dark",
+  "$schema": "vscode://schemas/color-theme",
+  "type": "dark",
+  "colors": {
+    "editor.background":              "#0d1117",
+    "editor.foreground":              "#e6edf3",
+    "editor.lineHighlightBackground": "#161b22",
+    "editor.selectionBackground":     "#1f3a4a",
+    "editorLineNumber.foreground":    "#484f58",
+    "editorLineNumber.activeForeground": "#3ee07f",
+    "editorCursor.foreground":        "#3ee07f",
+    "editorIndentGuide.background":   "#21262d",
+    "editorIndentGuide.activeBackground": "#3ee07f44",
+    "statusBar.background":           "#0d1117",
+    "statusBar.foreground":           "#3ee07f",
+    "statusBarItem.hoverBackground":  "#21262d",
+    "titleBar.activeBackground":      "#0d1117",
+    "titleBar.activeForeground":      "#e6edf3",
+    "sideBar.background":             "#090d13",
+    "sideBarTitle.foreground":        "#3ee07f",
+    "activityBar.background":         "#090d13",
+    "activityBar.foreground":         "#3ee07f",
+    "tab.activeBackground":           "#0d1117",
+    "tab.activeForeground":           "#e6edf3",
+    "tab.inactiveBackground":         "#090d13",
+    "tab.inactiveForeground":         "#8b949e",
+    "tab.activeBorderTop":            "#3ee07f",
+    "terminal.background":            "#0d1117",
+    "terminal.foreground":            "#e6edf3",
+    "terminal.ansiGreen":             "#3ee07f",
+    "terminal.ansiBrightGreen":       "#56f09a",
+    "terminal.ansiCyan":              "#79c0ff",
+    "terminal.ansiYellow":            "#e3b341",
+    "terminal.ansiRed":               "#ff7b72"
+  },
+  "tokenColors": [
+
+    {
+      "name": "Comments",
+      "scope": ["comment", "punctuation.definition.comment"],
+      "settings": { "foreground": "#484f58", "fontStyle": "italic" }
+    },
+
+    {
+      "name": "Depth prefix (1\\ 2\\ etc.)",
+      "scope": "punctuation.definition.depth.plantlang",
+      "settings": { "foreground": "#3ee07f", "fontStyle": "bold" }
+    },
+
+    {
+      "name": "MISSION mode constants",
+      "scope": "constant.language.mission-mode.plantlang",
+      "settings": { "foreground": "#56f09a", "fontStyle": "bold" }
+    },
+
+    {
+      "name": "MISSION keyword",
+      "scope": "keyword.control.mission.plantlang",
+      "settings": { "foreground": "#3ee07f", "fontStyle": "bold" }
+    },
+
+    {
+      "name": "Strings",
+      "scope": ["string.quoted.double", "string.quoted.single"],
+      "settings": { "foreground": "#a5d6ff" }
+    },
+
+    {
+      "name": "String escape",
+      "scope": "constant.character.escape",
+      "settings": { "foreground": "#79c0ff" }
+    },
+
+    {
+      "name": "Test labels (VERIFY / SUITE names)",
+      "scope": [
+        "string.quoted.double.test-label.plantlang",
+        "string.quoted.double.suite-name.plantlang"
+      ],
+      "settings": { "foreground": "#e3b341", "fontStyle": "italic" }
+    },
+
+    {
+      "name": "Numbers",
+      "scope": ["constant.numeric"],
+      "settings": { "foreground": "#79c0ff" }
+    },
+
+    {
+      "name": "Boolean constants",
+      "scope": "constant.language.boolean.plantlang",
+      "settings": { "foreground": "#ff7b72", "fontStyle": "bold" }
+    },
+
+    {
+      "name": "Storm types (ZERO_STORM etc.)",
+      "scope": "entity.name.type.storm.plantlang",
+      "settings": { "foreground": "#ff7b72", "fontStyle": "bold" }
+    },
+
+    {
+      "name": "Type names (NUM TX LIST MAP etc.)",
+      "scope": "entity.name.type.plantlang",
+      "settings": { "foreground": "#f0883e", "fontStyle": "bold" }
+    },
+
+    {
+      "name": "Control flow (IF ORIF ELSE CYCLE SEASON MATCH)",
+      "scope": [
+        "keyword.control.conditional.plantlang",
+        "keyword.control.loop.plantlang",
+        "keyword.control.match.plantlang",
+        "keyword.control.storm.plantlang"
+      ],
+      "settings": { "foreground": "#ff7b72" }
+    },
+
+    {
+      "name": "FLOW and logical operators",
+      "scope": "keyword.control.flow.plantlang",
+      "settings": { "foreground": "#d2a8ff" }
+    },
+
+    {
+      "name": "Block closers (/ACTION /SPECIES LISTEN/ SUITE/)",
+      "scope": "keyword.control.block-close.plantlang",
+      "settings": { "foreground": "#3ee07f44" }
+    },
+
+    {
+      "name": "CREATE keyword",
+      "scope": "keyword.other.create.plantlang",
+      "settings": { "foreground": "#3ee07f" }
+    },
+
+    {
+      "name": "Variable names",
+      "scope": "variable.other.plantlang",
+      "settings": { "foreground": "#e6edf3" }
+    },
+
+    {
+      "name": "Variable keywords (SET INCREASE DECREASE SHOW etc.)",
+      "scope": "keyword.other.variable.plantlang",
+      "settings": { "foreground": "#3ee07f" }
+    },
+
+    {
+      "name": "ROOT constant identifier",
+      "scope": "entity.name.constant.plantlang",
+      "settings": { "foreground": "#f0883e", "fontStyle": "bold" }
+    },
+
+    {
+      "name": "ROOT / ROOT_SCOPE keywords",
+      "scope": [
+        "keyword.other.root.plantlang",
+        "keyword.other.root-scope.plantlang"
+      ],
+      "settings": { "foreground": "#f0883e" }
+    },
+
+    {
+      "name": "Config keywords (MISSION PLANT WAIT NOW TYPEOF)",
+      "scope": "keyword.other.config.plantlang",
+      "settings": { "foreground": "#d2a8ff" }
+    },
+
+    {
+      "name": "List/Map keywords (PUT TAKE SORT BRAID LINK)",
+      "scope": "keyword.other.list.plantlang",
+      "settings": { "foreground": "#3ee07f" }
+    },
+
+    {
+      "name": "Reactive keywords (PULSE WHENEVER CHANGES)",
+      "scope": "keyword.other.reactive.plantlang",
+      "settings": { "foreground": "#d2a8ff" }
+    },
+
+    {
+      "name": "File I/O (TAP ABSORB INFUSE SEAL)",
+      "scope": "keyword.other.file.plantlang",
+      "settings": { "foreground": "#8b949e" }
+    },
+
+    {
+      "name": "ACTION declaration",
+      "scope": "keyword.declaration.action.plantlang",
+      "settings": { "foreground": "#3ee07f", "fontStyle": "bold" }
+    },
+
+    {
+      "name": "Action / function name",
+      "scope": "entity.name.function.plantlang",
+      "settings": { "foreground": "#d2a8ff" }
+    },
+
+    {
+      "name": "Action call keywords (GIVE REAP FROM)",
+      "scope": "keyword.other.action.plantlang",
+      "settings": { "foreground": "#3ee07f" }
+    },
+
+    {
+      "name": "SPECIES declaration",
+      "scope": "keyword.declaration.species.plantlang",
+      "settings": { "foreground": "#f0883e", "fontStyle": "bold" }
+    },
+
+    {
+      "name": "Class name",
+      "scope": ["entity.name.class.plantlang", "entity.name.class.parent.plantlang"],
+      "settings": { "foreground": "#f0883e" }
+    },
+
+    {
+      "name": "BLOOM keyword",
+      "scope": "keyword.other.bloom.plantlang",
+      "settings": { "foreground": "#3ee07f" }
+    },
+
+    {
+      "name": "Instance variable",
+      "scope": "variable.other.instance.plantlang",
+      "settings": { "foreground": "#e6edf3" }
+    },
+
+    {
+      "name": "Object keywords (PARENT VAR)",
+      "scope": "keyword.other.object.plantlang",
+      "settings": { "foreground": "#f0883e" }
+    },
+
+    {
+      "name": "SELF: reference",
+      "scope": "variable.language.self.plantlang",
+      "settings": { "foreground": "#ff7b72" }
+    },
+
+    {
+      "name": "LISTEN BRANCH keywords",
+      "scope": [
+        "keyword.other.listen.plantlang",
+        "keyword.other.branch.plantlang"
+      ],
+      "settings": { "foreground": "#3ee07f", "fontStyle": "bold" }
+    },
+
+    {
+      "name": "HTTP keywords (HARVEST ON WITH AS METHOD etc.)",
+      "scope": "keyword.other.http.plantlang",
+      "settings": { "foreground": "#3ee07f" }
+    },
+
+    {
+      "name": "HTTP methods (GET POST PUT DELETE)",
+      "scope": "keyword.other.http-method.plantlang",
+      "settings": { "foreground": "#79c0ff", "fontStyle": "bold" }
+    },
+
+    {
+      "name": "VERIFY keyword",
+      "scope": "keyword.other.verify.plantlang",
+      "settings": { "foreground": "#e3b341", "fontStyle": "bold" }
+    },
+
+    {
+      "name": "SUITE keyword",
+      "scope": "keyword.other.suite.plantlang",
+      "settings": { "foreground": "#e3b341", "fontStyle": "bold" }
+    },
+
+    {
+      "name": "Testing keywords (STORMS GIVES)",
+      "scope": "keyword.other.testing.plantlang",
+      "settings": { "foreground": "#e3b341" }
+    },
+
+    {
+      "name": "Built-in functions (COUNT FIRST LAST SUM MAX MIN)",
+      "scope": "support.function.builtin.plantlang",
+      "settings": { "foreground": "#79c0ff" }
+    },
+
+    {
+      "name": "Arithmetic operators",
+      "scope": "keyword.operator.arithmetic.plantlang",
+      "settings": { "foreground": "#ff7b72" }
+    },
+
+    {
+      "name": "Comparison operators",
+      "scope": "keyword.operator.comparison.plantlang",
+      "settings": { "foreground": "#ff7b72" }
+    },
+
+    {
+      "name": "Logical operators",
+      "scope": "keyword.operator.logical.plantlang",
+      "settings": { "foreground": "#d2a8ff" }
+    },
+
+    {
+      "name": "Library name (math strings lists)",
+      "scope": "support.class.library.plantlang",
+      "settings": { "foreground": "#79c0ff" }
+    },
+
+    {
+      "name": "Library function",
+      "scope": "support.function.library.plantlang",
+      "settings": { "foreground": "#d2a8ff" }
+    },
+
+    {
+      "name": "Object property (obj:prop)",
+      "scope": "variable.other.property.plantlang",
+      "settings": { "foreground": "#a5d6ff" }
+    },
+
+    {
+      "name": "Object name in obj:prop",
+      "scope": "variable.other.object.plantlang",
+      "settings": { "foreground": "#e6edf3" }
+    }
+
+  ]
+}

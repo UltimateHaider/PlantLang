@@ -1,0 +1,30 @@
+ACTION fib(n(NUM)),
+  CREATE r(NUM) TO 0.
+  IF n < 2,
+    SET r TO n.
+  /IF.
+  IF n GREATER THAN OR EQUAL 2,
+    CREATE a(NUM) TO 0.
+    REAP a FROM fib, n - 1.
+    CREATE b(NUM) TO 0.
+    REAP b FROM fib, n - 2.
+    SET r TO a + b + 0.
+  /IF.
+  GIVE r.
+/ACTION.
+
+ACTION main(),
+  REAP t0 FROM time_now.
+  CREATE r(NUM) TO 0.
+  REAP r FROM fib, 35.
+  REAP rs FROM _from_long, r.
+  SHOW "fib35=" + rs.
+  REAP t1 FROM time_now.
+  CREATE t0n(NUM) TO 0.
+  REAP t0n FROM _to_long, t0.
+  CREATE t1n(NUM) TO 0.
+  REAP t1n FROM _to_long, t1.
+  REAP d FROM _from_long, t1n - t0n + 0.
+  SHOW "elapsed_s=" + d.
+  GIVE 0.
+/GIVE main.

@@ -1,0 +1,5 @@
+#include <plant_compat.h>
+
+void get_cli_arg(long idx) {
+    source_path = get_cli_arg(0, SHOW input:  + source_path, REAP exists FROM fs : EXISTS , source_path, IF !exists , SHOW Error: file not found —  + source_path, CALM, / IF, REAP source_text FROM fs : READ , source_path, SHOW tokenizing..., REAP tokens FROM scan_tokens , source_text, SHOW parsing..., REAP program_ast FROM parse_program , tokens, REAP body FROM _map_get , program_ast , body, SHOW generating C..., REAP c_code FROM generate_c , body, REAP out_path FROM get_cli_arg , 1, IF out_path ==  , REAP out_path FROM strings : REPLACE , source_path , .plant , .c, / IF, REAP written FROM fs : WRITE , out_path , c_code, REAP c_len FROM strings : LENGTH , c_code, SHOW output:  + c_len +  bytes to  + out_path, CALM);
+}

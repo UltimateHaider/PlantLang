@@ -1,0 +1,22 @@
+ACTION main(),
+  CREATE i(NUM) TO 0.
+  CREATE out(TX) TO "".
+  REAP t0 FROM time_now.
+  SEASON i < 5000,
+    REAP j FROM json_parse, "{\"name\": \"bench\", \"n\": 42, \"ok\": true, \"tags\": [\"a\", \"b\", \"c\"], \"addr\": {\"city\": \"Zurich\", \"zip\": 8000}}".
+    REAP o FROM json_stringify, j.
+    SET out TO o.
+    SET i TO i + 1.
+  /SEASON.
+  REAP t1 FROM time_now.
+  CREATE ol(NUM) TO LEN(out).
+  REAP ols FROM _from_long, ol.
+  SHOW "jsonlen=" + ols.
+  CREATE t0n(NUM) TO 0.
+  REAP t0n FROM _to_long, t0.
+  CREATE t1n(NUM) TO 0.
+  REAP t1n FROM _to_long, t1.
+  REAP d FROM _from_long, t1n - t0n + 0.
+  SHOW "elapsed_s=" + d.
+  GIVE 0.
+/GIVE main.

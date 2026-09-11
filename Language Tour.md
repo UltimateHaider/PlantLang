@@ -1,0 +1,677 @@
+# 🌿 PlantLang — Chloroplast v0.48.4
+
+> **A programming language designed to read like natural prose.**
+> Write code the way you write a sentence — not the way you debug a cipher.
+> **Chloroplast** is the pure-native, self-hosted PlantLang compiler:
+> `src/plantc/*.plant` compiles to C, which links against a small native
+> runtime. No Node.js, no JavaScript, no interpreter.
+
+```
+ACTION greet(name(TX)) -> TX,
+  GIVE "hello, " + name.
+/GIVE greet.
+
+ACTION main(),
+  REAP msg FROM greet, "Haider".
+  SHOW msg.
+  GIVE 0.
+/GIVE main.
+```
+
+---
+
+## Installation
+
+Requires `gcc` and `make`. No other dependencies (no Node.js, no LLVM).
+
+```bash
+make all        # full native build → bin/Chloroplast (v1→v2→v3 chain)
+make self       # multi-generation self-hosting + byte-convergence check
+make test       # native + generics + closures integration suites
+make install    # install to ~/.local (PREFIX=/path/to/prefix to override)
+```
+
+## Quick Start
+
+```bash
+./bin/Chloroplast hello.plant out.c      # compile PlantLang to C
+gcc -w -O0 -I runtime/c out.c runtime/c/plant_runtime.c -lm -o hello
+./hello
+```
+
+`hello.plant`:
+
+```
+ACTION main(),
+  SHOW "hello, world".
+  GIVE 0.
+/GIVE main.
+```
+
+CLI:
+
+```bash
+./bin/Chloroplast --help        # usage + options
+./bin/Chloroplast --version     # Chloroplast 0.48.4 (pure native)
+./bin/Chloroplast file.plant [out.c]   # default output: file.c
+```
+
+---
+
+## Program Structure
+
+A program is a sequence of **declarations** (actions, externals, structs,
+enums, mission config) and **statements**. Every statement ends with a dot
+(`.`). `#` starts a line comment to end of line.
+
+Programs conventionally end with a top-level `ACTION main()`; the runtime
+driver calls it as the entry point. The compiler itself (in `src/plantc/`)
+is written in this language and bootstraps to a byte-identical fixed point.
+
+```
+# Functions
+ACTION add(a(NUM), b(NUM)),
+  GIVE a + b.
+/GIVE add.
+
+# Entry point
+ACTION main(),
+  REAP r FROM add, 10, 25.
+  CREATE rn(NUM) TO 0.
+  SET rn TO r.            # numeric result → NUM var
+  REAP rs FROM _from_long, rn.
+  SHOW rs.                # → 35
+  GIVE 0.
+/GIVE main.
+```
+
+> Legacy syntax reference: the pre-v0.46 JS engine's `N\` depth-prefixed
+> forms (e.g. `1\ SHOW "x".`), `MISSION: SAFE.` mode declarations, and the
+> `core/*.js` architecture are historical only and do not ship in v0.48.4.
+
+---
+
+## Language Tour
+
+### Variables & Types
+
+| Type | Keyword | Example |
+|------|---------|---------|
+| Integer | `NUM` | `CREATE age(NUM) TO 25.` |
+| Decimal | `SCL` | `CREATE pi(SCL) TO 3.14.` |
+| Text | `TX` | `CREATE name(TX) TO "Haider".` |
+| Boolean | `FACT` | `CREATE active(FACT) TO TRUE.` |
+| List | `LIST` | `CREATE parts(LIST) TO plant_list_make(0).` |
+| Generic list | `LIST[T]` | `CREATE xs(LIST[NUM]) TO plant_list_make(0).` |
+| Struct | `STRUCT` | `STRUCT Point { x: NUM, y: NUM }` |
+| Enum | `ENUM` | `ENUM Color { RED, GREEN, BLUE }.` |
+
+Declare a variable with `CREATE` (and re-assign with `SET`):
+
+```
+CREATE score(NUM) TO 94.
+SET score TO score + 6.
+SHOW "score=" + score.   # → 100
+
+CREATE name(TX) TO "Haider".
+CREATE pi(SCL) TO 3.14159.
+CREATE active(FACT) TO TRUE.
+CREATE fruits(LIST) TO plant_list_make(3, "apple", "banana", "kiwi").
+```
+
+`LET` is an accepted alias for `CREATE` (same semantics). `SET` requires a
+prior `CREATE` — there is no implicit declaration.
+
+### Maps (Hash Tables)
+
+Maps are created with the runtime helpers and accessed via `_map_get`:
+
+```
+CREATE user(LIST) TO plant_list_make(0).
+plant_map_set(user, "name", "Haider").
+plant_map_set(user, "score", 94).
+
+REAP nm FROM _map_get, user, "name".
+SHOW nm.             # → Haider
+```
+
+`plant_map_set(...)` as a bare call statement is a first-class statement
+(v0.48.4).
+
+### ENUM
+
+```
+ENUM Color { RED, GREEN, BLUE }.
+
+ACTION describe(c(Color)),
+  IF c IS GREEN,
+    GIVE "green".
+  /IF.
+  GIVE "other".
+/GIVE describe.
+
+ACTION main(),
+  REAP s FROM describe, GREEN.
+  SHOW s.            # → green
+  GIVE 0.
+/GIVE main.
+```
+
+Enums compile to native C `typedef enum` blocks; variants are plain
+integer identifiers, so compare them with `IF c IS GREEN` (string-
+concatenating a variant directly is not supported by the v0.48 generator).
+
+### STRUCT
+
+```
+STRUCT Point { x: NUM, y: NUM }
+```
+
+`STRUCT` declares a typed aggregate. The codegen emits a C typedef
+(`plant_Point`) and conversion helpers (`plant_map_to_Point`,
+`plant_Point_to_map`, …). Struct values flow through the FFI as opaque
+`tx_t` handles:
+
+```
+STRUCT Point { x: NUM, y: NUM }
+
+ACTION ffi_make_point(x(NUM), y(NUM)) -> external.
+ACTION ffi_point_sum(p(Point)) -> external.
+
+ACTION main(),
+  REAP p FROM ffi_make_point, 3, 4.
+  CREATE pp(Point) TO p.
+  REAP s FROM ffi_point_sum, pp.
+  SHOW "sum=" + s.      # → sum=7
+  GIVE 0.
+/GIVE main.
+```
+
+**Generic structs** (v0.48.1):
+
+```
+STRUCT Box[T] { val: T }
+STRUCT Pair[T, U] { first: T, second: U }
+```
+
+Each instantiation used in the program is monomorphized into a concrete
+typedef (`plant_Box_NUM`, `plant_Pair_NUM_TX`, …); uninstantiated templates
+emit nothing.
+
+### Actions (functions)
+
+```
+ACTION add(a(NUM), b(NUM)),
+  GIVE a + b.
+/GIVE add.
+
+ACTION greet(name(TX)) -> TX,
+  GIVE "hello, " + name.
+/GIVE greet.
+```
+
+- Typed parameters (`NUM`, `SCL`, `TX`, `FACT`, `LIST[T]`, structs, enums).
+- Optional `-> Type` return annotation (purely informative at this stage).
+- `GIVE expr.` returns; bodies may use `IF`/`SEASON`, recursion, closures.
+- `REAP target FROM action, args.` calls an action and binds the result.
+- `REAP _ FROM action, args.` discards the result (void calls).
+- An `ACTION` may also be declared in "expression-call" form directly in a
+  statement: `plant_map_set(user, "name", "Haider").`
+
+**Generics** (v0.48.1): actions may carry type parameters, monomorphized
+per call site:
+
+```
+ACTION echo[T](v(T)),
+  GIVE v.
+/GIVE echo.
+
+ACTION max2[T](a(T), b(T)),
+  IF a > b,
+    GIVE a.
+  /IF.
+  GIVE b.
+/GIVE max2.
+
+ACTION main(),
+  REAP a FROM echo[TX], "hi".
+  REAP m FROM max2[NUM], 9, 4.
+  CREATE mn(NUM) TO 0.
+  SET mn TO m.           # numeric generic result → NUM var
+  REAP ms FROM _from_long, mn.
+  SHOW "max=" + ms.       # → max=9
+  GIVE 0.
+/GIVE main.
+```
+
+Each instantiation (e.g. `echo[TX]`, `max2[NUM]`) emits a unique native C
+function (`plant_echo_TX`, `plant_max2_NUM`) — zero runtime overhead.
+Numeric generic results come back as raw integers: assign them to a `NUM`
+(like `max2` above) and convert with `_from_long` before printing. Once the
+value is in a `NUM` variable, `SHOW` prints it directly (it is value-aware).
+
+### Calling & Return Values
+
+```
+ACTION square(n(NUM)),
+  GIVE n * n.
+/GIVE square.
+
+ACTION main(),
+  CREATE x(NUM) TO 7.
+  REAP s FROM square, x.
+  CREATE sn(NUM) TO 0.
+  SET sn TO s.           # numeric result → NUM var
+  REAP ss FROM _from_long, sn.
+  SHOW ss.               # → 49
+  REAP _ FROM square, 2.          # ignore the result
+  GIVE 0.
+/GIVE main.
+```
+
+> Numeric results: a `GIVE` of a `NUM` comes back from the runtime as a raw
+> integer, so copy it into a `NUM` variable (`SET` + `_from_long`) before
+> string operations — see the example above. Bare `SHOW` of numeric values
+> (vars, arithmetic, `LEN`/`COUNT`) is value-aware (prints the number); the
+> remaining case that needs the explicit pattern is a raw return held in a
+> `TX`/implicit variable, where `SHOW r.` still reads it as a string pointer.
+
+### Conditions
+
+```
+IF score GREATER THAN OR EQUAL 90,
+  SHOW "A".
+/IF.
+
+IF score IS 0,
+  SHOW "zero".
+/IF.
+```
+
+Supported comparison keywords: `IS`, `ISNT`, `GREATER THAN`,
+`GREATER THAN OR EQUAL`, `LESS THAN`, `LESS THAN OR EQUAL`, `>`, `<`.
+Boolean composition: `AND`, `OR`, `NOT`. Constants `TRUE`, `FALSE`,
+`NULL` (null). Note: the v0.48 self-hosted parser implements `IF` /
+`/IF.` blocks; legacy `ORIF`/`ELSE` branches are not parsed by Chloroplast.
+
+### SEASON (while loop)
+
+```
+CREATE count(NUM) TO 5.
+SEASON count GREATER THAN 0,
+  SHOW "count=" + count.
+  SET count TO count - 1.
+/SEASON.
+```
+
+- `BREAK.` (or `BREAK 0.`) exits the innermost `SEASON` immediately.
+- `CONTINUE.` skips to the next iteration.
+- Loops must be inside an `ACTION` body.
+
+### Lists
+
+Runtime helpers build and manipulate lists natively:
+
+```
+CREATE parts(LIST) TO plant_list_make(0).
+PUT "first" INTO parts.
+PUT "second" INTO parts.
+REAP r FROM plant_list_get, parts, 1.
+SHOW "second=" + r.
+
+IF _at(parts, 0) IS "first",
+  SHOW "first-ok".
+/IF.
+```
+
+- `plant_list_make(count, ...)` — create a list (0..N initial items).
+- `plant_list_get(list, i)` / `_at(list, i)` — element access.
+- `PUT item INTO list.` — append.
+- `COUNT list` — element count (e.g. `SEASON i < COUNT lst`).
+- `_map_get(map, key)` — map lookup.
+
+### String Operations
+
+Strings are immutable `TX` values; `+` concatenates. Concatenating a
+number into a string works automatically (v0.48.3a): `"x=" + i` emits
+`_cat("x=", _from_long(i))`. Pure-numeric `+` stays plain C arithmetic.
+
+```
+CREATE x(NUM) TO 41.
+CREATE msg(TX) TO "n=" + x.
+SHOW msg.            # → n=41
+SHOW "len " + LEN(msg).     # → len 3
+```
+
+Runtime helpers: `_from_long(n)` (number → text), `_to_long(s)` (text →
+number), `LEN(s)` (string length), `_cat(a, b)` (concat). Module-style
+calls also exist: `strings:LENGTH`, `strings:REPLACE`, `strings:SPLIT`.
+
+---
+
+## Closures (v0.48.2)
+
+Anonymous functions with explicit capture lists. `MOVE` copies a value
+into the closure environment (the outer variable is cleared); `REF` tracks
+a variable live via pointer so changes are visible inside.
+
+```
+ACTION counter(start(NUM)),          # e.g. counter(3)
+  CREATE f TO [MOVE start](step(NUM)) -> step + start.
+  REAP a FROM f, 5.
+  REAP b FROM f, 5.
+  SET a1 TO a.
+  SET a2 TO b.
+  REAP da FROM _from_long, a1.
+  REAP db FROM _from_long, a2.
+  SHOW "state=" + da + "," + db.      # e.g. → state=8,8 (env persists)
+  SHOW "moved=" + _from_long(start).  # → moved=0 (MOVE cleared outer var)
+/GIVE counter.
+
+ACTION tracer(v(NUM)),                # called with 0
+  CREATE t TO [REF v](d(NUM)) -> d + v.
+  SET v TO 100.            # visible inside t via REF
+  REAP r FROM t, 1.
+  CREATE rn(NUM) TO 0.
+  SET rn TO r.
+  SHOW "ref=" + _from_long(rn).       # → ref=101
+/GIVE tracer.
+```
+
+Numeric closure results and outer `NUM` variables are raw integers, so the
+`SET`+`_from_long` conversion pattern applies here too (see the example).
+`SHOW` of any numeric variable/expression itself is value-aware and prints
+the number directly; the explicit conversion is only needed when converting
+a raw return into a string context.
+
+Block-form bodies run full statements and may nest closures. The closure
+must declare a parameter list; the body runs between `( … )`:
+
+```
+ACTION main(),
+  CREATE x(NUM) TO 5.
+  CREATE outer TO [MOVE x](a(NUM)) -> (
+    CREATE inner TO [MOVE a](b(NUM)) -> b + a + 1.
+    REAP ri FROM inner, 10.
+    SHOW "inner=" + _from_long(ri).
+    GIVE ri
+  ).
+  REAP r FROM outer, 2.
+  SHOW "outer=" + _from_long(r).
+  GIVE 0.
+/GIVE main.
+```
+
+Each closure lowers to a heap-allocated env struct (`plant_Env_N`) plus a
+plain native function (`plant_Closure_N_fn`) — no runtime dispatch. Closures
+are invocable anywhere in an ACTION body, including `SEASON`/`IF` bodies.
+
+---
+
+## FFI (Foreign Function Interface)
+
+Declare native C functions and call them directly. An external is an
+`ACTION` with no body whose return type is `external`:
+
+```
+ACTION ffi_add(a(NUM), b(NUM)) -> external.
+ACTION ffi_swap_ref(a(REF NUM), b(REF NUM)) -> external.
+ACTION ffi_open(mode(NUM)) -> Result<NUM, TX>.
+```
+
+- **Plain externals** — `ACTION name(args) -> external.` must be backed by
+  a matching C function (declare it in `plant_compat.h` or link a library).
+- **`REF` parameters** — passed by pointer; the call site emits `&var`
+  automatically.
+- **`Result<T, E>` returns** — the C ABI returns the value on success and a
+  sentinel + `errno` on failure. Check with `ffi_last_error()` /
+  `ffi_last_error_msg()` (`dlerror()` on loader failure, else
+  `strerror(errno)`).
+- **`ffi_free(ptr)`** — release `malloc`'d handles; `ffi_free(NULL)` sets
+  `EINVAL` (guarded, safe).
+- **Full signature space (v0.48.4)** — struct-by-value params and returns
+  (`STRUCT X`, mapped via `plant_map_to_X` / `plant_X_to_map`), `REF STRUCT`
+  (`plant_map_to_ref_X`), `void*` handles, varargs (`..., ...`), and
+  `CALLBACK` parameters (auto-generated `plant_cbw_<name>` adapters +
+  `plant_cb_ensure`).
+
+Example (from `tests/native/ffi.plant`):
+
+```
+ACTION ffi_open_mock(mode(NUM)) -> Result<NUM, TX>.
+
+ACTION main(),
+  REAP h1 FROM ffi_open_mock, 0.      # "" on failure, errno set
+  CREATE e(NUM) TO 0.
+  REAP e FROM ffi_last_error.         # errno (2 = ENOENT)
+  REAP m FROM ffi_last_error_msg.
+  SHOW m.                             # "No such file or directory"
+  REAP h2 FROM ffi_open_mock, 1.      # success → errno cleared
+  REAP buf FROM ffi_make_buf, 100.
+  REAP _ FROM ffi_free, buf.          # lifecycle
+  GIVE 0.
+/GIVE main.
+```
+
+The generated C ships a `/*__PLANT_TYPES_BEGIN__*/ … __END__` block with
+topologically ordered struct typedefs and extension prototypes.
+
+---
+
+## Standard Library (v0.47.x+)
+
+The core standard library ships natively in the runtime
+(`runtime/c/plant_runtime.c` + `plant_compat.h`) — no imports, no
+interpreter. Calls go through `REAP x FROM fn, args.` or bare expressions.
+
+### std/json
+
+```
+REAP j FROM json_parse, "{\"name\": \"Alice\", \"age\": 30}".
+IF j IS NULL,                        # invalid JSON → safe nil, no crash
+  SHOW "bad json".
+/IF.
+REAP nm FROM json_get, j, "name".
+SHOW json_val(nm).                   # → Alice
+REAP out FROM json_stringify, j.
+SHOW out.                            # → {"name":"Alice","age":30}
+REAP tags FROM json_get, j, "tags".
+CREATE tl(NUM) TO json_len(tags).    # array/object element count
+REAP t0 FROM json_at, tags, 0.
+SHOW json_val(t0).                   # first element
+```
+
+### std/string
+
+```
+REAP r1 FROM string_repeat, "ab", 3.     # → "ababab"
+REAP r2 FROM string_reverse, "abc".      # → "cba"
+REAP r3 FROM string_pad, "x", 5, ".".    # → "x...."
+REAP r  FROM strings:LENGTH, "abcd".     # → 4
+REAP s  FROM strings:REPLACE, "a-b-c", "-", "+".   # → "a+b+c"
+```
+
+### std/fs
+
+```
+REAP w FROM fs_WRITE, "/tmp/f.txt", "hello fs".     # "1" ok
+REAP e FROM fs_EXISTS, "/tmp/f.txt".                # "1" / "0"
+REAP c FROM file_copy, "a.txt", "b.txt".            # "1" ok
+REAP m FROM file_move, "b.txt", "c.txt".            # "1" ok
+REAP st FROM file_stat, "c.txt".                    # MAP: size/mtime/mode
+REAP sz FROM _map_get, st, "size".
+```
+
+### std/math
+
+```
+REAP s FROM math_sqrt, "16".       # → "4"
+REAP p FROM math_pow, "2", "10".   # → "1024"
+REAP f FROM math_floor, "3.7".     # → 3
+REAP c FROM math_ceil, "3.2".      # → 4
+REAP r FROM math_round, "2.5".     # → 3
+REAP si FROM math_sin, "0".        # → 0
+REAP mn FROM math_min, "3", "7".   # → 3
+REAP mx FROM math_max, "3", "7".   # → 7
+REAP rd FROM math_random.          # uniform [0,1) as text
+```
+
+### std/time
+
+```
+REAP t  FROM time_now.                      # epoch seconds
+REAP d  FROM time_format, t, "%Y-%m-%d".    # → "2026-08-01"
+REAP t2 FROM time_parse, "2026-08-01 12:00:00", "%Y-%m-%d %H:%M:%S".
+REAP ok FROM time_sleep, "0.05".            # fractional seconds
+```
+
+### Set / Queue / Stack (v0.47.2)
+
+```plantlang
+# Set — unique collection (identity-based uniqueness; 0/NULL reserved as nil)
+REAP s FROM set_create.
+REAP r FROM set_add, s, 10.          # "1" added
+REAP r FROM set_add, s, 10.          # "0" duplicate
+REAP r FROM set_has, s, 10.          # "1" present
+REAP r FROM set_remove, s, 10.       # "1" removed
+CREATE n(NUM) TO set_size(s).        # unique element count
+REAP lst FROM set_to_list, s.        # → LIST for iteration/export
+
+# Queue — FIFO ring buffer
+REAP q FROM queue_create.
+REAP _ FROM queue_push, q, "first".
+REAP _ FROM queue_push, q, "second".
+REAP v FROM queue_pop, q.            # → "first"
+REAP v FROM queue_peek, q.           # → "second" (front, kept)
+CREATE n(NUM) TO queue_size(q).      # item count
+
+# Stack — LIFO dynamic array
+REAP st FROM stack_create.
+REAP _ FROM stack_push, st, "bottom".
+REAP _ FROM stack_push, st, "top".
+REAP v FROM stack_peek, st.          # → "top"
+REAP v FROM stack_pop, st.           # → "top"
+REAP v FROM stack_pop, st.           # → "bottom"
+```
+
+Empty `pop`/`peek` on a queue or stack return the empty string — never a
+crash. Stress workloads (thousands of inserts/lookups/deletes) are covered
+by the `std_set` / `std_queue` / `std_stack` native test suites.
+
+---
+
+## Async Engine (v0.48.3+)
+
+`ASYNC ACTION` declares a cooperative, single-threaded async action. It
+compiles to a C state machine (no threads, no locks) with suspension and
+resume across awaits:
+
+```
+ASYNC ACTION phase2(tag(TX)),
+  GIVE "p2-" + tag.
+/GIVE phase2.
+
+ASYNC ACTION worker(tag(TX), n(NUM)),
+  CREATE i(NUM) TO 0.
+  CREATE sum(NUM) TO 0.
+  SEASON i < n,
+    SET sum TO sum + i.
+    SET i TO i + 1.
+  /SEASON.
+  AWAIT phase2, tag.
+  GIVE sum.
+/GIVE worker.
+
+ACTION main(),
+  CREATE i(NUM) TO 0.
+  SEASON i < 20,
+    START worker, "w" + i, 1000.
+    SET i TO i + 1.
+  /SEASON.
+  GIVE 0.
+/GIVE main.
+```
+
+Async statements:
+
+| Statement | Meaning |
+|---|---|
+| `AWAIT action, args.` | suspend current task until `action` completes |
+| `START action, args.` | fire-and-forget spawn of an async action |
+| `START action, args IN ctx.` | spawn into a named context |
+| `ASYNC IN ctx, action, args.` | spawn into a structured context |
+| `CANCEL value.` | cancel a task token or an entire context |
+| `TRACE LEVEL msg.` | emit a scoped trace event (level: INFO/DEBUG/PERF) |
+
+- `PRIORITY HIGH \| NORMAL \| LOW` may follow the `-> Type` annotation of an
+  async action (default NORMAL).
+- A top-level `ACTION main` that spawns async work automatically ends with
+  `plant_async_drain()` so every worker completes before the program exits
+  (v0.48.3a).
+- `MISSION CONFIG` directives tune the engine at runtime.
+
+### MISSION CONFIG (runtime directives)
+
+`MISSION CONFIG` directives configure the async engine at program startup.
+They compile to `plant_async_config("<key>", "<value>")` calls and are
+emitted before any other top-level statements.
+
+```
+MISSION CONFIG ADAPTIVE_THRESHOLD = 1000.
+MISSION CONFIG SAMPLING_MODE = CPU.
+MISSION CONFIG TRACE_LEVEL = DEBUG.
+MISSION CONFIG METRICS = ON.
+MISSION CONFIG TRACE = ON.
+MISSION CONFIG TRACE_FILE = trace.log.
+
+SHOW "starting".
+```
+
+Supported keys: `ADAPTIVE_THRESHOLD` (queue threshold, ≥1),
+`SAMPLING_MODE` (`CPU`/other), `TRACE_LEVEL` (`DEBUG`/`PERF`/off),
+`METRICS` (`ON`/`OFF`), `TRACE` (`ON`/`OFF`) and `TRACE_FILE` (path or
+`OFF`). Environment: `PLANT_TRACE=1` enables trace output;
+`PLANT_TRACE_FILE` writes it to a named file.
+
+> Note: a program mixes `MISSION CONFIG` with either an `ACTION main`
+> **or** bare top-level statements — the driver emits a single `main`,
+> so defining `ACTION main()` alongside `MISSION CONFIG` would produce a
+> duplicate `main` at link time. Keep config directives in statement-based
+> programs.
+
+---
+
+## Self-Hosting & Build
+
+The compiler is a single pipeline written in PlantLang itself:
+
+```
+Source (.plant)
+   ↓  src/plantc/lexer.plant       — tokenizer
+   ↓  src/plantc/parser.plant      — recursive-descent parser → AST (LISTS)
+   ↓  src/plantc/codegen_c.plant   — C code generator
+   ↓  bin/Chloroplast              — CLI driver (--help / --version / compile)
+   ↓  runtime/c/plant_runtime.c    — native runtime (lists, json, fs, async …)
+   ↓  gcc
+Native executable
+```
+
+Bootstrapping: `dist/Chloroplast` (v1) compiles the sources to `v2`, which
+compiles them again to `v3`, and so on; `make self` verifies the
+generations are byte-identical (fixed point). The Makefile also runs the
+native, generics, and closures integration suites (`make test`) and the
+benchmark suite (`make perf`, results in `perf_results.md`).
+
+### File Extensions
+
+| Extension | Meaning |
+|---|---|
+| `.plant` | modern native source (this tour) |
+| `.plnt` | legacy pre-v0.46 source (not parsed by Chloroplast) |
+
+---
+
+## License
+
+MIT — see the repository root. Chloroplast is self-hosted, pure native,
+and MIT licensed.

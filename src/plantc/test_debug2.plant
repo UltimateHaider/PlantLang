@@ -1,0 +1,7 @@
+IMPORT "ast.plant".
+IMPORT "codegen_c.plant".
+
+# Test if_stmt codegen branch directly
+REAP node FROM generate_node, { "type": "if_stmt", "cond": "x > 0", "body": [{ "type": "show_stmt", "value": "x" }] }, 0.
+SHOW "result:".
+SHOW node.
