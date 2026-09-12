@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.50.0d
+# 🌿 PlantLang — Chloroplast v0.50.0e
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -110,6 +110,7 @@ ACTION main(),
 | Struct | `STRUCT` | `STRUCT Point { x: NUM, y: NUM }` |
 | Anonymous struct | `STRUCT` | `STRUCT { x: NUM, y: NUM }` (auto-named) |
 | Union | `UNION` | `UNION V { i: NUM, f: SCL }` |
+| Fixed-size array | `ARRAY` | `ARRAY[NUM, 5] nums = [1, 2, 3, 4, 5].` |
 | Enum | `ENUM` | `ENUM Color { RED, GREEN, BLUE }.` |
 | Species | `SPECIES` | `SPECIES Animal { name: TX, age: NUM }.` |
 
@@ -362,6 +363,48 @@ is the element count, so two pairs are `plant_list_make(4, ...)`);
 parse time. Statement separation is line-aware: a chain never opens a
 new line, so `SHOW m.name.` followed by `m.put(...)` on the next line
 stays two statements (lexer marks line-leading tokens).
+
+### ARRAY (v0.50.0e)
+
+Fixed-size stack-allocated arrays with compile-time-known length:
+
+```
+CREATE nums(ARRAY[NUM, 5]) TO [10, 20, 30, 40, 50].
+# → long nums[5] = {10, 20, 30, 40, 50};
+```
+
+The lowercase shorthand is also supported:
+
+```
+array[NUM, 5] nums = [10, 20, 30, 40, 50].
+# → long nums[5] = {10, 20, 30, 40, 50};
+```
+
+Arrays are declared with `ARRAY[ElementType, Size]` and initialized with a
+list literal `[...]`. The compiler emits a native C array declaration with an
+aggregate initializer. Supported element types:
+
+| Element Type | C Declaration |
+|---|---|
+| `NUM` | `long name[N] = {…};` |
+| `FACT` | `int name[N] = {…};` |
+| `SCL` | `double name[N] = {…};` |
+| `CHAR` | `char name[N] = {…};` |
+| `UNUM` | `unsigned long name[N] = {…};` |
+| `UFACT` | `unsigned int name[N] = {…};` |
+
+```
+ACTION main(),
+  CREATE nums(ARRAY[NUM, 5]) TO [10, 20, 30, 40, 50].
+  array[FACT, 3] flags = [1, 0, 1].
+  SHOW "arrays created".
+  GIVE 0.
+/GIVE main.
+```
+
+**Note:** Array bracket indexing (`arr[idx]`) is not yet supported; the
+existing `handle_brackets` rewrites `arr[idx]` to `plant_list_get(arr, idx)`
+which is incompatible with native C arrays.
 
 ### Actions (functions)
 

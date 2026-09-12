@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.48.4
+# 🌿 PlantLang — Chloroplast v0.50.0e
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -104,6 +104,7 @@ ACTION main(),
 | List | `LIST` | `CREATE parts(LIST) TO plant_list_make(0).` |
 | Generic list | `LIST[T]` | `CREATE xs(LIST[NUM]) TO plant_list_make(0).` |
 | Struct | `STRUCT` | `STRUCT Point { x: NUM, y: NUM }` |
+| Fixed-size array | `ARRAY` | `ARRAY[NUM, 5] nums = [1, 2, 3, 4, 5].` |
 | Enum | `ENUM` | `ENUM Color { RED, GREEN, BLUE }.` |
 
 Declare a variable with `CREATE` (and re-assign with `SET`):

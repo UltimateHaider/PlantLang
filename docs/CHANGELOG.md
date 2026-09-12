@@ -1,3 +1,34 @@
+## v0.50.0e - 2026 (Native Fixed-Size Stack Arrays)
+
+### New Language Features
+
+#### Native Fixed-Size Stack Arrays (`ARRAY[T, N]`)
+- **Lexer**: Registered `"array"` as keyword mapped to `"ARRAY"` type token.
+- **Parser**: `ARRAY[T, N] varname = [init...]` declaration syntax, using manual bracket-depth-aware type scanning between `[` and `]`. Supports both `CREATE` syntax (`CREATE nums(ARRAY[NUM, 5]) TO [10, 20, 30, 40, 50].`) and lowercase syntax (`array[NUM, 5] nums = [10, 20, 30, 40, 50].`).
+- **Codegen**: `ARRAY[T, N]` maps to C `T[N]` with aggregate initializer `{...}`. Element type resolved recursively via `plant_ctype`. Aggregate init conversion strips `_from_long()` and `_from_double()` wrappers from list literal values, producing clean `{10, 20, 30, 40, 50}` initializers.
+- **Type system**: `ARRAY[T, N]` excluded from `is_struct_type` classifier. `plant_ctype` recursively maps `ARRAY[NUM, 5]` → `long`, `ARRAY[FACT, 3]` → `int`, `ARRAY[SCL, 3]` → `double`, etc.
+- **Action body support**: `ARRAY` dispatch added to both `parse_declaration` and `parse_statement`, enabling array declarations inside action bodies.
+
+#### Supported Array Types
+| PlantLang Type | C Declaration |
+|----------------|---------------|
+| `ARRAY[NUM, 5]` | `long name[5] = {…};` |
+| `ARRAY[FACT, 3]` | `int name[3] = {…};` |
+| `ARRAY[SCL, 3]` | `double name[3] = {…};` |
+| `ARRAY[CHAR, 4]` | `char name[4] = {…};` |
+| `ARRAY[UNUM, 2]` | `unsigned long name[2] = {…};` |
+| `ARRAY[UFACT, 2]` | `unsigned int name[2] = {…};` |
+
+### Implementation Notes
+- PlantLang's `[` character inside string literals is tokenized as a bracket; type strings are built via `_cat` to avoid misparse.
+- `COUNT` compiles to `plant_array_length()` (list-only); string length uses `LEN()` → `strlen()`.
+- Self-hosting convergence: **476960 bytes** (post-v0.50.0d supplement).
+
+### Tests
+- `array_basic` — comprehensive test covering both `CREATE` and lowercase `array` syntax, NUM/FACT/SCL types, and default-initialized arrays.
+
+---
+
 ## v0.50.0d - 2026 (Native `UNION` Composite Type & Memory Management)
 
 ### New Language Features

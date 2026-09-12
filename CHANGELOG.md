@@ -1,5 +1,18 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.50.0e — 2026 (Native Fixed-Size Stack Arrays)
+
+### New Features
+- **Native fixed-size stack arrays** — `ARRAY[T, N]` syntax maps to C `T[N]` with
+  aggregate initializer `{...}`. Both `CREATE nums(ARRAY[NUM, 5]) TO [10, 20, 30, 40, 50].`
+  and lowercase `array[NUM, 5] nums = [10, 20, 30, 40, 50].` syntax supported.
+- **Lexer**: `"array"` keyword → `"ARRAY"` type token.
+- **Parser**: `parse_array_decl` with manual bracket-depth-aware type scanning;
+  dispatch in both `parse_declaration` and `parse_statement` (action bodies).
+- **Codegen**: `plant_ctype` recursively maps `ARRAY[T, N]` to element C type;
+  `gen_create_stmt` and `let_stmt` emit `T name[N] = {stripped_init};` with
+  `_from_long()`/`_from_double()` wrapper removal from list literal values.
+
 ## v0.48.12 — 2026 (ENUM FFI)
 
 ### New Features
