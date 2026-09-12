@@ -3501,6 +3501,64 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
   REAP val FROM _map_get, node, "value".
   REAP cval FROM translate_expr, val, nums, evars.
   REAP cval FROM _handle_cat, cval, nums, evars.
+  # v0.50.0e — ARRAY[T, N]: emit T name[N] = {init}; BEFORE actx early return.
+  REAP _aby FROM find_any, vtype, "[".
+  IF _aby >= 0,
+      REAP _ab FROM substring, vtype, 0, _aby.
+      REAP _abt FROM trim, _ab.
+      IF _abt IS "ARRAY",
+          REAP _abct FROM plant_ctype, vtype.
+          # extract size from type string "ARRAY[T, N]"
+          REAP _inner FROM substring, vtype, _aby, LEN(vtype).
+          REAP _ci FROM find_any, _inner, ",".
+          REAP _ri FROM find_any, _inner, "]".
+          REAP _size_s FROM substring, _inner, _ci + 1, _ri.
+          REAP _size FROM trim, _size_s.
+          # convert plant_list_make(...) to aggregate init {...}
+          CREATE _cv2(TX) TO _cat("", cval).
+          REAP _plmk FROM substring, _cv2, 0, 16.
+          IF _plmk IS "plant_list_make(",
+              REAP _fc FROM find_any, _cv2, ",".
+              CREATE _elems_start(NUM) TO _fc + 2.
+              CREATE _elems_end(NUM) TO LEN(_cv2) - 1.
+              REAP _elems FROM substring, _cv2, _elems_start, _elems_end.
+              # build aggregate by stripping _from_long( and ) wrappers
+              CREATE _out(TX) TO "".
+              CREATE _pi(NUM) TO 0.
+              CREATE _plen(NUM) TO LEN(_elems).
+              SEASON _pi < _plen,
+                  REAP _ch FROM char_at, _elems, _pi.
+                  CREATE _is_from(NUM) TO 0.
+                  REAP _fl FROM substring, _elems, _pi, _pi + 11.
+                  IF _fl IS "_from_long(",
+                      SET _pi TO _pi + 11.
+                      SET _is_from TO 1.
+                  /IF.
+                  IF _is_from IS 0,
+                      REAP _fd FROM substring, _elems, _pi, _pi + 13.
+                      IF _fd IS "_from_double(",
+                          SET _pi TO _pi + 13.
+                          SET _is_from TO 1.
+                      /IF.
+                  /IF.
+                  IF _is_from IS 0,
+                      IF _ch IS ")",
+                          SET _pi TO _pi + 1.
+                      /IF.
+                      IF _ch ISNT ")",
+                          SET _out TO _out + _ch.
+                          SET _pi TO _pi + 1.
+                      /IF.
+                  /IF.
+              /SEASON.
+              SET _cv2 TO "{" + _out + "}".
+          /IF.
+          IF actx IS "a",
+              GIVE isel + "  " + target + " = " + _cv2 + ";\n".
+          /IF.
+          GIVE isel + "  " + _abct + " " + target + "[" + _size + "] = " + _cv2 + ";\n".
+      /IF.
+  /IF.
   IF actx IS "a",
       GIVE isel + "  " + target + " = " + cval + ";\n".
   /IF.
@@ -4545,6 +4603,61 @@ ACTION generate_node(node, env(LIST)),
         REAP val FROM _map_get, node, "value".
         REAP cval FROM translate_expr, val, nums, evars.
         REAP cval FROM _handle_cat, cval, nums, evars.
+        # v0.50.0e — ARRAY[T, N] in let_stmt: emit T name[N] = {init};
+        REAP _aby2 FROM find_any, vtype, "[".
+        IF _aby2 >= 0,
+            REAP _ab2 FROM substring, vtype, 0, _aby2.
+            REAP _abt2 FROM trim, _ab2.
+            IF _abt2 IS "ARRAY",
+                REAP _abct2 FROM plant_ctype, vtype.
+                REAP _inner2 FROM substring, vtype, _aby2, LEN(vtype).
+                REAP _ci2 FROM find_any, _inner2, ",".
+                REAP _ri2 FROM find_any, _inner2, "]".
+                REAP _size_s2 FROM substring, _inner2, _ci2 + 1, _ri2.
+                REAP _size2 FROM trim, _size_s2.
+                CREATE _cv3(TX) TO _cat("", cval).
+                REAP _plmk2 FROM substring, _cv3, 0, 16.
+                IF _plmk2 IS "plant_list_make(",
+                    REAP _fc2 FROM find_any, _cv3, ",".
+                    CREATE _elems_start2(NUM) TO _fc2 + 2.
+                    CREATE _elems_end2(NUM) TO LEN(_cv3) - 1.
+                    REAP _elems2 FROM substring, _cv3, _elems_start2, _elems_end2.
+                    CREATE _out2(TX) TO "".
+                    CREATE _pi2(NUM) TO 0.
+                    CREATE _plen2(NUM) TO LEN(_elems2).
+                    SEASON _pi2 < _plen2,
+                        REAP _ch2 FROM char_at, _elems2, _pi2.
+                        CREATE _is_from2(NUM) TO 0.
+                        REAP _fl2 FROM substring, _elems2, _pi2, _pi2 + 11.
+                        IF _fl2 IS "_from_long(",
+                            SET _pi2 TO _pi2 + 11.
+                            SET _is_from2 TO 1.
+                        /IF.
+                        IF _is_from2 IS 0,
+                            REAP _fd2 FROM substring, _elems2, _pi2, _pi2 + 13.
+                            IF _fd2 IS "_from_double(",
+                                SET _pi2 TO _pi2 + 13.
+                                SET _is_from2 TO 1.
+                            /IF.
+                        /IF.
+                        IF _is_from2 IS 0,
+                            IF _ch2 IS ")",
+                                SET _pi2 TO _pi2 + 1.
+                            /IF.
+                            IF _ch2 ISNT ")",
+                                SET _out2 TO _out2 + _ch2.
+                                SET _pi2 TO _pi2 + 1.
+                            /IF.
+                        /IF.
+                    /SEASON.
+                    SET _cv3 TO "{" + _out2 + "}".
+                /IF.
+                IF actx IS "a",
+                    GIVE isel + "  " + target + " = " + _cv3 + ";\n".
+                /IF.
+                GIVE isel + "  " + _abct2 + " " + target + "[" + _size2 + "] = " + _cv3 + ";\n".
+            /IF.
+        /IF.
         IF actx IS "a",
             GIVE isel + "  " + target + " = " + cval + ";\n".
         /IF.
@@ -5521,6 +5634,17 @@ ACTION plant_ctype(ptype(TX)),
     IF base IS "REF TX", GIVE "tx_t*". /IF.
     # v0.50.0d — union type maps to void* (opaque).
     IF base IS "UNION", GIVE "void*". /IF.
+    # v0.50.0e — ARRAY[T, N] maps to just the element type in plant_ctype.
+    # The [N] is appended by gen_create_stmt / let_stmt when emitting the declaration.
+    IF base IS "ARRAY",
+      REAP bi FROM find_any, ptype, "[".
+      REAP inner_from FROM substring, ptype, bi, COUNT ptype.
+      REAP ci FROM find_any, inner_from, ",".
+      REAP elem_name FROM substring, inner_from, 1, ci.
+      REAP elem_name2 FROM trim, elem_name.
+      REAP elem_ct FROM plant_ctype, elem_name2.
+      GIVE elem_ct.
+    /IF.
     GIVE "tx_t".
 /ACTION.
 
@@ -5608,6 +5732,8 @@ ACTION is_struct_type(t(TX)),
   IF tb IS "UNUM", GIVE "0". /IF.
   IF tb IS "UFACT", GIVE "0". /IF.
   IF tb IS "CHAR", GIVE "0". /IF.
+  # v0.50.0e — ARRAY[T, N] is not a struct type.
+  IF tb IS "ARRAY", GIVE "0". /IF.
   IF tb IS "", GIVE "0". /IF.
   REAP rf FROM substring, tb, 0, 4.
   IF rf IS "REF ", GIVE "0". /IF.

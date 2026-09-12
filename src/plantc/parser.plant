@@ -669,6 +669,69 @@ ACTION parse_create_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
   REAP p4 FROM _second, vpair.
   GIVE plant_list_make(2, plant_list_make(8, "type", "create_stmt", "target", id_name, "var_type", vtype, "value", expr), p4).
 /ACTION.
+
+# v0.50.0e — parse_array_decl: array[T, N] varname = [init...].
+#   Parses the array type bracket, collects element type and size,
+#   then the variable name, = or TO, and the initializer list.
+ACTION parse_array_decl(tokens(LIST), pos(NUM), rtab(LIST)),
+  REAP lexer FROM get_lexer.
+  # consume 'ARRAY' / 'array' token
+  REAP arr_pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
+  REAP p2 FROM _second, arr_pair.
+  # expect '['
+  REAP lb_tok FROM plant_iLexer_peek_at, lexer, tokens, p2.
+  REAP lb_lx FROM plant_iLexer_tok_lex, lexer, lb_tok.
+  IF lb_lx ISNT "[",
+    GIVE plant_list_make(2, plant_list_make(6, "type", "syntax_error", "message", "expected bracket after array"), p2).
+  /IF.
+  REAP lb_pair FROM plant_iLexer_consume_at, lexer, tokens, p2.
+  REAP p3 FROM _second, lb_pair.
+  # collect element type until ',' at depth 0
+  REAP et_pair FROM collect_type_text, tokens, p3, "]", 1.
+  REAP elem_type FROM _first, et_pair.
+  REAP p4 FROM _second, et_pair.
+  # skip ','
+  REAP comma_tok FROM plant_iLexer_peek_at, lexer, tokens, p4.
+  REAP comma_lx FROM plant_iLexer_tok_lex, lexer, comma_tok.
+  IF comma_lx IS ",",
+    REAP comma_pair FROM plant_iLexer_consume_at, lexer, tokens, p4.
+    REAP p4 FROM _second, comma_pair.
+  /IF.
+  # collect size until ']' at depth 0
+  REAP sz_pair FROM collect_type_text, tokens, p4, "]", 0.
+  REAP arr_size FROM _first, sz_pair.
+  REAP p5 FROM _second, sz_pair.
+  # consume ']'
+  REAP rb_pair FROM plant_iLexer_consume_at, lexer, tokens, p5.
+  REAP p6 FROM _second, rb_pair.
+  # construct the type string: "ARRAY[NUM, 5]"
+  CREATE _lb(TX) TO _cat("[", "").
+  CREATE _rb(TX) TO _cat("]", "").
+  CREATE _cm(TX) TO ", ".
+  CREATE vtype(TX) TO _cat(_cat4("ARRAY", _lb, elem_type, _cm), _cat(arr_size, _rb)).
+  # consume variable name
+  REAP name_pair FROM plant_iLexer_consume_at, lexer, tokens, p6.
+  REAP id_name FROM plant_iLexer_tok_lex, lexer, name_pair[0].
+  REAP p7 FROM _second, name_pair.
+  # expect '=' or 'TO'
+  REAP tok2 FROM plant_iLexer_peek_at, lexer, tokens, p7.
+  REAP lx2 FROM plant_iLexer_tok_lex, lexer, tok2.
+  CREATE p8(NUM) TO p7.
+  IF lx2 IS "=",
+    REAP eq_pair FROM plant_iLexer_consume_at, lexer, tokens, p7.
+    REAP p8 FROM _second, eq_pair.
+  /IF.
+  IF lx2 IS "TO",
+    REAP to_pair FROM plant_iLexer_consume_at, lexer, tokens, p7.
+    REAP p8 FROM _second, to_pair.
+  /IF.
+  # collect value
+  REAP vpair FROM collect_value, tokens, p8.
+  REAP expr FROM _first, vpair.
+  REAP p9 FROM _second, vpair.
+  GIVE plant_list_make(2, plant_list_make(8, "type", "create_stmt", "target", id_name, "var_type", vtype, "value", expr), p9).
+/ACTION.
+
 ACTION parse_show_stmt(tokens(LIST), pos(NUM)),
   REAP lexer FROM get_lexer.
 
@@ -2963,6 +3026,11 @@ ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), 
     REAP r FROM parse_create_stmt, tokens, pos, rtab, emode.
     GIVE r.
   /IF.
+  # v0.50.0e — native fixed-size arrays (inside action bodies).
+  IF lx IS "ARRAY" OR lx IS "array",
+    REAP r FROM parse_array_decl, tokens, pos, rtab.
+    GIVE r.
+  /IF.
   IF lx IS "SHOW",
     REAP r FROM parse_show_stmt, tokens, pos.
     GIVE r.
@@ -4057,6 +4125,11 @@ ACTION parse_declaration(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST)
   # v0.50.0d — UNION composite type.
   IF lx IS "UNION",
     REAP r FROM parse_union_decl, tokens, pos.
+    GIVE r.
+  /IF.
+  # v0.50.0e — native fixed-size arrays.
+  IF lx IS "ARRAY" OR lx IS "array",
+    REAP r FROM parse_array_decl, tokens, pos, rtab.
     GIVE r.
   /IF.
   # v0.49.27 - TYPE alias = target.
