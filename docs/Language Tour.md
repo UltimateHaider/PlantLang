@@ -254,9 +254,8 @@ UNION V {
 }
 ```
 
-`UNION` declares a tagged union type. The codegen emits a C `typedef union`
-block in the shared types section. Union values flow through the FFI as
-opaque `void*` handles:
+`UNION` declares a union type. The codegen emits a C `typedef union`
+block in the shared types section. Union values are stack-allocated:
 
 ```
 UNION Value {
@@ -266,19 +265,46 @@ UNION Value {
 }
 
 ACTION main(),
-  CREATE v(Value) TO plant_union_create(sizeof(Value)).
-  SHOW "union allocated".
-  plant_union_free(v).
+  CREATE v(Value) TO Value{i: 42}.
+  SHOW v.
   GIVE 0.
 /ACTION.
 ```
 
-Fields are comma-separated (consistent with `STRUCT`). The `sizeof()` 
-call in C computes the correct union size for allocation.
+Fields are comma-separated (consistent with `STRUCT`).
 
-**Runtime helpers:**
-- `plant_union_create(sizeof(U))` — allocate a zero-initialized union
-- `plant_union_free(u)` — free a union allocation
+#### UNION CREATE/LET
+
+Union-typed variables are stack-allocated using standard `CREATE`/`LET`:
+
+```
+CREATE v(Value) TO Value{i: 42}.      # stack union Value v = (union Value){.i = 42};
+LET w AS Value IS Value{f: 3.14}.     # stack union Value w = (union Value){.f = 3.14};
+```
+
+#### UNION_INIT Compound Literals
+
+Use `TypeName{field: value}` syntax to create union compound literals:
+
+```
+CREATE v(Value) TO Value{i: 42}.
+SET v TO Value{f: 3.14}.              # reassign entire union
+```
+
+The compiler translates `V{i: 42}` to the C compound literal `(union V){.i = 42}`.
+
+#### Field Access
+
+Union fields are accessed via standard C dot notation:
+
+```
+CREATE v(Value) TO Value{i: 42}.
+SHOW v.i.                              # 42
+```
+
+**Runtime helpers (FFI/dynamic interop only):**
+- `plant_union_create(sizeof(U))` — allocate a heap union
+- `plant_union_free(u)` — free a heap union
 
 **Field access (v0.49.10):** `a.b.c` on a map-backed LIST reads a key
 with `_map_get` — no explicit `_map_get` call needed:

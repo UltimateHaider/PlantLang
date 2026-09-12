@@ -124,6 +124,7 @@ tx_t _list_literal(tx_t expr, PlantArray* nums, PlantArray* evars);
 tx_t _seg_map(tx_t inner, PlantArray* nums, PlantArray* evars);
 tx_t _find_colon(tx_t ptext);
 tx_t _push_pair(tx_t acc, tx_t cur, PlantArray* nums, PlantArray* evars);
+tx_t _union_init(tx_t expr, PlantArray* nums, PlantArray* evars);
 tx_t _map_literal(tx_t expr, PlantArray* nums, PlantArray* evars);
 tx_t is_identifier(tx_t tok);
 tx_t seg_has_literal_digit(tx_t seg);
@@ -210,6 +211,8 @@ tx_t ffi_param_kind(tx_t ptype);
 tx_t ffi_struct_name(tx_t typ);
 tx_t ffi_struct_cname(tx_t typ);
 tx_t is_struct_type(tx_t t);
+tx_t is_union_type(tx_t t, PlantArray* reg);
+tx_t collect_union_names(PlantArray* ast);
 tx_t collect_stvars_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_stvars(PlantArray* bd, PlantArray* params, PlantArray* subst);
 tx_t find_sig(PlantArray* sigs, tx_t name);
@@ -7741,6 +7744,64 @@ tx_t _push_pair(tx_t acc, tx_t cur, PlantArray* nums, PlantArray* evars) {
     acc = _cat4(_cat4("plant_map_set(", acc, ", ", ken), ", ", ven, ")");
     return acc;
 }
+tx_t _union_init(tx_t expr, PlantArray* nums, PlantArray* evars) {
+  tx_t lp = "";
+  tx_t ep = "";
+  tx_t before = "";
+  tx_t bc = "";
+  tx_t bc2 = "";
+  tx_t tname = "";
+  tx_t iut = "";
+  tx_t inner = "";
+  tx_t colon_pos = "";
+  tx_t fname = "";
+  tx_t fval = "";
+    lp = find_any(expr, "{");
+    if (lp == - 1) {
+    return expr;
+    }
+    ep = find_any(expr, "}");
+    if (ep == - 1) {
+    return expr;
+    }
+    before = substring(expr, 0, lp);
+    before = trim(before);
+    long blen = strlen( before );
+    if (blen == 0) {
+    return expr;
+    }
+    bc = char_at(before, blen - 1);
+    if (strcmp(bc,")") == 0 || strcmp(bc,"]") == 0 || strcmp(bc,"\"") == 0) {
+    return expr;
+    }
+    long bi = blen - 1;
+    while (bi >= 0) {
+    bc2 = char_at(before, bi);
+    if (strcmp(bc2," ") == 0 || strcmp(bc2,"(") == 0 || strcmp(bc2,",") == 0 || strcmp(bc2,"+") == 0 || strcmp(bc2,"-") == 0 || strcmp(bc2,"*") == 0 || strcmp(bc2,"=") == 0) {
+    return expr;
+    }
+    if (strcmp(bc2,"}") == 0 || strcmp(bc2,"]") == 0) {
+    return expr;
+    }
+    bi = bi - 1;
+    }
+    tname = substring(before, bi+1, blen);
+    iut = is_union_type(tname, evars);
+    if (strcmp(iut,"0") == 0) {
+    return expr;
+    }
+    inner = substring(expr, lp+1, ep);
+    inner = trim(inner);
+    colon_pos = find_any(inner, ":");
+    if (colon_pos == - 1) {
+    return expr;
+    }
+    fname = substring(inner, 0, colon_pos);
+    fname = trim(fname);
+    fval = substring(inner, colon_pos+1, strlen( inner ));
+    fval = trim(fval);
+    return _cat4(_cat4("(union ", tname, "){.", fname), " = ", fval, "}");
+}
 tx_t _map_literal(tx_t expr, PlantArray* nums, PlantArray* evars) {
   tx_t isub = "";
   tx_t pvi = "";
@@ -8788,6 +8849,7 @@ tx_t collect_implicit(PlantArray* bd, PlantArray* params) {
 tx_t build_enum_registry(PlantArray* ast) {
   tx_t enm = "";
   tx_t sname2 = "";
+  tx_t uname2 = "";
     PlantArray* reg = plant_list_make ( 0 );
     long ei = 0;
     tx_t ne = "";
@@ -8849,6 +8911,32 @@ tx_t build_enum_registry(PlantArray* ast) {
             reg = plant_list_add(reg, sreval);
     }
     si = si+1;
+    }
+    long ui = 0;
+    tx_t un = "";
+    tx_t uty = "";
+    while (ui < plant_array_length(ast)) {
+    un = plant_list_get(ast, ui);
+    uty = _map_get(un, "type");
+    if (strcmp(uty,"union_decl") == 0) {
+    uname2 = _map_get(un, "name");
+    PlantArray* ufldlst = _map_get ( un , "fields" );
+    tx_t ufcsv = "";
+    long ufi2 = 0;
+    tx_t ufel = "";
+    while (ufi2 < plant_array_length(ufldlst)) {
+    ufel = plant_list_get(ufldlst, ufi2);
+    if (ufi2 > 0) {
+    ufcsv = _cat(ufcsv, ",");
+    }
+    ufcsv = _cat4(ufcsv, _map_get ( ufel , "name" ), ":", _map_get ( ufel , "type" ));
+    ufi2 = ufi2+1;
+    }
+    tx_t urekey = _cat("UNION.", uname2);
+            reg = plant_list_add(reg, urekey);
+            reg = plant_list_add(reg, ufcsv);
+    }
+    ui = ui+1;
     }
     return reg;
 }
@@ -10076,6 +10164,7 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars) {
     e = _handle_func(e, "SEAL", "plant_seal");
     e = _storm_inject(e);
     e = _handle_func(e, "TEST", "!");
+    e = _union_init(e, nums, evars);
     e = _map_literal(e, nums, evars);
     e = _list_literal(e, nums, evars);
     e = plant_sanitize_bools(e);
@@ -10206,9 +10295,11 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
   tx_t cval = "";
   tx_t isnc2 = "";
   tx_t fc = "";
+  tx_t iut2 = "";
   tx_t vst2 = "";
   tx_t vct2 = "";
   tx_t vst3 = "";
+  tx_t iut3 = "";
     target = _map_get(node, "target");
     vtype = _map_get(node, "var_type");
     vtype = subst_type(vtype, subst);
@@ -10287,6 +10378,13 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     if (strcmp(vtype,"LIST") == 0) {
     return _cat3(_cat4(isel, "  PlantArray* ", target, " = "), cval, ";\n");
     }
+    iut2 = is_union_type(vtype, evars);
+    if (strcmp(iut2,"1") == 0) {
+    if (strcmp(actx,"a") == 0) {
+    return _cat3(_cat4(isel, "  ", target, " = "), cval, ";\n");
+    }
+    return _cat(_cat4(_cat4(isel, "  union ", vtype, " "), target, " = ", cval), ";\n");
+    }
     vst2 = is_struct_type(vtype);
     if (strcmp(vst2,"1") == 0) {
     vct2 = ffi_ctype(vtype);
@@ -10297,7 +10395,8 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     }
     if (strcmp(vtype,"NUM") != 0 && strcmp(vtype,"FACT") != 0 && strcmp(vtype,"CHAR") != 0 && strcmp(vtype,"UNUM") != 0 && strcmp(vtype,"UFACT") != 0 && strcmp(vtype,"SCL") != 0 && strcmp(vtype,"LIST") != 0) {
     vst3 = is_struct_type(vtype);
-    if (strcmp(vst3,"1") != 0) {
+    iut3 = is_union_type(vtype, evars);
+    if (strcmp(vst3,"1") != 0 && strcmp(iut3,"1") != 0) {
     return _cat3(_cat4(isel, "  tx_t ", target, " = "), cval, ";\n");
     }
     }
@@ -11166,9 +11265,11 @@ tx_t generate_node(tx_t node, PlantArray* env) {
   tx_t cid2 = "";
   tx_t isnc3 = "";
   tx_t fc2 = "";
+  tx_t iut4 = "";
   tx_t vst4 = "";
   tx_t vct4 = "";
   tx_t vst5 = "";
+  tx_t iut5 = "";
   tx_t item = "";
   tx_t citem = "";
   tx_t left = "";
@@ -11494,6 +11595,13 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     }
     return _cat3(_cat4(isel, "  double ", target, " = plant_scl_create(_from_double("), cval, "));\n");
     }
+    iut4 = is_union_type(vtype, evars);
+    if (strcmp(iut4,"1") == 0) {
+    if (strcmp(actx,"a") == 0) {
+    return _cat3(_cat4(isel, "  ", target, " = "), cval, ";\n");
+    }
+    return _cat(_cat4(_cat4(isel, "  union ", vtype, " "), target, " = ", cval), ";\n");
+    }
     vst4 = is_struct_type(vtype);
     if (strcmp(vst4,"1") == 0) {
     vct4 = ffi_ctype(vtype);
@@ -11504,7 +11612,8 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     }
     if (strcmp(vtype,"NUM") != 0 && strcmp(vtype,"CHAR") != 0 && strcmp(vtype,"UNUM") != 0 && strcmp(vtype,"UFACT") != 0 && strcmp(vtype,"SCL") != 0) {
     vst5 = is_struct_type(vtype);
-    if (strcmp(vst5,"1") != 0) {
+    iut5 = is_union_type(vtype, evars);
+    if (strcmp(vst5,"1") != 0 && strcmp(iut5,"1") != 0) {
     return _cat3(_cat4(isel, "  tx_t ", target, " = "), cval, ";\n");
     }
     }
@@ -12343,6 +12452,18 @@ tx_t is_struct_type(tx_t t) {
     if (strcmp(tb,"LIST") == 0) {
     return "0";
     }
+    if (strcmp(tb,"SCL") == 0) {
+    return "0";
+    }
+    if (strcmp(tb,"UNUM") == 0) {
+    return "0";
+    }
+    if (strcmp(tb,"UFACT") == 0) {
+    return "0";
+    }
+    if (strcmp(tb,"CHAR") == 0) {
+    return "0";
+    }
     if (strcmp(tb,"") == 0) {
     return "0";
     }
@@ -12351,6 +12472,40 @@ tx_t is_struct_type(tx_t t) {
     return "0";
     }
     return "1";
+}
+tx_t is_union_type(tx_t t, PlantArray* reg) {
+  tx_t base = "";
+  tx_t tb = "";
+  tx_t rn = "";
+    base = type_base(t);
+    tb = trim(base);
+    tx_t lk = _cat("UNION.", tb);
+    long ri = 0;
+    while (ri + 1 < plant_array_length(reg)) {
+    rn = plant_list_get(reg, ri);
+    if (strcmp(str_eq ( rn , lk ),"1") == 0) {
+    return "1";
+    }
+    ri = ri+2;
+    }
+    return "0";
+}
+tx_t collect_union_names(PlantArray* ast) {
+  tx_t un = "";
+    PlantArray* res = plant_list_make ( 0 );
+    long ai = 0;
+    tx_t nd = "";
+    tx_t nty = "";
+    while (ai < plant_array_length(ast)) {
+    nd = plant_list_get(ast, ai);
+    nty = _map_get(nd, "type");
+    if (strcmp(nty,"union_decl") == 0) {
+    un = _map_get(nd, "name");
+            res = plant_list_add(res, un);
+    }
+    ai = ai+1;
+    }
+    return res;
 }
 tx_t collect_stvars_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
   tx_t wsf = "";

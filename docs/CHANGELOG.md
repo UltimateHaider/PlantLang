@@ -8,6 +8,14 @@
 - **Codegen**: `union_decl` nodes generate C `typedef union { ... } Name;` in the shared types block. `UNION` type maps to `void*` in generated C (opaque handle). Added runtime helpers `plant_union_create(size_t)` and `plant_union_free(void*)` for memory management.
 - **AST**: `union_decl` nodes properly excluded from all AST walk passes (16 top-level walks verified).
 
+#### UNION CREATE/LET & Compound Initializer (Supplement)
+- **Type registry**: Added `UNION.<Name>` entries to the enum registry for compile-time union type detection.
+- **`is_union_type` helper**: New type classifier that checks the union registry and returns `"1"` for registered union types.
+- **Stack-allocated CREATE**: `CREATE v(V) TO expr` emits `union V v = expr;` for union-typed variables (stack allocation, not heap).
+- **Stack-allocated LET**: `LET v AS V IS expr` emits `union V v = expr;` for union-typed variables.
+- **UNION_INIT compound literals**: `V{i: 42}` → `(union V){.i = 42}` via `_union_init` rewrite in `translate_expr`. Field name and value extracted from brace-delimited initializer syntax.
+- **Direct stack field access**: Union fields accessed via standard C dot notation (`v.field`), reserving `plant_union_create()`/`plant_union_free()` strictly for FFI/dynamic interop.
+
 ---
 
 ## v0.50.0c - 2026 (Native Double-Precision Real Primitive)

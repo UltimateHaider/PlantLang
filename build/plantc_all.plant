@@ -5960,6 +5960,42 @@ ACTION _push_pair(acc(TX), cur(TX), nums(LIST), evars(LIST)),
 # inside strings are literal text. The identifier-guard mirrors
 # _list_literal: a "{" preceded by an identifier (or ) or ]) is
 # legacy struct-literal syntax and passes through untouched.
+
+# v0.50.0d — _union_init: rewrite TypeName { field : val } to
+# (union TypeName){.field = val} for registered union types.
+# Detected before _map_literal so the brace text is still intact.
+ACTION _union_init(expr(TX), nums(LIST), evars(LIST)),
+    REAP lp FROM find_any, expr, "{".
+    IF lp IS -1, GIVE expr. /IF.
+    REAP ep FROM find_any, expr, "}".
+    IF ep IS -1, GIVE expr. /IF.
+    REAP before FROM substring, expr, 0, lp.
+    REAP before FROM trim, before.
+    CREATE blen(NUM) TO LEN(before).
+    IF blen IS 0, GIVE expr. /IF.
+    REAP bc FROM char_at, before, blen - 1.
+    IF bc IS ")" OR bc IS "]" OR bc IS "\"", GIVE expr. /IF.
+    CREATE bi(NUM) TO blen - 1.
+    SEASON bi >= 0,
+        REAP bc2 FROM char_at, before, bi.
+        IF bc2 IS " " OR bc2 IS "(" OR bc2 IS "," OR bc2 IS "+" OR bc2 IS "-" OR bc2 IS "*" OR bc2 IS "=", GIVE expr. /IF.
+        IF bc2 IS "}" OR bc2 IS "]", GIVE expr. /IF.
+        SET bi TO bi - 1.
+    /SEASON.
+    REAP tname FROM substring, before, bi + 1, blen.
+    REAP iut FROM is_union_type, tname, evars.
+    IF iut IS "0", GIVE expr. /IF.
+    REAP inner FROM substring, expr, lp + 1, ep.
+    REAP inner FROM trim, inner.
+    REAP colon_pos FROM find_any, inner, ":".
+    IF colon_pos IS -1, GIVE expr. /IF.
+    REAP fname FROM substring, inner, 0, colon_pos.
+    REAP fname FROM trim, fname.
+    REAP fval FROM substring, inner, colon_pos + 1, LEN(inner).
+    REAP fval FROM trim, fval.
+    GIVE "(union " + tname + "){." + fname + " = " + fval + "}".
+/ACTION.
+
 ACTION _map_literal(expr(TX), nums(LIST), evars(LIST)),
     CREATE chk0(TX) TO "".
     REAP chk0 FROM find_any, expr, "{".
@@ -7077,6 +7113,33 @@ ACTION build_enum_registry(ast(LIST)),
       PUT sreval INTO reg.
     /IF.
     SET si TO si + 1.
+  /SEASON.
+  # v0.50.0d — union entries: "UNION.<Name>" → "fieldCsv" (field
+  # types, fields "name:type" comma-joined). Used by is_union_type
+  # and union field access codegen.
+  CREATE ui(NUM) TO 0.
+  CREATE un(TX) TO "".
+  CREATE uty(TX) TO "".
+  SEASON ui < COUNT ast,
+    REAP un FROM plant_list_get, ast, ui.
+    REAP uty FROM _map_get, un, "type".
+    IF uty IS "union_decl",
+      REAP uname2 FROM _map_get, un, "name".
+      CREATE ufldlst(LIST) TO _map_get(un, "fields").
+      CREATE ufcsv(TX) TO "".
+      CREATE ufi2(NUM) TO 0.
+      CREATE ufel(TX) TO "".
+      SEASON ufi2 < COUNT ufldlst,
+        REAP ufel FROM plant_list_get, ufldlst, ufi2.
+        IF ufi2 > 0, SET ufcsv TO ufcsv + ",". /IF.
+        SET ufcsv TO ufcsv + _map_get(ufel, "name") + ":" + _map_get(ufel, "type").
+        SET ufi2 TO ufi2 + 1.
+      /SEASON.
+      CREATE urekey(TX) TO "UNION." + uname2.
+      PUT urekey INTO reg.
+      PUT ufcsv INTO reg.
+    /IF.
+    SET ui TO ui + 1.
   /SEASON.
   GIVE reg.
 /ACTION.
@@ -8296,6 +8359,11 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     REAP e FROM _handle_func, e, "SEAL", "plant_seal".
     REAP e FROM _storm_inject, e.
     REAP e FROM _handle_func, e, "TEST", "!".
+    # v0.50.0d — UNION_INIT compound literals: TypeName { field : val }
+    # → (union TypeName){.field = val}.  Detected BEFORE _map_literal
+    # so the brace text is still intact.  The type name must be a
+    # registered union (UNION.<Name> in the enum registry).
+    REAP e FROM _union_init, e, nums, evars.
     # map literals rewrite BEFORE list literals so { ... } spans
     # (and [ ... ] values nested inside them) are fully converted;
     # the emitted plant_map_set/plant_map_create chains contain no
@@ -8545,6 +8613,14 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
   IF vtype IS "LIST",
       GIVE isel + "  PlantArray* " + target + " = " + cval + ";\n".
   /IF.
+  # v0.50.0d — union CREATE: stack-allocate union and assign directly.
+  REAP iut2 FROM is_union_type, vtype, evars.
+  IF iut2 IS "1",
+      IF actx IS "a",
+          GIVE isel + "  " + target + " = " + cval + ";\n".
+      /IF.
+      GIVE isel + "  union " + vtype + " " + target + " = " + cval + ";\n".
+  /IF.
   REAP vst2 FROM is_struct_type, vtype.
   IF vst2 IS "1",
       REAP vct2 FROM ffi_ctype, vtype.
@@ -8555,7 +8631,8 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
   /IF.
   IF vtype ISNT "NUM" AND vtype ISNT "FACT" AND vtype ISNT "CHAR" AND vtype ISNT "UNUM" AND vtype ISNT "UFACT" AND vtype ISNT "SCL" AND vtype ISNT "LIST",
       REAP vst3 FROM is_struct_type, vtype.
-      IF vst3 ISNT "1",
+      REAP iut3 FROM is_union_type, vtype, evars.
+      IF vst3 ISNT "1" AND iut3 ISNT "1",
           GIVE isel + "  tx_t " + target + " = " + cval + ";\n".
       /IF.
   /IF.
@@ -9567,6 +9644,14 @@ ACTION generate_node(node, env(LIST)),
             /IF.
             GIVE isel + "  double " + target + " = plant_scl_create(_from_double(" + cval + "));\n".
         /IF.
+        # v0.50.0d — union LET: stack-allocate union and assign directly.
+        REAP iut4 FROM is_union_type, vtype, evars.
+        IF iut4 IS "1",
+            IF actx IS "a",
+                GIVE isel + "  " + target + " = " + cval + ";\n".
+            /IF.
+            GIVE isel + "  union " + vtype + " " + target + " = " + cval + ";\n".
+        /IF.
         REAP vst4 FROM is_struct_type, vtype.
         IF vst4 IS "1",
             REAP vct4 FROM ffi_ctype, vtype.
@@ -9577,7 +9662,8 @@ ACTION generate_node(node, env(LIST)),
         /IF.
         IF vtype ISNT "NUM" AND vtype ISNT "CHAR" AND vtype ISNT "UNUM" AND vtype ISNT "UFACT" AND vtype ISNT "SCL",
             REAP vst5 FROM is_struct_type, vtype.
-            IF vst5 ISNT "1",
+            REAP iut5 FROM is_union_type, vtype, evars.
+            IF vst5 ISNT "1" AND iut5 ISNT "1",
                 GIVE isel + "  tx_t " + target + " = " + cval + ";\n".
             /IF.
         /IF.
@@ -10574,7 +10660,7 @@ ACTION ffi_struct_cname(typ(TX)),
 /ACTION.
 
 # is_struct_type — 1 when a type is a struct type (not a primitive
-# scalar NUM/FACT/TX/LIST, not a REF, not empty)
+# scalar NUM/FACT/TX/LIST, not a REF, not empty, not a union)
 ACTION is_struct_type(t(TX)),
   REAP base FROM type_base, t.
   REAP tb FROM trim, base.
@@ -10582,10 +10668,47 @@ ACTION is_struct_type(t(TX)),
   IF tb IS "FACT", GIVE "0". /IF.
   IF tb IS "TX", GIVE "0". /IF.
   IF tb IS "LIST", GIVE "0". /IF.
+  IF tb IS "SCL", GIVE "0". /IF.
+  IF tb IS "UNUM", GIVE "0". /IF.
+  IF tb IS "UFACT", GIVE "0". /IF.
+  IF tb IS "CHAR", GIVE "0". /IF.
   IF tb IS "", GIVE "0". /IF.
   REAP rf FROM substring, tb, 0, 4.
   IF rf IS "REF ", GIVE "0". /IF.
   GIVE "1".
+/ACTION.
+
+# v0.50.0d — is_union_type: 1 when a type name matches a declared
+# union (UNION.<Name> entry in the enum registry).
+ACTION is_union_type(t(TX), reg(LIST)),
+  REAP base FROM type_base, t.
+  REAP tb FROM trim, base.
+  CREATE lk(TX) TO "UNION." + tb.
+  CREATE ri(NUM) TO 0.
+  SEASON ri + 1 < COUNT reg,
+    REAP rn FROM plant_list_get, reg, ri.
+    IF str_eq(rn, lk) IS "1", GIVE "1". /IF.
+    SET ri TO ri + 2.
+  /SEASON.
+  GIVE "0".
+/ACTION.
+
+# collect_union_names — flat list of union type names from the AST
+ACTION collect_union_names(ast(LIST)),
+  CREATE res(LIST) TO plant_list_make(0).
+  CREATE ai(NUM) TO 0.
+  CREATE nd(TX) TO "".
+  CREATE nty(TX) TO "".
+  SEASON ai < COUNT ast,
+    REAP nd FROM plant_list_get, ast, ai.
+    REAP nty FROM _map_get, nd, "type".
+    IF nty IS "union_decl",
+      REAP un FROM _map_get, nd, "name".
+      PUT un INTO res.
+    /IF.
+    SET ai TO ai + 1.
+  /SEASON.
+  GIVE res.
 /ACTION.
 
 # collect_stvars_walk — struct-typed CREATE/LET targets in a body
