@@ -1,0 +1,5 @@
+# v0.50.0i — Differentiation: power rule
+ACTION main(),
+  SHOW MATH_DERIVATIVE("x^2", "x").
+  GIVE 0.
+/GIVE main.

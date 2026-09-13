@@ -1,11 +1,12 @@
 /*
- * plant_math.h — v0.50.0h: Symbolic Math + Like Terms + Distribution
+ * plant_math.h — v0.50.0i: Symbolic Math + Calculus + Factoring
  *
  * MathNode AST structures and API for the PlantLang symbolic algebra subsystem.
  * Supports numbers, symbols, constants, binary/unary ops, function calls,
  * operator precedence, right-associative exponentiation, evaluation to double,
- * automatic symbolic simplification, like terms collection, distribution,
- * and descending term ordering.
+ * automatic simplification, like terms collection, distribution,
+ * descending term ordering, symbolic differentiation, integration,
+ * and polynomial factoring.
  */
 
 #ifndef PLANT_MATH_H
@@ -101,6 +102,24 @@ void*     plant_math_simplify_ptr(void* math_ptr);
 
 /* Convenience: simplify an expression string. Caller frees result. */
 char*     plant_math_simplify_str(const char* expr);
+
+/* Symbolic differentiation: d/dx(node). Caller frees result. */
+MathNode* plant_math_derivative(const MathNode* node, const char* var);
+
+/* Convenience: differentiate an expression string. Caller frees result. */
+char*     plant_math_derivative_str(const char* expr, const char* var);
+
+/* Symbolic integration: ∫ node dx. Returns NULL if unsupported. Caller frees result. */
+MathNode* plant_math_integral(const MathNode* node, const char* var);
+
+/* Convenience: integrate an expression string. Caller frees result. */
+char*     plant_math_integral_str(const char* expr, const char* var);
+
+/* Polynomial factoring. Caller frees result. */
+MathNode* plant_math_factor(const MathNode* node);
+
+/* Convenience: factor an expression string. Caller frees result. */
+char*     plant_math_factor_str(const char* expr);
 
 /* Convenience: free a PlantMath*. */
 void      plant_math_free(void* math_ptr);

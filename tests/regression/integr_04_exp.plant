@@ -1,0 +1,5 @@
+# v0.50.0i — Integration: EXP
+ACTION main(),
+  SHOW MATH_INTEGRAL("EXP(x)", "x").
+  GIVE 0.
+/GIVE main.

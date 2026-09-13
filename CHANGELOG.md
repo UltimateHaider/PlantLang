@@ -1,5 +1,52 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.50.0i — 2026 (Symbolic Derivatives, Integrals & Polynomial Factoring)
+
+### New Features
+- **Symbolic differentiation** — `MATH_DERIVATIVE(expr, var)` computes derivatives:
+  - Power rule: `x^2 → 2*x`, `x^3 → 3*x^2`
+  - Sum/difference: `5*x^3+2*x^2+3*x+1 → 15*x^2+4*x+3`
+  - Product rule: `x*SIN(x) → x*COS(x)+SIN(x)`
+  - Quotient rule: supported
+  - Chain rule: supported
+  - Standard functions: `SIN→COS`, `COS→-SIN`, `EXP→EXP`, `LOG→1/x`, `TAN→1+COS^2`, `SQRT→1/(2*SQRT)`, `ABS→x/ABS`
+- **Symbolic integration** — `MATH_INTEGRAL(expr, var)` computes indefinite integrals:
+  - Power rule: `x^2 → x^3/3`
+  - Constant multiple: `3*x^2 → x^3`
+  - Sum/difference: integrated term-by-term
+  - Standard integrals: `SIN→-COS`, `COS→SIN`, `EXP→EXP`, `1/x→LOG(ABS)`, `TAN→-LOG(ABS(COS))`
+  - Appends `+ C` for indefinite integrals
+- **Polynomial factoring** — `MATH_FACTOR(expr)` factors expressions:
+  - Perfect square trinomial: `x^2+2*x+1 → (x+1)^2`
+  - Difference of squares: `x^2-4 → (x-2)(x+2)`
+  - Common factor extraction: `2*x+2*y → 2*(x+y)` via GCD
+- **Function name normalization** — `math_node_func` strips `plant_`/`math_` prefixes
+  and uppercases names so derivative/integral/factor engines work correctly
+  regardless of codegen rewrites.
+
+### Internal
+- `_handle_func_paren` updated (v1 bootstrap link fix)
+- `plant_math_derivative()`, `plant_math_integral()`, `plant_math_factor()` + string wrappers
+- `_handle_func_paren2` for 2-argument built-ins (comma-split, paren-matching)
+- MATH_DERIVATIVE, MATH_INTEGRAL, MATH_FACTOR registered as codegen built-ins
+
+### Tests (15 new)
+- `deriv_01_power` — power rule: `x^2 → 2*x`.
+- `deriv_02_sin` — SIN derivative: `SIN(x) → COS(x)`.
+- `deriv_03_cos` — COS derivative: `COS(x) → (-SIN(x))`.
+- `deriv_04_exp` — EXP derivative: `EXP(x) → EXP(x)`.
+- `deriv_05_poly` — polynomial: `5*x^3+2*x^2+3*x+1 → 15*x^2+4*x+3`.
+- `deriv_06_product` — product rule: `x*SIN(x) → ((x*COS(x))+SIN(x))`.
+- `deriv_07_log` — LOG derivative: `LOG(x) → (1/x)`.
+- `integr_01_const` — constant: `5 → 5*x + C`.
+- `integr_02_power` — power: `x^2 → x^3/3 + C`.
+- `integr_03_sin` — SIN: `SIN(x) → (-COS(x)) + C`.
+- `integr_04_exp` — EXP: `EXP(x) → EXP(x) + C`.
+- `integr_05_reciprocal` — 1/x: `1/x → LOG(ABS(x)) + C`.
+- `factor_01_square` — perfect square: `x^2+2*x+1 → (x+1)^2`.
+- `factor_02_diff_sq` — difference of squares: `x^2-4 → (x-2)(x+2)`.
+- `factor_03_common` — common factor: `2*x+2*y → 2*(x+y)`.
+
 ## v0.50.0h — 2026 (Like Terms Collection & Distribution)
 
 ### New Features

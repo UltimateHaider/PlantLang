@@ -1,10 +1,11 @@
 /*
- * plant_math.c — v0.50.0h: Symbolic Math + Like Terms + Distribution
+ * plant_math.c — v0.50.0i: Symbolic Math + Calculus + Factoring
  *
  * Full implementation of the PlantLang symbolic algebra subsystem.
  * Tokenizer → Pratt parser (precedence climbing) → AST evaluator.
  * Automatic simplification: constant folding, identity/cancellation,
  * like terms collection, distribution, descending term ordering.
+ * Symbolic differentiation, integration with +C, polynomial factoring.
  */
 
 #include "plant_math.h"
@@ -124,7 +125,18 @@ MathNode* math_node_unary(MathNode* operand) {
 MathNode* math_node_func(const char* name, MathNode* arg) {
     MathNode* n = (MathNode*)calloc(1, sizeof(MathNode));
     n->type = MATH_FUNC_CALL;
-    n->sym_name = strdup(name);
+    /* Normalize: strip plant_/math_ prefix and uppercase so that
+       deriv_func / other consumers can match canonical names
+       like "SIN" regardless of codegen rewrites. */
+    char norm[128];
+    const char* src = name;
+    if (strncmp(name, "plant_", 6) == 0) src = name + 6;
+    else if (strncmp(name, "math_", 5) == 0) src = name + 5;
+    size_t i;
+    for (i = 0; src[i] && i < sizeof(norm) - 1; i++)
+        norm[i] = (src[i] >= 'a' && src[i] <= 'z') ? src[i] - 32 : src[i];
+    norm[i] = '\0';
+    n->sym_name = strdup(norm);
     n->left = arg;
     return n;
 }
@@ -1151,6 +1163,72 @@ static MathNode* distribute_node(MathNode* node) {
 
 /* ── Normalize: standardize operand ordering in products ─────── */
 
+/* Flatten nested products: a*(b*c) → a*b*c, collect numeric factors. */
+static MathNode* flatten_product(MathNode* node) {
+    if (!node || node->type != MATH_BINARY_OP || node->op != OP_MUL)
+        return node;
+
+    /* Collect all factors from nested MUL tree */
+    MathNode* factors[256];
+    int fcount = 0;
+
+    /* Recursive factor collection */
+    MathNode* stack[256];
+    int sp = 0;
+    stack[sp++] = node;
+    while (sp > 0 && fcount < 256) {
+        MathNode* cur = stack[--sp];
+        if (cur->type == MATH_BINARY_OP && cur->op == OP_MUL) {
+            if (cur->right) stack[sp++] = cur->right;
+            if (cur->left) stack[sp++] = cur->left;
+        } else {
+            factors[fcount++] = cur;
+        }
+    }
+
+    if (fcount <= 1) return node;
+
+    /* Separate numeric and non-numeric factors */
+    double num_product = 1.0;
+    MathNode* non_numeric[256];
+    int nn_count = 0;
+
+    for (int i = 0; i < fcount; i++) {
+        if (factors[i]->type == MATH_NUMBER) {
+            num_product *= factors[i]->num_val;
+            free(factors[i]->sym_name);
+            free(factors[i]);
+        } else if (factors[i]->type == MATH_CONSTANT) {
+            double v = lookup_constant(factors[i]->sym_name);
+            if (!isnan(v)) {
+                num_product *= v;
+                free(factors[i]->sym_name);
+                free(factors[i]);
+            } else {
+                non_numeric[nn_count++] = factors[i];
+            }
+        } else {
+            non_numeric[nn_count++] = factors[i];
+        }
+    }
+
+    /* Rebuild product tree */
+    MathNode* result = NULL;
+    if (num_product != 1.0 || nn_count == 0) {
+        result = math_node_number(num_product);
+    }
+    for (int i = 0; i < nn_count; i++) {
+        if (!result) {
+            result = non_numeric[i];
+        } else {
+            result = math_node_binary(OP_MUL, result, non_numeric[i]);
+        }
+    }
+    if (!result) result = math_node_number(num_product);
+
+    return result;
+}
+
 /* Sort commutative product factors: numbers first, then symbols alphabetically,
  * then complex expressions. This makes like-term detection more reliable. */
 static MathNode* normalize_node(MathNode* node) {
@@ -1159,6 +1237,10 @@ static MathNode* normalize_node(MathNode* node) {
     if (node->right) node->right = normalize_node(node->right);
 
     if (node->type == MATH_BINARY_OP && node->op == OP_MUL) {
+        /* Flatten nested products first */
+        MathNode* flat = flatten_product(node);
+        if (flat != node) return flat;
+
         /* If right is number and left is not, swap for canonical num*expr form */
         if (is_number(node->right) && !is_number(node->left)) {
             MathNode* tmp = node->left;
@@ -1175,12 +1257,6 @@ static MathNode* normalize_node(MathNode* node) {
             return math_node_unary(inner);
         }
     }
-
-    /* Convert subtraction to addition of negation for canonical form:
-     * a - b → a + (-b). This helps with like-term collection. */
-    /* NOTE: we intentionally skip this to preserve clean string output.
-     * Like-term collection handles subtraction via flatten_sum which
-     * already negates terms from the right side of SUB nodes. */
 
     return node;
 }
@@ -1258,6 +1334,655 @@ MathNode* plant_math_simplify(MathNode* node) {
         iterations++;
     }
     return node;
+}
+
+/* ====================================================================
+ *  v0.50.0i — Symbolic Differentiation Engine
+ *
+ *  Rules:
+ *    d/dx(c) = 0                    (constant)
+ *    d/dx(x) = 1                    (variable)
+ *    d/dx(x^n) = n * x^(n-1)       (power rule)
+ *    d/dx(f + g) = f' + g'          (sum rule)
+ *    d/dx(f - g) = f' - g'          (difference rule)
+ *    d/dx(f * g) = f'g + fg'        (product rule)
+ *    d/dx(f(g)) = f'(g) * g'        (chain rule)
+ *    d/dx(SIN(g)) = COS(g) * g'
+ *    d/dx(COS(g)) = -SIN(g) * g'
+ *    d/dx(EXP(g)) = EXP(g) * g'
+ *    d/dx(LOG(g)) = g'/g
+ * ==================================================================== */
+
+#define MAX_DERIVATIVE_DEPTH 20
+
+static MathNode* deriv_node(const MathNode* node, const char* var, int depth);
+
+/* Check if a node is a specific symbol */
+static int is_symbol_name(const MathNode* n, const char* name) {
+    return n && n->type == MATH_SYMBOL && strcmp(n->sym_name, name) == 0;
+}
+
+/* d/dx(c) = 0 — constant or number */
+static MathNode* deriv_const(const MathNode* node, const char* var) {
+    (void)node; (void)var;
+    return math_node_number(0.0);
+}
+
+/* d/dx(x) = 1 */
+static MathNode* deriv_var(const MathNode* node, const char* var) {
+    if (is_symbol_name(node, var))
+        return math_node_number(1.0);
+    return math_node_number(0.0);
+}
+
+/* d/dx(x^n) = n * x^(n-1) — power rule */
+static MathNode* deriv_pow(const MathNode* node, const char* var, int depth) {
+    MathNode* base = node->left;
+    MathNode* exp = node->right;
+
+    /* If exponent is constant, apply power rule */
+    if (is_pure_constant(exp) && !is_symbol_name(base, var)) {
+        double n_val = (exp->type == MATH_NUMBER) ? exp->num_val :
+                       lookup_constant(exp->sym_name);
+        /* d/dx(c^n) = 0 if c doesn't contain var */
+        MathNode* d_base = deriv_node(base, var, depth + 1);
+        if (is_zero(d_base)) {
+            math_node_free(d_base);
+            return math_node_number(0.0);
+        }
+        /* Chain rule: n * base^(n-1) * base' */
+        MathNode* n_node = plant_math_deep_copy(exp);
+        MathNode* n_minus_1 = math_node_binary(OP_SUB,
+            plant_math_deep_copy(exp), math_node_number(1.0));
+        MathNode* new_exp = math_node_binary(OP_POW,
+            plant_math_deep_copy(base), n_minus_1);
+        MathNode* term1 = math_node_binary(OP_MUL, n_node, new_exp);
+        return math_node_binary(OP_MUL, term1, d_base);
+    }
+
+    /* If base is the variable and exponent is constant: standard power rule */
+    if (is_symbol_name(base, var) && is_pure_constant(exp)) {
+        double n_val = (exp->type == MATH_NUMBER) ? exp->num_val :
+                       lookup_constant(exp->sym_name);
+        MathNode* n_node = plant_math_deep_copy(exp);
+        MathNode* n_minus_1 = math_node_binary(OP_SUB,
+            plant_math_deep_copy(exp), math_node_number(1.0));
+        MathNode* new_exp = math_node_binary(OP_POW,
+            plant_math_deep_copy(base), n_minus_1);
+        return math_node_binary(OP_MUL, n_node, new_exp);
+    }
+
+    /* General case: d/dx(f^g) = f^g * (g' * ln(f) + g * f'/f) */
+    MathNode* d_f = deriv_node(base, var, depth + 1);
+    MathNode* d_g = deriv_node(exp, var, depth + 1);
+    MathNode* f_copy = plant_math_deep_copy(base);
+    MathNode* g_copy = plant_math_deep_copy(exp);
+    MathNode* ln_f = math_node_func("LOG", plant_math_deep_copy(base));
+    MathNode* term1 = math_node_binary(OP_MUL, d_g, ln_f);
+    MathNode* f_prime_over_f = math_node_binary(OP_DIV, d_f, plant_math_deep_copy(base));
+    MathNode* term2 = math_node_binary(OP_MUL, g_copy, f_prime_over_f);
+    MathNode* inner_sum = math_node_binary(OP_ADD, term1, term2);
+    MathNode* f_pow_g = math_node_binary(OP_POW, f_copy, g_copy);
+    return math_node_binary(OP_MUL, f_pow_g, inner_sum);
+}
+
+/* d/dx(f + g) = f' + g' */
+static MathNode* deriv_add(const MathNode* node, const char* var, int depth) {
+    MathNode* d_left = deriv_node(node->left, var, depth + 1);
+    MathNode* d_right = deriv_node(node->right, var, depth + 1);
+    return math_node_binary(OP_ADD, d_left, d_right);
+}
+
+/* d/dx(f - g) = f' - g' */
+static MathNode* deriv_sub(const MathNode* node, const char* var, int depth) {
+    MathNode* d_left = deriv_node(node->left, var, depth + 1);
+    MathNode* d_right = deriv_node(node->right, var, depth + 1);
+    return math_node_binary(OP_SUB, d_left, d_right);
+}
+
+/* d/dx(f * g) = f'*g + f*g' — product rule */
+static MathNode* deriv_mul(const MathNode* node, const char* var, int depth) {
+    MathNode* d_left = deriv_node(node->left, var, depth + 1);
+    MathNode* d_right = deriv_node(node->right, var, depth + 1);
+    MathNode* left_copy = plant_math_deep_copy(node->left);
+    MathNode* right_copy = plant_math_deep_copy(node->right);
+    MathNode* term1 = math_node_binary(OP_MUL, d_left, right_copy);
+    MathNode* term2 = math_node_binary(OP_MUL, left_copy, d_right);
+    return math_node_binary(OP_ADD, term1, term2);
+}
+
+/* d/dx(f / g) = (f'*g - f*g') / g^2 — quotient rule */
+static MathNode* deriv_div(const MathNode* node, const char* var, int depth) {
+    MathNode* d_num = deriv_node(node->left, var, depth + 1);
+    MathNode* d_den = deriv_node(node->right, var, depth + 1);
+    MathNode* num_copy = plant_math_deep_copy(node->left);
+    MathNode* den_copy = plant_math_deep_copy(node->right);
+    MathNode* term1 = math_node_binary(OP_MUL, d_num, den_copy);
+    MathNode* term2 = math_node_binary(OP_MUL, num_copy, d_den);
+    MathNode* numer = math_node_binary(OP_SUB, term1, term2);
+    MathNode* denom = math_node_binary(OP_POW,
+        plant_math_deep_copy(node->right), math_node_number(2.0));
+    return math_node_binary(OP_DIV, numer, denom);
+}
+
+/* d/dx(f(g)) = f'(g) * g' — chain rule for function calls */
+static MathNode* deriv_func(const MathNode* node, const char* var, int depth) {
+    MathNode* arg = node->left;
+    MathNode* d_arg = deriv_node(arg, var, depth + 1);
+    MathNode* outer_deriv = NULL;
+    const char* fname = node->sym_name;
+
+    if (strcmp(fname, "SIN") == 0) {
+        /* d/dx SIN(g) = COS(g) * g' */
+        outer_deriv = math_node_func("COS", plant_math_deep_copy(arg));
+    } else if (strcmp(fname, "COS") == 0) {
+        /* d/dx COS(g) = -SIN(g) * g' */
+        MathNode* sin_arg = math_node_func("SIN", plant_math_deep_copy(arg));
+        outer_deriv = math_node_unary(sin_arg);
+    } else if (strcmp(fname, "EXP") == 0) {
+        /* d/dx EXP(g) = EXP(g) * g' */
+        outer_deriv = math_node_func("EXP", plant_math_deep_copy(arg));
+    } else if (strcmp(fname, "LOG") == 0) {
+        /* d/dx LOG(g) = g'/g */
+        return math_node_binary(OP_DIV, d_arg, plant_math_deep_copy(arg));
+    } else if (strcmp(fname, "TAN") == 0) {
+        /* d/dx TAN(g) = (1 + TAN(g)^2) * g' */
+        MathNode* tan_g = math_node_func("TAN", plant_math_deep_copy(arg));
+        MathNode* tan_sq = math_node_binary(OP_POW, tan_g, math_node_number(2.0));
+        MathNode* one_plus_tan_sq = math_node_binary(OP_ADD,
+            math_node_number(1.0), tan_sq);
+        outer_deriv = one_plus_tan_sq;
+    } else if (strcmp(fname, "SQRT") == 0) {
+        /* d/dx SQRT(g) = g' / (2 * SQRT(g)) */
+        MathNode* sqrt_g = math_node_func("SQRT", plant_math_deep_copy(arg));
+        MathNode* denom = math_node_binary(OP_MUL, math_node_number(2.0), sqrt_g);
+        return math_node_binary(OP_DIV, d_arg, denom);
+    } else if (strcmp(fname, "ABS") == 0) {
+        /* d/dx ABS(g) = g' * g / ABS(g) */
+        MathNode* abs_g = math_node_func("ABS", plant_math_deep_copy(arg));
+        MathNode* numer = math_node_binary(OP_MUL, d_arg, plant_math_deep_copy(arg));
+        return math_node_binary(OP_DIV, numer, abs_g);
+    } else {
+        /* Unknown function: return 0 (can't differentiate) */
+        math_node_free(d_arg);
+        return math_node_number(0.0);
+    }
+
+    /* Chain rule: outer_deriv * inner_deriv */
+    return math_node_binary(OP_MUL, outer_deriv, d_arg);
+}
+
+/* Main differentiation dispatcher with depth limit */
+static MathNode* deriv_node(const MathNode* node, const char* var, int depth) {
+    if (!node) return math_node_number(0.0);
+    if (depth > MAX_DERIVATIVE_DEPTH) return math_node_number(0.0);
+
+    switch (node->type) {
+        case MATH_NUMBER:
+        case MATH_CONSTANT:
+            return deriv_const(node, var);
+        case MATH_SYMBOL:
+            return deriv_var(node, var);
+        case MATH_BINARY_OP:
+            switch (node->op) {
+                case OP_ADD: return deriv_add(node, var, depth);
+                case OP_SUB: return deriv_sub(node, var, depth);
+                case OP_MUL: return deriv_mul(node, var, depth);
+                case OP_DIV: return deriv_div(node, var, depth);
+                case OP_POW: return deriv_pow(node, var, depth);
+                default:     return math_node_number(0.0);
+            }
+        case MATH_UNARY_OP:
+            if (node->op == OP_NEG) {
+                MathNode* inner = deriv_node(node->left, var, depth + 1);
+                return math_node_unary(inner);
+            }
+            return math_node_number(0.0);
+        case MATH_FUNC_CALL:
+            return deriv_func(node, var, depth);
+    }
+    return math_node_number(0.0);
+}
+
+MathNode* plant_math_derivative(const MathNode* node, const char* var) {
+    if (!node || !var) return math_node_number(0.0);
+    MathNode* result = deriv_node(node, var, 0);
+    result = plant_math_simplify(result);
+    return result;
+}
+
+char* plant_math_derivative_str(const char* expr, const char* var) {
+    MathNode* ast = plant_math_parse(expr);
+    MathNode* result = plant_math_derivative(ast, var);
+    char* str = plant_math_to_string(result);
+    math_node_free(ast);
+    math_node_free(result);
+    return str;
+}
+
+/* ====================================================================
+ *  v0.50.0i — Symbolic Integration Engine
+ *
+ *  Rules (indefinite integrals, +C appended):
+ *    ∫ c dx = c*x + C
+ *    ∫ x dx = x^2/2 + C
+ *    ∫ x^n dx = x^(n+1)/(n+1) + C  (n ≠ -1)
+ *    ∫ 1/x dx = LOG(|x|) + C
+ *    ∫ (f + g) dx = ∫f dx + ∫g dx
+ *    ∫ SIN(g) dx = -COS(g) + C      (when g is simple variable)
+ *    ∫ COS(g) dx = SIN(g) + C        (when g is simple variable)
+ *    ∫ EXP(g) dx = EXP(g) + C        (when g is simple variable)
+ * ==================================================================== */
+
+static MathNode* integral_node(const MathNode* node, const char* var);
+
+/* ∫ c dx = c*x */
+static MathNode* integral_number(const MathNode* node, const char* var) {
+    return math_node_binary(OP_MUL,
+        plant_math_deep_copy(node), math_node_symbol(var));
+}
+
+/* ∫ x^n dx = x^(n+1)/(n+1) */
+static MathNode* integral_pow_var(const MathNode* exp_node, const char* var) {
+    MathNode* n_plus_1 = math_node_binary(OP_ADD,
+        plant_math_deep_copy(exp_node), math_node_number(1.0));
+    MathNode* x_pow = math_node_binary(OP_POW,
+        math_node_symbol(var), plant_math_deep_copy(n_plus_1));
+    return math_node_binary(OP_DIV, x_pow, n_plus_1);
+}
+
+/* ∫ (f + g) dx = ∫f dx + ∫g dx */
+static MathNode* integral_add(const MathNode* node, const char* var) {
+    MathNode* int_left = integral_node(node->left, var);
+    MathNode* int_right = integral_node(node->right, var);
+    return math_node_binary(OP_ADD, int_left, int_right);
+}
+
+/* ∫ (f - g) dx = ∫f dx - ∫g dx */
+static MathNode* integral_sub(const MathNode* node, const char* var) {
+    MathNode* int_left = integral_node(node->left, var);
+    MathNode* int_right = integral_node(node->right, var);
+    return math_node_binary(OP_SUB, int_left, int_right);
+}
+
+/* Main integration dispatcher */
+static MathNode* integral_node(const MathNode* node, const char* var) {
+    if (!node) return math_node_number(0.0);
+
+    switch (node->type) {
+        case MATH_NUMBER:
+            return integral_number(node, var);
+
+        case MATH_CONSTANT: {
+            /* Fold constant, then integrate as number */
+            double v = lookup_constant(node->sym_name);
+            if (!isnan(v)) return integral_number(math_node_number(v), var);
+            return math_node_number(0.0);
+        }
+
+        case MATH_SYMBOL:
+            if (is_symbol_name(node, var)) {
+                /* ∫ x dx = x^2/2 */
+                return math_node_binary(OP_DIV,
+                    math_node_binary(OP_POW,
+                        math_node_symbol(var), math_node_number(2.0)),
+                    math_node_number(2.0));
+            }
+            /* ∫ c dx = c*x (treat other symbols as constants) */
+            return math_node_binary(OP_MUL,
+                plant_math_deep_copy(node), math_node_symbol(var));
+
+        case MATH_BINARY_OP:
+            switch (node->op) {
+                case OP_ADD: return integral_add(node, var);
+                case OP_SUB: return integral_sub(node, var);
+
+                case OP_MUL: {
+                    /* c * f(x) → c * ∫f dx */
+                    if (is_pure_constant(node->left) && !is_symbol_name(node->left, var)) {
+                        MathNode* int_right = integral_node(node->right, var);
+                        return math_node_binary(OP_MUL,
+                            plant_math_deep_copy(node->left), int_right);
+                    }
+                    if (is_pure_constant(node->right) && !is_symbol_name(node->right, var)) {
+                        MathNode* int_left = integral_node(node->left, var);
+                        return math_node_binary(OP_MUL,
+                            int_left, plant_math_deep_copy(node->right));
+                    }
+                    /* Can't integrate general products */
+                    return NULL;
+                }
+
+                case OP_DIV: {
+                    /* c / x → c * LOG(|x|) */
+                    if (is_pure_constant(node->left) && is_symbol_name(node->right, var)) {
+                        MathNode* log_x = math_node_func("LOG",
+                            math_node_func("ABS", math_node_symbol(var)));
+                        return math_node_binary(OP_MUL,
+                            plant_math_deep_copy(node->left), log_x);
+                    }
+                    /* 1 / x → LOG(|x|) */
+                    if (is_one(node->left) && is_symbol_name(node->right, var)) {
+                        return math_node_func("LOG",
+                            math_node_func("ABS", math_node_symbol(var)));
+                    }
+                    /* x^n (n negative) via power rule */
+                    if (is_symbol_name(node->left, var) &&
+                        node->right->type == MATH_NUMBER && node->right->num_val < 0) {
+                        return integral_pow_var(node->right, var);
+                    }
+                    return NULL;
+                }
+
+                case OP_POW: {
+                    /* x^n → x^(n+1)/(n+1) */
+                    if (is_symbol_name(node->left, var) && is_pure_constant(node->right)) {
+                        double n = (node->right->type == MATH_NUMBER) ?
+                                   node->right->num_val :
+                                   lookup_constant(node->right->sym_name);
+                        if (fabs(n + 1.0) > 1e-10) {
+                            return integral_pow_var(node->right, var);
+                        }
+                        /* n = -1: ∫ x^-1 dx = LOG(|x|) */
+                        return math_node_func("LOG",
+                            math_node_func("ABS", math_node_symbol(var)));
+                    }
+                    return NULL;
+                }
+
+                default: return NULL;
+            }
+
+        case MATH_UNARY_OP:
+            if (node->op == OP_NEG) {
+                MathNode* inner = integral_node(node->left, var);
+                if (inner) return math_node_unary(inner);
+                return NULL;
+            }
+            return NULL;
+
+        case MATH_FUNC_CALL: {
+            MathNode* arg = node->left;
+            /* Simple case: arg is just the variable */
+            if (is_symbol_name(arg, var)) {
+                if (strcmp(node->sym_name, "SIN") == 0) {
+                    /* ∫ SIN(x) dx = -COS(x) */
+                    return math_node_unary(math_node_func("COS",
+                        math_node_symbol(var)));
+                }
+                if (strcmp(node->sym_name, "COS") == 0) {
+                    /* ∫ COS(x) dx = SIN(x) */
+                    return math_node_func("SIN", math_node_symbol(var));
+                }
+                if (strcmp(node->sym_name, "EXP") == 0) {
+                    /* ∫ EXP(x) dx = EXP(x) */
+                    return math_node_func("EXP", math_node_symbol(var));
+                }
+                if (strcmp(node->sym_name, "TAN") == 0) {
+                    /* ∫ TAN(x) dx = -LOG(|COS(x)|) */
+                    return math_node_unary(math_node_func("LOG",
+                        math_node_func("ABS",
+                            math_node_func("COS", math_node_symbol(var)))));
+                }
+                if (strcmp(node->sym_name, "LOG") == 0) {
+                    /* ∫ LOG(x) dx = x*LOG(x) - x */
+                    MathNode* x = math_node_symbol(var);
+                    MathNode* x_log_x = math_node_binary(OP_MUL,
+                        plant_math_deep_copy(x),
+                        math_node_func("LOG", plant_math_deep_copy(x)));
+                    return math_node_binary(OP_SUB, x_log_x,
+                        plant_math_deep_copy(x));
+                }
+            }
+            /* Unsupported function integration */
+            return NULL;
+        }
+    }
+    return NULL;
+}
+
+MathNode* plant_math_integral(const MathNode* node, const char* var) {
+    if (!node || !var) return NULL;
+    MathNode* result = integral_node(node, var);
+    if (!result) return NULL;
+    result = plant_math_simplify(result);
+    return result;
+}
+
+char* plant_math_integral_str(const char* expr, const char* var) {
+    MathNode* ast = plant_math_parse(expr);
+    MathNode* result = plant_math_integral(ast, var);
+    if (!result) {
+        math_node_free(ast);
+        /* Build error message */
+        char* buf = (char*)malloc(256);
+        snprintf(buf, 256,
+            "ERROR: Integral of this expression is not supported yet.\n"
+            "Supported: x^n, c*x, SIN(x), COS(x), EXP(x), LOG(x), TAN(x), 1/x.");
+        return buf;
+    }
+    /* Append +C */
+    char* inner = plant_math_to_string(result);
+    size_t len = strlen(inner);
+    char* final_str = (char*)malloc(len + 16);
+    snprintf(final_str, len + 16, "%s + C", inner);
+    free(inner);
+    math_node_free(ast);
+    math_node_free(result);
+    return final_str;
+}
+
+/* ====================================================================
+ *  v0.50.0i — Polynomial Factoring Engine
+ *
+ *  Structural pattern matching:
+ *    Perfect square:     x^2 + 2ax + a^2 → (x + a)^2
+ *    Difference of squares: x^2 - a^2 → (x - a)(x + a)
+ *    Common factor:      a*x + a*y → a*(x + y)
+ * ==================================================================== */
+
+/* Check if a node matches x^n where n is a specific value */
+static int matches_power_of_var(const MathNode* n, const char* var, double target_exp) {
+    if (!n || n->type != MATH_BINARY_OP || n->op != OP_POW) return 0;
+    if (!is_symbol_name(n->left, var)) return 0;
+    if (n->right->type == MATH_NUMBER)
+        return fabs(n->right->num_val - target_exp) < 1e-10;
+    return 0;
+}
+
+/* Check if a term is coeff * var^n */
+static int term_coeff_var_pow(const MathNode* node, const char* var,
+                               double target_exp, double* out_coeff) {
+    if (!node) return 0;
+
+    /* coeff * var^n */
+    if (node->type == MATH_BINARY_OP && node->op == OP_MUL) {
+        if (is_pure_constant(node->left) && matches_power_of_var(node->right, var, target_exp)) {
+            *out_coeff = (node->left->type == MATH_NUMBER) ?
+                          node->left->num_val : lookup_constant(node->left->sym_name);
+            return 1;
+        }
+        if (is_pure_constant(node->right) && matches_power_of_var(node->left, var, target_exp)) {
+            *out_coeff = (node->right->type == MATH_NUMBER) ?
+                          node->right->num_val : lookup_constant(node->right->sym_name);
+            return 1;
+        }
+    }
+
+    /* var^n (coeff = 1) */
+    if (matches_power_of_var(node, var, target_exp)) {
+        *out_coeff = 1.0;
+        return 1;
+    }
+
+    return 0;
+}
+
+/* Check if a node is a pure number */
+static double get_number_value(const MathNode* n) {
+    if (!n) return NAN;
+    if (n->type == MATH_NUMBER) return n->num_val;
+    if (n->type == MATH_CONSTANT) return lookup_constant(n->sym_name);
+    return NAN;
+}
+
+MathNode* plant_math_factor(const MathNode* node) {
+    if (!node) return NULL;
+
+    /* Only factor sums/differences of 3 terms (quadratic trinomials) and
+     * products/differences that match structural patterns */
+
+    if (node->type == MATH_BINARY_OP && (node->op == OP_ADD || node->op == OP_SUB)) {
+        /* Flatten into terms */
+        TermEntry terms[MAX_TERMS];
+        int count = 0;
+        flatten_sum(node, terms, &count);
+
+        if (count == 3) {
+            /* Try to match ax^2 + bx + c (perfect square or factorable) */
+            double c2 = 0, c1 = 0, c0 = 0;
+            int has_x2 = 0, has_x = 0, has_const = 0;
+            double a_val = 0, b_val = 0;
+
+            for (int i = 0; i < count; i++) {
+                if (terms[i].base == NULL) {
+                    /* Pure constant */
+                    c0 = terms[i].coeff;
+                    has_const = 1;
+                } else if (matches_power_of_var(terms[i].base, "x", 2.0)) {
+                    c2 = terms[i].coeff;
+                    a_val = c2;
+                    has_x2 = 1;
+                } else if (is_symbol_name(terms[i].base, "x")) {
+                    c1 = terms[i].coeff;
+                    b_val = c1;
+                    has_x = 1;
+                }
+            }
+
+            /* Perfect square: x^2 + 2ax + a^2 → (x + a)^2 */
+            if (has_x2 && has_x && has_const && a_val > 0) {
+                double a = sqrt(c0);
+                if (fabs(a * a - c0) < 1e-10 && fabs(2.0 * a * a - c1) < 1e-10) {
+                    /* Check: coefficient of x^2 is 1, coefficient of x is 2a, constant is a^2 */
+                    if (fabs(c2 - 1.0) < 1e-10) {
+                        for (int i = 0; i < count; i++) math_node_free(terms[i].base);
+                        MathNode* inner = math_node_binary(OP_ADD,
+                            math_node_symbol("x"), math_node_number(a));
+                        return math_node_binary(OP_POW, inner, math_node_number(2.0));
+                    }
+                }
+            }
+
+            /* ax^2 + bx + c where a=1, perfect square variant */
+            if (has_x2 && has_x && has_const && c2 == 1.0) {
+                double half_b = c1 / 2.0;
+                if (fabs(half_b * half_b - c0) < 1e-10) {
+                    for (int i = 0; i < count; i++) math_node_free(terms[i].base);
+                    MathNode* inner = math_node_binary(OP_ADD,
+                        math_node_symbol("x"), math_node_number(half_b));
+                    return math_node_binary(OP_POW, inner, math_node_number(2.0));
+                }
+            }
+
+            /* Difference of squares: x^2 - a^2 → (x - a)(x + a) */
+            if (has_x2 && has_const && !has_x && c2 == 1.0 && c0 < 0) {
+                double a = sqrt(-c0);
+                if (fabs(a * a - (-c0)) < 1e-10) {
+                    for (int i = 0; i < count; i++) math_node_free(terms[i].base);
+                    MathNode* x = math_node_symbol("x");
+                    MathNode* a_node = math_node_number(a);
+                    MathNode* factor1 = math_node_binary(OP_SUB,
+                        plant_math_deep_copy(x), plant_math_deep_copy(a_node));
+                    MathNode* factor2 = math_node_binary(OP_ADD, x, a_node);
+                    return math_node_binary(OP_MUL, factor1, factor2);
+                }
+            }
+        }
+
+        /* 2-term difference of squares: x^2 - a^2 → (x - a)(x + a) */
+        if (count == 2) {
+            double c_sq = 0, c_const = 0;
+            int has_sq = 0, has_c = 0;
+            for (int i = 0; i < count; i++) {
+                if (terms[i].base == NULL) {
+                    c_const = terms[i].coeff;
+                    has_c = 1;
+                } else if (matches_power_of_var(terms[i].base, "x", 2.0)) {
+                    c_sq = terms[i].coeff;
+                    has_sq = 1;
+                }
+            }
+            if (has_sq && has_c && c_sq == 1.0 && c_const < 0) {
+                double a = sqrt(-c_const);
+                if (fabs(a * a - (-c_const)) < 1e-10) {
+                    for (int i = 0; i < count; i++) math_node_free(terms[i].base);
+                    MathNode* x = math_node_symbol("x");
+                    MathNode* a_node = math_node_number(a);
+                    MathNode* factor1 = math_node_binary(OP_SUB,
+                        plant_math_deep_copy(x), plant_math_deep_copy(a_node));
+                    MathNode* factor2 = math_node_binary(OP_ADD, x, a_node);
+                    return math_node_binary(OP_MUL, factor1, factor2);
+                }
+            }
+        }
+
+        for (int i = 0; i < count; i++) math_node_free(terms[i].base);
+    }
+
+    /* Common factor extraction: a*x + a*y → a*(x + y) */
+    if (node->type == MATH_BINARY_OP && node->op == OP_ADD) {
+        TermEntry terms[MAX_TERMS];
+        int count = 0;
+        flatten_sum(node, terms, &count);
+
+        if (count >= 2) {
+            /* Try to find a common numeric GCD of all coefficients */
+            double gcd_val = terms[0].coeff;
+            for (int i = 1; i < count; i++) {
+                double a = fabs(gcd_val), b = fabs(terms[i].coeff);
+                while (b > 1e-10) { double t = fmod(a, b); a = b; b = t; }
+                gcd_val = a;
+            }
+            if (fabs(gcd_val) > 1e-10 && fabs(gcd_val - terms[0].coeff) < 1e-10) {
+                /* Check all coefficients are divisible */
+                int all_div = 1;
+                for (int i = 1; i < count; i++) {
+                    if (fabs(terms[i].coeff / gcd_val -
+                             round(terms[i].coeff / gcd_val)) > 1e-10) {
+                        all_div = 0; break;
+                    }
+                }
+                if (all_div && count >= 2) {
+                    /* Build inner sum with divided coefficients */
+                    MathNode* inner = NULL;
+                    for (int i = 0; i < count; i++) {
+                        double new_coeff = terms[i].coeff / gcd_val;
+                        MathNode* term = build_term_node(new_coeff,
+                            terms[i].base ? plant_math_deep_copy(terms[i].base) : NULL);
+                        if (!inner) inner = term;
+                        else inner = math_node_binary(OP_ADD, inner, term);
+                    }
+                    for (int i = 0; i < count; i++) math_node_free(terms[i].base);
+                    return math_node_binary(OP_MUL,
+                        math_node_number(gcd_val), inner);
+                }
+            }
+            for (int i = 0; i < count; i++) math_node_free(terms[i].base);
+        }
+    }
+
+    /* No factoring pattern matched — return a deep copy */
+    return plant_math_deep_copy(node);
+}
+
+char* plant_math_factor_str(const char* expr) {
+    MathNode* ast = plant_math_parse(expr);
+    MathNode* result = plant_math_factor(ast);
+    char* str = plant_math_to_string(result);
+    math_node_free(ast);
+    math_node_free(result);
+    return str;
 }
 
 /* ====================================================================

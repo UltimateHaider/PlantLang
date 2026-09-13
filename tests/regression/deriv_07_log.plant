@@ -1,0 +1,5 @@
+# v0.50.0i — Differentiation: LOG
+ACTION main(),
+  SHOW MATH_DERIVATIVE("LOG(x)", "x").
+  GIVE 0.
+/GIVE main.

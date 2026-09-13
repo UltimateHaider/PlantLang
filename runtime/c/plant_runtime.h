@@ -314,6 +314,9 @@ char*        plant_math_eval_to_str(const char* expr);
 char*        plant_math_to_str(void* math_ptr);
 void*        plant_math_simplify_ptr(void* math_ptr);
 char*        plant_math_simplify_str(const char* expr);
+char*        plant_math_derivative_str(const char* expr, const char* var);
+char*        plant_math_integral_str(const char* expr, const char* var);
+char*        plant_math_factor_str(const char* expr);
 void         plant_math_free(void* math_ptr);
 void         plant_math_debug_print(void* node);
 

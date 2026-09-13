@@ -1,0 +1,5 @@
+# v0.50.0i — Differentiation: polynomial sum
+ACTION main(),
+  SHOW MATH_DERIVATIVE("5*x^3 + 2*x^2 + 3*x + 7", "x").
+  GIVE 0.
+/GIVE main.

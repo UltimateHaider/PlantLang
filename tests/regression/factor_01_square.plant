@@ -1,0 +1,5 @@
+# v0.50.0i — Factoring: perfect square trinomial
+ACTION main(),
+  SHOW MATH_FACTOR("x^2 + 2*x + 1").
+  GIVE 0.
+/GIVE main.

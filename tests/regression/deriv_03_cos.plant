@@ -1,0 +1,5 @@
+# v0.50.0i — Differentiation: COS
+ACTION main(),
+  SHOW MATH_DERIVATIVE("COS(x)", "x").
+  GIVE 0.
+/GIVE main.

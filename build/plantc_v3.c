@@ -105,6 +105,7 @@ tx_t parse_program(PlantArray* tokens);
 tx_t _substr(tx_t str, long start, long end);
 tx_t _handle_func(tx_t expr, tx_t kw, tx_t cfn);
 tx_t _handle_func_paren(tx_t expr, tx_t kw, tx_t cfn);
+tx_t _handle_func_paren2(tx_t expr, tx_t kw, tx_t cfn);
 tx_t _is_num_literal(tx_t s);
 tx_t _wrap_math_args(tx_t e, tx_t cfn);
 tx_t _math_func_paren(tx_t expr, tx_t kw, tx_t cfn);
@@ -6953,6 +6954,82 @@ tx_t _handle_func_paren(tx_t expr, tx_t kw, tx_t cfn) {
     }
     return res;
 }
+tx_t _handle_func_paren2(tx_t expr, tx_t kw, tx_t cfn) {
+  tx_t parts = "";
+  tx_t p0 = "";
+  tx_t p = "";
+  tx_t cc = "";
+  tx_t inner = "";
+  tx_t ac = "";
+  tx_t a1 = "";
+  tx_t a2 = "";
+  tx_t wa1 = "";
+  tx_t wa2 = "";
+    parts = strings_SPLIT(expr, _cat(kw, " ("));
+    if (plant_array_length(parts) == 1) {
+    parts = strings_SPLIT(expr, _cat(kw, "("));
+    }
+    if (plant_array_length(parts) == 1) {
+    return expr;
+    }
+    p0 = plant_list_get(parts, 0);
+    tx_t res = p0;
+    long idx = 1;
+    while (idx < plant_array_length(parts)) {
+    p = plant_list_get(parts, idx);
+    long dep = 0;
+    long close_pos = - 1;
+    long ci = 0;
+    while (ci < strlen( p )) {
+    cc = char_at(p, ci);
+    if (strcmp(cc,"(") == 0) {
+    dep = dep+1;
+    }
+    if (strcmp(cc,")") == 0) {
+    dep = dep - 1;
+    if (dep == 0) {
+    close_pos = ci;
+    }
+    if (dep == 0) {
+                                      break;
+    }
+    }
+    ci = ci+1;
+    }
+    if (close_pos == - 1) {
+    return _cat4(res, cfn, "(", p);
+    }
+    inner = substring(p, 1, close_pos);
+    long comma_pos = - 1;
+    long ad = 0;
+    long ai = 0;
+    while (ai < strlen( inner )) {
+    ac = char_at(inner, ai);
+    if (strcmp(ac,"(") == 0 || strcmp(ac,"[") == 0) {
+    ad = ad+1;
+    }
+    if (strcmp(ac,")") == 0 || strcmp(ac,"]") == 0) {
+    ad = ad - 1;
+    }
+    if (ad == 0 && strcmp(ac,",") == 0) {
+    comma_pos = ai;
+                              break;
+    }
+    ai = ai+1;
+    }
+    if (comma_pos == - 1) {
+    res = _cat3(_cat4(res, cfn, "(", inner), ")", substring ( p , close_pos + 1 , strlen( p ) ));
+    } else {
+    a1 = substring(inner, 0, comma_pos);
+    a2 = substring(inner, comma_pos+1, strlen( inner ));
+    wa1 = plant_trim(a1);
+    wa2 = plant_trim(a2);
+    res = _cat(_cat4(_cat4(res, cfn, "(", wa1), ", ", wa2, ")"), substring ( p , close_pos + 1 , strlen( p ) ));
+    }
+    idx = idx+1;
+    }
+    return res;
+}
 tx_t _is_num_literal(tx_t s) {
   tx_t cq = "";
   tx_t c3 = "";
@@ -10133,6 +10210,8 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars) {
   tx_t args1 = "";
     expr = _swap_self(expr);
     tx_t e = expr;
+    e = _handle_func_paren2(e, "MATH_DERIVATIVE", "plant_math_derivative_str");
+    e = _handle_func_paren2(e, "MATH_INTEGRAL", "plant_math_integral_str");
     e = _ni_replace(e);
     if (strcmp(e,"NOW") == 0) {
     return "plant_now(\"\")";
@@ -10256,6 +10335,7 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars) {
     e = _handle_func_paren(e, "MATH_EVAL_STR", "plant_math_eval_to_str");
     e = _handle_func_paren(e, "MATH_VALUE", "plant_math_value_str");
     e = _handle_func_paren(e, "MATH_SIMPLIFY", "plant_math_simplify_str");
+    e = _handle_func_paren(e, "MATH_FACTOR", "plant_math_factor_str");
     e = _handle_func_paren(e, "TAP", "plant_tap");
     e = _handle_func_paren(e, "INFUSE", "plant_infuse");
     e = _handle_func_paren(e, "ABSORB", "plant_absorb");
@@ -15772,7 +15852,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.50.0h (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.50.0i (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

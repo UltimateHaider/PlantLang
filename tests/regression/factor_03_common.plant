@@ -1,0 +1,5 @@
+# v0.50.0i — Factoring: common factor
+ACTION main(),
+  SHOW MATH_FACTOR("2*x + 2*y").
+  GIVE 0.
+/GIVE main.

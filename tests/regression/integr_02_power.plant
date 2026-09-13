@@ -1,0 +1,5 @@
+# v0.50.0i — Integration: power rule
+ACTION main(),
+  SHOW MATH_INTEGRAL("x^3", "x").
+  GIVE 0.
+/GIVE main.

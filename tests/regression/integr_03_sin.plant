@@ -1,0 +1,5 @@
+# v0.50.0i — Integration: SIN
+ACTION main(),
+  SHOW MATH_INTEGRAL("SIN(x)", "x").
+  GIVE 0.
+/GIVE main.

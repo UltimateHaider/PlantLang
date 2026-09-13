@@ -1,3 +1,21 @@
+## v0.50.0i - 2026 (Symbolic Derivatives, Integrals & Polynomial Factoring)
+
+### New Language Features
+
+#### Symbolic Differentiation
+- `MATH_DERIVATIVE(expr, var)` computes symbolic derivatives
+- Power rule, sum/difference, product rule, quotient rule, chain rule
+- Standard functions: SIN, COS, EXP, LOG, TAN, SQRT, ABS
+
+#### Symbolic Integration
+- `MATH_INTEGRAL(expr, var)` computes symbolic indefinite integrals
+- Power rule, constant multiple, sum/difference
+- Standard integrals: SIN, COS, EXP, TAN, LOG, 1/x
+
+#### Polynomial Factoring
+- `MATH_FACTOR(expr)` factors polynomial expressions
+- Perfect square trinomial, difference of squares, common factor extraction
+
 ## v0.50.0h - 2026 (Like Terms Collection & Distribution)
 
 ### New Language Features

@@ -62,6 +62,65 @@ ACTION _handle_func_paren(expr(TX), kw(TX), cfn(TX)),
     GIVE res.
 /ACTION.
 
+# _handle_func_paren2 — like _handle_func_paren but for KW(arg1, arg2).
+# Splits the outer expression on the keyword, then splits the argument
+# list on the top-level comma to rewrite each argument independently.
+ACTION _handle_func_paren2(expr(TX), kw(TX), cfn(TX)),
+  REAP parts FROM strings:SPLIT, expr, kw + " (".
+  IF COUNT parts IS 1,
+    REAP parts FROM strings:SPLIT, expr, kw + "(".
+  /IF.
+  IF COUNT parts IS 1, GIVE expr. /IF.
+  REAP p0 FROM plant_list_get, parts, 0.
+  CREATE res(TX) TO p0.
+  CREATE idx(NUM) TO 1.
+  SEASON idx < COUNT parts,
+    REAP p FROM plant_list_get, parts, idx.
+    # Find matching close-paren for first open-paren in p.
+    CREATE dep(NUM) TO 0.
+    CREATE close_pos(NUM) TO -1.
+    CREATE ci(NUM) TO 0.
+    SEASON ci < LEN(p),
+      REAP cc FROM char_at, p, ci.
+      IF cc IS "(", SET dep TO dep + 1. /IF.
+      IF cc IS ")",
+        SET dep TO dep - 1.
+        IF dep IS 0, SET close_pos TO ci. /IF.
+        IF dep IS 0, BREAK 0. /IF.
+      /IF.
+      SET ci TO ci + 1.
+    /SEASON.
+    IF close_pos IS -1, GIVE res + cfn + "(" + p. /IF.
+    REAP inner FROM substring, p, 1, close_pos.
+    # Find the top-level comma separating arg1 and arg2.
+    CREATE comma_pos(NUM) TO -1.
+    CREATE ad(NUM) TO 0.
+    CREATE ai(NUM) TO 0.
+    SEASON ai < LEN(inner),
+      REAP ac FROM char_at, inner, ai.
+      IF ac IS "(" OR ac IS "[", SET ad TO ad + 1. /IF.
+      IF ac IS ")" OR ac IS "]", SET ad TO ad - 1. /IF.
+      IF ad IS 0 AND ac IS ",",
+        SET comma_pos TO ai.
+        BREAK 0.
+      /IF.
+      SET ai TO ai + 1.
+    /SEASON.
+    IF comma_pos IS -1,
+      # No comma found — treat as single arg
+      SET res TO res + cfn + "(" + inner + ")" + substring(p, close_pos + 1, LEN(p)).
+    ELSE.
+      REAP a1 FROM substring, inner, 0, comma_pos.
+      REAP a2 FROM substring, inner, comma_pos + 1, LEN(inner).
+      REAP wa1 FROM plant_trim, a1.
+      REAP wa2 FROM plant_trim, a2.
+      SET res TO res + cfn + "(" + wa1 + ", " + wa2 + ")" + substring(p, close_pos + 1, LEN(p)).
+    /IF.
+    SET idx TO idx + 1.
+  /SEASON.
+  GIVE res.
+/ACTION.
+
 # _is_num_literal — "1" when s (spaces ignored) is a bare numeric
 # literal: optional single leading '-', digits with at most one '.'.
 # Used by _wrap_math_args to decide which call arguments need a
@@ -3099,6 +3158,12 @@ ACTION _swap_self(e(TX)),
 ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     REAP expr FROM _swap_self, expr.
     CREATE e(TX) TO expr.
+    # v0.50.0i — MATH_DERIVATIVE and MATH_INTEGRAL must run FIRST,
+    # before any _math_func_paren rewrites (SIN→plant_sin, etc.),
+    # because their string arguments contain math expressions that
+    # should NOT be rewritten to C function names.
+    REAP e FROM _handle_func_paren2, e, "MATH_DERIVATIVE", "plant_math_derivative_str".
+    REAP e FROM _handle_func_paren2, e, "MATH_INTEGRAL", "plant_math_integral_str".
     # ── v0.48.36 — temporal queries / introspection in expression
     #    position: NOW [FORMAT : x] → plant_now("x"), ANALYZE x →
     #    plant_analyze(x), TYPEOF x → plant_typeof(x). _ni_replace
@@ -3290,6 +3355,9 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     REAP e FROM _handle_func_paren, e, "MATH_VALUE", "plant_math_value_str".
     # v0.50.0g — MATH_SIMPLIFY: simplify a math expression string.
     REAP e FROM _handle_func_paren, e, "MATH_SIMPLIFY", "plant_math_simplify_str".
+
+    # v0.50.0i — MATH_FACTOR: factor a math expression.
+    REAP e FROM _handle_func_paren, e, "MATH_FACTOR", "plant_math_factor_str".
     # v0.48.38k — VEIN resource management: TAP / INFUSE use the
     # paren form; ABSORB / SEAL accept both the paren form (used by
     # the test suite) and the space form (the _handle_func pattern).

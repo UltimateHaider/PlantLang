@@ -1,0 +1,5 @@
+# v0.50.0i — Differentiation: EXP
+ACTION main(),
+  SHOW MATH_DERIVATIVE("EXP(x)", "x").
+  GIVE 0.
+/GIVE main.

@@ -1,0 +1,5 @@
+# v0.50.0i — Differentiation: SIN
+ACTION main(),
+  SHOW MATH_DERIVATIVE("SIN(x)", "x").
+  GIVE 0.
+/GIVE main.
