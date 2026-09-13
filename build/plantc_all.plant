@@ -103,6 +103,8 @@ ACTION is_keyword(wrd(TX)),
   IF wrd IS "union", GIVE TRUE. /IF.
   # v0.50.0e — native fixed-size arrays.
   IF wrd IS "array", GIVE TRUE. /IF.
+  # v0.50.0f — symbolic math type.
+  IF wrd IS "math", GIVE TRUE. /IF.
   GIVE FALSE.
 /ACTION.
 
@@ -259,6 +261,8 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "union", GIVE "UNION". /IF.
   # v0.50.0e — native fixed-size arrays.
   IF wrd IS "array", GIVE "ARRAY". /IF.
+  # v0.50.0f — symbolic math type.
+  IF wrd IS "math", GIVE "MATH". /IF.
   # v0.49.52/v0.49.54 — SUITE lifecycle hooks and VERIFY assertion
   IF wrd IS "SUITE", GIVE "SUITE". /IF.
   IF wrd IS "VERIFY", GIVE "VERIFY". /IF.
@@ -8425,6 +8429,10 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     REAP e FROM _math_func_paren, e, "GAMMA", "math_gamma".
     REAP e FROM _math_func_paren, e, "EXP2", "math_exp2".
     REAP e FROM _math_func_paren, e, "LOG_BASE", "math_log_base".
+    # v0.50.0f — MATH_EVAL_STR: evaluate a math expression string.
+    REAP e FROM _handle_func_paren, e, "MATH_EVAL_STR", "plant_math_eval_to_str".
+    # v0.50.0f — MATH_VALUE: evaluate a PlantMath* to string.
+    REAP e FROM _handle_func_paren, e, "MATH_VALUE", "plant_math_value_str".
     # v0.48.38k — VEIN resource management: TAP / INFUSE use the
     # paren form; ABSORB / SEAL accept both the paren form (used by
     # the test suite) and the space form (the _handle_func pattern).
@@ -8599,6 +8607,13 @@ ACTION gen_show_stmt(node, nums(LIST), evars(LIST), isel(TX)),
           SET cval TO "plant_map_to_string(" + cval + ")".
       /IF.
   /IF.
+  # v0.50.0f — MATH: evaluate symbolic expression for SHOW.
+  IF isn2 IS 0,
+      REAP sm0 FROM substring, cval, 0, 15.
+      IF sm0 IS "plant_math_create(",
+          SET cval TO "plant_math_eval_to_str(" + cval + ")".
+      /IF.
+  /IF.
   GIVE isel + "  plant_iReport_print(get_report(), " + cval + ");\n".
 /ACTION.
 
@@ -8748,6 +8763,13 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
   IF vtype IS "LIST",
       GIVE isel + "  PlantArray* " + target + " = " + cval + ";\n".
   /IF.
+  # v0.50.0f — MATH symbolic expression.
+  IF vtype IS "MATH",
+      IF actx IS "a",
+          GIVE isel + "  " + target + " = plant_math_create(" + cval + ");\n".
+      /IF.
+      GIVE isel + "  void* " + target + " = plant_math_create(" + cval + ");\n".
+  /IF.
   # v0.50.0d — union CREATE: stack-allocate union and assign directly.
   REAP iut2 FROM is_union_type, vtype, evars.
   IF iut2 IS "1",
@@ -8764,7 +8786,7 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
       /IF.
       GIVE isel + "  " + vct2 + " " + target + " = " + cval + ";\n".
   /IF.
-  IF vtype ISNT "NUM" AND vtype ISNT "FACT" AND vtype ISNT "CHAR" AND vtype ISNT "UNUM" AND vtype ISNT "UFACT" AND vtype ISNT "SCL" AND vtype ISNT "LIST",
+  IF vtype ISNT "NUM" AND vtype ISNT "FACT" AND vtype ISNT "CHAR" AND vtype ISNT "UNUM" AND vtype ISNT "UFACT" AND vtype ISNT "SCL" AND vtype ISNT "LIST" AND vtype ISNT "MATH",
       REAP vst3 FROM is_struct_type, vtype.
       REAP iut3 FROM is_union_type, vtype, evars.
       IF vst3 ISNT "1" AND iut3 ISNT "1",
@@ -9834,6 +9856,13 @@ ACTION generate_node(node, env(LIST)),
             /IF.
             GIVE isel + "  double " + target + " = plant_scl_create(_from_double(" + cval + "));\n".
         /IF.
+        # v0.50.0f — MATH symbolic expression in LET.
+        IF vtype IS "MATH",
+            IF actx IS "a",
+                GIVE isel + "  " + target + " = plant_math_create(" + cval + ");\n".
+            /IF.
+            GIVE isel + "  void* " + target + " = plant_math_create(" + cval + ");\n".
+        /IF.
         # v0.50.0d — union LET: stack-allocate union and assign directly.
         REAP iut4 FROM is_union_type, vtype, evars.
         IF iut4 IS "1",
@@ -9850,7 +9879,7 @@ ACTION generate_node(node, env(LIST)),
             /IF.
             GIVE isel + "  " + vct4 + " " + target + " = " + cval + ";\n".
         /IF.
-        IF vtype ISNT "NUM" AND vtype ISNT "CHAR" AND vtype ISNT "UNUM" AND vtype ISNT "UFACT" AND vtype ISNT "SCL",
+        IF vtype ISNT "NUM" AND vtype ISNT "CHAR" AND vtype ISNT "UNUM" AND vtype ISNT "UFACT" AND vtype ISNT "SCL" AND vtype ISNT "MATH",
             REAP vst5 FROM is_struct_type, vtype.
             REAP iut5 FROM is_union_type, vtype, evars.
             IF vst5 ISNT "1" AND iut5 ISNT "1",
@@ -10775,6 +10804,8 @@ ACTION plant_ctype(ptype(TX)),
     IF base IS "REF TX", GIVE "tx_t*". /IF.
     # v0.50.0d — union type maps to void* (opaque).
     IF base IS "UNION", GIVE "void*". /IF.
+    # v0.50.0f — symbolic math type.
+    IF base IS "MATH", GIVE "PlantMath*". /IF.
     # v0.50.0e — ARRAY[T, N] maps to just the element type in plant_ctype.
     # The [N] is appended by gen_create_stmt / let_stmt when emitting the declaration.
     IF base IS "ARRAY",
@@ -10875,6 +10906,8 @@ ACTION is_struct_type(t(TX)),
   IF tb IS "CHAR", GIVE "0". /IF.
   # v0.50.0e — ARRAY[T, N] is not a struct type.
   IF tb IS "ARRAY", GIVE "0". /IF.
+  # v0.50.0f — MATH is not a struct type.
+  IF tb IS "MATH", GIVE "0". /IF.
   IF tb IS "", GIVE "0". /IF.
   REAP rf FROM substring, tb, 0, 4.
   IF rf IS "REF ", GIVE "0". /IF.
@@ -13765,7 +13798,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.50.0e (pure native)".
+  SHOW "Chloroplast 0.50.0f (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

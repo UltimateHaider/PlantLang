@@ -103,6 +103,8 @@ ACTION is_keyword(wrd(TX)),
   IF wrd IS "union", GIVE TRUE. /IF.
   # v0.50.0e — native fixed-size arrays.
   IF wrd IS "array", GIVE TRUE. /IF.
+  # v0.50.0f — symbolic math type.
+  IF wrd IS "math", GIVE TRUE. /IF.
   GIVE FALSE.
 /ACTION.
 
@@ -259,6 +261,8 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "union", GIVE "UNION". /IF.
   # v0.50.0e — native fixed-size arrays.
   IF wrd IS "array", GIVE "ARRAY". /IF.
+  # v0.50.0f — symbolic math type.
+  IF wrd IS "math", GIVE "MATH". /IF.
   # v0.49.52/v0.49.54 — SUITE lifecycle hooks and VERIFY assertion
   IF wrd IS "SUITE", GIVE "SUITE". /IF.
   IF wrd IS "VERIFY", GIVE "VERIFY". /IF.

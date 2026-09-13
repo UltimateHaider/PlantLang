@@ -1,0 +1,7 @@
+# v0.50.0f — MATH: power operator.
+ACTION main(),
+  SHOW MATH_EVAL_STR("2 ^ 3").
+  SHOW MATH_EVAL_STR("3 ^ 2").
+  SHOW MATH_EVAL_STR("4 ^ 0.5").
+  GIVE 0.
+/GIVE main.

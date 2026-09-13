@@ -70,6 +70,7 @@ for src in "$SUITE_DIR"/*.plant; do
         "$ROOT/runtime/c/plant_runtime.c" "$ROOT/runtime/c/plant_error.c" \
         "$ROOT/runtime/c/plant_report.c" "$ROOT/runtime/c/plant_report_json.c" \
         "$ROOT/runtime/c/plant_report_xml.c" "$ROOT/runtime/c/plant_report_html.c" \
+        "$ROOT/runtime/c/plant_math.c" \
         "$ROOT/tests/native/mock_ffi.c" -lm -ldl -o "$BUILD/$name" \
         >>"$BUILD/$name.compile.log" 2>&1; then
     echo "FAIL  $name (gcc)"; fail=$((fail+1)); continue

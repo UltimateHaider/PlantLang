@@ -1,3 +1,43 @@
+## v0.50.0f - 2026 (Symbolic Math Core)
+
+### New Language Features
+
+#### Symbolic Math Type (`MATH`)
+- **Lexer**: Registered `"math"` as keyword mapped to `"MATH"` type token.
+- **Parser**: `CREATE expr(MATH) TO "expression"` and `MATH expr = "expression"` syntax for creating symbolic math ASTs.
+- **Runtime**: `plant_math.c` — full symbolic math engine with tokenizer, Pratt parser (precedence climbing with right-associative exponentiation), evaluator, debug printer, and string conversion.
+- **Built-in functions**: `MATH_EVAL_STR(expr)` evaluates expression strings directly; `MATH_VALUE(expr)` evaluates MATH-typed variables. Both return results as strings.
+- **Codegen**: `MATH` type maps to `void*` in generated C; `plant_math_create()` creates ASTs. SHOW handler wraps MATH expressions in `plant_math_eval_to_str()` for automatic evaluation.
+
+#### Math Features
+| Feature | Examples |
+|---------|----------|
+| Numbers | `42`, `3.14`, `0` |
+| Operators | `+`, `-`, `*`, `/`, `^` (exponentiation) |
+| Precedence | Standard math precedence; `^` is right-associative |
+| Constants | `PI`, `E`, `TAU`, `PHI`, `SQRT2` |
+| Functions | `SIN`, `COS`, `TAN`, `SQRT`, `EXP`, `LOG`, `ABS` |
+| Parentheses | `(2 + 3) * 4` |
+
+### Implementation Notes
+- The math parser strips `_from_double()` and `_from_long()` wrappers added by the codegen, so expressions pass through correctly.
+- Function lookup accepts both uppercase (`SIN`) and codegen-style (`plant_sin`, `math_sin`) names.
+- MATH variables use `void*` type in generated C to avoid dependency on MathNode type definition.
+
+### Tests
+- `math_01_number` — number literal evaluation.
+- `math_02_add` — addition expressions.
+- `math_03_parens` — parenthesized expressions.
+- `math_04_precedence` — operator precedence.
+- `math_05_power` — power operator.
+- `math_06_right_assoc_power` — right-associative exponentiation.
+- `math_07_constants` — mathematical constants (PI, E, TAU, PHI, SQRT2).
+- `math_08_functions` — built-in functions (SIN, COS, SQRT, ABS, EXP, LOG).
+- `math_09_math_type` — MATH type variable and MATH_VALUE evaluation.
+- `math_10_combined` — combined expressions with multiple features.
+
+---
+
 ## v0.50.0e - 2026 (Native Fixed-Size Stack Arrays)
 
 ### New Language Features

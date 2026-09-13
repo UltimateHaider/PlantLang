@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.50.0e
+# 🌿 PlantLang — Chloroplast v0.50.0f
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -111,6 +111,7 @@ ACTION main(),
 | Anonymous struct | `STRUCT` | `STRUCT { x: NUM, y: NUM }` (auto-named) |
 | Union | `UNION` | `UNION V { i: NUM, f: SCL }` |
 | Fixed-size array | `ARRAY` | `ARRAY[NUM, 5] nums = [1, 2, 3, 4, 5].` |
+| Symbolic math | `MATH` | `CREATE expr(MATH) TO "2 + 3 * 4".` |
 | Enum | `ENUM` | `ENUM Color { RED, GREEN, BLUE }.` |
 | Species | `SPECIES` | `SPECIES Animal { name: TX, age: NUM }.` |
 
@@ -405,6 +406,35 @@ ACTION main(),
 **Note:** Array bracket indexing (`arr[idx]`) is not yet supported; the
 existing `handle_brackets` rewrites `arr[idx]` to `plant_list_get(arr, idx)`
 which is incompatible with native C arrays.
+
+### MATH (v0.50.0f)
+
+Symbolic math expressions with full parsing and evaluation:
+
+```
+CREATE expr(MATH) TO "2 + 3 * 4".
+SHOW MATH_VALUE(expr).  # → 14
+```
+
+Direct expression evaluation without creating a MATH variable:
+
+```
+SHOW MATH_EVAL_STR("SQRT(16)").  # → 4
+SHOW MATH_EVAL_STR("PI * 2").    # → 6.28319
+```
+
+Features:
+- **Numbers**: `42`, `3.14`, `0`
+- **Operators**: `+`, `-`, `*`, `/`, `^` (exponentiation)
+- **Precedence**: Standard math precedence; `^` is right-associative
+- **Constants**: `PI`, `E`, `TAU`, `PHI`, `SQRT2`
+- **Functions**: `SIN`, `COS`, `TAN`, `SQRT`, `EXP`, `LOG`, `ABS`
+- **Parentheses**: `(2 + 3) * 4`
+
+The MATH type creates a symbolic AST (abstract syntax tree) from an expression
+string. Use `MATH_VALUE()` to evaluate a MATH variable, or `MATH_EVAL_STR()`
+to evaluate an expression string directly. Both return the result as a string
+suitable for `SHOW` or concatenation.
 
 ### Actions (functions)
 

@@ -1,0 +1,7 @@
+# v0.50.0f — MATH: addition.
+ACTION main(),
+  SHOW MATH_EVAL_STR("2 + 3").
+  SHOW MATH_EVAL_STR("10 + 20 + 30").
+  SHOW MATH_EVAL_STR("1.5 + 2.5").
+  GIVE 0.
+/GIVE main.

@@ -14,7 +14,7 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.50.0e
+VERSION    ?= 0.50.0f
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
@@ -29,7 +29,8 @@ REPORT_HTML:= runtime/c/plant_report_html.c
 LEXER      := runtime/c/plant_lexer.c
 PARSER     := runtime/c/plant_parser.c
 CODEGEN    := runtime/c/plant_codegen.c
-RUNTIME_C  := $(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) $(REPORT_HTML) $(LEXER) $(PARSER) $(CODEGEN)
+MATH       := runtime/c/plant_math.c
+RUNTIME_C  := $(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) $(REPORT_HTML) $(LEXER) $(PARSER) $(CODEGEN) $(MATH)
 COMPAT     := runtime/c/plant_compat.h
 
 SRC_DIR    := src/plantc

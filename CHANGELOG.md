@@ -1,5 +1,32 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.50.0f — 2026 (Symbolic Math Core)
+
+### New Features
+- **MATH symbolic expression type** — `MATH` type creates symbolic math ASTs from expression strings.
+  Supports numbers, symbols, constants (PI, E, TAU, PHI, SQRT2), binary ops (+, -, *, /, ^),
+  unary minus, function calls (SIN, COS, TAN, SQRT, EXP, LOG, ABS), operator precedence,
+  right-associative exponentiation, and evaluation to double.
+- **Lexer**: `"math"` keyword → `"MATH"` type token.
+- **Parser**: `CREATE expr(MATH) TO "2 + 3 * 4".` and `MATH expr = "..."` syntax.
+- **Codegen**: MATH type maps to `void*` in generated C; `plant_math_create()` creates ASTs.
+- **Built-in functions**: `MATH_EVAL_STR(expr)` evaluates expression strings directly;
+  `MATH_VALUE(expr)` evaluates MATH-typed variables. Both return result as strings.
+- **Runtime**: `plant_math.c` — full symbolic math engine with tokenizer, Pratt parser
+  (precedence climbing), evaluator, debug printer, and string conversion.
+
+### Tests
+- `math_01_number` — number literal evaluation.
+- `math_02_add` — addition expressions.
+- `math_03_parens` — parenthesized expressions.
+- `math_04_precedence` — operator precedence.
+- `math_05_power` — power operator.
+- `math_06_right_assoc_power` — right-associative exponentiation.
+- `math_07_constants` — mathematical constants (PI, E, TAU, PHI, SQRT2).
+- `math_08_functions` — built-in functions (SIN, COS, SQRT, ABS, EXP, LOG).
+- `math_09_math_type` — MATH type variable and MATH_VALUE evaluation.
+- `math_10_combined` — combined expressions with multiple features.
+
 ## v0.50.0e — 2026 (Native Fixed-Size Stack Arrays)
 
 ### New Features

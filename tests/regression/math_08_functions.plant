@@ -1,0 +1,10 @@
+# v0.50.0f — MATH: built-in functions.
+ACTION main(),
+  SHOW MATH_EVAL_STR("SIN(0)").
+  SHOW MATH_EVAL_STR("COS(0)").
+  SHOW MATH_EVAL_STR("SQRT(16)").
+  SHOW MATH_EVAL_STR("ABS(-5)").
+  SHOW MATH_EVAL_STR("EXP(0)").
+  SHOW MATH_EVAL_STR("LOG(1)").
+  GIVE 0.
+/GIVE main.

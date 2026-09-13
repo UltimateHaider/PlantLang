@@ -1,0 +1,7 @@
+# v0.50.0f — MATH: number literal evaluation.
+ACTION main(),
+  SHOW MATH_EVAL_STR("42").
+  SHOW MATH_EVAL_STR("3.14").
+  SHOW MATH_EVAL_STR("0").
+  GIVE 0.
+/GIVE main.

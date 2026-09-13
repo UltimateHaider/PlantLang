@@ -1,0 +1,10 @@
+# v0.50.0f — MATH: MATH type variable and MATH_VALUE.
+ACTION main(),
+  CREATE expr(MATH) TO "2 + 3 * 4".
+  SHOW MATH_VALUE(expr).
+  CREATE expr2(MATH) TO "PI * 2".
+  SHOW MATH_VALUE(expr2).
+  CREATE expr3(MATH) TO "SQRT(144)".
+  SHOW MATH_VALUE(expr3).
+  GIVE 0.
+/GIVE main.

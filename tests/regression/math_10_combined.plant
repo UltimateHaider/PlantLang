@@ -1,0 +1,10 @@
+# v0.50.0f — MATH: combined expressions.
+ACTION main(),
+  SHOW MATH_EVAL_STR("2 ^ 10 - 1").
+  SHOW MATH_EVAL_STR("SQRT(3^2 + 4^2)").
+  SHOW MATH_EVAL_STR("PI * 2 ^ 2").
+  SHOW MATH_EVAL_STR("EXP(1) * 2").
+  CREATE combined(MATH) TO "SIN(PI / 2) + COS(0)".
+  SHOW MATH_VALUE(combined).
+  GIVE 0.
+/GIVE main.

@@ -306,6 +306,15 @@ const char*   plant_scl_value(double v);
 void*        plant_union_create(size_t size);
 void         plant_union_free(void* u);
 
+/* ── v0.50.0f: Symbolic Math Core ── */
+void*        plant_math_create(const char* expr);
+double       plant_math_value(void* math_ptr);
+char*        plant_math_value_str(void* math_ptr);
+char*        plant_math_eval_to_str(const char* expr);
+char*        plant_math_to_str(void* math_ptr);
+void         plant_math_free(void* math_ptr);
+void         plant_math_debug_print(void* node);
+
 /* ── v0.50.0a: Anonymous Struct Allocation ── */
 void*        plant_anon_struct_create(size_t size);
 

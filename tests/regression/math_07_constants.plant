@@ -1,0 +1,9 @@
+# v0.50.0f — MATH: constants (PI, E, TAU, PHI, SQRT2).
+ACTION main(),
+  SHOW MATH_EVAL_STR("PI").
+  SHOW MATH_EVAL_STR("E").
+  SHOW MATH_EVAL_STR("TAU").
+  SHOW MATH_EVAL_STR("PHI").
+  SHOW MATH_EVAL_STR("SQRT2").
+  GIVE 0.
+/GIVE main.

@@ -2,6 +2,7 @@
 #include "plant_compat.h"
 #include "plant_lexer.h"
 #include "plant_codegen.h"
+#include "plant_math.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>

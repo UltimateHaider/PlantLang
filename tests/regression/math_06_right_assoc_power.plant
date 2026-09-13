@@ -1,0 +1,6 @@
+# v0.50.0f — MATH: right-associative exponentiation.
+ACTION main(),
+  SHOW MATH_EVAL_STR("2 ^ 3 ^ 2").
+  SHOW MATH_EVAL_STR("2 ^ 2 ^ 3").
+  GIVE 0.
+/GIVE main.
