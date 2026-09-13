@@ -1,0 +1,5 @@
+# v0.50.0h — Like terms collection: 5*x - 2*x → 3*x
+ACTION main(),
+  SHOW MATH_SIMPLIFY("5*x - 2*x").
+  GIVE 0.
+/GIVE main.

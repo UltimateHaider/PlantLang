@@ -1,5 +1,42 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.50.0h — 2026 (Like Terms Collection & Distribution)
+
+### New Features
+- **Like terms collection** — Terms with matching variable bases and exponents are merged:
+  - `x + x → 2*x`
+  - `2*x + 3*x → 5*x`
+  - `5*x - 2*x → 3*x`
+  - `x + 2 + 3 → x + 5`
+- **Algebraic distribution** — Products are expanded over sums:
+  - `2*(x + 1) → 2*x + 2`
+  - `-(x + 1) → -x - 1`
+  - `(x+1)*(y+1) → x*y + x + y + 1`
+- **Descending term ordering** — Sum terms are sorted by degree (highest first),
+  then variables before constants, then alphabetically.
+  - `x + x^3 + 2 + x^2 → x^3 + x^2 + x + 2`
+- **Operand normalization** — Products canonicalized with numeric coefficients leading:
+  - `x * 2 → 2 * x`
+- **String output improvement** — `ADD(x, -1)` renders as `x - 1` instead of `x + (-1)`.
+- **Simplification pipeline** — 5 passes per iteration:
+  1. `simplify_node` — constant folding, identity, cancellation
+  2. `distribute_node` — expand products over sums
+  3. `normalize_node` — standardize operand ordering
+  4. `collect_and_sort` — flatten sums, merge like terms, descending order
+  5. `simplify_node` — final cleanup
+
+### Tests
+- `collect_01_add` — simple like terms: `x + x → 2*x`.
+- `collect_02_sub` — subtraction: `5*x - 2*x → 3*x`.
+- `collect_03_const` — constant consolidation: `x + 2 + 3 → x + 5`.
+- `collect_04_mixed` — mixed terms: `2*x + 3*x + 4 → 5*x + 4`.
+- `collect_05_sort` — descending order: `x + x^3 + 2 + x^2 → x^3 + x^2 + x + 2`.
+- `distrib_01_basic` — scalar distribution: `2*(x + 1) → 2*x + 2`.
+- `distrib_02_neg` — negation distribution: `-(x + 1) → -x - 1`.
+- `distrib_03_double` — binomial expansion: `(x+1)*(y+1) → x*y + x + y + 1`.
+- `distrib_04_combined` — combined distribution + collection: `2*(x + 1) + 3*x → 5*x + 2`.
+- `distrib_05_eval` — evaluation after simplification: `2*(3 + 1) → 8`.
+
 ## v0.50.0g — 2026 (Automatic Symbolic Simplification)
 
 ### New Features

@@ -1,0 +1,5 @@
+# v0.50.0h — Descending sort: x + x^3 + 2 + x^2 → x^3 + x^2 + x + 2
+ACTION main(),
+  SHOW MATH_SIMPLIFY("x + x^3 + 2 + x^2").
+  GIVE 0.
+/GIVE main.

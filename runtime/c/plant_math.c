@@ -1,8 +1,10 @@
 /*
- * plant_math.c — v0.50.0f: Symbolic Math Core
+ * plant_math.c — v0.50.0h: Symbolic Math + Like Terms + Distribution
  *
  * Full implementation of the PlantLang symbolic algebra subsystem.
  * Tokenizer → Pratt parser (precedence climbing) → AST evaluator.
+ * Automatic simplification: constant folding, identity/cancellation,
+ * like terms collection, distribution, descending term ordering.
  */
 
 #include "plant_math.h"
@@ -790,7 +792,446 @@ static MathNode* simplify_node(MathNode* node) {
     }
 }
 
-/* Public simplification entry point — iterates until fixed point or cap */
+/* ====================================================================
+ *  v0.50.0h — Term Analysis, Like Terms Collection, Distribution,
+ *             and Descending Term Ordering
+ * ==================================================================== */
+
+/* ── Term decomposition ──────────────────────────────────────── */
+
+/* Extract the numeric coefficient and "base" of a term.
+ * 2*x      → coeff=2, base=x
+ * x        → coeff=1, base=x
+ * -x       → coeff=-1, base=x
+ * 5        → coeff=5, base=NULL (pure constant)
+ * x^2      → coeff=1, base=x^2
+ * 3*(x+1)  → coeff=3, base=(x+1)  [unexpanded product]
+ */
+static void decompose_term(const MathNode* node, double* coeff, MathNode** base) {
+    *coeff = 1.0;
+    *base = (MathNode*)node;
+
+    if (!node) { *coeff = 0; *base = NULL; return; }
+
+    switch (node->type) {
+        case MATH_NUMBER:
+            *coeff = node->num_val;
+            *base = NULL;
+            return;
+        case MATH_CONSTANT: {
+            double v = lookup_constant(node->sym_name);
+            if (!isnan(v)) { *coeff = v; *base = NULL; }
+            return;
+        }
+        case MATH_UNARY_OP:
+            if (node->op == OP_NEG) {
+                decompose_term(node->left, coeff, base);
+                *coeff = -*coeff;
+                return;
+            }
+            return;
+        case MATH_BINARY_OP:
+            if (node->op == OP_MUL) {
+                /* num * expr or expr * num */
+                if (is_number(node->left)) {
+                    *coeff = node->left->num_val;
+                    *base = node->right;
+                    return;
+                }
+                if (is_number(node->right)) {
+                    *coeff = node->right->num_val;
+                    *base = node->left;
+                    return;
+                }
+            }
+            return;
+        default:
+            return;
+    }
+}
+
+/* Compute the "degree" of a term's base for sorting.
+ * NULL (constant): 0
+ * symbol: 1
+ * symbol^n: n
+ * a*b: sum of degrees
+ * a/b: left - right degrees
+ * func(x): 1
+ */
+static double term_degree(const MathNode* base) {
+    if (!base) return 0.0;
+    switch (base->type) {
+        case MATH_NUMBER: return 0.0;
+        case MATH_CONSTANT: return 0.0;
+        case MATH_SYMBOL: return 1.0;
+        case MATH_BINARY_OP:
+            if (base->op == OP_POW && is_number(base->right))
+                return base->right->num_val;
+            if (base->op == OP_MUL)
+                return term_degree(base->left) + term_degree(base->right);
+            if (base->op == OP_DIV)
+                return term_degree(base->left) - term_degree(base->right);
+            return 1.0;
+        case MATH_UNARY_OP:
+            return term_degree(base->left);
+        case MATH_FUNC_CALL:
+            return 1.0;
+        default:
+            return 0.0;
+    }
+}
+
+/* Check if a node is a pure constant (evaluates to a number). */
+static int is_pure_constant(const MathNode* n) {
+    if (!n) return 1;
+    if (n->type == MATH_NUMBER) return 1;
+    if (n->type == MATH_CONSTANT) {
+        double v = lookup_constant(n->sym_name);
+        return !isnan(v);
+    }
+    return 0;
+}
+
+/* ── Flatten sum: collect terms from a + / - tree ────────────── */
+
+#define MAX_TERMS 256
+
+typedef struct {
+    double    coeff;
+    MathNode* base;   /* owned — will be freed or transferred */
+} TermEntry;
+
+/* Recursively flatten a sum/difference tree into a list of terms.
+ * A + B → [terms(A), terms(B)]
+ * A - B → [terms(A), -terms(B)]
+ */
+static void flatten_sum(const MathNode* node, TermEntry* terms, int* count) {
+    if (!node || *count >= MAX_TERMS) return;
+    if (node->type == MATH_BINARY_OP && node->op == OP_ADD) {
+        flatten_sum(node->left, terms, count);
+        flatten_sum(node->right, terms, count);
+    } else if (node->type == MATH_BINARY_OP && node->op == OP_SUB) {
+        flatten_sum(node->left, terms, count);
+        /* Negate all terms from the right side */
+        int saved = *count;
+        flatten_sum(node->right, terms, count);
+        for (int i = saved; i < *count; i++)
+            terms[i].coeff = -terms[i].coeff;
+    } else if (node->type == MATH_UNARY_OP && node->op == OP_NEG) {
+        int saved = *count;
+        flatten_sum(node->left, terms, count);
+        for (int i = saved; i < *count; i++)
+            terms[i].coeff = -terms[i].coeff;
+    } else {
+        double coeff;
+        MathNode* base;
+        decompose_term(node, &coeff, &base);
+        terms[*count].coeff = coeff;
+        terms[*count].base = base ? plant_math_deep_copy(base) : NULL;
+        (*count)++;
+    }
+}
+
+/* ── Like terms collection ───────────────────────────────────── */
+
+/* Collect like terms: merge terms with structurally identical bases.
+ * Modifies the terms array in-place, zeroing consumed slots. */
+static void collect_like(TermEntry* terms, int* count) {
+    for (int i = 0; i < *count; i++) {
+        if (!terms[i].base && terms[i].coeff == 0.0) continue;
+        for (int j = i + 1; j < *count; j++) {
+            if (!terms[j].base && terms[j].coeff == 0.0) continue;
+            if (trees_equal(terms[i].base, terms[j].base)) {
+                terms[i].coeff += terms[j].coeff;
+                math_node_free(terms[j].base);
+                terms[j].base = NULL;
+                terms[j].coeff = 0.0;
+            }
+        }
+    }
+    /* Compact: remove zero-coefficient entries */
+    int write = 0;
+    for (int i = 0; i < *count; i++) {
+        if (terms[i].coeff != 0.0 || terms[i].base != NULL) {
+            if (write != i)
+                terms[write] = terms[i];
+            write++;
+        }
+    }
+    *count = write;
+}
+
+/* ── Descending term ordering ────────────────────────────────── */
+
+/* Comparison for qsort: higher degree first, then variables before constants,
+ * then alphabetical by string representation. */
+static int cmp_term_desc(const void* a, const void* b) {
+    const TermEntry* ta = (const TermEntry*)a;
+    const TermEntry* tb = (const TermEntry*)b;
+
+    /* Pure constants sort last */
+    int a_const = (ta->base == NULL);
+    int b_const = (tb->base == NULL);
+    if (a_const != b_const) return a_const ? 1 : -1;
+
+    /* Higher degree first */
+    double da = term_degree(ta->base);
+    double db = term_degree(tb->base);
+    if (da != db) return (db > da) ? 1 : -1;
+
+    /* Same degree: alphabetical by string repr */
+    if (ta->base && tb->base) {
+        char* sa = plant_math_to_string(ta->base);
+        char* sb = plant_math_to_string(tb->base);
+        int cmp = strcmp(sa, sb);
+        free(sa);
+        free(sb);
+        return cmp;
+    }
+    return 0;
+}
+
+static void sort_terms(TermEntry* terms, int count) {
+    qsort(terms, count, sizeof(TermEntry), cmp_term_desc);
+}
+
+/* ── Build a sum tree from a flat term list ──────────────────── */
+
+/* Build a single term node: coeff * base.
+ * coeff=1, base=x → x
+ * coeff=2, base=x → 2*x
+ * coeff=-1, base=x → -x
+ * coeff=3, base=NULL → 3
+ */
+static MathNode* build_term_node(double coeff, MathNode* base) {
+    if (!base) return math_node_number(coeff);
+    if (coeff == 1.0) return base;
+    if (coeff == -1.0) return math_node_unary(base);
+    return math_node_binary(OP_MUL, math_node_number(coeff), base);
+}
+
+/* Build a sum tree from term list. */
+static MathNode* build_sum(TermEntry* terms, int count) {
+    if (count == 0) return math_node_number(0.0);
+    MathNode* result = build_term_node(terms[0].coeff, terms[0].base);
+    for (int i = 1; i < count; i++) {
+        MathNode* term = build_term_node(terms[i].coeff, terms[i].base);
+        result = math_node_binary(OP_ADD, result, term);
+    }
+    return result;
+}
+
+/* ── Distribution ────────────────────────────────────────────── */
+
+/* Check if a node is a sum (top-level ADD or SUB). */
+static int is_sum(const MathNode* n) {
+    return n && n->type == MATH_BINARY_OP && (n->op == OP_ADD || n->op == OP_SUB);
+}
+
+/* Multiply a scalar expression by a sum: distribute.
+ * scalar * (a + b) → scalar*a + scalar*b
+ * scalar * (a - b) → scalar*a - scalar*b
+ */
+static MathNode* distribute_scalar_sum(MathNode* scalar, const MathNode* sum) {
+    if (sum->op == OP_ADD) {
+        MathNode* la = plant_math_deep_copy(scalar);
+        MathNode* ra = plant_math_deep_copy(scalar);
+        MathNode* left_term = math_node_binary(OP_MUL, la, plant_math_deep_copy(sum->left));
+        MathNode* right_term = math_node_binary(OP_MUL, ra, plant_math_deep_copy(sum->right));
+        return math_node_binary(OP_ADD, left_term, right_term);
+    } else { /* OP_SUB */
+        MathNode* la = plant_math_deep_copy(scalar);
+        MathNode* ra = plant_math_deep_copy(scalar);
+        MathNode* left_term = math_node_binary(OP_MUL, la, plant_math_deep_copy(sum->left));
+        MathNode* right_term = math_node_binary(OP_MUL, ra, plant_math_deep_copy(sum->right));
+        return math_node_binary(OP_SUB, left_term, right_term);
+    }
+}
+
+/* Double distribution: (a + b) * (c + d) → a*c + a*d + b*c + b*d */
+static MathNode* distribute_double_sum(const MathNode* lsum, const MathNode* rsum) {
+    /* Collect terms from left sum */
+    TermEntry lterms[MAX_TERMS];
+    int lcount = 0;
+    flatten_sum(lsum, lterms, &lcount);
+
+    /* Collect terms from right sum */
+    TermEntry rterms[MAX_TERMS];
+    int rcount = 0;
+    flatten_sum(rsum, rterms, &rcount);
+
+    /* Build cross products */
+    MathNode* result = NULL;
+    for (int i = 0; i < lcount; i++) {
+        for (int j = 0; j < rcount; j++) {
+            MathNode* lt = build_term_node(lterms[i].coeff, lterms[i].base ? plant_math_deep_copy(lterms[i].base) : NULL);
+            MathNode* rt = build_term_node(rterms[j].coeff, rterms[j].base ? plant_math_deep_copy(rterms[j].base) : NULL);
+            MathNode* product = math_node_binary(OP_MUL, lt, rt);
+            if (!result) {
+                result = product;
+            } else {
+                result = math_node_binary(OP_ADD, result, product);
+            }
+        }
+    }
+    if (!result) result = math_node_number(0.0);
+
+    /* Clean up temporary term bases */
+    for (int i = 0; i < lcount; i++) math_node_free(lterms[i].base);
+    for (int i = 0; i < rcount; i++) math_node_free(rterms[i].base);
+
+    return result;
+}
+
+/* Distribution pass: expand products over sums where possible. */
+static MathNode* distribute_node(MathNode* node) {
+    if (!node) return NULL;
+
+    /* Recurse first (handles both unary and binary) */
+    if (node->left) node->left = distribute_node(node->left);
+    if (node->right) node->right = distribute_node(node->right);
+
+    /* Negation distribution: -(a+b) → -a - b */
+    if (node->type == MATH_UNARY_OP && node->op == OP_NEG && is_sum(node->left)) {
+        MathNode* neg_one = math_node_number(-1.0);
+        MathNode* result = distribute_scalar_sum(neg_one, node->left);
+        node->left = NULL;
+        math_node_free(node);
+        return result;
+    }
+
+    if (node->type != MATH_BINARY_OP) return node;
+
+    if (node->op == OP_MUL) {
+        MathNode* L = node->left;
+        MathNode* R = node->right;
+
+        /* scalar * sum → distribute */
+        if (is_pure_constant(L) && is_sum(R)) {
+            MathNode* result = distribute_scalar_sum(L, R);
+            node->left = NULL; node->right = NULL;
+            math_node_free(node);
+            return result;
+        }
+        /* sum * scalar → distribute */
+        if (is_sum(L) && is_pure_constant(R)) {
+            MathNode* result = distribute_scalar_sum(R, L);
+            node->left = NULL; node->right = NULL;
+            math_node_free(node);
+            return result;
+        }
+        /* -1 * sum → distribute as negation */
+        if (node->left->type == MATH_UNARY_OP && node->left->op == OP_NEG) {
+            if (is_one(node->left->left) && is_sum(R)) {
+                MathNode* result = distribute_scalar_sum(node->left, R);
+                node->left = NULL; node->right = NULL;
+                math_node_free(node);
+                return result;
+            }
+        }
+        if (node->right->type == MATH_UNARY_OP && node->right->op == OP_NEG) {
+            if (is_sum(L) && is_one(node->right->left)) {
+                MathNode* result = distribute_scalar_sum(node->right, L);
+                node->left = NULL; node->right = NULL;
+                math_node_free(node);
+                return result;
+            }
+        }
+        /* sum * sum → double distribution */
+        if (is_sum(L) && is_sum(R)) {
+            MathNode* result = distribute_double_sum(L, R);
+            node->left = NULL; node->right = NULL;
+            math_node_free(node);
+            return result;
+        }
+    }
+
+    return node;
+}
+
+/* ── Normalize: standardize operand ordering in products ─────── */
+
+/* Sort commutative product factors: numbers first, then symbols alphabetically,
+ * then complex expressions. This makes like-term detection more reliable. */
+static MathNode* normalize_node(MathNode* node) {
+    if (!node) return NULL;
+    if (node->left) node->left = normalize_node(node->left);
+    if (node->right) node->right = normalize_node(node->right);
+
+    if (node->type == MATH_BINARY_OP && node->op == OP_MUL) {
+        /* If right is number and left is not, swap for canonical num*expr form */
+        if (is_number(node->right) && !is_number(node->left)) {
+            MathNode* tmp = node->left;
+            node->left = node->right;
+            node->right = tmp;
+        }
+        /* If right is unary neg and left is not, move neg outward: a*(-b) → -(a*b) */
+        if (node->right && node->right->type == MATH_UNARY_OP && node->right->op == OP_NEG) {
+            MathNode* inner = math_node_binary(OP_MUL,
+                plant_math_deep_copy(node->left),
+                plant_math_deep_copy(node->right->left));
+            node->left = NULL; node->right = NULL;
+            math_node_free(node);
+            return math_node_unary(inner);
+        }
+    }
+
+    /* Convert subtraction to addition of negation for canonical form:
+     * a - b → a + (-b). This helps with like-term collection. */
+    /* NOTE: we intentionally skip this to preserve clean string output.
+     * Like-term collection handles subtraction via flatten_sum which
+     * already negates terms from the right side of SUB nodes. */
+
+    return node;
+}
+
+/* ── Collection + Ordering pass ──────────────────────────────── */
+
+static MathNode* collect_and_sort(MathNode* node) {
+    if (!node) return NULL;
+
+    /* Recurse first */
+    if (node->left) node->left = collect_and_sort(node->left);
+    if (node->right) node->right = collect_and_sort(node->right);
+
+    /* Only collect at the top-level sum/difference node */
+    if (node->type == MATH_BINARY_OP && (node->op == OP_ADD || node->op == OP_SUB)) {
+        /* Flatten the entire sum tree */
+        TermEntry terms[MAX_TERMS];
+        int count = 0;
+        flatten_sum(node, terms, &count);
+
+        /* Collect like terms */
+        collect_like(terms, &count);
+
+        /* Sort descending */
+        sort_terms(terms, count);
+
+        /* Rebuild */
+        MathNode* result = build_sum(terms, count);
+
+        /* Free old node (children already transferred to terms) */
+        node->left = NULL;
+        node->right = NULL;
+        math_node_free(node);
+
+        return result;
+    }
+
+    return node;
+}
+
+/* ====================================================================
+ *  Simplifier pipeline — iterates until fixed point or cap
+ *
+ *  Passes per iteration:
+ *    1. simplify_node  — constant folding, identity, cancellations
+ *    2. distribute_node — expand products over sums
+ *    3. normalize_node — standardize operand ordering (a-b → a+(-b), num*expr)
+ *    4. collect_and_sort — flatten sums, merge like terms, descending order
+ *    5. simplify_node  — final cleanup (1*x → x, x+0 → x, etc.)
+ * ==================================================================== */
+
 MathNode* plant_math_simplify(MathNode* node) {
     if (!node) return NULL;
     int iterations = 0;
@@ -798,7 +1239,18 @@ MathNode* plant_math_simplify(MathNode* node) {
     while (changed && iterations < MAX_SIMPLIFY_ITERATIONS) {
         changed = 0;
         MathNode* before = plant_math_deep_copy(node);
+
+        /* Pass 1: basic simplification (folding, identity, cancellation) */
         node = simplify_node(node);
+        /* Pass 2: distribute products over sums */
+        node = distribute_node(node);
+        /* Pass 3: normalize operand ordering */
+        node = normalize_node(node);
+        /* Pass 4: collect like terms and sort */
+        node = collect_and_sort(node);
+        /* Pass 5: final cleanup */
+        node = simplify_node(node);
+
         MathNode* after = plant_math_deep_copy(node);
         if (!trees_equal(before, after)) changed = 1;
         math_node_free(before);
@@ -895,8 +1347,37 @@ static void node_to_string(const MathNode* node, char** buf, size_t* len, size_t
             break;
         case MATH_BINARY_OP: {
             const char* op_str = "+";
+            MathNode* display_right = node->right;
+            MathNode* neg_inner = NULL;
+
             switch (node->op) {
-                case OP_ADD: op_str = "+"; break;
+                case OP_ADD:
+                    /* Check if right side is (-x), render as "left - x" */
+                    if (node->right && node->right->type == MATH_UNARY_OP &&
+                        node->right->op == OP_NEG) {
+                        op_str = "-";
+                        display_right = node->right->left;
+                        neg_inner = node->right;
+                    }
+                    /* Check if right side is a negative number, render as subtraction */
+                    else if (node->right && node->right->type == MATH_NUMBER &&
+                             node->right->num_val < 0) {
+                        op_str = "-";
+                        /* Create a temp positive number for display */
+                        MathNode tmp;
+                        tmp.type = MATH_NUMBER;
+                        tmp.num_val = -(node->right->num_val);
+                        tmp.sym_name = NULL;
+                        tmp.left = NULL;
+                        tmp.right = NULL;
+                        append_str(buf, len, cap, "(");
+                        node_to_string(node->left, buf, len, cap);
+                        append_str(buf, len, cap, op_str);
+                        node_to_string(&tmp, buf, len, cap);
+                        append_str(buf, len, cap, ")");
+                        return;
+                    }
+                    break;
                 case OP_SUB: op_str = "-"; break;
                 case OP_MUL: op_str = "*"; break;
                 case OP_DIV: op_str = "/"; break;
@@ -906,7 +1387,13 @@ static void node_to_string(const MathNode* node, char** buf, size_t* len, size_t
             append_str(buf, len, cap, "(");
             node_to_string(node->left, buf, len, cap);
             append_str(buf, len, cap, op_str);
-            node_to_string(node->right, buf, len, cap);
+            /* If we're using the inner of a neg, print it without the unary parens */
+            if (neg_inner) {
+                /* Print the inner expression directly to avoid double parens */
+                node_to_string(display_right, buf, len, cap);
+            } else {
+                node_to_string(display_right, buf, len, cap);
+            }
             append_str(buf, len, cap, ")");
             break;
         }

@@ -1,0 +1,5 @@
+# v0.50.0h — Like terms collection: x + x → 2*x
+ACTION main(),
+  SHOW MATH_SIMPLIFY("x + x").
+  GIVE 0.
+/GIVE main.

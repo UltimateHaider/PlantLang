@@ -1,3 +1,46 @@
+## v0.50.0h - 2026 (Like Terms Collection & Distribution)
+
+### New Language Features
+
+#### Like Terms Collection & Simplification
+- **Coefficient combination**: Matches terms with structurally identical variable bases and exponents, merging their coefficients. `x + x → 2*x`, `2*x + 3*x → 5*x`.
+- **Constant consolidation**: Sums of pure constants are folded. `x + 2 + 3 → x + 5`.
+- **Subtraction handling**: Like terms with opposite signs cancel correctly. `5*x - 2*x → 3*x`.
+
+#### Algebraic Distribution
+- **Scalar distribution**: Products with a numeric factor and a sum are expanded. `2*(x + 1) → 2*x + 2`.
+- **Negation distribution**: Unary minus over sums distributes. `-(x + 1) → -x - 1`.
+- **Double distribution (binomial expansion)**: Products of two sums are fully expanded. `(x+1)*(y+1) → x*y + x + y + 1`.
+
+#### Descending Term Ordering
+- Terms in sums are sorted by degree (highest power first), then variables before constants, then alphabetically.
+- Example: `x + x^3 + 2 + x^2 → x^3 + x^2 + x + 2`.
+
+#### Operand Normalization
+- Products are canonicalized with numeric coefficients leading: `x * 2 → 2 * x`.
+- String output improved: `ADD(x, -1)` renders as `x - 1` instead of `x + (-1)`.
+
+### Implementation Notes
+- Simplification pipeline runs 5 passes per iteration: simplify → distribute → normalize → collect/sort → simplify (cleanup).
+- Term decomposition extracts coefficient and base from each AST node for like-term matching.
+- Like-term detection uses `trees_equal()` for structural comparison of base sub-expressions.
+- Degree computation recursively sums powers through multiplication, enabling multi-variable degree sorting.
+- `MAX_SIMPLIFY_ITERATIONS = 100` safety cap prevents infinite rewrite loops from overlapping distribution/collection passes.
+
+### Tests
+- `collect_01_add` — simple like terms: `x + x → 2*x`.
+- `collect_02_sub` — subtraction: `5*x - 2*x → 3*x`.
+- `collect_03_const` — constant consolidation: `x + 2 + 3 → x + 5`.
+- `collect_04_mixed` — mixed terms: `2*x + 3*x + 4 → 5*x + 4`.
+- `collect_05_sort` — descending order: `x + x^3 + 2 + x^2 → x^3 + x^2 + x + 2`.
+- `distrib_01_basic` — scalar distribution: `2*(x + 1) → 2*x + 2`.
+- `distrib_02_neg` — negation distribution: `-(x + 1) → -x - 1`.
+- `distrib_03_double` — binomial expansion: `(x+1)*(y+1) → x*y + x + y + 1`.
+- `distrib_04_combined` — combined distribution + collection: `2*(x + 1) + 3*x → 5*x + 2`.
+- `distrib_05_eval` — evaluation after simplification: `2*(3 + 1) → 8`.
+
+---
+
 ## v0.50.0g - 2026 (Automatic Symbolic Simplification)
 
 ### New Language Features

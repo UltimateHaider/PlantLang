@@ -1,0 +1,5 @@
+# v0.50.0h — Eval after distribution: 2*(x + 1) at x=3 → 8
+ACTION main(),
+  SHOW MATH_EVAL_STR("2*(3 + 1)").
+  GIVE 0.
+/GIVE main.

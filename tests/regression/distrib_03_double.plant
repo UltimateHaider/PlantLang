@@ -1,0 +1,5 @@
+# v0.50.0h — Double distribution: (x+1)*(y+1) → x*y + x + y + 1
+ACTION main(),
+  SHOW MATH_SIMPLIFY("(x+1)*(y+1)").
+  GIVE 0.
+/GIVE main.

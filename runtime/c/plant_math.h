@@ -1,10 +1,11 @@
 /*
- * plant_math.h — v0.50.0g: Symbolic Math Core + Simplification
+ * plant_math.h — v0.50.0h: Symbolic Math + Like Terms + Distribution
  *
  * MathNode AST structures and API for the PlantLang symbolic algebra subsystem.
  * Supports numbers, symbols, constants, binary/unary ops, function calls,
  * operator precedence, right-associative exponentiation, evaluation to double,
- * and automatic symbolic simplification.
+ * automatic symbolic simplification, like terms collection, distribution,
+ * and descending term ordering.
  */
 
 #ifndef PLANT_MATH_H

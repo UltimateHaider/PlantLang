@@ -1,0 +1,5 @@
+# v0.50.0h — Distribution: 2*(x + 1) → 2*x + 2
+ACTION main(),
+  SHOW MATH_SIMPLIFY("2*(x + 1)").
+  GIVE 0.
+/GIVE main.

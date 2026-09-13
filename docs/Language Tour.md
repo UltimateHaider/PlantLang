@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.50.0g
+# 🌿 PlantLang — Chloroplast v0.50.0h
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -407,9 +407,9 @@ ACTION main(),
 existing `handle_brackets` rewrites `arr[idx]` to `plant_list_get(arr, idx)`
 which is incompatible with native C arrays.
 
-### MATH (v0.50.0g)
+### MATH (v0.50.0h)
 
-Symbolic math expressions with automatic simplification:
+Symbolic math expressions with automatic simplification, like terms collection, and distribution:
 
 ```
 CREATE expr(MATH) TO "2 + 3 * 4".
@@ -431,6 +431,16 @@ SHOW MATH_SIMPLIFY("2 + 3").     # → 5
 SHOW MATH_SIMPLIFY("x / x").     # → 1
 ```
 
+Like terms collection and distribution:
+
+```
+SHOW MATH_SIMPLIFY("x + x").            # → 2*x
+SHOW MATH_SIMPLIFY("2*x + 3*x").        # → 5*x
+SHOW MATH_SIMPLIFY("2*(x + 1)").        # → 2*x + 2
+SHOW MATH_SIMPLIFY("(x+1)*(y+1)").      # → x*y + x + y + 1
+SHOW MATH_SIMPLIFY("x + x^3 + 2").      # → x^3 + x + 2
+```
+
 Features:
 - **Numbers**: `42`, `3.14`, `0`
 - **Operators**: `+`, `-`, `*`, `/`, `^` (exponentiation)
@@ -439,11 +449,12 @@ Features:
 - **Functions**: `SIN`, `COS`, `TAN`, `SQRT`, `EXP`, `LOG`, `ABS`
 - **Parentheses**: `(2 + 3) * 4`
 
-**Automatic Simplification**: Expressions are simplified after parsing with these rules:
-- **Constant folding**: `2 + 3 → 5`, `SIN(0) → 0`, `PI → 3.14...`
-- **Identity**: `x + 0 → x`, `x - 0 → x`, `x * 1 → x`, `x^1 → x`
-- **Cancellation**: `x - x → 0`, `x / x → 1` (x ≠ 0), `x^0 → 1` (x ≠ 0)
-- **Zero ops**: `x * 0 → 0`, `0 / x → 0`
+**Automatic Simplification** (5 passes per iteration):
+1. **Constant folding**: `2 + 3 → 5`, `SIN(0) → 0`, `PI → 3.14...`
+2. **Identity/cancellation**: `x + 0 → x`, `x - x → 0`, `x * 1 → x`, `x^0 → 1`
+3. **Distribution**: `2*(x+1) → 2*x + 2`, `-(x+1) → -x - 1`, `(x+1)*(y+1) → x*y + x + y + 1`
+4. **Like terms collection**: `x + x → 2*x`, `2*x + 3*x → 5*x`, `x + 2 + 3 → x + 5`
+5. **Descending ordering**: `x + x^3 + 2 → x^3 + x + 2` (highest degree first)
 
 The MATH type creates a symbolic AST (abstract syntax tree) from an expression
 string. Use `MATH_VALUE()` to evaluate a MATH variable, `MATH_EVAL_STR()` to
