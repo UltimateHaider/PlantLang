@@ -1,0 +1,5 @@
+# v0.50.0j — Derivative: d/dx(LOG(SIN(x))) = COS(x)/SIN(x)
+ACTION main(),
+  SHOW MATH_DERIVATIVE("LOG(SIN(x))", "x").
+  GIVE 0.
+/GIVE main.

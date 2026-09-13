@@ -1,0 +1,5 @@
+# v0.50.0j — Integral: ∫ 1/(1+x^2) dx = ARCTAN(x) + C
+ACTION main(),
+  SHOW MATH_INTEGRAL("1/(1 + x^2)", "x").
+  GIVE 0.
+/GIVE main.

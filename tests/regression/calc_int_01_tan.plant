@@ -1,0 +1,5 @@
+# v0.50.0j — Integral: ∫ TAN(x) dx = -LOG(|COS(x)|) + C
+ACTION main(),
+  SHOW MATH_INTEGRAL("TAN(x)", "x").
+  GIVE 0.
+/GIVE main.

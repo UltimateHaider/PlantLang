@@ -1,0 +1,5 @@
+# v0.50.0j — GCD factoring: even coefficients
+ACTION main(),
+  SHOW MATH_FACTOR("12*x + 8").
+  GIVE 0.
+/GIVE main.

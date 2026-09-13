@@ -1,0 +1,5 @@
+# v0.50.0j — Quadratic: complex roots (x^2 + 1 = 0)
+ACTION main(),
+  SHOW MATH_QUADRATIC("1", "0", "1").
+  GIVE 0.
+/GIVE main.

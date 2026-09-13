@@ -1,0 +1,5 @@
+# v0.50.0j — Derivative: d/dx(EXP(x^2)) = 2x*EXP(x^2)
+ACTION main(),
+  SHOW MATH_DERIVATIVE("EXP(x^2)", "x").
+  GIVE 0.
+/GIVE main.

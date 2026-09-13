@@ -1,0 +1,5 @@
+# v0.50.0j — Derivative: d/dx(TAN(x)) = 1 + TAN(x)^2
+ACTION main(),
+  SHOW MATH_DERIVATIVE("TAN(x)", "x").
+  GIVE 0.
+/GIVE main.

@@ -1,5 +1,47 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.50.0j — 2026 (Advanced CAS: GCD Factoring, Quadratic Formula & Advanced Calculus)
+
+### New Features
+- **GCD-based common-factor extraction** — `MATH_FACTOR` now extracts numeric GCDs from polynomial
+  terms: `6*x + 9 → 3*(2*x + 3)`, `12*x + 8 → 4*(3*x + 2)`.
+- **Quadratic formula solver** — `MATH_QUADRATIC(a, b, c)` solves ax² + bx + c = 0:
+  - Two distinct real roots: `1,0,-4 → x1 = -2, x2 = 2`
+  - Repeated root: `1,-2,1 → x = 1`
+  - Complex conjugate roots: `1,0,1 → x1 = 0 + i, x2 = 0 - i`
+- **Imaginary unit** — CAS parser recognizes `i` as sqrt(-1), output as `0 + i`.
+- **ARCTAN integration** — `MATH_INTEGRAL("1/(x^2 + 1)", "x") → ARCTAN(x) + C`.
+  Also `MATH_INTEGRAL("1/(1 + x^2)", "x")` via commutative addition.
+- **_handle_func_paren3** — codegen support for 3-argument built-ins (MATH_QUADRATIC).
+
+### Improvements
+- GCD factoring no longer requires the GCD to equal the first coefficient.
+- `math_node_func()` strips `plant_`/`math_` prefixes and uppercases names, ensuring
+  derivative/integral/factor engines work correctly regardless of codegen rewrites.
+
+### Internal
+- `plant_math_gcd()` Euclidean GCD function
+- `plant_math_quadratic()` / `plant_math_quadratic_str()` quadratic solver
+- MATH_QUADRATIC registered as codegen built-in calling `plant_math_quadratic_str`
+- Forward declaration for `matches_power_of_var` (used in integration before definition)
+
+### Tests (15 new)
+- `gcd_01_simple` — GCD factoring: `6*x + 9 → 3*(2*x + 3)`.
+- `gcd_02_even` — GCD factoring: `12*x + 8 → 4*(3*x + 2)`.
+- `gcd_03_mixed` — GCD factoring: `4*x + 6 → 2*(2*x + 3)`.
+- `quad_01_real` — two real roots: `x^2 - 4 = 0 → x1 = -2, x2 = 2`.
+- `quad_02_repeated` — repeated root: `x^2 - 2x + 1 = 0 → x = 1`.
+- `quad_03_complex` — complex roots: `x^2 + 1 = 0 → x1 = 0 + i, x2 = 0 - i`.
+- `quad_04_general` — general: `2x^2 + 3x - 2 = 0 → x1 = -2, x2 = 0.5`.
+- `calc_int_01_tan` — `∫ TAN(x) dx = -LOG(|COS(x)|) + C`.
+- `calc_int_02_log` — `∫ LOG(x) dx = x*LOG(x) - x + C`.
+- `calc_int_03_arctan` — `∫ 1/(x^2+1) dx = ARCTAN(x) + C`.
+- `calc_int_04_arctan_rev` — `∫ 1/(1+x^2) dx = ARCTAN(x) + C` (commutative).
+- `calc_deriv_01_tan` — `d/dx(TAN(x)) = 1 + TAN(x)^2`.
+- `calc_deriv_02_exp_chain` — `d/dx(EXP(x^2)) = 2*x*EXP(x^2)`.
+- `calc_deriv_03_sqrt_chain` — `d/dx(SQRT(x^2+1)) = x/SQRT(x^2+1)`.
+- `calc_deriv_04_log_sin` — `d/dx(LOG(SIN(x))) = COS(x)/SIN(x)`.
+
 ## v0.50.0i — 2026 (Symbolic Derivatives, Integrals & Polynomial Factoring)
 
 ### New Features

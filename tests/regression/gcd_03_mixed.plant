@@ -1,0 +1,5 @@
+# v0.50.0j — GCD factoring: mixed coefficients
+ACTION main(),
+  SHOW MATH_FACTOR("4*x + 6").
+  GIVE 0.
+/GIVE main.

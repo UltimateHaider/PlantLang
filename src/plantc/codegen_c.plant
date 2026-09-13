@@ -121,6 +121,90 @@ ACTION _handle_func_paren2(expr(TX), kw(TX), cfn(TX)),
   GIVE res.
 /ACTION.
 
+# _handle_func_paren3 — like _handle_func_paren2 but for KW(arg1, arg2, arg3).
+# Splits the outer expression on the keyword, then splits the argument
+# list on the first two top-level commas to rewrite each argument independently.
+ACTION _handle_func_paren3(expr(TX), kw(TX), cfn(TX)),
+  REAP parts FROM strings:SPLIT, expr, kw + " (".
+  IF COUNT parts IS 1,
+    REAP parts FROM strings:SPLIT, expr, kw + "(".
+  /IF.
+  IF COUNT parts IS 1, GIVE expr. /IF.
+  REAP p0 FROM plant_list_get, parts, 0.
+  CREATE res(TX) TO p0.
+  CREATE idx(NUM) TO 1.
+  SEASON idx < COUNT parts,
+    REAP p FROM plant_list_get, parts, idx.
+    # Find matching close-paren for first open-paren in p.
+    CREATE dep(NUM) TO 0.
+    CREATE close_pos(NUM) TO -1.
+    CREATE ci(NUM) TO 0.
+    SEASON ci < LEN(p),
+      REAP cc FROM char_at, p, ci.
+      IF cc IS "(", SET dep TO dep + 1. /IF.
+      IF cc IS ")",
+        SET dep TO dep - 1.
+        IF dep IS 0, SET close_pos TO ci. /IF.
+        IF dep IS 0, BREAK 0. /IF.
+      /IF.
+      SET ci TO ci + 1.
+    /SEASON.
+    IF close_pos IS -1, GIVE res + cfn + "(" + p. /IF.
+    REAP inner FROM substring, p, 1, close_pos.
+    # Find the first top-level comma.
+    CREATE comma1(NUM) TO -1.
+    CREATE ad(NUM) TO 0.
+    CREATE ai(NUM) TO 0.
+    SEASON ai < LEN(inner),
+      REAP ac FROM char_at, inner, ai.
+      IF ac IS "(" OR ac IS "[", SET ad TO ad + 1. /IF.
+      IF ac IS ")" OR ac IS "]", SET ad TO ad - 1. /IF.
+      IF ad IS 0 AND ac IS ",",
+        SET comma1 TO ai.
+        BREAK 0.
+      /IF.
+      SET ai TO ai + 1.
+    /SEASON.
+    IF comma1 IS -1,
+      # No commas — single arg
+      SET res TO res + cfn + "(" + inner + ")" + substring(p, close_pos + 1, LEN(p)).
+    ELSE.
+      # Find second comma after first
+      CREATE comma2(NUM) TO -1.
+      SET ad TO 0.
+      SET ai TO comma1 + 1.
+      SEASON ai < LEN(inner),
+        REAP ac FROM char_at, inner, ai.
+        IF ac IS "(" OR ac IS "[", SET ad TO ad + 1. /IF.
+        IF ac IS ")" OR ac IS "]", SET ad TO ad - 1. /IF.
+        IF ad IS 0 AND ac IS ",",
+          SET comma2 TO ai.
+          BREAK 0.
+        /IF.
+        SET ai TO ai + 1.
+      /SEASON.
+      IF comma2 IS -1,
+        # Only one comma — treat as 2-arg
+        REAP a1 FROM substring, inner, 0, comma1.
+        REAP a2 FROM substring, inner, comma1 + 1, LEN(inner).
+        REAP wa1 FROM plant_trim, a1.
+        REAP wa2 FROM plant_trim, a2.
+        SET res TO res + cfn + "(" + wa1 + ", " + wa2 + ")" + substring(p, close_pos + 1, LEN(p)).
+      ELSE.
+        REAP a1 FROM substring, inner, 0, comma1.
+        REAP a2 FROM substring, inner, comma1 + 1, comma2.
+        REAP a3 FROM substring, inner, comma2 + 1, LEN(inner).
+        REAP wa1 FROM plant_trim, a1.
+        REAP wa2 FROM plant_trim, a2.
+        REAP wa3 FROM plant_trim, a3.
+        SET res TO res + cfn + "(" + wa1 + ", " + wa2 + ", " + wa3 + ")" + substring(p, close_pos + 1, LEN(p)).
+      /IF.
+    /IF.
+    SET idx TO idx + 1.
+  /SEASON.
+  GIVE res.
+/ACTION.
+
 # _is_num_literal — "1" when s (spaces ignored) is a bare numeric
 # literal: optional single leading '-', digits with at most one '.'.
 # Used by _wrap_math_args to decide which call arguments need a
@@ -3164,6 +3248,8 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     # should NOT be rewritten to C function names.
     REAP e FROM _handle_func_paren2, e, "MATH_DERIVATIVE", "plant_math_derivative_str".
     REAP e FROM _handle_func_paren2, e, "MATH_INTEGRAL", "plant_math_integral_str".
+    # v0.50.0j — MATH_QUADRATIC: solve ax^2 + bx + c = 0.
+    REAP e FROM _handle_func_paren3, e, "MATH_QUADRATIC", "plant_math_quadratic_str".
     # ── v0.48.36 — temporal queries / introspection in expression
     #    position: NOW [FORMAT : x] → plant_now("x"), ANALYZE x →
     #    plant_analyze(x), TYPEOF x → plant_typeof(x). _ni_replace

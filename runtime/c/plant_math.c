@@ -1,11 +1,12 @@
 /*
- * plant_math.c — v0.50.0i: Symbolic Math + Calculus + Factoring
+ * plant_math.c — v0.50.0j: Symbolic Math + Advanced CAS
  *
  * Full implementation of the PlantLang symbolic algebra subsystem.
  * Tokenizer → Pratt parser (precedence climbing) → AST evaluator.
  * Automatic simplification: constant folding, identity/cancellation,
  * like terms collection, distribution, descending term ordering.
- * Symbolic differentiation, integration with +C, polynomial factoring.
+ * Symbolic differentiation, integration with +C, polynomial factoring,
+ * GCD extraction, quadratic equation solver with complex number support.
  */
 
 #include "plant_math.h"
@@ -164,6 +165,7 @@ static const MathConst MATH_CONSTS[] = {
     { "TAU",   6.28318530717958647692 },
     { "PHI",   1.61803398874989484820 },
     { "SQRT2", 1.41421356237309504880 },
+    { "I",     0.0 },  /* imaginary unit: i^2 = -1 (symbolic only) */
     { NULL, 0.0 }
 };
 
@@ -184,6 +186,9 @@ static double fn_sqrt(double x) { return sqrt(x); }
 static double fn_exp(double x)  { return exp(x); }
 static double fn_log(double x)  { return log(x); }
 static double fn_abs(double x)  { return fabs(x); }
+static double fn_asin(double x) { return asin(x); }
+static double fn_acos(double x) { return acos(x); }
+static double fn_atan(double x) { return atan(x); }
 
 static const MathFuncEntry MATH_FUNCS[] = {
     { "SIN",  fn_sin  },
@@ -193,6 +198,10 @@ static const MathFuncEntry MATH_FUNCS[] = {
     { "EXP",  fn_exp  },
     { "LOG",  fn_log  },
     { "ABS",  fn_abs  },
+    { "ASIN", fn_asin },
+    { "ACOS", fn_acos },
+    { "ARCTAN", fn_atan },
+    { "ATAN", fn_atan },
     { NULL, NULL }
 };
 
@@ -1576,6 +1585,9 @@ char* plant_math_derivative_str(const char* expr, const char* var) {
 
 static MathNode* integral_node(const MathNode* node, const char* var);
 
+/* Forward declarations for factoring helpers used in integration */
+static int matches_power_of_var(const MathNode* n, const char* var, double target_exp);
+
 /* ∫ c dx = c*x */
 static MathNode* integral_number(const MathNode* node, const char* var) {
     return math_node_binary(OP_MUL,
@@ -1666,6 +1678,21 @@ static MathNode* integral_node(const MathNode* node, const char* var) {
                         return math_node_func("LOG",
                             math_node_func("ABS", math_node_symbol(var)));
                     }
+                    /* 1 / (x^2 + 1) → ARCTAN(x) */
+                    if (is_one(node->left) &&
+                        node->right->type == MATH_BINARY_OP && node->right->op == OP_ADD) {
+                        MathNode* den = node->right;
+                        /* Match x^2 + 1 or 1 + x^2 */
+                        int has_x2 = 0, has_one = 0;
+                        if (matches_power_of_var(den->left, var, 2.0) && is_one(den->right))
+                            { has_x2 = 1; has_one = 1; }
+                        if (is_one(den->left) && matches_power_of_var(den->right, var, 2.0))
+                            { has_x2 = 1; has_one = 1; }
+                        if (has_x2 && has_one) {
+                            return math_node_func("ARCTAN", math_node_symbol(var));
+                        }
+                    }
+                    /* 1 / (1 + x^2) same as above via commutativity */
                     /* x^n (n negative) via power rule */
                     if (is_symbol_name(node->left, var) &&
                         node->right->type == MATH_NUMBER && node->right->num_val < 0) {
@@ -1733,6 +1760,22 @@ static MathNode* integral_node(const MathNode* node, const char* var) {
                     return math_node_binary(OP_SUB, x_log_x,
                         plant_math_deep_copy(x));
                 }
+                if (strcmp(node->sym_name, "ARCTAN") == 0 ||
+                    strcmp(node->sym_name, "ATAN") == 0) {
+                    /* ∫ ARCTAN(x) dx = x*ARCTAN(x) - LOG(1+x^2)/2 */
+                    MathNode* x = math_node_symbol(var);
+                    MathNode* x_atan_x = math_node_binary(OP_MUL,
+                        plant_math_deep_copy(x),
+                        math_node_func("ARCTAN", plant_math_deep_copy(x)));
+                    MathNode* one_plus_x2 = math_node_binary(OP_ADD,
+                        math_node_number(1.0),
+                        math_node_binary(OP_POW,
+                            plant_math_deep_copy(x), math_node_number(2.0)));
+                    MathNode* half_log = math_node_binary(OP_MUL,
+                        math_node_number(0.5),
+                        math_node_func("LOG", one_plus_x2));
+                    return math_node_binary(OP_SUB, x_atan_x, half_log);
+                }
             }
             /* Unsupported function integration */
             return NULL;
@@ -1758,7 +1801,7 @@ char* plant_math_integral_str(const char* expr, const char* var) {
         char* buf = (char*)malloc(256);
         snprintf(buf, 256,
             "ERROR: Integral of this expression is not supported yet.\n"
-            "Supported: x^n, c*x, SIN(x), COS(x), EXP(x), LOG(x), TAN(x), 1/x.");
+            "Supported: x^n, c*x, SIN(x), COS(x), EXP(x), LOG(x), TAN(x), 1/x, 1/(x^2+1), ARCTAN(x).");
         return buf;
     }
     /* Append +C */
@@ -1944,7 +1987,7 @@ MathNode* plant_math_factor(const MathNode* node) {
                 while (b > 1e-10) { double t = fmod(a, b); a = b; b = t; }
                 gcd_val = a;
             }
-            if (fabs(gcd_val) > 1e-10 && fabs(gcd_val - terms[0].coeff) < 1e-10) {
+            if (fabs(gcd_val) > 1e-10) {
                 /* Check all coefficients are divisible */
                 int all_div = 1;
                 for (int i = 1; i < count; i++) {
@@ -1983,6 +2026,100 @@ char* plant_math_factor_str(const char* expr) {
     math_node_free(ast);
     math_node_free(result);
     return str;
+}
+
+/* ====================================================================
+ *  v0.50.0j — GCD (Greatest Common Divisor)
+ * ==================================================================== */
+
+long plant_math_gcd(long a, long b) {
+    if (a < 0) a = -a;
+    if (b < 0) b = -b;
+    while (b != 0) {
+        long t = b;
+        b = a % b;
+        a = t;
+    }
+    return a;
+}
+
+/* ====================================================================
+ *  v0.50.0j — Quadratic Equation Solver
+ *
+ *  Solves ax^2 + bx + c = 0.
+ *  Real roots when Δ = b^2 - 4ac ≥ 0.
+ *  Complex roots when Δ < 0, expressed using imaginary unit i.
+ * ==================================================================== */
+
+char* plant_math_quadratic(double a, double b, double c) {
+    char* buf = (char*)malloc(512);
+    if (fabs(a) < 1e-15) {
+        /* Linear equation bx + c = 0 */
+        if (fabs(b) < 1e-15) {
+            if (fabs(c) < 1e-15)
+                snprintf(buf, 512, "Infinite solutions (0 = 0)");
+            else
+                snprintf(buf, 512, "No solution");
+        } else {
+            double x = -c / b;
+            snprintf(buf, 512, "x = %g", x);
+        }
+        return buf;
+    }
+
+    double disc = b * b - 4.0 * a * c;
+    double real_part = -b / (2.0 * a);
+
+    if (fabs(disc) < 1e-15) {
+        /* One repeated root */
+        snprintf(buf, 512, "x = %g", real_part);
+    } else if (disc > 0) {
+        /* Two real roots */
+        double sqrt_disc = sqrt(disc);
+        double x1 = real_part - sqrt_disc / (2.0 * a);
+        double x2 = real_part + sqrt_disc / (2.0 * a);
+        snprintf(buf, 512, "x1 = %g, x2 = %g", x1, x2);
+    } else {
+        /* Two complex roots */
+        double imag_part = sqrt(-disc) / (2.0 * fabs(a));
+        if (fabs(a) < 0) /* adjust sign */
+            imag_part = sqrt(-disc) / (2.0 * a);
+        /* Normalize: if a < 0, flip sign of imaginary part */
+        if (a < 0) imag_part = -imag_part;
+
+        char real_str[64], imag_str[64];
+        if (fabs(real_part) < 1e-15)
+            snprintf(real_str, sizeof(real_str), "0");
+        else
+            snprintf(real_str, sizeof(real_str), "%g", real_part);
+
+        if (fabs(fabs(imag_part) - 1.0) < 1e-10)
+            snprintf(imag_str, sizeof(imag_str), "%s", imag_part > 0 ? "" : "-");
+        else
+            snprintf(imag_str, sizeof(imag_str), "%g*", fabs(imag_part));
+
+        if (imag_part >= 0) {
+            snprintf(buf, 512, "x1 = %s + %si, x2 = %s - %si",
+                     real_str, imag_str, real_str, imag_str);
+        } else {
+            snprintf(buf, 512, "x1 = %s - %si, x2 = %s + %si",
+                     real_str, imag_str + 1, real_str, imag_str + 1);
+        }
+    }
+    return buf;
+}
+
+char* plant_math_quadratic_str(const char* a_str, const char* b_str, const char* c_str) {
+    MathNode* a_ast = plant_math_parse(a_str);
+    MathNode* b_ast = plant_math_parse(b_str);
+    MathNode* c_ast = plant_math_parse(c_str);
+    double a = plant_math_eval(a_ast);
+    double b = plant_math_eval(b_ast);
+    double c = plant_math_eval(c_ast);
+    math_node_free(a_ast);
+    math_node_free(b_ast);
+    math_node_free(c_ast);
+    return plant_math_quadratic(a, b, c);
 }
 
 /* ====================================================================

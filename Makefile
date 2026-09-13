@@ -1,5 +1,5 @@
 # ═══════════════════════════════════════════════════════════════
-# PlantLang — Chloroplast Pure Native Self-Hosting Toolchain (v0.49.58a)
+# PlantLang — Chloroplast Pure Native Self-Hosting Toolchain (v0.50.0j)
 #
 # Targets:
 #   make            build the native compiler (bin/Chloroplast)
@@ -14,7 +14,7 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.50.0i
+VERSION    ?= 0.50.0j
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc

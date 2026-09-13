@@ -1,12 +1,13 @@
 /*
- * plant_math.h — v0.50.0i: Symbolic Math + Calculus + Factoring
+ * plant_math.h — v0.50.0j: Symbolic Math + Advanced CAS
  *
  * MathNode AST structures and API for the PlantLang symbolic algebra subsystem.
  * Supports numbers, symbols, constants, binary/unary ops, function calls,
  * operator precedence, right-associative exponentiation, evaluation to double,
  * automatic simplification, like terms collection, distribution,
  * descending term ordering, symbolic differentiation, integration,
- * and polynomial factoring.
+ * polynomial factoring, GCD extraction, and quadratic equation solving
+ * with complex number support (imaginary unit i).
  */
 
 #ifndef PLANT_MATH_H
@@ -120,6 +121,16 @@ MathNode* plant_math_factor(const MathNode* node);
 
 /* Convenience: factor an expression string. Caller frees result. */
 char*     plant_math_factor_str(const char* expr);
+
+/* Compute GCD of two numbers (Euclidean algorithm). */
+long      plant_math_gcd(long a, long b);
+
+/* Quadratic equation solver: ax^2 + bx + c = 0.
+ * Returns a string with roots (real or complex). Caller frees result. */
+char*     plant_math_quadratic(double a, double b, double c);
+
+/* Convenience: solve quadratic from string coefficients. Caller frees result. */
+char*     plant_math_quadratic_str(const char* a, const char* b, const char* c);
 
 /* Convenience: free a PlantMath*. */
 void      plant_math_free(void* math_ptr);

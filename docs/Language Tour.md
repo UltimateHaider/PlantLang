@@ -1006,6 +1006,40 @@ REAP mx FROM math_max, "3", "7".   # → 7
 REAP rd FROM math_random.          # uniform [0,1) as text
 ```
 
+### CAS (Computer Algebra System) Built-ins (v0.50.0j)
+
+The compiler provides compile-time symbolic math operations via `SHOW`:
+
+```plantlang
+# Simplify — folds constants, cancels terms
+SHOW MATH_SIMPLIFY("2*x + 3*x").     # → (5*x)
+
+# Collect like terms — groups powers
+SHOW MATH_COLLECT("x^2 + 3*x + x^2"). # → ((2*(x^2))+(4*x))
+
+# Distribute — expands (a+b)*c
+SHOW MATH_DISTRIBUTE("(x+2)*3").      # → ((3*x)+6)
+
+# Derivative — d/dx
+SHOW MATH_DERIVATIVE("x^3", "x").     # → (3*(x^2))
+SHOW MATH_DERIVATIVE("SIN(x)", "x").  # → COS(x)
+SHOW MATH_DERIVATIVE("EXP(x^2)", "x").# → chain rule: 2*x*EXP(x^2)
+
+# Integral — indefinite ∫
+SHOW MATH_INTEGRAL("x^2", "x").       # → ((x^3)/3) + C
+SHOW MATH_INTEGRAL("TAN(x)", "x").    # → -LOG(ABS(COS(x))) + C
+SHOW MATH_INTEGRAL("1/(x^2+1)", "x"). # → ARCTAN(x) + C
+
+# Factor — GCD, difference of squares, perfect square trinomial
+SHOW MATH_FACTOR("6*x + 9").          # → 3*(2*x + 3)
+SHOW MATH_FACTOR("x^2 - 4").          # → (x-2)*(x+2)
+SHOW MATH_FACTOR("x^2 + 2*x + 1").    # → (x+1)^2
+
+# Quadratic — solve ax^2 + bx + c = 0 (v0.50.0j)
+SHOW MATH_QUADRATIC("1", "0", "-4").  # → x1 = -2, x2 = 2
+SHOW MATH_QUADRATIC("1", "0", "1").   # → x1 = 0 + i, x2 = 0 - i
+```
+
 ### Extended Math Library (v0.49.17)
 
 17 new math built-ins as bare expression built-ins and FFI module

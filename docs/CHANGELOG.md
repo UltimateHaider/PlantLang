@@ -1,3 +1,26 @@
+## v0.50.0j - 2026 (Advanced CAS: GCD Factoring, Quadratic Formula & Advanced Calculus)
+
+### New Language Features
+
+#### GCD-Based Common-Factor Extraction
+- `MATH_FACTOR` now extracts numeric GCDs from polynomial terms:
+  - `6*x + 9 → 3*(2*x + 3)`
+  - `12*x + 8 → 4*(3*x + 2)`
+  - `4*x + 6 → 2*(2*x + 3)`
+
+#### Quadratic Formula Solver
+- `MATH_QUADRATIC(a, b, c)` solves ax² + bx + c = 0:
+  - Two distinct real roots: `1,0,-4 → x1 = -2, x2 = 2`
+  - Repeated root: `1,-2,1 → x = 1`
+  - Complex conjugate roots: `1,0,1 → x1 = 0 + i, x2 = 0 - i`
+
+#### ARCTAN Integration
+- `MATH_INTEGRAL("1/(x^2 + 1)", "x") → ARCTAN(x) + C`
+- Also `MATH_INTEGRAL("1/(1 + x^2)", "x")` via commutative addition
+
+#### Imaginary Unit
+- CAS parser recognizes `i` as sqrt(-1), output as `0 + i`
+
 ## v0.50.0i - 2026 (Symbolic Derivatives, Integrals & Polynomial Factoring)
 
 ### New Language Features

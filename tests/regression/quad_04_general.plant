@@ -1,0 +1,5 @@
+# v0.50.0j — Quadratic: general (2x^2 + 3x - 2 = 0)
+ACTION main(),
+  SHOW MATH_QUADRATIC("2", "3", "-2").
+  GIVE 0.
+/GIVE main.

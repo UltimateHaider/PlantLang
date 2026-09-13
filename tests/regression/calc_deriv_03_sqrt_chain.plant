@@ -1,0 +1,5 @@
+# v0.50.0j — Derivative: d/dx(SQRT(x^2+1)) = x/SQRT(x^2+1)
+ACTION main(),
+  SHOW MATH_DERIVATIVE("SQRT(x^2 + 1)", "x").
+  GIVE 0.
+/GIVE main.
