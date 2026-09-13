@@ -1,3 +1,30 @@
+## v0.50.1 - 2026 (Advanced Symbolic Simplification: TRIG, LOG, POW, FRAC)
+
+### New Language Features
+
+#### Trigonometric Simplification
+- Pythagorean identity: `sin^2(x) + cos^2(x) → 1`
+- Complement identities: `1 - sin^2(x) → cos^2(x)`, `1 - cos^2(x) → sin^2(x)`
+- Tangent identity: `1 + tan^2(x) → 1/cos^2(x)`
+
+#### Logarithmic Simplification
+- Product rule: `log(a*b) → log(a) + log(b)`
+- Quotient rule: `log(a/b) → log(a) - log(b)`
+- Power rule: `log(a^n) → n*log(a)`
+- Base evaluations: `log(1) → 0`, `log(e) → 1`
+- Inverses: `log(exp(x)) → x`, `exp(log(x)) → x`
+
+#### Exponent Simplification
+- Power of power: `(x^a)^b → x^(a*b)`
+- Product of powers: `x^a * x^b → x^(a+b)`
+- Quotient of powers: `x^a / x^b → x^(a-b)`
+- Trivial: `x^0 → 1`, `x^1 → x`, `1^x → 1`
+
+#### Rational Fraction Unification
+- `1/a + 1/b → (a+b)/(a*b)`
+- `1/a - 1/b → (b-a)/(a*b)`
+- `1/(x+1) + 1/(x-1) → 2x/(x^2-1)`
+
 ## v0.50.0j - 2026 (Advanced CAS: GCD Factoring, Quadratic Formula & Advanced Calculus)
 
 ### New Language Features

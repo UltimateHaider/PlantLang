@@ -1,0 +1,5 @@
+# v0.50.1 — Log: power rule
+ACTION main(),
+  SHOW MATH_SIMPLIFY("LOG(x^3)").
+  GIVE 0.
+/GIVE main.

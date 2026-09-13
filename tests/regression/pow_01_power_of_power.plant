@@ -1,0 +1,5 @@
+# v0.50.1 — Pow: power of a power (x^2)^3 = x^6
+ACTION main(),
+  SHOW MATH_SIMPLIFY("(x^2)^3").
+  GIVE 0.
+/GIVE main.

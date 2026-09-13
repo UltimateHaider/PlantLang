@@ -1,0 +1,5 @@
+# v0.50.1 — Trig: Pythagorean identity
+ACTION main(),
+  SHOW MATH_SIMPLIFY("SIN(x)^2 + COS(x)^2").
+  GIVE 0.
+/GIVE main.

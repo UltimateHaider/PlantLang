@@ -1,0 +1,5 @@
+# v0.50.1 — Pow: x^1 = x
+ACTION main(),
+  SHOW MATH_SIMPLIFY("x^1").
+  GIVE 0.
+/GIVE main.

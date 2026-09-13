@@ -518,13 +518,21 @@ REAP mx FROM math_max, "3", "7".   # → 7
 REAP rd FROM math_random.          # uniform [0,1) as text
 ```
 
-### CAS (Computer Algebra System) Built-ins (v0.50.0j)
+### CAS (Computer Algebra System) Built-ins (v0.50.1)
 
 The compiler provides compile-time symbolic math operations via `SHOW`:
 
 ```plantlang
-# Simplify — folds constants, cancels terms
+# Simplify — folds constants, cancels terms, applies identities
 SHOW MATH_SIMPLIFY("2*x + 3*x").     # → (5*x)
+SHOW MATH_SIMPLIFY("SIN(x)^2 + COS(x)^2").  # → 1  (Pythagorean)
+SHOW MATH_SIMPLIFY("1 + TAN(x)^2").   # → 1/(COS(x)^2)  (sec^2 identity)
+SHOW MATH_SIMPLIFY("LOG(x * y)").     # → LOG(x)+LOG(y)  (product rule)
+SHOW MATH_SIMPLIFY("LOG(x^3)").       # → 3*LOG(x)  (power rule)
+SHOW MATH_SIMPLIFY("(x^2)^3").        # → x^6  (power of power)
+SHOW MATH_SIMPLIFY("x^2 * x^3").      # → x^5  (product of powers)
+SHOW MATH_SIMPLIFY("x^5 / x^2").      # → x^3  (quotient of powers)
+SHOW MATH_SIMPLIFY("1/a + 1/b").      # → (a+b)/(a*b)  (fraction unification)
 
 # Collect like terms — groups powers
 SHOW MATH_COLLECT("x^2 + 3*x + x^2"). # → ((2*(x^2))+(4*x))

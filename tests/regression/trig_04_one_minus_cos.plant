@@ -1,0 +1,5 @@
+# v0.50.1 — Trig: 1 - cos^2 = sin^2
+ACTION main(),
+  SHOW MATH_SIMPLIFY("1 - COS(x)^2").
+  GIVE 0.
+/GIVE main.

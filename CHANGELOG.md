@@ -1,5 +1,59 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.50.1 — 2026 (Advanced Symbolic Simplification: TRIG, LOG, POW, FRAC)
+
+### New Features
+- **Trigonometric Simplification Engine** — `simplify_trig()` applies identity rewrites:
+  - Pythagorean: `sin^2(x) + cos^2(x) → 1`
+  - Complement: `1 - sin^2(x) → cos^2(x)`, `1 - cos^2(x) → sin^2(x)`
+  - Tangent identity: `1 + tan^2(x) → 1/cos^2(x)`
+  - Negative Pythagorean: `sin^2(x) - 1 → -cos^2(x)`, `cos^2(x) - 1 → -sin^2(x)`
+- **Logarithmic Simplification Engine** — `simplify_log()` applies log laws:
+  - Product rule: `log(a*b) → log(a) + log(b)`
+  - Quotient rule: `log(a/b) → log(a) - log(b)`
+  - Power rule: `log(a^n) → n*log(a)`
+  - Base evaluations: `log(1) → 0`, `log(e) → 1`
+  - Inverses: `log(exp(x)) → x`, `exp(log(x)) → x`
+- **Exponent Simplification Engine** — `simplify_pow()` applies power laws:
+  - Power of power: `(x^a)^b → x^(a*b)`
+  - Product of powers: `x^a * x^b → x^(a+b)`
+  - Quotient of powers: `x^a / x^b → x^(a-b)`
+  - Trivial exponents: `x^0 → 1`, `x^1 → x`, `1^x → 1`
+  - Negative base: `(-1)^(2n) → 1`, `(-1)^(2n+1) → -1`
+- **Rational Fraction Unification Engine** — `simplify_frac()` consolidates denominators:
+  - Base rule: `1/a + 1/b → (a+b)/(a*b)`
+  - Difference: `1/a - 1/b → (b-a)/(a*b)`
+  - Same numerator: `a/b1 + a/b2 → a*(b1+b2)/(b1*b2)`
+- **Pipeline expansion** — `plant_math_simplify()` now runs 9 passes per iteration:
+  1. simplify_node → 2. simplify_pow → 3. simplify_trig → 4. simplify_log → 5. simplify_frac → 6. distribute → 7. normalize → 8. collect_and_sort → 9. simplify_node
+
+### Internal
+- Forward declarations: `is_func()`, `is_op()`, `is_sym()`, `is_func_sq()` helpers
+- `simplify_pow_node()`, `simplify_trig_node()`, `simplify_log_node()`, `simplify_frac_node()` static functions
+- Native test runner version check updated
+
+### Tests (20 new)
+- `trig_01_pyth` — Pythagorean identity: `sin^2+cos^2 → 1`.
+- `trig_02_pyth_comm` — commutative: `cos^2+sin^2 → 1`.
+- `trig_03_one_minus_sin` — complement: `1-sin^2 → cos^2`.
+- `trig_04_one_minus_cos` — complement: `1-cos^2 → sin^2`.
+- `trig_05_one_plus_tan` — tangent: `1+tan^2 → 1/cos^2`.
+- `log_01_product` — product rule: `log(xy) → log(x)+log(y)`.
+- `log_02_quotient` — quotient rule: `log(x/y) → log(x)-log(y)`.
+- `log_03_power` — power rule: `log(x^3) → 3*log(x)`.
+- `log_04_log_one` — base eval: `log(1) → 0`.
+- `log_05_add_separate` — identity: `log(x)+log(y)` stays.
+- `pow_01_power_of_power` — `(x^2)^3 → x^6`.
+- `pow_02_product` — `x^2*x^3 → x^5`.
+- `pow_03_quotient` — `x^5/x^2 → x^3`.
+- `pow_04_zero_exp` — `x^0 → 1`.
+- `pow_05_one_exp` — `x^1 → x`.
+- `frac_01_sum` — `1/a+1/b → (a+b)/(a*b)`.
+- `frac_02_sum_vars` — `1/x+1/y → (x+y)/(x*y)`.
+- `frac_03_diff` — `1/a-1/b → (b-a)/(a*b)`.
+- `frac_04_diff_vars` — `1/x-1/y → (y-x)/(x*y)`.
+- `frac_05_complex` — `1/(x+1)+1/(x-1) → 2x/(x^2-1)`.
+
 ## v0.50.0j — 2026 (Advanced CAS: GCD Factoring, Quadratic Formula & Advanced Calculus)
 
 ### New Features

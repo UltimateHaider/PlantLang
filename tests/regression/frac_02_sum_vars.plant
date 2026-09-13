@@ -1,0 +1,5 @@
+# v0.50.1 — Frac: 1/x + 1/y = (x+y)/(x*y)
+ACTION main(),
+  SHOW MATH_SIMPLIFY("1/x + 1/y").
+  GIVE 0.
+/GIVE main.

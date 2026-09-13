@@ -1,0 +1,5 @@
+# v0.50.1 — Frac: 1/(x+1) + 1/(x-1) = 2x/(x^2-1)
+ACTION main(),
+  SHOW MATH_SIMPLIFY("1/(x+1) + 1/(x-1)").
+  GIVE 0.
+/GIVE main.

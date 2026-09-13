@@ -1,0 +1,5 @@
+# v0.50.1 — Log: log(1) = 0
+ACTION main(),
+  SHOW MATH_SIMPLIFY("LOG(1)").
+  GIVE 0.
+/GIVE main.

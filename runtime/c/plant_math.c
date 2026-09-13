@@ -1,5 +1,5 @@
 /*
- * plant_math.c — v0.50.0j: Symbolic Math + Advanced CAS
+ * plant_math.c — v0.50.1: Advanced Symbolic Simplification
  *
  * Full implementation of the PlantLang symbolic algebra subsystem.
  * Tokenizer → Pratt parser (precedence climbing) → AST evaluator.
@@ -814,6 +814,450 @@ static MathNode* simplify_node(MathNode* node) {
 }
 
 /* ====================================================================
+ *  v0.50.1 — Advanced Symbolic Simplification Engines
+ *
+ *  Four specialized passes that run inside the simplify pipeline:
+ *    simplify_pow()  — exponent law reductions
+ *    simplify_trig() — trigonometric identity rewrites
+ *    simplify_log()  — logarithmic law expansions
+ *    simplify_frac() — rational fraction denominator unification
+ * ==================================================================== */
+
+/* ── Helper: check if node is a function call with given name ─────── */
+static int is_func(const MathNode* n, const char* name) {
+    return n && n->type == MATH_FUNC_CALL &&
+           n->sym_name && strcmp(n->sym_name, name) == 0;
+}
+
+/* ── Helper: check if node matches op as binary ───────────────────── */
+static int is_op(const MathNode* n, MathOp op) {
+    return n && n->type == MATH_BINARY_OP && n->op == op;
+}
+
+/* ── Helper: check if node is a specific symbol ───────────────────── */
+static int is_sym(const MathNode* n, const char* name) {
+    return n && n->type == MATH_SYMBOL &&
+           n->sym_name && strcmp(n->sym_name, name) == 0;
+}
+
+/* ====================================================================
+ *  simplify_pow — Exponent Law Reductions
+ *
+ *  (x^a)^b  → x^(a*b)     power of a power
+ *  x^a * x^b → x^(a+b)    product of powers
+ *  x^a / x^b → x^(a-b)    quotient of powers
+ *  x^0       → 1           zero exponent (already in simplify_node)
+ *  x^1       → x           trivial exponent (already in simplify_node)
+ *  1^x       → 1           one to any power
+ * ==================================================================== */
+
+static MathNode* simplify_pow_node(MathNode* node) {
+    if (!node) return NULL;
+
+    /* Bottom-up: recurse first */
+    if (node->left)  node->left  = simplify_pow_node(node->left);
+    if (node->right) node->right = simplify_pow_node(node->right);
+
+    /* Power of a power: (x^a)^b → x^(a*b) */
+    if (node->type == MATH_BINARY_OP && node->op == OP_POW) {
+        MathNode* base = node->left;
+        MathNode* exp  = node->right;
+        if (base && base->type == MATH_BINARY_OP && base->op == OP_POW) {
+            /* (x^a)^b → x^(a*b) */
+            MathNode* inner_base = base->left;
+            MathNode* inner_exp  = base->right;
+            MathNode* new_exp = math_node_binary(OP_MUL,
+                plant_math_deep_copy(inner_exp),
+                plant_math_deep_copy(exp));
+            node->left = NULL;
+            node->right = NULL;
+            math_node_free(node);
+            node = math_node_binary(OP_POW, inner_base, new_exp);
+            return node;
+        }
+        /* 1^x → 1 */
+        if (is_one(base)) {
+            node->left = NULL;
+            node->right = NULL;
+            math_node_free(base);
+            math_node_free(exp);
+            node->type = MATH_NUMBER;
+            node->num_val = 1.0;
+            node->sym_name = NULL;
+            return node;
+        }
+        /* (-1)^2n → 1, (-1)^(2n+1) → -1 */
+        if (base->type == MATH_UNARY_OP && base->op == OP_NEG &&
+            is_one(base->left) && is_number(exp)) {
+            double e = exp->num_val;
+            if (e == (int)e) {
+                int ei = (int)e;
+                node->left = NULL;
+                node->right = NULL;
+                math_node_free(base);
+                math_node_free(exp);
+                node->type = MATH_NUMBER;
+                node->num_val = (ei % 2 == 0) ? 1.0 : -1.0;
+                node->sym_name = NULL;
+                return node;
+            }
+        }
+    }
+
+    /* Product of powers: x^a * x^b → x^(a+b) */
+    if (node->type == MATH_BINARY_OP && node->op == OP_MUL) {
+        MathNode* L = node->left;
+        MathNode* R = node->right;
+        if (L && R &&
+            L->type == MATH_BINARY_OP && L->op == OP_POW &&
+            R->type == MATH_BINARY_OP && R->op == OP_POW &&
+            trees_equal(L->left, R->left)) {
+            /* x^a * x^b → x^(a+b) */
+            MathNode* new_exp = math_node_binary(OP_ADD,
+                plant_math_deep_copy(L->right),
+                plant_math_deep_copy(R->right));
+            MathNode* new_base = plant_math_deep_copy(L->left);
+            node->left = NULL;
+            node->right = NULL;
+            math_node_free(node);
+            node = math_node_binary(OP_POW, new_base, new_exp);
+            return node;
+        }
+    }
+
+    /* Quotient of powers: x^a / x^b → x^(a-b) */
+    if (node->type == MATH_BINARY_OP && node->op == OP_DIV) {
+        MathNode* L = node->left;
+        MathNode* R = node->right;
+        if (L && R &&
+            L->type == MATH_BINARY_OP && L->op == OP_POW &&
+            R->type == MATH_BINARY_OP && R->op == OP_POW &&
+            trees_equal(L->left, R->left)) {
+            /* x^a / x^b → x^(a-b) */
+            MathNode* new_exp = math_node_binary(OP_SUB,
+                plant_math_deep_copy(L->right),
+                plant_math_deep_copy(R->right));
+            MathNode* new_base = plant_math_deep_copy(L->left);
+            node->left = NULL;
+            node->right = NULL;
+            math_node_free(node);
+            node = math_node_binary(OP_POW, new_base, new_exp);
+            return node;
+        }
+    }
+
+    return node;
+}
+
+/* ====================================================================
+ *  simplify_trig — Trigonometric Identity Rewrites
+ *
+ *  sin^2(x) + cos^2(x) → 1
+ *  1 - sin^2(x)        → cos^2(x)
+ *  1 - cos^2(x)        → sin^2(x)
+ *  tan(x)               → sin(x)/cos(x)
+ *  1 + tan^2(x)         → 1/cos^2(x)   (i.e. sec^2(x))
+ * ==================================================================== */
+
+/* Check if node matches func_name(arg)^2 */
+static int is_func_sq(const MathNode* n, const char* func_name, const char* arg_name) {
+    if (!n || n->type != MATH_BINARY_OP || n->op != OP_POW) return 0;
+    if (!is_func(n->left, func_name)) return 0;
+    if (n->right && n->right->type == MATH_NUMBER && n->right->num_val == 2.0) {
+        if (arg_name) return is_sym(n->left->left, arg_name);
+        return 1;  /* any argument */
+    }
+    return 0;
+}
+
+static MathNode* simplify_trig_node(MathNode* node) {
+    if (!node) return NULL;
+
+    /* Bottom-up: recurse first */
+    if (node->left)  node->left  = simplify_trig_node(node->left);
+    if (node->right) node->right = simplify_trig_node(node->right);
+
+    /* ── Sum rules for sin^2 + cos^2 ── */
+    if (node->type == MATH_BINARY_OP && node->op == OP_ADD) {
+        MathNode* L = node->left;
+        MathNode* R = node->right;
+
+        /* sin^2(x) + cos^2(x) → 1 */
+        if (is_func_sq(L, "SIN", NULL) && is_func_sq(R, "COS", NULL) &&
+            trees_equal(L->left->left, R->left->left)) {
+            node->left = NULL;
+            node->right = NULL;
+            math_node_free(node);
+            node = math_node_number(1.0);
+            return node;
+        }
+        /* cos^2(x) + sin^2(x) → 1 */
+        if (is_func_sq(L, "COS", NULL) && is_func_sq(R, "SIN", NULL) &&
+            trees_equal(L->left->left, R->left->left)) {
+            node->left = NULL;
+            node->right = NULL;
+            math_node_free(node);
+            node = math_node_number(1.0);
+            return node;
+        }
+
+        /* 1 + tan^2(x) → 1/cos^2(x) */
+        if (is_one(L) && is_func_sq(R, "TAN", NULL)) {
+            MathNode* arg = plant_math_deep_copy(R->left->left);
+            MathNode* cos_arg = math_node_func("COS", arg);
+            MathNode* cos_sq = math_node_binary(OP_POW, cos_arg, math_node_number(2.0));
+            node->left = NULL;
+            node->right = NULL;
+            math_node_free(node);
+            node = math_node_binary(OP_DIV, math_node_number(1.0), cos_sq);
+            return node;
+        }
+        /* tan^2(x) + 1 → 1/cos^2(x) */
+        if (is_func_sq(L, "TAN", NULL) && is_one(R)) {
+            MathNode* arg = plant_math_deep_copy(L->left->left);
+            MathNode* cos_arg = math_node_func("COS", arg);
+            MathNode* cos_sq = math_node_binary(OP_POW, cos_arg, math_node_number(2.0));
+            node->left = NULL;
+            node->right = NULL;
+            math_node_free(node);
+            node = math_node_binary(OP_DIV, math_node_number(1.0), cos_sq);
+            return node;
+        }
+    }
+
+    /* ── Difference rules: 1 - sin^2 → cos^2, 1 - cos^2 → sin^2 ── */
+    if (node->type == MATH_BINARY_OP && node->op == OP_SUB) {
+        MathNode* L = node->left;
+        MathNode* R = node->right;
+
+        /* 1 - sin^2(x) → cos^2(x) */
+        if (is_one(L) && is_func_sq(R, "SIN", NULL)) {
+            MathNode* arg = plant_math_deep_copy(R->left->left);
+            MathNode* cos_arg = math_node_func("COS", arg);
+            MathNode* cos_sq = math_node_binary(OP_POW, cos_arg, math_node_number(2.0));
+            node->left = NULL;
+            node->right = NULL;
+            math_node_free(node);
+            return cos_sq;
+        }
+        /* 1 - cos^2(x) → sin^2(x) */
+        if (is_one(L) && is_func_sq(R, "COS", NULL)) {
+            MathNode* arg = plant_math_deep_copy(R->left->left);
+            MathNode* sin_arg = math_node_func("SIN", arg);
+            MathNode* sin_sq = math_node_binary(OP_POW, sin_arg, math_node_number(2.0));
+            node->left = NULL;
+            node->right = NULL;
+            math_node_free(node);
+            return sin_sq;
+        }
+        /* sin^2(x) - 1 → -cos^2(x) */
+        if (is_func_sq(L, "SIN", NULL) && is_one(R)) {
+            MathNode* arg = plant_math_deep_copy(L->left->left);
+            MathNode* cos_arg = math_node_func("COS", arg);
+            MathNode* cos_sq = math_node_binary(OP_POW, cos_arg, math_node_number(2.0));
+            node->left = NULL;
+            node->right = NULL;
+            math_node_free(node);
+            node = math_node_unary(cos_sq);
+            return node;
+        }
+        /* cos^2(x) - 1 → -sin^2(x) */
+        if (is_func_sq(L, "COS", NULL) && is_one(R)) {
+            MathNode* arg = plant_math_deep_copy(L->left->left);
+            MathNode* sin_arg = math_node_func("SIN", arg);
+            MathNode* sin_sq = math_node_binary(OP_POW, sin_arg, math_node_number(2.0));
+            node->left = NULL;
+            node->right = NULL;
+            math_node_free(node);
+            node = math_node_unary(sin_sq);
+            return node;
+        }
+    }
+
+    return node;
+}
+
+/* ====================================================================
+ *  simplify_log — Logarithmic Law Expansions
+ *
+ *  log(a*b)    → log(a) + log(b)     product rule
+ *  log(a/b)    → log(a) - log(b)     quotient rule
+ *  log(a^n)    → n * log(a)          power rule
+ *  log(1)      → 0                   base evaluation
+ *  log(e)      → 1                   base evaluation
+ *  log(EXP(x)) → x                   inverse
+ *  EXP(log(x)) → x                   inverse
+ * ==================================================================== */
+
+static MathNode* simplify_log_node(MathNode* node) {
+    if (!node) return NULL;
+
+    /* Bottom-up: recurse first */
+    if (node->left)  node->left  = simplify_log_node(node->left);
+    if (node->right) node->right = simplify_log_node(node->right);
+
+    /* ── LOG(...) rules ── */
+    if (is_func(node, "LOG") && node->left) {
+        MathNode* arg = node->left;
+
+        /* log(1) → 0 */
+        if (is_one(arg)) {
+            node->left = NULL;
+            math_node_free(node);
+            node = math_node_number(0.0);
+            return node;
+        }
+
+        /* log(e) → 1 */
+        if (arg->type == MATH_CONSTANT && strcmp(arg->sym_name, "E") == 0) {
+            node->left = NULL;
+            math_node_free(node);
+            node = math_node_number(1.0);
+            return node;
+        }
+
+        /* log(EXP(x)) → x */
+        if (is_func(arg, "EXP") && arg->left) {
+            MathNode* inner = arg->left;
+            arg->left = NULL;
+            math_node_free(node);
+            return inner;
+        }
+
+        /* log(a*b) → log(a) + log(b) — product rule */
+        if (arg->type == MATH_BINARY_OP && arg->op == OP_MUL) {
+            MathNode* a = plant_math_deep_copy(arg->left);
+            MathNode* b = plant_math_deep_copy(arg->right);
+            MathNode* log_a = math_node_func("LOG", a);
+            MathNode* log_b = math_node_func("LOG", b);
+            node->left = NULL;
+            math_node_free(node);
+            node = math_node_binary(OP_ADD, log_a, log_b);
+            return node;
+        }
+
+        /* log(a/b) → log(a) - log(b) — quotient rule */
+        if (arg->type == MATH_BINARY_OP && arg->op == OP_DIV) {
+            MathNode* a = plant_math_deep_copy(arg->left);
+            MathNode* b = plant_math_deep_copy(arg->right);
+            MathNode* log_a = math_node_func("LOG", a);
+            MathNode* log_b = math_node_func("LOG", b);
+            node->left = NULL;
+            math_node_free(node);
+            node = math_node_binary(OP_SUB, log_a, log_b);
+            return node;
+        }
+
+        /* log(a^n) → n * log(a) — power rule */
+        if (arg->type == MATH_BINARY_OP && arg->op == OP_POW) {
+            MathNode* base = plant_math_deep_copy(arg->left);
+            MathNode* exp  = plant_math_deep_copy(arg->right);
+            MathNode* log_base = math_node_func("LOG", base);
+            node->left = NULL;
+            math_node_free(node);
+            node = math_node_binary(OP_MUL, exp, log_base);
+            return node;
+        }
+    }
+
+    /* ── EXP(log(x)) → x — inverse ── */
+    if (is_func(node, "EXP") && node->left &&
+        is_func(node->left, "LOG") && node->left->left) {
+        MathNode* inner = node->left->left;
+        node->left->left = NULL;
+        math_node_free(node);
+        return inner;
+    }
+
+    return node;
+}
+
+/* ====================================================================
+ *  simplify_frac — Rational Fraction Denominator Unification
+ *
+ *  1/a + 1/b → (a+b)/(a*b)           base rule
+ *  1/a - 1/b → (b-a)/(a*b)           base rule
+ *  a/(b*c) + a/(b*d) → a*(c+d)/(b*c*d)  partial denom
+ *
+ *  Stub for future: a/b + c/d → (a*d + b*c)/(b*d)
+ * ==================================================================== */
+
+static MathNode* simplify_frac_node(MathNode* node) {
+    if (!node) return NULL;
+
+    /* Bottom-up: recurse first */
+    if (node->left)  node->left  = simplify_frac_node(node->left);
+    if (node->right) node->right = simplify_frac_node(node->right);
+
+    /* ── 1/a + 1/b → (a+b)/(a*b) ── */
+    if (node->type == MATH_BINARY_OP && node->op == OP_ADD) {
+        MathNode* L = node->left;
+        MathNode* R = node->right;
+        if (L && R &&
+            L->type == MATH_BINARY_OP && L->op == OP_DIV && is_one(L->left) &&
+            R->type == MATH_BINARY_OP && R->op == OP_DIV && is_one(R->left)) {
+            /* 1/a + 1/b → (a+b)/(a*b) */
+            MathNode* a = plant_math_deep_copy(L->right);
+            MathNode* b = plant_math_deep_copy(R->right);
+            MathNode* numer = math_node_binary(OP_ADD,
+                plant_math_deep_copy(a), plant_math_deep_copy(b));
+            MathNode* denom = math_node_binary(OP_MUL, a, b);
+            node->left = NULL;
+            node->right = NULL;
+            math_node_free(node);
+            node = math_node_binary(OP_DIV, numer, denom);
+            return node;
+        }
+
+        /* a/(b*c) + a/(b*d) → a*(c+d)/(b*c*d)  same numerator, shared denom factor */
+        if (L && R &&
+            L->type == MATH_BINARY_OP && L->op == OP_DIV &&
+            R->type == MATH_BINARY_OP && R->op == OP_DIV) {
+            MathNode* ln = L->left,  *ld = L->right;
+            MathNode* rn = R->left,  *rd = R->right;
+            if (ln && rn && ld && rd && trees_equal(ln, rn)) {
+                /* Same numerator a: a/b1 + a/b2 → a*(b1+b2)/(b1*b2) */
+                MathNode* b1 = plant_math_deep_copy(ld);
+                MathNode* b2 = plant_math_deep_copy(rd);
+                MathNode* sum_b = math_node_binary(OP_ADD,
+                    plant_math_deep_copy(b1), plant_math_deep_copy(b2));
+                MathNode* prod_b = math_node_binary(OP_MUL, b1, b2);
+                MathNode* numer = math_node_binary(OP_MUL,
+                    plant_math_deep_copy(ln), sum_b);
+                node->left = NULL;
+                node->right = NULL;
+                math_node_free(node);
+                node = math_node_binary(OP_DIV, numer, prod_b);
+                return node;
+            }
+        }
+    }
+
+    /* ── 1/a - 1/b → (b-a)/(a*b) ── */
+    if (node->type == MATH_BINARY_OP && node->op == OP_SUB) {
+        MathNode* L = node->left;
+        MathNode* R = node->right;
+        if (L && R &&
+            L->type == MATH_BINARY_OP && L->op == OP_DIV && is_one(L->left) &&
+            R->type == MATH_BINARY_OP && R->op == OP_DIV && is_one(R->left)) {
+            /* 1/a - 1/b → (b-a)/(a*b) */
+            MathNode* a = plant_math_deep_copy(L->right);
+            MathNode* b = plant_math_deep_copy(R->right);
+            MathNode* numer = math_node_binary(OP_SUB,
+                plant_math_deep_copy(b), plant_math_deep_copy(a));
+            MathNode* denom = math_node_binary(OP_MUL, a, b);
+            node->left = NULL;
+            node->right = NULL;
+            math_node_free(node);
+            node = math_node_binary(OP_DIV, numer, denom);
+            return node;
+        }
+    }
+
+    return node;
+}
+
+/* ====================================================================
  *  v0.50.0h — Term Analysis, Like Terms Collection, Distribution,
  *             and Descending Term Ordering
  * ==================================================================== */
@@ -1311,10 +1755,14 @@ static MathNode* collect_and_sort(MathNode* node) {
  *
  *  Passes per iteration:
  *    1. simplify_node  — constant folding, identity, cancellations
- *    2. distribute_node — expand products over sums
- *    3. normalize_node — standardize operand ordering (a-b → a+(-b), num*expr)
- *    4. collect_and_sort — flatten sums, merge like terms, descending order
- *    5. simplify_node  — final cleanup (1*x → x, x+0 → x, etc.)
+ *    2. simplify_pow   — exponent law reductions
+ *    3. simplify_trig  — trigonometric identity rewrites
+ *    4. simplify_log   — logarithmic law expansions
+ *    5. simplify_frac  — rational fraction unification
+ *    6. distribute_node — expand products over sums
+ *    7. normalize_node — standardize operand ordering (a-b → a+(-b), num*expr)
+ *    8. collect_and_sort — flatten sums, merge like terms, descending order
+ *    9. simplify_node  — final cleanup (1*x → x, x+0 → x, etc.)
  * ==================================================================== */
 
 MathNode* plant_math_simplify(MathNode* node) {
@@ -1327,13 +1775,21 @@ MathNode* plant_math_simplify(MathNode* node) {
 
         /* Pass 1: basic simplification (folding, identity, cancellation) */
         node = simplify_node(node);
-        /* Pass 2: distribute products over sums */
+        /* Pass 2: exponent law reductions */
+        node = simplify_pow_node(node);
+        /* Pass 3: trigonometric identity rewrites */
+        node = simplify_trig_node(node);
+        /* Pass 4: logarithmic law expansions */
+        node = simplify_log_node(node);
+        /* Pass 5: rational fraction unification */
+        node = simplify_frac_node(node);
+        /* Pass 6: distribute products over sums */
         node = distribute_node(node);
-        /* Pass 3: normalize operand ordering */
+        /* Pass 7: normalize operand ordering */
         node = normalize_node(node);
-        /* Pass 4: collect like terms and sort */
+        /* Pass 8: collect like terms and sort */
         node = collect_and_sort(node);
-        /* Pass 5: final cleanup */
+        /* Pass 9: final cleanup */
         node = simplify_node(node);
 
         MathNode* after = plant_math_deep_copy(node);

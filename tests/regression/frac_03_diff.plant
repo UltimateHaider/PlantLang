@@ -1,0 +1,5 @@
+# v0.50.1 — Frac: 1/a - 1/b = (b-a)/(a*b)
+ACTION main(),
+  SHOW MATH_SIMPLIFY("1/a - 1/b").
+  GIVE 0.
+/GIVE main.

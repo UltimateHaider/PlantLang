@@ -1,0 +1,5 @@
+# v0.50.1 — Trig: Pythagorean identity (commutative)
+ACTION main(),
+  SHOW MATH_SIMPLIFY("COS(x)^2 + SIN(x)^2").
+  GIVE 0.
+/GIVE main.
