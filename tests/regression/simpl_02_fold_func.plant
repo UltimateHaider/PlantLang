@@ -1,0 +1,12 @@
+# v0.50.0g — Simplification: constant folding (functions & constants).
+ACTION main(),
+  SHOW MATH_SIMPLIFY("SIN(0)").
+  SHOW MATH_SIMPLIFY("COS(0)").
+  SHOW MATH_SIMPLIFY("SQRT(16)").
+  SHOW MATH_SIMPLIFY("ABS(-5)").
+  SHOW MATH_SIMPLIFY("EXP(0)").
+  SHOW MATH_SIMPLIFY("LOG(1)").
+  SHOW MATH_SIMPLIFY("PI").
+  SHOW MATH_SIMPLIFY("E").
+  GIVE 0.
+/GIVE main.

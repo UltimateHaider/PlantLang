@@ -10255,6 +10255,7 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars) {
     e = _math_func_paren(e, "LOG_BASE", "math_log_base");
     e = _handle_func_paren(e, "MATH_EVAL_STR", "plant_math_eval_to_str");
     e = _handle_func_paren(e, "MATH_VALUE", "plant_math_value_str");
+    e = _handle_func_paren(e, "MATH_SIMPLIFY", "plant_math_simplify_str");
     e = _handle_func_paren(e, "TAP", "plant_tap");
     e = _handle_func_paren(e, "INFUSE", "plant_infuse");
     e = _handle_func_paren(e, "ABSORB", "plant_absorb");
@@ -15771,7 +15772,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.50.0f (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.50.0g (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

@@ -392,6 +392,8 @@ MathNode* plant_math_parse(const char* expr) {
     Parser p;
     parser_init(&p, buf);
     MathNode* ast = parse_expr(&p, 0);
+    /* v0.50.0g: automatically simplify after parsing */
+    ast = plant_math_simplify(ast);
     return ast;
 }
 
@@ -436,6 +438,374 @@ double plant_math_eval(const MathNode* node) {
         }
     }
     return NAN;
+}
+
+/* ====================================================================
+ *  Deep Copy (AST cloning for safe simplification rewrites)
+ * ==================================================================== */
+
+MathNode* plant_math_deep_copy(const MathNode* node) {
+    if (!node) return NULL;
+    switch (node->type) {
+        case MATH_NUMBER:
+            return math_node_number(node->num_val);
+        case MATH_SYMBOL:
+            return math_node_symbol(node->sym_name);
+        case MATH_CONSTANT:
+            return math_node_constant(node->sym_name);
+        case MATH_BINARY_OP:
+            return math_node_binary(node->op,
+                plant_math_deep_copy(node->left),
+                plant_math_deep_copy(node->right));
+        case MATH_UNARY_OP:
+            return math_node_unary(plant_math_deep_copy(node->left));
+        case MATH_FUNC_CALL:
+            return math_node_func(node->sym_name,
+                plant_math_deep_copy(node->left));
+    }
+    return NULL;
+}
+
+/* ====================================================================
+ *  Simplifier — bottom-up AST rewrite with iteration cap
+ *
+ *  Rules applied:
+ *    Constant folding:  2 + 3 → 5,  SIN(0) → 0,  PI → 3.14...
+ *    Identity:          x + 0 → x,  x - 0 → x,  x * 1 → x,  x^1 → x
+ *    Cancellation:      x - x → 0,  x / x → 1   (x ≠ 0)
+ *    Zero power:        x^0 → 1                    (x ≠ 0)
+ * ==================================================================== */
+
+#define MAX_SIMPLIFY_ITERATIONS 100
+
+/* Forward declaration */
+static MathNode* simplify_node(MathNode* node);
+
+/* Check if two ASTs are structurally identical */
+static int trees_equal(const MathNode* a, const MathNode* b) {
+    if (!a && !b) return 1;
+    if (!a || !b) return 0;
+    if (a->type != b->type) return 0;
+    switch (a->type) {
+        case MATH_NUMBER:
+            return a->num_val == b->num_val;
+        case MATH_SYMBOL:
+        case MATH_CONSTANT:
+        case MATH_FUNC_CALL:
+            return strcmp(a->sym_name, b->sym_name) == 0 &&
+                   trees_equal(a->left, b->left);
+        case MATH_BINARY_OP:
+            return a->op == b->op &&
+                   trees_equal(a->left, b->left) &&
+                   trees_equal(a->right, b->right);
+        case MATH_UNARY_OP:
+            return a->op == b->op &&
+                   trees_equal(a->left, b->left);
+    }
+    return 0;
+}
+
+/* Check if a node is a numeric literal */
+static int is_number(const MathNode* n) {
+    return n && n->type == MATH_NUMBER;
+}
+
+/* Check if a node evaluates to zero (numbers and constants) */
+static int is_zero(const MathNode* n) {
+    if (!n) return 0;
+    if (n->type == MATH_NUMBER) return n->num_val == 0.0;
+    if (n->type == MATH_CONSTANT) {
+        double v = lookup_constant(n->sym_name);
+        return !isnan(v) && v == 0.0;
+    }
+    return 0;
+}
+
+/* Check if a node evaluates to one */
+static int is_one(const MathNode* n) {
+    if (!n) return 0;
+    if (n->type == MATH_NUMBER) return n->num_val == 1.0;
+    if (n->type == MATH_CONSTANT) {
+        double v = lookup_constant(n->sym_name);
+        return !isnan(v) && v == 1.0;
+    }
+    return 0;
+}
+
+/* Simplify a single node (one pass) — returns new or reused node */
+static MathNode* simplify_node(MathNode* node) {
+    if (!node) return NULL;
+
+    /* Recurse into children first (bottom-up) */
+    if (node->left) node->left = simplify_node(node->left);
+    if (node->right) node->right = simplify_node(node->right);
+
+    switch (node->type) {
+        case MATH_NUMBER:
+        case MATH_SYMBOL:
+            return node;  /* nothing to simplify */
+
+        case MATH_CONSTANT: {
+            /* Fold constants to their numeric value */
+            double v = lookup_constant(node->sym_name);
+            if (!isnan(v)) {
+                free(node->sym_name);
+                node->type = MATH_NUMBER;
+                node->num_val = v;
+                node->sym_name = NULL;
+            }
+            return node;
+        }
+
+        case MATH_UNARY_OP: {
+            if (node->op == OP_NEG) {
+                /* Fold unary negation of a number */
+                if (is_number(node->left)) {
+                    node->left->num_val = -(node->left->num_val);
+                    MathNode* result = node->left;
+                    node->left = NULL;
+                    math_node_free(node);
+                    return result;
+                }
+                /* Double negation: -(-x) → x */
+                if (node->left->type == MATH_UNARY_OP && node->left->op == OP_NEG) {
+                    MathNode* inner = node->left->left;
+                    node->left->left = NULL;
+                    math_node_free(node);
+                    return inner;
+                }
+            }
+            return node;
+        }
+
+        case MATH_FUNC_CALL: {
+            /* Fold function calls on numeric arguments */
+            if (is_number(node->left)) {
+                MathFunc1 fn = lookup_function(node->sym_name);
+                if (fn) {
+                    double result = fn(node->left->num_val);
+                    free(node->sym_name);
+                    free(node->left->sym_name);
+                    node->left->num_val = result;
+                    node->type = MATH_NUMBER;
+                    node->sym_name = NULL;
+                    MathNode* num = node->left;
+                    node->left = NULL;
+                    math_node_free(node);
+                    return num;
+                }
+            }
+            return node;
+        }
+
+        case MATH_BINARY_OP: {
+            MathNode* L = node->left;
+            MathNode* R = node->right;
+
+            /* ── Constant folding: both children are numbers ── */
+            if (is_number(L) && is_number(R)) {
+                double l = L->num_val, r = R->num_val, result;
+                switch (node->op) {
+                    case OP_ADD: result = l + r; break;
+                    case OP_SUB: result = l - r; break;
+                    case OP_MUL: result = l * r; break;
+                    case OP_DIV: result = (r != 0.0) ? l / r : NAN; break;
+                    case OP_POW: result = pow(l, r); break;
+                    default:     result = NAN; break;
+                }
+                free(L->sym_name);
+                free(R->sym_name);
+                L->num_val = result;
+                /* Detach children before freeing parent */
+                node->left = NULL;
+                node->right = NULL;
+                math_node_free(R);
+                math_node_free(node);
+                return L;
+            }
+
+            switch (node->op) {
+                case OP_ADD:
+                    /* x + 0 → x */
+                    if (is_zero(R)) {
+                        node->right = NULL;
+                        math_node_free(R);
+                        MathNode* result = L;
+                        node->left = NULL;
+                        math_node_free(node);
+                        return result;
+                    }
+                    /* 0 + x → x */
+                    if (is_zero(L)) {
+                        node->left = NULL;
+                        math_node_free(L);
+                        MathNode* result = R;
+                        node->right = NULL;
+                        math_node_free(node);
+                        return result;
+                    }
+                    break;
+
+                case OP_SUB:
+                    /* x - 0 → x */
+                    if (is_zero(R)) {
+                        node->right = NULL;
+                        math_node_free(R);
+                        MathNode* result = L;
+                        node->left = NULL;
+                        math_node_free(node);
+                        return result;
+                    }
+                    /* 0 - x → -x */
+                    if (is_zero(L)) {
+                        node->left = NULL;
+                        math_node_free(L);
+                        node->type = MATH_UNARY_OP;
+                        node->op = OP_NEG;
+                        node->left = R;
+                        node->right = NULL;
+                        return node;
+                    }
+                    /* x - x → 0 */
+                    if (trees_equal(L, R)) {
+                        node->left = NULL;
+                        node->right = NULL;
+                        math_node_free(L);
+                        math_node_free(R);
+                        node->type = MATH_NUMBER;
+                        node->num_val = 0.0;
+                        node->sym_name = NULL;
+                        return node;
+                    }
+                    break;
+
+                case OP_MUL:
+                    /* x * 1 → x */
+                    if (is_one(R)) {
+                        node->right = NULL;
+                        math_node_free(R);
+                        MathNode* result = L;
+                        node->left = NULL;
+                        math_node_free(node);
+                        return result;
+                    }
+                    /* 1 * x → x */
+                    if (is_one(L)) {
+                        node->left = NULL;
+                        math_node_free(L);
+                        MathNode* result = R;
+                        node->right = NULL;
+                        math_node_free(node);
+                        return result;
+                    }
+                    /* x * 0 → 0 */
+                    if (is_zero(R) || is_zero(L)) {
+                        node->left = NULL;
+                        node->right = NULL;
+                        math_node_free(L);
+                        math_node_free(R);
+                        node->type = MATH_NUMBER;
+                        node->num_val = 0.0;
+                        node->sym_name = NULL;
+                        return node;
+                    }
+                    break;
+
+                case OP_DIV:
+                    /* x / 1 → x */
+                    if (is_one(R)) {
+                        node->right = NULL;
+                        math_node_free(R);
+                        MathNode* result = L;
+                        node->left = NULL;
+                        math_node_free(node);
+                        return result;
+                    }
+                    /* 0 / x → 0 (x ≠ 0 by domain) */
+                    if (is_zero(L) && !is_zero(R)) {
+                        node->left = NULL;
+                        node->right = NULL;
+                        math_node_free(L);
+                        math_node_free(R);
+                        node->type = MATH_NUMBER;
+                        node->num_val = 0.0;
+                        node->sym_name = NULL;
+                        return node;
+                    }
+                    /* x / x → 1 (valid when x ≠ 0) */
+                    if (trees_equal(L, R)) {
+                        node->left = NULL;
+                        node->right = NULL;
+                        math_node_free(L);
+                        math_node_free(R);
+                        node->type = MATH_NUMBER;
+                        node->num_val = 1.0;
+                        node->sym_name = NULL;
+                        return node;
+                    }
+                    break;
+
+                case OP_POW:
+                    /* x^0 → 1 (valid when x ≠ 0) */
+                    if (is_zero(R)) {
+                        node->left = NULL;
+                        node->right = NULL;
+                        math_node_free(L);
+                        math_node_free(R);
+                        node->type = MATH_NUMBER;
+                        node->num_val = 1.0;
+                        node->sym_name = NULL;
+                        return node;
+                    }
+                    /* x^1 → x */
+                    if (is_one(R)) {
+                        node->right = NULL;
+                        math_node_free(R);
+                        MathNode* result = L;
+                        node->left = NULL;
+                        math_node_free(node);
+                        return result;
+                    }
+                    /* 0^x → 0 (x > 0) */
+                    if (is_zero(L)) {
+                        node->left = NULL;
+                        node->right = NULL;
+                        math_node_free(L);
+                        math_node_free(R);
+                        node->type = MATH_NUMBER;
+                        node->num_val = 0.0;
+                        node->sym_name = NULL;
+                        return node;
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+            return node;
+        }
+
+        default:
+            return node;
+    }
+}
+
+/* Public simplification entry point — iterates until fixed point or cap */
+MathNode* plant_math_simplify(MathNode* node) {
+    if (!node) return NULL;
+    int iterations = 0;
+    int changed = 1;
+    while (changed && iterations < MAX_SIMPLIFY_ITERATIONS) {
+        changed = 0;
+        MathNode* before = plant_math_deep_copy(node);
+        node = simplify_node(node);
+        MathNode* after = plant_math_deep_copy(node);
+        if (!trees_equal(before, after)) changed = 1;
+        math_node_free(before);
+        math_node_free(after);
+        iterations++;
+    }
+    return node;
 }
 
 /* ====================================================================
@@ -574,6 +944,18 @@ double plant_math_eval_string(const char* expr) {
 
 void* plant_math_create(const char* expr) {
     return (void*)plant_math_parse(expr);
+}
+
+void* plant_math_simplify_ptr(void* math_ptr) {
+    return (void*)plant_math_simplify((MathNode*)math_ptr);
+}
+
+char* plant_math_simplify_str(const char* expr) {
+    MathNode* ast = plant_math_parse(expr);
+    ast = plant_math_simplify(ast);
+    char* result = plant_math_to_string(ast);
+    math_node_free(ast);
+    return result;
 }
 
 double plant_math_value(void* math_ptr) {

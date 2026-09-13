@@ -1,0 +1,8 @@
+# v0.50.0g — Simplification: nested constant folding.
+ACTION main(),
+  SHOW MATH_SIMPLIFY("(2 + 3) * 4").
+  SHOW MATH_SIMPLIFY("2 * (3 + 4)").
+  SHOW MATH_SIMPLIFY("(10 - 2) ^ 2").
+  SHOW MATH_SIMPLIFY("SQRT(4) + SQRT(9)").
+  GIVE 0.
+/GIVE main.

@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.50.0f
+# 🌿 PlantLang — Chloroplast v0.50.0g
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -407,9 +407,9 @@ ACTION main(),
 existing `handle_brackets` rewrites `arr[idx]` to `plant_list_get(arr, idx)`
 which is incompatible with native C arrays.
 
-### MATH (v0.50.0f)
+### MATH (v0.50.0g)
 
-Symbolic math expressions with full parsing and evaluation:
+Symbolic math expressions with automatic simplification:
 
 ```
 CREATE expr(MATH) TO "2 + 3 * 4".
@@ -423,6 +423,14 @@ SHOW MATH_EVAL_STR("SQRT(16)").  # → 4
 SHOW MATH_EVAL_STR("PI * 2").    # → 6.28319
 ```
 
+Explicit simplification (also applied automatically after parsing):
+
+```
+SHOW MATH_SIMPLIFY("x + 0").     # → x
+SHOW MATH_SIMPLIFY("2 + 3").     # → 5
+SHOW MATH_SIMPLIFY("x / x").     # → 1
+```
+
 Features:
 - **Numbers**: `42`, `3.14`, `0`
 - **Operators**: `+`, `-`, `*`, `/`, `^` (exponentiation)
@@ -431,10 +439,15 @@ Features:
 - **Functions**: `SIN`, `COS`, `TAN`, `SQRT`, `EXP`, `LOG`, `ABS`
 - **Parentheses**: `(2 + 3) * 4`
 
+**Automatic Simplification**: Expressions are simplified after parsing with these rules:
+- **Constant folding**: `2 + 3 → 5`, `SIN(0) → 0`, `PI → 3.14...`
+- **Identity**: `x + 0 → x`, `x - 0 → x`, `x * 1 → x`, `x^1 → x`
+- **Cancellation**: `x - x → 0`, `x / x → 1` (x ≠ 0), `x^0 → 1` (x ≠ 0)
+- **Zero ops**: `x * 0 → 0`, `0 / x → 0`
+
 The MATH type creates a symbolic AST (abstract syntax tree) from an expression
-string. Use `MATH_VALUE()` to evaluate a MATH variable, or `MATH_EVAL_STR()`
-to evaluate an expression string directly. Both return the result as a string
-suitable for `SHOW` or concatenation.
+string. Use `MATH_VALUE()` to evaluate a MATH variable, `MATH_EVAL_STR()` to
+evaluate an expression string, or `MATH_SIMPLIFY()` to get the simplified form.
 
 ### Actions (functions)
 

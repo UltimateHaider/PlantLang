@@ -1,0 +1,10 @@
+# v0.50.0g — Simplification: identity reductions.
+ACTION main(),
+  SHOW MATH_SIMPLIFY("x + 0").
+  SHOW MATH_SIMPLIFY("0 + x").
+  SHOW MATH_SIMPLIFY("x - 0").
+  SHOW MATH_SIMPLIFY("x * 1").
+  SHOW MATH_SIMPLIFY("1 * x").
+  SHOW MATH_SIMPLIFY("x ^ 1").
+  GIVE 0.
+/GIVE main.

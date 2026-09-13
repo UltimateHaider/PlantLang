@@ -3288,6 +3288,8 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     REAP e FROM _handle_func_paren, e, "MATH_EVAL_STR", "plant_math_eval_to_str".
     # v0.50.0f — MATH_VALUE: evaluate a PlantMath* to string.
     REAP e FROM _handle_func_paren, e, "MATH_VALUE", "plant_math_value_str".
+    # v0.50.0g — MATH_SIMPLIFY: simplify a math expression string.
+    REAP e FROM _handle_func_paren, e, "MATH_SIMPLIFY", "plant_math_simplify_str".
     # v0.48.38k — VEIN resource management: TAP / INFUSE use the
     # paren form; ABSORB / SEAL accept both the paren form (used by
     # the test suite) and the space form (the _handle_func pattern).

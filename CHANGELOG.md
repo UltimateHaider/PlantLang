@@ -1,5 +1,33 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.50.0g — 2026 (Automatic Symbolic Simplification)
+
+### New Features
+- **Automatic symbolic simplification** — `MATH` expressions are automatically simplified
+  after parsing. Constant folding, identity reductions, and algebraic cancellations are applied
+  iteratively until a fixed point or the safety limit (100 iterations) is reached.
+- **Simplification rules**:
+  - **Constant folding**: `2 + 3 → 5`, `SIN(0) → 0`, `PI → 3.14...`
+  - **Identity reductions**: `x + 0 → x`, `x - 0 → x`, `x * 1 → x`, `x^1 → x`
+  - **Cancellation**: `x - x → 0`, `x / x → 1` (x ≠ 0), `x^0 → 1` (x ≠ 0)
+  - **Zero operations**: `x * 0 → 0`, `0 / x → 0`, `0^x → 0`
+  - **Double negation**: `-(-x) → x`
+- **Built-in function**: `MATH_SIMPLIFY(expr)` simplifies an expression string and returns
+  the simplified form as a string.
+- **Deep copy**: `plant_math_deep_copy()` enables safe AST cloning for manipulation.
+
+### Tests
+- `simpl_01_fold_arith` — arithmetic constant folding.
+- `simpl_02_fold_func` — function and constant folding.
+- `simpl_03_identity` — identity reductions (x+0, x*1, x^1).
+- `simpl_04_cancel` — cancellation rules (x-x, x/x, x^0).
+- `simpl_05_nested` — nested constant folding.
+- `simpl_06_mixed` — mixed symbolic + constant expressions.
+- `simpl_07_zero_ops` — zero multiplication and division.
+- `simpl_08_negation` — double negation simplification.
+- `simpl_09_complex` — complex expressions with sub-expressions.
+- `simpl_10_eval` — evaluation after simplification.
+
 ## v0.50.0f — 2026 (Symbolic Math Core)
 
 ### New Features

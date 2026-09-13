@@ -1,0 +1,8 @@
+# v0.50.0g — Simplification: evaluation after simplification.
+ACTION main(),
+  SHOW MATH_EVAL_STR(MATH_SIMPLIFY("2 + 3")).
+  SHOW MATH_EVAL_STR(MATH_SIMPLIFY("PI * 2")).
+  SHOW MATH_EVAL_STR(MATH_SIMPLIFY("SQRT(16)")).
+  SHOW MATH_SIMPLIFY("10 + 0").
+  GIVE 0.
+/GIVE main.

@@ -1,0 +1,7 @@
+# v0.50.0g — Simplification: double negation.
+ACTION main(),
+  SHOW MATH_SIMPLIFY("-(-x)").
+  SHOW MATH_SIMPLIFY("-(0 - x)").
+  SHOW MATH_SIMPLIFY("-(-(5))").
+  GIVE 0.
+/GIVE main.

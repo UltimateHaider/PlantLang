@@ -306,12 +306,14 @@ const char*   plant_scl_value(double v);
 void*        plant_union_create(size_t size);
 void         plant_union_free(void* u);
 
-/* ── v0.50.0f: Symbolic Math Core ── */
+/* ── v0.50.0g: Symbolic Math Core + Simplification ── */
 void*        plant_math_create(const char* expr);
 double       plant_math_value(void* math_ptr);
 char*        plant_math_value_str(void* math_ptr);
 char*        plant_math_eval_to_str(const char* expr);
 char*        plant_math_to_str(void* math_ptr);
+void*        plant_math_simplify_ptr(void* math_ptr);
+char*        plant_math_simplify_str(const char* expr);
 void         plant_math_free(void* math_ptr);
 void         plant_math_debug_print(void* node);
 

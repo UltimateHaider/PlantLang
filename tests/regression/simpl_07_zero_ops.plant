@@ -1,0 +1,8 @@
+# v0.50.0g — Simplification: zero multiplication and division.
+ACTION main(),
+  SHOW MATH_SIMPLIFY("x * 0").
+  SHOW MATH_SIMPLIFY("0 * x").
+  SHOW MATH_SIMPLIFY("0 / x").
+  SHOW MATH_SIMPLIFY("0 ^ x").
+  GIVE 0.
+/GIVE main.

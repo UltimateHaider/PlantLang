@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.50.0f
+# 🌿 PlantLang — Chloroplast v0.50.0g
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.

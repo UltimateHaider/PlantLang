@@ -1,0 +1,9 @@
+# v0.50.0g — Simplification: constant folding (arithmetic).
+ACTION main(),
+  SHOW MATH_SIMPLIFY("2 + 3").
+  SHOW MATH_SIMPLIFY("10 - 4").
+  SHOW MATH_SIMPLIFY("3 * 7").
+  SHOW MATH_SIMPLIFY("20 / 4").
+  SHOW MATH_SIMPLIFY("2 ^ 10").
+  GIVE 0.
+/GIVE main.

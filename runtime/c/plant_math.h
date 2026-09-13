@@ -1,9 +1,10 @@
 /*
- * plant_math.h — v0.50.0f: Symbolic Math Core
+ * plant_math.h — v0.50.0g: Symbolic Math Core + Simplification
  *
  * MathNode AST structures and API for the PlantLang symbolic algebra subsystem.
  * Supports numbers, symbols, constants, binary/unary ops, function calls,
- * operator precedence, right-associative exponentiation, and evaluation to double.
+ * operator precedence, right-associative exponentiation, evaluation to double,
+ * and automatic symbolic simplification.
  */
 
 #ifndef PLANT_MATH_H
@@ -54,6 +55,10 @@ MathNode* math_node_func(const char* name, MathNode* arg);
 
 void math_node_free(MathNode* node);
 
+/* ── Deep Copy ──────────────────────────────────────────────── */
+
+MathNode* plant_math_deep_copy(const MathNode* node);
+
 /* ── Core API ───────────────────────────────────────────────── */
 
 /* Parse a math expression string into an AST. Returns NULL on error. */
@@ -64,6 +69,10 @@ double    plant_math_eval(const MathNode* node);
 
 /* Serialize an AST back to human-readable string. Caller frees result. */
 char*     plant_math_to_string(const MathNode* node);
+
+/* Simplify an AST: constant folding, identity reductions, cancellations.
+ * Iterates until fixed point or MAX_SIMPLIFY_ITERATIONS (100). */
+MathNode* plant_math_simplify(MathNode* node);
 
 /* Debug: print AST hierarchy to stderr. */
 void      plant_math_debug_print(void* node);
@@ -85,6 +94,12 @@ char*     plant_math_to_str(void* math_ptr);
 
 /* Convenience: parse + eval in one call, return result as string. Caller frees. */
 char*     plant_math_eval_to_str(const char* expr);
+
+/* Convenience: simplify a PlantMath* in-place. Returns the simplified AST. */
+void*     plant_math_simplify_ptr(void* math_ptr);
+
+/* Convenience: simplify an expression string. Caller frees result. */
+char*     plant_math_simplify_str(const char* expr);
 
 /* Convenience: free a PlantMath*. */
 void      plant_math_free(void* math_ptr);

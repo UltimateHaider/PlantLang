@@ -1,3 +1,48 @@
+## v0.50.0g - 2026 (Automatic Symbolic Simplification)
+
+### New Language Features
+
+#### Automatic Symbolic Simplification (`MATH` Phase 3)
+- **Runtime**: `plant_math_simplify()` — bottom-up iterative AST simplification with `MAX_SIMPLIFY_ITERATIONS = 100` safety cap to prevent infinite loops.
+- **Deep copy**: `plant_math_deep_copy()` enables safe AST cloning for manipulation and comparison.
+- **Built-in function**: `MATH_SIMPLIFY(expr)` simplifies an expression string and returns the simplified form as a string.
+- **Auto-simplification**: `plant_math_parse()` automatically invokes `plant_math_simplify()` after AST construction.
+
+#### Simplification Rules
+| Rule | Before | After | Domain |
+|------|--------|-------|--------|
+| Constant folding | `2 + 3` | `5` | Both operands numeric |
+| Function folding | `SIN(0)` | `0` | Argument is numeric |
+| Constant resolution | `PI` | `3.14159...` | Known constant |
+| Additive identity | `x + 0` | `x` | — |
+| Multiplicative identity | `x * 1` | `x` | — |
+| Exponent identity | `x ^ 1` | `x` | — |
+| Self-cancellation | `x - x` | `0` | — |
+| Division cancellation | `x / x` | `1` | x ≠ 0 |
+| Zero exponent | `x ^ 0` | `1` | x ≠ 0 |
+| Zero multiplication | `x * 0` | `0` | — |
+| Zero division | `0 / x` | `0` | x ≠ 0 |
+| Double negation | `-(-x)` | `x` | — |
+
+### Implementation Notes
+- Simplification iterates until a fixed point (no changes) or `MAX_SIMPLIFY_ITERATIONS = 100` is reached.
+- `x / x → 1` and `x ^ 0 → 1` are documented as valid under the domain condition x ≠ 0.
+- The simplifier uses `trees_equal()` for structural AST comparison to detect cancellations.
+
+### Tests
+- `simpl_01_fold_arith` — arithmetic constant folding (2+3, 10-4, 3*7, 20/4, 2^10).
+- `simpl_02_fold_func` — function and constant folding (SIN(0), COS(0), SQRT(16), PI, E).
+- `simpl_03_identity` — identity reductions (x+0, 0+x, x-0, x*1, 1*x, x^1).
+- `simpl_04_cancel` — cancellation rules (x-x, x/x, x^0).
+- `simpl_05_nested` — nested constant folding ((2+3)*4, (10-2)^2).
+- `simpl_06_mixed` — mixed symbolic + constant expressions.
+- `simpl_07_zero_ops` — zero multiplication and division (x*0, 0*x, 0/x, 0^x).
+- `simpl_08_negation` — double negation simplification (-(-x), -(0-x)).
+- `simpl_09_complex` — complex expressions with sub-expressions.
+- `simpl_10_eval` — evaluation after simplification.
+
+---
+
 ## v0.50.0f - 2026 (Symbolic Math Core)
 
 ### New Language Features

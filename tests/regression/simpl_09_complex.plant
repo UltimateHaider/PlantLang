@@ -1,0 +1,10 @@
+# v0.50.0g — Simplification: complex expressions.
+ACTION main(),
+  SHOW MATH_SIMPLIFY("(x + y) * 0").
+  SHOW MATH_SIMPLIFY("(x + y) ^ 0").
+  SHOW MATH_SIMPLIFY("(x + y) / (x + y)").
+  SHOW MATH_SIMPLIFY("(x + y) - (x + y)").
+  SHOW MATH_SIMPLIFY("1 * (x + y)").
+  SHOW MATH_SIMPLIFY("(x + y) + 0").
+  GIVE 0.
+/GIVE main.
