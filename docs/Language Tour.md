@@ -1006,7 +1006,7 @@ REAP mx FROM math_max, "3", "7".   # → 7
 REAP rd FROM math_random.          # uniform [0,1) as text
 ```
 
-### CAS (Computer Algebra System) Built-ins (v0.50.2)
+### CAS (Computer Algebra System) Built-ins (v0.50.3)
 
 The compiler provides compile-time symbolic math operations via `SHOW`:
 
@@ -1039,6 +1039,22 @@ SHOW MATH_DERIVATIVE("x^3", "x").     # → (3*(x^2))
 
 # Integral — indefinite ∫
 SHOW MATH_INTEGRAL("x^2", "x").       # → ((x^3)/3) + C
+
+# Integration by parts — ∫ u dv = uv - ∫ v du (LIATE heuristic)
+SHOW MATH_INTEGRATE_PARTS("x*SIN(x)", "x").   # → ((x*(-COS(x)))+SIN(x)) + C
+SHOW MATH_INTEGRATE_PARTS("x*EXP(x)", "x").   # → ((x*EXP(x))-EXP(x)) + C
+SHOW MATH_INTEGRATE_PARTS("LOG(x)", "x").     # → ((x*LOG(x))-x) + C
+
+# Integration by substitution — ∫ f(g(x))·g'(x) dx
+SHOW MATH_INTEGRATE_SUBST("2*x*EXP(x^2)", "x").    # → EXP((x^2)) + C
+SHOW MATH_INTEGRATE_SUBST("COS(x)*SIN(x)", "x").    # → ((SIN(x)^2)/2) + C
+SHOW MATH_INTEGRATE_SUBST("2*x/(x^2 + 1)", "x").    # → LOG(((x^2)+1)) + C
+
+# Limit evaluation — lim_{x→c} f(x)
+SHOW MATH_LIMIT("x^2 + 2*x + 1", "x", "2").   # → 9  (direct substitution)
+SHOW MATH_LIMIT("SIN(x)/x", "x", "0").          # → 1  (trig special limit)
+SHOW MATH_LIMIT("(EXP(x) - 1)/x", "x", "0").   # → 1  (exp limit)
+SHOW MATH_LIMIT("x^2", "x", "inf").             # → infinity  (at infinity)
 
 # Factor — GCD, difference of squares, perfect square trinomial
 SHOW MATH_FACTOR("6*x + 9").          # → 3*(2*x + 3)

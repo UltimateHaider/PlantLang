@@ -1,0 +1,5 @@
+# v0.50.3 — Limit: lim_{x→0} tan(x)/x = 1
+ACTION main(),
+  SHOW MATH_LIMIT("TAN(x)/x", "x", "0").
+  GIVE 0.
+/GIVE main.

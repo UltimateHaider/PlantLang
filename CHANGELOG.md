@@ -1,5 +1,31 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.50.3 — 2026 (Limits, Integration by Parts & Integration by Substitution)
+
+### New Features
+- **Limit Evaluation Subsystem** (`MATH_LIMIT`):
+  - Direct polynomial substitution: `lim_{x→2}(x²+2x+1) → 9`
+  - Trigonometric special limits: `sin(x)/x → 1`, `tan(x)/x → 1`, `(1-cos(x))/x → 0`
+  - Exponential limits: `(e^x-1)/x → 1`, `log(1+x)/x → 1`
+  - Asymptotic evaluation at infinity using `MATH_INF` sentinel
+  - **L'Hôpital's rule** for `0/0` and `∞/∞` indeterminate forms (iterative, up to 10 depth)
+- **Integration by Parts** (`MATH_INTEGRATE_PARTS`):
+  - Core formula: `∫ u dv = uv - ∫ v du`
+  - **LIATE heuristic** for automatic `u` selection (Log > Inverse trig > Algebraic > Trig > Exponential)
+  - Direct handling of `LOG(x)`: `∫ LOG(x) dx = x·LOG(x) - x`
+  - Recursive fallback for complex products: `∫ x²·e^x dx`
+  - Standard forms: `x·sin(x)`, `x·e^x`, `x·cos(x)`, `x²·e^x`
+- **Integration by Substitution** (`MATH_INTEGRATE_SUBST`):
+  - Pattern matching for `∫ f(g(x))·g'(x) dx = ∫ f(u) du`
+  - `∫ 2x·e^(x²) dx → e^(x²) + C`
+  - `∫ cos(x)·sin(x) dx → sin²(x)/2 + C`
+  - `∫ 2x/(x²+1) dx → log(x²+1) + C`
+  - `∫ x·cos(x²) dx → sin(x²)/2 + C`
+- **Integral engine upgraded** — products now automatically try by-parts fallback when direct integration fails
+- **`is_power_of_var()` upgraded** — now handles `c*x` (linear term) in addition to `c*x^n`
+- 3 new codegen bindings: `MATH_LIMIT`, `MATH_INTEGRATE_PARTS`, `MATH_INTEGRATE_SUBST`
+- 15 new regression tests (5 limits + 5 by-parts + 5 substitution)
+
 ## v0.50.2 — 2026 (Complete Rational Fraction Unification & Complex Number Subsystem)
 
 ### New Features

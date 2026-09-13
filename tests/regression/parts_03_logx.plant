@@ -1,0 +1,5 @@
+# v0.50.3 — Integration by parts: ∫ log(x) dx
+ACTION main(),
+  SHOW MATH_INTEGRATE_PARTS("LOG(x)", "x").
+  GIVE 0.
+/GIVE main.

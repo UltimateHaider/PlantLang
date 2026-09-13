@@ -1,14 +1,16 @@
 /*
- * plant_math.h — v0.50.2: Symbolic Math + Advanced CAS + Complex Numbers
+ * plant_math.h — v0.50.3: Symbolic Math + Advanced CAS + Complex Numbers + Limits
  *
  * MathNode AST structures and API for the PlantLang symbolic algebra subsystem.
  * Supports numbers, symbols, constants, binary/unary ops, function calls,
  * operator precedence, right-associative exponentiation, evaluation to double,
  * automatic simplification, like terms collection, distribution,
- * descending term ordering, symbolic differentiation, integration,
+ * descending term ordering, symbolic differentiation, integration
+ * (power rule, trig, exp, log, by-parts, by-substitution),
  * polynomial factoring, GCD extraction, quadratic equation solving
  * with complex number support, complete rational fraction unification,
- * and a full complex number arithmetic subsystem (PlantComplex).
+ * full complex number arithmetic (PlantComplex), and limit evaluation
+ * with L'Hôpital's rule for indeterminate forms.
  */
 
 #ifndef PLANT_MATH_H
@@ -135,6 +137,31 @@ char*     plant_math_quadratic_str(const char* a, const char* b, const char* c);
 
 /* Convenience: free a PlantMath*. */
 void      plant_math_free(void* math_ptr);
+
+/* ====================================================================
+ *  v0.50.3 — Limit Evaluation Subsystem
+ * ==================================================================== */
+
+/* Evaluate lim_{var→point} of node. Returns NAN if limit doesn't exist.
+ * Use point = MATH_INF for limits at infinity. */
+double    plant_math_limit_val(const MathNode* node, const char* var, double point);
+
+/* Convenience: evaluate limit from strings. Returns result as string. Caller frees. */
+char*     plant_math_limit_str(const char* expr, const char* var, const char* point);
+
+/* ====================================================================
+ *  v0.50.3 — Advanced Integration Techniques
+ * ==================================================================== */
+
+/* Integration by parts: ∫ u dv = uv - ∫ v du.
+ * Automatically selects u via LIATE heuristic. Returns NULL if unsupported. */
+MathNode* plant_math_integral_parts(const MathNode* node, const char* var);
+char*     plant_math_integral_parts_str(const char* expr, const char* var);
+
+/* Integration by substitution: ∫ f(g(x))·g'(x) dx = ∫ f(u) du.
+ * Pattern-matches known composite forms. Returns NULL if unsupported. */
+MathNode* plant_math_integral_subst(const MathNode* node, const char* var);
+char*     plant_math_integral_subst_str(const char* expr, const char* var);
 
 /* ====================================================================
  *  v0.50.2 — Complex Number Subsystem (PlantComplex)

@@ -1,0 +1,5 @@
+# v0.50.3 — Integration by substitution: ∫ x*cos(x^2) dx = sin(x^2)/2
+ACTION main(),
+  SHOW MATH_INTEGRATE_SUBST("x*COS(x^2)", "x").
+  GIVE 0.
+/GIVE main.

@@ -1,0 +1,5 @@
+# v0.50.3 — Integration by parts: ∫ x*sin(x) dx
+ACTION main(),
+  SHOW MATH_INTEGRATE_PARTS("x*SIN(x)", "x").
+  GIVE 0.
+/GIVE main.

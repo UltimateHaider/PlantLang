@@ -8393,6 +8393,12 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     # should NOT be rewritten to C function names.
     REAP e FROM _handle_func_paren2, e, "MATH_DERIVATIVE", "plant_math_derivative_str".
     REAP e FROM _handle_func_paren2, e, "MATH_INTEGRAL", "plant_math_integral_str".
+    # v0.50.3 — MATH_LIMIT: evaluate lim_{x→c} f(x).
+    REAP e FROM _handle_func_paren3, e, "MATH_LIMIT", "plant_math_limit_str".
+    # v0.50.3 — MATH_INTEGRATE_PARTS: integration by parts (LIATE heuristic).
+    REAP e FROM _handle_func_paren2, e, "MATH_INTEGRATE_PARTS", "plant_math_integral_parts_str".
+    # v0.50.3 — MATH_INTEGRATE_SUBST: integration by substitution (pattern matching).
+    REAP e FROM _handle_func_paren2, e, "MATH_INTEGRATE_SUBST", "plant_math_integral_subst_str".
     # v0.50.0j — MATH_QUADRATIC: solve ax^2 + bx + c = 0.
     REAP e FROM _handle_func_paren3, e, "MATH_QUADRATIC", "plant_math_quadratic_str".
     # v0.50.2 — MATH_COMPLEX_*: complex number arithmetic (must run BEFORE _math_func_paren
@@ -13962,7 +13968,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.50.2 (pure native)".
+  SHOW "Chloroplast 0.50.3 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

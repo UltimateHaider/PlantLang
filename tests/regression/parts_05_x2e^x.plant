@@ -1,0 +1,5 @@
+# v0.50.3 — Integration by parts: ∫ x^2*e^x dx (recursive)
+ACTION main(),
+  SHOW MATH_INTEGRATE_PARTS("x^2*EXP(x)", "x").
+  GIVE 0.
+/GIVE main.

@@ -1,0 +1,5 @@
+# v0.50.3 — Limit: lim_{x→0} (e^x - 1)/x = 1
+ACTION main(),
+  SHOW MATH_LIMIT("(EXP(x) - 1)/x", "x", "0").
+  GIVE 0.
+/GIVE main.

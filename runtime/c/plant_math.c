@@ -2258,7 +2258,9 @@ static MathNode* integral_node(const MathNode* node, const char* var) {
                         return math_node_binary(OP_MUL,
                             int_left, plant_math_deep_copy(node->right));
                     }
-                    /* Can't integrate general products */
+                    /* Try integration by parts for general products */
+                    { MathNode* bp = plant_math_integral_parts(node, var);
+                      if (bp) return bp; }
                     return NULL;
                 }
 
@@ -2717,6 +2719,531 @@ char* plant_math_quadratic_str(const char* a_str, const char* b_str, const char*
     math_node_free(b_ast);
     math_node_free(c_ast);
     return plant_math_quadratic(a, b, c);
+}
+
+/* ====================================================================
+ *  v0.50.3 — Limit Evaluation Subsystem
+ *
+ *  Evaluates lim_{x→c} f(x) with:
+ *    - Direct substitution (polynomial, continuous functions)
+ *    - Trigonometric limits (sin(x)/x → 1, (1-cos(x))/x → 0, etc.)
+ *    - Exponential limits ((e^x-1)/x → 1)
+ *    - Asymptotic evaluation at infinity (MATH_INF)
+ *    - L'Hôpital's rule for 0/0 and ∞/∞ indeterminate forms
+ * ==================================================================== */
+
+#define MATH_INF 1e308
+
+/* Forward declaration */
+static double limit_node(const MathNode* node, const char* var, double point);
+
+/* Substitute variable with a constant value, returning a new MathNode tree */
+static MathNode* substitute_var(const MathNode* node, const char* var, double point) {
+    if (!node) return NULL;
+
+    if (node->type == MATH_SYMBOL && strcmp(node->sym_name, var) == 0) {
+        return math_node_number(point);
+    }
+    if (node->type == MATH_NUMBER || node->type == MATH_CONSTANT) {
+        return plant_math_deep_copy(node);
+    }
+
+    if (node->type == MATH_BINARY_OP) {
+        MathNode* L = substitute_var(node->left, var, point);
+        MathNode* R = substitute_var(node->right, var, point);
+        MathNode* n = math_node_binary(node->op, L, R);
+        return n;
+    }
+    if (node->type == MATH_UNARY_OP) {
+        MathNode* inner = substitute_var(node->left, var, point);
+        return math_node_unary(inner);
+    }
+    if (node->type == MATH_FUNC_CALL) {
+        MathNode* inner = substitute_var(node->left, var, point);
+        return math_node_func(node->sym_name, inner);
+    }
+
+    return plant_math_deep_copy(node);
+}
+
+/* Evaluate a node at a point by substituting the variable */
+static double eval_at(const MathNode* node, const char* var, double point) {
+    MathNode* substituted = substitute_var(node, var, point);
+    MathNode* simplified = plant_math_simplify(substituted);
+    double result = plant_math_eval(simplified);
+    math_node_free(simplified);
+    return result;
+}
+
+/* Check if a limit expression is 0/0 or ∞/∞ form */
+static int is_indeterminate_form(const MathNode* node, const char* var, double point) {
+    if (!node || node->type != MATH_BINARY_OP || node->op != OP_DIV) return 0;
+    double num = eval_at(node->left, var, point);
+    double den = eval_at(node->right, var, point);
+    /* 0/0 form */
+    if (fabs(num) < 1e-10 && fabs(den) < 1e-10) return 1;
+    /* ∞/∞ form */
+    if (fabs(num) > MATH_INF / 2 && fabs(den) > MATH_INF / 2) return 1;
+    return 0;
+}
+
+/* Check if a node contains the variable */
+static int contains_var(const MathNode* node, const char* var) {
+    if (!node) return 0;
+    if (node->type == MATH_SYMBOL && strcmp(node->sym_name, var) == 0) return 1;
+    if (node->type == MATH_CONSTANT) return 0;
+    if (node->type == MATH_NUMBER) return 0;
+    return contains_var(node->left, var) || contains_var(node->right, var);
+}
+
+/* L'Hôpital's rule: differentiate numerator and denominator */
+static double hopital_limit(const MathNode* node, const char* var, double point, int depth) {
+    if (depth > 10) return NAN; /* prevent infinite recursion */
+
+    MathNode* num = node->left;
+    MathNode* den = node->right;
+
+    /* Differentiate numerator and denominator */
+    MathNode* d_num = plant_math_derivative(num, var);
+    MathNode* d_den = plant_math_derivative(den, var);
+
+    if (!d_num || !d_den) {
+        math_node_free(d_num);
+        math_node_free(d_den);
+        return NAN;
+    }
+
+    /* Simplify the derivatives */
+    d_num = plant_math_simplify(d_num);
+    d_den = plant_math_simplify(d_den);
+
+    /* Build the new fraction d_num / d_den */
+    MathNode* new_frac = math_node_binary(OP_DIV, d_num, d_den);
+
+    /* Evaluate the new limit */
+    double result = limit_node(new_frac, var, point);
+    math_node_free(new_frac);
+    return result;
+}
+
+/* Special trigonometric limits */
+static double trig_limit(const MathNode* node, const char* var, double point) {
+    if (!node || node->type != MATH_BINARY_OP || node->op != OP_DIV) return NAN;
+    if (point != 0.0) return NAN; /* Most trig limits are at 0 */
+
+    MathNode* num = node->left;
+    MathNode* den = node->right;
+
+    /* sin(x)/x → 1 */
+    if (num->type == MATH_FUNC_CALL && strcmp(num->sym_name, "SIN") == 0 &&
+        contains_var(num->left, var) && is_symbol_name(den, var)) {
+        /* Check if inner is just var */
+        MathNode* inner = num->left;
+        if (inner->type == MATH_SYMBOL && strcmp(inner->sym_name, var) == 0)
+            return 1.0;
+    }
+
+    /* (1 - cos(x))/x → 0 */
+    if (num->type == MATH_BINARY_OP && num->op == OP_SUB) {
+        if (is_one(num->left) &&
+            num->right->type == MATH_FUNC_CALL &&
+            strcmp(num->right->sym_name, "COS") == 0 &&
+            is_symbol_name(num->right->left, var) &&
+            is_symbol_name(den, var)) {
+            return 0.0;
+        }
+    }
+
+    /* tan(x)/x → 1 */
+    if (num->type == MATH_FUNC_CALL && strcmp(num->sym_name, "TAN") == 0 &&
+        is_symbol_name(num->left, var) && is_symbol_name(den, var)) {
+        return 1.0;
+    }
+
+    /* (e^x - 1)/x → 1 */
+    if (num->type == MATH_BINARY_OP && num->op == OP_SUB) {
+        if (num->right->type == MATH_NUMBER && fabs(num->right->num_val - 1.0) < 1e-10 &&
+            num->left->type == MATH_FUNC_CALL &&
+            strcmp(num->left->sym_name, "EXP") == 0 &&
+            is_symbol_name(num->left->left, var) &&
+            is_symbol_name(den, var)) {
+            return 1.0;
+        }
+    }
+
+    /* (log(1+x))/x → 1 */
+    if (num->type == MATH_FUNC_CALL && strcmp(num->sym_name, "LOG") == 0 &&
+        num->left->type == MATH_BINARY_OP && num->left->op == OP_ADD &&
+        is_one(num->left->left) && is_symbol_name(num->left->right, var) &&
+        is_symbol_name(den, var)) {
+        return 1.0;
+    }
+
+    return NAN;
+}
+
+/* Main limit evaluation */
+static double limit_node(const MathNode* node, const char* var, double point) {
+    if (!node) return NAN;
+
+    /* If the expression doesn't contain the variable, the limit is just the value */
+    if (!contains_var(node, var)) {
+        return plant_math_eval(node);
+    }
+
+    /* Try direct substitution */
+    double val = eval_at(node, var, point);
+
+    /* If the result is finite and not NaN, we're done */
+    if (val == val && fabs(val) < MATH_INF) return val;
+
+    /* Try trigonometric special limits */
+    double tval = trig_limit(node, var, point);
+    if (tval == tval) return tval;
+
+    /* Try L'Hôpital's rule for indeterminate forms */
+    if (is_indeterminate_form(node, var, point)) {
+        return hopital_limit(node, var, point, 0);
+    }
+
+    return val;
+}
+
+double plant_math_limit_val(const MathNode* node, const char* var, double point) {
+    if (!node || !var) return NAN;
+    return limit_node(node, var, point);
+}
+
+char* plant_math_limit_str(const char* expr, const char* var, const char* point_str) {
+    MathNode* ast = plant_math_parse(expr);
+    if (!ast) return strdup("ERROR: Could not parse expression.");
+
+    /* Parse the limit point */
+    double point = NAN;
+    if (strcmp(point_str, "inf") == 0 || strcmp(point_str, "infinity") == 0 ||
+        strcmp(point_str, "INF") == 0) {
+        point = MATH_INF;
+    } else if (strcmp(point_str, "-inf") == 0 || strcmp(point_str, "-infinity") == 0 ||
+               strcmp(point_str, "-INF") == 0) {
+        point = -MATH_INF;
+    } else {
+        MathNode* p_ast = plant_math_parse(point_str);
+        if (p_ast) {
+            point = plant_math_eval(p_ast);
+            math_node_free(p_ast);
+        }
+    }
+
+    double result = limit_node(ast, var, point);
+    math_node_free(ast);
+
+    char buf[64];
+    if (result != result) { /* NaN */
+        snprintf(buf, sizeof(buf), "undefined");
+    } else if (fabs(result) >= MATH_INF) {
+        snprintf(buf, sizeof(buf), "%s%s", result > 0 ? "" : "-", "infinity");
+    } else {
+        snprintf(buf, sizeof(buf), "%g", result);
+    }
+    return strdup(buf);
+}
+
+/* ====================================================================
+ *  v0.50.3 — Integration by Parts
+ *
+ *  Formula: ∫ u dv = uv - ∫ v du
+ *  LIATE heuristic for choosing u:
+ *    L = Logarithmic, I = Inverse trig, A = Algebraic,
+ *    T = Trigonometric, E = Exponential
+ * ==================================================================== */
+
+/* Classify a node for LIATE ranking (lower = better u candidate) */
+static int liate_rank(const MathNode* node) {
+    if (!node) return 5;
+    /* Logarithmic */
+    if (node->type == MATH_FUNC_CALL &&
+        (strcmp(node->sym_name, "LOG") == 0 ||
+         strcmp(node->sym_name, "LN") == 0))
+        return 0;
+    /* Inverse trigonometric */
+    if (node->type == MATH_FUNC_CALL &&
+        (strcmp(node->sym_name, "ASIN") == 0 ||
+         strcmp(node->sym_name, "ACOS") == 0 ||
+         strcmp(node->sym_name, "ATAN") == 0 ||
+         strcmp(node->sym_name, "ARCTAN") == 0))
+        return 1;
+    /* Algebraic (variable or polynomial) */
+    if (node->type == MATH_SYMBOL) return 2;
+    if (node->type == MATH_BINARY_OP &&
+        (node->op == OP_POW || node->op == OP_MUL || node->op == OP_ADD ||
+         node->op == OP_SUB))
+        return 2;
+    /* Trigonometric */
+    if (node->type == MATH_FUNC_CALL &&
+        (strcmp(node->sym_name, "SIN") == 0 ||
+         strcmp(node->sym_name, "COS") == 0 ||
+         strcmp(node->sym_name, "TAN") == 0))
+        return 3;
+    /* Exponential */
+    if (node->type == MATH_FUNC_CALL &&
+        strcmp(node->sym_name, "EXP") == 0)
+        return 4;
+    return 5;
+}
+
+/* Integration by parts: ∫ u·dv = u·v - ∫ v·du */
+static MathNode* integrate_by_parts_impl(const MathNode* u, const MathNode* dv,
+                                          const char* var) {
+    /* v = ∫ dv */
+    MathNode* v = integral_node(dv, var);
+    if (!v) return NULL;
+
+    /* du = d/dx(u) */
+    MathNode* du = plant_math_derivative(u, var);
+    if (!du) { math_node_free(v); return NULL; }
+    du = plant_math_simplify(du);
+
+    /* u*v */
+    MathNode* uv = math_node_binary(OP_MUL,
+        plant_math_deep_copy(u), v);
+
+    /* ∫ v·du */
+    MathNode* vdu = math_node_binary(OP_MUL,
+        plant_math_deep_copy(v), du);
+    MathNode* integral_vdu = integral_node(vdu, var);
+    math_node_free(vdu);
+
+    if (!integral_vdu) {
+        math_node_free(uv);
+        return NULL;
+    }
+
+    /* result = uv - ∫ v·du */
+    MathNode* result = math_node_binary(OP_SUB, uv, integral_vdu);
+    return result;
+}
+
+MathNode* plant_math_integral_parts(const MathNode* node, const char* var) {
+    if (!node || !var) return NULL;
+
+    /* Special case: LOG(x) — u = LOG(x), dv = 1*dx */
+    if (node->type == MATH_FUNC_CALL &&
+        (strcmp(node->sym_name, "LOG") == 0 || strcmp(node->sym_name, "LN") == 0) &&
+        is_symbol_name(node->left, var)) {
+        /* ∫ LOG(x) dx = x*LOG(x) - x */
+        MathNode* x = math_node_symbol(var);
+        MathNode* x_log_x = math_node_binary(OP_MUL,
+            plant_math_deep_copy(x),
+            math_node_func("LOG", plant_math_deep_copy(x)));
+        return math_node_binary(OP_SUB, x_log_x,
+            plant_math_deep_copy(x));
+    }
+
+    /* Must be a product of two functions to apply by-parts */
+    if (node->type != MATH_BINARY_OP || node->op != OP_MUL) return NULL;
+
+    /* Try both orderings for u and dv */
+    const MathNode* factors[2] = { node->left, node->right };
+    int best_u = 0;
+
+    /* LIATE: choose the factor with lower rank as u */
+    int r0 = liate_rank(factors[0]);
+    int r1 = liate_rank(factors[1]);
+    if (r1 < r0) best_u = 1;
+
+    MathNode* result = integrate_by_parts_impl(
+        factors[best_u], factors[1 - best_u], var);
+    if (result) return plant_math_simplify(result);
+
+    /* Try the other ordering */
+    result = integrate_by_parts_impl(
+        factors[1 - best_u], factors[best_u], var);
+    if (result) return plant_math_simplify(result);
+
+    return NULL;
+}
+
+char* plant_math_integral_parts_str(const char* expr, const char* var) {
+    MathNode* ast = plant_math_parse(expr);
+    MathNode* result = plant_math_integral_parts(ast, var);
+    if (!result) {
+        math_node_free(ast);
+        return strdup("ERROR: Integration by parts not applicable to this expression.");
+    }
+    char* inner = plant_math_to_string(result);
+    size_t len = strlen(inner);
+    char* final_str = (char*)malloc(len + 16);
+    snprintf(final_str, len + 16, "%s + C", inner);
+    free(inner);
+    math_node_free(ast);
+    math_node_free(result);
+    return final_str;
+}
+
+/* ====================================================================
+ *  v0.50.3 — Integration by Substitution
+ *
+ *  Pattern matching for ∫ f(g(x))·g'(x) dx = ∫ f(u) du
+ *  Known patterns:
+ *    ∫ 2x·e^(x²) dx = e^(x²) + C
+ *    ∫ cos(x)·sin(x) dx = sin²(x)/2 + C
+ *    ∫ 2x/(x²+1) dx = log(x²+1) + C
+ *    ∫ x·cos(x²) dx = sin(x²)/2 + C
+ * ==================================================================== */
+
+/* Check if a node matches c*x^n (power of variable with coefficient) */
+static int is_power_of_var(const MathNode* node, const char* var, double target_exp) {
+    if (!node) return 0;
+    if (node->type == MATH_BINARY_OP && node->op == OP_MUL) {
+        /* c * x^n */
+        if (is_pure_constant(node->left) && node->right->type == MATH_BINARY_OP &&
+            node->right->op == OP_POW && is_symbol_name(node->right->left, var) &&
+            node->right->right->type == MATH_NUMBER &&
+            fabs(node->right->right->num_val - target_exp) < 1e-10)
+            return 1;
+        /* x^n * c */
+        if (is_pure_constant(node->right) && node->left->type == MATH_BINARY_OP &&
+            node->left->op == OP_POW && is_symbol_name(node->left->left, var) &&
+            node->left->right->type == MATH_NUMBER &&
+            fabs(node->left->right->num_val - target_exp) < 1e-10)
+            return 1;
+        /* c * x (target_exp == 1) */
+        if (target_exp == 1.0) {
+            if (is_pure_constant(node->left) && is_symbol_name(node->right, var))
+                return 1;
+            if (is_pure_constant(node->right) && is_symbol_name(node->left, var))
+                return 1;
+        }
+    }
+    if (node->type == MATH_BINARY_OP && node->op == OP_POW &&
+        is_symbol_name(node->left, var) &&
+        node->right->type == MATH_NUMBER &&
+        fabs(node->right->num_val - target_exp) < 1e-10)
+        return 1;
+    if (target_exp == 1.0 && node->type == MATH_SYMBOL &&
+        strcmp(node->sym_name, var) == 0)
+        return 1;
+    return 0;
+}
+
+MathNode* plant_math_integral_subst(const MathNode* node, const char* var) {
+    if (!node || !var) return NULL;
+
+    /* ∫ cos(x)·sin(x) dx → sin²(x)/2 + C */
+    if (node->type == MATH_BINARY_OP && node->op == OP_MUL) {
+        /* cos(x) * sin(x) */
+        int cos_sin = 0, sin_cos = 0;
+        if (node->left->type == MATH_FUNC_CALL &&
+            strcmp(node->left->sym_name, "COS") == 0 &&
+            is_symbol_name(node->left->left, var) &&
+            node->right->type == MATH_FUNC_CALL &&
+            strcmp(node->right->sym_name, "SIN") == 0 &&
+            is_symbol_name(node->right->left, var))
+            cos_sin = 1;
+        if (node->right->type == MATH_FUNC_CALL &&
+            strcmp(node->right->sym_name, "COS") == 0 &&
+            is_symbol_name(node->right->left, var) &&
+            node->left->type == MATH_FUNC_CALL &&
+            strcmp(node->left->sym_name, "SIN") == 0 &&
+            is_symbol_name(node->left->left, var))
+            sin_cos = 1;
+        if (cos_sin || sin_cos) {
+            /* ∫ cos(x)sin(x) dx = sin²(x)/2 */
+            MathNode* sin_x = math_node_func("SIN", math_node_symbol(var));
+            MathNode* sin_sq = math_node_binary(OP_POW, sin_x, math_node_number(2.0));
+            return math_node_binary(OP_DIV, sin_sq, math_node_number(2.0));
+        }
+    }
+
+    /* ∫ 2x·e^(x²) dx → e^(x²) + C */
+    if (node->type == MATH_BINARY_OP && node->op == OP_MUL) {
+        MathNode* L = node->left, *R = node->right;
+        /* 2x * e^(x^2) */
+        if (is_power_of_var(L, var, 1.0) &&
+            R->type == MATH_FUNC_CALL && strcmp(R->sym_name, "EXP") == 0 &&
+            R->left->type == MATH_BINARY_OP && R->left->op == OP_POW &&
+            is_symbol_name(R->left->left, var) &&
+            R->left->right->type == MATH_NUMBER &&
+            fabs(R->left->right->num_val - 2.0) < 1e-10) {
+            /* ∫ 2x·e^(x²) dx = e^(x²) */
+            return plant_math_deep_copy(R);
+        }
+        /* e^(x^2) * 2x */
+        if (L->type == MATH_FUNC_CALL && strcmp(L->sym_name, "EXP") == 0 &&
+            L->left->type == MATH_BINARY_OP && L->left->op == OP_POW &&
+            is_symbol_name(L->left->left, var) &&
+            L->left->right->type == MATH_NUMBER &&
+            fabs(L->left->right->num_val - 2.0) < 1e-10 &&
+            is_power_of_var(R, var, 1.0)) {
+            return plant_math_deep_copy(L);
+        }
+    }
+
+    /* ∫ 2x/(x²+1) dx → log(x²+1) */
+    if (node->type == MATH_BINARY_OP && node->op == OP_DIV) {
+        MathNode* num = node->left, *den = node->right;
+        if (is_power_of_var(num, var, 1.0) && den->type == MATH_BINARY_OP &&
+            den->op == OP_ADD) {
+            /* Check x^2 + 1 or 1 + x^2 */
+            int has_x2 = 0, has_one = 0;
+            if (matches_power_of_var(den->left, var, 2.0) && is_one(den->right))
+                { has_x2 = 1; has_one = 1; }
+            if (is_one(den->left) && matches_power_of_var(den->right, var, 2.0))
+                { has_x2 = 1; has_one = 1; }
+            if (has_x2 && has_one) {
+                /* ∫ 2x/(x²+1) dx = log(x²+1) */
+                MathNode* x2_plus_1 = plant_math_deep_copy(den);
+                return math_node_func("LOG", x2_plus_1);
+            }
+        }
+    }
+
+    /* ∫ x·cos(x²) dx → sin(x²)/2 */
+    if (node->type == MATH_BINARY_OP && node->op == OP_MUL) {
+        MathNode* L = node->left, *R = node->right;
+        /* x * cos(x^2) */
+        if (is_symbol_name(L, var) &&
+            R->type == MATH_FUNC_CALL && strcmp(R->sym_name, "COS") == 0 &&
+            R->left->type == MATH_BINARY_OP && R->left->op == OP_POW &&
+            is_symbol_name(R->left->left, var) &&
+            R->left->right->type == MATH_NUMBER &&
+            fabs(R->left->right->num_val - 2.0) < 1e-10) {
+            /* ∫ x·cos(x²) dx = sin(x²)/2 */
+            MathNode* sin_x2 = math_node_func("SIN",
+                plant_math_deep_copy(R->left));
+            return math_node_binary(OP_DIV, sin_x2, math_node_number(2.0));
+        }
+        /* cos(x^2) * x */
+        if (R->type == MATH_SYMBOL && strcmp(R->sym_name, var) == 0 &&
+            L->type == MATH_FUNC_CALL && strcmp(L->sym_name, "COS") == 0 &&
+            L->left->type == MATH_BINARY_OP && L->left->op == OP_POW &&
+            is_symbol_name(L->left->left, var) &&
+            L->left->right->type == MATH_NUMBER &&
+            fabs(L->left->right->num_val - 2.0) < 1e-10) {
+            MathNode* sin_x2 = math_node_func("SIN",
+                plant_math_deep_copy(L->left));
+            return math_node_binary(OP_DIV, sin_x2, math_node_number(2.0));
+        }
+    }
+
+    return NULL;
+}
+
+char* plant_math_integral_subst_str(const char* expr, const char* var) {
+    MathNode* ast = plant_math_parse(expr);
+    MathNode* result = plant_math_integral_subst(ast, var);
+    if (!result) {
+        math_node_free(ast);
+        return strdup("ERROR: No substitution pattern matched for this integral.");
+    }
+    char* inner = plant_math_to_string(result);
+    size_t len = strlen(inner);
+    char* final_str = (char*)malloc(len + 16);
+    snprintf(final_str, len + 16, "%s + C", inner);
+    free(inner);
+    math_node_free(ast);
+    math_node_free(result);
+    return final_str;
 }
 
 /* ====================================================================

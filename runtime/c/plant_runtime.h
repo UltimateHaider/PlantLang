@@ -325,6 +325,9 @@ char*        plant_complex_mul_str(const char* a, const char* b);
 char*        plant_complex_div_str(const char* a, const char* b);
 char*        plant_complex_conj_str(const char* a);
 char*        plant_complex_abs_str(const char* a);
+char*        plant_math_limit_str(const char* expr, const char* var, const char* point);
+char*        plant_math_integral_parts_str(const char* expr, const char* var);
+char*        plant_math_integral_subst_str(const char* expr, const char* var);
 void         plant_math_free(void* math_ptr);
 void         plant_math_debug_print(void* node);
 

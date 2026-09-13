@@ -1,0 +1,5 @@
+# v0.50.3 — Integration by substitution: ∫ 2x*e^(x^2) dx = e^(x^2)
+ACTION main(),
+  SHOW MATH_INTEGRATE_SUBST("2*x*EXP(x^2)", "x").
+  GIVE 0.
+/GIVE main.

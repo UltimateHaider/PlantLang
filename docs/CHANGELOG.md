@@ -1,3 +1,18 @@
+## v0.50.3 - 2026 (Limits, Integration by Parts & Integration by Substitution)
+
+### New Language Features
+
+#### Limit Evaluation (`MATH_LIMIT`)
+- `MATH_LIMIT("expr", "var", "point")` — evaluates limits with direct substitution, trig/exp special limits, and L'Hôpital's rule for indeterminate forms
+- Use `"inf"` or `"infinity"` for limits at infinity
+
+#### Integration by Parts (`MATH_INTEGRATE_PARTS`)
+- `MATH_INTEGRATE_PARTS("expr", "var")` — integrates products using `∫ u dv = uv - ∫ v du` with LIATE heuristic for automatic `u` selection
+- Handles `LOG(x)` directly, and recursive by-parts for `x^2*e^x`
+
+#### Integration by Substitution (`MATH_INTEGRATE_SUBST`)
+- `MATH_INTEGRATE_SUBST("expr", "var")` — pattern-matches composite function forms for `∫ f(g(x))·g'(x) dx`
+
 ## v0.50.2 - 2026 (Complete Rational Fraction Unification & Complex Number Subsystem)
 
 ### New Language Features

@@ -1,0 +1,5 @@
+# v0.50.3 — Integration by substitution: ∫ 2x/(x^2+1) dx = log(x^2+1)
+ACTION main(),
+  SHOW MATH_INTEGRATE_SUBST("2*x/(x^2 + 1)", "x").
+  GIVE 0.
+/GIVE main.
