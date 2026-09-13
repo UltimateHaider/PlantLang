@@ -1,13 +1,14 @@
 /*
- * plant_math.h — v0.50.0j: Symbolic Math + Advanced CAS
+ * plant_math.h — v0.50.2: Symbolic Math + Advanced CAS + Complex Numbers
  *
  * MathNode AST structures and API for the PlantLang symbolic algebra subsystem.
  * Supports numbers, symbols, constants, binary/unary ops, function calls,
  * operator precedence, right-associative exponentiation, evaluation to double,
  * automatic simplification, like terms collection, distribution,
  * descending term ordering, symbolic differentiation, integration,
- * polynomial factoring, GCD extraction, and quadratic equation solving
- * with complex number support (imaginary unit i).
+ * polynomial factoring, GCD extraction, quadratic equation solving
+ * with complex number support, complete rational fraction unification,
+ * and a full complex number arithmetic subsystem (PlantComplex).
  */
 
 #ifndef PLANT_MATH_H
@@ -134,5 +135,36 @@ char*     plant_math_quadratic_str(const char* a, const char* b, const char* c);
 
 /* Convenience: free a PlantMath*. */
 void      plant_math_free(void* math_ptr);
+
+/* ====================================================================
+ *  v0.50.2 — Complex Number Subsystem (PlantComplex)
+ * ==================================================================== */
+
+typedef struct {
+    double real;
+    double imag;
+} PlantComplex;
+
+/* Complex arithmetic */
+PlantComplex plant_complex_add(PlantComplex a, PlantComplex b);
+PlantComplex plant_complex_sub(PlantComplex a, PlantComplex b);
+PlantComplex plant_complex_mul(PlantComplex a, PlantComplex b);
+PlantComplex plant_complex_div(PlantComplex a, PlantComplex b);
+PlantComplex plant_complex_conj(PlantComplex z);
+double       plant_complex_abs(PlantComplex z);
+
+/* Convenience: create complex from doubles */
+PlantComplex plant_complex_make(double real, double imag);
+
+/* Convenience: format complex as string "a+bi". Caller frees result. */
+char*        plant_complex_to_str(PlantComplex z);
+
+/* Convenience: complex built-in wrappers (string args → complex ops) */
+char*  plant_complex_add_str(const char* a, const char* b);
+char*  plant_complex_sub_str(const char* a, const char* b);
+char*  plant_complex_mul_str(const char* a, const char* b);
+char*  plant_complex_div_str(const char* a, const char* b);
+char*  plant_complex_conj_str(const char* a);
+char*  plant_complex_abs_str(const char* a);
 
 #endif /* PLANT_MATH_H */

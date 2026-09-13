@@ -319,6 +319,12 @@ char*        plant_math_integral_str(const char* expr, const char* var);
 char*        plant_math_factor_str(const char* expr);
 char*        plant_math_quadratic_str(const char* a, const char* b, const char* c);
 long         plant_math_gcd(long a, long b);
+char*        plant_complex_add_str(const char* a, const char* b);
+char*        plant_complex_sub_str(const char* a, const char* b);
+char*        plant_complex_mul_str(const char* a, const char* b);
+char*        plant_complex_div_str(const char* a, const char* b);
+char*        plant_complex_conj_str(const char* a);
+char*        plant_complex_abs_str(const char* a);
 void         plant_math_free(void* math_ptr);
 void         plant_math_debug_print(void* node);
 

@@ -8395,6 +8395,14 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     REAP e FROM _handle_func_paren2, e, "MATH_INTEGRAL", "plant_math_integral_str".
     # v0.50.0j — MATH_QUADRATIC: solve ax^2 + bx + c = 0.
     REAP e FROM _handle_func_paren3, e, "MATH_QUADRATIC", "plant_math_quadratic_str".
+    # v0.50.2 — MATH_COMPLEX_*: complex number arithmetic (must run BEFORE _math_func_paren
+    # to avoid ABS→plant_abs rewriting inside MATH_COMPLEX_ABS).
+    REAP e FROM _handle_func_paren2, e, "MATH_COMPLEX_ADD", "plant_complex_add_str".
+    REAP e FROM _handle_func_paren2, e, "MATH_COMPLEX_SUB", "plant_complex_sub_str".
+    REAP e FROM _handle_func_paren2, e, "MATH_COMPLEX_MUL", "plant_complex_mul_str".
+    REAP e FROM _handle_func_paren2, e, "MATH_COMPLEX_DIV", "plant_complex_div_str".
+    REAP e FROM _handle_func_paren, e, "MATH_COMPLEX_CONJ", "plant_complex_conj_str".
+    REAP e FROM _handle_func_paren, e, "MATH_COMPLEX_ABS", "plant_complex_abs_str".
     # ── v0.48.36 — temporal queries / introspection in expression
     #    position: NOW [FORMAT : x] → plant_now("x"), ANALYZE x →
     #    plant_analyze(x), TYPEOF x → plant_typeof(x). _ni_replace
@@ -13954,7 +13962,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.50.1 (pure native)".
+  SHOW "Chloroplast 0.50.2 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

@@ -1,0 +1,5 @@
+# v0.50.2 — Complex: add (3+2i)+(1+4i)
+ACTION main(),
+  SHOW MATH_COMPLEX_ADD("3+2i", "1+4i").
+  GIVE 0.
+/GIVE main.

@@ -1,3 +1,26 @@
+## v0.50.2 - 2026 (Complete Rational Fraction Unification & Complex Number Subsystem)
+
+### New Language Features
+
+#### Complete Fraction Arithmetic
+- General addition: `a/b + c/d → (ad+cb)/(bd)`
+- General subtraction: `a/b - c/d → (ad-cb)/(bd)`
+- Same denominator: `a/c + b/c → (a+b)/c`
+- Denominator cancellation: `(a*c)/c → a`
+- Fraction multiplication: `(a/b)*(c/d) → (ac)/(bd)`
+- Fraction division: `(a/b)/(c/d) → (ad)/(bc)`
+
+#### Complex Number Built-ins
+- `MATH_COMPLEX_ADD("3+2i", "1+4i")` → `4+6i`
+- `MATH_COMPLEX_MUL("3+2i", "1+4i")` → `-5+14i`
+- `MATH_COMPLEX_DIV("3+2i", "1+4i")` → `0.647059-0.588235i`
+- `MATH_COMPLEX_CONJ("3+2i")` → `3-2i`
+- `MATH_COMPLEX_ABS("3+4i")` → `5`
+
+#### Complex Simplification
+- `i*i → -1`
+- `sqrt(-1) → i`
+
 ## v0.50.1 - 2026 (Advanced Symbolic Simplification: TRIG, LOG, POW, FRAC)
 
 ### New Language Features

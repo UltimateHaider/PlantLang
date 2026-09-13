@@ -1,0 +1,5 @@
+# v0.50.2 — Complex: conj(3+2i)
+ACTION main(),
+  SHOW MATH_COMPLEX_CONJ("3+2i").
+  GIVE 0.
+/GIVE main.

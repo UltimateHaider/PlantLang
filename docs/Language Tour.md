@@ -1006,7 +1006,7 @@ REAP mx FROM math_max, "3", "7".   # → 7
 REAP rd FROM math_random.          # uniform [0,1) as text
 ```
 
-### CAS (Computer Algebra System) Built-ins (v0.50.1)
+### CAS (Computer Algebra System) Built-ins (v0.50.2)
 
 The compiler provides compile-time symbolic math operations via `SHOW`:
 
@@ -1016,36 +1016,35 @@ SHOW MATH_SIMPLIFY("2*x + 3*x").     # → (5*x)
 SHOW MATH_SIMPLIFY("SIN(x)^2 + COS(x)^2").  # → 1  (Pythagorean)
 SHOW MATH_SIMPLIFY("1 + TAN(x)^2").   # → 1/(COS(x)^2)  (sec^2 identity)
 SHOW MATH_SIMPLIFY("LOG(x * y)").     # → LOG(x)+LOG(y)  (product rule)
-SHOW MATH_SIMPLIFY("LOG(x^3)").       # → 3*LOG(x)  (power rule)
 SHOW MATH_SIMPLIFY("(x^2)^3").        # → x^6  (power of power)
-SHOW MATH_SIMPLIFY("x^2 * x^3").      # → x^5  (product of powers)
-SHOW MATH_SIMPLIFY("x^5 / x^2").      # → x^3  (quotient of powers)
 SHOW MATH_SIMPLIFY("1/a + 1/b").      # → (a+b)/(a*b)  (fraction unification)
+SHOW MATH_SIMPLIFY("i*i").            # → -1  (complex constant folding)
+SHOW MATH_SIMPLIFY("sqrt(-1)").       # → i
 
-# Collect like terms — groups powers
-SHOW MATH_COLLECT("x^2 + 3*x + x^2"). # → ((2*(x^2))+(4*x))
+# Fraction arithmetic
+SHOW MATH_SIMPLIFY("1/2 + 1/3").      # → 0.833333  (cross-multiply)
+SHOW MATH_SIMPLIFY("(x/y)*(z/w)").    # → (x*z)/(y*w)  (fraction mul)
+SHOW MATH_SIMPLIFY("(x/y)/(z/w)").    # → (x*w)/(y*z)  (fraction div)
 
-# Distribute — expands (a+b)*c
-SHOW MATH_DISTRIBUTE("(x+2)*3").      # → ((3*x)+6)
+# Complex number arithmetic (v0.50.2)
+SHOW MATH_COMPLEX_ADD("3+2i", "1+4i"). # → 4+6i
+SHOW MATH_COMPLEX_SUB("3+2i", "1+4i"). # → 2-2i
+SHOW MATH_COMPLEX_MUL("3+2i", "1+4i"). # → -5+14i
+SHOW MATH_COMPLEX_DIV("3+2i", "1+4i"). # → 0.647059-0.588235i
+SHOW MATH_COMPLEX_CONJ("3+2i").        # → 3-2i
+SHOW MATH_COMPLEX_ABS("3+4i").         # → 5
 
 # Derivative — d/dx
 SHOW MATH_DERIVATIVE("x^3", "x").     # → (3*(x^2))
-SHOW MATH_DERIVATIVE("SIN(x)", "x").  # → COS(x)
-SHOW MATH_DERIVATIVE("EXP(x^2)", "x").# → chain rule: 2*x*EXP(x^2)
 
 # Integral — indefinite ∫
 SHOW MATH_INTEGRAL("x^2", "x").       # → ((x^3)/3) + C
-SHOW MATH_INTEGRAL("TAN(x)", "x").    # → -LOG(ABS(COS(x))) + C
-SHOW MATH_INTEGRAL("1/(x^2+1)", "x"). # → ARCTAN(x) + C
 
 # Factor — GCD, difference of squares, perfect square trinomial
 SHOW MATH_FACTOR("6*x + 9").          # → 3*(2*x + 3)
-SHOW MATH_FACTOR("x^2 - 4").          # → (x-2)*(x+2)
-SHOW MATH_FACTOR("x^2 + 2*x + 1").    # → (x+1)^2
 
-# Quadratic — solve ax^2 + bx + c = 0 (v0.50.0j)
+# Quadratic — solve ax^2 + bx + c = 0
 SHOW MATH_QUADRATIC("1", "0", "-4").  # → x1 = -2, x2 = 2
-SHOW MATH_QUADRATIC("1", "0", "1").   # → x1 = 0 + i, x2 = 0 - i
 ```
 
 ### Extended Math Library (v0.49.17)

@@ -1,0 +1,5 @@
+# v0.50.2 — Simplify: (1+i)(1-i) = 2
+ACTION main(),
+  SHOW MATH_SIMPLIFY("(1+i)*(1-i)").
+  GIVE 0.
+/GIVE main.

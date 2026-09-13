@@ -1,0 +1,5 @@
+# v0.50.2 — Simplify: i*i*i = -i
+ACTION main(),
+  SHOW MATH_SIMPLIFY("i*i*i").
+  GIVE 0.
+/GIVE main.

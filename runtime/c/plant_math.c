@@ -1,5 +1,5 @@
 /*
- * plant_math.c — v0.50.1: Advanced Symbolic Simplification
+ * plant_math.c — v0.50.2: Advanced Symbolic Simplification + Complex Numbers
  *
  * Full implementation of the PlantLang symbolic algebra subsystem.
  * Tokenizer → Pratt parser (precedence climbing) → AST evaluator.
@@ -555,6 +555,9 @@ static int is_one(const MathNode* n) {
     return 0;
 }
 
+/* Forward declaration for is_func (defined after simplify_node) */
+static int is_func(const MathNode* n, const char* name);
+
 /* Simplify a single node (one pass) — returns new or reused node */
 static MathNode* simplify_node(MathNode* node) {
     if (!node) return NULL;
@@ -602,6 +605,14 @@ static MathNode* simplify_node(MathNode* node) {
         }
 
         case MATH_FUNC_CALL: {
+            /* v0.50.2 — SQRT(-1) → i, before numeric folding which would yield NaN */
+            if (is_func(node, "SQRT") && node->left &&
+                node->left->type == MATH_NUMBER && node->left->num_val == -1.0) {
+                node->left = NULL;
+                math_node_free(node);
+                node = math_node_symbol("i");
+                return node;
+            }
             /* Fold function calls on numeric arguments */
             if (is_number(node->left)) {
                 MathFunc1 fn = lookup_function(node->sym_name);
@@ -817,16 +828,37 @@ static MathNode* simplify_node(MathNode* node) {
  *  v0.50.1 — Advanced Symbolic Simplification Engines
  *
  *  Four specialized passes that run inside the simplify pipeline:
- *    simplify_pow()  — exponent law reductions
- *    simplify_trig() — trigonometric identity rewrites
- *    simplify_log()  — logarithmic law expansions
- *    simplify_frac() — rational fraction denominator unification
+ *    simplify_pow()     — exponent law reductions
+ *    simplify_trig()    — trigonometric identity rewrites
+ *    simplify_log()     — logarithmic law expansions
+ *    simplify_frac()    — rational fraction denominator unification
+ *    simplify_complex() — complex number constant folding (i*i → -1)
  * ==================================================================== */
 
-/* ── Helper: check if node is a function call with given name ─────── */
+static MathNode* simplify_complex_node(MathNode* node);
+
+/* ── Helper: check if node is a function call with given name ───────
+ *    Matches both "SQRT" and prefixed variants like "plant_sqrt", "math_sqrt". */
 static int is_func(const MathNode* n, const char* name) {
-    return n && n->type == MATH_FUNC_CALL &&
-           n->sym_name && strcmp(n->sym_name, name) == 0;
+    if (!n || n->type != MATH_FUNC_CALL || !n->sym_name) return 0;
+    if (strcmp(n->sym_name, name) == 0) return 1;
+    /* Also accept plant_ or math_ prefixed lowercase variants */
+    const char* prefix = NULL;
+    size_t prefix_len = 0;
+    if (strncmp(n->sym_name, "plant_", 6) == 0) { prefix = "plant_"; prefix_len = 6; }
+    if (strncmp(n->sym_name, "math_", 5) == 0) { prefix = "math_"; prefix_len = 5; }
+    if (prefix) {
+        /* Lowercase the canonical name and compare with prefix */
+        char lower_name[128];
+        size_t j;
+        for (j = 0; name[j] && j < sizeof(lower_name) - 1; j++)
+            lower_name[j] = name[j] >= 'A' && name[j] <= 'Z' ? name[j] + 32 : name[j];
+        lower_name[j] = '\0';
+        char expected[128];
+        snprintf(expected, sizeof(expected), "%s%s", prefix, lower_name);
+        if (strcmp(n->sym_name, expected) == 0) return 1;
+    }
+    return 0;
 }
 
 /* ── Helper: check if node matches op as binary ───────────────────── */
@@ -1173,14 +1205,23 @@ static MathNode* simplify_log_node(MathNode* node) {
 }
 
 /* ====================================================================
- *  simplify_frac — Rational Fraction Denominator Unification
+ *  simplify_frac — Complete Rational Fraction Unification
  *
- *  1/a + 1/b → (a+b)/(a*b)           base rule
- *  1/a - 1/b → (b-a)/(a*b)           base rule
- *  a/(b*c) + a/(b*d) → a*(c+d)/(b*c*d)  partial denom
- *
- *  Stub for future: a/b + c/d → (a*d + b*c)/(b*d)
+ *  1/a + 1/b → (a+b)/(a*b)           base rule (unit numerators)
+ *  1/a - 1/b → (b-a)/(a*b)           base rule (unit numerators)
+ *  a/(b*c) + a/(b*d) → a*(c+d)/(b*c*d)  same numerator shortcut
+ *  a/c + b/c → (a+b)/c               same denominator
+ *  a/b + c/d → (a*d + c*b)/(b*d)     general cross-multiplication
+ *  a/b - c/d → (a*d - c*b)/(b*d)     general cross-multiplication
+ *  (a*c)/c → a                        denominator cancellation
+ *  (a/b)*(c/d) → (a*c)/(b*d)         fraction multiplication
+ *  (a/b)/(c/d) → (a*d)/(b*c)         fraction division
  * ==================================================================== */
+
+/* Helper: check if a node is a fraction (a/b) */
+static int is_frac(const MathNode* n) {
+    return n && n->type == MATH_BINARY_OP && n->op == OP_DIV;
+}
 
 static MathNode* simplify_frac_node(MathNode* node) {
     if (!node) return NULL;
@@ -1189,65 +1230,162 @@ static MathNode* simplify_frac_node(MathNode* node) {
     if (node->left)  node->left  = simplify_frac_node(node->left);
     if (node->right) node->right = simplify_frac_node(node->right);
 
-    /* ── 1/a + 1/b → (a+b)/(a*b) ── */
+    /* ── ADDITION ── */
     if (node->type == MATH_BINARY_OP && node->op == OP_ADD) {
         MathNode* L = node->left;
         MathNode* R = node->right;
-        if (L && R &&
-            L->type == MATH_BINARY_OP && L->op == OP_DIV && is_one(L->left) &&
-            R->type == MATH_BINARY_OP && R->op == OP_DIV && is_one(R->left)) {
-            /* 1/a + 1/b → (a+b)/(a*b) */
+
+        /* 1/a + 1/b → (a+b)/(a*b) — unit numerator shortcut */
+        if (is_frac(L) && is_one(L->left) &&
+            is_frac(R) && is_one(R->left)) {
             MathNode* a = plant_math_deep_copy(L->right);
             MathNode* b = plant_math_deep_copy(R->right);
             MathNode* numer = math_node_binary(OP_ADD,
                 plant_math_deep_copy(a), plant_math_deep_copy(b));
             MathNode* denom = math_node_binary(OP_MUL, a, b);
-            node->left = NULL;
-            node->right = NULL;
+            node->left = NULL; node->right = NULL;
             math_node_free(node);
             node = math_node_binary(OP_DIV, numer, denom);
             return node;
         }
 
-        /* a/(b*c) + a/(b*d) → a*(c+d)/(b*c*d)  same numerator, shared denom factor */
-        if (L && R &&
-            L->type == MATH_BINARY_OP && L->op == OP_DIV &&
-            R->type == MATH_BINARY_OP && R->op == OP_DIV) {
-            MathNode* ln = L->left,  *ld = L->right;
-            MathNode* rn = R->left,  *rd = R->right;
-            if (ln && rn && ld && rd && trees_equal(ln, rn)) {
-                /* Same numerator a: a/b1 + a/b2 → a*(b1+b2)/(b1*b2) */
-                MathNode* b1 = plant_math_deep_copy(ld);
-                MathNode* b2 = plant_math_deep_copy(rd);
-                MathNode* sum_b = math_node_binary(OP_ADD,
-                    plant_math_deep_copy(b1), plant_math_deep_copy(b2));
-                MathNode* prod_b = math_node_binary(OP_MUL, b1, b2);
-                MathNode* numer = math_node_binary(OP_MUL,
-                    plant_math_deep_copy(ln), sum_b);
-                node->left = NULL;
-                node->right = NULL;
-                math_node_free(node);
-                node = math_node_binary(OP_DIV, numer, prod_b);
-                return node;
-            }
+        /* a/c + b/c → (a+b)/c — same denominator */
+        if (is_frac(L) && is_frac(R) && trees_equal(L->right, R->right)) {
+            MathNode* numer = math_node_binary(OP_ADD,
+                plant_math_deep_copy(L->left),
+                plant_math_deep_copy(R->left));
+            MathNode* denom = plant_math_deep_copy(L->right);
+            node->left = NULL; node->right = NULL;
+            math_node_free(node);
+            node = math_node_binary(OP_DIV, numer, denom);
+            return node;
+        }
+
+        /* a/(b*c) + a/(b*d) → a*(c+d)/(b*c*d) — same numerator */
+        if (is_frac(L) && is_frac(R) &&
+            trees_equal(L->left, R->left)) {
+            MathNode* b1 = plant_math_deep_copy(L->right);
+            MathNode* b2 = plant_math_deep_copy(R->right);
+            MathNode* sum_b = math_node_binary(OP_ADD,
+                plant_math_deep_copy(b1), plant_math_deep_copy(b2));
+            MathNode* prod_b = math_node_binary(OP_MUL, b1, b2);
+            MathNode* numer = math_node_binary(OP_MUL,
+                plant_math_deep_copy(L->left), sum_b);
+            node->left = NULL; node->right = NULL;
+            math_node_free(node);
+            node = math_node_binary(OP_DIV, numer, prod_b);
+            return node;
+        }
+
+        /* a/b + c/d → (a*d + c*b)/(b*d) — general cross-multiplication */
+        if (is_frac(L) && is_frac(R)) {
+            MathNode* a = plant_math_deep_copy(L->left);
+            MathNode* b = plant_math_deep_copy(L->right);
+            MathNode* c = plant_math_deep_copy(R->left);
+            MathNode* d = plant_math_deep_copy(R->right);
+            MathNode* ad = math_node_binary(OP_MUL, a, d);
+            MathNode* cb = math_node_binary(OP_MUL, c, b);
+            MathNode* numer = math_node_binary(OP_ADD, ad, cb);
+            MathNode* bd = math_node_binary(OP_MUL,
+                plant_math_deep_copy(L->right),
+                plant_math_deep_copy(R->right));
+            node->left = NULL; node->right = NULL;
+            math_node_free(node);
+            node = math_node_binary(OP_DIV, numer, bd);
+            return node;
         }
     }
 
-    /* ── 1/a - 1/b → (b-a)/(a*b) ── */
+    /* ── SUBTRACTION ── */
     if (node->type == MATH_BINARY_OP && node->op == OP_SUB) {
         MathNode* L = node->left;
         MathNode* R = node->right;
-        if (L && R &&
-            L->type == MATH_BINARY_OP && L->op == OP_DIV && is_one(L->left) &&
-            R->type == MATH_BINARY_OP && R->op == OP_DIV && is_one(R->left)) {
-            /* 1/a - 1/b → (b-a)/(a*b) */
+
+        /* 1/a - 1/b → (b-a)/(a*b) — unit numerator shortcut */
+        if (is_frac(L) && is_one(L->left) &&
+            is_frac(R) && is_one(R->left)) {
             MathNode* a = plant_math_deep_copy(L->right);
             MathNode* b = plant_math_deep_copy(R->right);
             MathNode* numer = math_node_binary(OP_SUB,
                 plant_math_deep_copy(b), plant_math_deep_copy(a));
             MathNode* denom = math_node_binary(OP_MUL, a, b);
-            node->left = NULL;
-            node->right = NULL;
+            node->left = NULL; node->right = NULL;
+            math_node_free(node);
+            node = math_node_binary(OP_DIV, numer, denom);
+            return node;
+        }
+
+        /* a/c - b/c → (a-b)/c — same denominator */
+        if (is_frac(L) && is_frac(R) && trees_equal(L->right, R->right)) {
+            MathNode* numer = math_node_binary(OP_SUB,
+                plant_math_deep_copy(L->left),
+                plant_math_deep_copy(R->left));
+            MathNode* denom = plant_math_deep_copy(L->right);
+            node->left = NULL; node->right = NULL;
+            math_node_free(node);
+            node = math_node_binary(OP_DIV, numer, denom);
+            return node;
+        }
+
+        /* a/b - c/d → (a*d - c*b)/(b*d) — general cross-multiplication */
+        if (is_frac(L) && is_frac(R)) {
+            MathNode* a = plant_math_deep_copy(L->left);
+            MathNode* b = plant_math_deep_copy(L->right);
+            MathNode* c = plant_math_deep_copy(R->left);
+            MathNode* d = plant_math_deep_copy(R->right);
+            MathNode* ad = math_node_binary(OP_MUL, a, d);
+            MathNode* cb = math_node_binary(OP_MUL, c, b);
+            MathNode* numer = math_node_binary(OP_SUB, ad, cb);
+            MathNode* bd = math_node_binary(OP_MUL,
+                plant_math_deep_copy(L->right),
+                plant_math_deep_copy(R->right));
+            node->left = NULL; node->right = NULL;
+            math_node_free(node);
+            node = math_node_binary(OP_DIV, numer, bd);
+            return node;
+        }
+    }
+
+    /* ── MULTIPLICATION: (a/b)*(c/d) → (a*c)/(b*d) ── */
+    if (node->type == MATH_BINARY_OP && node->op == OP_MUL) {
+        MathNode* L = node->left;
+        MathNode* R = node->right;
+        if (is_frac(L) && is_frac(R)) {
+            MathNode* numer = math_node_binary(OP_MUL,
+                plant_math_deep_copy(L->left),
+                plant_math_deep_copy(R->left));
+            MathNode* denom = math_node_binary(OP_MUL,
+                plant_math_deep_copy(L->right),
+                plant_math_deep_copy(R->right));
+            node->left = NULL; node->right = NULL;
+            math_node_free(node);
+            node = math_node_binary(OP_DIV, numer, denom);
+            return node;
+        }
+    }
+
+    /* ── DIVISION: (a/b)/(c/d) → (a*d)/(b*c) ── */
+    if (node->type == MATH_BINARY_OP && node->op == OP_DIV) {
+        MathNode* L = node->left;
+        MathNode* R = node->right;
+
+        /* Denominator cancellation: (a*c)/c → a */
+        if (is_frac(L) && trees_equal(L->right, R)) {
+            MathNode* result = plant_math_deep_copy(L->left);
+            node->left = NULL; node->right = NULL;
+            math_node_free(node);
+            return result;
+        }
+
+        /* Fraction division: (a/b)/(c/d) → (a*d)/(b*c) */
+        if (is_frac(L) && is_frac(R)) {
+            MathNode* numer = math_node_binary(OP_MUL,
+                plant_math_deep_copy(L->left),
+                plant_math_deep_copy(R->right));
+            MathNode* denom = math_node_binary(OP_MUL,
+                plant_math_deep_copy(L->right),
+                plant_math_deep_copy(R->left));
+            node->left = NULL; node->right = NULL;
             math_node_free(node);
             node = math_node_binary(OP_DIV, numer, denom);
             return node;
@@ -1754,15 +1892,16 @@ static MathNode* collect_and_sort(MathNode* node) {
  *  Simplifier pipeline — iterates until fixed point or cap
  *
  *  Passes per iteration:
- *    1. simplify_node  — constant folding, identity, cancellations
- *    2. simplify_pow   — exponent law reductions
- *    3. simplify_trig  — trigonometric identity rewrites
- *    4. simplify_log   — logarithmic law expansions
- *    5. simplify_frac  — rational fraction unification
- *    6. distribute_node — expand products over sums
- *    7. normalize_node — standardize operand ordering (a-b → a+(-b), num*expr)
- *    8. collect_and_sort — flatten sums, merge like terms, descending order
- *    9. simplify_node  — final cleanup (1*x → x, x+0 → x, etc.)
+ *    1. simplify_node     — constant folding, identity, cancellations
+ *    2. simplify_pow      — exponent law reductions
+ *    3. simplify_trig     — trigonometric identity rewrites
+ *    4. simplify_log      — logarithmic law expansions
+ *    5. simplify_frac     — rational fraction unification
+ *    6. simplify_complex  — complex number folding (i*i → -1, sqrt(-1) → i)
+ *    7. distribute_node   — expand products over sums
+ *    8. normalize_node    — standardize operand ordering
+ *    9. collect_and_sort  — flatten sums, merge like terms
+ *   10. simplify_node    — final cleanup (1*x → x, x+0 → x, etc.)
  * ==================================================================== */
 
 MathNode* plant_math_simplify(MathNode* node) {
@@ -1783,13 +1922,15 @@ MathNode* plant_math_simplify(MathNode* node) {
         node = simplify_log_node(node);
         /* Pass 5: rational fraction unification */
         node = simplify_frac_node(node);
-        /* Pass 6: distribute products over sums */
+        /* Pass 6: complex number folding */
+        node = simplify_complex_node(node);
+        /* Pass 7: distribute products over sums */
         node = distribute_node(node);
-        /* Pass 7: normalize operand ordering */
+        /* Pass 8: normalize operand ordering */
         node = normalize_node(node);
-        /* Pass 8: collect like terms and sort */
+        /* Pass 9: collect like terms and sort */
         node = collect_and_sort(node);
-        /* Pass 9: final cleanup */
+        /* Pass 10: final cleanup */
         node = simplify_node(node);
 
         MathNode* after = plant_math_deep_copy(node);
@@ -2750,6 +2891,221 @@ double plant_math_eval_string(const char* expr) {
 void* plant_math_create(const char* expr) {
     return (void*)plant_math_parse(expr);
 }
+
+/* ====================================================================
+ *  v0.50.2 — Complex Number Subsystem (PlantComplex)
+ *
+ *  Full complex arithmetic: add, sub, mul, div, conjugate, magnitude.
+ *  Also provides simplify_complex() for CAS pipeline integration.
+ * ==================================================================== */
+
+PlantComplex plant_complex_make(double real, double imag) {
+    PlantComplex z;
+    z.real = real;
+    z.imag = imag;
+    return z;
+}
+
+PlantComplex plant_complex_add(PlantComplex a, PlantComplex b) {
+    return plant_complex_make(a.real + b.real, a.imag + b.imag);
+}
+
+PlantComplex plant_complex_sub(PlantComplex a, PlantComplex b) {
+    return plant_complex_make(a.real - b.real, a.imag - b.imag);
+}
+
+PlantComplex plant_complex_mul(PlantComplex a, PlantComplex b) {
+    return plant_complex_make(
+        a.real * b.real - a.imag * b.imag,
+        a.real * b.imag + a.imag * b.real
+    );
+}
+
+PlantComplex plant_complex_div(PlantComplex a, PlantComplex b) {
+    double denom = b.real * b.real + b.imag * b.imag;
+    if (denom == 0.0) return plant_complex_make(NAN, NAN);
+    return plant_complex_make(
+        (a.real * b.real + a.imag * b.imag) / denom,
+        (a.imag * b.real - a.real * b.imag) / denom
+    );
+}
+
+PlantComplex plant_complex_conj(PlantComplex z) {
+    return plant_complex_make(z.real, -z.imag);
+}
+
+double plant_complex_abs(PlantComplex z) {
+    return sqrt(z.real * z.real + z.imag * z.imag);
+}
+
+char* plant_complex_to_str(PlantComplex z) {
+    char buf[128];
+    if (z.imag == 0.0) {
+        snprintf(buf, sizeof(buf), "%g", z.real);
+    } else if (z.real == 0.0) {
+        if (z.imag == 1.0)
+            snprintf(buf, sizeof(buf), "i");
+        else if (z.imag == -1.0)
+            snprintf(buf, sizeof(buf), "-i");
+        else
+            snprintf(buf, sizeof(buf), "%gi", z.imag);
+    } else {
+        if (z.imag > 0)
+            snprintf(buf, sizeof(buf), "%g+%gi", z.real, z.imag);
+        else
+            snprintf(buf, sizeof(buf), "%g%gi", z.real, z.imag);
+    }
+    return strdup(buf);
+}
+
+/* Parse a simple "a+bi", "a-bi", "bi", or "a" string into PlantComplex */
+static PlantComplex parse_complex_str(const char* s) {
+    PlantComplex z = { 0.0, 0.0 };
+    if (!s) return z;
+
+    /* Skip whitespace */
+    while (*s == ' ') s++;
+
+    /* Check for pure imaginary: "i", "-i" */
+    if (*s == 'i' && (s[1] == '\0')) { z.imag = 1.0; return z; }
+    if (*s == '-' && s[1] == 'i' && s[2] == '\0') { z.imag = -1.0; return z; }
+
+    /* Try to find +/- separating real and imag parts (scan from right, skip exponent) */
+    size_t len = strlen(s);
+    const char* sep = NULL;
+    for (const char* p = s + len - 1; p > s; p--) {
+        if (*p == '+' || *p == '-') {
+            /* Must not be part of exponent notation (e+03, E-5) */
+            if (p > s && *(p-1) != 'e' && *(p-1) != 'E') {
+                sep = p;
+                break;
+            }
+        }
+    }
+
+    if (sep) {
+        /* Parse real part */
+        char real_buf[64] = {0};
+        size_t rlen = sep - s;
+        if (rlen >= sizeof(real_buf)) rlen = sizeof(real_buf) - 1;
+        strncpy(real_buf, s, rlen);
+        z.real = atof(real_buf);
+        /* Parse imaginary part (may or may not end with 'i') */
+        char imag_buf[64] = {0};
+        const char* imag_start = sep;
+        size_t ilen = strlen(imag_start);
+        if (ilen > 0 && imag_start[ilen - 1] == 'i') ilen--;
+        if (ilen >= sizeof(imag_buf)) ilen = sizeof(imag_buf) - 1;
+        strncpy(imag_buf, imag_start, ilen);
+        z.imag = atof(imag_buf);
+        return z;
+    }
+
+    /* Check for pure imaginary like "2i", "-3i" (no +/- separator found) */
+    if (len > 1 && s[len - 1] == 'i') {
+        char buf[64];
+        size_t blen = len - 1;
+        if (blen >= sizeof(buf)) blen = sizeof(buf) - 1;
+        strncpy(buf, s, blen);
+        buf[blen] = '\0';
+        z.imag = atof(buf);
+        return z;
+    }
+
+    /* Pure real number */
+    z.real = atof(s);
+    return z;
+}
+
+char* plant_complex_add_str(const char* a, const char* b) {
+    PlantComplex z1 = parse_complex_str(a);
+    PlantComplex z2 = parse_complex_str(b);
+    return plant_complex_to_str(plant_complex_add(z1, z2));
+}
+
+char* plant_complex_sub_str(const char* a, const char* b) {
+    PlantComplex z1 = parse_complex_str(a);
+    PlantComplex z2 = parse_complex_str(b);
+    return plant_complex_to_str(plant_complex_sub(z1, z2));
+}
+
+char* plant_complex_mul_str(const char* a, const char* b) {
+    PlantComplex z1 = parse_complex_str(a);
+    PlantComplex z2 = parse_complex_str(b);
+    return plant_complex_to_str(plant_complex_mul(z1, z2));
+}
+
+char* plant_complex_div_str(const char* a, const char* b) {
+    PlantComplex z1 = parse_complex_str(a);
+    PlantComplex z2 = parse_complex_str(b);
+    return plant_complex_to_str(plant_complex_div(z1, z2));
+}
+
+char* plant_complex_conj_str(const char* a) {
+    PlantComplex z = parse_complex_str(a);
+    return plant_complex_to_str(plant_complex_conj(z));
+}
+
+char* plant_complex_abs_str(const char* a) {
+    PlantComplex z = parse_complex_str(a);
+    char buf[64];
+    snprintf(buf, sizeof(buf), "%g", plant_complex_abs(z));
+    return strdup(buf);
+}
+
+/* ====================================================================
+ *  v0.50.2 — Simplify Complex (CAS pipeline pass)
+ *
+ *  Folds complex constant expressions: i*i → -1, etc.
+ *  Simplifies known complex values in the AST.
+ * ==================================================================== */
+
+static MathNode* simplify_complex_node(MathNode* node) {
+    if (!node) return NULL;
+
+    /* Bottom-up */
+    if (node->left)  node->left  = simplify_complex_node(node->left);
+    if (node->right) node->right = simplify_complex_node(node->right);
+
+    /* i*i → -1 */
+    if (node->type == MATH_BINARY_OP && node->op == OP_MUL) {
+        MathNode* L = node->left;
+        MathNode* R = node->right;
+        if (is_sym(L, "i") && is_sym(R, "i")) {
+            node->left = NULL; node->right = NULL;
+            math_node_free(node);
+            node = math_node_number(-1.0);
+            return node;
+        }
+    }
+
+    /* (-1)*i → -i (handled by simplify_node's -1*x → -x) */
+
+    /* sqrt(-1) → i */
+    if (is_func(node, "SQRT") && node->left) {
+        if (node->left->type == MATH_NUMBER && node->left->num_val == -1.0) {
+            node->left = NULL;
+            math_node_free(node);
+            node = math_node_symbol("i");
+            return node;
+        }
+    }
+
+    return node;
+}
+
+/* ====================================================================
+ *  v0.50.2 — Complete Fraction Simplification Pipeline Integration
+ *
+ *  The simplify_frac_node() now handles:
+ *    - Unit numerator shortcuts: 1/a ± 1/b
+ *    - Same denominator: a/c ± b/c
+ *    - Same numerator: a/b + a/d
+ *    - General cross-multiplication: a/b ± c/d
+ *    - Denominator cancellation: (a*c)/c → a
+ *    - Fraction multiplication: (a/b)*(c/d) → (a*c)/(b*d)
+ *    - Fraction division: (a/b)/(c/d) → (a*d)/(b*c)
+ * ==================================================================== */
 
 void* plant_math_simplify_ptr(void* math_ptr) {
     return (void*)plant_math_simplify((MathNode*)math_ptr);

@@ -1,5 +1,59 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.50.2 — 2026 (Complete Rational Fraction Unification & Complex Number Subsystem)
+
+### New Features
+- **Complete Rational Fraction Unification** — `simplify_frac()` now handles all algebraic fraction operations:
+  - General addition: `a/b + c/d → (ad+cb)/(bd)`
+  - General subtraction: `a/b - c/d → (ad-cb)/(bd)`
+  - Same denominator: `a/c + b/c → (a+b)/c`
+  - Denominator cancellation: `(a*c)/c → a`
+  - Fraction multiplication: `(a/b)*(c/d) → (ac)/(bd)`
+  - Fraction division: `(a/b)/(c/d) → (ad)/(bc)`
+- **Complex Number Subsystem** (`PlantComplex`):
+  - Data structure: `typedef struct { double real; double imag; } PlantComplex`
+  - Arithmetic: `plant_complex_add`, `sub`, `mul`, `div`
+  - Auxiliary: `plant_complex_conj` (conjugate), `plant_complex_abs` (magnitude)
+  - String parsing: handles `a+bi`, `a-bi`, `bi`, `a` formats
+  - String formatting: clean `a+bi` output with special cases for `i`, `-i`
+- **Complex CAS Built-ins** (6 new codegen bindings):
+  - `MATH_COMPLEX_ADD(a, b)` — complex addition
+  - `MATH_COMPLEX_SUB(a, b)` — complex subtraction
+  - `MATH_COMPLEX_MUL(a, b)` — complex multiplication
+  - `MATH_COMPLEX_DIV(a, b)` — complex division
+  - `MATH_COMPLEX_CONJ(a)` — complex conjugate
+  - `MATH_COMPLEX_ABS(a)` — complex magnitude
+- **Complex Simplification** (`simplify_complex` pass):
+  - `i*i → -1`
+  - `sqrt(-1) → i`
+- **`is_func()` upgraded** — now matches `plant_`/`math_` prefixed function names (codegen compatibility)
+- **Pipeline expanded** to 10 passes per iteration
+
+### Internal
+- `PlantComplex` struct and 6 arithmetic functions in `plant_math.h` / `plant_math.c`
+- `parse_complex_str()` — robust parser for `a+bi`, `a-bi`, `bi`, `a` formats
+- `simplify_complex_node()` — CAS pipeline pass for complex constant folding
+- Complex built-ins registered in codegen BEFORE `_math_func_paren` (avoids ABS rewrite collision)
+- `SQRT(-1) → i` special case added to `simplify_node` (before numeric folding produces NaN)
+- Forward declarations for `is_func()` and `simplify_complex_node()`
+
+### Tests (15 new)
+- `frac_06_general_add` — general add: `1/2+1/3 → 5/6`.
+- `frac_07_general_sub` — general sub: `1/2-1/4 → 1/4`.
+- `frac_08_same_denom` — same denom: `2/3+1/3 → 1`.
+- `frac_09_mul` — fraction mul: `(x/y)*(z/w) → (xz)/(yw)`.
+- `frac_10_div` — fraction div: `(x/y)/(z/w) → (xw)/(yz)`.
+- `cmplx_01_add` — complex add: `(3+2i)+(1+4i) → 4+6i`.
+- `cmplx_02_mul` — complex mul: `(3+2i)*(1+4i) → -5+14i`.
+- `cmplx_03_div` — complex div: `(3+2i)/(1+4i)`.
+- `cmplx_04_conj` — complex conj: `conj(3+2i) → 3-2i`.
+- `cmplx_05_abs` — complex abs: `|3+4i| → 5`.
+- `cmplx_06_simplify_i` — `i*i → -1`.
+- `cmplx_07_simplify_sqrt_neg` — `sqrt(-1) → i`.
+- `cmplx_08_simplify_i3` — `i*i*i → (-1*i)`.
+- `cmplx_09_simplify_i4` — `i^4 → (i^4)` (power engine).
+- `cmplx_10_conjugate_mult` — `(1+i)*(1-i) → (i*(-i))+1`.
+
 ## v0.50.1 — 2026 (Advanced Symbolic Simplification: TRIG, LOG, POW, FRAC)
 
 ### New Features

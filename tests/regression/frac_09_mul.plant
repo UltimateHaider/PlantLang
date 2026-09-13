@@ -1,0 +1,5 @@
+# v0.50.2 — Frac: mul (x/y)*(z/w)
+ACTION main(),
+  SHOW MATH_SIMPLIFY("(x/y)*(z/w)").
+  GIVE 0.
+/GIVE main.

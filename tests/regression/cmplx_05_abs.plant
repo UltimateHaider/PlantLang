@@ -1,0 +1,5 @@
+# v0.50.2 — Complex: abs(3+4i) = 5
+ACTION main(),
+  SHOW MATH_COMPLEX_ABS("3+4i").
+  GIVE 0.
+/GIVE main.

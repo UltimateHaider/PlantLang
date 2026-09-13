@@ -10319,6 +10319,12 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars) {
     e = _handle_func_paren2(e, "MATH_DERIVATIVE", "plant_math_derivative_str");
     e = _handle_func_paren2(e, "MATH_INTEGRAL", "plant_math_integral_str");
     e = _handle_func_paren3(e, "MATH_QUADRATIC", "plant_math_quadratic_str");
+    e = _handle_func_paren2(e, "MATH_COMPLEX_ADD", "plant_complex_add_str");
+    e = _handle_func_paren2(e, "MATH_COMPLEX_SUB", "plant_complex_sub_str");
+    e = _handle_func_paren2(e, "MATH_COMPLEX_MUL", "plant_complex_mul_str");
+    e = _handle_func_paren2(e, "MATH_COMPLEX_DIV", "plant_complex_div_str");
+    e = _handle_func_paren(e, "MATH_COMPLEX_CONJ", "plant_complex_conj_str");
+    e = _handle_func_paren(e, "MATH_COMPLEX_ABS", "plant_complex_abs_str");
     e = _ni_replace(e);
     if (strcmp(e,"NOW") == 0) {
     return "plant_now(\"\")";
@@ -15959,7 +15965,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.50.0j (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.50.2 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

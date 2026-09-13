@@ -1,0 +1,5 @@
+# v0.50.2 — Complex: mul (3+2i)*(1+4i)
+ACTION main(),
+  SHOW MATH_COMPLEX_MUL("3+2i", "1+4i").
+  GIVE 0.
+/GIVE main.

@@ -1,0 +1,5 @@
+# v0.50.2 — Simplify: sqrt(-1) = i
+ACTION main(),
+  SHOW MATH_SIMPLIFY("sqrt(-1)").
+  GIVE 0.
+/GIVE main.
