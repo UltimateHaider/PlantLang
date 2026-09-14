@@ -1,3 +1,29 @@
+## v0.50.5 - 2026 (MATH Type Mixed Operations & Explicit Casting)
+
+### New Language Features
+
+#### EVAL(expr) — Math Expression Evaluator
+Evaluates a math expression string and returns the result as a string.
+```plantlang
+SHOW EVAL("2 + 3 * 4").          # 14
+SHOW EVAL("sin(pi/6)^2 + cos(pi/6)^2").  # 1
+```
+
+#### SUBST(expr, var, value) — Variable Substitution
+Substitutes a variable with a value in a math expression, returns the simplified result string.
+```plantlang
+SHOW SUBST("x^2 + y^2", "x", "3").  # ((y^2)+9)
+SHOW SUBST("a*x + b", "a", "5").    # (b+(5*x))
+```
+
+#### @ Cast Operator — Explicit Math Evaluation
+The `@` operator explicitly evaluates a math expression and returns its string result.
+```plantlang
+SHOW @(1 + 2).          # 3
+SHOW @(3 * 7 + 1).      # 22
+SHOW @((2 + 3)*(4+5)).  # 45
+```
+
 ## v0.50.4 - 2026 (Series Expansions & Partial Fraction Decomposition)
 
 ### New Language Features

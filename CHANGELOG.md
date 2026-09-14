@@ -1,5 +1,31 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.50.5 — 2026 (MATH Type Mixed Operations & Explicit Casting)
+
+### New Features
+- **`EVAL(expr)` built-in**: Evaluate a math expression string to a numeric result.
+  - `EVAL("2 + 3 * 4")` → `"14"`
+  - `EVAL("sin(pi/6)^2 + cos(pi/6)^2")` → `"1"`
+- **`SUBST(expr, var, value)` built-in**: Substitute a variable with a value in a math expression.
+  - `SUBST("x^2 + y^2", "x", "3")` → `"((y^2)+9)"`
+- **`@` cast operator**: Explicitly cast a math expression to a numeric string.
+  - `@(1 + 2)` → `"3"`
+  - `@(3 * 7 + 1)` → `"22"`
+  - `@((2 + 3) * (4 + 5))` → `"45"`
+- **MATH type in mixed operations**: MATH variables can be used in mixed-type expressions.
+
+### Implementation
+- Added `plant_math_subst_str()` to runtime for single-variable substitution
+- Added `_handle_cast` codegen action for `@` operator (scans for `@` in translated expressions)
+- Added `_handle_func_paren` registrations for `EVAL` and `SUBST`
+- Added `collect_maths_walk`/`collect_maths` to track MATH variable names in scope
+- Added `_wrap_math_vars` to auto-wrap MATH variable references with `plant_math_eval()`
+- Added `env_maths` slot (index 12) to environment for MATH variable tracking
+- Added `AT` lexer token type for `@` symbol (handled via `str_eq` to avoid v1 bootstrap issues)
+- Updated `is_bare_id` to treat `@` as non-identifier character
+- 5 regression tests (2 EVAL + 1 SUBST + 2 @ cast), all pass
+- Self-hosting converged at ~805000 bytes
+
 ## v0.50.4 — 2026 (Series Expansions & Partial Fraction Decomposition)
 
 ### New Features

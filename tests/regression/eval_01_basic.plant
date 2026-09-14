@@ -1,0 +1,6 @@
+# v0.50.5 — EVAL: evaluate a math expression string
+ACTION main(),
+  SHOW EVAL("2 + 3 * 4").
+  SHOW EVAL("sin(pi/6)^2 + cos(pi/6)^2").
+  GIVE 0.
+/GIVE main.

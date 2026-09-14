@@ -1,0 +1,132 @@
+#include <plant_compat.h>
+
+/*__PLANT_TYPES_BEGIN__*/
+#ifndef PLANT_TYPES_INCLUDED
+#define PLANT_TYPES_INCLUDED
+#endif
+/*__PLANT_TYPES_END__*/
+
+tx_t main();
+
+
+tx_t main() {
+  tx_t r1 = "";
+  tx_t r2 = "";
+  tx_t r3 = "";
+  tx_t r4 = "";
+  tx_t r5 = "";
+  tx_t g1 = "";
+  tx_t g2 = "";
+  tx_t g3 = "";
+  tx_t g4 = "";
+  tx_t g5 = "";
+  tx_t s1 = "";
+  tx_t s2 = "";
+  tx_t i1 = "";
+  tx_t i2 = "";
+  tx_t i3 = "";
+  tx_t i4 = "";
+  tx_t i5 = "";
+  tx_t x1 = "";
+  tx_t x2 = "";
+  tx_t x3 = "";
+  tx_t u1 = "";
+  tx_t u2 = "";
+  tx_t u3 = "";
+  tx_t u4 = "";
+  tx_t a1 = "";
+  tx_t a2 = "";
+  tx_t a3 = "";
+  tx_t a4 = "";
+  tx_t a5 = "";
+  tx_t m1 = "";
+  tx_t m2 = "";
+  tx_t m3 = "";
+  tx_t m4 = "";
+  tx_t n1 = "";
+  tx_t n2 = "";
+  tx_t n3 = "";
+    plant_iReport_print(get_report(), "== reverse ==");
+    r1 = plant_join( plant_list_reverse( plant_list_make(3, "a", "b", "c") ) , " " );
+    plant_iReport_print(get_report(), r1);
+    r2 = plant_join( plant_list_reverse( plant_list_make(3, _from_long(1), _from_long(2), _from_long(3)) ) , " " );
+    plant_iReport_print(get_report(), r2);
+    r3 = plant_join( plant_list_reverse( plant_list_make(1, "solo") ) , " " );
+    plant_iReport_print(get_report(), r3);
+    r4 = plant_join( plant_list_reverse( plant_list_make(0) ) , " " );
+    plant_iReport_print(get_report(), _cat3("[", r4, "]"));
+    r5 = plant_list_reverse( "abc" );
+    plant_iReport_print(get_report(), r5);
+    plant_iReport_print(get_report(), "== range ==");
+    g1 = plant_join( plant_range_list(_from_double( 1 ), _from_double( 5 )) , " " );
+    plant_iReport_print(get_report(), g1);
+    g2 = plant_join( plant_range_list(_from_double( 0 ), _from_double( 3 )) , " " );
+    plant_iReport_print(get_report(), g2);
+    g3 = plant_join( plant_range_list(_from_double( 5 ), _from_double( 5 )) , " " );
+    plant_iReport_print(get_report(), _cat3("[", g3, "]"));
+    g4 = plant_join( plant_range_list(_from_double( 3 ), _from_double( 1 )) , " " );
+    plant_iReport_print(get_report(), _cat3("[", g4, "]"));
+    g5 = plant_join( plant_range_list(_from_double( - 2 ), _from_double( 2 )) , " " );
+    plant_iReport_print(get_report(), g5);
+    plant_iReport_print(get_report(), "== sort (expression) ==");
+    s1 = plant_join( plant_list_sort( plant_list_make(3, "cherry", "apple", "banana") ) , " " );
+    plant_iReport_print(get_report(), s1);
+    s2 = plant_join( plant_list_sort( plant_list_make(3, _from_long(3), _from_long(1), _from_long(2)) ) , " " );
+    plant_iReport_print(get_report(), s2);
+    plant_iReport_print(get_report(), "== includes (list) ==");
+    i1 = plant_list_includes( plant_list_make(3, "a", "b", "c") , "b" );
+    plant_iReport_print(get_report(), i1);
+    i2 = plant_list_includes( plant_list_make(3, "a", "b", "c") , "z" );
+    plant_iReport_print(get_report(), i2);
+    i3 = plant_list_includes( plant_list_make(3, _from_long(1), _from_long(2), _from_long(3)) , 2 );
+    plant_iReport_print(get_report(), i3);
+    i4 = plant_list_includes( plant_list_make(3, _from_long(1), _from_long(2), _from_long(3)) , 9 );
+    plant_iReport_print(get_report(), i4);
+    i5 = plant_list_includes( "hello" , "lo" );
+    plant_iReport_print(get_report(), i5);
+    plant_iReport_print(get_report(), "== index_of ==");
+    x1 = plant_list_index_of( plant_list_make(3, "a", "b", "c") , "b" );
+    plant_iReport_print(get_report(), x1);
+    x2 = plant_list_index_of( plant_list_make(3, "a", "b", "c") , "z" );
+    plant_iReport_print(get_report(), x2);
+    x3 = plant_list_index_of( plant_list_make(3, _from_long(7), _from_long(8), _from_long(9)) , 9 );
+    plant_iReport_print(get_report(), x3);
+    plant_iReport_print(get_report(), "== unique ==");
+    u1 = plant_join( plant_list_unique( plant_list_make(5, "a", "b", "a", "c", "b") ) , " " );
+    plant_iReport_print(get_report(), u1);
+    u2 = plant_join( plant_list_unique( plant_list_make(5, _from_long(1), _from_long(2), _from_long(2), _from_long(3), _from_long(1)) ) , " " );
+    plant_iReport_print(get_report(), u2);
+    u3 = plant_join( plant_list_unique( plant_list_make(2, "same", "same") ) , " " );
+    plant_iReport_print(get_report(), u3);
+    u4 = plant_join( plant_list_unique( plant_list_make(0) ) , " " );
+    plant_iReport_print(get_report(), _cat3("[", u4, "]"));
+    plant_iReport_print(get_report(), "== average ==");
+    a1 = plant_list_average( plant_list_make(4, _from_long(1), _from_long(2), _from_long(3), _from_long(4)) );
+    plant_iReport_print(get_report(), a1);
+    a2 = plant_list_average( plant_list_make(3, _from_long(2), _from_long(2), _from_long(2)) );
+    plant_iReport_print(get_report(), a2);
+    a3 = plant_list_average( plant_list_make(2, _from_long(1), _from_long(2)) );
+    plant_iReport_print(get_report(), a3);
+    a4 = plant_list_average( plant_list_make(0) );
+    plant_iReport_print(get_report(), a4);
+    a5 = plant_list_average( plant_list_make(2, "x", "y") );
+    plant_iReport_print(get_report(), a5);
+    plant_iReport_print(get_report(), "== median ==");
+    m1 = plant_list_median( plant_list_make(3, _from_long(5), _from_long(1), _from_long(3)) );
+    plant_iReport_print(get_report(), m1);
+    m2 = plant_list_median( plant_list_make(4, _from_long(4), _from_long(1), _from_long(2), _from_long(3)) );
+    plant_iReport_print(get_report(), m2);
+    m3 = plant_list_median( plant_list_make(1, _from_long(7)) );
+    plant_iReport_print(get_report(), m3);
+    m4 = plant_list_median( plant_list_make(0) );
+    plant_iReport_print(get_report(), m4);
+    plant_iReport_print(get_report(), "== nested ==");
+    n1 = plant_join( plant_list_reverse( plant_range_list(_from_double( 1 ), _from_double( 4 )) ) , " " );
+    plant_iReport_print(get_report(), n1);
+    n2 = plant_join( plant_list_sort( plant_list_reverse( plant_list_make(3, "b", "a", "c") ) ) , " " );
+    plant_iReport_print(get_report(), n2);
+    n3 = plant_list_average( plant_list_unique( plant_list_make(4, _from_long(1), _from_long(1), _from_long(2), _from_long(3)) ) );
+    plant_iReport_print(get_report(), n3);
+    plant_iReport_print(get_report(), "done");
+    return 0;
+}

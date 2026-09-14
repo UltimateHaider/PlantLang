@@ -1,0 +1,6 @@
+# v0.50.5 — EVAL + SUBST combined: substitute then evaluate
+ACTION main(),
+  SHOW EVAL(SUBST("x^2 + 2*x + 1", "x", "5")).
+  SHOW EVAL("3 * 5 + 4").
+  GIVE 0.
+/GIVE main.

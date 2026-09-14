@@ -333,6 +333,8 @@ char*        plant_math_taylor_str(const char* expr, const char* var, const char
 char*        plant_math_partial_fractions_str(const char* expr, const char* var);
 void         plant_math_free(void* math_ptr);
 void         plant_math_debug_print(void* node);
+char*        plant_math_eval_to_str(const char* expr);
+char*        plant_math_subst_str(const char* expr, const char* var, const char* value);
 
 /* ── v0.50.0a: Anonymous Struct Allocation ── */
 void*        plant_anon_struct_create(size_t size);

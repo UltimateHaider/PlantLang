@@ -1,0 +1,6 @@
+# v0.50.5 — @ cast: @expr → plant_math_eval_to_str(expr)
+ACTION main(),
+  SHOW @(1 + 2).
+  SHOW @(3 * 7 + 1).
+  GIVE 0.
+/GIVE main.

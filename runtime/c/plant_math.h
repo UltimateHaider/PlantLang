@@ -139,6 +139,19 @@ char*     plant_math_quadratic_str(const char* a, const char* b, const char* c);
 void      plant_math_free(void* math_ptr);
 
 /* ====================================================================
+ *  v0.50.5 — EVAL and SUBST Built-ins
+ * ==================================================================== */
+
+/* Evaluate a math expression string to a double. Caller frees result string. */
+char*     plant_math_eval_to_str(const char* expr);
+
+/* Substitute a variable with a value in an expression.
+ * plant_math_subst_str("x^2 + y^2", "x", "3") → "((3^2)+(y^2))"
+ * Caller frees result. */
+char*     plant_math_subst_str(const char* expr, const char* var,
+                                const char* value);
+
+/* ====================================================================
  *  v0.50.4 — Series Expansion Subsystem
  * ==================================================================== */
 

@@ -1,0 +1,6 @@
+# v0.50.5 — SUBST: substitute variable with value
+ACTION main(),
+  SHOW SUBST("x^2 + y^2", "x", "3").
+  SHOW SUBST("a*x + b", "a", "5").
+  GIVE 0.
+/GIVE main.

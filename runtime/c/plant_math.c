@@ -4198,3 +4198,56 @@ char* plant_math_to_str(void* math_ptr) {
 void plant_math_free(void* math_ptr) {
     math_node_free((MathNode*)math_ptr);
 }
+
+/* ====================================================================
+ *  v0.50.5 — SUBST: Single-variable substitution
+ *
+ *  plant_math_subst_str("x^2 + y^2", "x", "3") → "((3^2)+(y^2))"
+ *  Caller frees result.
+ * ==================================================================== */
+
+static MathNode* subst_in_node(const MathNode* node, const char* var,
+                                const MathNode* replacement) {
+    if (!node) return NULL;
+
+    if (node->type == MATH_SYMBOL && strcmp(node->sym_name, var) == 0) {
+        return plant_math_deep_copy(replacement);
+    }
+    if (node->type == MATH_NUMBER || node->type == MATH_CONSTANT) {
+        return plant_math_deep_copy(node);
+    }
+    if (node->type == MATH_BINARY_OP) {
+        MathNode* L = subst_in_node(node->left, var, replacement);
+        MathNode* R = subst_in_node(node->right, var, replacement);
+        return math_node_binary(node->op, L, R);
+    }
+    if (node->type == MATH_UNARY_OP) {
+        MathNode* inner = subst_in_node(node->left, var, replacement);
+        return math_node_unary(inner);
+    }
+    if (node->type == MATH_FUNC_CALL) {
+        MathNode* inner = subst_in_node(node->left, var, replacement);
+        return math_node_func(node->sym_name, inner);
+    }
+    return plant_math_deep_copy(node);
+}
+
+char* plant_math_subst_str(const char* expr, const char* var,
+                            const char* value) {
+    MathNode* ast = plant_math_parse(expr);
+    if (!ast) return strdup("ERROR: Could not parse expression.");
+
+    MathNode* val_ast = plant_math_parse(value);
+    if (!val_ast) { math_node_free(ast); return strdup("ERROR: Could not parse value."); }
+
+    MathNode* result = subst_in_node(ast, var, val_ast);
+    math_node_free(ast);
+    math_node_free(val_ast);
+
+    if (!result) return strdup("ERROR: Substitution failed.");
+
+    MathNode* simplified = plant_math_simplify(result);
+    char* str = plant_math_to_string(simplified);
+    math_node_free(simplified);
+    return str;
+}

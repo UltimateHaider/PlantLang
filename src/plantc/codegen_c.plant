@@ -1700,7 +1700,7 @@ ACTION _expand_bare(t(TX), nums(LIST), evars(LIST)),
       /SEASON.
       REAP inner FROM substring, t, i + 2, j - 1.
       REAP inner FROM _expand_bare, inner, nums, evars.
-      REAP inner FROM translate_expr, inner, nums, evars.
+      REAP inner FROM translate_expr, inner, nums, evars, plant_list_make(0).
       REAP inner FROM _handle_cat, inner, nums, evars.
       SET res TO res + inner.
       SET i TO j.
@@ -1800,7 +1800,7 @@ ACTION _interp_expand(raw(TX), nums(LIST), evars(LIST)),
         REAP seg2 FROM _unescape, seg.
         REAP seg2 FROM _expand_bare, seg2, nums, evars.
         REAP seg2 FROM _interp_to_cat, seg2, nums, evars.
-        REAP seg2 FROM translate_expr, seg2, nums, evars.
+        REAP seg2 FROM translate_expr, seg2, nums, evars, plant_list_make(0).
         REAP seg2 FROM _handle_cat, seg2, nums, evars.
         REAP sg2n FROM seg_is_numeric, seg2, nums.
         IF sg2n IS 1,
@@ -2748,6 +2748,143 @@ ACTION collect_nums(bd(LIST), params(LIST), subst(LIST)),
 /ACTION.
 
 # ──────────────────────────────────────────────────────────────
+#  collect_maths_walk — add names of MATH CREATE/LET targets
+#  in bd (recursing into IF/SEASON/CYCLE/MATCH bodies)
+# ──────────────────────────────────────────────────────────────
+ACTION collect_maths_walk(bd(LIST), subst(LIST), res(LIST)),
+  CREATE wi(NUM) TO 0.
+  CREATE wnd(TX) TO "".
+  CREATE wty(TX) TO "".
+  CREATE wtg(TX) TO "".
+  CREATE wvt(TX) TO "".
+  CREATE wbs(TX) TO "".
+  CREATE wbb(TX) TO "".
+  SEASON wi < COUNT bd,
+    REAP wnd FROM plant_list_get, bd, wi.
+    REAP wty FROM _map_get, wnd, "type".
+    IF wty IS "create_stmt" OR wty IS "let_stmt",
+      REAP wtg FROM _map_get, wnd, "target".
+      REAP wvt FROM _map_get, wnd, "var_type".
+      REAP wbs FROM subst_type, wvt, subst.
+      REAP wbb FROM type_base, wbs.
+      IF wbb IS "MATH",
+        REAP wfound FROM list_contains, res, wtg.
+        IF wfound IS 0, PUT wtg INTO res. /IF.
+      /IF.
+    /IF.
+    IF wty IS "if_stmt",
+      REAP ib FROM _if_bodies, wnd.
+      CREATE ii4(NUM) TO 0.
+      SEASON ii4 < COUNT ib,
+        REAP ibd4 FROM plant_list_get, ib, ii4.
+        REAP wret2 FROM collect_maths_walk, ibd4, subst, res.
+        SET ii4 TO ii4 + 1.
+      /SEASON.
+    /IF.
+    IF wty IS "season_stmt" OR wty IS "cycle_stmt",
+      REAP wbd2 FROM _map_get, wnd, "body".
+      REAP wret2 FROM collect_maths_walk, wbd2, subst, res.
+    /IF.
+    IF wty IS "match_stmt",
+      CREATE mcl3(LIST) TO _map_get(wnd, "clauses").
+      CREATE mci3(NUM) TO 0.
+      SEASON mci3 < COUNT mcl3,
+        REAP mcl4 FROM plant_list_get, mcl3, mci3.
+        REAP mcb2 FROM _map_get, mcl4, "bodyStatements".
+        REAP wret2 FROM collect_maths_walk, mcb2, subst, res.
+        SET mci3 TO mci3 + 1.
+      /SEASON.
+    /IF.
+    SET wi TO wi + 1.
+  /SEASON.
+  GIVE res.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
+#  collect_maths — names of MATH scalar vars in scope for an
+#  action body: MATH params (after subst) plus MATH
+#  CREATE/LET targets anywhere in the body. Used to wrap
+#  MATH var references with plant_math_eval() in expressions.
+# ──────────────────────────────────────────────────────────────
+ACTION collect_maths(bd(LIST), params(LIST), subst(LIST)),
+  CREATE res(LIST) TO plant_list_make(0).
+  CREATE pi(NUM) TO 0.
+  CREATE pnd(TX) TO "".
+  CREATE pn2(TX) TO "".
+  CREATE pty2(TX) TO "".
+  CREATE psu2(TX) TO "".
+  CREATE pbs2(TX) TO "".
+  SEASON pi < COUNT params,
+    REAP pnd FROM plant_list_get, params, pi.
+    REAP pn2 FROM _map_get, pnd, "name".
+    REAP pty2 FROM _map_get, pnd, "type".
+    REAP psu2 FROM subst_type, pty2, subst.
+    REAP pbs2 FROM type_base, psu2.
+    IF pbs2 IS "MATH",
+      PUT pn2 INTO res.
+    /IF.
+    SET pi TO pi + 1.
+  /SEASON.
+  REAP ret FROM collect_maths_walk, bd, subst, res.
+  GIVE res.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
+#  _wrap_math_vars — post-process a translated expression to
+#  wrap MATH variable references with plant_math_eval().
+#  Scans for each maths var name and wraps bare references.
+# ──────────────────────────────────────────────────────────────
+ACTION _wrap_math_vars(e(TX), maths(LIST)),
+  CREATE mi(NUM) TO 0.
+  CREATE mv(TX) TO "".
+  SEASON mi < COUNT maths,
+    REAP mv FROM plant_list_get, maths, mi.
+    # Wrap standalone variable references: "mv" → "plant_math_eval(mv)"
+    # Only wrap when the var is a standalone identifier (not part of a larger name)
+    CREATE wrapped(TX) TO "".
+    CREATE pos(NUM) TO 0.
+    CREATE elen(NUM) TO LEN(e).
+    CREATE vlen(NUM) TO LEN(mv).
+    SEASON pos < elen,
+      # Check if current position starts with the variable name
+      REAP chunk FROM substring, e, pos, pos + vlen.
+      REAP chunk_eq FROM str_eq, chunk, mv.
+      IF chunk_eq IS 1,
+        # Check boundary: char before must not be alphanumeric/underscore
+        CREATE before_ok(NUM) TO 1.
+        IF pos > 0,
+          REAP bch FROM char_at, e, pos - 1.
+          REAP bisid FROM find_any, bch, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_".
+          IF bisid ISNT -1, SET before_ok TO 0. /IF.
+        /IF.
+        # Check boundary: char after must not be alphanumeric/underscore or '('
+        CREATE after_ok(NUM) TO 1.
+        REAP apos TO pos + vlen.
+        IF apos < elen,
+          REAP ach FROM char_at, e, apos.
+          REAP aisid FROM find_any, ach, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_(".
+          IF aisid ISNT -1, SET after_ok TO 0. /IF.
+        /IF.
+        IF before_ok IS 1 AND after_ok IS 1,
+          SET wrapped TO wrapped + "plant_math_eval(" + mv + ")".
+          SET pos TO pos + vlen.
+        ELSE.
+          SET wrapped TO wrapped + chunk.
+          SET pos TO pos + 1.
+        /IF.
+      ELSE.
+        REAP sch FROM char_at, e, pos.
+        SET wrapped TO wrapped + sch.
+        SET pos TO pos + 1.
+      /IF.
+    /SEASON.
+    SET e TO wrapped.
+    SET mi TO mi + 1.
+  /SEASON.
+  GIVE e.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
 #  nums_from_avars — numeric var names from an async var table
 #  (flat [name, ctype, …] pairs as built by async_var_add)
 # ──────────────────────────────────────────────────────────────
@@ -2840,7 +2977,7 @@ ACTION async_argstr(args(LIST), sigs(LIST), act(TX), nums(LIST), stvars(LIST), e
     CREATE aex(TX) TO ael.
     REAP a0 FROM substring, ael, 0, 1.
     IF a0 ISNT "\"",
-      REAP aex FROM translate_expr, ael, nums, evars.
+      REAP aex FROM translate_expr, ael, nums, evars, plant_list_make(0).
       REAP aex FROM _handle_cat, aex, nums, evars.
     /IF.
     REAP rp FROM is_ref_at, fparams, ai.
@@ -3115,7 +3252,7 @@ ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIS
         PUT ls INTO lead.
         SET lj TO lj + 1.
       /SEASON.
-      REAP lcode FROM generate_body, lead, env_make(1, sigs, subst, clmap, "a", nums_s, stvars, evars, "", "", "").
+      REAP lcode FROM generate_body, lead, env_make(1, sigs, subst, clmap, "a", nums_s, stvars, evars, "", "", "", plant_list_make(0)).
       SET code TO code + lcode.
       CREATE aw_last(NUM) TO nst - 1.
       REAP awnd FROM plant_list_get, phd, aw_last.
@@ -3147,7 +3284,7 @@ ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIS
       /IF.
     /IF.
     IF nxt IS nph,
-      REAP tcode FROM generate_body, phd, env_make(1, sigs, subst, clmap, "a", nums_s, stvars, evars, "", "", "").
+      REAP tcode FROM generate_body, phd, env_make(1, sigs, subst, clmap, "a", nums_s, stvars, evars, "", "", "", plant_list_make(0)).
       SET code TO code + tcode.
     /IF.
     SET ph2 TO ph2 + 1.
@@ -3342,9 +3479,78 @@ ACTION _swap_self(e(TX)),
   GIVE out2.
 /ACTION.
 
+# ──────────────────────────────────────────────────────────────
+#  v0.50.5 — _handle_cast: @expr → plant_math_eval(expr)
+#  The @ operator explicitly casts a MATH expression to a numeric
+#  value.  Scans for @ followed by a balanced-paren subexpression
+#  and replaces with plant_math_eval(...).
+# ──────────────────────────────────────────────────────────────
+ACTION _handle_cast(e(TX)),
+  CREATE out(TX) TO "".
+  CREATE pos(NUM) TO 0.
+  CREATE elen(NUM) TO LEN(e).
+  SEASON pos < elen,
+    REAP ch FROM char_at, e, pos.
+    # v0.50.5 — @ cast operator; detect "@" via str_eq to avoid v1 bootstrap issues
+    REAP is_at FROM str_eq, ch, "@".
+    IF is_at IS "1",
+      # Find the start of the expression after @
+      CREATE npos(NUM) TO pos + 1.
+      # Skip whitespace
+      SEASON npos < elen,
+        REAP wch FROM char_at, e, npos.
+        IF wch ISNT " ", SET pos TO npos. BREAK. /IF.
+        SET npos TO npos + 1.
+      /SEASON.
+      # Collect the expression: if '(' → balanced parens, else identifier
+      REAP ech FROM char_at, e, pos.
+      IF ech IS "(",
+        # Balanced parens: find matching close
+        CREATE depth(NUM) TO 1.
+        CREATE estart(NUM) TO pos + 1.
+        CREATE eend(NUM) TO estart.
+        SEASON eend < elen,
+          REAP pch FROM char_at, e, eend.
+          IF pch IS "(", SET depth TO depth + 1. /IF.
+          IF pch IS ")", SET depth TO depth - 1. /IF.
+          IF depth IS 0,
+            SET eend TO eend + 1.
+            BREAK.
+          /IF.
+          SET eend TO eend + 1.
+        /SEASON.
+        REAP inner FROM substring, e, estart, eend - 1.
+        SET out TO out + "plant_math_eval_to_str(\"" + inner + "\")".
+        SET pos TO eend.
+      ELSE.
+        # Bare identifier: collect name chars
+        CREATE id_start(NUM) TO pos.
+        CREATE id_end(NUM) TO pos.
+        SEASON id_end < elen,
+          REAP ich FROM char_at, e, id_end.
+          REAP isid FROM find_any, ich, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_".
+          IF isid IS -1, BREAK. /IF.
+          SET id_end TO id_end + 1.
+        /SEASON.
+        IF id_end > id_start,
+          REAP inner FROM substring, e, id_start, id_end.
+          SET out TO out + "plant_math_eval_to_str(\"" + inner + "\")".
+          SET pos TO id_end.
+        ELSE.
+          SET out TO out + ch.
+          SET pos TO pos + 1.
+        /IF.
+      /IF.
+    ELSE.
+      SET out TO out + ch.
+      SET pos TO pos + 1.
+    /IF.
+  /SEASON.
+  GIVE out.
+/ACTION.
 
 
-ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
+ACTION translate_expr(expr(TX), nums(LIST), evars(LIST), maths(LIST)),
     REAP expr FROM _swap_self, expr.
     CREATE e(TX) TO expr.
     # v0.50.0i — MATH_DERIVATIVE and MATH_INTEGRAL must run FIRST,
@@ -3365,6 +3571,10 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     REAP e FROM _handle_func_paren4, e, "MATH_TAYLOR", "plant_math_taylor_str".
     # v0.50.4 — MATH_PARTIAL_FRACTIONS: partial fraction decomposition.
     REAP e FROM _handle_func_paren2, e, "MATH_PARTIAL_FRACTIONS", "plant_math_partial_fractions_str".
+    # v0.50.5 — EVAL(expr): evaluate a math expression string to a double.
+    REAP e FROM _handle_func_paren, e, "EVAL", "plant_math_eval_to_str".
+    # v0.50.5 — SUBST(expr, var, value): substitute a variable with a value.
+    REAP e FROM _handle_func_paren, e, "SUBST", "plant_math_subst_str".
     # v0.50.0j — MATH_QUADRATIC: solve ax^2 + bx + c = 0.
     REAP e FROM _handle_func_paren3, e, "MATH_QUADRATIC", "plant_math_quadratic_str".
     # v0.50.2 — MATH_COMPLEX_*: complex number arithmetic (must run BEFORE _math_func_paren
@@ -3599,6 +3809,13 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST)),
     REAP e FROM strings:REPLACE, e, "NULL", "NULL".
     REAP e FROM strings:REPLACE, e, " : ", "_".
     REAP e FROM handle_brackets, e.
+    # v0.50.5 — @ cast operator: @expr → plant_math_eval(expr)
+    REAP e FROM _handle_cast, e.
+    # v0.50.5 — wrap MATH variable references with plant_math_eval()
+    # so they resolve to double values in numeric C expressions.
+    IF (COUNT maths) > 0,
+      REAP e FROM _wrap_math_vars, e, maths.
+    /IF.
     GIVE e.
 /ACTION.
 
@@ -3702,14 +3919,18 @@ ACTION env_indent_num(env(LIST)),
   GIVE env_get(env, 11).
 /ACTION.
 
+ACTION env_maths(env(LIST)),
+  GIVE env_get(env, 12).
+/ACTION.
+
 # ──────────────────────────────────────────────────────────────
 #  env_make — create and populate an env in one call
 #  Takes numeric indent (pre-computed into isel string for slot 0
-#  and _from_long for slot 11) plus all 11 state params.
+#  and _from_long for slot 11) plus all 12 state params (v0.50.5: +maths).
 # ──────────────────────────────────────────────────────────────
-ACTION env_make(indent_num(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST), rty(TX), mexit(TX), wexit(TX)),
+ACTION env_make(indent_num(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST), rty(TX), mexit(TX), wexit(TX), maths(LIST)),
   REAP isel FROM indent_str, indent_num.
-  REAP env FROM plant_list_create(12).
+  REAP env FROM plant_list_create(13).
   REAP _ FROM env_set, env, 0, isel.
   REAP _ FROM env_set, env, 1, sigs.
   REAP _ FROM env_set, env, 2, subst.
@@ -3722,12 +3943,13 @@ ACTION env_make(indent_num(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX),
   REAP _ FROM env_set, env, 9, mexit.
   REAP _ FROM env_set, env, 10, wexit.
   REAP _ FROM env_set, env, 11, _from_long(indent_num).
+  REAP _ FROM env_set, env, 12, maths.
   GIVE env.
 /ACTION.
 
 ACTION gen_show_stmt(node, nums(LIST), evars(LIST), isel(TX)),
   REAP val FROM _map_get, node, "value".
-  REAP cval FROM translate_expr, val, nums, evars.
+  REAP cval FROM translate_expr, val, nums, evars, plant_list_make(0).
   REAP cval FROM _handle_cat, cval, nums, evars.
   REAP isn2 FROM expr_is_numeric, cval, nums.
   IF isn2 IS 1,
@@ -3791,7 +4013,7 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
       GIVE ccode2.
   /IF.
   REAP val FROM _map_get, node, "value".
-  REAP cval FROM translate_expr, val, nums, evars.
+  REAP cval FROM translate_expr, val, nums, evars, plant_list_make(0).
   REAP cval FROM _handle_cat, cval, nums, evars.
   # v0.50.0e — ARRAY[T, N]: emit T name[N] = {init}; BEFORE actx early return.
   REAP _aby FROM find_any, vtype, "[".
@@ -3938,7 +4160,7 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
 ACTION gen_set_stmt(node, nums(LIST), evars(LIST), isel(TX)),
   REAP target FROM _map_get, node, "target".
   REAP val FROM _map_get, node, "value".
-  REAP cval FROM translate_expr, val, nums, evars.
+  REAP cval FROM translate_expr, val, nums, evars, plant_list_make(0).
   REAP cval FROM _handle_cat, cval, nums, evars.
   GIVE isel + "  " + target + " = " + cval + ";\n".
 /ACTION.
@@ -3949,7 +4171,7 @@ ACTION gen_set_stmt(node, nums(LIST), evars(LIST), isel(TX)),
 # ──────────────────────────────────────────────────────────────
 ACTION gen_give_stmt(node, nums(LIST), evars(LIST), rty(TX), actx(TX), mexit(TX), isel(TX)),
   REAP val FROM _map_get, node, "value".
-  REAP cval FROM translate_expr, val, nums, evars.
+  REAP cval FROM translate_expr, val, nums, evars, plant_list_make(0).
   REAP cval FROM _handle_cat, cval, nums, evars.
   REAP isn3 FROM expr_is_numeric, cval, nums.
   IF isn3 IS 0,
@@ -3987,7 +4209,7 @@ ACTION gen_give_stmt(node, nums(LIST), evars(LIST), rty(TX), actx(TX), mexit(TX)
 ACTION gen_if_stmt(node, nums(LIST), evars(LIST), isel(TX), indent_num(NUM), env(LIST)),
   REAP cond FROM _map_get, node, "cond".
   REAP bd FROM _map_get, node, "body".
-  REAP ccond FROM translate_expr, cond, nums, evars.
+  REAP ccond FROM translate_expr, cond, nums, evars, plant_list_make(0).
   REAP ccond FROM handle_strcmp, ccond.
   CREATE ccode(TX) TO isel + "  if (" + ccond + ") \{\n".
   REAP sigs FROM env_sigs, env.
@@ -4008,7 +4230,7 @@ ACTION gen_if_stmt(node, nums(LIST), evars(LIST), isel(TX), indent_num(NUM), env
       SEASON ei2 < COUNT elif,
           REAP econd FROM plant_list_get, elif, ei2.
           REAP ebd FROM plant_list_get, elif, ei2 + 1.
-          REAP ecc FROM translate_expr, econd, nums, evars.
+          REAP ecc FROM translate_expr, econd, nums, evars, plant_list_make(0).
           REAP ecc FROM handle_strcmp, ecc.
           SET ccode TO ccode + isel + "  \} else if (" + ecc + ") \{\n".
           REAP _ FROM env_set, env, 11, _from_long(indent_num + 2).
@@ -4127,7 +4349,7 @@ ACTION gen_reap_stmt(node, sigs(LIST), subst(LIST), clmap(LIST), nums(LIST), stv
       IF cl_ok IS "0",
           REAP arg0 FROM substring, arg_el, 0, 1.
           IF arg0 ISNT "\"",
-             REAP aexpr FROM translate_expr, arg_el, nums, evars.
+             REAP aexpr FROM translate_expr, arg_el, nums, evars, plant_list_make(0).
              REAP aexpr FROM _handle_cat, aexpr, nums, evars.
           /IF.
           IF safe_call IS "1",
@@ -4290,7 +4512,7 @@ ACTION gen_reap_stmt(node, sigs(LIST), subst(LIST), clmap(LIST), nums(LIST), stv
 ACTION gen_season_stmt(node, nums(LIST), evars(LIST), isel(TX), indent_num(NUM), env(LIST)),
   REAP cond FROM _map_get, node, "cond".
   REAP bd FROM _map_get, node, "body".
-  REAP ccond FROM translate_expr, cond, nums, evars.
+  REAP ccond FROM translate_expr, cond, nums, evars, plant_list_make(0).
   REAP ccond FROM handle_strcmp, ccond.
   CREATE ccode(TX) TO isel + "  while (" + ccond + ") \{\n".
   REAP sigs FROM env_sigs, env.
@@ -4323,11 +4545,11 @@ ACTION gen_cycle_stmt(node, nums(LIST), evars(LIST), isel(TX), indent_num(NUM), 
   REAP bd FROM _map_get, node, "body".
   CREATE ccode(TX) TO "".
   IF fromExpr ISNT "",
-      REAP cfrom FROM translate_expr, fromExpr, nums, evars.
-      REAP cto FROM translate_expr, toExpr, nums, evars.
+      REAP cfrom FROM translate_expr, fromExpr, nums, evars, plant_list_make(0).
+      REAP cto FROM translate_expr, toExpr, nums, evars, plant_list_make(0).
       CREATE stepstr(TX) TO "1".
       IF stepExpr > "" AND stepExpr ISNT "null",
-          REAP cstep FROM translate_expr, stepExpr, nums, evars.
+          REAP cstep FROM translate_expr, stepExpr, nums, evars, plant_list_make(0).
           SET stepstr TO cstep.
       /IF.
       REAP sgn FROM _step_sign, stepstr.
@@ -4353,7 +4575,7 @@ ACTION gen_cycle_stmt(node, nums(LIST), evars(LIST), isel(TX), indent_num(NUM), 
       IF indexVar ISNT "" AND indexVar ISNT "null",
           SET idxvar TO indexVar.
       /IF.
-      REAP clist FROM translate_expr, listExpr, nums, evars.
+      REAP clist FROM translate_expr, listExpr, nums, evars, plant_list_make(0).
       SET ccode TO isel + "  for (long " + idxvar + " = 0; " + idxvar + " < plant_array_length(" + clist + "); " + idxvar + "++) \{\n".
       SET ccode TO ccode + isel + "    tx_t " + ivar + " = plant_list_get(" + clist + ", " + idxvar + ");\n".
       REAP _ FROM env_set, env, 11, _from_long(indent_num + 2).
@@ -4464,7 +4686,7 @@ ACTION gen_throw_stmt(node, nums(LIST), evars(LIST), isel(TX)),
   REAP wmsg2 FROM _map_get, node, "msg".
   CREATE cmsg(TX) TO "NULL".
   IF wmsg2 > "",
-      REAP cmsg FROM translate_expr, wmsg2, nums, evars.
+      REAP cmsg FROM translate_expr, wmsg2, nums, evars, plant_list_make(0).
       REAP cmsg FROM _handle_cat, cmsg, nums, evars.
   /IF.
   IF wtype2 IS "",
@@ -4680,11 +4902,15 @@ ACTION generate_node(node, env(LIST)),
     REAP mexit FROM env_mexit, env.
     REAP wexit FROM env_wexit, env.
     REAP isel0 FROM env_indent, env.
+    REAP maths FROM env_maths, env.
     IF clmap IS "",
         SET clmap TO plant_list_make(0).
     /IF.
     IF evars IS "",
         SET evars TO plant_list_make(0).
+    /IF.
+    IF maths IS "",
+        SET maths TO plant_list_make(0).
     /IF.
   
     # ── show_stmt: SHOW expr. → plant_print(expr); ────────────
@@ -4701,9 +4927,9 @@ ACTION generate_node(node, env(LIST)),
     IF ntype IS "verify_stmt",
         REAP lbl FROM _map_get, node, "label".
         REAP cond FROM _map_get, node, "cond".
-        REAP lbl FROM translate_expr, lbl, nums, evars.
+        REAP lbl FROM translate_expr, lbl, nums, evars, maths.
         REAP lbl FROM _handle_cat, lbl, nums, evars.
-        REAP ccond FROM translate_expr, cond, nums, evars.
+        REAP ccond FROM translate_expr, cond, nums, evars, maths.
         REAP ccond FROM _handle_cat, ccond, nums, evars.
         REAP isn FROM expr_is_numeric, ccond, nums.
         IF isn IS 1,
@@ -4761,7 +4987,7 @@ ACTION generate_node(node, env(LIST)),
     # -- setup_stmt: SETUP expr. --> plant_suite_setup_hook(expr);
     IF ntype IS "setup_stmt",
         REAP val FROM _map_get, node, "value".
-        REAP cval FROM translate_expr, val, nums, evars.
+        REAP cval FROM translate_expr, val, nums, evars, maths.
         REAP cval FROM _handle_cat, cval, nums, evars.
         REAP isn FROM expr_is_numeric, cval, nums.
         IF isn IS 1,
@@ -4774,7 +5000,7 @@ ACTION generate_node(node, env(LIST)),
     # -- teardown_stmt: TEARDOWN expr. --> plant_suite_teardown_hook(expr);
     IF ntype IS "teardown_stmt",
         REAP val FROM _map_get, node, "value".
-        REAP cval FROM translate_expr, val, nums, evars.
+        REAP cval FROM translate_expr, val, nums, evars, maths.
         REAP cval FROM _handle_cat, cval, nums, evars.
         REAP isn FROM expr_is_numeric, cval, nums.
         IF isn IS 1,
@@ -4807,7 +5033,7 @@ ACTION generate_node(node, env(LIST)),
     IF ntype IS "increase_stmt" OR ntype IS "decrease_stmt",
         REAP target FROM _map_get, node, "target".
         REAP val FROM _map_get, node, "value".
-        REAP cval FROM translate_expr, val, nums, evars.
+        REAP cval FROM translate_expr, val, nums, evars, maths.
         REAP cval FROM _handle_cat, cval, nums, evars.
         REAP isel FROM indent_str, indent_num.
         REAP isnc FROM list_contains, nums, target.
@@ -4854,7 +5080,7 @@ ACTION generate_node(node, env(LIST)),
         REAP dsrc FROM _map_get, node, "source".
         REAP ditems FROM _map_get, node, "vars".
         REAP dkind FROM _map_get, node, "pattern".
-        REAP srcc FROM translate_expr, dsrc, nums, evars.
+        REAP srcc FROM translate_expr, dsrc, nums, evars, maths.
         REAP isel FROM indent_str, indent_num.
         CREATE tag(TX) TO _from_long(plant_unique_seq()).
         CREATE dsbase(TX) TO "(".
@@ -4900,7 +5126,7 @@ ACTION generate_node(node, env(LIST)),
             GIVE ccode2.
         /IF.
         REAP val FROM _map_get, node, "value".
-        REAP cval FROM translate_expr, val, nums, evars.
+        REAP cval FROM translate_expr, val, nums, evars, maths.
         REAP cval FROM _handle_cat, cval, nums, evars.
         # v0.50.0e — ARRAY[T, N] in let_stmt: emit T name[N] = {init};
         REAP _aby2 FROM find_any, vtype, "[".
@@ -5059,7 +5285,7 @@ ACTION generate_node(node, env(LIST)),
     IF ntype IS "put_stmt",
         REAP item FROM _map_get, node, "item".
         REAP target FROM _map_get, node, "target".
-        REAP citem FROM translate_expr, item, nums, evars.
+        REAP citem FROM translate_expr, item, nums, evars, maths.
         REAP citem FROM _handle_cat, citem, nums, evars.
         REAP isel FROM indent_str, indent_num.
         GIVE isel + "  " + target + " = plant_list_add(" + target + ", " + citem + ");\n".
@@ -5069,7 +5295,7 @@ ACTION generate_node(node, env(LIST)),
     IF ntype IS "take_stmt",
         REAP item FROM _map_get, node, "item".
         REAP target FROM _map_get, node, "target".
-        REAP citem FROM translate_expr, item, nums, evars.
+        REAP citem FROM translate_expr, item, nums, evars, maths.
         REAP citem FROM _handle_cat, citem, nums, evars.
         REAP isel FROM indent_str, indent_num.
         GIVE isel + "  " + target + " = plant_list_remove(" + target + ", " + citem + ");\n".
@@ -5100,9 +5326,9 @@ ACTION generate_node(node, env(LIST)),
         REAP key FROM _map_get, node, "key".
         REAP value FROM _map_get, node, "value".
         REAP target FROM _map_get, node, "target".
-        REAP ckey FROM translate_expr, key, nums, evars.
+        REAP ckey FROM translate_expr, key, nums, evars, maths.
         REAP ckey FROM _handle_cat, ckey, nums, evars.
-        REAP cval FROM translate_expr, value, nums, evars.
+        REAP cval FROM translate_expr, value, nums, evars, maths.
         REAP cval FROM _handle_cat, cval, nums, evars.
         REAP isel FROM indent_str, indent_num.
         GIVE isel + "  " + target + " = plant_link(" + target + ", " + ckey + ", " + cval + ");\n".
@@ -5135,7 +5361,7 @@ ACTION generate_node(node, env(LIST)),
             SET hfn TO "plant_net_harvest_map".
         /IF.
         REAP isel FROM indent_str, indent_num.
-        REAP hcurl FROM translate_expr, hurl, nums, evars.
+        REAP hcurl FROM translate_expr, hurl, nums, evars, maths.
         CREATE hmethod(TX) TO hmeth.
         IF hmethod > "",
             REAP hx0 FROM substring, hmethod, 0, 1.
@@ -5146,7 +5372,7 @@ ACTION generate_node(node, env(LIST)),
         IF hcbody > "",
             REAP hy0 FROM substring, hcbody, 0, 1.
             IF hy0 ISNT "\"",
-                REAP hy1 FROM translate_expr, hcbody, nums, evars.
+                REAP hy1 FROM translate_expr, hcbody, nums, evars, maths.
                 REAP hy1 FROM _handle_cat, hy1, nums, evars.
                 SET hcbody TO hy1.
             /IF.
@@ -5158,7 +5384,7 @@ ACTION generate_node(node, env(LIST)),
         IF htmo > "",
             REAP hz0 FROM substring, htmo, 0, 1.
             IF hz0 ISNT "\"",
-                REAP hz1 FROM translate_expr, htmo, nums, evars.
+                REAP hz1 FROM translate_expr, htmo, nums, evars, maths.
                 SET htmo TO hz1.
             /IF.
         /IF.
@@ -5180,7 +5406,7 @@ ACTION generate_node(node, env(LIST)),
         IF lsp > "",
             REAP lsp0 FROM substring, lsp, 0, 1.
             IF lsp0 ISNT "\"",
-                REAP lsp1 FROM translate_expr, lsp, nums, evars.
+                REAP lsp1 FROM translate_expr, lsp, nums, evars, maths.
                 SET lsp TO lsp1.
             /IF.
         /IF.
@@ -5188,7 +5414,7 @@ ACTION generate_node(node, env(LIST)),
         IF lst > "",
             REAP lst0 FROM substring, lst, 0, 1.
             IF lst0 ISNT "\"",
-                REAP lst1 FROM translate_expr, lst, nums, evars.
+                REAP lst1 FROM translate_expr, lst, nums, evars, maths.
                 SET lst TO lst1.
             /IF.
         /IF.
@@ -5220,7 +5446,7 @@ ACTION generate_node(node, env(LIST)),
         IF rsb > "",
             REAP rsb0 FROM substring, rsb, 0, 1.
             IF rsb0 ISNT "\"",
-                REAP rsb1 FROM translate_expr, rsb, nums, evars.
+                REAP rsb1 FROM translate_expr, rsb, nums, evars, maths.
                 REAP rsb1 FROM _handle_cat, rsb1, nums, evars.
                 SET rsb TO rsb1.
             /IF.
@@ -5318,7 +5544,7 @@ ACTION generate_node(node, env(LIST)),
     #    only cancels the handle if it lives in the given context) ─
     IF ntype IS "cancel_stmt",
         REAP val FROM _map_get, node, "value".
-        REAP cval FROM translate_expr, val, nums, evars.
+        REAP cval FROM translate_expr, val, nums, evars, maths.
         REAP cctx FROM _map_get, node, "ctx".
         REAP isel FROM indent_str, indent_num.
         IF cctx ISNT "" AND cctx ISNT "null",
@@ -5338,7 +5564,7 @@ ACTION generate_node(node, env(LIST)),
         IF lv IS "DEBUG", SET lvnum TO "1". /IF.
         IF lv IS "PERF", SET lvnum TO "2". /IF.
     REAP val FROM _map_get, node, "value".
-    REAP cval FROM translate_expr, val, nums, evars.
+    REAP cval FROM translate_expr, val, nums, evars, maths.
     REAP cval FROM _handle_cat, cval, nums, evars.
     REAP tctx FROM _map_get, node, "ctx".
     REAP isel FROM indent_str, indent_num.
@@ -5408,7 +5634,7 @@ ACTION generate_node(node, env(LIST)),
     IF ntype IS "reap_expr_stmt",
         REAP tgt2 FROM _map_get, node, "target".
         REAP expr2 FROM _map_get, node, "expr".
-        REAP cval2 FROM translate_expr, expr2, nums, evars.
+        REAP cval2 FROM translate_expr, expr2, nums, evars, maths.
         REAP cval2 FROM _handle_cat, cval2, nums, evars.
         # v0.49.9 — numeric results (COUNT, arithmetic, _to_long…)
         # are stored as text like numeric-action REAPs, so SHOW/
@@ -5478,7 +5704,7 @@ ACTION generate_node(node, env(LIST)),
     # ── analyze_stmt: ANALYZE x. → plant_print(plant_map_to_string(plant_analyze(x))); ─
     IF ntype IS "analyze_stmt",
         REAP tgt FROM _map_get, node, "target".
-        REAP cval FROM translate_expr, tgt, nums, evars.
+        REAP cval FROM translate_expr, tgt, nums, evars, maths.
         REAP cval FROM _handle_cat, cval, nums, evars.
         REAP isn2 FROM expr_is_numeric, cval, nums.
         IF isn2 IS 1,
@@ -5491,7 +5717,7 @@ ACTION generate_node(node, env(LIST)),
     # ── typeof_stmt: TYPEOF x. → plant_print(plant_typeof(x)); ────
     IF ntype IS "typeof_stmt",
         REAP tgt2 FROM _map_get, node, "target".
-        REAP cval2 FROM translate_expr, tgt2, nums, evars.
+        REAP cval2 FROM translate_expr, tgt2, nums, evars, maths.
         REAP cval2 FROM _handle_cat, cval2, nums, evars.
         REAP isn3 FROM expr_is_numeric, cval2, nums.
         IF isn3 IS 1,
@@ -5504,7 +5730,7 @@ ACTION generate_node(node, env(LIST)),
     # ── free_stmt: FREE x. → x = plant_mem_free((tx_t)x); ────
     IF ntype IS "free_stmt",
         REAP ftgt FROM _map_get, node, "target".
-        REAP fcv FROM translate_expr, ftgt, nums, evars.
+        REAP fcv FROM translate_expr, ftgt, nums, evars, maths.
         REAP isel FROM indent_str, indent_num.
         GIVE isel + "  " + fcv + " = plant_mem_free((tx_t)" + fcv + ");\n".
     /IF.
@@ -5513,8 +5739,8 @@ ACTION generate_node(node, env(LIST)),
     IF ntype IS "arc_link_stmt" OR ntype IS "arc_unlink_stmt",
         REAP ap FROM _map_get, node, "parent".
         REAP ac FROM _map_get, node, "child".
-        REAP avp FROM translate_expr, ap, nums, evars.
-        REAP avc FROM translate_expr, ac, nums, evars.
+        REAP avp FROM translate_expr, ap, nums, evars, maths.
+        REAP avc FROM translate_expr, ac, nums, evars, maths.
         REAP isnp FROM expr_is_numeric, avp, nums.
         IF isnp IS 1,
             SET avp TO "_from_long(" + avp + ")".
@@ -5546,7 +5772,7 @@ ACTION generate_node(node, env(LIST)),
         REAP isel FROM indent_str, indent_num.
         CREATE wsleep(TX) TO "0".
         IF wms > "",
-            REAP wc2 FROM translate_expr, wms, nums, evars.
+            REAP wc2 FROM translate_expr, wms, nums, evars, maths.
             SET wsleep TO wc2.
         /IF.
         GIVE isel + "  plant_msleep(" + wsleep + ");\n".
@@ -5558,7 +5784,7 @@ ACTION generate_node(node, env(LIST)),
     #    targets are stringified so their value is the key.
     IF ntype IS "lock_stmt",
         REAP lv2 FROM _map_get, node, "var".
-        REAP lcv2 FROM translate_expr, lv2, nums, evars.
+        REAP lcv2 FROM translate_expr, lv2, nums, evars, maths.
         REAP isnl2 FROM expr_is_numeric, lcv2, nums.
         IF isnl2 IS 1,
             SET lcv2 TO "_from_long(" + lcv2 + ")".
@@ -5633,7 +5859,7 @@ ACTION generate_node(node, env(LIST)),
     #    the descriptive default ("conditional stop requested").
     IF ntype IS "stop_if_stmt",
         REAP scond FROM _map_get, node, "cond".
-        REAP scc FROM translate_expr, scond, nums, evars.
+        REAP scc FROM translate_expr, scond, nums, evars, maths.
         REAP scc FROM handle_strcmp, scc.
         REAP isel FROM indent_str, indent_num.
         GIVE isel + "  if (" + scc + ") \{\n" + isel + "    plant_throw(\"STOP_STORM\", NULL);\n" + isel + "  \}\n".
@@ -5651,7 +5877,7 @@ ACTION generate_node(node, env(LIST)),
     IF ntype IS "match_stmt",
         REAP subj FROM _map_get, node, "subjectExpr".
         CREATE clauses(LIST) TO _map_get(node, "clauses").
-        REAP csubj FROM translate_expr, subj, nums, evars.
+        REAP csubj FROM translate_expr, subj, nums, evars, maths.
         REAP isel FROM indent_str, indent_num.
         CREATE ccode(TX) TO isel + "  \{\n" + isel + "    tx_t __mt = " + csubj + ";\n".
         CREATE ci(NUM) TO 0.
@@ -5790,7 +6016,8 @@ ACTION generate_node(node, env(LIST)),
         IF mmode IS "SAFE", SET amode_exit TO "  plant_safe_exit();\n". /IF.
         IF mmode IS "SMART", SET amode_exit TO "  plant_smart_exit(\"" + aname + "\");\n". /IF.
         IF mmode IS "PERSISTENT", SET amode_exit TO "  plant_persist_exit();\n". /IF.
-        REAP bcode FROM generate_body, bd, env_make(1, sigs, subst, clmap, actx, nums_a, stvars_a, evars_a, rty_a, amode_exit, "").
+        CREATE maths_a(LIST) TO collect_maths(bd, params, subst).
+        REAP bcode FROM generate_body, bd, env_make(1, sigs, subst, clmap, actx, nums_a, stvars_a, evars_a, rty_a, amode_exit, "", maths_a).
         # v0.49.53: scan body for verify_stmt nodes; wrap with
         # plant_verify_begin/end only for actions that contain VERIFY
         # assertions (test actions).
@@ -6215,7 +6442,13 @@ ACTION is_bare_id(e(TX)),
   CREATE bc(TX) TO "".
   SEASON bi2 < LEN(e),
     REAP bc FROM char_at, e, bi2.
-    IF bc IS " " OR bc IS "(" OR bc IS ")" OR bc IS "+" OR bc IS "-" OR bc IS "\"" OR bc IS "[" OR bc IS "]" OR bc IS "@" OR bc IS "*" OR bc IS "&" OR bc IS "=" OR bc IS "!",
+    IF bc IS " " OR bc IS "(" OR bc IS ")" OR bc IS "+" OR bc IS "-" OR bc IS "\"" OR bc IS "[" OR bc IS "]" OR bc IS "*" OR bc IS "&" OR bc IS "=" OR bc IS "!",
+      GIVE "0".
+    /IF.
+    # v0.50.5 — @ is also a non-identifier char (cast operator);
+    # detect via str_eq to avoid v1 bootstrap string-literal issues.
+    REAP is_at2 FROM str_eq, bc, "@".
+    IF is_at2 IS "1",
       GIVE "0".
     /IF.
     SET bi2 TO bi2 + 1.
@@ -7061,7 +7294,8 @@ ACTION emit_inst(inst(TX), templates(LIST), sigs(LIST), reg(LIST)),
         SET dcode TO dcode + "  tx_t " + dv + " = \"\";\n".
         SET di TO di + 1.
     /SEASON.
-    REAP bcode FROM generate_body, bd, env_make(1, sigs, subst, plant_list_make(0), "", nums_m, stvars_m, evars_m, rty_m, "", "").
+    CREATE maths_m(LIST) TO collect_maths(bd, params, subst).
+    REAP bcode FROM generate_body, bd, env_make(1, sigs, subst, plant_list_make(0), "", nums_m, stvars_m, evars_m, rty_m, "", "", maths_m).
     IF (COUNT bd) IS 0,
         SET bcode TO "  return " + mname + ";\n".
     /IF.
@@ -7790,7 +8024,7 @@ ACTION generate_c(ast(LIST)),
         REAP node_el FROM plant_list_get, ast, i.
         REAP ntype FROM _map_get, node_el, "type".
         IF ntype IS "enum_decl",
-            REAP nd_code FROM generate_node, node_el, env_make(0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "", "", "").
+            REAP nd_code FROM generate_node, node_el, env_make(0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "", "", "", plant_list_make(0)).
             SET struct_code TO struct_code + nd_code.
         /IF.
         SET i TO i + 1.
@@ -8197,7 +8431,7 @@ ACTION generate_c(ast(LIST)),
                     /IF.
                 /IF.
                 REAP cmact FROM _cl_map_get, clmaps, aname.
-                REAP nd_code FROM generate_node, node_el2, env_make(0, sigs, esub, cmact, "", plant_list_make(0), plant_list_make(0), eregs, "", "", "").
+                REAP nd_code FROM generate_node, node_el2, env_make(0, sigs, esub, cmact, "", plant_list_make(0), plant_list_make(0), eregs, "", "", "", plant_list_make(0)).
                 SET decl_code TO decl_code + nd_code.
                 SET has_decl TO 1.
             /IF.
@@ -8214,7 +8448,7 @@ ACTION generate_c(ast(LIST)),
         # v0.49.25: import_stmt nodes are loader-level no-ops and must
         # not flip has_stmt (which would force a duplicate CLI main).
         IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "union_decl" AND ntype ISNT "import_stmt" AND ntype ISNT "type_decl" AND ntype ISNT "species_decl" AND ntype ISNT "interface_decl",
-            REAP ns_code FROM generate_node, node_el, env_make(0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "", "", "").
+            REAP ns_code FROM generate_node, node_el, env_make(0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "", "", "", plant_list_make(0)).
             SET stmt_code TO stmt_code + ns_code.
             SET has_stmt TO 1.
         /IF.
@@ -8877,7 +9111,7 @@ ACTION _cl_emit_fn(cnode(LIST), sigs(LIST), subst(LIST), reg(LIST)),
         REAP bx FROM _map_get, cnode, "body".
         CREATE nums_c(LIST) TO collect_nums_cb(plant_list_make(0), params, shads, subst).
         CREATE evars_c(LIST) TO collect_enums(plant_list_make(0), cbpars2, subst, reg, sigs).
-        REAP cx3 FROM translate_expr, bx, nums_c, evars_c.
+        REAP cx3 FROM translate_expr, bx, nums_c, evars_c, plant_list_make(0).
         REAP cx3 FROM _handle_cat, cx3, nums_c, evars_c.
         SET fnc TO fnc + "  return " + cx3 + ";\n".
     /IF.
@@ -8902,7 +9136,7 @@ ACTION _cl_emit_fn(cnode(LIST), sigs(LIST), subst(LIST), reg(LIST)),
             SET di6 TO di6 + 1.
         /SEASON.
         CREATE evars_c(LIST) TO collect_enums(bb, cbpars2, subst, reg, sigs).
-        REAP bc3 FROM generate_body, bb, env_make(1, sigs, subst, cm2, "", nums_c, stvars_c, evars_c, "", "", "").
+        REAP bc3 FROM generate_body, bb, env_make(1, sigs, subst, cm2, "", nums_c, stvars_c, evars_c, "", "", "", plant_list_make(0)).
         SET fnc TO fnc + bc3 + "".
     /IF.
     SET fnc TO fnc + "\}\n".
