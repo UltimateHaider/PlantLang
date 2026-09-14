@@ -1,0 +1,5 @@
+# v0.50.4 — Series: Maclaurin expansion of log(1+x), order 4
+ACTION main(),
+  SHOW MATH_SERIES("LOG(1+x)", "x", 4).
+  GIVE 0.
+/GIVE main.

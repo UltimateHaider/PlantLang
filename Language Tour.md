@@ -518,7 +518,7 @@ REAP mx FROM math_max, "3", "7".   # → 7
 REAP rd FROM math_random.          # uniform [0,1) as text
 ```
 
-### CAS (Computer Algebra System) Built-ins (v0.50.3)
+### CAS (Computer Algebra System) Built-ins (v0.50.4)
 
 The compiler provides compile-time symbolic math operations via `SHOW`:
 
@@ -567,6 +567,18 @@ SHOW MATH_LIMIT("x^2 + 2*x + 1", "x", "2").   # → 9  (direct substitution)
 SHOW MATH_LIMIT("SIN(x)/x", "x", "0").          # → 1  (trig special limit)
 SHOW MATH_LIMIT("(EXP(x) - 1)/x", "x", "0").   # → 1  (exp limit)
 SHOW MATH_LIMIT("x^2", "x", "inf").             # → infinity  (at infinity)
+
+# Series expansion — Maclaurin (center=0)
+SHOW MATH_SERIES("EXP(x)", "x", 4).     # → 1 + x + 0.5*x^2 + 0.166667*x^3 + 0.0416667*x^4
+SHOW MATH_SERIES("SIN(x)", "x", 5).     # → x - 0.166667*x^3 + 0.00833333*x^5
+SHOW MATH_SERIES("COS(x)", "x", 4).     # → 1 - 0.5*x^2 + 0.0416667*x^4
+
+# Taylor series — about explicit center
+SHOW MATH_TAYLOR("x^2", "x", "1", 3).   # → (x-1)^2 + 2*x - 1
+
+# Partial fraction decomposition
+SHOW MATH_PARTIAL_FRACTIONS("1/((x-1)*(x-2))", "x").  # → -1/(x-1) + 1/(x-2)
+SHOW MATH_PARTIAL_FRACTIONS("x/((x-1)*(x-2))", "x").  # → -1/(x-1) + 2/(x-2)
 
 # Factor — GCD, difference of squares, perfect square trinomial
 SHOW MATH_FACTOR("6*x + 9").          # → 3*(2*x + 3)

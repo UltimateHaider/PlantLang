@@ -139,6 +139,35 @@ char*     plant_math_quadratic_str(const char* a, const char* b, const char* c);
 void      plant_math_free(void* math_ptr);
 
 /* ====================================================================
+ *  v0.50.4 — Series Expansion Subsystem
+ * ==================================================================== */
+
+/* Compute Maclaurin series (center=0) of node, up to max_order terms.
+ * Returns a polynomial MathNode (sum of terms). Caller must free. */
+MathNode* plant_math_series(const MathNode* node, const char* var, int max_order);
+
+/* Convenience: compute Maclaurin series from strings. Caller frees result. */
+char*     plant_math_series_str(const char* expr, const char* var, int max_order);
+
+/* Compute Taylor series about center, up to max_order terms.
+ * Returns a polynomial MathNode. Caller must free. */
+MathNode* plant_math_taylor(const MathNode* node, const char* var,
+                             double center, int max_order);
+
+/* Convenience: compute Taylor series from strings. Caller frees result. */
+char*     plant_math_taylor_str(const char* expr, const char* var,
+                                 const char* center, int max_order);
+
+/* ====================================================================
+ *  v0.50.4 — Partial Fraction Decomposition
+ * ==================================================================== */
+
+/* Decompose a rational expression into partial fractions.
+ * Input must be a division node (num/den).
+ * Returns a string representation. Caller frees result. */
+char*     plant_math_partial_fractions_str(const char* expr, const char* var);
+
+/* ====================================================================
  *  v0.50.3 — Limit Evaluation Subsystem
  * ==================================================================== */
 

@@ -1,3 +1,16 @@
+## v0.50.4 - 2026 (Series Expansions & Partial Fraction Decomposition)
+
+### New Language Features
+
+#### Series Expansions (`MATH_SERIES`, `MATH_TAYLOR`)
+- `MATH_SERIES("expr", "var", "order")` — Maclaurin series (center=0)
+- `MATH_TAYLOR("expr", "var", "center", "order")` — Taylor series about explicit center
+- Template shortcuts for EXP, SIN, COS, LOG(1+x), 1/(1-x)
+
+#### Partial Fraction Decomposition (`MATH_PARTIAL_FRACTIONS`)
+- `MATH_PARTIAL_FRACTIONS("expr", "var")` — decomposes rational expressions into partial fractions
+- Handles distinct linear factors, polynomial numerators, and negative roots
+
 ## v0.50.3 - 2026 (Limits, Integration by Parts & Integration by Substitution)
 
 ### New Language Features

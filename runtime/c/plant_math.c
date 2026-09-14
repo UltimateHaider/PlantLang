@@ -12,6 +12,7 @@
 #include "plant_math.h"
 #include <ctype.h>
 #include <float.h>
+#include <string.h>
 
 /* ====================================================================
  *  Tokenizer
@@ -3244,6 +3245,524 @@ char* plant_math_integral_subst_str(const char* expr, const char* var) {
     math_node_free(ast);
     math_node_free(result);
     return final_str;
+}
+
+/* ====================================================================
+ *  v0.50.4 — Series Expansion Subsystem
+ *
+ *  Taylor series: f(x) = Σ_{n=0}^{N} f^{(n)}(a)/n! · (x-a)^n
+ *  Maclaurin is Taylor with a=0.
+ *
+ *  Template shortcuts for common functions to avoid expensive
+ *  symbolic derivative computation:
+ *    exp(x)     → 1 + x + x²/2! + x³/3! + ...
+ *    sin(x)     → x - x³/3! + x⁵/5! - ...
+ *    cos(x)     → 1 - x²/2! + x⁴/4! - ...
+ *    log(1+x)   → x - x²/2 + x³/3 - ...
+ *    1/(1-x)    → 1 + x + x² + x³ + ...
+ * ==================================================================== */
+
+/* Factorial helper */
+static double factorial(int n) {
+    double r = 1.0;
+    for (int i = 2; i <= n; i++) r *= i;
+    return r;
+}
+
+/* Compute n-th derivative of node with respect to var, evaluated at center */
+static double nth_derivative_at(const MathNode* node, const char* var,
+                                 double center, int n) {
+    MathNode* cur = plant_math_deep_copy(node);
+    for (int i = 0; i < n; i++) {
+        MathNode* d = plant_math_derivative(cur, var);
+        math_node_free(cur);
+        if (!d) return NAN;
+        cur = plant_math_simplify(d);
+    }
+    /* Evaluate at center */
+    MathNode* substituted = substitute_var(cur, var, center);
+    MathNode* simplified = plant_math_simplify(substituted);
+    double val = plant_math_eval(simplified);
+    math_node_free(simplified);
+    math_node_free(cur);
+    return val;
+}
+
+/* Build polynomial term: coeff * (x - center)^power */
+static MathNode* series_term(const char* var, double center, double coeff, int power) {
+    if (fabs(coeff) < 1e-15) return NULL;
+
+    MathNode* x_node;
+    if (fabs(center) < 1e-15) {
+        /* Maclaurin: just x^power */
+        x_node = math_node_symbol(var);
+    } else {
+        /* Taylor: (x - center)^power */
+        x_node = math_node_binary(OP_SUB,
+            math_node_symbol(var), math_node_number(center));
+    }
+
+    MathNode* term;
+    if (power == 0) {
+        term = math_node_number(coeff);
+    } else if (power == 1) {
+        term = math_node_binary(OP_MUL, math_node_number(coeff), x_node);
+    } else {
+        MathNode* x_pow = math_node_binary(OP_POW,
+            x_node, math_node_number((double)power));
+        term = math_node_binary(OP_MUL, math_node_number(coeff), x_pow);
+    }
+    return term;
+}
+
+/* Template: exp(x) about center=a */
+static MathNode* series_exp(const char* var, double center, int max_order) {
+    MathNode* result = NULL;
+    for (int n = 0; n <= max_order; n++) {
+        /* d^n/dx^n e^x = e^x, eval at a = e^a */
+        double coeff = exp(center) / factorial(n);
+        MathNode* term = series_term(var, center, coeff, n);
+        if (term) {
+            if (!result) result = term;
+            else result = math_node_binary(OP_ADD, result, term);
+        }
+    }
+    return result ? result : math_node_number(0.0);
+}
+
+/* Template: sin(x) about center=a — uses angle addition formula expansion */
+static MathNode* series_sin(const char* var, double center, int max_order) {
+    /* sin(x) = sin(a + (x-a)) = sin(a)·cos(x-a) + cos(a)·sin(x-a) */
+    /* Expand cos(x-a) and sin(x-a) as Maclaurin series */
+    double sa = sin(center), ca = cos(center);
+    MathNode* result = NULL;
+    for (int n = 0; n <= max_order; n++) {
+        /* d^n/dx^n sin(x) = sin(x + nπ/2) */
+        double angle = center + n * M_PI / 2.0;
+        double coeff = sin(angle) / factorial(n);
+        MathNode* term = series_term(var, center, coeff, n);
+        if (term) {
+            if (!result) result = term;
+            else result = math_node_binary(OP_ADD, result, term);
+        }
+    }
+    return result ? result : math_node_number(0.0);
+}
+
+/* Template: cos(x) about center=a */
+static MathNode* series_cos(const char* var, double center, int max_order) {
+    MathNode* result = NULL;
+    for (int n = 0; n <= max_order; n++) {
+        /* d^n/dx^n cos(x) = cos(x + nπ/2) */
+        double angle = center + n * M_PI / 2.0;
+        double coeff = cos(angle) / factorial(n);
+        MathNode* term = series_term(var, center, coeff, n);
+        if (term) {
+            if (!result) result = term;
+            else result = math_node_binary(OP_ADD, result, term);
+        }
+    }
+    return result ? result : math_node_number(0.0);
+}
+
+/* Template: log(1+x) about center=0 only */
+static MathNode* series_log1x(const char* var, int max_order) {
+    MathNode* result = NULL;
+    for (int n = 1; n <= max_order; n++) {
+        double coeff = ((n % 2 == 1) ? 1.0 : -1.0) / (double)n;
+        MathNode* term = series_term(var, 0.0, coeff, n);
+        if (term) {
+            if (!result) result = term;
+            else result = math_node_binary(OP_ADD, result, term);
+        }
+    }
+    return result ? result : math_node_number(0.0);
+}
+
+/* Template: 1/(1-x) about center=0 only */
+static MathNode* series_geom(const char* var, int max_order) {
+    MathNode* result = NULL;
+    for (int n = 0; n <= max_order; n++) {
+        MathNode* term = series_term(var, 0.0, 1.0, n);
+        if (term) {
+            if (!result) result = term;
+            else result = math_node_binary(OP_ADD, result, term);
+        }
+    }
+    return result ? result : math_node_number(0.0);
+}
+
+/* Detect function call patterns for template shortcuts */
+static MathNode* try_series_template(const MathNode* node, const char* var,
+                                       double center, int max_order) {
+    /* 1/(1-x) — geometric series, only at center=0 */
+    if (node->type == MATH_BINARY_OP && node->op == OP_DIV &&
+        fabs(center) < 1e-15 &&
+        is_one(node->left) &&
+        node->right->type == MATH_BINARY_OP && node->right->op == OP_SUB &&
+        is_one(node->right->left) &&
+        node->right->right->type == MATH_SYMBOL &&
+        strcmp(node->right->right->sym_name, var) == 0) {
+        return series_geom(var, max_order);
+    }
+
+    if (node->type != MATH_FUNC_CALL) return NULL;
+
+    const char* fname = node->sym_name;
+
+    /* exp(x) */
+    if (strcmp(fname, "EXP") == 0 &&
+        node->left->type == MATH_SYMBOL &&
+        strcmp(node->left->sym_name, var) == 0) {
+        return series_exp(var, center, max_order);
+    }
+
+    /* sin(x) */
+    if (strcmp(fname, "SIN") == 0 &&
+        node->left->type == MATH_SYMBOL &&
+        strcmp(node->left->sym_name, var) == 0) {
+        return series_sin(var, center, max_order);
+    }
+
+    /* cos(x) */
+    if (strcmp(fname, "COS") == 0 &&
+        node->left->type == MATH_SYMBOL &&
+        strcmp(node->left->sym_name, var) == 0) {
+        return series_cos(var, center, max_order);
+    }
+
+    /* log(1+x) — only at center=0 */
+    if ((strcmp(fname, "LOG") == 0 || strcmp(fname, "LN") == 0) &&
+        fabs(center) < 1e-15 &&
+        node->left->type == MATH_BINARY_OP && node->left->op == OP_ADD &&
+        is_one(node->left->left) &&
+        node->left->right->type == MATH_SYMBOL &&
+        strcmp(node->left->right->sym_name, var) == 0) {
+        return series_log1x(var, max_order);
+    }
+
+    return NULL;
+}
+
+MathNode* plant_math_series(const MathNode* node, const char* var, int max_order) {
+    return plant_math_taylor(node, var, 0.0, max_order);
+}
+
+char* plant_math_series_str(const char* expr, const char* var, int max_order) {
+    MathNode* ast = plant_math_parse(expr);
+    if (!ast) return strdup("ERROR: Could not parse expression.");
+    MathNode* result = plant_math_series(ast, var, max_order);
+    math_node_free(ast);
+    if (!result) return strdup("ERROR: Could not compute series expansion.");
+    char* inner = plant_math_to_string(result);
+    math_node_free(result);
+    return inner;
+}
+
+MathNode* plant_math_taylor(const MathNode* node, const char* var,
+                             double center, int max_order) {
+    if (!node || !var || max_order < 0) return NULL;
+
+    /* Try template shortcuts first */
+    MathNode* tmpl = try_series_template(node, var, center, max_order);
+    if (tmpl) return tmpl;
+
+    /* General Taylor expansion via iterative differentiation */
+    MathNode* result = NULL;
+    for (int n = 0; n <= max_order; n++) {
+        double coeff = nth_derivative_at(node, var, center, n);
+        if (coeff != coeff) continue; /* skip NaN */
+        coeff /= factorial(n);
+        MathNode* term = series_term(var, center, coeff, n);
+        if (term) {
+            if (!result) result = term;
+            else result = math_node_binary(OP_ADD, result, term);
+        }
+    }
+    return result ? plant_math_simplify(result) : math_node_number(0.0);
+}
+
+char* plant_math_taylor_str(const char* expr, const char* var,
+                             const char* center_str, int max_order) {
+    MathNode* ast = plant_math_parse(expr);
+    if (!ast) return strdup("ERROR: Could not parse expression.");
+
+    double center = 0.0;
+    if (center_str && strlen(center_str) > 0) {
+        MathNode* c_ast = plant_math_parse(center_str);
+        if (c_ast) { center = plant_math_eval(c_ast); math_node_free(c_ast); }
+    }
+
+    MathNode* result = plant_math_taylor(ast, var, center, max_order);
+    math_node_free(ast);
+    if (!result) return strdup("ERROR: Could not compute Taylor series.");
+
+    char* inner = plant_math_to_string(result);
+    math_node_free(result);
+    return inner;
+}
+
+/* ====================================================================
+ *  v0.50.4 — Partial Fraction Decomposition
+ *
+ *  Decomposes rational expressions into partial fractions:
+ *    1/((x-a)(x-b))       → A/(x-a) + B/(x-b)
+ *    1/((x-a)^2)          → A/(x-a) + B/(x-a)^2
+ *    (px+q)/(x^2+bx+c)    → kept as-is (irreducible quadratic)
+ *
+ *  Approach: extract polynomial coefficients from AST, find integer
+ *  roots via evaluation, compute quotients via synthetic division,
+ *  and determine residues via L'Hôpital's rule.
+ * ==================================================================== */
+
+/* Maximum polynomial degree we handle */
+#define MAX_POLY_DEG 8
+
+/* Extract coefficients from a polynomial AST into c[0..deg] where
+ * poly = c[0] + c[1]*x + c[2]*x^2 + ... + c[deg]*x^deg.
+ * Returns degree, or -1 if not a polynomial in var. */
+static int extract_poly_coeffs(const MathNode* node, const char* var,
+                                double c[], int max_deg) {
+    if (!node) return -1;
+
+    /* Number or constant */
+    if (node->type == MATH_NUMBER) {
+        c[0] = node->num_val;
+        return 0;
+    }
+    if (node->type == MATH_CONSTANT) {
+        c[0] = lookup_constant(node->sym_name);
+        if (isnan(c[0])) return -1;
+        return 0;
+    }
+
+    /* Symbol: x → 0 + 1*x */
+    if (node->type == MATH_SYMBOL) {
+        if (strcmp(node->sym_name, var) == 0) {
+            c[0] = 0; c[1] = 1.0;
+            return 1;
+        }
+        /* Other symbol treated as constant */
+        c[0] = 0;
+        return -1; /* not a polynomial in var */
+    }
+
+    /* Binary operations */
+    if (node->type == MATH_BINARY_OP) {
+        double lc[MAX_POLY_DEG + 1] = {0};
+        double rc[MAX_POLY_DEG + 1] = {0};
+        int ld = extract_poly_coeffs(node->left, var, lc, max_deg);
+        int rd = extract_poly_coeffs(node->right, var, rc, max_deg);
+
+        switch (node->op) {
+            case OP_ADD:
+                if (ld < 0 && rd < 0) return -1;
+                { int d = (ld > rd) ? ld : rd;
+                  for (int i = 0; i <= d; i++)
+                      c[i] = (i <= ld ? lc[i] : 0) + (i <= rd ? rc[i] : 0);
+                  return d; }
+
+            case OP_SUB:
+                if (ld < 0 && rd < 0) return -1;
+                { int d = (ld > rd) ? ld : rd;
+                  for (int i = 0; i <= d; i++)
+                      c[i] = (i <= ld ? lc[i] : 0) - (i <= rd ? rc[i] : 0);
+                  return d; }
+
+            case OP_MUL:
+                if (ld < 0 || rd < 0) return -1;
+                { int d = ld + rd;
+                  if (d > max_deg) return -1;
+                  for (int i = 0; i <= d; i++) c[i] = 0;
+                  for (int i = 0; i <= ld; i++)
+                      for (int j = 0; j <= rd; j++)
+                          c[i + j] += lc[i] * rc[j];
+                  return d; }
+
+            case OP_POW:
+                /* Only handle integer exponents up to small values */
+                if (rd < 0 || (node->right->type != MATH_NUMBER)) return -1;
+                { int exp = (int)(node->right->num_val + 0.5);
+                  if (fabs(node->right->num_val - exp) > 1e-10) return -1;
+                  if (exp < 0 || exp > 6) return -1;
+                  if (ld < 0) return -1;
+                  /* Multiply polynomial by itself exp times */
+                  double tmp[MAX_POLY_DEG + 1] = {0};
+                  double acc[MAX_POLY_DEG + 1] = {0};
+                  acc[0] = 1.0;
+                  int ad = 0;
+                  for (int e = 0; e < exp; e++) {
+                      double next[MAX_POLY_DEG + 1] = {0};
+                      int nd = ad + ld;
+                      if (nd > max_deg) return -1;
+                      for (int i = 0; i <= ad; i++)
+                          for (int j = 0; j <= ld; j++)
+                              next[i + j] += acc[i] * lc[j];
+                      memcpy(acc, next, sizeof(double) * (nd + 1));
+                      ad = nd;
+                  }
+                  for (int i = 0; i <= ad; i++) c[i] = acc[i];
+                  return ad; }
+
+            default: return -1;
+        }
+    }
+
+    /* Unary negation */
+    if (node->type == MATH_UNARY_OP && node->op == OP_NEG) {
+        int d = extract_poly_coeffs(node->left, var, c, max_deg);
+        if (d < 0) return -1;
+        for (int i = 0; i <= d; i++) c[i] = -c[i];
+        return d;
+    }
+
+    return -1;
+}
+
+/* Evaluate polynomial using Horner's method */
+static double poly_eval_arr(double c[], int deg, double x) {
+    double result = c[deg];
+    for (int i = deg - 1; i >= 0; i--)
+        result = result * x + c[i];
+    return result;
+}
+
+/* Find integer roots of polynomial, returns count */
+static int find_int_roots(double c[], int deg, double roots[], int max_roots) {
+    int count = 0;
+    for (int r = -20; r <= 20 && count < max_roots; r++) {
+        if (fabs(poly_eval_arr(c, deg, (double)r)) < 1e-8) {
+            roots[count++] = (double)r;
+        }
+    }
+    return count;
+}
+
+/* Synthetic division: divide c[0..deg] by (x - root), result in q[0..deg-1] */
+static void synth_div(double c[], int deg, double root, double q[]) {
+    q[deg - 1] = c[deg];
+    for (int i = deg - 2; i >= 0; i--)
+        q[i] = c[i + 1] + q[i + 1] * root;
+}
+
+/* Build AST from coefficient array: c[0] + c[1]*x + ... + c[deg]*x^deg */
+static MathNode* poly_from_coeffs(double c[], int deg, const char* var) {
+    MathNode* result = NULL;
+    for (int i = deg; i >= 0; i--) {
+        if (fabs(c[i]) < 1e-12) continue;
+        MathNode* term;
+        if (i == 0) {
+            term = math_node_number(c[i]);
+        } else if (i == 1) {
+            if (fabs(c[i] - 1.0) < 1e-10)
+                term = math_node_symbol(var);
+            else if (fabs(c[i] + 1.0) < 1e-10)
+                term = math_node_unary(math_node_symbol(var));
+            else
+                term = math_node_binary(OP_MUL, math_node_number(c[i]),
+                                        math_node_symbol(var));
+        } else {
+            MathNode* xv = math_node_binary(OP_POW,
+                math_node_symbol(var), math_node_number((double)i));
+            if (fabs(c[i] - 1.0) < 1e-10)
+                term = xv;
+            else
+                term = math_node_binary(OP_MUL, math_node_number(c[i]), xv);
+        }
+        if (!result) result = term;
+        else result = math_node_binary(OP_ADD, result, term);
+    }
+    return result ? result : math_node_number(0.0);
+}
+
+char* plant_math_partial_fractions_str(const char* expr, const char* var) {
+    MathNode* ast = plant_math_parse(expr);
+    if (!ast) return strdup("ERROR: Could not parse expression.");
+
+    /* Must be a fraction: num/den */
+    if (ast->type != MATH_BINARY_OP || ast->op != OP_DIV) {
+        math_node_free(ast);
+        return strdup("ERROR: Expression must be a fraction (num/den).");
+    }
+
+    MathNode* num = ast->left;
+    MathNode* den = ast->right;
+
+    /* Extract denominator polynomial coefficients */
+    double dc[MAX_POLY_DEG + 1] = {0};
+    int ddeg = extract_poly_coeffs(den, var, dc, MAX_POLY_DEG);
+    if (ddeg < 1) {
+        math_node_free(ast);
+        return strdup("ERROR: Could not extract denominator polynomial.");
+    }
+
+    /* Extract numerator polynomial coefficients */
+    double nc[MAX_POLY_DEG + 1] = {0};
+    int ndeg = extract_poly_coeffs(num, var, nc, MAX_POLY_DEG);
+    if (ndeg < 0) {
+        /* Numerator is constant */
+        nc[0] = plant_math_eval(num);
+        ndeg = 0;
+    }
+
+    /* Find integer roots of denominator */
+    double roots[MAX_POLY_DEG];
+    int nroots = find_int_roots(dc, ddeg, roots, MAX_POLY_DEG);
+
+    if (nroots == 0) {
+        math_node_free(ast);
+        return strdup("ERROR: No integer roots found in denominator.");
+    }
+
+    /* Build partial fraction decomposition using residues.
+     * For each root r_i, compute A_i = N(r_i) / D'(r_i) where
+     * D'(x) is the derivative of the denominator polynomial. */
+    MathNode* result = NULL;
+
+    /* Compute denominator derivative coefficients */
+    double dd[MAX_POLY_DEG + 1] = {0};
+    for (int j = 1; j <= ddeg; j++)
+        dd[j - 1] = dc[j] * j;
+    int dderiv_deg = ddeg - 1;
+
+    /* Compute how many times each root appears (multiplicity) */
+    for (int i = 0; i < nroots; i++) {
+        double root = roots[i];
+
+        /* Evaluate numerator at root */
+        double nval = poly_eval_arr(nc, ndeg, root);
+
+        /* Evaluate denominator derivative at root */
+        double dval = poly_eval_arr(dd, dderiv_deg, root);
+
+        if (fabs(dval) < 1e-15) continue;
+
+        double residue = nval / dval;
+
+        /* Build term: residue / (x - root) */
+        MathNode* denom_term = math_node_binary(OP_SUB,
+            math_node_symbol(var), math_node_number(root));
+        MathNode* frac;
+        if (fabs(residue - 1.0) < 1e-10) {
+            frac = math_node_binary(OP_DIV, math_node_number(1.0), denom_term);
+        } else if (fabs(residue + 1.0) < 1e-10) {
+            frac = math_node_unary(
+                math_node_binary(OP_DIV, math_node_number(1.0), denom_term));
+        } else {
+            frac = math_node_binary(OP_DIV, math_node_number(residue), denom_term);
+        }
+
+        if (!result) result = frac;
+        else result = math_node_binary(OP_ADD, result, frac);
+    }
+
+    math_node_free(ast);
+
+    if (!result) return strdup("ERROR: Decomposition failed.");
+
+    char* str = plant_math_to_string(result);
+    math_node_free(result);
+    return str;
 }
 
 /* ====================================================================

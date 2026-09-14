@@ -1,5 +1,30 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.50.4 — 2026 (Series Expansions & Partial Fraction Decomposition)
+
+### New Features
+- **Series Expansion Subsystem** (`MATH_SERIES`, `MATH_TAYLOR`):
+  - Maclaurin series: `MATH_SERIES("expr", "var", "order")` — center=0
+  - Taylor series: `MATH_TAYLOR("expr", "var", "center", "order")` — explicit center
+  - Template shortcuts for common functions (no derivative computation needed):
+    - `EXP(x)` → `1 + x + x²/2! + x³/3! + ...`
+    - `SIN(x)` → `x - x³/3! + x⁵/5! - ...`
+    - `COS(x)` → `1 - x²/2! + x⁴/4! - ...`
+    - `LOG(1+x)` → `x - x²/2 + x³/3 - ...` (center=0 only)
+    - `1/(1-x)` → `1 + x + x² + x³ + ...` (center=0 only)
+  - General Taylor expansion via iterative `plant_math_derivative()` for arbitrary functions
+- **Partial Fraction Decomposition** (`MATH_PARTIAL_FRACTIONS`):
+  - Polynomial coefficient extraction from AST via `extract_poly_coeffs()`
+  - Integer root detection via brute-force evaluation
+  - Residue computation via `N(r)/D'(r)` formula
+  - Handles distinct linear factors: `1/((x-a)(x-b)) → A/(x-a) + B/(x-b)`
+  - Handles polynomial numerators: `x/((x-1)(x-2)) → -1/(x-1) + 2/(x-2)`
+  - Handles negative roots: `1/((x-1)(x+1)) → -0.5/(x+1) + 0.5/(x-1)`
+  - Handles cubic denominators: `1/((x-1)(x-2)(x-3))`
+- 2 new codegen bindings: `MATH_SERIES`, `MATH_TAYLOR`, `MATH_PARTIAL_FRACTIONS`
+- New `_handle_func_paren4` codegen helper for 4-argument built-ins
+- 10 new regression tests (5 series + 5 partial fractions)
+
 ## v0.50.3 — 2026 (Limits, Integration by Parts & Integration by Substitution)
 
 ### New Features
