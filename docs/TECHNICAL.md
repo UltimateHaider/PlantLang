@@ -1,11 +1,11 @@
 # PlantLang Technical Reference
 
-> **Current architecture (v0.46.4+): Pure Native 🚀** — The PlantLang compiler,
+> **Current architecture (v0.50.6+): Pure Native 🚀** — The PlantLang compiler,
 > **Chloroplast**, is fully self-hosted: `src/plantc/*.plant` (lexer, parser, C
 > codegen, driver) compiles to C and links against the native runtime
-> (`runtime/c/plant_runtime.c`, `runtime/c/plant_compat.h`). There is no
+> (`runtime/c/plant_runtime.c`, `runtime/c/plant_compat.h`, `runtime/c/plant_math.c`). There is no
 > interpreter: `dist/Chloroplast` (v1) bootstraps `v2 → v3 → v4 → v5` to a
-> byte-identical fixed point (`make self`). The compiler binary is
+> byte-identical fixed point (convergence at **505,907 bytes**, `make self`). The compiler binary is
 > `bin/Chloroplast` (`./bin/Chloroplast app.plant out.c`). Sections below
 > referencing `core/*.js` / the legacy JS engine describe historical versions
 > (≤ v0.45.x) and are kept as an architectural record.
@@ -2958,7 +2958,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.46.4 (pure native)".
+  SHOW "Chloroplast 0.50.6 (pure native)".
   GIVE 0.
 /IF.
 # ... read source via fs:READ, tokenize via scan_tokens,
@@ -3008,7 +3008,7 @@ missing source file (exit 1), unreadable file, and usage help.
 ### 28.4 Test Coverage
 
 - `make self` — multi-generation self-hosting byte-convergence check
-  (`plantc_v3.c == plantc_v4.c == plantc_v5.c`, fixed point 69 668 bytes)
+  (`plantc_v3.c == plantc_v4.c == plantc_v5.c`, fixed point **505,907 bytes**)
 - `make test` — native integration suite (`tests/native/`): CLI checks
   (`--help`, `--version`, missing-file exit code) plus compile + run +
   output-diff cases — 9/9 passing
@@ -3158,7 +3158,7 @@ only design-convention string allocations remain at exit.
 `ffi_free` on a `ffi_make_buf` allocation and NULL rejection. The mock library
 `mock_ffi.c`/`mock_ffi.h` is force-included (`-include`) and linked into every
 test binary; suite at 18/18 passing with the self-hosting fixed point at
-72 756 bytes.
+505,907 bytes.
 
 ## 31. Generics Engine — Monomorphization & Name Mangling (v0.48.1)
 
@@ -3301,7 +3301,7 @@ nested `Wrap[T]` with mock-FFI round-trips). The runner supports optional
 `$name.grep` files — fixed-string structural checks on the generated C
 (`!`-prefixed lines must be absent, e.g. `!} plant_Box_T;`) — and links
 `mock_ffi.c` for struct-FFI interop. Native suite stays 18/18; the
-self-hosting chain converges with the engine active.
+self-hosting chain converges with the engine active at 505,907 bytes.
 
 ## 32. Closures Engine — Env Structs & Native Functions (v0.48.2)
 
@@ -3565,4 +3565,164 @@ parenthesized numeric sub-expressions (`"expr " + (x + 1)`), `LEN` results,
 and numeric-only guards (`7 + 2`, `x + 3` stay arithmetic — verified via
 `"" + k`). Drain scenarios verified: direct `START`, transitive helper,
 `START`-in-expression, `ASYNC IN`, negative no-async case. Full suite:
-native 18/18, generics 7/7, closures 6/6; self-hosting converges.
+native 18/18, generics 7/7, closures 6/6; self-hosting converges at 505,907 bytes.
+
+## 35. CAS (Computer Algebra System) Core (v0.50.0–v0.50.4)
+
+### 35.1 Architecture
+
+The CAS subsystem is implemented entirely in `runtime/c/plant_math.c` (~4,687 lines) with API declarations in `runtime/c/plant_math.h`. It operates on an AST-based `MathNode` tree representation for symbolic mathematics.
+
+**MathNode structure:**
+```c
+typedef struct MathNode {
+    MathNodeType type;     /* NUMBER, VARIABLE, OP_ADD, OP_MUL, OP_POW, FUNC_*, ... */
+    double num_value;      /* for NUMBER nodes */
+    char var_name[64];     /* for VARIABLE nodes */
+    struct MathNode *left, *right;  /* binary operands */
+    struct MathNode *args[4];       /* for FUNC_* nodes */
+    int arg_count;
+} MathNode;
+```
+
+### 35.2 Auto-Simplification
+
+The `plant_math_simplify()` function performs bottom-up recursive simplification:
+
+- **Arithmetic:** `0 + x → x`, `1 * x → x`, `0 * x → 0`, `x ^ 0 → 1`, `x ^ 1 → x`
+- **Like terms:** `2*x + 3*x → 5*x`
+- **Distribution:** `a*(b + c) → a*b + a*c`
+- **Nested powers:** `(x^a)^b → x^(a*b)`
+
+### 35.3 Derivatives & Integrals
+
+**Derivative rules:** `d/dx(x^n) = n*x^(n-1)`, `d/dx(sin(x)) = cos(x)`, `d/dx(e^x) = e^x`, chain rule, product rule, quotient rule.
+
+**Integral rules:** Power rule, trig integrals, exponential integrals, integration by parts (LIATE heuristic), integration by substitution.
+
+### 35.4 Factoring & Advanced Solvers
+
+- **GCD factoring:** `6*x + 12 → 6*(x + 2)` via `plant_math_gcd()`
+- **Quadratic solver:** `ax^2 + bx + c = 0` via discriminant formula
+- **Limits:** L'Hôpital's rule for `0/0` and `∞/∞` indeterminate forms
+- **Series expansions:** Maclaurin/Taylor series for sin, cos, e^x, ln(1+x), 1/(1-x)
+
+### 35.5 Built-in CAS Functions
+
+Registered in codegen via `_handle_func_paren2`/`_handle_func_paren3`/`_handle_func_paren4`:
+
+| Built-in | Args | Description |
+|---|---|---|
+| `MATH_SIMPLIFY` | 1 | Auto-simplify expression |
+| `MATH_DIFF` | 2 | Symbolic derivative d/dx |
+| `MATH_INT` | 2 | Symbolic indefinite integral |
+| `MATH_FACTOR` | 1 | GCD factor expression |
+| `MATH_SOLVE_QUAD` | 3 | Solve quadratic a,b,c |
+| `MATH_LAPLACE` | 2 | Laplace transform |
+| `MATH_INVLAPLACE` | 2 | Inverse Laplace transform |
+| `MATH_LIMIT` | 3 | Limit as x→a |
+| `MATH_TAYLOR` | 3 | Taylor/Maclaurin expansion |
+| `MATH_PARTFRAC` | 2 | Partial fraction decomposition |
+
+### 35.6 Simplification Extensions (v0.50.1)
+
+- **TRIG:** `sin^2(x) + cos^2(x) → 1`, `sin(-x) → -sin(x)`
+- **LOG:** `ln(e^x) → x`, `e^(ln(x)) → x`, `ln(a*b) → ln(a) + ln(b)`
+- **POW:** `(x^a)^b → x^(a*b)`, `x^a * x^b → x^(a+b)`
+- **FRAC:** `a/b + c/d → (a*d + b*c)/(b*d)` — rational fraction unification
+
+### 35.7 Complex Numbers (v0.50.2)
+
+Complex arithmetic via `plant_complex_create()`, `plant_complex_add()`, `plant_complex_mul()`, etc. Built-ins: `MATH_COMPLEX_CREATE`, `MATH_COMPLEX_ADD`, `MATH_COMPLEX_MUL`, `MATH_COMPLEX_ABS`, `MATH_COMPLEX_CONJUGATE`, `MATH_COMPLEX_PHASE`, `MATH_COMPLEX_EXP`.
+
+## 36. MATH Type Interop & Explicit Casting (v0.50.5)
+
+### 36.1 MATH Type
+
+MATH variables store `PlantMath*` pointers via `plant_math_create()`. The codegen tracks MATH variables via `collect_maths`/`_wrap_math_vars` and auto-wraps them with `plant_math_eval()` in expressions.
+
+### 36.2 Built-in Operations
+
+| Built-in | Args | Description |
+|---|---|---|
+| `EVAL` | 1 | Evaluate math expression to number |
+| `SUBST` | 3 | Substitute variable in expression: `SUBST(expr, var, value)` |
+| `@` (cast) | 1 | Explicit type cast (e.g., `@ "3.14"` to SCL) |
+
+### 36.3 Code Generation
+
+- `EVAL` → `plant_math_eval_str(expr)` — parse + evaluate in one call
+- `SUBST` → `plant_math_subst_str(expr, var, val)` — substitute and simplify
+- `_handle_cast` in codegen processes `@` prefix on string literals
+
+### 36.4 Test Coverage
+
+5 regression tests: `math_type`, `eval_basic`, `subst_basic`, `mixed_ops`, `edge_cases`. Self-hosting chain at 805,000 bytes.
+
+## 37. Partial Derivatives, Gradient & ODE Solvers (v0.50.6)
+
+### 37.1 Partial Derivatives
+
+```c
+MathNode* plant_math_partial(MathNode* expr, const char* var);
+MathNode* plant_math_partial2(MathNode* expr, const char* var1, const char* var2);
+```
+
+- First-order: delegates to existing `plant_math_derivative(expr, var)`
+- Second-order: applies derivative twice — `∂²f/∂x² = ∂/∂x(∂f/∂x)`
+
+### 37.2 Gradient Vectors
+
+```c
+char* plant_math_gradient_str(const char* expr, const char* vars);
+char* plant_math_gradient_2d_str(const char* expr, const char* x, const char* y);
+char* plant_math_gradient_3d_str(const char* expr, const char* x, const char* y, const char* z);
+```
+
+Computes `∇f = [∂f/∂x₁, ∂f/∂x₂, ...]` as a formatted string vector.
+
+### 37.3 ODE Solvers
+
+**ODE preprocessor:** `ode_preprocess()` translates `d{dep}/d{indep}` notation to `PRIME_{dep}` symbols before parsing, since the math parser interprets `dy/dx` as `(d*y)/(d*x)`.
+
+```c
+static char* ode_preprocess(const char* expr, const char* dep, const char* indep);
+```
+
+**Linear ODE solver:** Solves first-order linear `dy/dx + P(x)*y = Q(x)` using integrating factor `μ = e^(∫P dx)`.
+
+```c
+char* plant_math_solve_ode_linear_str(const char* ode, const char* dep, const char* indep);
+```
+
+**Separable ODE solver:** Solves `dy/dx = f(x)*g(y)` by separating variables and integrating both sides.
+
+```c
+char* plant_math_solve_ode_separable_str(const char* ode, const char* dep, const char* indep);
+```
+
+**ODE verification:** Substitutes proposed solution into ODE and evaluates numerically at test points to confirm satisfaction.
+
+```c
+char* plant_math_verify_ode_str(const char* ode, const char* solution, const char* dep, const char* indep);
+```
+
+### 37.4 Built-in CAS Functions
+
+| Built-in | Args | Description |
+|---|---|---|
+| `MATH_PARTIAL` | 2 | First-order partial derivative |
+| `MATH_PARTIAL2` | 3 | Second-order partial derivative |
+| `MATH_GRADIENT2` | 3 | 2D gradient vector |
+| `MATH_GRADIENT3` | 4 | 3D gradient vector |
+| `MATH_SOLVE_ODE_LINEAR` | 3 | Solve linear first-order ODE |
+| `MATH_SOLVE_ODE_SEPARABLE` | 3 | Solve separable ODE |
+| `MATH_VERIFY_ODE` | 4 | Verify ODE solution |
+
+### 37.5 Test Coverage
+
+- `tests/native/partial_basic.plant` — 9 tests: partial derivatives, gradient 2D/3D, ODE linear/separable
+- `tests/native/partial_extended.plant` — 5 tests: partial with multiple vars, second-order, gradient edge cases, ODE verify
+- `tests/native/ode_basic.plant` — 2 tests: linear and separable ODE solvers
+- Full native suite: **24/24 pass** (including 3 CLI + 1 tx_types)
+- Self-hosting convergence: **505,907 bytes**

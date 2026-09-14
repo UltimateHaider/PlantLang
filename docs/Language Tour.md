@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.50.0i
+# 🌿 PlantLang — Chloroplast v0.50.6
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -1073,6 +1073,19 @@ SHOW MATH_FACTOR("6*x + 9").          # → 3*(2*x + 3)
 
 # Quadratic — solve ax^2 + bx + c = 0
 SHOW MATH_QUADRATIC("1", "0", "-4").  # → x1 = -2, x2 = 2
+
+# v0.50.5 — EVAL and SUBST
+SHOW EVAL("2 + 3 * 4").                           # → 14
+SHOW SUBST("x^2 + y^2", "x", "3").               # → ((y^2)+9)
+
+# v0.50.6 — Partial derivatives, gradient, ODE solvers
+SHOW MATH_PARTIAL("x^2 + y^2", "x").              # → (2*x)
+SHOW MATH_PARTIAL2("x^3", "x").                   # → (6*x)
+SHOW MATH_GRADIENT2("x^2 + y^2", "x", "y").       # → ((2*x), (2*y))
+SHOW MATH_GRADIENT3("x*y*z", "x", "y", "z").      # → ((y*z), (x*z), (x*y))
+SHOW MATH_SOLVE_ODE_LINEAR("dy/dx - 2*x", "y", "x").   # → (2*((x^2)/2)) + C
+SHOW MATH_SOLVE_ODE_SEPARABLE("dy/dx - x*y", "y", "x"). # → LOG(ABS(y)) = ((x^2)/2) + C
+SHOW MATH_VERIFY_ODE("dy/dx - 2*x", "x^2", "y", "x").  # → 1
 ```
 
 ### Extended Math Library (v0.49.17)

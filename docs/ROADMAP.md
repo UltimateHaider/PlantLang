@@ -1,5 +1,7 @@
 # PlantLang Roadmap: v0.46.4+ (Completed & Future)
 
+> **Current version: v0.50.6** — Partial Derivatives, Gradient & ODE Solvers
+
 ## ✅ Version v0.46.4: Pure Native & Chloroplast Transition
 
 **Status:** ✅ Completed
@@ -66,16 +68,19 @@
 - `plantfmt` — standard formatter for PlantLang sources
 - `plantlang init` / `build` — project scaffolding and build tooling
 
-### v0.50.0 — Distributed Systems & Consensus
+### v0.50.0 — ✅ CAS (Computer Algebra System)
+- **✅ v0.50.0–v0.50.6 completed:** Symbolic math with auto-simplification, like-terms, distribution; GCD factoring, quadratic solver, advanced calculus (derivatives, integrals, limits); trig/log/pow/frac simplification; complex number arithmetic; series expansions (Maclaurin/Taylor); partial fraction decomposition; partial derivatives, gradient vectors (2D/3D), ODE solvers (linear, separable), ODE verification; `EVAL`/`SUBST` built-ins, `@` cast operator, MATH type interop
+
+### v0.51.0 — Distributed Systems & Consensus
 - Distributed GC (DGC) — cross-node garbage collection
 - Raft Consensus by default for `SHARED_WRITE` — with Paxos abstraction layer
   for pluggable consensus
 
-### v0.51.0 — Language Server & Debugging Tools
+### v0.52.0 — Language Server & Debugging Tools
 - Language Server Protocol (LSP) — with live CodeWords inspection
 - Debugger — DWARF/GDB integration for native binaries
 
-### v0.52.0 — WebAssembly & Benchmarking
+### v0.53.0 — WebAssembly & Benchmarking
 - `--target=wasm` — compile PlantLang to run in browsers
 - `plant bench` — benchmarking suite for native performance measurement
 

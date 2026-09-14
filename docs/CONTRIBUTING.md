@@ -39,7 +39,7 @@ Runs `tests/regression/run_regression_tests.sh` and
 `tests/native/run_native_tests.sh`. Expected results are the `*.expected`
 files in `tests/regression/`. A test fails when the compiled program's output
 does not match its `.expected` file. The suite must be green before a PR is
-merged — **regression 156/156, native 20/20** at v0.49.12.
+merged — **regression 317/317, native 24/24** at v0.50.6.
 
 ## Code style
 
@@ -65,7 +65,7 @@ Use the GitHub issue tracker. Include:
 
 - The exact command you ran
 - The `.plant` source and any compiler output
-- `bin/Chloroplast --version` (e.g. `Chloroplast 0.49.12 (pure native)`)
+- `bin/Chloroplast --version` (e.g. `Chloroplast 0.50.6 (pure native)`)
 - Whether `make self` converges on your machine
 
 ## Submitting pull requests
@@ -85,4 +85,4 @@ Use the GitHub issue tracker. Include:
 
 Each release bumps `VERSION` in the `Makefile`, the banner in
 `src/plantc/main.plant`, and the version check in
-`tests/native/run_native_tests.sh`, then tags the release commit `v0.49.x`.
+`tests/native/run_native_tests.sh`, then tags the release commit `v0.50.x`.

@@ -1,4 +1,4 @@
-# PlantLang v0.49.63 — Data Types Report
+# PlantLang v0.50.6 — Data Types Report
 
 **Scope:** Complete analysis of every type, conversion function, default, limit, and C representation in the PlantLang compiler and runtime.
 
@@ -21,6 +21,7 @@ PlantLang uses a **single opaque pointer** (`tx_t = void*`) as the universal run
 | `LIST[T]` | `PlantArray*` | 16 bytes (pointer) | N/A | `plant_list_make(0)` | Dynamic array of T values |
 | `MAP` | `PlantArray*` (pair-list) | 16 bytes (pointer) | N/A | `plant_map_create()` | Key-value pair-list (kind=1) |
 | `ENUM X` | `tx_t` (int or name string) | 8 bytes (pointer) | 0 to 65535 (int) | first member | Enum member as integer or name string |
+| `MATH` | `PlantMath*` | 16 bytes (pointer) | N/A | `plant_math_create("0")` | Symbolic math expression (v0.50.0h) |
 
 **Source:** `src/plantc/codegen_c.plant:5344-5362` (`plant_ctype`)
 
@@ -509,17 +510,17 @@ tx_t plant_analyze(tx_t v);   /* Returns: {type, size, keys} MAP */
 | Category | Count | Types |
 |---|---|---|
 | **Primitive** | 6 | NUM, SCL, FACT, TX, BOOL (via literals), NULL |
-| **Composite** | 7 | LIST, MAP, STRUCT, ENUM, SPECIES, ACTION, CALLBACK |
+| **Composite** | 8 | LIST, MAP, STRUCT, ENUM, SPECIES, ACTION, CALLBACK, MATH |
 | **Special** | 5 | VOID, STORM, ANY, JSON, OPTION/RESULT |
 | **Reference** | 4 | REF NUM, REF FACT, REF LIST, REF TX |
-| **Total** | **22** | |
+| **Total** | **23** | |
 
 ### Primitive vs Composite
 
 | Category | Types | C Representation |
 |---|---|---|
 | **Primitive** | NUM, SCL, FACT, TX | `long`, `int`, `tx_t` (all stored as `tx_t` at runtime) |
-| **Composite** | LIST, MAP, STRUCT, ENUM, SPECIES | `PlantArray*`, generated structs, map-backed objects |
+| **Composite** | LIST, MAP, STRUCT, ENUM, SPECIES, MATH | `PlantArray*`, generated structs, map-backed objects, `PlantMath*` |
 | **Functional** | ACTION, CALLBACK | Function pointers with context |
 | **Special** | NULL, VOID, STORM, ANY, JSON, OPTION, RESULT | Null pointer, void, ARC objects, tagged unions |
 
@@ -538,7 +539,7 @@ tx_t plant_analyze(tx_t v);   /* Returns: {type, size, keys} MAP */
 | `array` (fixed-size) | M | Only dynamic `PlantArray` |
 | `pointer arithmetic` | M | No direct pointer manipulation |
 | `bitwise types` | M | Operations exist but no dedicated types |
-| `complex` | M | Not supported |
+| `complex` | P | Supported via `PlantComplex` struct and `MATH_COMPLEX_*` built-ins (v0.50.2) |
 | `decimal` | P | Stored as text, not native `double` |
 
 ### Recommendations
@@ -561,4 +562,4 @@ tx_t plant_analyze(tx_t v);   /* Returns: {type, size, keys} MAP */
 
 ---
 
-*Report generated for PlantLang v0.49.63. Sources: `runtime/c/plant_runtime.h`, `runtime/c/plant_compat.h`, `runtime/c/plant_runtime.c`, `src/plantc/codegen_c.plant`, `src/plantc/parser.plant`, `src/plantc/lexer.plant`.*
+*Report generated for PlantLang v0.50.6. Sources: `runtime/c/plant_runtime.h`, `runtime/c/plant_compat.h`, `runtime/c/plant_runtime.c`, `src/plantc/codegen_c.plant`, `src/plantc/parser.plant`, `src/plantc/lexer.plant`.*

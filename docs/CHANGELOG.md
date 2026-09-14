@@ -1,3 +1,57 @@
+## v0.50.6 - 2026 (Partial Derivatives, Gradient & ODE Solvers)
+
+### New Language Features
+
+#### MATH_PARTIAL(expr, var) — First-Order Partial Derivative
+Computes the partial derivative of a multivariable expression with respect to one variable.
+```plantlang
+SHOW MATH_PARTIAL("x^2 + y^2", "x").          # (2*x)
+SHOW MATH_PARTIAL("x^2 + y^2", "y").          # (2*y)
+SHOW MATH_PARTIAL("sin(x)*cos(y)", "x").      # (COS(x)*COS(y))
+SHOW MATH_PARTIAL("x^2*y", "x").              # ((2*x)*y)
+```
+
+#### MATH_PARTIAL2(expr, var) — Second-Order Partial Derivative
+Computes the second-order partial derivative of an expression.
+```plantlang
+SHOW MATH_PARTIAL2("x^3", "x").               # (6*x)
+SHOW MATH_PARTIAL2("x^4", "x").               # (12*(x^2))
+```
+
+#### MATH_GRADIENT2(expr, x, y) — 2D Gradient Vector
+Computes the gradient vector (∂f/∂x, ∂f/∂y) for a function of two variables.
+```plantlang
+SHOW MATH_GRADIENT2("x^2 + y^2", "x", "y").   # ((2*x), (2*y))
+SHOW MATH_GRADIENT2("x*y", "x", "y").          # (y, x)
+```
+
+#### MATH_GRADIENT3(expr, x, y, z) — 3D Gradient Vector
+Computes the gradient vector (∂f/∂x, ∂f/∂y, ∂f/∂z) for a function of three variables.
+```plantlang
+SHOW MATH_GRADIENT3("x*y*z", "x", "y", "z").  # ((y*z), (x*z), (x*y))
+SHOW MATH_GRADIENT3("x^2+y^2+z^2", "x", "y", "z").  # ((2*x), (2*y), (2*z))
+```
+
+#### MATH_SOLVE_ODE_LINEAR(ode, dep, indep) — First-Order Linear ODE Solver
+Solves first-order linear ODEs of the form dy/dx - f(x) = 0. The ODE is written using the `dy/dx` notation (internally pre-processed to PRIME symbols).
+```plantlang
+SHOW MATH_SOLVE_ODE_LINEAR("dy/dx - 2*x", "y", "x").   # (2*((x^2)/2)) + C
+SHOW MATH_SOLVE_ODE_LINEAR("dy/dx - 3", "y", "x").     # (3*x) + C
+```
+
+#### MATH_SOLVE_ODE_SEPARABLE(ode, dep, indep) — Separable ODE Solver
+Solves separable ODEs of the form dy/dx = f(x)*g(y).
+```plantlang
+SHOW MATH_SOLVE_ODE_SEPARABLE("dy/dx - x*y", "y", "x").  # LOG(ABS(y)) = ((x^2)/2) + C
+```
+
+#### MATH_VERIFY_ODE(ode, sol, dep, indep) — ODE Solution Verifier
+Verifies whether a proposed solution satisfies a given ODE. Returns "1" if correct, "0" otherwise.
+```plantlang
+SHOW MATH_VERIFY_ODE("dy/dx - 2*x", "x^2", "y", "x").    # 1  (correct)
+SHOW MATH_VERIFY_ODE("dy/dx - x", "x^2", "y", "x").      # 0  (wrong)
+```
+
 ## v0.50.5 - 2026 (MATH Type Mixed Operations & Explicit Casting)
 
 ### New Language Features

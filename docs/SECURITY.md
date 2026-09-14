@@ -34,8 +34,8 @@ considered end-of-life.
 
 | Version | Supported          |
 | ------- | ------------------ |
-| 0.49.x  | :white_check_mark: |
-| <= 0.48 | :x:                |
+| 0.50.x  | :white_check_mark: |
+| <= 0.49 | :x:                |
 
 ## Disclosure Policy
 

@@ -1,6 +1,6 @@
 # PlantLang Chloroplast — Clean Architecture
 
-> v0.49.61 — Finalized architectural specification.
+> v0.50.6 — Finalized architectural specification.
 
 ## Overview
 
@@ -190,7 +190,7 @@ dist/Chloroplast (v1, bootstrap)
                           plantc_v4.c  (must == plantc_v3.c for convergence)
 ```
 
-Convergence at v0.49.61: **464520 bytes** (v3 = v4 = v5).
+Convergence at v0.50.6: **505907 bytes** (v3 = v4 = v5).
 
 ## Key Invariants
 
