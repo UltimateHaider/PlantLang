@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/Zero_GC-💚-brightgreen?style=flat-square" alt="Zero GC"/>
   <img src="https://img.shields.io/badge/No_VM-⚡-orange?style=flat-square" alt="No VM"/>
   <img src="https://img.shields.io/badge/License-MIT-ff69b4?style=flat-square" alt="License MIT"/>
-  <img src="https://img.shields.io/badge/Version-0.49.9-9cf?style=flat-square" alt="Version 0.49.9"/>
+  <img src="https://img.shields.io/badge/Version-0.50.7-9cf?style=flat-square" alt="Version 0.50.7"/>
 </p>
 
 <p align="center">
@@ -119,6 +119,14 @@ IF age GREATER THAN OR EQUAL 18,
 - `std/math` — sin/cos/sqrt/pow/round
 - `std/time` — now/format/parse/sleep
 
+### 🔬 **CAS (Computer Algebra System)** (v0.50.0+)
+- Symbolic derivatives, integrals, limits
+- Vector calculus — divergence, curl, Laplacian
+- Laplace & inverse Laplace transforms
+- ODE solvers (linear, separable)
+- Series expansions, partial fractions
+- Complex number arithmetic
+
 </td>
 </tr>
 </table>
@@ -164,7 +172,7 @@ gcc -w -I runtime/c out.c runtime/c/plant_runtime.c -lm -o hello
 
 ```bash
 ./bin/Chloroplast --help     # usage + options
-./bin/Chloroplast --version  # Chloroplast 0.49.9 (pure native)
+./bin/Chloroplast --version  # Chloroplast 0.50.7 (pure native)
 ```
 
 ---
@@ -209,6 +217,13 @@ ASYNC ACTION fetch(url(TX)),
   GIVE "Done".
 /ASYNC.
 
+# CAS — Computer Algebra System
+SHOW DERIV("x^3 + 2*x", "x").                          # (3*(x^2))+2
+SHOW INTEG("2*x", "x").                                 # (x^2)
+SHOW MATH_LAPLACIAN("x^2 + y^2 + z^2").                 # 6
+SHOW MATH_LAPLACE("EXP(a*t)", "t", "s").                 # 1/(s-a)
+SHOW MATH_DIVERGENCE("x^2, y^2, z^2").                   # ((2*x)+(2*y))+(2*z)
+
 ACTION main,
   START fetch, "https://api.example.com".
   AWAIT sleep, 50.
@@ -243,6 +258,7 @@ runtime/c/            native runtime
   plant_runtime.c     core runtime
   plant_runtime.h     runtime declarations
   plant_compat.h      FFI bridge
+  plant_math.c        CAS engine (symbolic math, transforms)
 tests/                test suites
   regression/         `.plant` + `.expected`
   native/             integration tests
@@ -260,11 +276,11 @@ make all && make self && make test
 
 ```text
 ✅ Self-hosting converged (v3 ≡ v4 ≡ v5)
-✅ Regression: 154/154
-✅ Native: 20/20
+✅ Regression: 317/317
+✅ Native: 25/25
 ✅ Generics: 7/7
 ✅ Closures: 6/6
-✅ Version: 0.49.9
+✅ Version: 0.50.7
 ```
 
 ---
@@ -275,7 +291,7 @@ make all && make self && make test
 |----------|-------------|
 | **[Language Tour.md](Language%20Tour.md)** | Complete ground-up syntax & mechanics guide |
 | **[TECHNICAL.md](TECHNICAL.md)** | Deep technical architecture, codegen, memory model |
-| **[CHANGELOG.md](CHANGELOG.md)** | Full version history through v0.49.9 |
+| **[CHANGELOG.md](CHANGELOG.md)** | Full version history through v0.50.7 |
 | **[ROADMAP.md](ROADMAP.md)** | Completed milestones + future plans |
 | **[docs/BUILD.md](docs/BUILD.md)** | Build system reference: targets, packaging, install |
 
@@ -309,8 +325,8 @@ make all && make self && make test
   <img src="https://img.shields.io/badge/Zero_GC-💚-brightgreen?style=for-the-badge" alt="Zero GC"/>
   <img src="https://img.shields.io/badge/No_VM-⚡-orange?style=for-the-badge" alt="No VM"/>
   <img src="https://img.shields.io/badge/License-MIT-ff69b4?style=for-the-badge" alt="License MIT"/>
-  <img src="https://img.shields.io/badge/Version-0.49.9-9cf?style=for-the-badge" alt="Version 0.49.9"/>
-  <img src="https://img.shields.io/badge/Tests-154/154-4CAF50?style=for-the-badge" alt="Tests 154/154"/>
+  <img src="https://img.shields.io/badge/Version-0.50.7-9cf?style=for-the-badge" alt="Version 0.50.7"/>
+  <img src="https://img.shields.io/badge/Tests-317/317-4CAF50?style=for-the-badge" alt="Tests 317/317"/>
   <img src="https://img.shields.io/badge/Self_Hosted-🔄-brightgreen?style=for-the-badge" alt="Self-Hosted"/>
   <img src="https://img.shields.io/badge/PRs-Welcome-ff69b4?style=for-the-badge" alt="PRs Welcome"/>
   <img src="https://img.shields.io/badge/Made_with-❤️-red?style=for-the-badge" alt="Made with Love"/>
