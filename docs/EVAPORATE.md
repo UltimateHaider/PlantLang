@@ -1,6 +1,6 @@
 # EVAPORATE — Memory Management in Chloroplast
 
-**Status:** authoritative reference · **Verified against:** `runtime/c/plant_runtime.c` (8707 lines), `runtime/c/plant_compat.h`, `runtime/c/plant_runtime.h`, `runtime/c/plant_math.c` (4687 lines), `src/plantc/codegen_c.plant` (9160 lines), `make self` (converged, 505907 bytes), `make test` (native 24, generics 7, closures 6, regression 317 — all green).
+**Status:** authoritative reference · **Verified against:** `runtime/c/plant_runtime.c` (8707 lines), `runtime/c/plant_compat.h`, `runtime/c/plant_runtime.h`, `runtime/c/plant_math.c` (5184 lines), `src/plantc/codegen_c.plant` (9160 lines), `make self` (converged, 503136 bytes), `make test` (native 25, generics 7, closures 6, regression 317 — all green).
 
 > **Naming note.** EVAPORATE is the *documentation brand* for Chloroplast's memory philosophy, adopted here as the organizing convention. The codebase itself does not use the word "evaporate"; every mechanism described below is real and is cited by file and line. Where the EVAPORATE model implies a primitive that does not exist (for example `plant_arena_reset`), this document says so explicitly and names the mechanism that actually performs the equivalent job.
 
@@ -248,7 +248,7 @@ In BALANCED and FAST there is no GC at all. The only collector in the system is 
 
 ## Verification Appendix
 
-- `make self` — full v1→v2→v3→v4→v5 self-hosting chain **converged** (505907 bytes).
+- `make self` — full v1→v2→v3→v4→v5 self-hosting chain **converged** (503136 bytes).
 - `make test` — native 24, generics 7, closures 6, regression 317, **0 failures** (including `fast_escalation`, `fast_audit`, `fast_security`, `persistent_cycle`, `persistent_cache`, `persistent_finalization`, `persistent_boundary`, `persistent_permissions`, `safe_*` suites).
 - Generated code inspected (`build/plantc_v5.c`, ~11000 lines): implicit `tx_t x = "";` declarations, `_cat`/`_cat3`/`_cat4` chains, `_from_long`/`_from_digit` numeric wrappers, `plant_async_alloc_state` state structs, mission enter/exit emission.
 - Key line references: arena §2662–2866, FAST §3601–3709, SAFE §3471–3892, SMART §4160–4298, PERSISTENT §4343–4652, audit ring §3415–3468, codegen mission binding `src/plantc/codegen_c.plant:3269–3312`, main epilogue `:5363`.

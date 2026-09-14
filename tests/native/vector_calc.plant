@@ -1,0 +1,34 @@
+ACTION main(),
+  # === Vector Calculus Tests ===
+  # Test 1: div(x, y, z) = 3
+  SHOW MATH_DIVERGENCE("x, y, z").
+  # Test 2: div(x^2, y^2, z^2) = 2*x + 2*y + 2*z
+  SHOW MATH_DIVERGENCE("x^2, y^2, z^2").
+  # Test 3: curl(y, -x, 0) = (0, 0, -2)
+  SHOW MATH_CURL("y, -x, 0").
+  # Test 4: curl(x^2, y^2, z^2) = (0, 0, 0)
+  SHOW MATH_CURL("x^2, y^2, z^2").
+  # Test 5: laplacian(x^2 + y^2 + z^2) = 6
+  SHOW MATH_LAPLACIAN("x^2 + y^2 + z^2").
+  # Test 6: laplacian(x^3) = 6*x
+  SHOW MATH_LAPLACIAN("x^3").
+  # === Laplace Transform Tests ===
+  # Test 7: Laplace{1} = 1/s
+  SHOW MATH_LAPLACE("1", "t", "s").
+  # Test 8: Laplace{t} = 1/s^2
+  SHOW MATH_LAPLACE("t", "t", "s").
+  # Test 9: Laplace{EXP(a*t)} = 1/(s-a)
+  SHOW MATH_LAPLACE("EXP(a*t)", "t", "s").
+  # Test 10: Laplace{SIN(a*t)} = a/(s^2+a^2)
+  SHOW MATH_LAPLACE("SIN(a*t)", "t", "s").
+  # Test 11: Laplace{COS(a*t)} = s/(s^2+a^2)
+  SHOW MATH_LAPLACE("COS(a*t)", "t", "s").
+  # === Inverse Laplace Transform Tests ===
+  # Test 12: InverseLaplace{1/s} = 1
+  SHOW MATH_INVERSE_LAPLACE("1/s", "s", "t").
+  # Test 13: InverseLaplace{1/s^2} = t
+  SHOW MATH_INVERSE_LAPLACE("1/s^2", "s", "t").
+  # Test 14: InverseLaplace{1/(s-a)} = EXP(a*t)
+  SHOW MATH_INVERSE_LAPLACE("1/(s-a)", "s", "t").
+  GIVE 0.
+/GIVE main.

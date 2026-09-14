@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.50.6
+# 🌿 PlantLang — Chloroplast v0.50.7
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -1086,6 +1086,14 @@ SHOW MATH_GRADIENT3("x*y*z", "x", "y", "z").      # → ((y*z), (x*z), (x*y))
 SHOW MATH_SOLVE_ODE_LINEAR("dy/dx - 2*x", "y", "x").   # → (2*((x^2)/2)) + C
 SHOW MATH_SOLVE_ODE_SEPARABLE("dy/dx - x*y", "y", "x"). # → LOG(ABS(y)) = ((x^2)/2) + C
 SHOW MATH_VERIFY_ODE("dy/dx - 2*x", "x^2", "y", "x").  # → 1
+
+# v0.50.7 — Vector calculus, Laplace transforms
+SHOW MATH_DIVERGENCE("x, y, z").                        # → 3
+SHOW MATH_CURL("y, -x, 0").                             # → (0, 0, -2)
+SHOW MATH_LAPLACIAN("x^2 + y^2 + z^2").                 # → 6
+SHOW MATH_LAPLACE("EXP(a*t)", "t", "s").                 # → 1/(s-a)
+SHOW MATH_LAPLACE("SIN(a*t)", "t", "s").                 # → a/(s^2+a^2)
+SHOW MATH_INVERSE_LAPLACE("1/(s-a)", "s", "t").          # → EXP(a*t)
 ```
 
 ### Extended Math Library (v0.49.17)

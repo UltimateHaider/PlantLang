@@ -4685,3 +4685,473 @@ char* plant_math_verify_ode_str(const char* ode_expr,
 
     return strdup(passes ? "1" : "0");
 }
+
+/* ====================================================================
+ *  v0.50.7 — Vector Calculus & Laplace Transforms
+ * ==================================================================== */
+
+/* --- Helper: parse comma-separated vector components --------------- */
+static int _split_components(const char* vec, char** out, int max) {
+    int n = 0;
+    const char* p = vec;
+    while (*p && n < max) {
+        while (*p == ' ') p++;
+        const char* start = p;
+        int depth = 0;
+        while (*p && !(*p == ',' && depth == 0)) {
+            if (*p == '(') depth++;
+            else if (*p == ')') depth--;
+            p++;
+        }
+        size_t len = (size_t)(p - start);
+        while (len > 0 && start[len-1] == ' ') len--;
+        out[n] = (char*)malloc(len + 1);
+        memcpy(out[n], start, len);
+        out[n][len] = '\0';
+        n++;
+        if (*p == ',') p++;
+    }
+    return n;
+}
+
+/* --- Divergence: div(F) = dFx/dx + dFy/dy + dFz/dz -------------- */
+char* plant_math_divergence_str(const char* vec) {
+    if (!vec) return strdup("ERROR: Invalid divergence arguments.");
+
+    /* Split vector components */
+    char* comps[3];
+    int nc = _split_components(vec, comps, 3);
+    if (nc != 3) {
+        for (int i = 0; i < nc; i++) free(comps[i]);
+        return strdup("ERROR: Divergence requires exactly 3 vector components.");
+    }
+
+    const char* coord_vars[3] = {"x", "y", "z"};
+
+    MathNode* ast[3];
+    for (int i = 0; i < 3; i++) {
+        ast[i] = plant_math_parse(comps[i]);
+        free(comps[i]);
+        if (!ast[i]) {
+            for (int j = 0; j <= i; j++) math_node_free(ast[j]);
+            return strdup("ERROR: Could not parse vector components.");
+        }
+    }
+
+    /* dFx/dx + dFy/dy + dFz/dz */
+    MathNode* d1 = plant_math_simplify(plant_math_derivative(ast[0], coord_vars[0]));
+    MathNode* d2 = plant_math_simplify(plant_math_derivative(ast[1], coord_vars[1]));
+    MathNode* d3 = plant_math_simplify(plant_math_derivative(ast[2], coord_vars[2]));
+
+    MathNode* sum12 = plant_math_simplify(math_node_binary(OP_ADD, d1, d2));
+    MathNode* total = plant_math_simplify(math_node_binary(OP_ADD, sum12, d3));
+
+    char* result = plant_math_to_string(total);
+    for (int i = 0; i < 3; i++) math_node_free(ast[i]);
+    math_node_free(total);
+    return result;
+}
+
+/* --- Curl (3D): curl(F) = (dFz/dy-dFy/dz, dFx/dz-dFz/dx, dFy/dx-dFx/dy) - */
+char* plant_math_curl_str(const char* vec) {
+    if (!vec) return strdup("ERROR: Invalid curl arguments.");
+
+    char* comps[3];
+    int nc = _split_components(vec, comps, 3);
+    if (nc != 3) {
+        for (int i = 0; i < nc; i++) free(comps[i]);
+        return strdup("ERROR: Curl requires exactly 3 vector components.");
+    }
+
+    const char* cv[3] = {"x", "y", "z"};
+
+    MathNode* ast[3];
+    for (int i = 0; i < 3; i++) {
+        ast[i] = plant_math_parse(comps[i]);
+        free(comps[i]);
+        if (!ast[i]) {
+            for (int j = 0; j <= i; j++) math_node_free(ast[j]);
+            return strdup("ERROR: Could not parse vector components.");
+        }
+    }
+
+    /* cx = dFz/dy - dFy/dz */
+    MathNode* cz_dy = plant_math_simplify(plant_math_derivative(ast[2], cv[1]));
+    MathNode* cy_dz = plant_math_simplify(plant_math_derivative(ast[1], cv[2]));
+    MathNode* cx = plant_math_simplify(math_node_binary(OP_SUB, cz_dy, cy_dz));
+
+    /* cy = dFx/dz - dFz/dx */
+    MathNode* cx_dz = plant_math_simplify(plant_math_derivative(ast[0], cv[2]));
+    MathNode* cz_dx = plant_math_simplify(plant_math_derivative(ast[2], cv[0]));
+    MathNode* cy = plant_math_simplify(math_node_binary(OP_SUB, cx_dz, cz_dx));
+
+    /* cz = dFy/dx - dFx/dy */
+    MathNode* cy_dx = plant_math_simplify(plant_math_derivative(ast[1], cv[0]));
+    MathNode* cx_dy = plant_math_simplify(plant_math_derivative(ast[0], cv[1]));
+    MathNode* cz = plant_math_simplify(math_node_binary(OP_SUB, cy_dx, cx_dy));
+
+    char* sx = plant_math_to_string(cx);
+    char* sy = plant_math_to_string(cy);
+    char* sz = plant_math_to_string(cz);
+    size_t rlen = strlen(sx) + strlen(sy) + strlen(sz) + 10;
+    char* result = (char*)malloc(rlen);
+    snprintf(result, rlen, "(%s, %s, %s)", sx, sy, sz);
+
+    free(sx); free(sy); free(sz);
+    for (int i = 0; i < 3; i++) math_node_free(ast[i]);
+    math_node_free(cx); math_node_free(cy); math_node_free(cz);
+    return result;
+}
+
+/* --- Laplacian: lap(f) = d2f/dx2 + d2f/dy2 + d2f/dz2 ------------ */
+char* plant_math_laplacian_str(const char* expr) {
+    if (!expr) return strdup("ERROR: Invalid laplacian arguments.");
+
+    MathNode* ast = plant_math_parse(expr);
+    if (!ast) return strdup("ERROR: Could not parse expression.");
+
+    const char* coord_vars[3] = {"x", "y", "z"};
+
+    /* Compute each second derivative, simplify, convert to string, sum numerically */
+    double num_sum = 0.0;
+    int all_numeric = 1;
+    char* parts[3] = {NULL, NULL, NULL};
+    int part_count = 0;
+
+    for (int i = 0; i < 3; i++) {
+        MathNode* d1 = plant_math_derivative(ast, coord_vars[i]);
+        MathNode* d2 = plant_math_derivative(d1, coord_vars[i]);
+        MathNode* s = plant_math_simplify(d2);
+        char* sstr = plant_math_to_string(s);
+        parts[part_count++] = sstr;
+
+        /* Try numeric evaluation */
+        MathNode* s_ast = plant_math_parse(sstr);
+        if (s_ast) {
+            double val = plant_math_eval(s_ast);
+            if (val == val) { /* not NaN */
+                num_sum += val;
+            } else {
+                all_numeric = 0;
+            }
+            math_node_free(s_ast);
+        } else {
+            all_numeric = 0;
+        }
+        math_node_free(d1);
+        math_node_free(s);
+    }
+
+    char* result;
+    if (all_numeric) {
+        char buf[64];
+        snprintf(buf, sizeof(buf), "%g", num_sum);
+        result = strdup(buf);
+    } else {
+        /* Build symbolic sum: "part1 + part2 + part3" */
+        size_t rlen = strlen(parts[0]) + strlen(parts[1]) + strlen(parts[2]) + 10;
+        result = (char*)malloc(rlen);
+        snprintf(result, rlen, "(%s + %s + %s)", parts[0], parts[1], parts[2]);
+        MathNode* result_ast = plant_math_parse(result);
+        if (result_ast) {
+            char* simplified = plant_math_to_string(result_ast);
+            free(result);
+            result = simplified;
+            math_node_free(result_ast);
+        }
+    }
+
+    for (int i = 0; i < part_count; i++) free(parts[i]);
+    math_node_free(ast);
+    return result;
+}
+
+/* --- Laplace Transform: L{f(t)} via lookup table ------------------ */
+/* Helper: strip outer parentheses */
+static char* _strip_parens(const char* s) {
+    if (!s) return NULL;
+    while (*s == '(') {
+        const char* end = s + strlen(s) - 1;
+        if (*end == ')') { s++; end--; }
+        else break;
+    }
+    return strdup(s);
+}
+
+/* Helper: check if string starts with prefix (case-insensitive) */
+static int _starts_with(const char* s, const char* prefix) {
+    return strncasecmp(s, prefix, strlen(prefix)) == 0;
+}
+
+/* Helper: find matching paren starting at pos (which points to '(') */
+static int _find_matching_paren(const char* s, int pos) {
+    int depth = 0;
+    for (int i = pos; s[i]; i++) {
+        if (s[i] == '(') depth++;
+        else if (s[i] == ')') { depth--; if (depth == 0) return i; }
+    }
+    return -1;
+}
+
+/* Helper: normalize function name — strip plant_/math_ prefix, uppercase */
+static void _normalize_func(const char* s, char* out, size_t outsz) {
+    const char* p = s;
+    if (_starts_with(p, "plant_")) p += 6;
+    else if (_starts_with(p, "math_")) p += 5;
+    /* uppercase only up to the opening paren */
+    size_t i;
+    for (i = 0; p[i] && p[i] != '(' && i < outsz - 1; i++) {
+        out[i] = (char)toupper((unsigned char)p[i]);
+    }
+    out[i] = '\0';
+}
+
+char* plant_math_laplace_str(const char* expr, const char* var, const char* svar) {
+    if (!expr || !var || !svar)
+        return strdup("ERROR: Invalid Laplace transform arguments.");
+
+    char* s = _strip_parens(expr);
+    char result[512];
+    result[0] = '\0';
+
+    /* L{1} = 1/s */
+    if (strcmp(s, "1") == 0 || strcasecmp(s, "ONE") == 0) {
+        snprintf(result, sizeof(result), "1/%s", svar);
+    }
+    /* L{t} = 1/s^2 */
+    else if (strcmp(s, var) == 0) {
+        snprintf(result, sizeof(result), "1/%s^2", svar);
+    }
+    /* L{t^n} = n!/s^(n+1) -- polynomial check */
+    else if (_starts_with(s, var) && s[strlen(var)] == '^') {
+        char* endp;
+        double n = strtod(s + strlen(var) + 1, &endp);
+        if (*endp == '\0' && n == (int)n && n > 0) {
+            long fact = 1;
+            for (int i = 2; i <= (int)n; i++) fact *= i;
+            snprintf(result, sizeof(result), "%ld/%s^%d", fact, svar, (int)n + 1);
+        }
+    }
+    /* Function-based transforms: normalize and match */
+    else {
+        /* Find opening paren */
+        const char* paren = strchr(s, '(');
+        if (paren) {
+            char fname[64];
+            _normalize_func(s, fname, sizeof(fname));
+            int inner_start = (int)(paren - s) + 1;
+            int inner_end = _find_matching_paren(s, inner_start - 1);
+            if (inner_end > 0) {
+                char inner[256] = {0};
+                strncpy(inner, s + inner_start, (size_t)(inner_end - inner_start));
+
+                if (strcmp(fname, "EXP") == 0) {
+                    /* L{e^(at)} = 1/(s-a) */
+                    char acoeff[128] = "1";
+                    char* mul = strstr(inner, "*");
+                    if (mul && mul != inner) {
+                        size_t alen = (size_t)(mul - inner);
+                        strncpy(acoeff, inner, alen);
+                        acoeff[alen] = '\0';
+                    } else {
+                        char* vp = strcasestr(inner, var);
+                        if (vp == inner && strlen(inner) > strlen(var)) {
+                            size_t vlen = strlen(var);
+                            strncpy(acoeff, inner, strlen(inner) - vlen);
+                            acoeff[strlen(inner) - vlen] = '\0';
+                        }
+                    }
+                    if (strcmp(acoeff, "1") == 0)
+                        snprintf(result, sizeof(result), "1/(%s-1)", svar);
+                    else
+                        snprintf(result, sizeof(result), "1/(%s-%s)", svar, acoeff);
+                }
+                else if (strcmp(fname, "SIN") == 0) {
+                    /* L{sin(at)} = a/(s^2+a^2) */
+                    char acoeff[128] = "1";
+                    char* mul = strstr(inner, "*");
+                    if (mul && mul != inner) {
+                        size_t alen = (size_t)(mul - inner);
+                        strncpy(acoeff, inner, alen);
+                        acoeff[alen] = '\0';
+                    } else if (strlen(inner) > strlen(var)) {
+                        size_t vlen = strlen(var);
+                        strncpy(acoeff, inner, strlen(inner) - vlen);
+                        acoeff[strlen(inner) - vlen] = '\0';
+                    }
+                    if (strcmp(acoeff, "0") == 0)
+                        snprintf(result, sizeof(result), "0");
+                    else if (strcmp(acoeff, "1") == 0)
+                        snprintf(result, sizeof(result), "1/(%s^2+1)", svar);
+                    else
+                        snprintf(result, sizeof(result), "%s/(%s^2+%s^2)", acoeff, svar, acoeff);
+                }
+                else if (strcmp(fname, "COS") == 0) {
+                    /* L{cos(at)} = s/(s^2+a^2) */
+                    char acoeff[128] = "1";
+                    char* mul = strstr(inner, "*");
+                    if (mul && mul != inner) {
+                        size_t alen = (size_t)(mul - inner);
+                        strncpy(acoeff, inner, alen);
+                        acoeff[alen] = '\0';
+                    } else if (strlen(inner) > strlen(var)) {
+                        size_t vlen = strlen(var);
+                        strncpy(acoeff, inner, strlen(inner) - vlen);
+                        acoeff[strlen(inner) - vlen] = '\0';
+                    }
+                    if (strcmp(acoeff, "1") == 0)
+                        snprintf(result, sizeof(result), "%s/(%s^2+1)", svar, svar);
+                    else
+                        snprintf(result, sizeof(result), "%s/(%s^2+%s^2)", svar, svar, acoeff);
+                }
+                else if (strcmp(fname, "SINH") == 0) {
+                    /* L{sinh(at)} = a/(s^2-a^2) */
+                    char acoeff[128] = "1";
+                    char* mul = strstr(inner, "*");
+                    if (mul && mul != inner) {
+                        size_t alen = (size_t)(mul - inner);
+                        strncpy(acoeff, inner, alen);
+                        acoeff[alen] = '\0';
+                    }
+                    if (strcmp(acoeff, "1") == 0)
+                        snprintf(result, sizeof(result), "1/(%s^2-1)", svar);
+                    else
+                        snprintf(result, sizeof(result), "%s/(%s^2-%s^2)", acoeff, svar, acoeff);
+                }
+                else if (strcmp(fname, "COSH") == 0) {
+                    /* L{cosh(at)} = s/(s^2-a^2) */
+                    char acoeff[128] = "1";
+                    char* mul = strstr(inner, "*");
+                    if (mul && mul != inner) {
+                        size_t alen = (size_t)(mul - inner);
+                        strncpy(acoeff, inner, alen);
+                        acoeff[alen] = '\0';
+                    }
+                    if (strcmp(acoeff, "1") == 0)
+                        snprintf(result, sizeof(result), "%s/(%s^2-1)", svar, svar);
+                    else
+                        snprintf(result, sizeof(result), "%s/(%s^2-%s^2)", svar, svar, acoeff);
+                }
+            }
+        }
+    }
+
+    free(s);
+
+    if (strlen(result) == 0) {
+        /* Fall back to symbolic representation */
+        size_t rlen = strlen(expr) + strlen(svar) + strlen(var) + 32;
+        char* fallback = (char*)malloc(rlen);
+        snprintf(fallback, rlen, "LAPLACE(%s, %s)", expr, svar);
+        return fallback;
+    }
+    return strdup(result);
+}
+
+/* --- Inverse Laplace Transform: L^{-1}{F(s)} via lookup table ----- */
+char* plant_math_inverselaplace_str(const char* expr, const char* var, const char* tvar) {
+    if (!expr || !var || !tvar)
+        return strdup("ERROR: Invalid inverse Laplace transform arguments.");
+
+    char* s = _strip_parens(expr);
+    char result[512];
+    result[0] = '\0';
+
+    /* L^{-1}{1/s} = 1 */
+    if (strcmp(s, "1/s") == 0 || strcmp(s, "1/s^1") == 0) {
+        snprintf(result, sizeof(result), "1");
+    }
+    /* L^{-1}{1/s^2} = t */
+    else if (strcmp(s, "1/s^2") == 0) {
+        snprintf(result, sizeof(result), "%s", tvar);
+    }
+    /* L^{-1}{n!/s^(n+1)} = t^n */
+    else if (_starts_with(s, "1/s^")) {
+        int exp = atoi(s + 4);
+        if (exp > 1) {
+            snprintf(result, sizeof(result), "%s^%d", tvar, exp - 1);
+        }
+    }
+    /* L^{-1}{1/(s-a)} = e^(at) */
+    else if (_starts_with(s, "1/(") && s[strlen(s)-1] == ')') {
+        char inner[256] = {0};
+        strncpy(inner, s + 3, strlen(s) - 4);
+        /* inner = "s-a" */
+        char* minus = strchr(inner, '-');
+        if (minus && minus != inner) {
+            char acoeff[128] = {0};
+            strncpy(acoeff, minus + 1, sizeof(acoeff) - 1);
+            if (strcmp(acoeff, "1") == 0) {
+                snprintf(result, sizeof(result), "EXP(%s)", tvar);
+            } else {
+                snprintf(result, sizeof(result), "EXP(%s*%s)", acoeff, tvar);
+            }
+        } else {
+            snprintf(result, sizeof(result), "EXP(%s)", tvar);
+        }
+    }
+    /* L^{-1}{a/(s^2+a^2)} = sin(at) */
+    else if (strstr(s, "/(") && strstr(s, "^2+")) {
+        /* Try to extract a from "a/(s^2+a^2)" */
+        char num[128] = {0};
+        char den[256] = {0};
+        const char* slash = strchr(s, '/');
+        if (slash) {
+            strncpy(num, s, (size_t)(slash - s));
+            strncpy(den, slash + 1, sizeof(den) - 1);
+            /* den should be "(s^2+a^2)" */
+            if (den[0] == '(' && den[strlen(den)-1] == ')') {
+                den[strlen(den)-1] = '\0';
+                /* "s^2+a^2" */
+                char* plus = strchr(den + 3, '+');
+                if (plus) {
+                    char acoeff[128] = {0};
+                    strncpy(acoeff, plus + 1, sizeof(acoeff) - 1);
+                    /* Remove trailing ^2 */
+                    char* caret = strchr(acoeff, '^');
+                    if (caret) *caret = '\0';
+                    if (strcmp(num, acoeff) == 0 || (strlen(num) == 0 && strcmp(acoeff, "1") == 0)) {
+                        snprintf(result, sizeof(result), "SIN(%s*%s)", acoeff, tvar);
+                    }
+                }
+            }
+        }
+    }
+    /* L^{-1}{s/(s^2+a^2)} = cos(at) */
+    else if (strstr(s, "/(") && strstr(s, "^2+")) {
+        const char* slash = strchr(s, '/');
+        if (slash && *(slash + 1) == '(') {
+            char num[128] = {0};
+            strncpy(num, s, (size_t)(slash - s));
+            if (strcmp(num, var) == 0) {
+                char den[256] = {0};
+                strncpy(den, slash + 2, sizeof(den) - 3);
+                /* den = "s^2+a^2)" -- strip trailing paren */
+                char* rp = strchr(den, ')');
+                if (rp) *rp = '\0';
+                char* plus = strchr(den + 3, '+');
+                if (plus) {
+                    char acoeff[128] = {0};
+                    strncpy(acoeff, plus + 1, sizeof(acoeff) - 1);
+                    char* caret = strchr(acoeff, '^');
+                    if (caret) *caret = '\0';
+                    if (strcmp(acoeff, "1") == 0) {
+                        snprintf(result, sizeof(result), "COS(%s)", tvar);
+                    } else {
+                        snprintf(result, sizeof(result), "COS(%s*%s)", acoeff, tvar);
+                    }
+                }
+            }
+        }
+    }
+
+    free(s);
+
+    if (strlen(result) == 0) {
+        size_t rlen = strlen(expr) + strlen(var) + strlen(tvar) + 32;
+        char* fallback = (char*)malloc(rlen);
+        snprintf(fallback, rlen, "INVERSE_LAPLACE(%s, %s)", expr, tvar);
+        return fallback;
+    }
+    return strdup(result);
+}

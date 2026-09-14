@@ -1,6 +1,6 @@
 # PlantLang Roadmap: v0.46.4+ (Completed & Future)
 
-> **Current version: v0.50.6** — Partial Derivatives, Gradient & ODE Solvers
+> **Current version: v0.50.7** — Vector Calculus & Laplace Transforms
 
 ## ✅ Version v0.46.4: Pure Native & Chloroplast Transition
 
@@ -69,7 +69,7 @@
 - `plantlang init` / `build` — project scaffolding and build tooling
 
 ### v0.50.0 — ✅ CAS (Computer Algebra System)
-- **✅ v0.50.0–v0.50.6 completed:** Symbolic math with auto-simplification, like-terms, distribution; GCD factoring, quadratic solver, advanced calculus (derivatives, integrals, limits); trig/log/pow/frac simplification; complex number arithmetic; series expansions (Maclaurin/Taylor); partial fraction decomposition; partial derivatives, gradient vectors (2D/3D), ODE solvers (linear, separable), ODE verification; `EVAL`/`SUBST` built-ins, `@` cast operator, MATH type interop
+- **✅ v0.50.0–v0.50.7 completed:** Symbolic math with auto-simplification, like-terms, distribution; GCD factoring, quadratic solver, advanced calculus (derivatives, integrals, limits); trig/log/pow/frac simplification; complex number arithmetic; series expansions (Maclaurin/Taylor); partial fraction decomposition; partial derivatives, gradient vectors (2D/3D), ODE solvers (linear, separable), ODE verification; `EVAL`/`SUBST` built-ins, `@` cast operator, MATH type interop; vector calculus (divergence, curl, Laplacian); Laplace & inverse Laplace transforms
 
 ### v0.51.0 — Distributed Systems & Consensus
 - Distributed GC (DGC) — cross-node garbage collection

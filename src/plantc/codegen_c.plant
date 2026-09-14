@@ -3589,6 +3589,16 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST), maths(LIST)),
     REAP e FROM _handle_func_paren3, e, "MATH_SOLVE_ODE_SEPARABLE", "plant_math_solve_ode_separable_str".
     # v0.50.6 — MATH_VERIFY_ODE(ode, sol, dep, indep): verify solution.
     REAP e FROM _handle_func_paren4, e, "MATH_VERIFY_ODE", "plant_math_verify_ode_str".
+    # v0.50.7 — MATH_DIVERGENCE(vec): vector field divergence (auto x,y,z).
+    REAP e FROM _handle_func_paren, e, "MATH_DIVERGENCE", "plant_math_divergence_str".
+    # v0.50.7 — MATH_CURL(vec): 3D curl (auto x,y,z).
+    REAP e FROM _handle_func_paren, e, "MATH_CURL", "plant_math_curl_str".
+    # v0.50.7 — MATH_LAPLACIAN(expr): scalar field laplacian (auto x,y,z).
+    REAP e FROM _handle_func_paren, e, "MATH_LAPLACIAN", "plant_math_laplacian_str".
+    # v0.50.7 — MATH_LAPLACE(f, var, svar): forward Laplace transform.
+    REAP e FROM _handle_func_paren3, e, "MATH_LAPLACE", "plant_math_laplace_str".
+    # v0.50.7 — MATH_INVERSE_LAPLACE(F, var, tvar): inverse Laplace transform.
+    REAP e FROM _handle_func_paren3, e, "MATH_INVERSE_LAPLACE", "plant_math_inverselaplace_str".
     # v0.50.0j — MATH_QUADRATIC: solve ax^2 + bx + c = 0.
     REAP e FROM _handle_func_paren3, e, "MATH_QUADRATIC", "plant_math_quadratic_str".
     # v0.50.2 — MATH_COMPLEX_*: complex number arithmetic (must run BEFORE _math_func_paren

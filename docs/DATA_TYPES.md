@@ -1,4 +1,4 @@
-# PlantLang v0.50.6 — Data Types Report
+# PlantLang v0.50.7 — Data Types Report
 
 **Scope:** Complete analysis of every type, conversion function, default, limit, and C representation in the PlantLang compiler and runtime.
 
@@ -562,4 +562,4 @@ tx_t plant_analyze(tx_t v);   /* Returns: {type, size, keys} MAP */
 
 ---
 
-*Report generated for PlantLang v0.50.6. Sources: `runtime/c/plant_runtime.h`, `runtime/c/plant_compat.h`, `runtime/c/plant_runtime.c`, `src/plantc/codegen_c.plant`, `src/plantc/parser.plant`, `src/plantc/lexer.plant`.*
+*Report generated for PlantLang v0.50.7. Sources: `runtime/c/plant_runtime.h`, `runtime/c/plant_compat.h`, `runtime/c/plant_runtime.c`, `src/plantc/codegen_c.plant`, `src/plantc/parser.plant`, `src/plantc/lexer.plant`.*

@@ -1,3 +1,55 @@
+## v0.50.7 - 2026 (Vector Calculus & Laplace Transforms)
+
+### New Language Features
+
+#### MATH_DIVERGENCE(vec) — Vector Field Divergence
+Computes the divergence of a 3D vector field: ∇·F = ∂Fx/∂x + ∂Fy/∂y + ∂Fz/∂z.
+```plantlang
+SHOW MATH_DIVERGENCE("x, y, z").                  # 3
+SHOW MATH_DIVERGENCE("x^2, y^2, z^2").            # (((2*x)+(2*y))+(2*z))
+```
+
+#### MATH_CURL(vec) — 3D Curl
+Computes the curl of a 3D vector field: ∇×F = (∂Fz/∂y-∂Fy/∂z, ∂Fx/∂z-∂Fz/∂x, ∂Fy/∂x-∂Fx/∂y).
+```plantlang
+SHOW MATH_CURL("y, -x, 0").                       # (0, 0, -2)
+SHOW MATH_CURL("x^2, y^2, z^2").                  # (0, 0, 0)
+```
+
+#### MATH_LAPLACIAN(expr) — Scalar Field Laplacian
+Computes the Laplacian: ∇²f = ∂²f/∂x² + ∂²f/∂y² + ∂²f/∂z².
+```plantlang
+SHOW MATH_LAPLACIAN("x^2 + y^2 + z^2").           # 6
+SHOW MATH_LAPLACIAN("x^3").                       # (6*x)
+```
+
+#### MATH_LAPLACE(f, var, svar) — Forward Laplace Transform
+Converts a time-domain function to the complex frequency domain.
+```plantlang
+SHOW MATH_LAPLACE("1", "t", "s").                  # 1/s
+SHOW MATH_LAPLACE("t", "t", "s").                  # 1/s^2
+SHOW MATH_LAPLACE("EXP(a*t)", "t", "s").           # 1/(s-a)
+SHOW MATH_LAPLACE("SIN(a*t)", "t", "s").           # a/(s^2+a^2)
+SHOW MATH_LAPLACE("COS(a*t)", "t", "s").           # s/(s^2+a^2)
+```
+
+#### MATH_INVERSE_LAPLACE(F, var, tvar) — Inverse Laplace Transform
+Reconstructs a time-domain function from its Laplace transform.
+```plantlang
+SHOW MATH_INVERSE_LAPLACE("1/s", "s", "t").        # 1
+SHOW MATH_INVERSE_LAPLACE("1/s^2", "s", "t").      # t
+SHOW MATH_INVERSE_LAPLACE("1/(s-a)", "s", "t").    # EXP(a*t)
+```
+
+### Implementation
+- **Vector calculus**: `plant_math_divergence_str()`, `plant_math_curl_str()`, `plant_math_laplacian_str()` in `runtime/c/plant_math.c`
+- **Laplace transforms**: `plant_math_laplace_str()`, `plant_math_inverselaplace_str()` with lookup table for common forms (1, t, t^n, e^at, sin, cos, sinh, cosh)
+- **Codegen**: 5 new built-ins registered in `src/plantc/codegen_c.plant` via `_handle_func_paren`/`_handle_func_paren3`
+- **Tests**: `tests/native/vector_calc.plant` — 14 tests covering divergence, curl, laplacian, forward/inverse Laplace transforms
+- **Native suite**: 25/25 tests pass
+
+---
+
 ## v0.50.6 - 2026 (Partial Derivatives, Gradient & ODE Solvers)
 
 ### New Language Features

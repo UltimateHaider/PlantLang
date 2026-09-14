@@ -342,6 +342,11 @@ char*        plant_math_gradient_3d_str(const char* expr, const char* x, const c
 char*        plant_math_solve_ode_linear_str(const char* ode, const char* dep, const char* indep);
 char*        plant_math_solve_ode_separable_str(const char* ode, const char* dep, const char* indep);
 char*        plant_math_verify_ode_str(const char* ode, const char* sol, const char* dep, const char* indep);
+char*        plant_math_divergence_str(const char* vec);
+char*        plant_math_curl_str(const char* vec);
+char*        plant_math_laplacian_str(const char* expr);
+char*        plant_math_laplace_str(const char* expr, const char* var, const char* svar);
+char*        plant_math_inverselaplace_str(const char* expr, const char* var, const char* tvar);
 
 /* ── v0.50.0a: Anonymous Struct Allocation ── */
 void*        plant_anon_struct_create(size_t size);

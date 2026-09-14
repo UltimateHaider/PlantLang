@@ -10685,6 +10685,11 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* 
     e = _handle_func_paren3(e, "MATH_SOLVE_ODE_LINEAR", "plant_math_solve_ode_linear_str");
     e = _handle_func_paren3(e, "MATH_SOLVE_ODE_SEPARABLE", "plant_math_solve_ode_separable_str");
     e = _handle_func_paren4(e, "MATH_VERIFY_ODE", "plant_math_verify_ode_str");
+    e = _handle_func_paren(e, "MATH_DIVERGENCE", "plant_math_divergence_str");
+    e = _handle_func_paren(e, "MATH_CURL", "plant_math_curl_str");
+    e = _handle_func_paren(e, "MATH_LAPLACIAN", "plant_math_laplacian_str");
+    e = _handle_func_paren3(e, "MATH_LAPLACE", "plant_math_laplace_str");
+    e = _handle_func_paren3(e, "MATH_INVERSE_LAPLACE", "plant_math_inverselaplace_str");
     e = _handle_func_paren3(e, "MATH_QUADRATIC", "plant_math_quadratic_str");
     e = _handle_func_paren2(e, "MATH_COMPLEX_ADD", "plant_complex_add_str");
     e = _handle_func_paren2(e, "MATH_COMPLEX_SUB", "plant_complex_sub_str");
@@ -16352,7 +16357,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.50.6 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.50.7 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

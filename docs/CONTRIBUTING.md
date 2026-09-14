@@ -39,7 +39,7 @@ Runs `tests/regression/run_regression_tests.sh` and
 `tests/native/run_native_tests.sh`. Expected results are the `*.expected`
 files in `tests/regression/`. A test fails when the compiled program's output
 does not match its `.expected` file. The suite must be green before a PR is
-merged — **regression 317/317, native 24/24** at v0.50.6.
+merged — **regression 317/317, native 25/25** at v0.50.7.
 
 ## Code style
 

@@ -286,4 +286,36 @@ char*     plant_math_verify_ode_str(const char* ode_expr,
                                      const char* dep_var,
                                      const char* indep_var);
 
+/* ====================================================================
+ *  v0.50.7 — Vector Calculus & Laplace Transforms
+ * ==================================================================== */
+
+/* Divergence: div(F) = dFx/dx + dFy/dy + dFz/dz.
+ * vec is comma-separated components "Fx, Fy, Fz".
+ * Coordinate variables default to x, y, z.
+ * Returns result as string. Caller frees result. */
+char*     plant_math_divergence_str(const char* vec);
+
+/* Curl (3D): curl(F) = (dFz/dy-dFy/dz, dFx/dz-dFz/dx, dFy/dx-dFx/dy).
+ * vec is comma-separated components "Fx, Fy, Fz".
+ * Coordinate variables default to x, y, z.
+ * Returns result as string "(cx, cy, cz)". Caller frees result. */
+char*     plant_math_curl_str(const char* vec);
+
+/* Laplacian: lap(f) = d2f/dx2 + d2f/dy2 + d2f/dz2.
+ * expr is the scalar field expression.
+ * Coordinate variables default to x, y, z.
+ * Returns result as string. Caller frees result. */
+char*     plant_math_laplacian_str(const char* expr);
+
+/* Laplace transform: L{f(t)} = F(s).
+ * expr is f(t), var is the time variable, svar is the s variable.
+ * Returns result as string. Caller frees result. */
+char*     plant_math_laplace_str(const char* expr, const char* var, const char* svar);
+
+/* Inverse Laplace transform: L^{-1}{F(s)} = f(t).
+ * expr is F(s), var is the s variable, tvar is the time variable.
+ * Returns result as string. Caller frees result. */
+char*     plant_math_inverselaplace_str(const char* expr, const char* var, const char* tvar);
+
 #endif /* PLANT_MATH_H */

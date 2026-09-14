@@ -1,11 +1,11 @@
 # PlantLang Technical Reference
 
-> **Current architecture (v0.50.6+): Pure Native 🚀** — The PlantLang compiler,
+> **Current architecture (v0.50.7+): Pure Native 🚀** — The PlantLang compiler,
 > **Chloroplast**, is fully self-hosted: `src/plantc/*.plant` (lexer, parser, C
 > codegen, driver) compiles to C and links against the native runtime
 > (`runtime/c/plant_runtime.c`, `runtime/c/plant_compat.h`, `runtime/c/plant_math.c`). There is no
 > interpreter: `dist/Chloroplast` (v1) bootstraps `v2 → v3 → v4 → v5` to a
-> byte-identical fixed point (convergence at **505,907 bytes**, `make self`). The compiler binary is
+> byte-identical fixed point (convergence at **503,136 bytes**, `make self`). The compiler binary is
 > `bin/Chloroplast` (`./bin/Chloroplast app.plant out.c`). Sections below
 > referencing `core/*.js` / the legacy JS engine describe historical versions
 > (≤ v0.45.x) and are kept as an architectural record.
@@ -3008,7 +3008,7 @@ missing source file (exit 1), unreadable file, and usage help.
 ### 28.4 Test Coverage
 
 - `make self` — multi-generation self-hosting byte-convergence check
-  (`plantc_v3.c == plantc_v4.c == plantc_v5.c`, fixed point **505,907 bytes**)
+  (`plantc_v3.c == plantc_v4.c == plantc_v5.c`, fixed point **503,136 bytes**)
 - `make test` — native integration suite (`tests/native/`): CLI checks
   (`--help`, `--version`, missing-file exit code) plus compile + run +
   output-diff cases — 9/9 passing
@@ -3158,7 +3158,7 @@ only design-convention string allocations remain at exit.
 `ffi_free` on a `ffi_make_buf` allocation and NULL rejection. The mock library
 `mock_ffi.c`/`mock_ffi.h` is force-included (`-include`) and linked into every
 test binary; suite at 18/18 passing with the self-hosting fixed point at
-505,907 bytes.
+503,136 bytes.
 
 ## 31. Generics Engine — Monomorphization & Name Mangling (v0.48.1)
 
@@ -3301,7 +3301,7 @@ nested `Wrap[T]` with mock-FFI round-trips). The runner supports optional
 `$name.grep` files — fixed-string structural checks on the generated C
 (`!`-prefixed lines must be absent, e.g. `!} plant_Box_T;`) — and links
 `mock_ffi.c` for struct-FFI interop. Native suite stays 18/18; the
-self-hosting chain converges with the engine active at 505,907 bytes.
+self-hosting chain converges with the engine active at 503,136 bytes.
 
 ## 32. Closures Engine — Env Structs & Native Functions (v0.48.2)
 
@@ -3565,7 +3565,7 @@ parenthesized numeric sub-expressions (`"expr " + (x + 1)`), `LEN` results,
 and numeric-only guards (`7 + 2`, `x + 3` stay arithmetic — verified via
 `"" + k`). Drain scenarios verified: direct `START`, transitive helper,
 `START`-in-expression, `ASYNC IN`, negative no-async case. Full suite:
-native 18/18, generics 7/7, closures 6/6; self-hosting converges at 505,907 bytes.
+native 18/18, generics 7/7, closures 6/6; self-hosting converges at 503,136 bytes.
 
 ## 35. CAS (Computer Algebra System) Core (v0.50.0–v0.50.4)
 
@@ -3725,4 +3725,88 @@ char* plant_math_verify_ode_str(const char* ode, const char* solution, const cha
 - `tests/native/partial_extended.plant` — 5 tests: partial with multiple vars, second-order, gradient edge cases, ODE verify
 - `tests/native/ode_basic.plant` — 2 tests: linear and separable ODE solvers
 - Full native suite: **24/24 pass** (including 3 CLI + 1 tx_types)
-- Self-hosting convergence: **505,907 bytes**
+- Self-hosting convergence: **503,136 bytes**
+
+## 38. Vector Calculus & Laplace Transforms (v0.50.7)
+
+### 38.1 Divergence
+
+```c
+char* plant_math_divergence_str(const char* vec);
+```
+
+Computes the divergence of a 3D vector field: ∇·F = ∂Fx/∂x + ∂Fy/∂y + ∂Fz/∂z. The vector is a comma-separated string (e.g., `"x^2, y^2, z^2"`). Coordinates default to `x`, `y`, `z` and are auto-detected from the expression.
+
+### 38.2 Curl
+
+```c
+char* plant_math_curl_str(const char* vec);
+```
+
+Computes the 3D curl: ∇×F = (∂Fz/∂y−∂Fy/∂z, ∂Fx/∂z−∂Fz/∂x, ∂Fy/∂x−∂Fx/∂y). Returns a formatted string vector `"(comp1, comp2, comp3)"`.
+
+### 38.3 Laplacian
+
+```c
+char* plant_math_laplacian_str(const char* expr);
+```
+
+Computes the scalar Laplacian: ∇²f = ∂²f/∂x² + ∂²f/∂y² + ∂²f/∂z². Uses string-based accumulation (avoids AST use-after-free). Falls back to numeric sum if all second derivatives are constants.
+
+### 38.4 Forward Laplace Transform
+
+```c
+char* plant_math_laplace_str(const char* expr, const char* var, const char* svar);
+```
+
+Transforms a time-domain function to the complex frequency domain. Supported forms:
+
+| f(t) | L{f(t)} |
+|---|---|
+| 1 | 1/s |
+| t | 1/s² |
+| tⁿ | n!/s^(n+1) |
+| e^(at) | 1/(s−a) |
+| sin(at) | a/(s²+a²) |
+| cos(at) | s/(s²+a²) |
+| sinh(at) | a/(s²−a²) |
+| cosh(at) | s/(s²−a²) |
+
+Function names are normalized via `_normalize_func()` which strips `plant_`/`math_` prefixes (added by codegen rewrites) and uppercases before matching.
+
+### 38.5 Inverse Laplace Transform
+
+```c
+char* plant_math_inverselaplace_str(const char* expr, const char* var, const char* tvar);
+```
+
+Reconstructs a time-domain function from its Laplace transform. Supported forms:
+
+| F(s) | L⁻¹{F(s)} |
+|---|---|
+| 1/s | 1 |
+| 1/s² | t |
+| n!/s^(n+1) | tⁿ |
+| 1/(s−a) | e^(at) |
+| a/(s²+a²) | sin(at) |
+| s/(s²+a²) | cos(at) |
+
+### 38.6 Built-in CAS Functions
+
+| Built-in | Args | Codegen | Description |
+|---|---|---|---|
+| `MATH_DIVERGENCE` | 1 | `_handle_func_paren` | Vector field divergence |
+| `MATH_CURL` | 1 | `_handle_func_paren` | 3D curl |
+| `MATH_LAPLACIAN` | 1 | `_handle_func_paren` | Scalar Laplacian |
+| `MATH_LAPLACE` | 3 | `_handle_func_paren3` | Forward Laplace transform |
+| `MATH_INVERSE_LAPLACE` | 3 | `_handle_func_paren3` | Inverse Laplace transform |
+
+### 38.7 Test Coverage
+
+- `tests/native/vector_calc.plant` — 14 tests: divergence (2), curl (2), Laplacian (2), forward Laplace (5), inverse Laplace (3)
+- Full native suite: **25/25 pass** (including 3 CLI + 1 tx_types)
+- Self-hosting convergence: **503,136 bytes**
+
+---
+
+*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.50.7. As of v0.50.7 the legacy side exists only in git history — `core/`, `src/**/*.js`, `std/`, `service/`, `webrepl/`, and `benchmarks/` were removed from the working tree (commit `c17de62`).*
