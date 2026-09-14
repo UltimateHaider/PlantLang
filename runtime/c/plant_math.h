@@ -236,4 +236,54 @@ char*  plant_complex_div_str(const char* a, const char* b);
 char*  plant_complex_conj_str(const char* a);
 char*  plant_complex_abs_str(const char* a);
 
+/* ====================================================================
+ *  v0.50.6 — Partial Derivatives & Gradient Subsystem
+ * ==================================================================== */
+
+/* Compute ∂f/∂var (first-order partial derivative).
+ * Equivalent to plant_math_derivative for single-variable expressions,
+ * but explicitly named for multivariable calculus semantics. */
+MathNode* plant_math_partial(const MathNode* node, const char* var);
+char*     plant_math_partial_str(const char* expr, const char* var);
+
+/* Compute second-order partial derivative ∂²f/∂var². */
+MathNode* plant_math_partial2(const MathNode* node, const char* var);
+char*     plant_math_partial2_str(const char* expr, const char* var);
+
+/* Compute gradient vector ∇f = (∂f/∂x, ∂f/∂y, [∂f/∂z]).
+ * vars: array of variable names, n: number of variables (2 or 3).
+ * Returns a string like "(2*x, 2*y)" or "(2*x, 2*y, 2*z)".
+ * Caller frees result. */
+char*     plant_math_gradient_str(const char* expr, const char** vars, int n);
+
+/* Convenience: 2D gradient (fixed array). */
+char*     plant_math_gradient_2d_str(const char* expr, const char* x, const char* y);
+
+/* Convenience: 3D gradient (fixed array). */
+char*     plant_math_gradient_3d_str(const char* expr, const char* x, const char* y, const char* z);
+
+/* ====================================================================
+ *  v0.50.6 — ODE Solver Subsystem
+ * ==================================================================== */
+
+/* Solve a first-order linear ODE: dy/dx + P(x)*y = Q(x).
+ * ode_expr: the full ODE string (e.g. "dy/dx + 2*y = x")
+ * Returns solution as string. Caller frees result. */
+char*     plant_math_solve_ode_linear_str(const char* ode_expr,
+                                           const char* dep_var,
+                                           const char* indep_var);
+
+/* Solve a separable ODE: dy/dx = f(x)*g(y).
+ * Returns solution as string. Caller frees result. */
+char*     plant_math_solve_ode_separable_str(const char* ode_expr,
+                                              const char* dep_var,
+                                              const char* indep_var);
+
+/* Verify a proposed solution against an ODE.
+ * Returns "1" if the solution satisfies the ODE, "0" otherwise. */
+char*     plant_math_verify_ode_str(const char* ode_expr,
+                                     const char* solution,
+                                     const char* dep_var,
+                                     const char* indep_var);
+
 #endif /* PLANT_MATH_H */

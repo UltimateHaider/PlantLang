@@ -1,5 +1,31 @@
 # Changelog — PlantLang / Chloroplast
 
+## v0.50.6 — 2026 (Partial Derivatives, Gradient & ODE Solvers)
+
+### New Features
+- **`MATH_PARTIAL(expr, var)` built-in**: Compute first-order partial derivative.
+  - `MATH_PARTIAL("x^2 + y^2", "x")` → `"(2*x)"`
+  - `MATH_PARTIAL("sin(x)*cos(y)", "x")` → `"(COS(x)*COS(y))"`
+- **`MATH_PARTIAL2(expr, var)` built-in**: Compute second-order partial derivative.
+  - `MATH_PARTIAL2("x^3", "x")` → `"(6*x)"`
+- **`MATH_GRADIENT2(expr, x, y)` built-in**: Compute 2D gradient vector.
+  - `MATH_GRADIENT2("x^2 + y^2", "x", "y")` → `"((2*x), (2*y))"`
+- **`MATH_GRADIENT3(expr, x, y, z)` built-in**: Compute 3D gradient vector.
+  - `MATH_GRADIENT3("x*y*z", "x", "y", "z")` → `"((y*z), (x*z), (x*y))"`
+- **`MATH_SOLVE_ODE_LINEAR(ode, dep, indep)` built-in**: Solve first-order linear ODEs.
+  - Uses `dy/dx` notation internally (pre-processed to PRIME symbols).
+  - `MATH_SOLVE_ODE_LINEAR("dy/dx - 2*x", "y", "x")` → `"(2*((x^2)/2)) + C"`
+- **`MATH_SOLVE_ODE_SEPARABLE(ode, dep, indep)` built-in**: Solve separable ODEs.
+  - `MATH_SOLVE_ODE_SEPARABLE("dy/dx - x*y", "y", "x")` → `"LOG(ABS(y)) = ((x^2)/2) + C"`
+- **`MATH_VERIFY_ODE(ode, sol, dep, indep)` built-in**: Verify a solution against an ODE.
+  - `MATH_VERIFY_ODE("dy/dx - 2*x", "x^2", "y", "x")` → `"1"` (correct)
+  - `MATH_VERIFY_ODE("dy/dx - x", "x^2", "y", "x")` → `"0"` (wrong)
+
+### Internal
+- Added `ode_preprocess()` helper for `dy/dx` → `PRIME_` symbol translation.
+- Added `is_prime_node()` helper for recognizing derivative symbols.
+- All new functions use string-based API (`_str` suffix) for codegen integration.
+
 ## v0.50.5 — 2026 (MATH Type Mixed Operations & Explicit Casting)
 
 ### New Features

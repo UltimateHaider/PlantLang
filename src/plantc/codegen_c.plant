@@ -3575,6 +3575,20 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST), maths(LIST)),
     REAP e FROM _handle_func_paren, e, "EVAL", "plant_math_eval_to_str".
     # v0.50.5 — SUBST(expr, var, value): substitute a variable with a value.
     REAP e FROM _handle_func_paren, e, "SUBST", "plant_math_subst_str".
+    # v0.50.6 — MATH_PARTIAL(expr, var): first-order partial derivative.
+    REAP e FROM _handle_func_paren2, e, "MATH_PARTIAL", "plant_math_partial_str".
+    # v0.50.6 — MATH_PARTIAL2(expr, var): second-order partial derivative.
+    REAP e FROM _handle_func_paren2, e, "MATH_PARTIAL2", "plant_math_partial2_str".
+    # v0.50.6 — MATH_GRADIENT2(expr, x, y): gradient for 2D.
+    REAP e FROM _handle_func_paren3, e, "MATH_GRADIENT2", "plant_math_gradient_2d_str".
+    # v0.50.6 — MATH_GRADIENT3(expr, x, y, z): gradient for 3D.
+    REAP e FROM _handle_func_paren4, e, "MATH_GRADIENT3", "plant_math_gradient_3d_str".
+    # v0.50.6 — MATH_SOLVE_ODE_LINEAR(ode, dep, indep): solve linear ODE.
+    REAP e FROM _handle_func_paren3, e, "MATH_SOLVE_ODE_LINEAR", "plant_math_solve_ode_linear_str".
+    # v0.50.6 — MATH_SOLVE_ODE_SEPARABLE(ode, dep, indep): solve separable ODE.
+    REAP e FROM _handle_func_paren3, e, "MATH_SOLVE_ODE_SEPARABLE", "plant_math_solve_ode_separable_str".
+    # v0.50.6 — MATH_VERIFY_ODE(ode, sol, dep, indep): verify solution.
+    REAP e FROM _handle_func_paren4, e, "MATH_VERIFY_ODE", "plant_math_verify_ode_str".
     # v0.50.0j — MATH_QUADRATIC: solve ax^2 + bx + c = 0.
     REAP e FROM _handle_func_paren3, e, "MATH_QUADRATIC", "plant_math_quadratic_str".
     # v0.50.2 — MATH_COMPLEX_*: complex number arithmetic (must run BEFORE _math_func_paren

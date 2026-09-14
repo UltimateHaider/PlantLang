@@ -1,0 +1,21 @@
+ACTION main(),
+  # Test 1: ∂/∂x(x^2) = 2*x
+  SHOW MATH_PARTIAL("x^2", "x").
+  # Test 2: ∂/∂y(x^2 + y^2) = 2*y
+  SHOW MATH_PARTIAL("x^2 + y^2", "y").
+  # Test 3: second-order ∂²/∂x²(x^3) = 6*x
+  SHOW MATH_PARTIAL2("x^3", "x").
+  # Test 4: ∂/∂x(sin(x)*cos(y)) = cos(x)*cos(y)
+  SHOW MATH_PARTIAL("sin(x)*cos(y)", "x").
+  # Test 5: gradient 2D of x^2 + y^2
+  SHOW MATH_GRADIENT2("x^2 + y^2", "x", "y").
+  # Test 6: gradient 3D of x*y*z
+  SHOW MATH_GRADIENT3("x*y*z", "x", "y", "z").
+  # Test 7: solve dy/dx = 2*x → y = x^2 + C
+  SHOW MATH_SOLVE_ODE_LINEAR("dy/dx - 2*x", "y", "x").
+  # Test 8: separable dy/dx = x*y
+  SHOW MATH_SOLVE_ODE_SEPARABLE("dy/dx - x*y", "y", "x").
+  # Test 9: verify y = x^2 against dy/dx = 2*x
+  SHOW MATH_VERIFY_ODE("dy/dx - 2*x", "x^2", "y", "x").
+  GIVE 0.
+/GIVE main.

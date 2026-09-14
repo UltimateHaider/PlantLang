@@ -335,6 +335,13 @@ void         plant_math_free(void* math_ptr);
 void         plant_math_debug_print(void* node);
 char*        plant_math_eval_to_str(const char* expr);
 char*        plant_math_subst_str(const char* expr, const char* var, const char* value);
+char*        plant_math_partial_str(const char* expr, const char* var);
+char*        plant_math_partial2_str(const char* expr, const char* var);
+char*        plant_math_gradient_2d_str(const char* expr, const char* x, const char* y);
+char*        plant_math_gradient_3d_str(const char* expr, const char* x, const char* y, const char* z);
+char*        plant_math_solve_ode_linear_str(const char* ode, const char* dep, const char* indep);
+char*        plant_math_solve_ode_separable_str(const char* ode, const char* dep, const char* indep);
+char*        plant_math_verify_ode_str(const char* ode, const char* sol, const char* dep, const char* indep);
 
 /* ── v0.50.0a: Anonymous Struct Allocation ── */
 void*        plant_anon_struct_create(size_t size);

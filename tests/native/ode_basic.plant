@@ -1,0 +1,7 @@
+ACTION main(),
+  # Test 1: dy/dx = 2*x → y = x^2 + C (written as dy/dx - 2*x)
+  SHOW MATH_SOLVE_ODE_LINEAR("dy/dx - 2*x", "y", "x").
+  # Test 2: separable: dy/dx = x*y (written as dy/dx - x*y)
+  SHOW MATH_SOLVE_ODE_SEPARABLE("dy/dx - x*y", "y", "x").
+  GIVE 0.
+/GIVE main.

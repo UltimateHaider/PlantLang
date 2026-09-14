@@ -1,0 +1,13 @@
+ACTION main(),
+  # Test 1: partial of x^2*y wrt x = 2*x*y
+  SHOW MATH_PARTIAL("x^2*y", "x").
+  # Test 2: partial of x*y^2 wrt y = 2*x*y
+  SHOW MATH_PARTIAL("x*y^2", "y").
+  # Test 3: gradient of x^2+y^2+z^2 = (2x, 2y, 2z)
+  SHOW MATH_GRADIENT3("x^2+y^2+z^2", "x", "y", "z").
+  # Test 4: verify y = x^2 against dy/dx = 2*x (correct)
+  SHOW MATH_VERIFY_ODE("dy/dx - 2*x", "x^2", "y", "x").
+  # Test 5: verify y = x^2 against dy/dx = x (wrong ODE → 0)
+  SHOW MATH_VERIFY_ODE("dy/dx - x", "x^2", "y", "x").
+  GIVE 0.
+/GIVE main.
