@@ -1,0 +1,11 @@
+mat_add=4,6
+mat_sub=-2,-2
+mat_trace=5
+mat_id3=1,0,0,0,1,0,0,0,1
+mat_id1=1
+mat_add2=6,8,10,12
+mat_sub2=4,4,4,4
+mat_id_neg=ERROR: Cannot create identity matrix: size must be positive. Got -1.
+mat_id_zero=ERROR: Cannot create identity matrix: size must be positive. Got 0.
+mat_id_large=ERROR: Cannot create identity matrix: size 3000 exceeds maximum 2000. Use sparse matrices (v0.52+).
+mat_basic=done

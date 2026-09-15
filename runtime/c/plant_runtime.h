@@ -347,6 +347,9 @@ char*        plant_math_curl_str(const char* vec);
 char*        plant_math_laplacian_str(const char* expr);
 char*        plant_math_laplace_str(const char* expr, const char* var, const char* svar);
 char*        plant_math_inverselaplace_str(const char* expr, const char* var, const char* tvar);
+char*        plant_math_solve_pde_str(const char* pde, const char* dep, const char* indep1, const char* indep2);
+char*        plant_math_verify_pde_str(const char* pde, const char* sol, const char* dep, const char* indep1, const char* indep2);
+char*        plant_math_verify_pde_strict_str(const char* pde, const char* sol, const char* dep, const char* indep1, const char* indep2);
 
 /* ── v0.50.0a: Anonymous Struct Allocation ── */
 void*        plant_anon_struct_create(size_t size);

@@ -5455,6 +5455,136 @@ ACTION _handle_func_paren4(expr(TX), kw(TX), cfn(TX)),
   GIVE res.
 /ACTION.
 
+# _handle_func_paren5 — like _handle_func_paren4 but for KW(a, b, c, d, e).
+ACTION _handle_func_paren5(expr(TX), kw(TX), cfn(TX)),
+  REAP parts FROM strings:SPLIT, expr, kw + " (".
+  IF COUNT parts IS 1,
+    REAP parts FROM strings:SPLIT, expr, kw + "(".
+  /IF.
+  IF COUNT parts IS 1, GIVE expr. /IF.
+  REAP p0 FROM plant_list_get, parts, 0.
+  CREATE res(TX) TO p0.
+  CREATE idx(NUM) TO 1.
+  SEASON idx < COUNT parts,
+    REAP p FROM plant_list_get, parts, idx.
+    CREATE dep(NUM) TO 0.
+    CREATE close_pos(NUM) TO -1.
+    CREATE ci(NUM) TO 0.
+    SEASON ci < LEN(p),
+      REAP cc FROM char_at, p, ci.
+      IF cc IS "(", SET dep TO dep + 1. /IF.
+      IF cc IS ")",
+        SET dep TO dep - 1.
+        IF dep IS 0, SET close_pos TO ci. /IF.
+        IF dep IS 0, BREAK 0. /IF.
+      /IF.
+      SET ci TO ci + 1.
+    /SEASON.
+    IF close_pos IS -1, GIVE res + cfn + "(" + p. /IF.
+    REAP inner FROM substring, p, 1, close_pos.
+    # Find first comma
+    CREATE comma1(NUM) TO -1.
+    CREATE ad(NUM) TO 0.
+    CREATE ai(NUM) TO 0.
+    SEASON ai < LEN(inner),
+      REAP ac FROM char_at, inner, ai.
+      IF ac IS "(" OR ac IS "[", SET ad TO ad + 1. /IF.
+      IF ac IS ")" OR ac IS "]", SET ad TO ad - 1. /IF.
+      IF ad IS 0 AND ac IS ",",
+        SET comma1 TO ai.
+        BREAK 0.
+      /IF.
+      SET ai TO ai + 1.
+    /SEASON.
+    IF comma1 IS -1,
+      SET res TO res + cfn + "(" + inner + ")" + substring(p, close_pos + 1, LEN(p)).
+    ELSE.
+      # Find second comma
+      CREATE comma2(NUM) TO -1.
+      SET ad TO 0.
+      SET ai TO comma1 + 1.
+      SEASON ai < LEN(inner),
+        REAP ac FROM char_at, inner, ai.
+        IF ac IS "(" OR ac IS "[", SET ad TO ad + 1. /IF.
+        IF ac IS ")" OR ac IS "]", SET ad TO ad - 1. /IF.
+        IF ad IS 0 AND ac IS ",",
+          SET comma2 TO ai.
+          BREAK 0.
+        /IF.
+        SET ai TO ai + 1.
+      /SEASON.
+      IF comma2 IS -1,
+        REAP a1 FROM substring, inner, 0, comma1.
+        REAP a2 FROM substring, inner, comma1 + 1, LEN(inner).
+        REAP wa1 FROM plant_trim, a1.
+        REAP wa2 FROM plant_trim, a2.
+        SET res TO res + cfn + "(" + wa1 + ", " + wa2 + ")" + substring(p, close_pos + 1, LEN(p)).
+      ELSE.
+        # Find third comma
+        CREATE comma3(NUM) TO -1.
+        SET ad TO 0.
+        SET ai TO comma2 + 1.
+        SEASON ai < LEN(inner),
+          REAP ac FROM char_at, inner, ai.
+          IF ac IS "(" OR ac IS "[", SET ad TO ad + 1. /IF.
+          IF ac IS ")" OR ac IS "]", SET ad TO ad - 1. /IF.
+          IF ad IS 0 AND ac IS ",",
+            SET comma3 TO ai.
+            BREAK 0.
+          /IF.
+          SET ai TO ai + 1.
+        /SEASON.
+        IF comma3 IS -1,
+          REAP a1 FROM substring, inner, 0, comma1.
+          REAP a2 FROM substring, inner, comma1 + 1, comma2.
+          REAP a3 FROM substring, inner, comma2 + 1, LEN(inner).
+          REAP wa1 FROM plant_trim, a1.
+          REAP wa2 FROM plant_trim, a2.
+          REAP wa3 FROM plant_trim, a3.
+          SET res TO res + cfn + "(" + wa1 + ", " + wa2 + ", " + wa3 + ")" + substring(p, close_pos + 1, LEN(p)).
+        ELSE.
+          # Find fourth comma
+          CREATE comma4(NUM) TO -1.
+          SET ad TO 0.
+          SET ai TO comma3 + 1.
+          SEASON ai < LEN(inner),
+            REAP ac FROM char_at, inner, ai.
+            IF ac IS "(" OR ac IS "[", SET ad TO ad + 1. /IF.
+            IF ac IS ")" OR ac IS "]", SET ad TO ad - 1. /IF.
+            IF ad IS 0 AND ac IS ",",
+              SET comma4 TO ai.
+              BREAK 0.
+            /IF.
+            SET ai TO ai + 1.
+          /SEASON.
+          REAP a1 FROM substring, inner, 0, comma1.
+          REAP a2 FROM substring, inner, comma1 + 1, comma2.
+          REAP a3 FROM substring, inner, comma2 + 1, comma3.
+          IF comma4 IS -1,
+            REAP a4 FROM substring, inner, comma3 + 1, LEN(inner).
+            REAP wa1 FROM plant_trim, a1.
+            REAP wa2 FROM plant_trim, a2.
+            REAP wa3 FROM plant_trim, a3.
+            REAP wa4 FROM plant_trim, a4.
+            SET res TO res + cfn + "(" + wa1 + ", " + wa2 + ", " + wa3 + ", " + wa4 + ")" + substring(p, close_pos + 1, LEN(p)).
+          ELSE,
+            REAP a4 FROM substring, inner, comma3 + 1, comma4.
+            REAP a5 FROM substring, inner, comma4 + 1, LEN(inner).
+            REAP wa1 FROM plant_trim, a1.
+            REAP wa2 FROM plant_trim, a2.
+            REAP wa3 FROM plant_trim, a3.
+            REAP wa4 FROM plant_trim, a4.
+            REAP wa5 FROM plant_trim, a5.
+            SET res TO res + cfn + "(" + wa1 + ", " + wa2 + ", " + wa3 + ", " + wa4 + ", " + wa5 + ")" + substring(p, close_pos + 1, LEN(p)).
+          /IF.
+        /IF.
+      /IF.
+    /IF.
+    SET idx TO idx + 1.
+  /SEASON.
+  GIVE res.
+/ACTION.
+
 # _is_num_literal — "1" when s (spaces ignored) is a bare numeric
 # literal: optional single leading '-', digits with at most one '.'.
 # Used by _wrap_math_args to decide which call arguments need a
@@ -8744,6 +8874,12 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST), maths(LIST)),
     REAP e FROM _handle_func_paren3, e, "MATH_LAPLACE", "plant_math_laplace_str".
     # v0.50.7 — MATH_INVERSE_LAPLACE(F, var, tvar): inverse Laplace transform.
     REAP e FROM _handle_func_paren3, e, "MATH_INVERSE_LAPLACE", "plant_math_inverselaplace_str".
+    # v0.51.0 — MATH_SOLVE_PDE(pde, dep, indep1, indep2): classify and solve PDE.
+    REAP e FROM _handle_func_paren4, e, "MATH_SOLVE_PDE", "plant_math_solve_pde_str".
+    # v0.51.0 — MATH_VERIFY_PDE(pde, sol, dep, indep1, indep2): verify PDE solution.
+    REAP e FROM _handle_func_paren5, e, "MATH_VERIFY_PDE", "plant_math_verify_pde_str".
+    # v0.51.0 — MATH_VERIFY_PDE_STRICT(pde, sol, dep, indep1, indep2): strict verify.
+    REAP e FROM _handle_func_paren5, e, "MATH_VERIFY_PDE_STRICT", "plant_math_verify_pde_strict_str".
     # v0.50.0j — MATH_QUADRATIC: solve ax^2 + bx + c = 0.
     REAP e FROM _handle_func_paren3, e, "MATH_QUADRATIC", "plant_math_quadratic_str".
     # v0.50.2 — MATH_COMPLEX_*: complex number arithmetic (must run BEFORE _math_func_paren
@@ -8816,6 +8952,11 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST), maths(LIST)),
     REAP e FROM _math_func_paren, e, "MATRIX_MULT", "plant_matrix_mult".
     REAP e FROM _math_func_paren, e, "INVERSE", "plant_inverse".
     REAP e FROM _math_func_paren, e, "DET", "plant_det".
+    # v0.51.0 — matrix arithmetic (element-wise add/sub, trace, identity).
+    REAP e FROM _math_func_paren, e, "MAT_ADD", "plant_mat_add".
+    REAP e FROM _math_func_paren, e, "MAT_SUB", "plant_mat_sub".
+    REAP e FROM _math_func_paren, e, "MAT_TRACE", "plant_mat_trace".
+    REAP e FROM _math_func_paren, e, "MAT_IDENTITY", "plant_mat_identity".
     # v0.49.23 — numerical analysis (factorization/eigen/solver).
     REAP e FROM _math_func_paren, e, "LU", "plant_lu".
     REAP e FROM _math_func_paren, e, "EIGEN", "plant_eigen".
@@ -14337,7 +14478,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.50.7 (pure native)".
+  SHOW "Chloroplast 0.51.0b (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

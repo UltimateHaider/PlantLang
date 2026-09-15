@@ -19,9 +19,9 @@
 == errors ==
 ERR
 ERR
-ERR
-ERR
-ERR
+ERROR: Cannot multiply matrices: incompatible dimensions. A is 1x2, B is 1x2. Columns of A (2) must equal rows of B (1).
+ERROR: Cannot compute determinant: matrix must be square. Got 2x3 matrix.
+ERROR: Cannot compute inverse: matrix is singular (det = 0).
 ERR
 ERR
 ERR

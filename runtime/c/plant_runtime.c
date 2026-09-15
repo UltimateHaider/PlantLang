@@ -3004,6 +3004,17 @@ static tx_t _plant_ser(tx_t v, int depth) {
     return res;
 }
 
+/* v0.51.0 — plant_to_string: type-aware serializer.
+   PlantArray (LIST/MAP) → recursive [k=v, ...] format.
+   Everything else → pass through as string. */
+tx_t plant_to_string(tx_t v) {
+    if (!v) return strdup("");
+    PlantArray* p = (PlantArray*)v;
+    if (p->magic == PLANT_ARRAY_MAGIC) return _plant_ser(v, 0);
+    const char* s = _S(v);
+    return strdup(s ? s : "");
+}
+
 /* ═══════════════════════════════════════════════════════════════
    v0.48.38c — JOIN(list, delim) built-in
    Concatenates the elements of a list into one string separated by
@@ -3748,9 +3759,95 @@ tx_t plant_list_mode(tx_t data) {
    ragged input, non-parsable elements and singular inverses all
    return the string "ERR". Cells coerce via _list_num; numeric
    results render through _plant_math_result.
-   ================================================================ */
+    ================================================================ */
 
-#define LA_MAXD 64
+/* --- Malloc failure simulation (test-only, opt-in) ---
+ * Set MAT_MALLOC_FAIL_AT=N to make the Nth malloc call return NULL.
+ * Disabled when the env var is unset. Gated by PLANT_MALLOC_SIMULATE.
+ * C89-compatible. No production impact. */
+#ifdef PLANT_MALLOC_SIMULATE
+#include <stdlib.h>
+
+static int  g_malloc_call_count = 0;
+static int  g_malloc_fail_at    = -1;
+static int  g_malloc_initialized = 0;
+
+static void plant_malloc_init(void) {
+    const char *env;
+    if (g_malloc_initialized) return;
+    g_malloc_initialized = 1;
+    env = getenv("MAT_MALLOC_FAIL_AT");
+    if (env) {
+        g_malloc_fail_at = atoi(env);
+    }
+}
+
+static void* plant_malloc_sim(size_t size) {
+    plant_malloc_init();
+    g_malloc_call_count++;
+    if (g_malloc_fail_at > 0 && g_malloc_call_count == g_malloc_fail_at) {
+        return NULL;
+    }
+    return malloc(size);
+}
+
+#define plant_malloc(size) plant_malloc_sim(size)
+#else
+#define plant_malloc(size) malloc(size)
+#endif
+/* --- End malloc failure simulation --- */
+
+#define LA_MAXD 2000
+
+static double** _la_alloc(int n) {
+    double** m = (double**)plant_malloc((size_t)n * sizeof(double*));
+    if (!m) return NULL;
+    for (int i = 0; i < n; i++) {
+        m[i] = (double*)plant_malloc((size_t)n * sizeof(double));
+        if (!m[i]) {
+            for (int j = 0; j < i; j++) free(m[j]);
+            free(m);
+            return NULL;
+        }
+    }
+    return m;
+}
+
+static double** _la_alloc_rect(int rows, int cols) {
+    double** m = (double**)plant_malloc((size_t)rows * sizeof(double*));
+    if (!m) return NULL;
+    for (int i = 0; i < rows; i++) {
+        m[i] = (double*)plant_malloc((size_t)cols * sizeof(double));
+        if (!m[i]) {
+            for (int j = 0; j < i; j++) free(m[j]);
+            free(m);
+            return NULL;
+        }
+    }
+    return m;
+}
+
+static void _la_free(double** m, int n) {
+    if (!m) return;
+    for (int i = 0; i < n; i++) free(m[i]);
+    free(m);
+}
+
+static char* _la_dim_err(const char* op, int64_t r1, int64_t c1, int64_t r2, int64_t c2) {
+    char* buf = (char*)malloc(256);
+    if (!buf) return strdup("ERR");
+    snprintf(buf, 256, "ERROR: Cannot %s: dimensions must match. Got %lldx%lld and %lldx%lld.",
+             op, (long long)r1, (long long)c1, (long long)r2, (long long)c2);
+    return buf;
+}
+
+static char* _la_nonsq_err(const char* op, int64_t r, int64_t c) {
+    char* buf = (char*)malloc(256);
+    if (!buf) return strdup("ERR");
+    snprintf(buf, 256, "ERROR: Cannot compute %s: matrix must be square. Got %lldx%lld matrix.",
+             op, (long long)r, (long long)c);
+    return buf;
+}
 
 static PlantArray* _la_matrix(tx_t data, int64_t* rows, int64_t* cols) {
     PlantArray* a = (PlantArray*)data;
@@ -3761,7 +3858,7 @@ static PlantArray* _la_matrix(tx_t data, int64_t* rows, int64_t* cols) {
         if (!r) return NULL;
         PlantArray* ra = (PlantArray*)r;
         if (ra->magic != PLANT_ARRAY_MAGIC || ra->count == 0) return NULL;
-        if (i == 0) { *cols = ra->count; if (*cols > LA_MAXD) return NULL; }
+        if (i == 0) { *cols = ra->count; }
         else if (ra->count != *cols) return NULL;      /* ragged */
     }
     *rows = a->count;
@@ -3776,7 +3873,7 @@ static double _la_get(PlantArray* m, int64_t i, int64_t j, int* ok) {
 static int _la_vec(tx_t v, double* out, int64_t* n) {
     PlantArray* a = (PlantArray*)v;
     *n = 0;
-    if (!a || a->magic != PLANT_ARRAY_MAGIC || a->count == 0 || a->count > LA_MAXD) return 0;
+    if (!a || a->magic != PLANT_ARRAY_MAGIC || a->count == 0) return 0;
     for (int64_t i = 0; i < a->count; i++) {
         int ok = 0;
         double d = _list_num(a->items[i], &ok);
@@ -3787,12 +3884,15 @@ static int _la_vec(tx_t v, double* out, int64_t* n) {
 }
 
 tx_t plant_dot(tx_t v1, tx_t v2) {
-    double a[LA_MAXD], b[LA_MAXD];
+    double* a = (double*)malloc(LA_MAXD * sizeof(double));
+    double* b = (double*)malloc(LA_MAXD * sizeof(double));
+    if (!a || !b) { free(a); free(b); return strdup("ERR"); }
     int64_t na, nb;
-    if (!_la_vec(v1, a, &na) || !_la_vec(v2, b, &nb)) return strdup("ERR");
-    if (na != nb) return strdup("ERR");
+    if (!_la_vec(v1, a, &na) || !_la_vec(v2, b, &nb)) { free(a); free(b); return strdup("ERR"); }
+    if (na != nb) { free(a); free(b); return strdup("ERR"); }
     double acc = 0.0;
     for (int64_t i = 0; i < na; i++) acc += a[i] * b[i];
+    free(a); free(b);
     return _plant_math_result(acc);
 }
 
@@ -3808,11 +3908,13 @@ tx_t plant_cross(tx_t v1, tx_t v2) {
 }
 
 tx_t plant_norm(tx_t v) {
-    double a[LA_MAXD];
+    double* a = (double*)malloc(LA_MAXD * sizeof(double));
+    if (!a) return strdup("ERR");
     int64_t n;
-    if (!_la_vec(v, a, &n)) return strdup("ERR");
+    if (!_la_vec(v, a, &n)) { free(a); return strdup("ERR"); }
     double acc = 0.0;
     for (int64_t i = 0; i < n; i++) acc += a[i] * a[i];
+    free(a);
     return _plant_math_result(sqrt(acc));
 }
 
@@ -3838,7 +3940,13 @@ tx_t plant_matrix_mult(tx_t m1, tx_t m2) {
     int64_t r1, c1, r2, c2;
     PlantArray* A = _la_matrix(m1, &r1, &c1);
     PlantArray* B = _la_matrix(m2, &r2, &c2);
-    if (!A || !B || c1 != r2) return strdup("ERR");
+    if (!A || !B || c1 != r2) {
+        char* buf = (char*)malloc(256);
+        if (!buf) return strdup("ERR");
+        snprintf(buf, 256, "ERROR: Cannot multiply matrices: incompatible dimensions. A is %lldx%lld, B is %lldx%lld. Columns of A (%lld) must equal rows of B (%lld).",
+                 (long long)r1, (long long)c1, (long long)r2, (long long)c2, (long long)c1, (long long)r2);
+        return buf;
+    }
     PlantArray* out = plant_list_create(r1);
     for (int64_t i = 0; i < r1; i++) {
         PlantArray* row = plant_list_create(c2);
@@ -3861,7 +3969,7 @@ tx_t plant_matrix_mult(tx_t m1, tx_t m2) {
 /* Gaussian elimination core shared by DET / INVERSE.
    Fills aug (n x 2n for inverse work); returns determinant sign-
    aware product, or set *singular. */
-static double _gauss(double aug[LA_MAXD][2*LA_MAXD], int n, int cols, int* singular) {
+static double _gauss(double** aug, int n, int cols, int* singular) {
     double det = 1.0;
     *singular = 0;
     for (int col = 0; col < n; col++) {
@@ -3890,19 +3998,23 @@ static double _gauss(double aug[LA_MAXD][2*LA_MAXD], int n, int cols, int* singu
 tx_t plant_inverse(tx_t m) {
     int64_t r, c;
     PlantArray* M = _la_matrix(m, &r, &c);
-    if (!M || r != c) return strdup("ERR");
+    if (!M || r != c) {
+        if (!M) return strdup("ERR");
+        return _la_nonsq_err("inverse", r, c);
+    }
     int n = (int)r;
-    static __thread double aug[LA_MAXD][2*LA_MAXD];
+    double** aug = _la_alloc_rect(n, 2*n);
+    if (!aug) return strdup("ERR");
     for (int i = 0; i < n; i++)
         for (int j = 0; j < n; j++) {
             int ok = 0;
             aug[i][j] = _la_get(M, i, j, &ok);
-            if (!ok) return strdup("ERR");
+            if (!ok) { _la_free(aug, n); return strdup("ERR"); }
             aug[i][j+n] = (i == j) ? 1.0 : 0.0;
         }
     int singular = 0;
     _gauss(aug, n, 2*n, &singular);
-    if (singular) return strdup("ERR");
+    if (singular) { _la_free(aug, n); return strdup("ERROR: Cannot compute inverse: matrix is singular (det = 0)."); }
     PlantArray* out = plant_list_create(n);
     for (int i = 0; i < n; i++) {
         PlantArray* row = plant_list_create(n);
@@ -3910,23 +4022,32 @@ tx_t plant_inverse(tx_t m) {
             row = plant_list_push(row, _plant_math_result(aug[i][j+n]));
         out = plant_list_push(out, (tx_t)row);
     }
+    _la_free(aug, n);
     return (tx_t)out;
 }
 
 tx_t plant_det(tx_t m) {
     int64_t r, c;
     PlantArray* M = _la_matrix(m, &r, &c);
-    if (!M || r != c) return strdup("ERR");
+    if (!M) {
+        char* buf = (char*)malloc(128);
+        if (!buf) return strdup("ERR");
+        snprintf(buf, 128, "ERROR: Cannot compute determinant: matrix is empty. Got 0x0 matrix.");
+        return buf;
+    }
+    if (r != c) return _la_nonsq_err("determinant", r, c);
     int n = (int)r;
-    static __thread double aug[LA_MAXD][2*LA_MAXD];
+    double** aug = _la_alloc_rect(n, n);
+    if (!aug) return strdup("ERR");
     for (int i = 0; i < n; i++)
         for (int j = 0; j < n; j++) {
             int ok = 0;
             aug[i][j] = _la_get(M, i, j, &ok);
-            if (!ok) return strdup("ERR");
+            if (!ok) { _la_free(aug, n); return strdup("ERR"); }
         }
     int singular = 0;
     double det = _gauss(aug, n, n, &singular);
+    _la_free(aug, n);
     if (singular) return _plant_math_result(0.0);
     return _plant_math_result(det);
 }
@@ -3943,7 +4064,7 @@ tx_t plant_det(tx_t m) {
    (Euclidean/Frobenius). Every invalid state returns "ERR".
    ================================================================ */
 
-static PlantArray* _la_build(int rows, int cols, double src[LA_MAXD][2*LA_MAXD]) {
+static PlantArray* _la_build(int rows, int cols, double** src) {
     PlantArray* out = plant_list_create(rows);
     for (int i = 0; i < rows; i++) {
         PlantArray* row = plant_list_create(cols);
@@ -3967,7 +4088,7 @@ static int _la_symmetric(PlantArray* M, int n) {
 
 /* cyclic Jacobi eigenrotation for symmetric matrices; fills eval
    (diagonal) and evec (columns are eigenvectors) */
-static void _jacobi(double A[LA_MAXD][LA_MAXD], double V[LA_MAXD][LA_MAXD], int n) {
+static void _jacobi(double** A, double** V, int n) {
     for (int i = 0; i < n; i++) V[i][i] = 1.0;
     for (int sweep = 0; sweep < 200; sweep++) {
         double off = 0.0;
@@ -4004,12 +4125,13 @@ tx_t plant_lu(tx_t m) {
     PlantArray* M = _la_matrix(m, &r, &c);
     if (!M || r != c) return strdup("ERR");
     int n = (int)r;
-    static __thread double aug[LA_MAXD][2*LA_MAXD];
+    double** aug = _la_alloc(n);
+    if (!aug) return strdup("ERR");
     for (int i = 0; i < n; i++)
         for (int j = 0; j < n; j++) {
             int ok = 0;
             aug[i][j] = _la_get(M, i, j, &ok);
-            if (!ok) return strdup("ERR");
+            if (!ok) { _la_free(aug, n); return strdup("ERR"); }
         }
     /* in-place Doolittle with partial pivoting; unit lower L */
     double det_sign = 1.0;
@@ -4029,8 +4151,9 @@ tx_t plant_lu(tx_t m) {
         (void)det_sign;
     }
     /* split: strict-lower triangle + diagonal = L; upper incl diag = U */
-    static __thread double Lb[LA_MAXD][2*LA_MAXD];
-    static __thread double Ub[LA_MAXD][2*LA_MAXD];
+    double** Lb = _la_alloc(n);
+    double** Ub = _la_alloc(n);
+    if (!Lb || !Ub) { _la_free(aug, n); _la_free(Lb, n); _la_free(Ub, n); return strdup("ERR"); }
     for (int i = 0; i < n; i++)
         for (int j = 0; j < n; j++) {
             Lb[i][j] = (j < i) ? aug[i][j] : (j == i ? 1.0 : 0.0);
@@ -4039,6 +4162,9 @@ tx_t plant_lu(tx_t m) {
     PlantArray* out = plant_list_create(2);
     out = plant_list_push(out, (tx_t)_la_build(n, n, Lb));
     out = plant_list_push(out, (tx_t)_la_build(n, n, Ub));
+    _la_free(aug, n);
+    _la_free(Lb, n);
+    _la_free(Ub, n);
     return (tx_t)out;
 }
 
@@ -4047,18 +4173,20 @@ static PlantArray* _eig_impl(tx_t m, int want_vectors) {
     PlantArray* M = _la_matrix(m, &r, &c);
     if (!M || r != c || !_la_symmetric(M, (int)r)) return NULL;
     int n = (int)r;
-    static __thread double A[LA_MAXD][LA_MAXD];
-    static __thread double V[LA_MAXD][LA_MAXD];
+    double** A = _la_alloc(n);
+    double** V = _la_alloc(n);
+    if (!A || !V) { _la_free(A, n); _la_free(V, n); return NULL; }
     for (int i = 0; i < n; i++)
         for (int j = 0; j < n; j++) {
             int ok = 0;
             A[i][j] = _la_get(M, i, j, &ok);
-            if (!ok) return NULL;
+            if (!ok) { _la_free(A, n); _la_free(V, n); return NULL; }
             V[i][j] = (i == j) ? 1.0 : 0.0;
         }
     _jacobi(A, V, n);
     /* sort eigenpairs descending */
-    int idx[LA_MAXD];
+    int* idx = (int*)malloc((size_t)n * sizeof(int));
+    if (!idx) { _la_free(A, n); _la_free(V, n); return NULL; }
     for (int i = 0; i < n; i++) idx[i] = i;
     for (int i = 0; i < n; i++)
         for (int j = i + 1; j < n; j++)
@@ -4066,7 +4194,7 @@ static PlantArray* _eig_impl(tx_t m, int want_vectors) {
     PlantArray* vals = plant_list_create(n);
     for (int i = 0; i < n; i++)
         vals = plant_list_push(vals, _plant_math_result(A[idx[i]][idx[i]]));
-    if (!want_vectors) return vals;
+    if (!want_vectors) { free(idx); _la_free(A, n); _la_free(V, n); return vals; }
     PlantArray* vecs = plant_list_create(n);   /* columns of V */
     for (int j = 0; j < n; j++) {
         PlantArray* col = plant_list_create(n);
@@ -4077,6 +4205,9 @@ static PlantArray* _eig_impl(tx_t m, int want_vectors) {
     PlantArray* out = plant_list_create(2);
     out = plant_list_push(out, (tx_t)vals);
     out = plant_list_push(out, (tx_t)vecs);
+    free(idx);
+    _la_free(A, n);
+    _la_free(V, n);
     return out;
 }
 
@@ -4092,8 +4223,9 @@ tx_t plant_svd(tx_t m) {
     if (!M) return strdup("ERR");
     int mm = (int)rm, nn = (int)cm;
     /* AtA = M^T M (n x n, symmetric) */
-    static __thread double AtA[LA_MAXD][LA_MAXD];
-    static __thread double V[LA_MAXD][LA_MAXD];
+    double** AtA = _la_alloc(nn);
+    double** V = _la_alloc(nn);
+    if (!AtA || !V) { _la_free(AtA, nn); _la_free(V, nn); return strdup("ERR"); }
     for (int i = 0; i < nn; i++)
         for (int j = 0; j < nn; j++) {
             double acc = 0.0;
@@ -4105,14 +4237,16 @@ tx_t plant_svd(tx_t m) {
             V[i][j] = (i == j) ? 1.0 : 0.0;
         }
     _jacobi(AtA, V, nn);
-    double sv[LA_MAXD];
-    int idx[LA_MAXD];
+    double* sv = (double*)malloc((size_t)nn * sizeof(double));
+    int* idx = (int*)malloc((size_t)nn * sizeof(int));
+    if (!sv || !idx) { free(sv); free(idx); _la_free(AtA, nn); _la_free(V, nn); return strdup("ERR"); }
     for (int i = 0; i < nn; i++) { sv[i] = sqrt(AtA[i][i] > 0 ? AtA[i][i] : 0.0); idx[i] = i; }
     for (int i = 0; i < nn; i++)
         for (int j = i + 1; j < nn; j++)
             if (sv[idx[j]] > sv[idx[i]]) { int t = idx[i]; idx[i] = idx[j]; idx[j] = t; }
     /* U columns: Av/sigma for sigma > eps; Gram-Schmidt fill rest */
-    static __thread double U[LA_MAXD][LA_MAXD];
+    double** U = _la_alloc(mm);
+    if (!U) { free(sv); free(idx); _la_free(AtA, nn); _la_free(V, nn); return strdup("ERR"); }
     for (int c = 0; c < nn; c++) {
         int si = idx[c];
         if (sv[si] > 1e-9) {
@@ -4166,6 +4300,8 @@ tx_t plant_svd(tx_t m) {
     out = plant_list_push(out, (tx_t)Uo);
     out = plant_list_push(out, (tx_t)So);
     out = plant_list_push(out, (tx_t)Vo);
+    free(sv); free(idx);
+    _la_free(AtA, nn); _la_free(V, nn); _la_free(U, mm);
     return (tx_t)out;
 }
 
@@ -4173,25 +4309,28 @@ tx_t plant_solve(tx_t m, tx_t bv) {
     int64_t r, c;
     PlantArray* M = _la_matrix(m, &r, &c);
     if (!M || r != c) return strdup("ERR");
-    double b[LA_MAXD];
+    double* b = (double*)malloc((size_t)r * sizeof(double));
+    if (!b) return strdup("ERR");
     int64_t nb;
-    if (!_la_vec(bv, b, &nb) || nb != r) return strdup("ERR");
+    if (!_la_vec(bv, b, &nb) || nb != r) { free(b); return strdup("ERR"); }
     int n = (int)r;
-    static __thread double aug[LA_MAXD][2*LA_MAXD];
+    double** aug = _la_alloc_rect(n, n+1);
+    if (!aug) { free(b); return strdup("ERR"); }
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++) {
             int ok = 0;
             aug[i][j] = _la_get(M, i, j, &ok);
-            if (!ok) return strdup("ERR");
+            if (!ok) { free(b); _la_free(aug, n); return strdup("ERR"); }
         }
         aug[i][n] = b[i];
     }
+    free(b);
     for (int col = 0; col < n; col++) {
         int piv = col;
         double best = fabs(aug[col][col]);
         for (int rr = col + 1; rr < n; rr++)
             if (fabs(aug[rr][col]) > best) { best = fabs(aug[rr][col]); piv = rr; }
-        if (best < 1e-12) return strdup("ERR");   /* singular system */
+        if (best < 1e-12) { _la_free(aug, n); return strdup("ERR"); }   /* singular system */
         if (piv != col)
             for (int cc = 0; cc <= n; cc++) { double t = aug[col][cc]; aug[col][cc] = aug[piv][cc]; aug[piv][cc] = t; }
         for (int rr = col + 1; rr < n; rr++) {
@@ -4199,7 +4338,8 @@ tx_t plant_solve(tx_t m, tx_t bv) {
             for (int cc = col; cc <= n; cc++) aug[rr][cc] -= f * aug[col][cc];
         }
     }
-    double x[LA_MAXD];
+    double* x = (double*)malloc((size_t)n * sizeof(double));
+    if (!x) { _la_free(aug, n); return strdup("ERR"); }
     for (int i = n - 1; i >= 0; i--) {
         double s = aug[i][n];
         for (int j = i + 1; j < n; j++) s -= aug[i][j] * x[j];
@@ -4207,6 +4347,8 @@ tx_t plant_solve(tx_t m, tx_t bv) {
     }
     PlantArray* out = plant_list_create(n);
     for (int i = 0; i < n; i++) out = plant_list_push(out, _plant_math_result(x[i]));
+    free(x);
+    _la_free(aug, n);
     return (tx_t)out;
 }
 
@@ -4228,6 +4370,89 @@ tx_t plant_cond(tx_t m) {
             ni += v * v;
         }
     return _plant_math_result(sqrt(nm) * sqrt(ni));
+}
+
+/* ================================================================
+   v0.51.0 — matrix arithmetic built-ins
+   MAT_ADD MAT_SUB MAT_TRACE over nested lists (LIST of LIST).
+   ================================================================ */
+
+tx_t plant_mat_add(tx_t m1, tx_t m2) {
+    int64_t r1, c1, r2, c2;
+    PlantArray* A = _la_matrix(m1, &r1, &c1);
+    PlantArray* B = _la_matrix(m2, &r2, &c2);
+    if (!A || !B || r1 != r2 || c1 != c2) return _la_dim_err("add matrices", r1, c1, r2, c2);
+    PlantArray* out = plant_list_create(r1);
+    for (int64_t i = 0; i < r1; i++) {
+        PlantArray* row = plant_list_create(c1);
+        for (int64_t j = 0; j < c1; j++) {
+            int o1 = 0, o2 = 0;
+            double a = _la_get(A, i, j, &o1);
+            double b = _la_get(B, i, j, &o2);
+            if (!o1 || !o2) return strdup("ERR");
+            row = plant_list_push(row, _plant_math_result(a + b));
+        }
+        out = plant_list_push(out, (tx_t)row);
+    }
+    return (tx_t)out;
+}
+
+tx_t plant_mat_sub(tx_t m1, tx_t m2) {
+    int64_t r1, c1, r2, c2;
+    PlantArray* A = _la_matrix(m1, &r1, &c1);
+    PlantArray* B = _la_matrix(m2, &r2, &c2);
+    if (!A || !B || r1 != r2 || c1 != c2) return _la_dim_err("subtract matrices", r1, c1, r2, c2);
+    PlantArray* out = plant_list_create(r1);
+    for (int64_t i = 0; i < r1; i++) {
+        PlantArray* row = plant_list_create(c1);
+        for (int64_t j = 0; j < c1; j++) {
+            int o1 = 0, o2 = 0;
+            double a = _la_get(A, i, j, &o1);
+            double b = _la_get(B, i, j, &o2);
+            if (!o1 || !o2) return strdup("ERR");
+            row = plant_list_push(row, _plant_math_result(a - b));
+        }
+        out = plant_list_push(out, (tx_t)row);
+    }
+    return (tx_t)out;
+}
+
+tx_t plant_mat_trace(tx_t m) {
+    int64_t r, c;
+    PlantArray* M = _la_matrix(m, &r, &c);
+    if (!M) return strdup("ERR");
+    if (r != c) return _la_nonsq_err("trace", r, c);
+    double acc = 0.0;
+    for (int64_t i = 0; i < r; i++) {
+        int ok = 0;
+        acc += _la_get(M, i, i, &ok);
+        if (!ok) return strdup("ERR");
+    }
+    return _plant_math_result(acc);
+}
+
+tx_t plant_mat_identity(tx_t size) {
+    long n = _slice_arg(size);
+    if (n <= 0) {
+        char* buf = (char*)malloc(128);
+        if (!buf) return strdup("ERR");
+        snprintf(buf, 128, "ERROR: Cannot create identity matrix: size must be positive. Got %ld.", n);
+        return buf;
+    }
+    if (n > 2000) {
+        char* buf = (char*)malloc(128);
+        if (!buf) return strdup("ERR");
+        snprintf(buf, 128, "ERROR: Cannot create identity matrix: size %ld exceeds maximum 2000. Use sparse matrices (v0.52+).", n);
+        return buf;
+    }
+    PlantArray* out = plant_list_create(n);
+    for (int64_t i = 0; i < n; i++) {
+        PlantArray* row = plant_list_create(n);
+        for (int64_t j = 0; j < n; j++)
+            row = plant_list_push(row, _plant_math_result(i == j ? 1.0 : 0.0));
+        out = plant_list_push(out, (tx_t)row);
+    }
+    return (tx_t)out;
 }
 
 tx_t plant_list_flatten(tx_t data) {

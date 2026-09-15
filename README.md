@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/Zero_GC-💚-brightgreen?style=flat-square" alt="Zero GC"/>
   <img src="https://img.shields.io/badge/No_VM-⚡-orange?style=flat-square" alt="No VM"/>
   <img src="https://img.shields.io/badge/License-MIT-ff69b4?style=flat-square" alt="License MIT"/>
-  <img src="https://img.shields.io/badge/Version-0.50.7-9cf?style=flat-square" alt="Version 0.50.7"/>
+  <img src="https://img.shields.io/badge/Version-0.51.0b-9cf?style=flat-square" alt="Version 0.51.0b"/>
 </p>
 
 <p align="center">

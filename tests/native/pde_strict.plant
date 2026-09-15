@@ -1,0 +1,11 @@
+ACTION main(),
+  # === PDE Strict Mode Tests ===
+  # Test 1: MATH_VERIFY_PDE with unsupported function → 0 + stderr warning
+  SHOW "strict_unsupported=" + MATH_VERIFY_PDE("d2u/dt2 = d2u/dx2", "f(x-ct)", "u", "t", "x").
+  # Test 2: MATH_VERIFY_PDE_STRICT with unsupported function → ERROR
+  SHOW "strict_mode=" + MATH_VERIFY_PDE_STRICT("d2u/dt2 = d2u/dx2", "f(x-ct)", "u", "t", "x").
+  # Test 3: MATH_VERIFY_PDE_STRICT with valid function → 1
+  SHOW "strict_valid=" + MATH_VERIFY_PDE_STRICT("d2u/dt2 = d2u/dx2", "x^2 + t^2", "u", "t", "x").
+  SHOW "pde_strict=done".
+  GIVE 0.
+/GIVE main.

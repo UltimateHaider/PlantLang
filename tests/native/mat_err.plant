@@ -1,0 +1,13 @@
+ACTION main(),
+  # === Matrix Error Tests ===
+  # Test 1: MAT_INVERSE singular → error
+  SHOW "err_singular=" + INVERSE([[1, 2], [2, 4]]).
+  # Test 2: MAT_ADD dimension mismatch → error
+  SHOW "err_dim=" + MAT_ADD([[1, 2, 3]], [[1, 2]]).
+  # Test 3: MAT_DET non-square → error
+  SHOW "err_nonsq=" + DET([[1, 2, 3], [4, 5, 6]]).
+  # Test 4: MAT_DET empty → error
+  SHOW "err_empty=" + DET([]).
+  SHOW "mat_err=done".
+  GIVE 0.
+/GIVE main.

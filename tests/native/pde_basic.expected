@@ -1,0 +1,18 @@
+solve_wave=GENERAL SOLUTION: u(x,t) = F(x - c*t) + G(x + c*t)
+where F and G are arbitrary functions determined by initial/boundary conditions.
+For separable: u(x,t) = X(x)*T(t), T'' + c^2*k^2*T = 0, X'' + k^2*X = 0.
+solve_heat=GENERAL SOLUTION: u(x,t) = Σ B_n * sin(n*PI*x/L) * exp(-alpha*(n*PI/L)^2*t)
+where B_n are Fourier coefficients from initial condition.
+Separable: u(x,t) = X(x)*T(t), T' + alpha*k^2*T = 0, X'' + k^2*X = 0.
+solve_laplace=GENERAL SOLUTION (2D): u(x,y) = Σ (A_n*cos(n*y) + B_n*sin(n*y)) * exp(n*x)
+                     + Σ (C_n*cos(n*y) + D_n*sin(n*y)) * exp(-n*x)
+Boundary conditions determine coefficients.
+In polar: u(r,θ) = a_0 + Σ r^n(a_n*cos(nθ) + b_n*sin(nθ)).
+verify_wave_x2t2=1
+verify_wave_x2mt2=0
+verify_heat_exp_sin=1
+verify_heat_xt=0
+verify_laplace_x2y2=1
+verify_laplace_xy=1
+verify_laplace_expcos=1
+pde_tests=done

@@ -1,0 +1,8 @@
+WARNING: MATH_VERIFY_PDE encountered unsupported function 'f'.
+         Result may be incorrect. See docs/PDE_LIMITATIONS.md
+strict_unsupported=0
+strict_mode=ERROR: Unsupported function 'f' in MATH_VERIFY_PDE_STRICT mode.
+Use MATH_VERIFY_PDE for non-strict mode.
+See docs/PDE_LIMITATIONS.md
+strict_valid=1
+pde_strict=done

@@ -1,0 +1,25 @@
+ACTION main(),
+  # === Matrix Arithmetic Tests ===
+  # Test 1: MAT_ADD
+  SHOW "mat_add=" + JOIN(FLATTEN(MAT_ADD([[1, 2]], [[3, 4]])), ",").
+  # Test 2: MAT_SUB
+  SHOW "mat_sub=" + JOIN(FLATTEN(MAT_SUB([[1, 2]], [[3, 4]])), ",").
+  # Test 3: MAT_TRACE
+  SHOW "mat_trace=" + MAT_TRACE([[1, 2], [3, 4]]).
+  # Test 4: MAT_IDENTITY(3)
+  SHOW "mat_id3=" + JOIN(FLATTEN(MAT_IDENTITY(3)), ",").
+  # Test 5: MAT_IDENTITY(1)
+  SHOW "mat_id1=" + JOIN(FLATTEN(MAT_IDENTITY(1)), ",").
+  # Test 6: MAT_ADD 2x2
+  SHOW "mat_add2=" + JOIN(FLATTEN(MAT_ADD([[1, 2], [3, 4]], [[5, 6], [7, 8]])), ",").
+  # Test 7: MAT_SUB 2x2
+  SHOW "mat_sub2=" + JOIN(FLATTEN(MAT_SUB([[5, 6], [7, 8]], [[1, 2], [3, 4]])), ",").
+  # Test 8: MAT_IDENTITY(-1) → error
+  SHOW "mat_id_neg=" + MAT_IDENTITY(-1).
+  # Test 9: MAT_IDENTITY(0) → error
+  SHOW "mat_id_zero=" + MAT_IDENTITY(0).
+  # Test 10: MAT_IDENTITY(3000) → exceeds 2000 limit
+  SHOW "mat_id_large=" + MAT_IDENTITY(3000).
+  SHOW "mat_basic=done".
+  GIVE 0.
+/GIVE main.

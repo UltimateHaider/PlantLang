@@ -1,0 +1,4 @@
+ACTION main(),
+  SHOW DET([[1,2],[3,4]]).
+  GIVE 0.
+/GIVE main.

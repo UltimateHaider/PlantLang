@@ -318,4 +318,24 @@ char*     plant_math_laplace_str(const char* expr, const char* var, const char* 
  * Returns result as string. Caller frees result. */
 char*     plant_math_inverselaplace_str(const char* expr, const char* var, const char* tvar);
 
+/* ====================================================================
+ *  v0.51.0 — PDE Solvers & Verification
+ * ==================================================================== */
+
+/* PDE solver: classifies and returns general solution structure.
+ * Supports: Wave (d2u/dt2 = c^2*d2u/dx2), Heat (du/dt = alpha*d2u/dx2),
+ * Laplace (d2u/dx2 + d2u/dy2 = 0).
+ * Returns result as string. Caller frees result. */
+char*     plant_math_solve_pde_str(const char* pde, const char* dep,
+                                    const char* indep1, const char* indep2);
+
+/* PDE verification: checks if solution satisfies PDE.
+ * Returns "1" (TRUE) or "0" (FALSE). Caller frees result. */
+char*     plant_math_verify_pde_str(const char* pde, const char* solution,
+                                     const char* dep, const char* indep1, const char* indep2);
+
+/* Strict PDE verification: returns ERROR for unsupported functions. */
+char*     plant_math_verify_pde_strict_str(const char* pde, const char* solution,
+                                            const char* dep, const char* indep1, const char* indep2);
+
 #endif /* PLANT_MATH_H */

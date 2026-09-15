@@ -1,3 +1,90 @@
+## v0.51.0 - 2026 (Foundation — Matrix & PDE)
+
+### Malloc Failure Simulation (Test Infrastructure)
+- **`PLANT_MALLOC_SIMULATE`**: Opt-in compile-time flag for testing allocation failures. Only activated when defined; zero impact on production builds.
+- **`MAT_MALLOC_FAIL_AT=N`**: Environment variable that makes the Nth `plant_malloc` call in `_la_alloc`/`_la_alloc_rect` return NULL, simulating memory exhaustion.
+- **Cleanup verification**: Both `_la_alloc` and `_la_alloc_rect` properly free partial allocations on failure (tested via `mat_malloc.plant`).
+- **Scope**: Covers only matrix allocation path (`_la_alloc`, `_la_alloc_rect`). General runtime allocations unaffected.
+
+#### Example
+```bash
+# Simulate first malloc failure in _la_alloc
+MAT_MALLOC_FAIL_AT=1 ./my_program
+
+# Compiled with: gcc -DPLANT_MALLOC_SIMULATE ...
+```
+
+### Matrix Operations (Foundation)
+
+#### LA_MAXD Raised to 2000
+Maximum matrix dimension increased from 64 to 2000. Heap allocation with automatic cleanup on failure — no more stack overflow for large matrices.
+
+#### MAT_ADD(a, b) — Element-wise Matrix Addition
+Adds two matrices of equal dimensions.
+```plantlang
+SHOW MAT_ADD([[1,2], [3,4]], [[5,6], [7,8]]).        # [[6,8],[10,12]]
+```
+
+#### MAT_SUB(a, b) — Element-wise Matrix Subtraction
+Subtracts second matrix from the first.
+```plantlang
+SHOW MAT_SUB([[5,6], [7,8]], [[1,2], [3,4]]).        # [[4,4],[4,4]]
+```
+
+#### MAT_TRACE(m) — Matrix Trace
+Returns the sum of diagonal elements. Requires square matrix.
+```plantlang
+SHOW MAT_TRACE([[1,2],[3,4]]).                        # 5
+```
+
+#### MAT_IDENTITY(n) — Identity Matrix
+Returns the n×n identity matrix. Maximum n=2000.
+```plantlang
+SHOW MAT_IDENTITY(3).                                 # [[1,0,0],[0,1,0],[0,0,1]]
+```
+
+### Unified Error Messages
+All matrix operation errors now follow a consistent format with dimension information:
+- **Dimension mismatch**: `ERROR: Matrix dimensions must match for addition. A is 2x3, B is 2x4.`
+- **Non-square matrix**: `ERROR: Cannot compute determinant: matrix must be square. Got 2x3 matrix.`
+- **Singular matrix**: `ERROR: Cannot compute inverse: matrix is singular (det = 0).`
+- **Incompatible multiply**: `ERROR: Cannot multiply matrices: incompatible dimensions. A is 1x2, B is 1x2.`
+
+### PDE Solvers
+
+#### MATH_SOLVE_PDE(pde, dep, indep1, indep2) — PDE Classification & General Solution
+Classifies standard PDE forms and returns general solution structure.
+```plantlang
+SHOW MATH_SOLVE_PDE("d2u/dt2 = c^2 * d2u/dx2", "u", "t", "x").  # Wave equation general solution
+SHOW MATH_SOLVE_PDE("du/dt = alpha * d2u/dx2", "u", "t", "x").   # Heat equation general solution
+SHOW MATH_SOLVE_PDE("d2u/dx2 + d2u/dy2 = 0", "u", "x", "y").    # Laplace equation general solution
+```
+
+Supported PDE types:
+- **Wave**: d²u/dt² = c² · d²u/dx²
+- **Heat**: du/dt = α · d²u/dx²
+- **Laplace**: d²u/dx² + d²u/dy² = 0
+
+#### MATH_VERIFY_PDE(pde, solution, dep, indep1, indep2) — PDE Verification
+Verifies that a proposed solution satisfies the PDE using numerical evaluation at test points.
+```plantlang
+SHOW MATH_VERIFY_PDE("d2u/dt2 = d2u/dx2", "x^2 + t^2", "u", "t", "x").   # 1 (TRUE)
+SHOW MATH_VERIFY_PDE("d2u/dx2 + d2u/dy2 = 0", "x^2 - y^2", "u", "x", "y"). # 1 (TRUE)
+```
+
+Standard functions supported: SIN, COS, TAN, EXP, LOG, SQRT, ABS, polynomials, PI, E.
+
+#### MATH_VERIFY_PDE_STRICT(pde, solution, dep, indep1, indep2) — Strict PDE Verification
+Same as MATH_VERIFY_PDE, but returns ERROR for unsupported functions (e.g., arbitrary f, g, Bessel, erf) instead of a potentially incorrect result.
+
+### Nested List Display
+Matrices now print as `[[1, 2], [3, 4]]` instead of `[object Object]`. Works across all print contexts (SHOW, test output, debug).
+
+### Bug Fixes
+- Fixed crash in `plant_iReport_print` when printing matrix results (slab-allocator memory freed incorrectly).
+
+---
+
 ## v0.50.7 - 2026 (Vector Calculus & Laplace Transforms)
 
 ### New Language Features

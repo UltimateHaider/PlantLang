@@ -633,6 +633,12 @@ tx_t plant_svd(tx_t m);
 tx_t plant_solve(tx_t m, tx_t b);
 tx_t plant_cond(tx_t m);
 
+/* -- v0.51.0 matrix arithmetic --------------------------------- */
+tx_t plant_mat_add(tx_t m1, tx_t m2);
+tx_t plant_mat_sub(tx_t m1, tx_t m2);
+tx_t plant_mat_trace(tx_t m);
+tx_t plant_mat_identity(tx_t size);
+
 /* ── std/math FFI bindings (v0.49.19 — full module namespace) ──
    Every math-family endpoint is reachable as REAP … FROM math:FUNC.
    Legacy-eight endpoints route to their tagged-int-safe plant_*
@@ -693,6 +699,7 @@ tx_t plant_now(tx_t format);       /* NOW FORMAT:x — DATE/TIME/STAMP/YEAR; "" 
 tx_t plant_analyze(tx_t v);        /* introspection MAP {type, size, keys} (null-safe) */
 tx_t plant_typeof(tx_t v);         /* type string: "int"/"string"/"map"/"list"/"closure"/"null" */
 tx_t plant_map_to_string(tx_t v);  /* recursive "{k=v, ...}" / "[e1, ...]" serializer */
+tx_t plant_to_string(tx_t v);     /* v0.51.0: type-aware serializer (lists, maps, scalars) */
 tx_t plant_map_create(void);       /* v0.49.5: pair-list MAP (kind 1) factory for {k: v} literals */
 tx_t plant_map_set(tx_t map, tx_t key, tx_t value); /* upsert; returns map for chaining */
 

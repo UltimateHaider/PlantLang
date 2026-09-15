@@ -1,0 +1,12 @@
+ACTION main(),
+  SHOW "solve_wave=" + MATH_SOLVE_PDE("d2u/dt2 = c^2 * d2u/dx2", "u", "t", "x").
+  SHOW "solve_heat=" + MATH_SOLVE_PDE("du/dt = alpha * d2u/dx2", "u", "t", "x").
+  SHOW "solve_laplace=" + MATH_SOLVE_PDE("d2u/dx2 + d2u/dy2 = 0", "u", "x", "y").
+  SHOW "verify_wave_x2t2=" + MATH_VERIFY_PDE("d2u/dt2 = d2u/dx2", "x^2 + t^2", "u", "t", "x").
+  SHOW "verify_wave_x2mt2=" + MATH_VERIFY_PDE("d2u/dt2 = d2u/dx2", "x^2 - t^2", "u", "t", "x").
+  SHOW "verify_heat_exp_sin=" + MATH_VERIFY_PDE("du/dt = d2u/dx2", "EXP(-1*PI*PI*t) * SIN(PI*x)", "u", "t", "x").
+  SHOW "verify_heat_xt=" + MATH_VERIFY_PDE("du/dt = d2u/dx2", "x * t", "u", "t", "x").
+  SHOW "verify_laplace_x2y2=" + MATH_VERIFY_PDE("d2u/dx2 + d2u/dy2 = 0", "x^2 - y^2", "u", "x", "y").
+  SHOW "verify_laplace_xy=" + MATH_VERIFY_PDE("d2u/dx2 + d2u/dy2 = 0", "x * y", "u", "x", "y").
+  SHOW "verify_laplace_expcos=" + MATH_VERIFY_PDE("d2u/dx2 + d2u/dy2 = 0", "exp(x) * cos(y)", "u", "x", "y").
+  SHOW "pde_tests=done".

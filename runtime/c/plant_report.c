@@ -238,7 +238,18 @@ void plant_report_interface_free(IReport* rp) {
 /* ── Convenience helpers with null-safety ── */
 
 void plant_iReport_print(IReport* rp, const char* message) {
-    if (rp && rp->print) rp->print(rp->context, message);
+    if (!rp || !rp->print) return;
+    /* v0.51.0: detect PlantArray (nested list/map) and serialize */
+    if (message) {
+        PlantArray* p = (PlantArray*)message;
+        if (p->magic == PLANT_ARRAY_MAGIC) {
+            char* s = (char*)plant_to_string((tx_t)p);
+            rp->print(rp->context, s);
+            /* s may be slab-allocated — do not free individually */
+            return;
+        }
+    }
+    rp->print(rp->context, message);
 }
 
 void plant_iReport_summary(IReport* rp, int total, int passed, int failed) {

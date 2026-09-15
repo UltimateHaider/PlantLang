@@ -5155,3 +5155,207 @@ char* plant_math_inverselaplace_str(const char* expr, const char* var, const cha
     }
     return strdup(result);
 }
+
+/* ================================================================
+   v0.51.0 — PDE (Partial Differential Equation) Solvers
+   Supports Wave, Heat, and Laplace equation forms.
+   ================================================================ */
+
+static int _pde_contains(const char* s, const char* sub) {
+    return strstr(s, sub) != NULL;
+}
+
+static void _pde_lower(char* dst, const char* src, size_t sz) {
+    size_t i;
+    for (i = 0; i < sz - 1 && src[i]; i++)
+        dst[i] = (char)tolower((unsigned char)src[i]);
+    dst[i] = '\0';
+}
+
+/* MATH_SOLVE_PDE(pde_expr, dep, indep1, indep2)
+   Classifies and returns general solution structure for standard PDE forms.
+   Supported: Wave (d2u/dt2 = c^2 * d2u/dx2),
+              Heat (du/dt = alpha * d2u/dx2),
+              Laplace (d2u/dx2 + d2u/dy2 = 0). */
+char* plant_math_solve_pde_str(const char* pde, const char* dep,
+                                const char* indep1, const char* indep2) {
+    if (!pde || !dep || !indep1 || !indep2) return strdup("ERR");
+    char lower[512];
+    _pde_lower(lower, pde, sizeof(lower));
+
+    /* Wave equation: d2u/dt2 = c^2 * d2u/dx2 */
+    if ((_pde_contains(lower, "d2u/dt2") || _pde_contains(lower, "d²u/dt²")) &&
+        _pde_contains(lower, "d2u/dx2")) {
+        return strdup("GENERAL SOLUTION: u(x,t) = F(x - c*t) + G(x + c*t)\n"
+                      "where F and G are arbitrary functions determined by initial/boundary conditions.\n"
+                      "For separable: u(x,t) = X(x)*T(t), T'' + c^2*k^2*T = 0, X'' + k^2*X = 0.");
+    }
+
+    /* Heat equation: du/dt = alpha * d2u/dx2 */
+    if ((_pde_contains(lower, "du/dt") || _pde_contains(lower, "∂u/∂t")) &&
+        _pde_contains(lower, "d2u/dx2")) {
+        return strdup("GENERAL SOLUTION: u(x,t) = Σ B_n * sin(n*PI*x/L) * exp(-alpha*(n*PI/L)^2*t)\n"
+                      "where B_n are Fourier coefficients from initial condition.\n"
+                      "Separable: u(x,t) = X(x)*T(t), T' + alpha*k^2*T = 0, X'' + k^2*X = 0.");
+    }
+
+    /* Laplace equation: d2u/dx2 + d2u/dy2 = 0 */
+    if (_pde_contains(lower, "d2u/dx2") && _pde_contains(lower, "d2u/dy2")) {
+        return strdup("GENERAL SOLUTION (2D): u(x,y) = Σ (A_n*cos(n*y) + B_n*sin(n*y)) * exp(n*x)\n"
+                      "                     + Σ (C_n*cos(n*y) + D_n*sin(n*y)) * exp(-n*x)\n"
+                      "Boundary conditions determine coefficients.\n"
+                      "In polar: u(r,θ) = a_0 + Σ r^n(a_n*cos(nθ) + b_n*sin(nθ)).");
+    }
+
+    return strdup("ERR: Unsupported PDE form. Supported: Wave (d2u/dt2 = c^2*d2u/dx2), "
+                  "Heat (du/dt = alpha*d2u/dx2), Laplace (d2u/dx2 + d2u/dy2 = 0).");
+}
+
+/* Check if an expression contains unsupported functions (f, g, Bessel, erf, etc.) */
+static int _pde_has_unsupported(const char* expr, char* unknown_name, size_t name_sz) {
+    const char* p = expr;
+    while (*p) {
+        if (strncmp(p, "f(", 2) == 0) {
+            if (unknown_name) snprintf(unknown_name, name_sz, "f");
+            return 1;
+        }
+        if (strncmp(p, "g(", 2) == 0) {
+            if (unknown_name) snprintf(unknown_name, name_sz, "g");
+            return 1;
+        }
+        if (strncmp(p, "h(", 2) == 0) {
+            if (unknown_name) snprintf(unknown_name, name_sz, "h");
+            return 1;
+        }
+        if (strncmp(p, "J_", 2) == 0 || strncmp(p, "BESSEL", 6) == 0) {
+            if (unknown_name) snprintf(unknown_name, name_sz, "Bessel");
+            return 1;
+        }
+        if (strncmp(p, "erf(", 4) == 0) {
+            if (unknown_name) snprintf(unknown_name, name_sz, "erf");
+            return 1;
+        }
+        if (strncmp(p, "gamma(", 6) == 0) {
+            if (unknown_name) snprintf(unknown_name, name_sz, "gamma");
+            return 1;
+        }
+        p++;
+    }
+    return 0;
+}
+
+/* MATH_VERIFY_PDE(pde, solution, dep, indep1, indep2)
+   Verifies that a proposed solution satisfies the PDE.
+   Uses existing plant_math_derivative infrastructure.
+   Returns "1" (TRUE) or "0" (FALSE).
+   Only supports standard functions: SIN, COS, TAN, EXP, LOG, SQRT, ABS, polynomials. */
+char* plant_math_verify_pde_str(const char* pde, const char* solution,
+                                 const char* dep, const char* indep1, const char* indep2) {
+    if (!pde || !solution || !dep || !indep1 || !indep2) return strdup("0");
+
+    /* Check for unsupported functions */
+    char unknown[32] = {0};
+    if (_pde_has_unsupported(solution, unknown, sizeof(unknown))) {
+        fprintf(stderr, "WARNING: MATH_VERIFY_PDE encountered unsupported function '%s'.\n"
+                "         Result may be incorrect. See docs/PDE_LIMITATIONS.md\n", unknown);
+        return strdup("0");
+    }
+
+    char lower_pde[512];
+    _pde_lower(lower_pde, pde, sizeof(lower_pde));
+
+    /* Parse the solution */
+    MathNode* sol = plant_math_parse(solution);
+    if (!sol) return strdup("0");
+
+    /* Compute all needed partial derivatives */
+    MathNode* du_dt = plant_math_derivative(sol, indep1);
+    MathNode* d2u_dt2 = plant_math_derivative(du_dt, indep1);
+    MathNode* du_dx = plant_math_derivative(sol, indep2);
+    MathNode* d2u_dx2 = plant_math_derivative(du_dx, indep2);
+
+    /* Serialize derivatives as strings for substitution */
+    char* d2u_dt2_str = plant_math_to_string(d2u_dt2);
+    char* d2u_dx2_str = plant_math_to_string(d2u_dx2);
+    char* du_dt_str = plant_math_to_string(du_dt);
+    char* du_dx_str = plant_math_to_string(du_dx);
+
+    /* Build residual expression string, then evaluate at test points */
+    char* residual_expr = NULL;
+
+    /* Wave equation: d2u/dt2 = d2u/dx2 (c=1) */
+    if ((_pde_contains(lower_pde, "d2u/dt2") || _pde_contains(lower_pde, "d²u/dt²")) &&
+        _pde_contains(lower_pde, "d2u/dx2")) {
+        /* residual = d2u/dt2 - d2u/dx2 */
+        size_t rlen = strlen(d2u_dt2_str) + strlen(d2u_dx2_str) + 8;
+        residual_expr = (char*)malloc(rlen);
+        snprintf(residual_expr, rlen, "(%s) - (%s)", d2u_dt2_str, d2u_dx2_str);
+    }
+    /* Heat equation: du/dt = d2u/dx2 (alpha=1) */
+    else if ((_pde_contains(lower_pde, "du/dt") || _pde_contains(lower_pde, "∂u/∂t")) &&
+             _pde_contains(lower_pde, "d2u/dx2")) {
+        /* residual = du/dt - d2u/dx2 */
+        size_t rlen = strlen(du_dt_str) + strlen(d2u_dx2_str) + 8;
+        residual_expr = (char*)malloc(rlen);
+        snprintf(residual_expr, rlen, "(%s) - (%s)", du_dt_str, d2u_dx2_str);
+    }
+    /* Laplace equation: d2u/dx2 + d2u/dy2 = 0 */
+    else if (_pde_contains(lower_pde, "d2u/dx2") && _pde_contains(lower_pde, "d2u/dy2")) {
+        /* d2u_dt2_str = d²u/d(indep1)², d2u_dx2_str = d²u/d(indep2)² */
+        /* residual = d²u/d(indep1)² + d²u/d(indep2)² */
+        size_t rlen = strlen(d2u_dt2_str) + strlen(d2u_dx2_str) + 8;
+        residual_expr = (char*)malloc(rlen);
+        snprintf(residual_expr, rlen, "(%s) + (%s)", d2u_dt2_str, d2u_dx2_str);
+    }
+
+    free(d2u_dt2_str);
+    free(d2u_dx2_str);
+    free(du_dt_str);
+    free(du_dx_str);
+    math_node_free(d2u_dt2);
+    math_node_free(du_dt);
+    math_node_free(d2u_dx2);
+    math_node_free(du_dx);
+    math_node_free(sol);
+
+    if (!residual_expr) return strdup("0");
+
+    /* Evaluate residual at multiple test points (same pattern as ODE verify) */
+    double test_vals[] = {0.5, 1.0, 2.0, -1.0, 0.1, 3.0, -0.7, 1.5};
+    int n_tests = 8;
+    int passes = 1;
+
+    for (int t = 0; t < n_tests; t++) {
+        char val1[64], val2[64];
+        snprintf(val1, sizeof(val1), "%g", test_vals[t]);
+        snprintf(val2, sizeof(val2), "%g", test_vals[(t + 3) % n_tests]);
+
+        char* step1 = plant_math_subst_str(residual_expr, indep1, val1);
+        char* step2 = plant_math_subst_str(step1, indep2, val2);
+        free(step1);
+
+        double val = plant_math_eval_string(step2);
+        free(step2);
+
+        if (val != val) { passes = 0; break; } /* NaN */
+        if (fabs(val) > 1e-4) { passes = 0; break; }
+    }
+
+    free(residual_expr);
+    return passes ? strdup("1") : strdup("0");
+}
+
+/* MATH_VERIFY_PDE_STRICT(pde, solution, dep, indep1, indep2)
+   Strict variant: returns ERROR for unsupported functions instead of FALSE. */
+char* plant_math_verify_pde_strict_str(const char* pde, const char* solution,
+                                        const char* dep, const char* indep1, const char* indep2) {
+    char unknown[32] = {0};
+    if (_pde_has_unsupported(solution, unknown, sizeof(unknown))) {
+        char* buf = (char*)malloc(256);
+        snprintf(buf, 256, "ERROR: Unsupported function '%s' in MATH_VERIFY_PDE_STRICT mode.\n"
+                 "Use MATH_VERIFY_PDE for non-strict mode.\n"
+                 "See docs/PDE_LIMITATIONS.md", unknown);
+        return buf;
+    }
+    return plant_math_verify_pde_str(pde, solution, dep, indep1, indep2);
+}

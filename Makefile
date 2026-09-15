@@ -14,11 +14,12 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.50.7
+VERSION    ?= 0.51.0b
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
 CFLAGS     ?= -w -O0
+TEST_CFLAGS ?= -DPLANT_MALLOC_SIMULATE
 CPPFLAGS   += -I runtime/c
 RUNTIME    := runtime/c/plant_runtime.c
 ERROR      := runtime/c/plant_error.c
@@ -236,6 +237,47 @@ rollback: ## Revert to a tagged release: make rollback VERSION=v0.49.56b
 # ── benchmark: timing metrics for build + test cycles ────────────
 benchmark: ## Run performance benchmark for build targets
 	@sh scripts/benchmark.sh
+
+# ── size-report: binary size tracking across versions ────────────
+size-report: $(NATIVE_BIN) ## Show binary sizes and threshold status
+	@echo "╔══════════════════════════════════════════════════════════╗"
+	@echo "║ SIZE REPORT — v$(VERSION)                                  ║"
+	@echo "╠══════════════════════════════════════════════════════════╣"
+	@echo "║ File                                    Lines Status    ║"
+	@echo "╠══════════════════════════════════════════════════════════╣"
+	@# plant_runtime.c: INFO=8000, WARN=8500, CRIT=9000
+	@_loc=$$(wc -l < runtime/c/plant_runtime.c); \
+	 if [ "$$_loc" -ge 9000 ]; then _st="🔴 CRITICAL"; \
+	 elif [ "$$_loc" -ge 8500 ]; then _st="⚠️  WARN"; \
+	 elif [ "$$_loc" -ge 8000 ]; then _st="ℹ️  INFO"; \
+	 else _st="✅ OK"; fi; \
+	 printf "║ %-40s %5d %s\n" "runtime/c/plant_runtime.c" "$$_loc" "$$_st"
+	@# plant_math.c: WARN=8000, CRIT=10000
+	@_loc=$$(wc -l < runtime/c/plant_math.c); \
+	 if [ "$$_loc" -ge 10000 ]; then _st="🔴 CRITICAL"; \
+	 elif [ "$$_loc" -ge 8000 ]; then _st="⚠️  WARN"; \
+	 else _st="✅ OK"; fi; \
+	 printf "║ %-40s %5d %s\n" "runtime/c/plant_math.c" "$$_loc" "$$_st"
+	@# Other files — informational only
+	@_loc=$$(wc -l < runtime/c/plant_report.c); \
+	 printf "║ %-40s %5d ✅ OK\n" "runtime/c/plant_report.c" "$$_loc"
+	@echo "╠══════════════════════════════════════════════════════════╣"
+	@echo "║ Binaries:                                               ║"
+	@_sz=$$(stat -c%s dist/Chloroplast 2>/dev/null || echo 0); \
+	 printf "║ %-40s %s bytes\n" "dist/Chloroplast (bootstrap):" "$$_sz"
+	@_sz=$$(stat -c%s bin/Chloroplast 2>/dev/null || echo 0); \
+	 printf "║ %-40s %s bytes\n" "bin/Chloroplast (final):" "$$_sz"
+	@echo "╚══════════════════════════════════════════════════════════╝"
+
+# ── test-perf: timing metrics for test suites ──────────────────
+test-perf: $(NATIVE_BIN) ## Run test suites with timing metrics
+	@echo "=== Test Performance (v$(VERSION)) ==="
+	@echo "--- Native tests ---"
+	@time sh tests/native/run_native_tests.sh $(NATIVE_BIN) 2>&1 | tail -3
+	@echo "--- Generics tests ---"
+	@time sh tests/generics/run_generics_tests.sh $(NATIVE_BIN) 2>&1 | tail -3
+	@echo "--- Closures tests ---"
+	@time sh tests/closures/run_closures_tests.sh $(NATIVE_BIN) 2>&1 | tail -3
 
 # ── smoke: rapid core feature validation ────────────────────────
 smoke: $(NATIVE_BIN) ## Run smoke tests for core language features

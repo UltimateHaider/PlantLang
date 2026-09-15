@@ -1,0 +1,5 @@
+err_singular=ERROR: Cannot compute inverse: matrix is singular (det = 0).
+err_dim=ERROR: Cannot add matrices: dimensions must match. Got 1x3 and 1x2.
+err_nonsq=ERROR: Cannot compute determinant: matrix must be square. Got 2x3 matrix.
+err_empty=ERROR: Cannot compute determinant: matrix is empty. Got 0x0 matrix.
+mat_err=done
