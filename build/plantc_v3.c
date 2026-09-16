@@ -1,4 +1,5 @@
 #include <plant_compat.h>
+#include <plant_memory.h>
 
 /*__PLANT_TYPES_BEGIN__*/
 #ifndef PLANT_TYPES_INCLUDED
@@ -11008,6 +11009,9 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* 
     e = _handle_func_paren(e, "SEAL", "plant_seal");
     e = _handle_func(e, "ABSORB", "plant_absorb");
     e = _handle_func(e, "SEAL", "plant_seal");
+    e = _handle_func_paren(e, "LIST_FREE", "plant_list_free");
+    e = _handle_func_paren(e, "TENSOR_FREE", "plant_tensor_free");
+    e = _handle_func_paren(e, "FREE", "plant_free");
     e = _storm_inject(e);
     e = _handle_func(e, "TEST", "!");
     e = _union_init(e, nums, evars);
@@ -11121,6 +11125,8 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
   tx_t sm0 = "";
   tx_t st0 = "";
   tx_t st1 = "";
+  tx_t st2 = "";
+  tx_t st3 = "";
     val = _map_get(node, "value");
     cval = translate_expr(val, nums, evars, plant_list_make ( 0 ));
     cval = _handle_cat(cval, nums, evars);
@@ -11153,6 +11159,16 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
     if (plant_array_length(st1) > 1) {
     cval = _cat3("plant_tensor_to_string((PlantTensor*)", cval, ")");
     }
+    }
+    }
+    if (isn2 == 0) {
+    st2 = substring(cval, 0, 21);
+    if (strcmp(st2,"plant_tensor_to_string(") == 0) {
+    return _cat4(isel, "  { char* __str = ", cval, "; plant_iReport_print(get_report(), __str); free(__str); }\n");
+    }
+    st3 = strings_SPLIT(cval, "plant_tensor_to_string(");
+    if (plant_array_length(st3) > 1) {
+    return _cat4(isel, "  { char* __str = ", cval, "; plant_iReport_print(get_report(), __str); free(__str); }\n");
     }
     }
     return _cat4(isel, "  plant_iReport_print(get_report(), ", cval, ");\n");
@@ -12930,6 +12946,15 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     if (strcmp(ntype,"call_stmt") == 0) {
     ca2 = _map_get(node, "action");
     ca2 = _swap_self(ca2);
+    if (strcmp(ca2,"LIST_FREE") == 0) {
+    ca2 = "plant_list_free";
+    }
+    if (strcmp(ca2,"TENSOR_FREE") == 0) {
+    ca2 = "plant_tensor_free";
+    }
+    if (strcmp(ca2,"FREE") == 0) {
+    ca2 = "plant_free";
+    }
     PlantArray* cargs2 = _map_get ( node , "args" );
     PlantArray* ccl2 = _map_get ( node , "clargs" );
     if (strcmp(ccl2,"") == 0) {
@@ -15129,7 +15154,7 @@ tx_t generate_c(PlantArray* ast) {
   tx_t trg = "";
   tx_t rv2 = "";
   tx_t ct2 = "";
-    tx_t header = "#include <plant_compat.h>\n\n";
+    tx_t header = "#include <plant_compat.h>\n#include <plant_memory.h>\n\n";
     tx_t decl_code = "";
     tx_t stmt_code = "";
     long has_decl = 0;
@@ -16551,7 +16576,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.51.1 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.51.2a (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

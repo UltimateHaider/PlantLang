@@ -1,3 +1,55 @@
+## v0.51.2a - 2026 (Core Memory Fixes)
+
+### TD-001/002/003 Closed: First Production Milestone
+First sub-release of v0.51.2. Closes all 4 technical debts from v0.51.1, achieving the first valgrind-clean "production milestone" release.
+
+#### New Files
+- `runtime/c/plant_memory.h` — Unified memory management header
+- `runtime/c/plant_memory.c` — `plant_list_free()`, `plant_array_free()`, `plant_free()` (generic dispatcher), type detection helpers, compile-time magic verification
+
+#### Runtime Changes
+- `plant_raw_free()` replaces old `plant_free()` wrapper in `plant_runtime.c`
+- `plant_compat.h` adds `plant_list_free()` and `plant_free()` declarations
+- `plant_tensor.h` adds `plant_tensor_to_string_static()` for buffer-based output
+- `plant_memory.c` includes `_PLANT_PTR_MIN` guard to prevent dereferencing small integer values as pointers
+
+#### Codegen Changes
+- `#include <plant_memory.h>` added to generated C header
+- `LIST_FREE(x)` → `plant_list_free(x)` — recursive list free
+- `TENSOR_FREE(x)` → `plant_tensor_free(x)` — tensor free
+- `FREE(x)` → `plant_free(x)` — generic dispatcher (available for manual use, NOT emitted by codegen until v0.51.2b)
+- `SHOW TENSOR(...)` now emits `free(__str)` after printing to close to_string leak (TD-003)
+
+#### New Makefile Targets
+- `valgrind-check-tensor` — strict valgrind on tensor tests with `--error-exitcode=1`
+- `check-ffi-safety` — verify FFI examples don't use `plant_tensor_to_string_static`
+- `check-releases-updated` — verify RELEASES.md is current
+- `check-verify-integrity` — verify verify-* targets include valgrind
+- `update-growth` — update growth table in RELEASES.md
+- `verify-v0.51.2a` — comprehensive release gate (7 steps)
+
+### Known Limitations (v0.51.2a)
+- `plant_free()` (generic dispatcher) is available but NOT emitted by codegen
+- `LIST_FREE` / `TENSOR_FREE` must be called manually by the programmer
+- Codegen does NOT automatically insert free calls at scope end (planned for v0.51.2d+)
+- `plant_tensor_to_string_static` exists but SHOW still uses heap-allocated `plant_tensor_to_string` (with `free(__str)` wrapper)
+
+### Test Infrastructure
+- 34/34 native tests passing (unchanged from v0.51.1)
+- `plant_list_free` verified end-to-end with nested list structures
+
+### Size Report
+| File | v0.51.1 | v0.51.2a | Delta | Status |
+|------|---------|----------|-------|--------|
+| plant_runtime.c | 8940 | 8940 | 0 | ✅ OK |
+| plant_tensor.c | 396 | 416 | +20 | ✅ OK |
+| plant_memory.c | — | 78 | +78 | NEW |
+| plant_compat.h | 1176 | 1180 | +4 | ✅ OK |
+| plant_tensor.h | 46 | 48 | +2 | ✅ OK |
+| **Binary** | 896,536 | 896,816 | +280 (+0.03%) | ✅ OK |
+
+---
+
 ## v0.51.1 - 2026 (TENSOR Core)
 
 ### New Native Type: PlantTensor

@@ -1,0 +1,9 @@
+[1, 2, 3]
+plant_free_available: PASS
+list_free_idempotent: PASS
+tensor_free_idempotent: PASS
+[1, 2, 3]
+[10, 20, 30]
+mixed_operations: PASS
+[200, 300]
+scope_reuse: PASS

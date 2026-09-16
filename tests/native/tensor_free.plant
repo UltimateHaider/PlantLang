@@ -1,0 +1,40 @@
+# tests/native/tensor_free.plant — Test TENSOR_FREE built-in
+ACTION main(),
+  # 1. tensor_free_1d: free a 1D tensor
+  CREATE T1 TO TENSOR([1, 2, 3]).
+  SHOW T1.
+  TENSOR_FREE(T1).
+  SHOW "tensor_free_1d: PASS".
+
+  # 2. tensor_free_2d: free a 2D tensor
+  CREATE T2 TO TENSOR([[1, 2], [3, 4]]).
+  SHOW T2.
+  TENSOR_FREE(T2).
+  SHOW "tensor_free_2d: PASS".
+
+  # 3. tensor_free_3d: free a 3D tensor
+  CREATE T3 TO TENSOR([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]).
+  SHOW T3.
+  TENSOR_FREE(T3).
+  SHOW "tensor_free_3d: PASS".
+
+  # 4. tensor_free_then_reuse: free and create new tensor
+  CREATE T4 TO TENSOR([10, 20, 30]).
+  TENSOR_FREE(T4).
+  CREATE T5 TO TENSOR([40, 50, 60]).
+  SHOW T5.
+  TENSOR_FREE(T5).
+  SHOW "tensor_free_then_reuse: PASS".
+
+  # 5. tensor_free_4d: free a 4D tensor
+  CREATE T6 TO TENSOR([[[[1, 2]], [[3, 4]]], [[[5, 6]], [[7, 8]]]]).
+  SHOW T6.
+  TENSOR_FREE(T6).
+  SHOW "tensor_free_4d: PASS".
+
+  # 6. tensor_free_show_free: verify SHOW + TENSOR_FREE works together
+  CREATE T8 TO TENSOR([100, 200, 300]).
+  SHOW T8.
+  TENSOR_FREE(T8).
+  SHOW "tensor_free_show_free: PASS".
+/ACTION.

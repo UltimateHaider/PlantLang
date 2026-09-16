@@ -63,9 +63,9 @@ All leaks are **bounded** (no accumulation in loops) and **freed at process exit
 
 | Component | Bytes | Freed? | Fix target |
 |-----------|-------|--------|------------|
-| PlantArray (from `plant_list_make`) | 48–168 | NO | v0.51.2 (TD-001) |
-| PlantTensor struct + fields | 88–128 | NO | v0.51.7 (TD-002) |
-| `plant_tensor_to_string` buffer | 1,024 | NO | v0.51.2+ (TD-003) |
+| PlantArray (from `plant_list_make`) | 48–168 | YES (v0.51.2a) | TD-001 CLOSED |
+| PlantTensor struct + fields | 88–128 | YES (v0.51.2a) | TD-002 CLOSED |
+| `plant_tensor_to_string` buffer | 1,024 | YES (v0.51.2a) | TD-003 CLOSED |
 
 ### Loop behavior (mitigating)
 
@@ -83,7 +83,26 @@ Lists of tensors WILL accumulate leaks:
 ```plantlang
 CREATE L TO LIST OF TENSOR(...).
 ```
-Each new tensor in the list leaks ~240 bytes. This is a known risk for future ML workloads. Fix requires codegen cleanup (TD-002).
+Each new tensor in the list leaks ~240 bytes. This is a known risk for future ML workloads. Fix requires codegen cleanup (TD-002, now closed).
+
+## Memory Management (v0.51.2a+)
+
+### Built-ins
+- `LIST_FREE(x)` — Recursively frees a PlantArray and its contents
+- `TENSOR_FREE(x)` — Frees a PlantTensor and its data
+- `FREE(x)` — Generic dispatcher (available for manual use)
+
+### Example
+```plantlang
+ACTION main(),
+  LET mylist TO [1, 2, 3].
+  LET mytensor TO TENSOR([1, 2, 3, 4, 5, 6]).
+  SHOW mylist.
+  SHOW mytensor.
+  LIST_FREE(mylist).
+  TENSOR_FREE(mytensor).
+/ACTION.
+```
 
 ## What's NOT Supported Yet
 

@@ -82,7 +82,7 @@ void* plant_alloc(size_t size) {
     return ptr;
 }
 
-void plant_free(void* ptr) {
+void plant_raw_free(void* ptr) {
     free(ptr);
 }
 
@@ -179,11 +179,11 @@ static void _plant_pending_store(int fd, const char* data) {
         if (_plant_pending_fd[i] == fd) {
             char* old = _plant_pending_data[i];
             _plant_pending_data[i] = plant_str_concat(old, data);
-            plant_free(old);
+            plant_raw_free(old);
             return;
         }
     }
-    if (_plant_pending_n >= 64) { plant_free(_plant_pending_data[0]); _plant_pending_n = 0; }
+    if (_plant_pending_n >= 64) { plant_raw_free(_plant_pending_data[0]); _plant_pending_n = 0; }
     _plant_pending_fd[_plant_pending_n] = fd;
     _plant_pending_data[_plant_pending_n] = plant_str_concat(data, "");
     _plant_pending_n++;
@@ -342,7 +342,7 @@ static tx_t _plant_net_harvest_ex(tx_t url, tx_t method, tx_t body, tx_t headers
         memcpy(response, old, old_len);
         memcpy(response + old_len, buf, (size_t)r);
         response[old_len + (size_t)r] = '\0';
-        plant_free(old);
+        plant_raw_free(old);
         if (keep_sock && !got_hdr) {
             const char* sep0 = strstr(response, "\r\n\r\n");
             if (sep0) {
@@ -378,7 +378,7 @@ static tx_t _plant_net_harvest_ex(tx_t url, tx_t method, tx_t body, tx_t headers
             memcpy(over, sep2 + 4 + (size_t)cl_need, over_len);
             over[over_len] = '\0';
             if (over_len > 0) _plant_pending_store(fd, over);
-            plant_free(over);
+            plant_raw_free(over);
         }
     }
     if (!keep_sock || sock_report < 0)
@@ -451,8 +451,8 @@ static tx_t _plant_net_harvest_ex(tx_t url, tx_t method, tx_t body, tx_t headers
         out = plant_list_push(out, strdup("sock"));
         out = plant_list_push(out, strdup(sfd));
     }
-    plant_free(body_out);
-    plant_free(response);
+    plant_raw_free(body_out);
+    plant_raw_free(response);
     return (tx_t)out;
 }
 
@@ -549,7 +549,7 @@ static tx_t _plant_net_listen_ex(int64_t port, int64_t timeout) {
         memcpy(raw, old, ol);
         memcpy(raw + ol, buf, (size_t)r);
         raw[ol + (size_t)r] = '\0';
-        plant_free(old);
+        plant_raw_free(old);
         if (ol + (size_t)r > 1048576) break;
         const char* sep = strstr(raw, "\r\n\r\n");
         if (sep) {
@@ -643,10 +643,10 @@ static tx_t _plant_net_listen_ex(int64_t port, int64_t timeout) {
     plant_list_set(req, 5, strdup(path));
     plant_list_set(req, 7, (void*)hdrs);
     plant_list_set(req, 9, strdup(body_copy));
-    plant_free(raw);
-    plant_free(method);
-    plant_free(path);
-    plant_free(body_copy);
+    plant_raw_free(raw);
+    plant_raw_free(method);
+    plant_raw_free(path);
+    plant_raw_free(body_copy);
     return (tx_t)req;
 }
 
@@ -751,7 +751,7 @@ tx_t plant_net_read(tx_t fd) {
         memcpy(data, old, ol);
         memcpy(data + ol, buf, (size_t)r);
         data[ol + (size_t)r] = '\0';
-        plant_free(old);
+        plant_raw_free(old);
         if (ol + (size_t)r > 1048576) break;
     }
     return data;
@@ -800,10 +800,10 @@ static void _plant_map_grow(PlantMap* map) {
     for (size_t i = 0; i < old_cap; i++) {
         if (old_entries[i].occupied) {
             plant_map_hash_set(map, old_entries[i].key, old_entries[i].value);
-            plant_free(old_entries[i].key);
+            plant_raw_free(old_entries[i].key);
         }
     }
-    plant_free(old_entries);
+    plant_raw_free(old_entries);
 }
 
 void plant_map_hash_set(PlantMap* map, const char* key, void* value) {
@@ -924,10 +924,10 @@ char** plant_map_keys(PlantMap* map, size_t* out_count) {
 void plant_map_free(PlantMap* map) {
     if (!map) return;
     for (size_t i = 0; i < map->capacity; i++) {
-        if (map->entries[i].occupied) plant_free(map->entries[i].key);
+        if (map->entries[i].occupied) plant_raw_free(map->entries[i].key);
     }
-    plant_free(map->entries);
-    plant_free(map);
+    plant_raw_free(map->entries);
+    plant_raw_free(map);
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -991,8 +991,8 @@ void* plant_iterator_next(PlantIterator* it) {
 
 void plant_iterator_free(PlantIterator* it) {
     if (!it) return;
-    if (it->keys)  plant_free(it->keys);
-    if (it->values) plant_free(it->values);
+    if (it->keys)  plant_raw_free(it->keys);
+    if (it->values) plant_raw_free(it->values);
     it->container = NULL;
     it->keys = NULL;
     it->values = NULL;

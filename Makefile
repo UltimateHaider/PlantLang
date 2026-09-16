@@ -14,7 +14,7 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.51.1
+VERSION    ?= 0.51.2a
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
@@ -32,7 +32,8 @@ PARSER     := runtime/c/plant_parser.c
 CODEGEN    := runtime/c/plant_codegen.c
 MATH       := runtime/c/plant_math.c
 TENSOR     := runtime/c/plant_tensor.c
-RUNTIME_C  := $(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) $(REPORT_HTML) $(LEXER) $(PARSER) $(CODEGEN) $(MATH) $(TENSOR)
+MEMORY     := runtime/c/plant_memory.c
+RUNTIME_C  := $(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) $(REPORT_HTML) $(LEXER) $(PARSER) $(CODEGEN) $(MATH) $(TENSOR) $(MEMORY)
 COMPAT     := runtime/c/plant_compat.h
 
 SRC_DIR    := src/plantc
@@ -262,6 +263,8 @@ size-report: $(NATIVE_BIN) ## Show binary sizes and threshold status
 	@# Other files — informational only
 	@_loc=$$(wc -l < runtime/c/plant_tensor.c); \
 	 printf "║ %-40s %5d ✅ OK\n" "runtime/c/plant_tensor.c" "$$_loc"
+	@_loc=$$(wc -l < runtime/c/plant_memory.c); \
+	 printf "║ %-40s %5d ✅ OK\n" "runtime/c/plant_memory.c" "$$_loc"
 	@_loc=$$(wc -l < runtime/c/plant_report.c); \
 	 printf "║ %-40s %5d ✅ OK\n" "runtime/c/plant_report.c" "$$_loc"
 	@echo "╠══════════════════════════════════════════════════════════╣"
@@ -286,14 +289,19 @@ test-perf: $(NATIVE_BIN) ## Run test suites with timing metrics
 smoke: $(NATIVE_BIN) ## Run smoke tests for core language features
 	@sh tests/smoke/run_smoke_tests.sh $(NATIVE_BIN)
 
-# ── check-no-raw-malloc: verify no raw malloc in plant_tensor.c ──
-check-no-raw-malloc: ## Verify no raw malloc in plant_tensor.c
+# ── check-no-raw-malloc: verify no raw malloc in new files ──────
+check-no-raw-malloc: ## Verify no raw malloc in plant_tensor.c and plant_memory.c
 	@if grep -nE '(^|[^_a-zA-Z])malloc[[:space:]]*\(' \
 		runtime/c/plant_tensor.c | grep -v 'plant_malloc'; then \
 		echo "STOP: Raw malloc found in plant_tensor.c"; \
 		exit 1; \
 	fi
-	@echo "OK: plant_tensor.c uses only plant_malloc"
+	@if grep -nE '(^|[^_a-zA-Z])malloc[[:space:]]*\(' \
+		runtime/c/plant_memory.c | grep -v 'plant_malloc'; then \
+		echo "STOP: Raw malloc found in plant_memory.c"; \
+		exit 1; \
+	fi
+	@echo "OK: plant_tensor.c and plant_memory.c use only plant_malloc"
 
 # ── check-expected-files: verify .expected files have no comments ──
 check-expected-files: ## Verify .expected files contain only real output
@@ -336,11 +344,98 @@ valgrind-check: $(NATIVE_BIN) ## Run valgrind on compiled tensor memory tests (r
 	done
 	@echo "OK: valgrind report complete (pre-existing leaks documented)"
 
-# ── valgrind-check-tensor: strict tensor leak gate (v0.51.2+) ───
-# Placeholder for v0.51.2. Will fail if ANY new tensor-specific leak is found.
-# Current known leaks (TD-001/002/003) will be grandfathered.
-valgrind-check-tensor: $(NATIVE_BIN) ## [PLACEHOLDER v0.51.2] Strict tensor leak gate
-	@echo "valgrind-check-tensor: not yet implemented (target: v0.51.2)"
+# ── valgrind-check-tensor: strict tensor leak gate (v0.51.2a) ───
+# STRICT: fails on ANY definite leak in tensor tests.
+valgrind-check-tensor: $(NATIVE_BIN) ## Run strict valgrind on tensor tests
+	@echo "=== Strict valgrind on tensor tests ==="
+	@if [ "$(SKIP_VALGRIND)" = "1" ]; then \
+		echo "SKIP_VALGRIND=1 — skipping (document in commit)"; \
+		exit 0; \
+	fi
+	@if ! command -v valgrind >/dev/null 2>&1; then \
+		echo "STOP: valgrind not installed"; \
+		echo "   Install: sudo apt-get install valgrind"; \
+		exit 1; \
+	fi
+	@for test in tensor_basic tensor_malloc tensor_refcount; do \
+		if [ ! -f tests/native/$$test.plant ]; then \
+			echo "SKIP: tests/native/$$test.plant not found"; \
+			continue; \
+		fi; \
+		echo "Checking $$test..."; \
+		./bin/Chloroplast tests/native/$$test.plant /tmp/vg_$$test.c 2>/dev/null; \
+		$(CC) $(CFLAGS) $(TEST_CFLAGS) $(CPPFLAGS) /tmp/vg_$$test.c \
+			$(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) \
+			$(REPORT_HTML) $(MATH) $(TENSOR) $(MEMORY) tests/native/mock_ffi.c \
+			-lm -ldl -o /tmp/vg_$$test 2>/dev/null; \
+		valgrind --leak-check=full \
+			--error-exitcode=1 \
+			--errors-for-leak-kinds=definite \
+			/tmp/vg_$$test 2>&1 | tee /tmp/vg_$$test.log; \
+		if [ $$? -ne 0 ]; then \
+			echo "STOP: valgrind errors in $$test"; \
+			exit 1; \
+		fi; \
+		echo "OK: $$test clean"; \
+	done
+	@echo "valgrind-check-tensor passed"
+
+# ── check-ffi-safety: verify FFI examples don't use unsafe APIs ─
+check-ffi-safety: ## Check FFI safety
+	@echo "=== Checking FFI safety ==="
+	@if grep -rn "plant_tensor_to_string_static" examples/ffi_*.c 2>/dev/null; then \
+		echo "STOP: FFI example uses to_string_static"; \
+		echo "   Use plant_tensor_to_string instead."; \
+		exit 1; \
+	fi
+	@echo "No FFI code uses to_string_static"
+
+# ── check-releases-updated: verify RELEASES.md is current ──────
+check-releases-updated: ## Check RELEASES.md is updated
+	@if ! grep -q "# Auto-updated: $(VERSION)" docs/RELEASES.md 2>/dev/null; then \
+		echo "STOP: RELEASES.md not updated for $(VERSION)"; \
+		echo "   Run: make update-growth"; \
+		exit 1; \
+	fi
+	@echo "RELEASES.md updated for $(VERSION)"
+
+# ── check-verify-integrity: verify verify-* targets include valgrind
+check-verify-integrity: ## Check verify targets include valgrind
+	@echo "=== Checking verify-* targets include valgrind ==="
+	@for target in verify-v0.51.2a verify-v0.51.2b verify-v0.51.2c verify-v0.51.2d; do \
+		if grep -q "^$$target:" Makefile; then \
+			if ! grep -A 25 "^$$target:" Makefile | grep -q "valgrind-check-tensor"; then \
+				echo "STOP: $$target does not include valgrind-check-tensor"; \
+				exit 1; \
+			fi; \
+		fi; \
+	done
+	@echo "All verify targets include valgrind"
+
+# ── update-growth: update RELEASES.md growth table ──────────────
+update-growth: ## Update growth table in RELEASES.md
+	@bash scripts/update_growth_table.sh
+
+# ── verify-v0.51.2a: comprehensive release gate ──────────────────
+verify-v0.51.2a: check-no-raw-malloc check-expected-files \
+                 check-changelog-numbers check-ffi-safety ## Run v0.51.2a verification gate
+	@echo "========================================================"
+	@echo "  v0.51.2a VERIFICATION GATE"
+	@echo "========================================================"
+	@echo ""
+	@echo "[1/7] Native tests..."     && sh tests/native/run_native_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[2/7] Self-hosting..."     && make self || exit 1
+	@cmp -s build/plantc_v3 bin/Chloroplast || \
+		{ echo "STOP: Self-hosting failed"; exit 1; }
+	@echo "[3/7] valgrind strict..."  && $(MAKE) valgrind-check-tensor || exit 1
+	@echo "[4/7] Size report..."      && $(MAKE) size-report
+	@echo "[5/7] check-ffi-safety..." && $(MAKE) check-ffi-safety
+	@echo "[6/7] Update RELEASES..."  && $(MAKE) update-growth
+	@echo "[7/7] Verify RELEASES..."  && $(MAKE) check-releases-updated
+	@echo ""
+	@echo "========================================================"
+	@echo "  v0.51.2a VERIFIED — PRODUCTION MILESTONE"
+	@echo "========================================================"
 
 # ── verify-v0.51.1: comprehensive release gate ──────────────────
 verify-v0.51.1: check-no-raw-malloc check-expected-files check-changelog-numbers ## Run v0.51.1 verification gate

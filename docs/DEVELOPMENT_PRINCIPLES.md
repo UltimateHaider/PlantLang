@@ -1,4 +1,4 @@
-# Development Principles (v0.51.1+)
+# Development Principles (v0.51.2a+)
 
 Permanent principles for all future releases v0.51.x → v0.56.x.
 
@@ -58,3 +58,36 @@ valgrind MUST run on memory-critical tests (ref_count, malloc, deep_copy).
 
 ### K. verify-v0.51.1 Target
 Comprehensive release gate: runs all checks (C tests, native tests, valgrind, self-hosting, size report, binary growth check).
+
+### L. Memory Management Built-ins (v0.51.2a)
+Codegen provides `LIST_FREE`, `TENSOR_FREE`, and `FREE` built-ins for explicit memory management. TD-001/002/003 closed.
+
+### M. plant_raw_free for Internal Use
+`plant_raw_free()` is the simple `free()` wrapper for internal runtime use. `plant_free()` is the generic type-aware dispatcher.
+
+### N. Compile-time Magic Verification
+`ASSERT_MAGIC_FIRST(type)` ensures `magic` is always the first field in PlantArray and PlantTensor structs.
+
+### P. _PLANT_PTR_MIN Guard
+All type-detection code checks `(uintptr_t)ptr >= 0x1000` before dereferencing, preventing segfaults on small integer values cast to void*.
+
+### T. SHOW Tensor Emits free(__str)
+`gen_show_stmt` wraps tensor SHOW output in `{ char* __str = ...; plant_iReport_print(r, __str); free(__str); }` to close the to_string leak.
+
+### W. FREE Generic Dispatcher (Stub)
+`plant_free()` is available in v0.51.2a but NOT emitted by codegen. Codegen emits type-specific `LIST_FREE`/`TENSOR_FREE` instead.
+
+### Y. valgrind-check-tensor Strict Mode
+`valgrind-check-tensor` uses `--error-exitcode=1` and `--errors-for-leak-kinds=definite` to catch any new leaks.
+
+### AA. check-ffi-safety
+FFI examples must not use `plant_tensor_to_string_static` (internal buffer API).
+
+### BB. check-releases-updated
+RELEASES.md must be updated with current version before release.
+
+### CC. check-verify-integrity
+All verify-* targets must include valgrind-check-tensor.
+
+### DD. update-growth Script
+`scripts/update_growth_table.sh` automates growth table updates in RELEASES.md.

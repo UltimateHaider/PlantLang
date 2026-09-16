@@ -23,7 +23,7 @@ fi
 
 out=$("$PLANTC" --version 2>&1)
 rc=$?
-  if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '0.51.1'; then
+  if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '0.51.2a'; then
   echo "PASS  cli --version"; pass=$((pass+1))
 else
   echo "FAIL  cli --version"; fail=$((fail+1))
@@ -55,6 +55,7 @@ for src in "$DIR"/*.plant; do
         "$ROOT/runtime/c/plant_report_xml.c" "$ROOT/runtime/c/plant_report_html.c" \
         "$ROOT/runtime/c/plant_math.c" \
         "$ROOT/runtime/c/plant_tensor.c" \
+        "$ROOT/runtime/c/plant_memory.c" \
         "$ROOT/tests/native/mock_ffi.c" \
         -lm -ldl -o "$BUILD/$name" \
         >>"$BUILD/$name.compile.log" 2>&1; then
@@ -91,6 +92,7 @@ if gcc -w -O0 -I "$ROOT/runtime/c" "$DIR/tx_types.c" \
     "$ROOT/runtime/c/plant_report.c" "$ROOT/runtime/c/plant_report_json.c" \
     "$ROOT/runtime/c/plant_report_xml.c" "$ROOT/runtime/c/plant_report_html.c" \
     "$ROOT/runtime/c/plant_math.c" "$ROOT/runtime/c/plant_tensor.c" \
+    "$ROOT/runtime/c/plant_memory.c" \
     "$ROOT/tests/native/mock_ffi.c" \
     -lm -ldl -o "$BUILD/tx_types" \
       >"$BUILD/tx_types.compile.log" 2>&1 \

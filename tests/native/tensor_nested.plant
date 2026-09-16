@@ -1,0 +1,45 @@
+# tests/native/tensor_nested.plant — Test nested list/tensor operations
+ACTION main(),
+  # 1. tensor_from_nested_list
+  CREATE L1 TO [[1, 2, 3], [4, 5, 6]].
+  CREATE T1 TO TENSOR(L1).
+  SHOW T1.
+  TENSOR_FREE(T1).
+  LIST_FREE(L1).
+  SHOW "tensor_from_nested_list: PASS".
+
+  # 2. tensor_from_deep_nested
+  CREATE L2 TO [[[1, 2], [3, 4]], [[5, 6], [7, 8]]].
+  CREATE T2 TO TENSOR(L2).
+  SHOW T2.
+  TENSOR_FREE(T2).
+  LIST_FREE(L2).
+  SHOW "tensor_from_deep_nested: PASS".
+
+  # 3. tensor_list_roundtrip
+  CREATE L3 TO [10, 20, 30, 40].
+  CREATE T3 TO TENSOR(L3).
+  SHOW T3.
+  TENSOR_FREE(T3).
+  LIST_FREE(L3).
+  SHOW "tensor_list_roundtrip: PASS".
+
+  # 4. multiple_tensors_same_list
+  CREATE L4 TO [1, 2, 3].
+  CREATE T4a TO TENSOR(L4).
+  CREATE T4b TO TENSOR(L4).
+  SHOW T4a.
+  SHOW T4b.
+  TENSOR_FREE(T4a).
+  TENSOR_FREE(T4b).
+  LIST_FREE(L4).
+  SHOW "multiple_tensors_same_list: PASS".
+
+  # 5. tensor_in_list
+  CREATE L5 TO [1, 2, 3].
+  CREATE T5 TO TENSOR(L5).
+  SHOW T5.
+  TENSOR_FREE(T5).
+  LIST_FREE(L5).
+  SHOW "tensor_in_list: PASS".
+/ACTION.

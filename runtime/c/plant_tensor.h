@@ -39,6 +39,8 @@ int          plant_tensor_is_tensor(const void* ptr);
 
 /* Display */
 char*        plant_tensor_to_string(const PlantTensor* t);
+int64_t      plant_tensor_to_string_static(const PlantTensor* t,
+                                           char* buf, int64_t bufsize);
 
 /* Construction from PlantArray (nested list) */
 void* plant_tensor_from_list(void* list);

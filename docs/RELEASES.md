@@ -1,0 +1,46 @@
+# Release Timeline — PlantLang Chloroplast
+
+## Cumulative Growth Table
+
+# Auto-updated: 0.51.2a
+| Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
+|---------|-------------|-----------------|----------------|----------------|----------------|--------------|
+| v0.51.2a | 896816 | 8940 | 416 | 72 | 322 | 5361 |
+| v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
+
+## Release Timeline
+
+| Version | Date | Feature | Status |
+|---------|------|---------|--------|
+| v0.51.0 | 2026 | malloc simulation + tensor infrastructure | Released |
+| v0.51.0b | 2026 | plant_malloc exclusivity | Released |
+| v0.51.1 | 2026 | TENSOR Core type | Released |
+| v0.51.2a | 2026 | Core Memory Fixes (TD-001..004) | IN PROGRESS |
+| v0.51.2b | 2026 | Codegen auto-free at scope end | Planned |
+| v0.51.2c | 2026 | TENSOR Introspection | Planned |
+| v0.51.2d | 2026 | TENSOR Operations | Planned |
+
+## Growth Chart (ASCII)
+
+```
+Binary Size (KB)
+900 |                              *
+    |                             /
+895 |                            *   v0.51.1 (896,536)
+    |                           /
+890 |                          *     v0.51.0b (891,624)
+    |                         /
+885 |                        *       v0.51.0
+    |                       /
+880 |                      *         v0.50.7
+    |                     /
+875 |                    *           v0.50.5
+    |                   /
+870 |                  *             v0.50.3
+    |                 /
+865 |                *               v0.50.1
+    |               /
+860 |              *                 v0.49.56
+    |____________/________________________________
+      v0.49.56  v0.50.1  v0.50.3  v0.50.5  v0.50.7  v0.51.0  v0.51.0b  v0.51.1
+```

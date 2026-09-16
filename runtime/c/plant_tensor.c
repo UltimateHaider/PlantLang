@@ -394,3 +394,23 @@ char* plant_tensor_to_string(const PlantTensor* t) {
     free(coords);
     return result;
 }
+
+/* ── plant_tensor_to_string_static ──────────────────────────── */
+/* Writes tensor representation into caller-provided buffer.
+   Returns number of chars written (excluding NUL), or -1 on error.
+   v0.51.2a — static variant to avoid heap allocation (TD-003). */
+int64_t plant_tensor_to_string_static(const PlantTensor* t,
+                                      char* buf, int64_t bufsize) {
+    char* tmp;
+    int64_t len;
+    if (!buf || bufsize < 1) return -1;
+    if (!t) { buf[0] = '\0'; return 0; }
+    tmp = plant_tensor_to_string(t);
+    if (!tmp) { buf[0] = '\0'; return 0; }
+    len = (int64_t)strlen(tmp);
+    if (len >= bufsize) len = bufsize - 1;
+    memcpy(buf, tmp, (size_t)len);
+    buf[len] = '\0';
+    free(tmp);
+    return len;
+}

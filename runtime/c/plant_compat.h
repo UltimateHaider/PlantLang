@@ -647,6 +647,10 @@ typedef struct PlantTensor PlantTensor;
 char* plant_tensor_to_string(const PlantTensor* t);
 void  plant_tensor_free(PlantTensor* t);
 
+/* v0.51.2a — Memory management built-ins (TD-001/002/003) */
+void plant_list_free(PlantArray* list);
+void plant_free(void* obj);
+
 /* ── std/math FFI bindings (v0.49.19 — full module namespace) ──
    Every math-family endpoint is reachable as REAP … FROM math:FUNC.
    Legacy-eight endpoints route to their tagged-int-safe plant_*

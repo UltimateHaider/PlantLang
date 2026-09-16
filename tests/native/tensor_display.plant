@@ -1,0 +1,20 @@
+# tests/native/tensor_display.plant — Test tensor display output
+ACTION main(),
+  # 1. tensor_display_1d
+  SHOW TENSOR([1, 2, 3]).
+
+  # 2. tensor_display_2d
+  SHOW TENSOR([[10, 20], [30, 40]]).
+
+  # 3. tensor_display_3d
+  SHOW TENSOR([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]).
+
+  # 4. tensor_display_float
+  SHOW TENSOR([1.5, 2.5, 3.5]).
+
+  # 5. tensor_display_mixed
+  SHOW TENSOR([[1, 2, 3], [4, 5, 6], [7, 8, 9]]).
+
+  # 6. tensor_display_single
+  SHOW TENSOR([42]).
+/ACTION.

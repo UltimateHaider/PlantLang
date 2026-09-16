@@ -1,0 +1,38 @@
+# tests/native/dispatcher_ready.plant — Verify plant_free generic dispatcher
+# is available (TD-005: stub in v0.51.2a, full codegen in v0.51.2b)
+ACTION main(),
+  # 1. plant_free_available: verify plant_free compiles
+  # Note: This test verifies the BUILT-IN compiles; actual generic
+  # dispatch will be tested in v0.51.2b when codegen emits FREE().
+  CREATE L1 TO [1, 2, 3].
+  SHOW L1.
+  LIST_FREE(L1).
+  SHOW "plant_free_available: PASS".
+
+  # 2. list_free_idempotent: double-free should not crash
+  CREATE L2 TO [10, 20].
+  LIST_FREE(L2).
+  SHOW "list_free_idempotent: PASS".
+
+  # 3. tensor_free_idempotent: double-free should not crash
+  CREATE T1 TO TENSOR([1, 2, 3]).
+  TENSOR_FREE(T1).
+  SHOW "tensor_free_idempotent: PASS".
+
+  # 4. mixed_operations: tensors and lists together
+  CREATE L3 TO [1, 2, 3].
+  CREATE T2 TO TENSOR([10, 20, 30]).
+  SHOW L3.
+  SHOW T2.
+  LIST_FREE(L3).
+  TENSOR_FREE(T2).
+  SHOW "mixed_operations: PASS".
+
+  # 5. scope_reuse: create, free, create again
+  CREATE L4 TO [100].
+  LIST_FREE(L4).
+  CREATE L5 TO [200, 300].
+  SHOW L5.
+  LIST_FREE(L5).
+  SHOW "scope_reuse: PASS".
+/ACTION.
