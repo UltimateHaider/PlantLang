@@ -14,7 +14,7 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.51.0b
+VERSION    ?= 0.51.1
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
@@ -31,7 +31,8 @@ LEXER      := runtime/c/plant_lexer.c
 PARSER     := runtime/c/plant_parser.c
 CODEGEN    := runtime/c/plant_codegen.c
 MATH       := runtime/c/plant_math.c
-RUNTIME_C  := $(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) $(REPORT_HTML) $(LEXER) $(PARSER) $(CODEGEN) $(MATH)
+TENSOR     := runtime/c/plant_tensor.c
+RUNTIME_C  := $(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) $(REPORT_HTML) $(LEXER) $(PARSER) $(CODEGEN) $(MATH) $(TENSOR)
 COMPAT     := runtime/c/plant_compat.h
 
 SRC_DIR    := src/plantc
@@ -259,6 +260,8 @@ size-report: $(NATIVE_BIN) ## Show binary sizes and threshold status
 	 else _st="✅ OK"; fi; \
 	 printf "║ %-40s %5d %s\n" "runtime/c/plant_math.c" "$$_loc" "$$_st"
 	@# Other files — informational only
+	@_loc=$$(wc -l < runtime/c/plant_tensor.c); \
+	 printf "║ %-40s %5d ✅ OK\n" "runtime/c/plant_tensor.c" "$$_loc"
 	@_loc=$$(wc -l < runtime/c/plant_report.c); \
 	 printf "║ %-40s %5d ✅ OK\n" "runtime/c/plant_report.c" "$$_loc"
 	@echo "╠══════════════════════════════════════════════════════════╣"
@@ -282,6 +285,77 @@ test-perf: $(NATIVE_BIN) ## Run test suites with timing metrics
 # ── smoke: rapid core feature validation ────────────────────────
 smoke: $(NATIVE_BIN) ## Run smoke tests for core language features
 	@sh tests/smoke/run_smoke_tests.sh $(NATIVE_BIN)
+
+# ── check-no-raw-malloc: verify no raw malloc in plant_tensor.c ──
+check-no-raw-malloc: ## Verify no raw malloc in plant_tensor.c
+	@if grep -nE '(^|[^_a-zA-Z])malloc[[:space:]]*\(' \
+		runtime/c/plant_tensor.c | grep -v 'plant_malloc'; then \
+		echo "STOP: Raw malloc found in plant_tensor.c"; \
+		exit 1; \
+	fi
+	@echo "OK: plant_tensor.c uses only plant_malloc"
+
+# ── check-expected-files: verify .expected files have no comments ──
+check-expected-files: ## Verify .expected files contain only real output
+	@for f in tests/native/tensor_*.expected; do \
+		if grep -qE '^\s*#' "$$f"; then \
+			echo "STOP: Comments in $$f"; \
+			exit 1; \
+		fi; \
+	done
+	@echo "OK: .expected files contain only real output"
+
+# ── check-changelog-numbers: verify no placeholders in CHANGELOG ──
+check-changelog-numbers: ## Verify CHANGELOG numbers are real
+	@if grep -E 'XXX|\?\?\?' docs/CHANGELOG.md | grep -A1 'SIZE REPORT'; then \
+		echo "STOP: Placeholders in CHANGELOG"; \
+		exit 1; \
+	fi
+	@echo "OK: CHANGELOG numbers are real"
+
+# ── valgrind-check: memory leak check on tensor tests ────────────
+# v0.51.1: report-only (pre-existing leaks documented, TD-001/002/003)
+# v0.51.2+: will add --error-exitcode=1 for NEW leaks only
+valgrind-check: $(NATIVE_BIN) ## Run valgrind on compiled tensor memory tests (report only)
+	@if ! command -v valgrind >/dev/null 2>&1; then \
+		echo "valgrind not installed. Skipping."; \
+		exit 0; \
+	fi
+	@for test in tensor_refcount tensor_malloc; do \
+		echo "Checking $$test..."; \
+		./bin/Chloroplast tests/native/$$test.plant /tmp/vg_$$test.c 2>/dev/null; \
+		$(CC) $(CFLAGS) $(TEST_CFLAGS) $(CPPFLAGS) /tmp/vg_$$test.c \
+			$(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) \
+			$(REPORT_HTML) $(MATH) $(TENSOR) tests/native/mock_ffi.c \
+			-lm -ldl -o /tmp/vg_$$test 2>/dev/null; \
+		valgrind --leak-check=full \
+			--errors-for-leak-kinds=definite \
+			/tmp/vg_$$test \
+			2>&1 | grep -E "LEAK SUMMARY|definitely lost|ERROR SUMMARY" || true; \
+		echo "---"; \
+	done
+	@echo "OK: valgrind report complete (pre-existing leaks documented)"
+
+# ── valgrind-check-tensor: strict tensor leak gate (v0.51.2+) ───
+# Placeholder for v0.51.2. Will fail if ANY new tensor-specific leak is found.
+# Current known leaks (TD-001/002/003) will be grandfathered.
+valgrind-check-tensor: $(NATIVE_BIN) ## [PLACEHOLDER v0.51.2] Strict tensor leak gate
+	@echo "valgrind-check-tensor: not yet implemented (target: v0.51.2)"
+
+# ── verify-v0.51.1: comprehensive release gate ──────────────────
+verify-v0.51.1: check-no-raw-malloc check-expected-files check-changelog-numbers ## Run v0.51.1 verification gate
+	@echo "========================================================"
+	@echo "  v0.51.1 VERIFICATION GATE"
+	@echo "========================================================"
+	@echo "[1/6] Native tests..."   && sh tests/native/run_native_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[2/6] valgrind..."       && make valgrind-check || exit 1
+	@echo "[3/6] Self-hosting..."   && make self || exit 1
+	@cmp -s build/plantc_v3 bin/Chloroplast || { \
+		echo "STOP: Self-hosting does NOT converge"; exit 1; }
+	@echo "[4/6] Size report..."    && make size-report
+	@echo "========================================================"
+	@echo "  v0.51.1 VERIFIED"
+	@echo "========================================================"
 
 # ── clean ──────────────────────────────────────────────────────
 clean: ## Remove build artifacts (keeps dist/Chloroplast bootstrap)

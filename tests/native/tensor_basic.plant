@@ -1,0 +1,29 @@
+ACTION main(),
+  # 1. tensor_1d_basic
+  SHOW TENSOR([1, 2, 3]).
+  # 2. tensor_2d_basic
+  SHOW TENSOR([[1, 2], [3, 4]]).
+  # 3. tensor_3d_basic
+  SHOW TENSOR([[[1, 2]]]).
+  # 4. tensor_1d_display
+  SHOW TENSOR([10, 20, 30]).
+  # 5. tensor_2d_display
+  SHOW TENSOR([[10, 20], [30, 40]]).
+  # 6. tensor_3d_display
+  SHOW TENSOR([[[10, 20]]]).
+  # 7. tensor_4d_display
+  CREATE T4 TO TENSOR([[[[1, 2]]]]).
+  SHOW T4.
+  # 8. tensor_5d_display
+  CREATE T5 TO TENSOR([[[[[1, 2]]]]]).
+  SHOW T5.
+  # 9. tensor_float_values
+  SHOW TENSOR([1.5, 2.5, 3.5]).
+  # 10. tensor_2d_float
+  SHOW TENSOR([[1.1, 2.2], [3.3, 4.4]]).
+  # 11. tensor_1d_single
+  SHOW TENSOR([42]).
+  # 12. tensor_3d_2x2x2
+  SHOW TENSOR([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]).
+  GIVE 0.
+/GIVE main.

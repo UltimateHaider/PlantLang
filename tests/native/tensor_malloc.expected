@@ -1,0 +1,6 @@
+TENSOR allocation failed (shape from list)
+TENSOR allocation failed (struct)
+TENSOR allocation failed (shape)
+TENSOR allocation failed (strides)
+TENSOR allocation failed (data)
+[[1, 2], [3, 4]]

@@ -639,6 +639,14 @@ tx_t plant_mat_sub(tx_t m1, tx_t m2);
 tx_t plant_mat_trace(tx_t m);
 tx_t plant_mat_identity(tx_t size);
 
+/* v0.51.1 — TENSOR constructor */
+tx_t plant_tensor_from_list(tx_t list);
+
+/* Forward declaration for PlantTensor display */
+typedef struct PlantTensor PlantTensor;
+char* plant_tensor_to_string(const PlantTensor* t);
+void  plant_tensor_free(PlantTensor* t);
+
 /* ── std/math FFI bindings (v0.49.19 — full module namespace) ──
    Every math-family endpoint is reachable as REAP … FROM math:FUNC.
    Legacy-eight endpoints route to their tagged-int-safe plant_*

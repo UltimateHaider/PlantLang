@@ -1,0 +1,5 @@
+ACTION main(),
+  # tensor_malloc: exercise tensor creation path for MAT_MALLOC_FAIL_AT
+  SHOW TENSOR([[1, 2], [3, 4]]).
+  GIVE 0.
+/GIVE main.

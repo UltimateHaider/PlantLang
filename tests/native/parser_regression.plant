@@ -1,0 +1,30 @@
+ACTION main(),
+  # 1. parser_list_still_works
+  SHOW [1, 2, 3].
+  # 2. parser_nested_list
+  SHOW [[1, 2], [3, 4]].
+  # 3. parser_matrix_mult
+  SHOW MAT_ADD([[1, 2], [3, 4]], [[5, 6], [7, 8]]).
+  # 4. parser_dot_cross_norm
+  SHOW MAT_TRACE([[1, 2], [3, 4]]).
+  # 5. parser_tensor_keyword
+  SHOW TENSOR([1, 2, 3]).
+  # 6. parser_tensor_vs_matrix
+  SHOW TENSOR([[1, 2], [3, 4]]).
+  # 7. parser_keyword_case
+  SHOW MAT_IDENTITY(2).
+  # 8. parser_tensor_no_paren — TENSOR without () is a keyword, not a function
+  # (This is valid PlantLang — TENSOR is a keyword, SHOW TENSOR would need ())
+  # 9. parser_tensor_matrix_list_mix
+  SHOW TENSOR([1, 2, 3]).
+  SHOW MAT_ADD([[1, 2], [3, 4]], [[5, 6], [7, 8]]).
+  # 10. parser_tensor_in_expression
+  SHOW TENSOR([1, 2, 3]).
+  # 11. parser_tensor_nested_call
+  SHOW TENSOR([[1, 2, 3], [4, 5, 6]]).
+  # 12. parser_tensor_list_matrix_deep
+  SHOW TENSOR([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]).
+  # 13. parser_4level_nesting
+  SHOW TENSOR([[[[1, 2]]]]).
+  GIVE 0.
+/GIVE main.

@@ -1,3 +1,97 @@
+## v0.51.1 - 2026 (TENSOR Core)
+
+### New Native Type: PlantTensor
+A NEW native type for N-dimensional numerical tensors. NOT an extension of PlantArray.
+
+- **Contiguous storage**: `double* data` with row-major layout
+- **Reference counting**: `ref_count` field from day 1
+- **Deep copy**: `plant_tensor_deep_copy()` for independent clones
+- **Construction**: `TENSOR([...])` syntax for 1D, 2D, 3D, 4D, 5D
+- **Display**: Nested-list format matching PlantArray display
+
+#### Example
+```plantlang
+SHOW TENSOR([1, 2, 3]).           # [1, 2, 3]
+SHOW TENSOR([[1, 2], [3, 4]]).    # [[1, 2], [3, 4]]
+SHOW TENSOR([[[1, 2]]]).          # [[[1, 2]]]
+```
+
+### Implementation
+- **New files**: `runtime/c/plant_tensor.h` (51 lines), `runtime/c/plant_tensor.c` (396 lines)
+- **Lexer**: TENSOR keyword added to `src/plantc/lexer.plant`
+- **Codegen**: `TENSOR(...)` → `plant_tensor_from_list(...)` in `src/plantc/codegen_c.plant`
+- **Display**: `plant_iReport_print` detects PlantTensor via magic number
+- **Malloc simulation**: All tensor allocations use `plant_malloc()` for test injection
+
+### Test Infrastructure
+- **Malloc failure simulation** expanded to tensor allocation path
+- **4 new test files**: tensor_basic (12 tests), tensor_malloc (5 tests), tensor_refcount (6 tests), parser_regression (13 tests)
+- **Native tests**: 30 → 34 files (34 tests passing)
+
+### Size Report
+| File | v0.51.0b | v0.51.1 | Delta | Status |
+|------|----------|---------|-------|--------|
+| plant_runtime.c | 8932 | 8940 | +8 | ✅ OK |
+| plant_math.c | 5361 | 5361 | 0 | ✅ OK |
+| plant_tensor.c | — | 396 | +396 | NEW |
+| plant_report.c | 314 | 322 | +8 | ✅ OK |
+| **Binary** | 891,624 | 896,536 | +4,912 (+0.55%) | ✅ OK |
+
+### Cumulative Growth
+```
+Binary Size (KB)
+900 │                              ●  v0.51.1 (896,536)
+    │                             /
+895 │                            ●   v0.51.0b (891,624)
+    │                           /
+890 │                          ●     v0.51.0
+    │                         /
+885 │                        ●       v0.50.7
+    │                       /
+880 │                      ●         v0.50.0h
+    │                     /
+875 │                    /
+    └───────────────────────────────────
+```
+
+### Documentation
+- `docs/TENSOR.md` — Type definition, construction, display, memory model, roadmap
+- `docs/DEVELOPMENT_PRINCIPLES.md` — 14 permanent principles (A through K)
+- `docs/TECH_DEBT.md` — TD-001 through TD-004
+
+### Known Limitations (valgrind-documented)
+
+#### TD-001: PlantArray never freed (pre-existing, v0.51.2 target)
+`plant_list_free()` does not exist. PlantArray objects allocated by `plant_list_make` are never freed.
+- **Impact**: 48–168 bytes per list depending on capacity
+- **Evidence**: Compiled `lists.plant` test leaks 40 bytes from `plant_list_make`
+- **Fix target**: v0.51.2 — add `plant_list_free` to runtime + codegen cleanup
+
+#### TD-002: PlantTensor never freed (NEW, v0.51.7 target)
+Generated code never calls `plant_tensor_free()`. Each tensor leaks its struct (64B), shape (24B), strides (24B), and data (variable).
+- **Impact**: 88–128 bytes per tensor depending on dimensionality
+- **Evidence**: tensor_refcount test: 7 PlantTensor leaks (704 bytes total)
+- **Fix target**: v0.51.7 — codegen emits `plant_tensor_free` at scope end
+
+#### TD-003: to_string buffer never freed (NEW, v0.51.2+ target)
+`plant_tensor_to_string()` allocates a 1,024-byte buffer. Generated code passes result directly to `plant_iReport_print` without freeing.
+- **Impact**: 1,024 bytes per SHOW TENSOR statement
+- **Evidence**: tensor_refcount test: 1,024-byte leak from `_tensor_to_string_recursive`
+- **Fix target**: v0.51.2+ — codegen emits `free()` on to_string result
+
+#### TD-004: valgrind-check was historically wrong
+Original `valgrind-check` ran valgrind on `bin/Chloroplast` (the compiler), not on compiled test binaries. Fixed in v0.51.1.
+- **Impact**: Compiler leaks (87KB+) masked runtime leaks
+- **Fix**: v0.51.1 — target now compiles test and runs valgrind on compiled binary
+
+#### Loop Behavior (mitigating)
+PlantLang loops optimize variable reuse — `LOOP i FROM 1 TO 100: CREATE T TO TENSOR(...). /LOOP` creates only 1 tensor at exit, not 100. Leaks do NOT accumulate in loops.
+
+#### LIST OF TENSOR Warning (non-mitigating)
+Lists of tensors (e.g., `CREATE L TO LIST OF TENSOR(...)`) WILL accumulate leaks. Each new tensor in the list leaks ~240 bytes. This is a known risk for future ML workloads.
+
+---
+
 ## v0.51.0 - 2026 (Foundation — Matrix & PDE)
 
 ### Malloc Failure Simulation (Test Infrastructure)

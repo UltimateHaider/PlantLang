@@ -1,46 +1,40 @@
-# Technical Debt Tracker
+# Technical Debt Register — PlantLang Chloroplast
 
-## Active Items
+## TD-001: PlantArray never freed
+- **Status**: OPEN
+- **Introduced**: v0.0.1 (always existed)
+- **Target fix**: v0.51.2
+- **Impact**: 48–168 bytes per PlantArray (capacity-dependent)
+- **Root cause**: `plant_list_free()` does not exist in the runtime
+- **Fix plan**: Add `plant_list_free(PlantArray* a)` to `plant_runtime.c` that frees `a->items` then `a`. Update codegen to emit cleanup calls at scope end.
+- **Scope**: Runtime + codegen
+- **valgrind evidence**: Compiled `lists.plant` → 40 bytes lost in `plant_list_make`
 
-### Runtime Monolith (plant_runtime.c)
-- **File**: `runtime/c/plant_runtime.c` (~8930 lines)
-- **Issue**: Core language, matrix ops, CAS, PDE solvers, string ops, list ops, I/O, FFI, and test framework all in one file
-- **Impact**: Slow incremental compilation, hard to navigate, difficult to test independently
-- **Mitigation**: Runtime split plan documented in `RUNTIME_SPLIT_PLAN.md`
-- **Target**: Phase 1 (extract CAS) in v0.52.0
+## TD-002: PlantTensor never freed
+- **Status**: OPEN
+- **Introduced**: v0.51.1
+- **Target fix**: v0.51.7
+- **Impact**: 88–128 bytes per tensor (dimensionality-dependent)
+- **Root cause**: Generated code never calls `plant_tensor_free()`. The function exists in `plant_tensor.c` but is not declared in `plant_compat.h` (now added) and codegen does not emit calls.
+- **Fix plan**: Codegen emits `plant_tensor_free(T)` at scope end for each `CREATE T TO TENSOR(...)` statement.
+- **Scope**: Codegen only
+- **valgrind evidence**: tensor_refcount → 7 PlantTensor leaks (704 bytes)
 
-### Matrix Allocation Path (malloc simulation scope)
-- **Files**: `_la_alloc`, `_la_alloc_rect` in `plant_runtime.c`
-- **Issue**: Malloc failure simulation only covers matrix allocation path (4 malloc calls)
-- **Impact**: Other allocation failures (string ops, list creation, CAS) cannot be simulated in tests
-- **Mitigation**: Sufficient for current test coverage; extend in future if needed
-- **Target**: v0.52.0+ if broader allocation testing is needed
+## TD-003: to_string buffer never freed
+- **Status**: OPEN
+- **Introduced**: v0.51.1
+- **Target fix**: v0.51.2+
+- **Impact**: 1,024 bytes per SHOW TENSOR statement
+- **Root cause**: `plant_tensor_to_string()` returns a heap-allocated string. Generated code passes it directly to `plant_iReport_print()` without calling `free()`.
+- **Fix plan**: Codegen emits `char* _s = plant_tensor_to_string(T); plant_iReport_print(r, _s); free(_s);` pattern.
+- **Scope**: Codegen only
+- **valgrind evidence**: tensor_refcount → 1,024 bytes from `_tensor_to_string_recursive`
 
-### Self-Hosting Binary Size
-- **Current**: 891,624 bytes (v0.51.0b, v3 == final)
-- **Threshold**: WARN at 10% growth (>980,786), CRITICAL at 20% (>1,069,949)
-- **Impact**: Large binary affects distribution and startup time
-- **Mitigation**: Size-report target tracks growth; runtime split in v0.52.0 may help
-- **Target**: Ongoing monitoring
-
-### Error Message Consistency
-- **Status**: Unified in v0.51.0 for matrix operations (10 error messages)
-- **Issue**: Other subsystems (CAS, PDE, string ops) still have ad-hoc error formatting
-- **Impact**: Inconsistent error messages across subsystems
-- **Mitigation**: None currently
-- **Target**: v0.52.0+ systematic error message audit
-
-### PDE Solver Coverage
-- **Status**: Wave, Heat, Laplace supported
-- **Issue**: Only 3 PDE types; no support for Schrödinger, Maxwell, Navier-Stokes, etc.
-- **Impact**: Limited applicability for physics/engineering use cases
-- **Mitigation**: Documented in `PDE_LIMITATIONS.md`
-- **Target**: v0.52.0+ expansion
-
-## Resolved Items
-
-### malloc simulation scope (v0.51.0b)
-- **Issue**: Tests could not verify allocation failure behavior
-- **Resolution**: Added `PLANT_MALLOC_SIMULATE` compile flag and `MAT_MALLOC_FAIL_AT` env var
-- **Scope**: Matrix allocation path only (`_la_alloc`, `_la_alloc_rect`)
-- **Date**: 2026-09-15
+## TD-004: valgrind-check was measuring compiler, not runtime
+- **Status**: FIXED (v0.51.1)
+- **Introduced**: v0.51.0b
+- **Fixed**: v0.51.1
+- **Impact**: Compiler leaks (87KB+) masked runtime leaks (1–2KB)
+- **Root cause**: Original `valgrind-check` ran `valgrind bin/Chloroplast tests/native/$$test.plant` — valgrinding the compiler process, not the compiled test binary.
+- **Fix**: Target now compiles test → gcc → valgrind on compiled binary.
+- **Scope**: Makefile only

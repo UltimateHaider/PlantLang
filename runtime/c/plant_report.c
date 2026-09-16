@@ -12,6 +12,7 @@
  */
 
 #include "plant_compat.h"
+#include "plant_tensor.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -246,6 +247,13 @@ void plant_iReport_print(IReport* rp, const char* message) {
             char* s = (char*)plant_to_string((tx_t)p);
             rp->print(rp->context, s);
             /* s may be slab-allocated — do not free individually */
+            return;
+        }
+        /* v0.51.1: detect PlantTensor and serialize */
+        if (plant_tensor_is_tensor(message)) {
+            char* s = plant_tensor_to_string((const PlantTensor*)message);
+            rp->print(rp->context, s);
+            free(s);
             return;
         }
     }

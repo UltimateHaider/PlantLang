@@ -3,6 +3,8 @@
 #include "plant_lexer.h"
 #include "plant_codegen.h"
 #include "plant_math.h"
+#include "plant_malloc.h"
+#include "plant_tensor.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -3766,7 +3768,6 @@ tx_t plant_list_mode(tx_t data) {
  * Disabled when the env var is unset. Gated by PLANT_MALLOC_SIMULATE.
  * C89-compatible. No production impact. */
 #ifdef PLANT_MALLOC_SIMULATE
-#include <stdlib.h>
 
 static int  g_malloc_call_count = 0;
 static int  g_malloc_fail_at    = -1;
@@ -3782,7 +3783,17 @@ static void plant_malloc_init(void) {
     }
 }
 
-static void* plant_malloc_sim(size_t size) {
+int plant_malloc_sim_get_count(void) {
+    return g_malloc_call_count;
+}
+
+void plant_malloc_sim_reset(void) {
+    g_malloc_call_count = 0;
+    g_malloc_fail_at = -1;
+    g_malloc_initialized = 0;
+}
+
+void* plant_malloc_sim(size_t size) {
     plant_malloc_init();
     g_malloc_call_count++;
     if (g_malloc_fail_at > 0 && g_malloc_call_count == g_malloc_fail_at) {
@@ -3791,9 +3802,6 @@ static void* plant_malloc_sim(size_t size) {
     return malloc(size);
 }
 
-#define plant_malloc(size) plant_malloc_sim(size)
-#else
-#define plant_malloc(size) malloc(size)
 #endif
 /* --- End malloc failure simulation --- */
 

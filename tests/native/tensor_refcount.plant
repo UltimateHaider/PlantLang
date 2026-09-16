@@ -1,0 +1,21 @@
+ACTION main(),
+  # refcount_initial_one — tensor creation works without crash
+  SHOW TENSOR([1, 2, 3]).
+  # refcount_decrement — multiple SHOW of same tensor (copy)
+  CREATE t TO TENSOR([[1, 2], [3, 4]]).
+  SHOW t.
+  SHOW t.
+  # deep_copy independent — two tensors, show both
+  CREATE a TO TENSOR([10, 20, 30]).
+  CREATE b TO TENSOR([10, 20, 30]).
+  SHOW a.
+  SHOW b.
+  # chained creation — multiple tensors in sequence
+  CREATE c1 TO TENSOR([1]).
+  CREATE c2 TO TENSOR([2]).
+  CREATE c3 TO TENSOR([3]).
+  SHOW c1.
+  SHOW c2.
+  SHOW c3.
+  GIVE 0.
+/GIVE main.

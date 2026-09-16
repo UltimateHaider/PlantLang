@@ -1,0 +1,111 @@
+# PlantTensor Type (v0.51.1)
+
+## Overview
+
+PlantTensor is a NEW native type for N-dimensional numerical tensors, introduced in v0.51.1. It is NOT an extension of PlantArray — it has contiguous `double*` data storage, row-major memory layout, and reference-counted lifecycle.
+
+## Type Definition
+
+```c
+typedef struct PlantTensor {
+    uint64_t magic;      /* PLANT_TENSOR_MAGIC */
+    int64_t  ndim;       /* Number of dimensions (1..N) */
+    int64_t* shape;      /* shape[0..ndim-1] */
+    int64_t* strides;    /* Row-major strides, in elements */
+    double*  data;       /* Contiguous row-major storage */
+    int64_t  size;       /* Total elements (product of shape) */
+    int64_t  ref_count;  /* Reference count (starts at 1) */
+    char*    error_msg;  /* NULL if no error */
+} PlantTensor;
+```
+
+## Construction
+
+### 1D Tensor
+```plantlang
+SHOW TENSOR([1, 2, 3]).        # [1, 2, 3]
+```
+
+### 2D Tensor
+```plantlang
+SHOW TENSOR([[1, 2], [3, 4]]). # [[1, 2], [3, 4]]
+```
+
+### 3D Tensor
+```plantlang
+SHOW TENSOR([[[1, 2]]]).       # [[[1, 2]]]
+```
+
+### 4D and 5D
+```plantlang
+SHOW TENSOR([[[[1, 2]]]]).     # [[[[1, 2]]]]
+SHOW TENSOR([[[[[1, 2]]]]]).   # [[[[[1, 2]]]]]
+```
+
+## Display
+
+Tensors display in nested-list format:
+- 1D: `[1, 2, 3]`
+- 2D: `[[1, 2], [3, 4]]`
+- 3D: `[[[1, 2], [3, 4]], [[5, 6], [7, 8]]]`
+
+## Memory Model
+
+- **ref_count**: Starts at 1. Decremented on free. Tensor freed when ref_count reaches 0.
+- **deep_copy**: Creates independent clone with ref_count=1.
+- **row-major**: Element [i, j, k] = data[i*strides[0] + j*strides[1] + k*strides[2]].
+
+## Known Memory Leaks (v0.51.1)
+
+All leaks are **bounded** (no accumulation in loops) and **freed at process exit**.
+
+### Per-tensor leak breakdown
+
+| Component | Bytes | Freed? | Fix target |
+|-----------|-------|--------|------------|
+| PlantArray (from `plant_list_make`) | 48–168 | NO | v0.51.2 (TD-001) |
+| PlantTensor struct + fields | 88–128 | NO | v0.51.7 (TD-002) |
+| `plant_tensor_to_string` buffer | 1,024 | NO | v0.51.2+ (TD-003) |
+
+### Loop behavior (mitigating)
+
+PlantLang loops optimize variable reuse:
+```plantlang
+LOOP i FROM 1 TO 100:
+  CREATE T TO TENSOR([1, 2, 3]).
+/LOOP
+```
+Result: Only 1 tensor exists at exit (not 100). The compiler reuses the variable slot. **Leaks do NOT accumulate.**
+
+### LIST OF TENSOR warning (non-mitigating)
+
+Lists of tensors WILL accumulate leaks:
+```plantlang
+CREATE L TO LIST OF TENSOR(...).
+```
+Each new tensor in the list leaks ~240 bytes. This is a known risk for future ML workloads. Fix requires codegen cleanup (TD-002).
+
+## What's NOT Supported Yet
+
+- Operations (add, multiply, reshape, transpose) — deferred to v0.51.2+
+- GPU acceleration — future phase
+- Sparse tensors — future phase
+- Broadcasting — v0.51.6
+
+## Roadmap
+
+| Version | Feature |
+|---------|---------|
+| v0.51.1 | TENSOR Core (this release) |
+| v0.51.2 | TENSOR Introspection |
+| v0.51.3 | TENSOR Reshape |
+| v0.51.4 | TENSOR Transpose |
+| v0.51.5 | TENSOR Operations |
+| v0.51.6 | TENSOR Broadcasting |
+| v0.51.7 | TENSOR Views |
+
+## Relationship with MATH and Matrix
+
+- **MATH**: Symbolic math engine (plant_math.c). PlantTensor is for numerical computation.
+- **Matrix**: PlantArray-based nested lists with MAT_ADD, MAT_SUB, etc. PlantTensor is a separate type with contiguous storage.
+- Future: TENSOR operations will replace Matrix operations for numerical work.
