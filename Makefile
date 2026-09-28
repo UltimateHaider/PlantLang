@@ -14,7 +14,7 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.51.2a
+VERSION    ?= 0.51.2b
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
@@ -435,6 +435,62 @@ verify-v0.51.2a: check-no-raw-malloc check-expected-files \
 	@echo ""
 	@echo "========================================================"
 	@echo "  v0.51.2a VERIFIED — PRODUCTION MILESTONE"
+	@echo "========================================================"
+
+# ── test-perf-6d: run 6D tensor benchmark ──────────────────────
+test-perf-6d: ## Run 6D tensor benchmark
+	@sh tests/perf/run_6d_bench.sh $(NATIVE_BIN)
+
+# ── check-benchmark-recorded: verify benchmark result recorded ──
+check-benchmark-recorded: ## Check benchmark result in perf_results.md
+	@if ! grep -q "6D tensor" perf_results.md 2>/dev/null; then \
+		echo "STOP: 6D tensor benchmark not recorded in perf_results.md"; \
+		echo "   Run: make test-perf-6d"; \
+		exit 1; \
+	fi
+	@echo "Benchmark recorded"
+
+# ── check-changelog-benchmark: verify benchmark in CHANGELOG ────
+check-changelog-benchmark: ## Check benchmark mentioned in CHANGELOG
+	@if ! grep -q "tensor_6d_bench" docs/CHANGELOG.md 2>/dev/null; then \
+		echo "STOP: tensor_6d_bench not mentioned in CHANGELOG.md"; \
+		exit 1; \
+	fi
+	@echo "CHANGELOG benchmark OK"
+
+# ── check-dispatcher-only: verify all free built-ins use plant_free
+check-dispatcher-only: ## Verify codegen uses plant_free for all free built-ins
+	@if ! grep -q 'ca2 IS "LIST_FREE".*plant_free' src/plantc/codegen_c.plant; then \
+		echo "STOP: LIST_FREE not routed through plant_free"; exit 1; \
+	fi
+	@if ! grep -q 'ca2 IS "TENSOR_FREE".*plant_free' src/plantc/codegen_c.plant; then \
+		echo "STOP: TENSOR_FREE not routed through plant_free"; exit 1; \
+	fi
+	@if ! grep -q 'ca2 IS "FREE".*plant_free' src/plantc/codegen_c.plant; then \
+		echo "STOP: FREE not routed through plant_free"; exit 1; \
+	fi
+	@echo "All free built-ins use plant_free dispatcher"
+
+# ── verify-v0.51.2b: comprehensive release gate ────────────────
+verify-v0.51.2b: check-no-raw-malloc check-expected-files \
+                 check-changelog-numbers check-ffi-safety \
+                 check-dispatcher-only ## Run v0.51.2b verification gate
+	@echo "========================================================"
+	@echo "  v0.51.2b VERIFICATION GATE"
+	@echo "========================================================"
+	@echo "[1/8] Native tests..."     && sh tests/native/run_native_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[2/8] Self-hosting..."     && make self || exit 1
+	@cmp -s build/plantc_v3 bin/Chloroplast || \
+		{ echo "STOP: Self-hosting failed"; exit 1; }
+	@echo "[3/8] valgrind strict..."  && $(MAKE) valgrind-check-tensor || exit 1
+	@echo "[4/8] Size report..."      && $(MAKE) size-report
+	@echo "[5/8] check-ffi-safety..." && $(MAKE) check-ffi-safety
+	@echo "[6/8] check-dispatcher..." && $(MAKE) check-dispatcher-only
+	@echo "[7/8] Update RELEASES..."  && $(MAKE) update-growth
+	@echo "[8/8] Verify RELEASES..."  && $(MAKE) check-releases-updated
+	@echo ""
+	@echo "========================================================"
+	@echo "  v0.51.2b VERIFIED"
 	@echo "========================================================"
 
 # ── verify-v0.51.1: comprehensive release gate ──────────────────

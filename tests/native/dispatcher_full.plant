@@ -1,0 +1,42 @@
+# tests/native/dispatcher_full.plant — Test plant_free generic dispatcher (TD-005)
+# All free built-ins now emit plant_free() — no type-specific calls.
+ACTION main(),
+  # 1. list_free_via_dispatcher
+  CREATE L1 TO [1, 2, 3].
+  SHOW L1.
+  LIST_FREE(L1).
+  SHOW "list_free_via_dispatcher: PASS".
+
+  # 2. tensor_free_via_dispatcher
+  CREATE T1 TO TENSOR([10, 20, 30]).
+  SHOW T1.
+  TENSOR_FREE(T1).
+  SHOW "tensor_free_via_dispatcher: PASS".
+
+  # 3. free_generic_via_dispatcher
+  CREATE L2 TO [4, 5, 6].
+  SHOW L2.
+  FREE L2.
+  SHOW "free_generic_via_dispatcher: PASS".
+
+  # 4. mixed_free_types
+  CREATE L3 TO [1, 2].
+  CREATE T2 TO TENSOR([3, 4]).
+  SHOW L3.
+  SHOW T2.
+  LIST_FREE(L3).
+  TENSOR_FREE(T2).
+  SHOW "mixed_free_types: PASS".
+
+  # 5. all_three_aliases_same_result
+  CREATE L4 TO [7, 8, 9].
+  CREATE T3 TO TENSOR([10, 11]).
+  CREATE L5 TO [12, 13].
+  SHOW L4.
+  LIST_FREE(L4).
+  SHOW T3.
+  TENSOR_FREE(T3).
+  SHOW L5.
+  FREE L5.
+  SHOW "all_three_aliases_same_result: PASS".
+/ACTION.

@@ -1,0 +1,38 @@
+# tests/native/dispatcher_backcompat.plant — Backward compatibility for free aliases
+# Ensure existing code using LIST_FREE/TENSOR_FREE still compiles and runs.
+# KNOWN FAILURE (TD-006): double-free in runtime.
+# See docs/TECH_DEBT.md. Expected to fail until v0.51.2c or v0.52.0.
+ACTION main(),
+  # 1. old_style_list_free
+  CREATE L1 TO [1, 2, 3, 4, 5].
+  SHOW L1.
+  LIST_FREE(L1).
+  SHOW "old_style_list_free: PASS".
+
+  # 2. old_style_tensor_free
+  CREATE T1 TO TENSOR([[1, 2], [3, 4]]).
+  SHOW T1.
+  TENSOR_FREE(T1).
+  SHOW "old_style_tensor_free: PASS".
+
+  # 3. mixed_old_and_new
+  CREATE L2 TO [10, 20].
+  CREATE T2 TO TENSOR([30, 40]).
+  SHOW L2.
+  SHOW T2.
+  LIST_FREE(L2).
+  FREE T2.
+  SHOW "mixed_old_and_new: PASS".
+
+  # 4. multiple_free_calls
+  CREATE L3 TO [100].
+  LIST_FREE(L3).
+  FREE L3.
+  SHOW "multiple_free_calls: PASS".
+
+  # 5. tensor_show_then_free
+  CREATE T3 TO TENSOR([1, 2, 3]).
+  SHOW T3.
+  FREE T3.
+  SHOW "tensor_show_then_free: PASS".
+/ACTION.

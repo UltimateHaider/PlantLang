@@ -1,0 +1,32 @@
+# tests/native/tensor_size.plant — Test TENSOR_SIZE introspection
+ACTION main(),
+  # 1. size_1d
+  CREATE T1 TO TENSOR([1, 2, 3]).
+  SHOW TENSOR_SIZE(T1).
+  TENSOR_FREE(T1).
+
+  # 2. size_2d
+  CREATE T2 TO TENSOR([[1, 2], [3, 4]]).
+  SHOW TENSOR_SIZE(T2).
+  TENSOR_FREE(T2).
+
+  # 3. size_3d
+  CREATE T3 TO TENSOR([[[1, 2]]]).
+  SHOW TENSOR_SIZE(T3).
+  TENSOR_FREE(T3).
+
+  # 4. size_6d
+  CREATE T6 TO TENSOR([[[[[[1, 2]]]]]]).
+  SHOW TENSOR_SIZE(T6).
+  TENSOR_FREE(T6).
+
+  # 5. size_single_element
+  CREATE T7 TO TENSOR([42]).
+  SHOW TENSOR_SIZE(T7).
+  TENSOR_FREE(T7).
+
+  # 6. size_rectangular
+  CREATE T8 TO TENSOR([[1, 2, 3], [4, 5, 6]]).
+  SHOW TENSOR_SIZE(T8).
+  TENSOR_FREE(T8).
+/ACTION.

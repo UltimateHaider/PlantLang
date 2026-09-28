@@ -74,8 +74,23 @@ All type-detection code checks `(uintptr_t)ptr >= 0x1000` before dereferencing, 
 ### T. SHOW Tensor Emits free(__str)
 `gen_show_stmt` wraps tensor SHOW output in `{ char* __str = ...; plant_iReport_print(r, __str); free(__str); }` to close the to_string leak.
 
-### W. FREE Generic Dispatcher (Stub)
-`plant_free()` is available in v0.51.2a but NOT emitted by codegen. Codegen emits type-specific `LIST_FREE`/`TENSOR_FREE` instead.
+### W. FREE Generic Dispatcher (Closed v0.51.2b)
+`plant_free()` is the generic type-aware dispatcher. Since v0.51.2b, codegen emits `plant_free()` for all three built-ins (LIST_FREE, TENSOR_FREE, FREE). No type-specific calls remain in generated code.
+
+### EE. TENSOR Introspection Return Types (v0.51.2b)
+`TENSOR_SHAPE` returns `PlantArray*` with string-ified shape values. `TENSOR_NDIM` and `TENSOR_SIZE` return `int64_t`. Shape values are stored as `strdup(snprintf(...))` strings, not raw integer casts.
+
+### FF. plant_free Returns Void (v0.51.2b)
+`plant_free()` returns `void`. Codegen must NOT assign its result (e.g., `x = plant_free(x)` is invalid; use `plant_free(x);` instead).
+
+### GG. FREE Keyword vs Function (v0.51.2b)
+`FREE` is a keyword with syntax `FREE x.` (no parentheses). `LIST_FREE(x)` and `TENSOR_FREE(x)` are regular function calls with parentheses.
+
+### HH. Expected Files Trailing Newline (v0.51.2b)
+All `.expected` files must end with a trailing newline. The test runner's diff comparison fails if the file lacks a final newline.
+
+### II. seg_is_numeric Prefix Length (v0.51.2b)
+`seg_is_numeric` prefix strings must match exactly (e.g., `plant_tensor_ndim(` = 18 chars, not 17). Off-by-one causes introspection built-ins to be treated as non-numeric.
 
 ### Y. valgrind-check-tensor Strict Mode
 `valgrind-check-tensor` uses `--error-exitcode=1` and `--errors-for-leak-kinds=definite` to catch any new leaks.

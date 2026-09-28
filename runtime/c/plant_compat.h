@@ -651,6 +651,11 @@ void  plant_tensor_free(PlantTensor* t);
 void plant_list_free(PlantArray* list);
 void plant_free(void* obj);
 
+/* v0.51.2b — TENSOR introspection (Principle FF) */
+PlantArray* plant_tensor_shape(PlantTensor* t);
+int64_t     plant_tensor_ndim(PlantTensor* t);
+int64_t     plant_tensor_size(PlantTensor* t);
+
 /* ── std/math FFI bindings (v0.49.19 — full module namespace) ──
    Every math-family endpoint is reachable as REAP … FROM math:FUNC.
    Legacy-eight endpoints route to their tagged-int-safe plant_*

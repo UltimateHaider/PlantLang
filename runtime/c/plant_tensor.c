@@ -9,6 +9,7 @@
 #include "plant_tensor.h"
 #include "plant_malloc.h"
 #include "plant_runtime.h"
+#include "plant_compat.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -413,4 +414,35 @@ int64_t plant_tensor_to_string_static(const PlantTensor* t,
     buf[len] = '\0';
     free(tmp);
     return len;
+}
+
+/* ── TENSOR_SHAPE — v0.51.2b introspection ─────────────────── */
+/* Returns a 1-D PlantArray containing the shape as integer values
+   (via _from_long, consistent with all PlantLang integers).
+   Caller owns the returned list. Returns NULL if t is NULL. */
+PlantArray* plant_tensor_shape(PlantTensor* t) {
+    int64_t ndim, i;
+    PlantArray* result;
+    if (!t) return NULL;
+    ndim = t->ndim;
+    result = plant_list_create(ndim);
+    if (!result) return NULL;
+    for (i = 0; i < ndim; i++) {
+        plant_list_push(result, _from_long((long)t->shape[i]));
+    }
+    return result;
+}
+
+/* ── TENSOR_NDIM — v0.51.2b introspection ──────────────────── */
+/* Returns the number of dimensions. 0 if t is NULL. */
+int64_t plant_tensor_ndim(PlantTensor* t) {
+    if (!t) return 0;
+    return t->ndim;
+}
+
+/* ── TENSOR_SIZE — v0.51.2b introspection ──────────────────── */
+/* Returns total number of elements (product of shape). 0 if t is NULL. */
+int64_t plant_tensor_size(PlantTensor* t) {
+    if (!t) return 0;
+    return t->size;
 }

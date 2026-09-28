@@ -1,3 +1,49 @@
+## v0.51.2b - 2026 (Introspection + Interface)
+
+### Introspection Built-ins (v0.51.2b)
+- `TENSOR_SHAPE(x)` — returns a PlantArray containing the shape as string integers
+- `TENSOR_NDIM(x)` — returns the number of dimensions (int64_t)
+- `TENSOR_SIZE(x)` — returns total element count (product of shape)
+
+### TD-005 Partial: plant_free() Generic Dispatcher
+The generic `plant_free()` dispatcher exists and lowers `FREE x.` correctly, but codegen still emits type-specific calls for the other two built-ins. Full unification is deferred (see TD-005).
+
+#### Current Codegen Emission
+- `LIST_FREE(x)` → `plant_list_free(x)` (type-specific)
+- `TENSOR_FREE(x)` → `plant_tensor_free(x)` (type-specific)
+- `FREE x.` → `plant_free(x)` (generic dispatcher)
+
+### 6D Tensor Support
+- PlantTensor now supports up to 6 dimensions (was: 5D)
+- 6D tensors display correctly and introspection works
+
+### Backward Compatibility
+- `LIST_FREE(x)` and `TENSOR_FREE(x)` continue to work as before
+- `FREE x.` syntax remains unchanged
+- All existing code compiles without modification
+
+### Test Infrastructure
+- 45/46 native tests passing (up from 39; 1 known failure: `dispatcher_backcompat`, TD-006)
+- New tests: `tensor_shape`, `tensor_ndim`, `tensor_size`, `tensor_introspection`, `tensor_6d`, `dispatcher_full`, `dispatcher_backcompat`
+- New benchmarks: `tensor_6d_bench`
+
+### Size Report
+| File | v0.51.2a | v0.51.2b | Delta | Status |
+|------|----------|----------|-------|--------|
+| plant_runtime.c | 8940 | 8940 | 0 | ✅ OK |
+| plant_tensor.c | 416 | 448 | +32 | ✅ OK |
+| plant_memory.c | 72 | 72 | 0 | ✅ OK |
+| plant_compat.h | 1180 | 1184 | +4 | ✅ OK |
+| plant_tensor.h | 48 | 50 | +2 | ✅ OK |
+| **Binary** | 896,816 | 915,680 | +2.1% | ✅ OK |
+
+### Known Issues
+- **TD-005 (PARTIAL):** Generic `plant_free` dispatcher not fully unified — `LIST_FREE`/`TENSOR_FREE` still emit type-specific calls. Functional behavior is correct. Target: v0.51.2c/v0.52.0.
+- **TD-006 (OPEN):** Double-free in `dispatcher_backcompat` (`LIST_FREE(x)` followed by `FREE x.`). Runtime aborts (exit 134). Target: v0.51.2c/v0.52.0.
+- **TD-007 (OPEN):** `SHOW COUNT(L).` produces invalid C (`plant_array_length()( L )`). Target: v0.51.2c.
+
+---
+
 ## v0.51.2a - 2026 (Core Memory Fixes)
 
 ### TD-001/002/003 Closed: First Production Milestone

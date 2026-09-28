@@ -1,0 +1,22 @@
+# tests/native/tensor_shape.plant — Test TENSOR_SHAPE introspection
+ACTION main(),
+  # 1. shape_1d
+  CREATE T1 TO TENSOR([1, 2, 3]).
+  SHOW TENSOR_SHAPE(T1).
+  TENSOR_FREE(T1).
+
+  # 2. shape_2d
+  CREATE T2 TO TENSOR([[1, 2], [3, 4]]).
+  SHOW TENSOR_SHAPE(T2).
+  TENSOR_FREE(T2).
+
+  # 3. shape_3d
+  CREATE T3 TO TENSOR([[[1, 2]]]).
+  SHOW TENSOR_SHAPE(T3).
+  TENSOR_FREE(T3).
+
+  # 4. shape_6d
+  CREATE T6 TO TENSOR([[[[[[1, 2]]]]]]).
+  SHOW TENSOR_SHAPE(T6).
+  TENSOR_FREE(T6).
+/ACTION.

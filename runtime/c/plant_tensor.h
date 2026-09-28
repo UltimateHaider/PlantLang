@@ -45,4 +45,10 @@ int64_t      plant_tensor_to_string_static(const PlantTensor* t,
 /* Construction from PlantArray (nested list) */
 void* plant_tensor_from_list(void* list);
 
+/* Introspection — v0.51.2b */
+struct PlantArray;  /* forward declaration */
+struct PlantArray*  plant_tensor_shape(PlantTensor* t);
+int64_t             plant_tensor_ndim(PlantTensor* t);
+int64_t             plant_tensor_size(PlantTensor* t);
+
 #endif /* PLANT_TENSOR_H */

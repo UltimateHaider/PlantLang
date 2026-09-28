@@ -15,10 +15,10 @@
 | v0.51.0 | 2026 | malloc simulation + tensor infrastructure | Released |
 | v0.51.0b | 2026 | plant_malloc exclusivity | Released |
 | v0.51.1 | 2026 | TENSOR Core type | Released |
-| v0.51.2a | 2026 | Core Memory Fixes (TD-001..004) | IN PROGRESS |
-| v0.51.2b | 2026 | Codegen auto-free at scope end | Planned |
-| v0.51.2c | 2026 | TENSOR Introspection | Planned |
-| v0.51.2d | 2026 | TENSOR Operations | Planned |
+| v0.51.2a | 2026 | Core Memory Fixes (TD-001..004) | Released |
+| v0.51.2b | 2026 | Introspection + Interface (TD-005) | IN PROGRESS |
+| v0.51.2c | 2026 | TENSOR Operations | Planned |
+| v0.51.2d | 2026 | Codegen auto-free at scope end | Planned |
 
 ## Growth Chart (ASCII)
 

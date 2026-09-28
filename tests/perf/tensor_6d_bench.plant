@@ -1,0 +1,27 @@
+# tests/perf/tensor_6d_bench.plant — 6D tensor allocation/free benchmark
+ACTION main(),
+  CREATE I TO 0.
+  CREATE N TO 1000.
+  CREATE T TO TENSOR([[[[[[1]]]]]]).
+
+  SHOW "start: 6D tensor bench (1000 iterations)".
+
+  # benchmark: allocate + free 6D tensors
+  CREATE TSUM TO 0.
+  CREATE I TO 0.
+  LOOP WHILE I < N,
+    CREATE T6 TO TENSOR([[[[[[I]]]]]]).
+    SHOW TENSOR_SIZE(T6).
+    TENSOR_FREE(T6).
+    CREATE I TO I + 1.
+  /LOOP.
+
+  SHOW "done: 6D tensor bench".
+
+  # introspection overhead
+  CREATE T7 TO TENSOR([[[[[[1, 2, 3, 4, 5, 6]]]]]]).
+  SHOW TENSOR_SHAPE(T7).
+  SHOW TENSOR_NDIM(T7).
+  SHOW TENSOR_SIZE(T7).
+  TENSOR_FREE(T7).
+/ACTION.

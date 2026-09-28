@@ -39,11 +39,38 @@
 - **Fix**: Target now compiles test → gcc → valgrind on compiled binary.
 - **Scope**: Makefile only
 
-## TD-005: plant_free() generic dispatcher not emitted by codegen
-- **Status**: OPEN (available for manual use in v0.51.2a)
-- **Introduced**: v0.51.2a
-- **Target fix**: v0.51.2b
-- **Impact**: LOW — type-specific `LIST_FREE()` and `TENSOR_FREE()` are sufficient for generated code
-- **Root cause**: `plant_free()` is a generic type dispatcher that detects PlantArray vs PlantTensor via magic. In v0.51.2a it is available for manual use but codegen does not emit it because type-specific calls are safer and faster.
-- **Fix plan**: v0.51.2b will emit `FREE()` for variables where the type is not statically known at codegen time.
-- **Scope**: Codegen only
+## TD-005: Generic plant_free dispatcher — PARTIAL
+- **Status**: PARTIAL (documentation was ahead of implementation)
+- **Introduced**: v0.51.2a (planned), v0.51.2b (partially applied)
+- **Target fix**: v0.51.2c or v0.52.0
+- **Impact**: LOW — functional behavior is correct, but the dispatcher is not fully unified.
+- **Actual state**: codegen still emits type-specific calls:
+  - `LIST_FREE(x)`   → `plant_list_free(x)`
+  - `TENSOR_FREE(x)` → `plant_tensor_free(x)`
+  - `FREE(x)`        → `plant_free(x)`
+- **Planned state (v0.51.2c+)**: all three should route through `plant_free(x)` for uniformity.
+- **Note**: `plant_free` already exists and dispatches by magic. The change is only in codegen emission.
+- **Related**: TD-006 (double-free) depends on how `plant_free` interacts with auto-cleanup.
+
+## TD-006: Double-free in dispatcher_backcompat
+- **Status**: OPEN
+- **Introduced**: v0.51.2b (test added in v0.51.2a-b transition)
+- **Target fix**: v0.51.2c or v0.52.0
+- **Impact**: MEDIUM — 1 failing native test (`dispatcher_backcompat`).
+- **Symptom**: Runtime aborts with "double free detected in tcache 2" (exit 134).
+- **Root cause**: codegen emits both `plant_list_free(L3)` AND `L3 = plant_mem_free((tx_t)L3)` for the same variable. The second free is a use-after-free.
+- **Unsafe proposed fix (REJECTED)**: zeroing magic before `free()` and checking `magic==0` in `plant_mem_free`. This reads from freed memory (undefined behavior).
+- **Correct fix direction**: codegen must track that a variable was explicitly freed via `*_FREE`, and skip auto `plant_mem_free` for it. Requires variable-lifecycle tracking in codegen.
+- **Related**: Type System Audit planned for v0.52.0.
+
+## TD-007: SHOW COUNT(L) produces invalid C
+- **Status**: OPEN
+- **Introduced**: pre-existing (discovered in v0.51.2b testing)
+- **Target fix**: v0.51.2c
+- **Impact**: LOW-MEDIUM — `COUNT(L)` works inline but not in `SHOW`.
+- **Symptom**: `SHOW COUNT(L).` produces a GCC error.
+- **Generated C (wrong)**: `plant_array_length()( L )` — invalid C
+- **Expected C**: `plant_array_length( L )`
+- **Root cause**: `_handle_func` splits by `"COUNT "` (with trailing space) and doesn't match `"COUNT("`. The `COUNT` prefix is partially translated but not merged with the argument.
+- **Correct fix direction**: handle `"COUNT("` in the same dispatch as `"COUNT "`.
+- **Related**: Type System Audit planned for v0.52.0.

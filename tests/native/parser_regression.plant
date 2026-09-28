@@ -26,5 +26,33 @@ ACTION main(),
   SHOW TENSOR([[[1, 2], [3, 4]], [[5, 6], [7, 8]]]).
   # 13. parser_4level_nesting
   SHOW TENSOR([[[[1, 2]]]]).
+
+  # 14. parser_free_alias_list_free
+  CREATE L1 TO [1, 2, 3].
+  LIST_FREE(L1).
+
+  # 15. parser_free_alias_tensor_free
+  CREATE T1 TO TENSOR([1, 2, 3]).
+  TENSOR_FREE(T1).
+
+  # 16. parser_free_alias_generic_free
+  CREATE L2 TO [4, 5, 6].
+  FREE L2.
+
+  # 17. parser_introspection_shape
+  CREATE T2 TO TENSOR([[1, 2], [3, 4]]).
+  SHOW TENSOR_SHAPE(T2).
+  TENSOR_FREE(T2).
+
+  # 18. parser_introspection_ndim
+  CREATE T3 TO TENSOR([[[1, 2]]]).
+  SHOW TENSOR_NDIM(T3).
+  TENSOR_FREE(T3).
+
+  # 19. parser_introspection_size
+  CREATE T4 TO TENSOR([[[[1, 2]], [[3, 4]]]]).
+  SHOW TENSOR_SIZE(T4).
+  TENSOR_FREE(T4).
+
   GIVE 0.
 /GIVE main.

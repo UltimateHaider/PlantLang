@@ -1,0 +1,44 @@
+# tests/native/tensor_introspection.plant — Combined introspection test
+ACTION main(),
+  # 1. introspect_1d
+  CREATE T1 TO TENSOR([10, 20, 30]).
+  SHOW TENSOR_SHAPE(T1).
+  SHOW TENSOR_NDIM(T1).
+  SHOW TENSOR_SIZE(T1).
+  TENSOR_FREE(T1).
+
+  # 2. introspect_2d
+  CREATE T2 TO TENSOR([[1, 2, 3], [4, 5, 6]]).
+  SHOW TENSOR_SHAPE(T2).
+  SHOW TENSOR_NDIM(T2).
+  SHOW TENSOR_SIZE(T2).
+  TENSOR_FREE(T2).
+
+  # 3. introspect_3d
+  CREATE T3 TO TENSOR([[[1, 2, 3], [4, 5, 6]], [[7, 8, 9], [10, 11, 12]]]).
+  SHOW TENSOR_SHAPE(T3).
+  SHOW TENSOR_NDIM(T3).
+  SHOW TENSOR_SIZE(T3).
+  TENSOR_FREE(T3).
+
+  # 4. introspect_4d
+  CREATE T4 TO TENSOR([[[[1, 2], [3, 4]], [[5, 6], [7, 8]]], [[[9, 10], [11, 12]], [[13, 14], [15, 16]]]]).
+  SHOW TENSOR_SHAPE(T4).
+  SHOW TENSOR_NDIM(T4).
+  SHOW TENSOR_SIZE(T4).
+  TENSOR_FREE(T4).
+
+  # 5. introspect_5d
+  CREATE T5 TO TENSOR([[[[[1, 2], [3, 4]], [[5, 6], [7, 8]]], [[[9, 10], [11, 12]], [[13, 14], [15, 16]]]]]).
+  SHOW TENSOR_SHAPE(T5).
+  SHOW TENSOR_NDIM(T5).
+  SHOW TENSOR_SIZE(T5).
+  TENSOR_FREE(T5).
+
+  # 6. introspect_6d
+  CREATE T6 TO TENSOR([[[[[[1, 2]]]]]]).
+  SHOW TENSOR_SHAPE(T6).
+  SHOW TENSOR_NDIM(T6).
+  SHOW TENSOR_SIZE(T6).
+  TENSOR_FREE(T6).
+/ACTION.

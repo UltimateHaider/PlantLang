@@ -12,7 +12,15 @@ PlantLang does NOT have garbage collection. All heap-allocated objects (lists, t
 |----------|-------------|----------|
 | `LIST_FREE(x)` | Recursively frees a PlantArray | Free nested lists |
 | `TENSOR_FREE(x)` | Frees a PlantTensor | Free tensors |
-| `FREE(x)` | Generic type-aware dispatcher | When type is unknown |
+| `FREE x.` | Generic type-aware dispatcher | When type is unknown |
+
+### Aliases (v0.51.2b+)
+
+All three built-ins (`LIST_FREE`, `TENSOR_FREE`, `FREE`) are functionally identical since v0.51.2b. They all route through the `plant_free()` generic dispatcher, which detects the type via magic bytes and frees accordingly.
+
+- Use `LIST_FREE(x)` when x is known to be a list
+- Use `TENSOR_FREE(x)` when x is known to be a tensor
+- Use `FREE x.` when the type is unknown or mixed
 
 ### Example
 

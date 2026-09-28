@@ -1,0 +1,28 @@
+# tests/native/tensor_6d.plant — Test 6D tensor support
+ACTION main(),
+  # 1. six_d_create
+  CREATE T1 TO TENSOR([[[[[[1, 2, 3, 4, 5, 6]]]]]]).
+  SHOW T1.
+
+  # 2. six_d_shape
+  SHOW TENSOR_SHAPE(T1).
+
+  # 3. six_d_ndim
+  SHOW TENSOR_NDIM(T1).
+
+  # 4. six_d_size
+  SHOW TENSOR_SIZE(T1).
+
+  # 5. six_d_from_list
+  CREATE L1 TO [[[1, 2], [3, 4]], [[5, 6], [7, 8]]].
+  CREATE T2 TO TENSOR(L1).
+  SHOW T2.
+  SHOW TENSOR_SHAPE(T2).
+  SHOW TENSOR_SIZE(T2).
+  TENSOR_FREE(T2).
+  LIST_FREE(L1).
+
+  # 6. six_d_free
+  TENSOR_FREE(T1).
+  SHOW "tensor_6d_free: PASS".
+/ACTION.

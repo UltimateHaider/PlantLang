@@ -87,10 +87,16 @@ Each new tensor in the list leaks ~240 bytes. This is a known risk for future ML
 
 ## Memory Management (v0.51.2a+)
 
-### Built-ins
+### Built-ins (All route through plant_free dispatcher since v0.51.2b)
 - `LIST_FREE(x)` — Recursively frees a PlantArray and its contents
 - `TENSOR_FREE(x)` — Frees a PlantTensor and its data
-- `FREE(x)` — Generic dispatcher (available for manual use)
+- `FREE x.` — Generic type-aware dispatcher (same as above)
+
+### Aliases
+`LIST_FREE`, `TENSOR_FREE`, and `FREE` are functionally identical in v0.51.2b+. All three route through the `plant_free()` generic dispatcher. Use whichever reads best in context:
+- `LIST_FREE(x)` — when x is known to be a list
+- `TENSOR_FREE(x)` — when x is known to be a tensor
+- `FREE x.` — when the type is unknown or mixed
 
 ### Example
 ```plantlang
@@ -111,12 +117,32 @@ ACTION main(),
 - Sparse tensors — future phase
 - Broadcasting — v0.51.6
 
+## Introspection Built-ins (v0.51.2b)
+
+| Built-in | Return Type | Description |
+|----------|-------------|-------------|
+| `TENSOR_SHAPE(x)` | `PlantArray*` (list of integers) | Shape values via `_from_long`, e.g. `[2, 3]` |
+| `TENSOR_NDIM(x)` | `int64_t` | Number of dimensions |
+| `TENSOR_SIZE(x)` | `int64_t` | Total element count (product of shape) |
+
+### TENSOR_SHAPE Return Type
+
+Returns a **List** of shape values. Values are stored as PlantLang integers (via `_from_long`), which are internally `char*` strings — consistent with all PlantLang integers.
+
+```plantlang
+CREATE T TO TENSOR([[1, 2], [3, 4]]).
+CREATE S TO TENSOR_SHAPE(T).
+SHOW S.           # [2, 2]
+TENSOR_FREE(T).
+```
+
 ## Roadmap
 
 | Version | Feature |
 |---------|---------|
 | v0.51.1 | TENSOR Core (this release) |
-| v0.51.2 | TENSOR Introspection |
+| v0.51.2a | Core Memory Fixes (TD-001..004) |
+| v0.51.2b | Introspection + Interface (TENSOR_SHAPE/NDIM/SIZE, TD-005) |
 | v0.51.3 | TENSOR Reshape |
 | v0.51.4 | TENSOR Transpose |
 | v0.51.5 | TENSOR Operations |
