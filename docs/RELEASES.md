@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.51.2d.1
+# Auto-updated: 0.51.2d.2
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.51.2d.1 | 919904 | 8941 | 448 | 109 | 322 | 5361 |
+| v0.51.2d.2 | 919904 | 8941 | 448 | 109 | 322 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -19,7 +19,7 @@
 | v0.51.2b | 2026 | Introspection + Interface | Released |
 | v0.51.2c | 2026 | Lifecycle Tracking + Release | Released |
 | v0.51.2d.1 | 2026 | TDs Closure (TD-008/010/011/012/013) | Released |
-| v0.51.2d.2 | 2026 | Global/Closure/Static + JJ + 6D | Planned |
+| v0.51.2d.2 | 2026 | Advanced Scopes + JJ + 6D | Released |
 
 ## Growth Chart (ASCII)
 

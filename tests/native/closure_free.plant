@@ -1,0 +1,18 @@
+# tests/native/closure_free.plant — v0.51.2d.2 closure-body lifecycle
+# freed_vars works inside generated closure bodies: LIST_FREE followed
+# by FREE emits a single free (no double-free). Uses the real
+# [captures](params) -> body closure syntax; the nested-ACTION form
+# emits malformed C (see TD-017).
+ACTION main(),
+  CREATE x(NUM) TO 1.
+  CREATE h TO [MOVE x](v(NUM)) -> (
+    CREATE L TO [v].
+    LIST_FREE(L).
+    FREE L.
+    GIVE v
+  ).
+  REAP r FROM h, 4.
+  REAP rs FROM _from_long, r.
+  SHOW "closure-ok".
+  GIVE 0.
+/GIVE main.

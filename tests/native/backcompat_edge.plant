@@ -1,0 +1,25 @@
+# tests/native/backcompat_edge.plant — v0.51.2d.2 JJ principle
+# Edge cases: double-free protection, multiple tensors, nested function.
+# (Top-level ACTION form: SUITE-with-nested-ACTION emits malformed C.)
+ACTION inner(),
+  CREATE LL TO [5, 6].
+  LIST_FREE(LL).
+/ACTION.
+
+ACTION main(),
+  # Double-free protection (same-scope freed_vars)
+  CREATE L TO [1, 2, 3].
+  LIST_FREE(L).
+  FREE L.        # skipped (already freed)
+
+  # Multiple tensors
+  CREATE T1 TO TENSOR([1, 2]).
+  CREATE T2 TO TENSOR([3, 4]).
+  TENSOR_FREE(T1).
+  TENSOR_FREE(T2).
+
+  # Nested function
+  inner().
+
+  SHOW "edge-ok".
+/ACTION.

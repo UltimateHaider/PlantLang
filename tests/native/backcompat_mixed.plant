@@ -1,0 +1,15 @@
+# tests/native/backcompat_mixed.plant — v0.51.2d.2 JJ principle
+# Mixed old/new free aliases in one scope, all routed through plant_free.
+SUITE "Back-Compat Mixed"
+  CREATE L1 TO [1, 2, 3].
+  CREATE L2 TO [4, 5, 6].
+  CREATE T1 TO TENSOR([7, 8, 9]).
+  CREATE T2 TO TENSOR([10, 11, 12]).
+
+  LIST_FREE(L1).
+  FREE L2.
+  TENSOR_FREE(T1).
+  FREE T2.
+
+  SHOW "mixed-ok".
+/SUITE

@@ -143,3 +143,36 @@ All verify-* targets must include valgrind-check-tensor.
     - plant_heapstr_release checks the magic before freeing.
     - Safety: no false free for static literals (magic mismatch).
     - Cost: one bounded read before the string pointer.
+
+### JJ. Back-compat tests required (v0.51.2d.2+)
+
+    - Every codegen change MUST include a back-compat test.
+    - Tests must exercise BOTH old API names and new ones.
+    - For v0.51.2d.2: backcompat tests cover:
+      - LIST_FREE / TENSOR_FREE / FREE aliases.
+      - Old code patterns (v0.51.2a style).
+      - Mixed patterns.
+      - Edge cases.
+    - Rationale: API changes must preserve backward compatibility
+      without silent breakage.
+    - Status: MANDATORY from v0.51.2d.2 onward.
+
+### KKK. Global tracking deferred (v0.51.2d.2)
+
+    - Global variables in PlantLang are main() locals; not visible
+      to ACTIONs. No cross-function mutable state exists.
+    - Global lifecycle tracking is therefore not applicable in the
+      current architecture.
+    - Cross-scope (nested-block) free tracking is deferred to
+      v0.52.0 (Type System Audit) — see TD-015.
+
+### LLL. Static variables deferred (v0.51.2d.2)
+
+    - STATIC is not a keyword in PlantLang.
+    - STATIC declarations are deferred to v0.52.0 (TD-016).
+
+### MMM. Closure capture lifecycle deferred (v0.51.2d.2)
+
+    - Closure captures use heap env structs (plant_env_alloc).
+    - Env lifecycle is not individually managed.
+    - Deferred to v0.52.0 (TD-017).

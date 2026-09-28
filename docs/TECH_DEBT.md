@@ -49,16 +49,17 @@
   runtime (public API) but are no longer emitted.
 - **Related:** TD-006 (double-free, closed in c.1).
 
-## TD-006: Double-free in dispatcher_backcompat
-- **Status**: OPEN
+## TD-006: Double-free in dispatcher_backcompat — CLOSED
+- **Status**: ✅ CLOSED in v0.51.2c.1 (variable-lifecycle tracking).
 - **Introduced**: v0.51.2b (test added in v0.51.2a-b transition)
-- **Target fix**: v0.51.2c or v0.52.0
-- **Impact**: MEDIUM — 1 failing native test (`dispatcher_backcompat`).
-- **Symptom**: Runtime aborts with "double free detected in tcache 2" (exit 134).
-- **Root cause**: codegen emits both `plant_list_free(L3)` AND `L3 = plant_mem_free((tx_t)L3)` for the same variable. The second free is a use-after-free.
-- **Unsafe proposed fix (REJECTED)**: zeroing magic before `free()` and checking `magic==0` in `plant_mem_free`. This reads from freed memory (undefined behavior).
-- **Correct fix direction**: codegen must track that a variable was explicitly freed via `*_FREE`, and skip auto `plant_mem_free` for it. Requires variable-lifecycle tracking in codegen.
-- **Related**: Type System Audit planned for v0.52.0.
+- **Symptom**: Runtime aborted with "double free detected in tcache 2".
+- **Root cause**: codegen emitted both `plant_list_free(L3)` AND
+  `L3 = plant_mem_free((tx_t)L3)` for the same variable.
+- **Fix**: `freed_vars` (env slot 13) tracks explicitly-freed variables;
+  auto-cleanup skips them.
+- **Residual**: frees inside a nested block are block-scoped (invisible
+  to the enclosing scope) — a cross-scope double-free remains. See **TD-015**.
+- **Related**: TD-015 (global/cross-scope tracking, v0.52.0).
 
 ## TD-007: COUNT in SHOW/IF/CYCLE — CLOSED
 
@@ -178,10 +179,80 @@ SHOW n.
   `valgrind-check-tensor` now fail on pre-existing leaks. This is
   correct. v0.51.2d.1 fixes the underlying leaks (TD-008 + TD-010).
 
-## TD-014: tensor_basic test leaks its own T4/T5
-- **Status:** OPEN
-- **Target fix:** v0.51.2d.2 or v0.52.0
-- **Impact:** LOW — the test does not `TENSOR_FREE` its `T4`/`T5` tensors.
-- **Fix:** add `TENSOR_FREE` calls to `tensor_basic.plant`, or document
-  the test's intent.
-- **Discovered by:** v0.51.2d.1 valgrind analysis.
+## TD-014: tensor_basic test leaks its own T4/T5 — CLOSED
+- **Status:** ✅ CLOSED in v0.51.2d.1
+- **Fixed:** `tensor_basic` and `tensor_refcount` now free their tensors
+  (test hygiene).
+
+## TD-015: Global/cross-scope lifecycle tracking — DEFERRED
+- **Status:** DEFERRED to v0.52.0 (Type System Audit)
+- **Introduced:** v0.51.2d.2 (scope analysis)
+- **Impact:** MEDIUM — affects nested-block frees of outer variables.
+
+### Findings
+1. **Global variables tracking is not applicable.**
+   - In PlantLang, "globals" are top-level statements compiled into
+     `main()` locals. They are NOT visible to ACTIONs.
+   - The codegen has no cross-function mutable state (no shared env).
+   - The directive's global-tracking scenario (top-level free via
+     ACTION) is not expressible.
+   - Top-level free tracking already works via `freed_vars` (slot 13).
+   - Slot 14 (`global_freed_vars`) would be dead code.
+2. **Nested-block cross-scope double-free exists.**
+   - Example:
+```plantlang
+CREATE G TO [1, 2, 3].
+IF 1 > 0, LIST_FREE(G). /IF.
+FREE G.    # double-free
+```
+   - Cause: `freed_vars` is block-scoped (from v0.51.2c.1) — a free
+     inside a nested block is invisible to the outer scope.
+   - Trade-off: block-scoping → double-free; function-scoping → leak.
+   - This is the documented conditional/cross-scope free limitation.
+
+### Target
+v0.52.0 (Type System Audit): implement proper scope tracking; decide
+block- vs function-scope with type information; or implement safe
+double-free detection.
+
+### User Guidance
+Avoid freeing an outer variable inside a nested block and then freeing
+it again outside. Use a single free point.
+
+## TD-016: STATIC variables not supported — DEFERRED
+- **Status:** DEFERRED to v0.52.0 (Type System Audit)
+- **Introduced:** pre-v0.51.2 (long-standing; `STATIC` is not a keyword)
+- **Impact:** LOW — `STATIC` is not part of the language today.
+- **Symptom:** `STATIC c TO 0.` is silently dropped; subsequent uses of
+  `c` emit `c undeclared` in the generated C (GCC error).
+- **Root cause:** `STATIC` is not a lexer/parser keyword; the statement
+  is ignored.
+- **Target:** v0.52.0 — add `STATIC` declarations (C `static` storage)
+  and lifecycle tracking. Static lifecycle tracking cannot precede
+  STATIC language support.
+
+## TD-017: Closure capture lifecycle not managed — DEFERRED
+- **Status:** DEFERRED to v0.52.0 (Type System Audit)
+- **Introduced:** v0.51.2d.2 (closure scope analysis)
+- **Impact:** LOW-MEDIUM.
+
+### Findings
+1. Captured variables are stored in **heap-allocated `plant_Env_N`
+   structs** via `plant_env_alloc` (NOT the codegen `env_make`
+   mechanism), registered in `_env_registry`.
+2. Env structs are never individually freed (they remain
+   "still reachable" via the registry) → potential growth.
+3. MOVE/REF capture ownership for LIST/TENSOR captures is undefined
+   (MOVE copies the value, REF aliases the outer variable).
+4. **Positive:** `freed_vars` DOES work inside generated closure bodies
+   — a `LIST_FREE` followed by `FREE` emits a single free (verified by
+   `closure_free.plant`).
+5. The directive's nested-`ACTION` closure syntax is NOT supported
+   (emits malformed C); real closures use `[captures](params) -> body`.
+
+### Target
+v0.52.0 — define capture ownership and free closure envs.
+
+### User Guidance
+Do not rely on captured container lifetimes; free containers in the
+defining scope.

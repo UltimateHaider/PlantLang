@@ -1,0 +1,9 @@
+=== 6D Tensor Benchmark ===
+Date: Mon Sep 28 09:33:41 PM +04 2026
+Host: penguin
+OS: Linux 6.6.76-08111-g8df27f55632a
+Compiler: cc (Debian 12.2.0-14+deb12u1) 12.2.0
+
+--- 1000 iterations, 6D tensor create+free (runtime) ---
+bench-done
+Elapsed: 3 ms

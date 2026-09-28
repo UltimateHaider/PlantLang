@@ -1,0 +1,15 @@
+# tests/native/backcompat_basic.plant — v0.51.2d.2 JJ principle
+# Old API names (LIST_FREE / TENSOR_FREE / FREE) keep working.
+SUITE "Back-Compat Basic"
+  CREATE L TO [1, 2, 3].
+  SHOW "list-ok".
+  LIST_FREE(L).
+
+  CREATE T TO TENSOR([4, 5, 6]).
+  SHOW "tensor-ok".
+  TENSOR_FREE(T).
+
+  CREATE L2 TO [7, 8, 9].
+  FREE L2.
+  SHOW "backcompat-ok".
+/SUITE

@@ -1,3 +1,43 @@
+## v0.51.2d.2 — Advanced Scopes + JJ + 6D
+
+### Performance Benchmark (6D)
+
+Source: `tests/perf/6d_bench_results.txt`
+
+| Workload | Value |
+|----------|-------|
+| Iterations | 1000 |
+| 6D tensor create+free (runtime) | 3 ms |
+| Environment | Debian 12 (gcc 12.2.0), Linux 6.6.76 |
+
+### Added
+- JJ principle: every codegen change MUST include a back-compat test.
+- 3 back-compat tests: backcompat_basic, backcompat_mixed, backcompat_edge.
+- Closure-body lifecycle test: closure_free.
+- 6D tensor benchmark (tests/perf/tensor_6d_bench.plant + run_6d_bench.sh).
+
+### Deferred (v0.52.0 — Type System Audit)
+- TD-015: Global/cross-scope lifecycle tracking — globals are main()
+  locals; no cross-function mutable state.
+- TD-016: STATIC variables — `STATIC` is not a lexer/parser keyword.
+- TD-017: Closure capture lifecycle — heap env structs, no per-env free.
+
+### Verified
+- Native: 67/67
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (513,141 B; md5 6b2fcf91)
+- valgrind-check-tensor: PASS
+- 6D benchmark: 3 ms for 1000 iterations
+- Binary: 919,904 bytes
+
+### Out of Scope (v0.52.0)
+- TD-009: Structs fundamentally broken.
+- TD-011: COUNT type-system gaps.
+- TD-015: Global/cross-scope lifecycle.
+- TD-016: STATIC variables.
+- TD-017: Closure capture lifecycle.
+
 ## v0.51.2d.1 — TDs Closure
 
 ### Fixed
