@@ -1,0 +1,5 @@
+# tests/native/td007_count_show.plant — v0.51.2c.3 COUNT in SHOW
+SUITE "TD-007 COUNT in SHOW"
+  CREATE L TO [1, 2, 3].
+  SHOW COUNT(L).
+/SUITE

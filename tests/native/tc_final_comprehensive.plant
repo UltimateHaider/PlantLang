@@ -1,0 +1,26 @@
+# tests/native/tc_final_comprehensive.plant — v0.51.2c final comprehensive
+# Combines unified dispatcher, lifecycle tracking, alive-free, and COUNT.
+# (Top-level ACTION form: SUITE-with-nested-ACTION emits malformed C.)
+ACTION inner(),
+  CREATE LL TO [10, 20].
+  LIST_FREE(LL).
+/ACTION.
+
+ACTION outer(),
+  inner().
+/ACTION.
+
+ACTION main(),
+  CREATE L1 TO [1, 2, 3].
+  LIST_FREE(L1).
+
+  CREATE L2 TO [4, 5, 6].
+  LIST_FREE(L2).
+  FREE L2.
+
+  CREATE L3 TO [7, 8, 9].
+  SHOW COUNT(L3).
+
+  outer().
+  SHOW "final-ok".
+/ACTION.

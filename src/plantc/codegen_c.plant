@@ -3792,6 +3792,9 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST), maths(LIST)),
     REAP e FROM strings:REPLACE, e, " OR ", " || ".
     REAP e FROM strings:REPLACE, e, "NOT ", "!".
     REAP e FROM strings:REPLACE, e, " IS ", " == ".
+    # v0.51.2c.3 — COUNT: paren form "COUNT ( L )" via _handle_func_paren,
+    # then bare form "COUNT L" via _handle_func.
+    REAP e FROM _handle_func_paren, e, "COUNT", "plant_array_length".
     REAP e FROM _handle_func, e, "COUNT", "plant_array_length".
     # v0.49.18 shadow-order guard: these seven must
     # rewrite BEFORE their shorter substrings (SINH/COSH/TANH/GAMMA,
@@ -5828,8 +5831,9 @@ ACTION generate_node(node, env(LIST)),
         REAP ca2 FROM _swap_self, ca2.
         CREATE ca2orig(TX) TO ca2.
         # v0.51.2a — memory management built-in rewrites for call_stmt
-        IF ca2 IS "LIST_FREE", SET ca2 TO "plant_list_free". /IF.
-        IF ca2 IS "TENSOR_FREE", SET ca2 TO "plant_tensor_free". /IF.
+        # v0.51.2c.3 — unified: all free built-ins route through plant_free (TD-005).
+        IF ca2 IS "LIST_FREE", SET ca2 TO "plant_free". /IF.
+        IF ca2 IS "TENSOR_FREE", SET ca2 TO "plant_free". /IF.
         IF ca2 IS "FREE", SET ca2 TO "plant_free". /IF.
         # v0.51.2c.1 — record explicitly freed local vars (TD-006).
         IF ca2orig IS "LIST_FREE" OR ca2orig IS "TENSOR_FREE" OR ca2orig IS "FREE",

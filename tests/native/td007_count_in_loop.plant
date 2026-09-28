@@ -1,0 +1,11 @@
+# tests/native/td007_count_in_loop.plant — v0.51.2c.3 COUNT in CYCLE
+# NOTE: uses ACTION main (not SUITE) because collect_nums_walk does not
+# recurse into suite_stmt bodies, so a bare SHOW of a CYCLE iterVar inside
+# a SUITE would not be wrapped in _from_long (pre-existing SUITE/nums gap,
+# out of scope for v0.51.2c.3).
+ACTION main(),
+  CREATE L TO [1, 2, 3].
+  CYCLE i FROM 1 TO COUNT(L),
+    SHOW i.
+  /CYCLE.
+/ACTION.

@@ -1,0 +1,7 @@
+# tests/native/td007_count_in_if.plant — v0.51.2c.3 COUNT in IF
+SUITE "TD-007 COUNT in IF"
+  CREATE L TO [1, 2, 3].
+  IF COUNT(L) > 0,
+    SHOW "has-items".
+  /IF.
+/SUITE

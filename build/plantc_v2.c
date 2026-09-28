@@ -10924,6 +10924,7 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* 
     e = strings_REPLACE(e, " OR ", " || ");
     e = strings_REPLACE(e, "NOT ", "!");
     e = strings_REPLACE(e, " IS ", " == ");
+    e = _handle_func_paren(e, "COUNT", "plant_array_length");
     e = _handle_func(e, "COUNT", "plant_array_length");
     e = _math_func_paren(e, "ASINH", "math_asinh");
     e = _math_func_paren(e, "ACOSH", "math_acosh");
@@ -12991,10 +12992,10 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     ca2 = _swap_self(ca2);
     tx_t ca2orig = ca2;
     if (strcmp(ca2,"LIST_FREE") == 0) {
-    ca2 = "plant_list_free";
+    ca2 = "plant_free";
     }
     if (strcmp(ca2,"TENSOR_FREE") == 0) {
-    ca2 = "plant_tensor_free";
+    ca2 = "plant_free";
     }
     if (strcmp(ca2,"FREE") == 0) {
     ca2 = "plant_free";
@@ -16638,7 +16639,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.51.2b (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.51.2c (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

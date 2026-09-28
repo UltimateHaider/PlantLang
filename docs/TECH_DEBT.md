@@ -39,18 +39,15 @@
 - **Fix**: Target now compiles test → gcc → valgrind on compiled binary.
 - **Scope**: Makefile only
 
-## TD-005: Generic plant_free dispatcher — PARTIAL
-- **Status**: PARTIAL (documentation was ahead of implementation)
-- **Introduced**: v0.51.2a (planned), v0.51.2b (partially applied)
-- **Target fix**: v0.51.2c or v0.52.0
-- **Impact**: LOW — functional behavior is correct, but the dispatcher is not fully unified.
-- **Actual state**: codegen still emits type-specific calls:
-  - `LIST_FREE(x)`   → `plant_list_free(x)`
-  - `TENSOR_FREE(x)` → `plant_tensor_free(x)`
-  - `FREE(x)`        → `plant_free(x)`
-- **Planned state (v0.51.2c+)**: all three should route through `plant_free(x)` for uniformity.
-- **Note**: `plant_free` already exists and dispatches by magic. The change is only in codegen emission.
-- **Related**: TD-006 (double-free) depends on how `plant_free` interacts with auto-cleanup.
+## TD-005: Generic plant_free dispatcher — CLOSED
+
+- **Status:** ✅ CLOSED in v0.51.2c.3
+- **Closed by:** unified dispatcher — LIST_FREE, TENSOR_FREE, and FREE
+  all emit `plant_free((void*)x)`.
+- **Historical:** v0.51.2a-b emitted type-specific calls
+  (`plant_list_free`, `plant_tensor_free`). These remain in the
+  runtime (public API) but are no longer emitted.
+- **Related:** TD-006 (double-free, closed in c.1).
 
 ## TD-006: Double-free in dispatcher_backcompat
 - **Status**: OPEN
@@ -63,17 +60,19 @@
 - **Correct fix direction**: codegen must track that a variable was explicitly freed via `*_FREE`, and skip auto `plant_mem_free` for it. Requires variable-lifecycle tracking in codegen.
 - **Related**: Type System Audit planned for v0.52.0.
 
-## TD-007: SHOW COUNT(L) produces invalid C
-- **Status**: OPEN
-- **Introduced**: pre-existing (discovered in v0.51.2b testing)
-- **Target fix**: v0.51.2c
-- **Impact**: LOW-MEDIUM — `COUNT(L)` works inline but not in `SHOW`.
-- **Symptom**: `SHOW COUNT(L).` produces a GCC error.
-- **Generated C (wrong)**: `plant_array_length()( L )` — invalid C
-- **Expected C**: `plant_array_length( L )`
-- **Root cause**: `_handle_func` splits by `"COUNT "` (with trailing space) and doesn't match `"COUNT("`. The `COUNT` prefix is partially translated but not merged with the argument.
-- **Correct fix direction**: handle `"COUNT("` in the same dispatch as `"COUNT "`.
-- **Related**: Type System Audit planned for v0.52.0.
+## TD-007: COUNT in SHOW/IF/CYCLE — CLOSED
+
+- **Status:** ✅ CLOSED in v0.51.2c.3
+- **Fixed:** COUNT works in all tested contexts:
+  - `SHOW COUNT(L).`
+  - `IF COUNT(L) > 0,`
+  - `CYCLE i FROM 1 TO COUNT(L),`
+  - `SHOW COUNT (L).` [space form]
+  - `SHOW COUNT L.` [bare form]
+- **Fix:** `translate_expr` now applies `_handle_func_paren` for COUNT
+  before `_handle_func`. Tokens joined with spaces → `"COUNT ( L )"`
+  is now correctly lowered to `plant_array_length(L)`.
+- **Related:** TD-011 (complex expressions).
 
 ## TD-008: TENSOR([...]) input list not freed
 - **Status:** OPEN
@@ -145,3 +144,56 @@
 - **Evidence:** isolated `CREATE L TO [1,2]. LIST_FREE(L).` → 0 B; `[10,20]` → 6 B; `[10,20,30,40]` → 12 B.
 - **Constraint:** requires runtime change (`plant_memory.c` / `plant_compat.h`) → out of scope for v0.51.2c.2.
 - **Discovered by:** valgrind on freed_vars_nested_func (v0.51.2c.2).
+
+## TD-011: COUNT in complex expressions — MOSTLY FIXED
+
+- **Status:** MOSTLY FIXED in v0.51.2c.3 (edge cases remain)
+- **Target for remaining edges:** v0.51.2d
+- **Impact:** LOW — common cases work.
+
+### Fixed in v0.51.2c.3
+- `SHOW COUNT(L).`
+- `IF COUNT(L) > 0, ...`
+- `CYCLE i FROM 1 TO COUNT(L), ...`
+- `COUNT(L)` in mixed expressions
+- **`COUNT(L1) + COUNT(L2)` (complex case now works!)**
+
+### Possibly unfixed (v0.51.2d investigation)
+- `COUNT(FUNC(x))` where FUNC is a runtime call
+- `COUNT(L)` inside nested function calls
+- Deeply nested COUNT expressions
+- COUNT combined with other meta-operations
+
+### User Guidance
+If a complex COUNT expression fails, refactor with a temp:
+```plantlang
+CREATE n TO COUNT(L).
+SHOW n + COUNT(L2).
+```
+
+- **Related:** TD-007 (original COUNT fix), TD-012 (SUITE nums gap).
+
+## TD-012: collect_nums_walk does not recurse into suite_stmt
+
+- **Status:** OPEN
+- **Introduced:** pre-v0.51.2 (long-standing)
+- **Target fix:** v0.51.2d
+- **Impact:** LOW-MEDIUM — a bare `SHOW` of a CYCLE iterVar inside a
+  SUITE body is not `_from_long`-wrapped.
+- **Root cause:** `collect_nums_walk` does not scan `suite_stmt` bodies.
+  Numeric variables declared inside a SUITE are not added to `nums`,
+  so `expr_is_numeric` returns 0 for them → no `_from_long` wrapping.
+- **Workaround:** use top-level `ACTION main` form.
+- **Discovered by:** v0.51.2c.3 test authoring.
+- **Related:** TD-006 (lifecycle tracking), TD-011 (COUNT in contexts).
+
+## TD-013: valgrind-check-tensor masks valgrind exit code
+- **Status:** OPEN
+- **Introduced:** v0.51.0b or earlier
+- **Target fix:** v0.51.2d
+- **Impact:** MEDIUM — valgrind-check-tensor may report PASS even when
+  valgrind finds leaks, because `valgrind ... | tee` masks the exit
+  code (the pipeline's exit status is tee's, not valgrind's).
+- **Fix direction:** use `set -o pipefail` (POSIX) or capture exit
+  code before piping, or use process substitution.
+- **Discovered by:** v0.51.2c.3 documentation review.

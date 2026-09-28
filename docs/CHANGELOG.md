@@ -1,3 +1,46 @@
+## v0.51.2c — Lifecycle Tracking + Release
+
+### Fixed
+- TD-005: Unified `plant_free` dispatcher. LIST_FREE, TENSOR_FREE,
+  and FREE all emit `plant_free((void*)x)`.
+- TD-006: Double-free in `dispatcher_backcompat` (from c.1).
+- TD-007: COUNT works in SHOW, IF, and CYCLE contexts.
+- TD-011: COUNT in complex expressions
+  (e.g., `COUNT(L1) + COUNT(L2)`) now works.
+
+### Added
+- Variable lifecycle tracking (`freed_vars`) for:
+  - Local variables
+  - Loops and if branches
+  - Nested functions
+  - Mixed types
+- 13 new tests across the c sub-releases:
+  - c.1: freed_vars_basic, freed_vars_in_loop, freed_vars_in_if,
+    freed_vars_mixed
+  - c.2: freed_vars_nested_func, freed_vars_comprehensive
+  - c.3: td005_dispatcher, td007_count_show, td007_count_in_if,
+    td007_count_in_loop, tc_final_comprehensive
+  - earlier (c.1/c.2b): dispatcher_full, dispatcher_backcompat
+
+### Known Issues (TDs)
+- TD-008: TENSOR([...]) input list not freed → v0.51.2d.
+- TD-009: Structs fundamentally broken → v0.52.0.
+- TD-010: Multi-digit string leak in `plant_list_free` → v0.51.2d.
+- TD-011: COUNT edge cases (FUNC, nested) → v0.51.2d.
+- TD-012: SUITE bodies not scanned by `collect_nums_walk` → v0.51.2d.
+
+### Verified
+- Native: 57/57
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (511,656 B; md5 59a77547)
+- Binary: 919,808 bytes (+0.000% from c.2)
+
+### Out of Scope
+- Struct fields → TD-009
+- Global/Closure/Static → v0.51.2d
+- Deeply nested structs → v0.52.0
+
 ## v0.51.2c.2 — Advanced Lifecycle Scopes
 
 ### Added

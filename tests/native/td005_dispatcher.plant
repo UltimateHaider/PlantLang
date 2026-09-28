@@ -1,0 +1,15 @@
+# tests/native/td005_dispatcher.plant — v0.51.2c.3 unified plant_free dispatcher
+# All free built-ins (LIST_FREE, TENSOR_FREE, FREE) route through plant_free.
+SUITE "TD-005 Unified Dispatcher"
+  CREATE L TO [1, 2, 3].
+  SHOW "list-ok".
+  LIST_FREE(L).
+
+  CREATE T TO TENSOR([4, 5, 6]).
+  SHOW "tensor-ok".
+  TENSOR_FREE(T).
+
+  CREATE L2 TO [7, 8, 9].
+  FREE L2.
+  SHOW "td005-ok".
+/SUITE
