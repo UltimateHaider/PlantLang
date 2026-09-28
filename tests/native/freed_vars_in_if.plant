@@ -1,0 +1,9 @@
+# tests/native/freed_vars_in_if.plant — v0.51.2c.1 lifecycle tracking (if scope)
+# Free inside an IF branch; block-scoped tracker isolates it from the outer scope.
+SUITE "Freed Vars in If"
+  CREATE L TO [1, 2, 3].
+  IF 1 > 0,
+    LIST_FREE(L).
+  /IF.
+  SHOW "ok".
+/SUITE

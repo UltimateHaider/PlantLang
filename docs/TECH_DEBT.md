@@ -74,3 +74,17 @@
 - **Root cause**: `_handle_func` splits by `"COUNT "` (with trailing space) and doesn't match `"COUNT("`. The `COUNT` prefix is partially translated but not merged with the argument.
 - **Correct fix direction**: handle `"COUNT("` in the same dispatch as `"COUNT "`.
 - **Related**: Type System Audit planned for v0.52.0.
+
+## TD-008: TENSOR([...]) input list not freed
+- **Status:** OPEN
+- **Introduced:** v0.51.1 (TENSOR type introduction)
+- **Target fix:** v0.51.2d or v0.52.0
+- **Impact:** LOW-MEDIUM — every `TENSOR([...])` literal leaks the input list.
+- **Root cause:** `plant_tensor_from_list(list)` in `runtime/c/plant_tensor.c` does not free or take ownership of the input list.
+- **Affected tests:** tensor_basic, tensor_display, list_free, dispatcher_full, freed_vars_mixed, dispatcher_backcompat (all pre-existing, all outside v0.51.2c.1 scope).
+- **Impact estimate:** ~40-72 bytes per `TENSOR([...])` literal.
+- **Fix direction (one of):**
+  (a) `plant_tensor_from_list` takes ownership and frees the input list, OR
+  (b) codegen emits `plant_list_free` after `plant_tensor_from_list`.
+- **Constraint:** requires runtime change → out of scope for v0.51.2c.1.
+- **Discovered by:** valgrind on freed_vars_mixed and dispatcher_backcompat (v0.51.2c.1).

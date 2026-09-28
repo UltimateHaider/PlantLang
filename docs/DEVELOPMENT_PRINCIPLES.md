@@ -106,3 +106,13 @@ All verify-* targets must include valgrind-check-tensor.
 
 ### DD. update-growth Script
 `scripts/update_growth_table.sh` automates growth table updates in RELEASES.md.
+
+### TT. Variable lifecycle tracking (v0.51.2c.1+)
+
+    - Codegen tracks explicitly-freed variables in env slot 13
+      (`freed_vars`).
+    - Auto-cleanup skips variables present in `freed_vars`.
+    - Block-scoped via `generate_body` (snapshot/restore).
+    - Scope: local variables, loops, if, mixed types.
+    - Out of scope: nested functions, struct fields, global,
+      closure, static, nested structs.

@@ -196,6 +196,7 @@ tx_t env_mexit(PlantArray* env);
 tx_t env_wexit(PlantArray* env);
 tx_t env_indent_num(PlantArray* env);
 tx_t env_maths(PlantArray* env);
+tx_t env_freed(PlantArray* env);
 tx_t env_make(long indent_num, PlantArray* sigs, PlantArray* subst, PlantArray* clmap, tx_t actx, PlantArray* nums, PlantArray* stvars, PlantArray* evars, tx_t rty, tx_t mexit, tx_t wexit, PlantArray* maths);
 tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel);
 tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray* evars, tx_t actx, tx_t isel);
@@ -11122,12 +11123,15 @@ tx_t env_indent_num(PlantArray* env) {
 tx_t env_maths(PlantArray* env) {
     return env_get ( env , 12 );
 }
+tx_t env_freed(PlantArray* env) {
+    return env_get ( env , 13 );
+}
 tx_t env_make(long indent_num, PlantArray* sigs, PlantArray* subst, PlantArray* clmap, tx_t actx, PlantArray* nums, PlantArray* stvars, PlantArray* evars, tx_t rty, tx_t mexit, tx_t wexit, PlantArray* maths) {
   tx_t isel = "";
   tx_t env = "";
   tx_t _ = "";
     isel = indent_str(indent_num);
-    env = plant_list_create(13);
+    env = plant_list_create(14);
     env_set(env, 0, isel);
     env_set(env, 1, sigs);
     env_set(env, 2, subst);
@@ -11141,6 +11145,7 @@ tx_t env_make(long indent_num, PlantArray* sigs, PlantArray* subst, PlantArray* 
     env_set(env, 10, wexit);
     env_set(env, 11, _from_long ( indent_num ));
     env_set(env, 12, maths);
+    env_set(env, 13, plant_list_make ( 0 ));
     return env;
 }
 tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
@@ -12018,10 +12023,14 @@ tx_t gen_throw_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
     return _cat3(_cat4(isel, "  plant_throw(\"", wtype2, "\", "), cmsg, ");\n");
 }
 tx_t generate_body(PlantArray* bd, PlantArray* env) {
+  tx_t fvsave = "";
+  tx_t _ = "";
   tx_t node_code = "";
     tx_t res = "";
     long i = 0;
     tx_t node_el = "";
+    fvsave = env_get(env, 13);
+    env_set(env, 13, plant_list_make ( 0 ));
     while (i < plant_array_length(bd)) {
     node_el = plant_list_get(bd, i);
     node_code = generate_node(node_el, env);
@@ -12030,6 +12039,7 @@ tx_t generate_body(PlantArray* bd, PlantArray* env) {
     }
     i = i+1;
     }
+    env_set(env, 13, fvsave);
     return res;
 }
 tx_t _is_digit(tx_t c) {
@@ -12228,6 +12238,7 @@ tx_t generate_node(tx_t node, PlantArray* env) {
   tx_t wexit = "";
   tx_t isel0 = "";
   tx_t maths = "";
+  tx_t freed = "";
   tx_t code = "";
   tx_t lbl = "";
   tx_t cond = "";
@@ -12324,6 +12335,9 @@ tx_t generate_node(tx_t node, PlantArray* env) {
   tx_t tctx = "";
   tx_t ec2 = "";
   tx_t ca2 = "";
+  tx_t fargs = "";
+  tx_t fargel = "";
+  tx_t fin = "";
   tx_t ca2s = "";
   tx_t ael = "";
   tx_t asw = "";
@@ -12344,6 +12358,7 @@ tx_t generate_node(tx_t node, PlantArray* env) {
   tx_t isn3 = "";
   tx_t ftgt = "";
   tx_t fcv = "";
+  tx_t fskip = "";
   tx_t ap = "";
   tx_t ac = "";
   tx_t avp = "";
@@ -12389,6 +12404,7 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     wexit = env_wexit(env);
     isel0 = env_indent(env);
     maths = env_maths(env);
+    freed = env_freed(env);
     if (strcmp(clmap,"") == 0) {
     clmap = plant_list_make ( 0 );
     }
@@ -12973,6 +12989,7 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     if (strcmp(ntype,"call_stmt") == 0) {
     ca2 = _map_get(node, "action");
     ca2 = _swap_self(ca2);
+    tx_t ca2orig = ca2;
     if (strcmp(ca2,"LIST_FREE") == 0) {
     ca2 = "plant_list_free";
     }
@@ -12981,6 +12998,18 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     }
     if (strcmp(ca2,"FREE") == 0) {
     ca2 = "plant_free";
+    }
+    if (strcmp(ca2orig,"LIST_FREE") == 0 || strcmp(ca2orig,"TENSOR_FREE") == 0 || strcmp(ca2orig,"FREE") == 0) {
+    fargs = _map_get(node, "args");
+    if (plant_array_length(fargs) > 0) {
+    fargel = plant_list_get(fargs, 0);
+    if (strcmp(fargel,"") > 0) {
+    fin = list_contains(freed, fargel);
+    if (fin == 0) {
+                        freed = plant_list_add(freed, fargel);
+    }
+    }
+    }
     }
     PlantArray* cargs2 = _map_get ( node , "args" );
     PlantArray* ccl2 = _map_get ( node , "clargs" );
@@ -13074,6 +13103,11 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     ftgt = _map_get(node, "target");
     fcv = translate_expr(ftgt, nums, evars, maths);
     isel = indent_str(indent_num);
+    fskip = list_contains(freed, ftgt);
+    if (fskip == 1) {
+    return "";
+    }
+        freed = plant_list_add(freed, ftgt);
     return _cat3(_cat4(isel, "  ", fcv, " = plant_mem_free((tx_t)"), fcv, ");\n");
     }
     if (strcmp(ntype,"arc_link_stmt") == 0 || strcmp(ntype,"arc_unlink_stmt") == 0) {

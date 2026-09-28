@@ -1,0 +1,9 @@
+# tests/native/freed_vars_in_loop.plant — v0.51.2c.1 lifecycle tracking (loop scope)
+# Each iteration creates and frees its own list; block-scoped tracker isolates it.
+SUITE "Freed Vars in Loop"
+  CYCLE i FROM 1 TO 3,
+    CREATE L TO [i].
+    LIST_FREE(L).
+  /CYCLE.
+  SHOW "done".
+/SUITE

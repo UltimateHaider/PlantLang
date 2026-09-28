@@ -1,3 +1,40 @@
+## v0.51.2c.1 — Core Lifecycle Tracking
+
+### Fixed
+- TD-006: Double-free in `dispatcher_backcompat` is closed.
+  Codegen now tracks explicitly-freed variables (`freed_vars`)
+  and skips auto-cleanup for them.
+
+### Added
+- Variable lifecycle tracking for local variables, loops, if
+  branches, and mixed types.
+- 4 new tests: freed_vars_basic, freed_vars_in_loop,
+  freed_vars_in_if, freed_vars_mixed.
+- 6 codegen changes (env slot 13, env_freed accessor,
+  generate_body block-scoping, generate_node reads freed,
+  call_stmt records, free_stmt skips-or-records).
+
+### Known Issues
+- TD-008 (new): `TENSOR([...])` input list not freed.
+  Pre-existing since v0.51.1. Target fix: v0.51.2d or v0.52.0.
+  See docs/TECH_DEBT.md.
+
+### Verified
+- Native: 50/50 (was 45/46)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (511,606 bytes, md5 e9f7ebeb...)
+- Binary: 919,808 bytes (+0.451% from v0.51.2b)
+- valgrind: 3/5 clean; 2 pre-existing leaks documented as TD-008
+
+### Out of Scope (v0.51.2c.1)
+- Nested functions (v0.51.2c.2)
+- Struct fields (v0.51.2c.2)
+- Global / closure / static variables (v0.51.2d)
+- Nested structs (v0.52.0)
+- TD-007: SHOW COUNT(L) (v0.51.2c.2 or later)
+- LOOP keyword gap (separate concern)
+
 ## v0.51.2b - 2026 (Introspection + Interface)
 
 ### Introspection Built-ins (v0.51.2b)

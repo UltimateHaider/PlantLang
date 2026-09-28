@@ -1,0 +1,7 @@
+# tests/native/freed_vars_basic.plant — v0.51.2c.1 lifecycle tracking (basic scope)
+# Local var freed via LIST_FREE; tracker must not disturb basic-scope cleanup.
+SUITE "Freed Vars Basic"
+  CREATE L TO [1, 2, 3].
+  SHOW "basic-ok".
+  LIST_FREE(L).
+/SUITE

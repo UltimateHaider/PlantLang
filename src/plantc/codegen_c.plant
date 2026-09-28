@@ -4117,6 +4117,11 @@ ACTION env_maths(env(LIST)),
   GIVE env_get(env, 12).
 /ACTION.
 
+# v0.51.2c.1 — freed-variable tracker accessor (TD-006).
+ACTION env_freed(env(LIST)),
+  GIVE env_get(env, 13).
+/ACTION.
+
 # ──────────────────────────────────────────────────────────────
 #  env_make — create and populate an env in one call
 #  Takes numeric indent (pre-computed into isel string for slot 0
@@ -4124,7 +4129,7 @@ ACTION env_maths(env(LIST)),
 # ──────────────────────────────────────────────────────────────
 ACTION env_make(indent_num(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST), rty(TX), mexit(TX), wexit(TX), maths(LIST)),
   REAP isel FROM indent_str, indent_num.
-  REAP env FROM plant_list_create(13).
+  REAP env FROM plant_list_create(14).
   REAP _ FROM env_set, env, 0, isel.
   REAP _ FROM env_set, env, 1, sigs.
   REAP _ FROM env_set, env, 2, subst.
@@ -4138,6 +4143,7 @@ ACTION env_make(indent_num(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX),
   REAP _ FROM env_set, env, 10, wexit.
   REAP _ FROM env_set, env, 11, _from_long(indent_num).
   REAP _ FROM env_set, env, 12, maths.
+  REAP _ FROM env_set, env, 13, plant_list_make(0).
   GIVE env.
 /ACTION.
 
@@ -4916,6 +4922,9 @@ ACTION generate_body(bd(LIST), env(LIST)),
   CREATE res(TX) TO "".
   CREATE i(NUM) TO 0.
   CREATE node_el(TX) TO "".
+  # v0.51.2c.1 — block-scope the freed-variable tracker (TD-006).
+  REAP fvsave FROM env_get, env, 13.
+  REAP _ FROM env_set, env, 13, plant_list_make(0).
   SEASON i < COUNT bd,
     REAP node_el FROM plant_list_get, bd, i.
     REAP node_code FROM generate_node, node_el, env.
@@ -4924,6 +4933,7 @@ ACTION generate_body(bd(LIST), env(LIST)),
     /IF.
     SET i TO i + 1.
   /SEASON.
+  REAP _ FROM env_set, env, 13, fvsave.
   GIVE res.
 /ACTION.
 
@@ -5120,6 +5130,7 @@ ACTION generate_node(node, env(LIST)),
     REAP wexit FROM env_wexit, env.
     REAP isel0 FROM env_indent, env.
     REAP maths FROM env_maths, env.
+    REAP freed FROM env_freed, env.
     IF clmap IS "",
         SET clmap TO plant_list_make(0).
     /IF.
@@ -5815,10 +5826,22 @@ ACTION generate_node(node, env(LIST)),
     IF ntype IS "call_stmt",
         REAP ca2 FROM _map_get, node, "action".
         REAP ca2 FROM _swap_self, ca2.
+        CREATE ca2orig(TX) TO ca2.
         # v0.51.2a — memory management built-in rewrites for call_stmt
         IF ca2 IS "LIST_FREE", SET ca2 TO "plant_list_free". /IF.
         IF ca2 IS "TENSOR_FREE", SET ca2 TO "plant_tensor_free". /IF.
         IF ca2 IS "FREE", SET ca2 TO "plant_free". /IF.
+        # v0.51.2c.1 — record explicitly freed local vars (TD-006).
+        IF ca2orig IS "LIST_FREE" OR ca2orig IS "TENSOR_FREE" OR ca2orig IS "FREE",
+            REAP fargs FROM _map_get, node, "args".
+            IF COUNT fargs > 0,
+                REAP fargel FROM plant_list_get, fargs, 0.
+                IF fargel > "",
+                    REAP fin FROM list_contains, freed, fargel.
+                    IF fin IS 0, PUT fargel INTO freed. /IF.
+                /IF.
+            /IF.
+        /IF.
         CREATE cargs2(LIST) TO _map_get(node, "args").
         CREATE ccl2(LIST) TO _map_get(node, "clargs").
         IF ccl2 IS "",
@@ -5953,6 +5976,12 @@ ACTION generate_node(node, env(LIST)),
         REAP ftgt FROM _map_get, node, "target".
         REAP fcv FROM translate_expr, ftgt, nums, evars, maths.
         REAP isel FROM indent_str, indent_num.
+        # v0.51.2c.1 — skip when already explicitly freed (TD-006).
+        REAP fskip FROM list_contains, freed, ftgt.
+        IF fskip IS 1,
+            GIVE "".
+        /IF.
+        PUT ftgt INTO freed.
         GIVE isel + "  " + fcv + " = plant_mem_free((tx_t)" + fcv + ");\n".
     /IF.
 

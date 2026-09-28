@@ -1,0 +1,9 @@
+# tests/native/freed_vars_mixed.plant — v0.51.2c.1 lifecycle tracking (mixed types)
+# LIST_FREE and TENSOR_FREE on distinct locals in the same scope.
+SUITE "Freed Vars Mixed Types"
+  CREATE L TO [1, 2, 3].
+  CREATE T TO TENSOR([4, 5, 6]).
+  LIST_FREE(L).
+  TENSOR_FREE(T).
+  SHOW "mixed-ok".
+/SUITE
