@@ -1,0 +1,8 @@
+# tests/native/suite_nums.plant — v0.51.2d.1 TD-012
+# Numeric vars/iterVars inside a SUITE body are collected (TD-012).
+SUITE "Suite Nums"
+  CREATE L TO [1, 2, 3].
+  CYCLE i FROM 1 TO COUNT(L),
+    SHOW i.
+  /CYCLE.
+/SUITE

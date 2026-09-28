@@ -128,3 +128,18 @@ All verify-* targets must include valgrind-check-tensor.
     - Cannot be used reliably in production.
     - See docs/TECH_DEBT.md (TD-009).
     - Target fix: v0.52.0 (Type System Audit).
+
+### GGG. Runtime change exception (v0.51.2d.1)
+
+    - TD-010 required a runtime change in plant_memory.c,
+      plant_compat.h, and plant_runtime.c (one line).
+    - This was explicitly authorized and documented.
+    - Future runtime changes must be similarly justified.
+
+### HHH. Header-tagged heap strings (v0.51.2d.1)
+
+    - Numeric conversions (_from_long >= 10, _from_double) allocate
+      strings with an 8-byte magic header.
+    - plant_heapstr_release checks the magic before freeing.
+    - Safety: no false free for static literals (magic mismatch).
+    - Cost: one bounded read before the string pointer.

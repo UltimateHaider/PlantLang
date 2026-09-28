@@ -1,0 +1,12 @@
+# tests/native/numeric_free.plant — v0.51.2d.1 TD-010 regression guard
+# FREE of a numeric action result (header-tagged string) must not abort.
+# (Top-level ACTION form: SUITE-with-nested-ACTION emits malformed C.)
+ACTION getn() -> NUM,
+  GIVE 10.
+/ACTION.
+
+ACTION main(),
+  CREATE n TO getn().
+  FREE n.
+  SHOW "num-free-ok".
+/ACTION.

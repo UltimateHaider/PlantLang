@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.51.2c
+# Auto-updated: 0.51.2d.1
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.51.2c | 919808 | 8940 | 448 | 72 | 322 | 5361 |
+| v0.51.2d.1 | 919904 | 8941 | 448 | 109 | 322 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -16,9 +16,10 @@
 | v0.51.0b | 2026 | plant_malloc exclusivity | Released |
 | v0.51.1 | 2026 | TENSOR Core type | Released |
 | v0.51.2a | 2026 | Core Memory Fixes (TD-001..004) | Released |
-| v0.51.2b | 2026 | Introspection + Interface (TD-005) | IN PROGRESS |
-| v0.51.2c | 2026 | TENSOR Operations | Planned |
-| v0.51.2d | 2026 | Codegen auto-free at scope end | Planned |
+| v0.51.2b | 2026 | Introspection + Interface | Released |
+| v0.51.2c | 2026 | Lifecycle Tracking + Release | Released |
+| v0.51.2d.1 | 2026 | TDs Closure (TD-008/010/011/012/013) | Released |
+| v0.51.2d.2 | 2026 | Global/Closure/Static + JJ + 6D | Planned |
 
 ## Growth Chart (ASCII)
 

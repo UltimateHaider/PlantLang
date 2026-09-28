@@ -1,0 +1,7 @@
+# tests/native/valgrind_pipefail.plant — v0.51.2d.1 TD-013
+# A clean test that should pass strict valgrind (no leaks).
+SUITE "Valgrind Pipefail"
+  CREATE L TO [1, 2, 3].
+  SHOW "clean-ok".
+  LIST_FREE(L).
+/SUITE

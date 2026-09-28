@@ -9898,6 +9898,7 @@ tx_t collect_nums_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
   tx_t ibd4 = "";
   tx_t wret2 = "";
   tx_t wbd2 = "";
+  tx_t wbd3 = "";
   tx_t mcl4 = "";
   tx_t mcb2 = "";
   tx_t wbl5 = "";
@@ -9952,6 +9953,10 @@ tx_t collect_nums_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
     if (strcmp(wty,"season_stmt") == 0 || strcmp(wty,"cycle_stmt") == 0) {
     wbd2 = _map_get(wnd, "body");
     wret2 = collect_nums_walk(wbd2, subst, res);
+    }
+    if (strcmp(wty,"suite_stmt") == 0) {
+    wbd3 = _map_get(wnd, "body");
+    wret2 = collect_nums_walk(wbd3, subst, res);
     }
     if (strcmp(wty,"match_stmt") == 0) {
     PlantArray* mcl3 = _map_get ( wnd , "clauses" );
@@ -11161,6 +11166,12 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
   tx_t st1 = "";
   tx_t st2 = "";
   tx_t st3 = "";
+  tx_t ts_rest = "";
+  tx_t ts_split = "";
+  tx_t ts_tail = "";
+  tx_t ts_i0 = "";
+  tx_t ts_inner = "";
+  tx_t ts_mk = "";
     val = _map_get(node, "value");
     cval = translate_expr(val, nums, evars, plant_list_make ( 0 ));
     cval = _handle_cat(cval, nums, evars);
@@ -11202,6 +11213,17 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
     }
     st3 = strings_SPLIT(cval, "plant_tensor_to_string(");
     if (plant_array_length(st3) > 1) {
+    ts_rest = plant_list_get(st3, 1);
+    ts_split = strings_SPLIT(ts_rest, "plant_tensor_from_list(");
+    if (plant_array_length(ts_split) > 1) {
+    ts_tail = plant_list_get(ts_split, 1);
+    ts_i0 = substring(ts_tail, 0, strlen( ts_tail ) - 2);
+    ts_inner = trim(ts_i0);
+    ts_mk = substring(ts_inner, 0, 16);
+    if (strcmp(ts_mk,"plant_list_make(") == 0) {
+    return _cat4(isel, "  { tx_t __ti = ", ts_inner, "; PlantTensor* __t = (PlantTensor*)plant_tensor_from_list(__ti); char* __str = plant_tensor_to_string(__t); plant_iReport_print(get_report(), __str); free(__str); plant_tensor_free(__t); plant_list_free((PlantArray*)__ti); }\n");
+    }
+    }
     return _cat4(isel, "  { char* __str = ", cval, "; plant_iReport_print(get_report(), __str); free(__str); }\n");
     }
     }
@@ -11239,6 +11261,10 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
   tx_t vct2 = "";
   tx_t vst3 = "";
   tx_t iut3 = "";
+  tx_t tt0 = "";
+  tx_t tt_inner0 = "";
+  tx_t tt_inner = "";
+  tx_t tt_mk = "";
     target = _map_get(node, "target");
     vtype = _map_get(node, "var_type");
     vtype = subst_type(vtype, subst);
@@ -11396,6 +11422,15 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     vst3 = is_struct_type(vtype);
     iut3 = is_union_type(vtype, evars);
     if (strcmp(vst3,"1") != 0 && strcmp(iut3,"1") != 0) {
+    tt0 = substring(cval, 0, 23);
+    if (strcmp(tt0,"plant_tensor_from_list(") == 0) {
+    tt_inner0 = substring(cval, 23, strlen( cval ) - 1);
+    tt_inner = trim(tt_inner0);
+    tt_mk = substring(tt_inner, 0, 16);
+    if (strcmp(tt_mk,"plant_list_make(") == 0) {
+    return _cat4(_cat4(_cat4(isel, "  tx_t ", target, ";\n"), isel, "  { tx_t __ti = ", tt_inner), "; ", target, " = plant_tensor_from_list(__ti); plant_list_free((PlantArray*)__ti); }\n");
+    }
+    }
     return _cat3(_cat4(isel, "  tx_t ", target, " = "), cval, ";\n");
     }
     }
@@ -16640,7 +16675,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.51.2c (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.51.2d.1 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

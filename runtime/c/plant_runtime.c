@@ -7485,6 +7485,7 @@ static void plant_slab_free(void* p) {
 tx_t plant_mem_free(tx_t v) {
     if (!v) return NULL;
     if ((uintptr_t)v < 65536) return v;          /* small int / static table */
+    if (plant_heapstr_release(v)) return NULL;   /* v0.51.2d.1 — TD-010 tagged strings */
     if (plant_in_slab(v)) {
         plant_slab_free(v);
         g_bal_bytes -= PLANT_SLAB_BLOCK;

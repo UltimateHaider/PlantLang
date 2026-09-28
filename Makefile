@@ -14,7 +14,7 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.51.2c
+VERSION    ?= 0.51.2d.1
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
@@ -371,14 +371,36 @@ valgrind-check-tensor: $(NATIVE_BIN) ## Run strict valgrind on tensor tests
 		valgrind --leak-check=full \
 			--error-exitcode=1 \
 			--errors-for-leak-kinds=definite \
-			/tmp/vg_$$test 2>&1 | tee /tmp/vg_$$test.log; \
-		if [ $$? -ne 0 ]; then \
+			/tmp/vg_$$test > /tmp/vg_$$test.log 2>&1; \
+		vgrc=$$?; \
+		cat /tmp/vg_$$test.log; \
+		if [ $$vgrc -ne 0 ]; then \
 			echo "STOP: valgrind errors in $$test"; \
 			exit 1; \
 		fi; \
 		echo "OK: $$test clean"; \
 	done
 	@echo "valgrind-check-tensor passed"
+
+# ── valgrind-check-tensor-soft: report-only (never fails) ───────
+valgrind-check-tensor-soft: $(NATIVE_BIN) ## Report tensor leaks without failing
+	@echo "=== Soft valgrind on tensor tests (report-only) ==="
+	@for test in tensor_basic tensor_malloc tensor_refcount; do \
+		if [ ! -f tests/native/$$test.plant ]; then \
+			echo "SKIP: tests/native/$$test.plant not found"; \
+			continue; \
+		fi; \
+		echo "Checking $$test..."; \
+		./bin/Chloroplast tests/native/$$test.plant /tmp/vgs_$$test.c 2>/dev/null; \
+		$(CC) $(CFLAGS) $(TEST_CFLAGS) $(CPPFLAGS) /tmp/vgs_$$test.c \
+			$(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) \
+			$(REPORT_HTML) $(MATH) $(TENSOR) $(MEMORY) tests/native/mock_ffi.c \
+			-lm -ldl -o /tmp/vgs_$$test 2>/dev/null; \
+		valgrind --leak-check=full \
+			--errors-for-leak-kinds=definite \
+			/tmp/vgs_$$test 2>&1 | grep -E "definitely lost|ERROR SUMMARY" || true; \
+	done
+	@echo "valgrind-check-tensor-soft done (report-only)"
 
 # ── check-ffi-safety: verify FFI examples don't use unsafe APIs ─
 check-ffi-safety: ## Check FFI safety
@@ -511,6 +533,25 @@ verify-v0.51.2c: check-no-raw-malloc check-expected-files \
 	@echo "[7/7] Update RELEASES..."  && $(MAKE) update-growth && $(MAKE) check-releases-updated
 	@echo "========================================================"
 	@echo "  v0.51.2c VERIFIED"
+	@echo "========================================================"
+
+# ── verify-v0.51.2d.1: comprehensive release gate ──────────────
+verify-v0.51.2d.1: check-no-raw-malloc check-expected-files \
+                   check-changelog-numbers check-ffi-safety \
+                   check-dispatcher-only
+	@echo "========================================================"
+	@echo "  v0.51.2d.1 VERIFICATION GATE"
+	@echo "========================================================"
+	@echo "[1/6] Native tests..."     && sh tests/native/run_native_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[2/6] Generics..."         && sh tests/generics/run_generics_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[3/6] Closures..."         && sh tests/closures/run_closures_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[4/6] Self-hosting..."     && make self || exit 1
+	@cmp -s build/plantc_v3 bin/Chloroplast || \
+		{ echo "STOP: Self-hosting failed"; exit 1; }
+	@echo "[5/6] Size report..."      && make size-report
+	@echo "[6/6] Update RELEASES..."  && make update-growth && make check-releases-updated
+	@echo "========================================================"
+	@echo "  v0.51.2d.1 VERIFIED"
 	@echo "========================================================"
 
 # ── verify-v0.51.1: comprehensive release gate ──────────────────

@@ -1,3 +1,30 @@
+## v0.51.2d.1 — TDs Closure
+
+### Fixed
+- TD-008: TENSOR([...]) input list now freed (CREATE + SHOW sites).
+- TD-010: Multi-digit string leak (header-tagged heap strings).
+  Runtime change documented (Principle GGG).
+- TD-011: Reclassified — COUNT translation correct; remaining gaps
+  are type-system issues (v0.52.0).
+- TD-012: collect_nums_walk now scans suite_stmt bodies.
+- TD-013: valgrind-check-tensor preserves exit code.
+- Bonus: _from_double now uses tagged strings (float leaks fixed).
+- TD-014: tensor_basic and tensor_refcount now free their tensors (test hygiene).
+
+### Added
+- valgrind-check-tensor-soft (report-only companion).
+- Tests: suite_nums, multi_digit_free, numeric_free,
+  tensor_input_free, count_edge_cases, valgrind_pipefail.
+- Principle GGG (runtime exception), HHH (tagged strings).
+
+### Verified
+- Native: 63/63
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (513,141 B; md5 ac71c6c6)
+- tensor_basic leak: 1,248 B → 0 (its T4/T5 tensors now freed)
+- valgrind-check-tensor: PASS (tensor_basic/malloc/refcount all clean)
+
 ## v0.51.2c — Lifecycle Tracking + Release
 
 ### Fixed

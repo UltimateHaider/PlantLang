@@ -1,0 +1,13 @@
+# tests/native/count_edge_cases.plant — v0.51.2d.1 TD-011
+# COUNT in contexts that are now fixed: bare, summed, and over a call result.
+ACTION get(),
+  GIVE [1, 2, 3].
+/ACTION.
+
+ACTION main(),
+  CREATE L TO [1, 2, 3].
+  SHOW COUNT(L).
+  CREATE L2 TO [4, 5].
+  SHOW COUNT(L) + COUNT(L2).
+  SHOW COUNT(get()).
+/ACTION.

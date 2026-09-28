@@ -14,9 +14,11 @@ ACTION main(),
   # 7. tensor_4d_display
   CREATE T4 TO TENSOR([[[[1, 2]]]]).
   SHOW T4.
+  TENSOR_FREE(T4).
   # 8. tensor_5d_display
   CREATE T5 TO TENSOR([[[[[1, 2]]]]]).
   SHOW T5.
+  TENSOR_FREE(T5).
   # 9. tensor_float_values
   SHOW TENSOR([1.5, 2.5, 3.5]).
   # 10. tensor_2d_float

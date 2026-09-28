@@ -17,5 +17,11 @@ ACTION main(),
   SHOW c1.
   SHOW c2.
   SHOW c3.
+  TENSOR_FREE(t).
+  TENSOR_FREE(a).
+  TENSOR_FREE(b).
+  TENSOR_FREE(c1).
+  TENSOR_FREE(c2).
+  TENSOR_FREE(c3).
   GIVE 0.
 /GIVE main.

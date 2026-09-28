@@ -1,0 +1,7 @@
+# tests/native/multi_digit_free.plant — v0.51.2d.1 TD-010
+# Multi-digit numeric list items (heap-tagged) are freed by LIST_FREE.
+SUITE "Multi-digit free"
+  CREATE L TO [10, 20, 30].
+  SHOW "multi-digit-ok".
+  LIST_FREE(L).
+/SUITE

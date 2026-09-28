@@ -83,12 +83,15 @@ static long plant_rw_arg_long(tx_t v) { if (!v) return 0; if ((uintptr_t)v < 409
    string conversion benefits; the compiler additionally emits
    _from_digit(...) directly for known single-digit literal segments.
    Static return is safe: the runtime never writes into tx_t strings. */
-static tx_t _from_digit(long n) { static const char* _dg[10] = {"0","1","2","3","4","5","6","7","8","9"}; if (n >= 0 && n <= 9) return (tx_t)_dg[n]; char buf[64]; snprintf(buf,64,"%ld",n); return strdup(buf); }
+ /* v0.51.2d.1 — TD-010: heap-tagged numeric strings (owned, freeable). */
+ char* plant_heapstr_alloc_copy(const char* s);
+ int plant_heapstr_release(void* p);
+ static tx_t _from_digit(long n) { static const char* _dg[10] = {"0","1","2","3","4","5","6","7","8","9"}; if (n >= 0 && n <= 9) return (tx_t)_dg[n]; char buf[64]; snprintf(buf,64,"%ld",n); return (tx_t)plant_heapstr_alloc_copy(buf); }
 static tx_t _from_long(long n) { return _from_digit(n); }
 /* v0.49.6 — decimal literals: [1.5, 2.7] emit _from_double(...).
    %g prints integral doubles without the trailing dot (1.0 → "1"),
    so the number string round-trips through _to_long/atol too. */
-static tx_t _from_double(double d) { char buf[64]; snprintf(buf, 64, "%.10g", d); return strdup(buf); }
+static tx_t _from_double(double d) { char buf[64]; snprintf(buf, 64, "%.10g", d); return (tx_t)plant_heapstr_alloc_copy(buf); }
 /* v0.48.5 — FFI numeric results: C functions returning `long` hand
    raw integer bits back in tx_t. On this runtime intptr_t == void*,
    so the conversion is identical to _from_long; this single choke

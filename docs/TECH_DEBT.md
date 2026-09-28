@@ -74,19 +74,14 @@
   is now correctly lowered to `plant_array_length(L)`.
 - **Related:** TD-011 (complex expressions).
 
-## TD-008: TENSOR([...]) input list not freed
-- **Status:** OPEN
-- **Introduced:** v0.51.1 (TENSOR type introduction)
-- **Target fix:** v0.51.2d or v0.52.0
-- **Impact:** LOW-MEDIUM — every `TENSOR([...])` literal leaks the input list.
-- **Root cause:** `plant_tensor_from_list(list)` in `runtime/c/plant_tensor.c` does not free or take ownership of the input list.
-- **Affected tests:** tensor_basic, tensor_display, list_free, dispatcher_full, freed_vars_mixed, dispatcher_backcompat (all pre-existing, all outside v0.51.2c.1 scope).
-- **Impact estimate:** ~40-72 bytes per `TENSOR([...])` literal.
-- **Fix direction (one of):**
-  (a) `plant_tensor_from_list` takes ownership and frees the input list, OR
-  (b) codegen emits `plant_list_free` after `plant_tensor_from_list`.
-- **Constraint:** requires runtime change → out of scope for v0.51.2c.1.
-- **Discovered by:** valgrind on freed_vars_mixed and dispatcher_backcompat (v0.51.2c.1).
+## TD-008: TENSOR([...]) input list not freed — CLOSED
+- **Status:** ✅ CLOSED in v0.51.2d.1
+- **Fixed:** codegen now frees the input list after
+  `plant_tensor_from_list`, at both CREATE and SHOW sites.
+- **Safety guard:** free only when the argument is a fresh
+  `plant_list_make(...)` literal, never a user variable.
+- **Residual:** `tensor_basic` still leaks 128 B from its own
+  unfreed `T4`/`T5` tensors (test hygiene — see TD-014).
 
 ## TD-009: Structs are fundamentally broken
 - **Status:** OPEN
@@ -134,66 +129,59 @@
 - Use explicit `_map_get` / FFI where possible.
 - Free struct fields manually (if supported at all).
 
-## TD-010: plant_list_free does not free multi-digit _from_long string items
-- **Status:** OPEN
-- **Introduced:** v0.51.2a (LIST_FREE / plant_list_free introduction)
-- **Target fix:** v0.51.2d or v0.52.0
-- **Impact:** LOW — small leak (~3 bytes per multi-digit integer inside a freed list).
-- **Root cause:** `_from_long()` strdup's a string for multi-digit numbers (single digits use a static table); `plant_list_free()` frees nested containers but skips primitive string items (`/* else: primitive — not freed here */`).
-- **Affected tests:** freed_vars_nested_func (6 B), freed_vars_comprehensive (6 B); any `LIST_FREE` on a list containing integers `>= 10`.
-- **Evidence:** isolated `CREATE L TO [1,2]. LIST_FREE(L).` → 0 B; `[10,20]` → 6 B; `[10,20,30,40]` → 12 B.
-- **Constraint:** requires runtime change (`plant_memory.c` / `plant_compat.h`) → out of scope for v0.51.2c.2.
-- **Discovered by:** valgrind on freed_vars_nested_func (v0.51.2c.2).
+## TD-010: Multi-digit string leak in plant_list_free — CLOSED
+- **Status:** ✅ CLOSED in v0.51.2d.1
+- **Fixed by:** header-tagged heap strings.
+  - `_from_long` (n>=10) and `_from_double` now allocate via
+    `plant_heapstr_alloc_copy` (8-byte magic prefix).
+  - `plant_list_free` and `plant_mem_free` call `plant_heapstr_release`.
+- **Runtime exception:** this is a documented runtime change (Principle GGG).
+- **Regression fixed:** `plant_mem_free` now releases tagged strings
+  (previously `free()` on a tagged pointer → abort).
 
-## TD-011: COUNT in complex expressions — MOSTLY FIXED
+## TD-011: COUNT in complex expressions — RECLASSIFIED
 
-- **Status:** MOSTLY FIXED in v0.51.2c.3 (edge cases remain)
-- **Target for remaining edges:** v0.51.2d
-- **Impact:** LOW — common cases work.
-
-### Fixed in v0.51.2c.3
-- `SHOW COUNT(L).`
-- `IF COUNT(L) > 0, ...`
-- `CYCLE i FROM 1 TO COUNT(L), ...`
-- `COUNT(L)` in mixed expressions
-- **`COUNT(L1) + COUNT(L2)` (complex case now works!)**
-
-### Possibly unfixed (v0.51.2d investigation)
-- `COUNT(FUNC(x))` where FUNC is a runtime call
-- `COUNT(L)` inside nested function calls
-- Deeply nested COUNT expressions
-- COUNT combined with other meta-operations
-
-### User Guidance
-If a complex COUNT expression fails, refactor with a temp:
+- **Status:** TRANSLATION CORRECT; failures are type-system gaps.
+- **Fixed in v0.51.2c.3/d.1:**
+  - `SHOW COUNT(L).`
+  - `IF COUNT(L) > 0, ...`
+  - `CYCLE i FROM 1 TO COUNT(L), ...`
+  - `COUNT(L1) + COUNT(L2)`
+  - `COUNT(get())`
+- **Remaining (type-system gap, not COUNT defect):**
+  - Parenthesized: `SHOW (COUNT(L1) + COUNT(L2))`
+  - Non-numeric-returning calls: `SHOW wrap(COUNT(L))`
+- **Root cause:** `seg_is_numeric` returns 0 for a leading `(` or
+  unknown-return-type calls. This is a type-inference gap. The
+  `COUNT(...)` → `plant_array_length(...)` lowering itself is correct.
+- **Target:** v0.52.0 (Type System Audit).
+- **User guidance:** use temp variables for parenthesized arithmetic:
 ```plantlang
-CREATE n TO COUNT(L).
-SHOW n + COUNT(L2).
+CREATE n TO COUNT(L1) + COUNT(L2).
+SHOW n.
 ```
 
 - **Related:** TD-007 (original COUNT fix), TD-012 (SUITE nums gap).
 
-## TD-012: collect_nums_walk does not recurse into suite_stmt
+## TD-012: collect_nums_walk does not recurse into suite_stmt — CLOSED
 
-- **Status:** OPEN
-- **Introduced:** pre-v0.51.2 (long-standing)
-- **Target fix:** v0.51.2d
-- **Impact:** LOW-MEDIUM — a bare `SHOW` of a CYCLE iterVar inside a
-  SUITE body is not `_from_long`-wrapped.
-- **Root cause:** `collect_nums_walk` does not scan `suite_stmt` bodies.
-  Numeric variables declared inside a SUITE are not added to `nums`,
-  so `expr_is_numeric` returns 0 for them → no `_from_long` wrapping.
-- **Workaround:** use top-level `ACTION main` form.
-- **Discovered by:** v0.51.2c.3 test authoring.
-- **Related:** TD-006 (lifecycle tracking), TD-011 (COUNT in contexts).
+- **Status:** ✅ CLOSED in v0.51.2d.1
+- **Fixed:** `collect_nums_walk` now recurses into `suite_stmt` bodies.
+- **Test:** `suite_nums.plant`
 
-## TD-013: valgrind-check-tensor masks valgrind exit code
+## TD-013: valgrind-check-tensor masks valgrind exit code — CLOSED
+- **Status:** ✅ CLOSED in v0.51.2d.1
+- **Fixed:** `valgrind-check-tensor` now captures and checks valgrind's
+  exit code (redirect to file, then cat + exit).
+- **Companion:** `valgrind-check-tensor-soft` (report-only).
+- **Consequence:** `verify-v0.51.2a/b/c` gates that reference
+  `valgrind-check-tensor` now fail on pre-existing leaks. This is
+  correct. v0.51.2d.1 fixes the underlying leaks (TD-008 + TD-010).
+
+## TD-014: tensor_basic test leaks its own T4/T5
 - **Status:** OPEN
-- **Introduced:** v0.51.0b or earlier
-- **Target fix:** v0.51.2d
-- **Impact:** MEDIUM — valgrind-check-tensor may report PASS even when
-  valgrind finds leaks, because `valgrind ... | tee` masks the exit
-  code (the pipeline's exit status is tee's, not valgrind's).
-- **Fix direction:** use `set -o pipefail` (POSIX) or capture exit
-  code before piping, or use process substitution.
-- **Discovered by:** v0.51.2c.3 documentation review.
+- **Target fix:** v0.51.2d.2 or v0.52.0
+- **Impact:** LOW — the test does not `TENSOR_FREE` its `T4`/`T5` tensors.
+- **Fix:** add `TENSOR_FREE` calls to `tensor_basic.plant`, or document
+  the test's intent.
+- **Discovered by:** v0.51.2d.1 valgrind analysis.

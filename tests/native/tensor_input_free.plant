@@ -1,0 +1,7 @@
+# tests/native/tensor_input_free.plant — v0.51.2d.1 TD-008
+# The fresh input list of TENSOR([...]) is freed after conversion.
+SUITE "TENSOR input list freed"
+  CREATE T TO TENSOR([4, 5, 6]).
+  SHOW "tensor-input-ok".
+  TENSOR_FREE(T).
+/SUITE
