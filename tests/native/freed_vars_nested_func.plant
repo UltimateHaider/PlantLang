@@ -1,0 +1,13 @@
+# tests/native/freed_vars_nested_func.plant — v0.51.2c.2 per-function lifecycle
+# Each function has its own freed_vars (env slot 13); nested calls are isolated.
+ACTION inner(),
+  CREATE LL TO [10, 20].
+  LIST_FREE(LL).
+/ACTION.
+
+ACTION main(),
+  CREATE LL TO [1, 2].
+  inner().
+  LIST_FREE(LL).
+  SHOW "nested-ok".
+/ACTION.

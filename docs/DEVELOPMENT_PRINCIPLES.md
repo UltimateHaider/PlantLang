@@ -116,3 +116,15 @@ All verify-* targets must include valgrind-check-tensor.
     - Scope: local variables, loops, if, mixed types.
     - Out of scope: nested functions, struct fields, global,
       closure, static, nested structs.
+
+### YY. Global/Closure/Static fields out of scope (v0.51.2c.2+)
+
+    - Fields of global/closure/static variables are NOT tracked.
+    - Target: v0.51.2d.
+
+### YY2. Struct support is broken (v0.51.2c.2+)
+
+    - Structs are fundamentally broken in the current compiler.
+    - Cannot be used reliably in production.
+    - See docs/TECH_DEBT.md (TD-009).
+    - Target fix: v0.52.0 (Type System Audit).

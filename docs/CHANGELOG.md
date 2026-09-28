@@ -1,3 +1,45 @@
+## v0.51.2c.2 — Advanced Lifecycle Scopes
+
+### Added
+- Verified per-function lifecycle tracking: each function
+  (action, top-level, async, closure) has its own `freed_vars`
+  (env slot 13); nested calls do not affect the caller's tracking.
+- Comprehensive lifecycle test combining local variables, loops/if,
+  mixed list/tensor frees, and nested function calls.
+- No codegen changes in this release (verification + tests + docs).
+
+### New Tests
+- `freed_vars_nested_func` — per-function `freed_vars` isolation
+- `freed_vars_comprehensive` — combined supported scopes
+
+### Known Issues
+- TD-009 (new): Structs are fundamentally broken — `CREATE x TO
+  Type(...)` emits an undefined call, `LIST_FREE(h.field)` emits
+  invalid C (`h . field`), and `SPECIES … /SPECIES` segfaults the
+  compiler. Struct lifecycle tracking deferred to v0.52.0
+  (Type System Audit). See docs/TECH_DEBT.md.
+- TD-010 (new): `plant_list_free` does not free multi-digit
+  `_from_long` string items (~3 B per integer >= 10 inside a freed
+  list). Pre-existing since v0.51.2a.
+- TD-008: `TENSOR([...])` input list not freed (unchanged).
+
+### Verified
+- Native: 52/52 (was 50/50)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (511,606 bytes; v3.c == v4.c == v5.c)
+- Binary: 919,808 bytes (+0.000% from v0.51.2c.1)
+- valgrind: nested_func 6 B / comprehensive 46 B — pre-existing
+  runtime leaks (TD-008 + TD-010), not introduced by this release
+
+### Out of Scope (v0.51.2c.2)
+- Struct field tracking (structs broken — TD-009; v0.52.0)
+- Multi-level struct access (h.a.b) (TD-009)
+- Heap-allocated / global / closure / static struct fields (TD-009)
+- Nested structs (TD-009)
+- TD-007: SHOW COUNT(L) (separate concern)
+- LOOP keyword gap (separate concern)
+
 ## v0.51.2c.1 — Core Lifecycle Tracking
 
 ### Fixed

@@ -88,3 +88,60 @@
   (b) codegen emits `plant_list_free` after `plant_tensor_from_list`.
 - **Constraint:** requires runtime change → out of scope for v0.51.2c.1.
 - **Discovered by:** valgrind on freed_vars_mixed and dispatcher_backcompat (v0.51.2c.1).
+
+## TD-009: Structs are fundamentally broken
+- **Status:** OPEN
+- **Introduced:** pre-v0.51.1 (long-standing limitation)
+- **Target fix:** v0.52.0 (Type System Audit)
+- **Impact:** HIGH — structs cannot be used reliably.
+- **Discovered by:** DeepSeek V4 Flash during v0.51.2c.2 Phase 2.
+
+### Symptoms
+1. `STRUCT Holder { values: LIST }` + `CREATE h TO Holder(...)`:
+   - Emits `Holder(...)` (undefined function) → linker error.
+   - Structs are represented as `tx_t` map handles, not stack structs.
+2. `LIST_FREE(h.values)`:
+   - Emits `plant_list_free(h . values)` — invalid C.
+   - Dot-access is not lowered inside free-call argument position.
+3. `SPECIES Holder: values: LIST. /SPECIES.`:
+   - Compiler SIGSEGV (exit 139, no output file).
+4. Map literals `{a: [1, 2]}`:
+   - Keys need quotes (`{"a": ...}`).
+   - Unquoted keys → undeclared variable.
+5. Field reads (`SHOW m.a`):
+   - ✅ Work — lowered to `_map_get(m, "a")`.
+   - So reads work but frees don't.
+
+### Root Cause
+- Structs in PlantLang are tx_t (map handle) values, not C structs.
+- Dot-access is lowered only in read positions, not in free positions.
+- `CREATE x TO TypeName(...)` is not recognized as a struct constructor.
+
+### Out of Scope for v0.51.2c.2
+- Struct field tracking
+- Any struct lifecycle management
+- Map literal syntax
+
+### Recommended Fix Path
+- v0.52.0 (Type System Audit):
+  - Decide struct representation (stack C struct? map handle?).
+  - Unify dot-access lowering across read/free positions.
+  - Support `CREATE x TO StructType(...)`.
+  - Fix SPECIES parser crash.
+  - Support map literals.
+
+### User Guidance
+- Do NOT rely on structs in production code.
+- Use explicit `_map_get` / FFI where possible.
+- Free struct fields manually (if supported at all).
+
+## TD-010: plant_list_free does not free multi-digit _from_long string items
+- **Status:** OPEN
+- **Introduced:** v0.51.2a (LIST_FREE / plant_list_free introduction)
+- **Target fix:** v0.51.2d or v0.52.0
+- **Impact:** LOW — small leak (~3 bytes per multi-digit integer inside a freed list).
+- **Root cause:** `_from_long()` strdup's a string for multi-digit numbers (single digits use a static table); `plant_list_free()` frees nested containers but skips primitive string items (`/* else: primitive — not freed here */`).
+- **Affected tests:** freed_vars_nested_func (6 B), freed_vars_comprehensive (6 B); any `LIST_FREE` on a list containing integers `>= 10`.
+- **Evidence:** isolated `CREATE L TO [1,2]. LIST_FREE(L).` → 0 B; `[10,20]` → 6 B; `[10,20,30,40]` → 12 B.
+- **Constraint:** requires runtime change (`plant_memory.c` / `plant_compat.h`) → out of scope for v0.51.2c.2.
+- **Discovered by:** valgrind on freed_vars_nested_func (v0.51.2c.2).

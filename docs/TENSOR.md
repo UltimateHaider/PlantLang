@@ -110,6 +110,24 @@ ACTION main(),
 /ACTION.
 ```
 
+## Memory Tracking Scope (v0.51.2c.2)
+
+Covered:
+- ✅ Local variables
+- ✅ Loops and if branches
+- ✅ Nested functions (per-function freed_vars)
+
+Not covered:
+- ❌ Struct fields (structs are fundamentally broken — TD-009)
+- ❌ Multi-level struct access (h.a.b)
+- ❌ Heap-allocated structs
+- ❌ Global struct fields
+- ❌ Closure struct fields
+- ❌ Static variables inside struct
+- ❌ Nested structs
+
+See docs/TECH_DEBT.md (TD-006, TD-008, TD-009).
+
 ## What's NOT Supported Yet
 
 - Operations (add, multiply, reshape, transpose) — deferred to v0.51.2+

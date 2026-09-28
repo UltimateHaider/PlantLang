@@ -1,0 +1,22 @@
+# tests/native/freed_vars_comprehensive.plant — v0.51.2c.2 combined scopes
+# Combines: local vars, mixed list/tensor frees, nested function calls.
+# (Struct portion intentionally omitted — structs are broken, see TD-009.)
+ACTION inner(),
+  CREATE LL TO [10, 20].
+  LIST_FREE(LL).
+/ACTION.
+
+ACTION outer(),
+  CREATE LL TO [1, 2].
+  inner().
+  LIST_FREE(LL).
+/ACTION.
+
+ACTION main(),
+  CREATE L TO [1, 2, 3].
+  CREATE T TO TENSOR([4, 5, 6]).
+  outer().
+  LIST_FREE(L).
+  TENSOR_FREE(T).
+  SHOW "comprehensive-ok".
+/ACTION.
