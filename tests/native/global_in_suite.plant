@@ -1,0 +1,8 @@
+# tests/native/global_in_suite.plant — v0.51.3b GLOBAL in SUITE
+# Verification inside the suite body (top-level SUITE terminates
+# parsing — see TD-019).
+SUITE "Global in Suite"
+  GLOBAL x TO 10.
+  SHOW x.
+  SHOW "suite-global-ok".
+/SUITE.

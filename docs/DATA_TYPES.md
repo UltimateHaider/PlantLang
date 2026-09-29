@@ -560,6 +560,33 @@ tx_t plant_analyze(tx_t v);   /* Returns: {type, size, keys} MAP */
 
 8. **Add compile-time type checking:** The current runtime-only type detection allows silent type mismatches. A gradual type system would catch errors earlier.
 
+## GLOBAL Init Order (v0.51.3b)
+
+### Declaration Order
+
+GLOBAL variables are initialized in declaration order.
+
+```plant
+GLOBAL a TO 10.       # OK
+GLOBAL b TO a + 5.    # OK (a already initialized)
+GLOBAL c TO d.        # INCORRECT (d not yet initialized)
+GLOBAL d TO 20.
+```
+
+### Forward References
+
+Forward references are NOT supported.
+
+```plant
+GLOBAL c TO d.        # d = 0 (initial value) — not the intended value
+GLOBAL d TO 20.
+```
+
+### User Responsibility
+
+The programmer is responsible for declaration order. There is no
+compile-time check for forward references.
+
 ---
 
 *Report generated for PlantLang v0.50.7. Sources: `runtime/c/plant_runtime.h`, `runtime/c/plant_compat.h`, `runtime/c/plant_runtime.c`, `src/plantc/codegen_c.plant`, `src/plantc/parser.plant`, `src/plantc/lexer.plant`.*

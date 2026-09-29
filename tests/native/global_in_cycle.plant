@@ -1,0 +1,8 @@
+# tests/native/global_in_cycle.plant — v0.51.3b GLOBAL in CYCLE
+# Declared once (file scope); re-inited per iteration.
+CYCLE i FROM 1 TO 3,
+  GLOBAL z TO 30.
+  SHOW z.
+/CYCLE.
+SHOW z.
+SHOW "cycle-global-ok".

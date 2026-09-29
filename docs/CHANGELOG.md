@@ -1,3 +1,40 @@
+## v0.51.3b — GLOBAL Complete
+
+### Added
+- GLOBAL in SUITE/IF/CYCLE (scope-aware).
+- `GLOBAL_FREE(name).` statement.
+- GLOBAL list mutation via `PUT item INTO lst.` (the supported append).
+- GLOBAL init order documented (declaration order).
+- Tests: global_in_suite, global_in_if, global_in_cycle, global_free,
+  global_list_mutation, global_init_order.
+
+### Resolved (partial)
+- TD-015: GLOBAL now feature-complete; auto-cleanup deferred.
+
+### Documented (new TDs)
+- TD-018: CHAR segfaults.
+- TD-019: Top-level SUITE terminates parsing.
+- TD-020: List operations unsupported (`+`, `[]`, `PUSH`).
+
+### Semantics
+- GLOBAL persistent (programme-scope).
+- GLOBAL in CYCLE: declared once, re-inited per iteration.
+- Forward references not supported.
+
+### Verified
+- Native: 75/75 (was 69)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (md5 b2db8865)
+- Binary: 928,184 bytes
+
+### Out of Scope (v0.51.4)
+- Auto-cleanup for GLOBAL.
+- GLOBAL in nested functions.
+- List operations (`+`, `[]`, `PUSH`).
+- SUITE parser fix.
+- SBT, SHORT, BOOL, BYT.
+
 ## v0.51.3a — GLOBAL Keyword
 
 ### Added

@@ -1,0 +1,8 @@
+# tests/native/global_init_order.plant — v0.51.3b GLOBAL init order
+# Initialized in declaration order (b may reference a).
+GLOBAL a TO 10.
+GLOBAL b TO a + 5.
+
+SHOW a.
+SHOW b.
+SHOW "init-order-ok".

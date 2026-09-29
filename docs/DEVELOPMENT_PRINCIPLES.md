@@ -198,3 +198,27 @@ All verify-* targets must include valgrind-check-tensor.
     - GLOBAL variables are persistent.
     - No auto-cleanup at program exit.
     - GLOBAL_FREE deferred to v0.51.4.
+
+### TTT. GLOBAL scope-aware (v0.51.3b)
+
+    - GLOBAL can be declared inside SUITE/IF/CYCLE bodies.
+    - It is treated as a top-level declaration (once).
+    - The init runs at the statement's position.
+
+### UUU. GLOBAL_FREE (v0.51.3b)
+
+    - `GLOBAL_FREE(name).` frees a GLOBAL explicitly.
+    - Re-assignment after GLOBAL_FREE is allowed.
+    - No freed_vars tracking (GLOBAL persistent).
+
+### VVV. GLOBAL init order (v0.51.3b)
+
+    - Declaration order.
+    - Forward references NOT supported.
+    - No compile-time check.
+
+### WWW. GLOBAL persistent (v0.51.3b)
+
+    - GLOBAL variables are persistent (programme-scope).
+    - No auto-cleanup at program exit.
+    - Auto-cleanup deferred to v0.51.4.

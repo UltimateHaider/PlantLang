@@ -1,0 +1,7 @@
+# tests/native/global_in_if.plant — v0.51.3b GLOBAL in IF
+IF 1 > 0,
+  GLOBAL y TO 20.
+  SHOW y.
+/IF.
+SHOW y.
+SHOW "if-global-ok".

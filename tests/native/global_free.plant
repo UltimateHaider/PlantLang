@@ -1,0 +1,6 @@
+# tests/native/global_free.plant — v0.51.3b GLOBAL_FREE
+GLOBAL big TO [1, 2, 3].
+SHOW COUNT(big).
+
+GLOBAL_FREE(big).
+SHOW "freed-ok".

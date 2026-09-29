@@ -162,6 +162,7 @@ tx_t enum_in_table(PlantArray* evars, tx_t name);
 tx_t enum_expr_of(PlantArray* evars, tx_t cval);
 tx_t list_contains(PlantArray* lst, tx_t x);
 tx_t collect_nums_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
+tx_t collect_globals_walk(PlantArray* bd, PlantArray* res);
 tx_t collect_nums(PlantArray* bd, PlantArray* params, PlantArray* subst);
 tx_t collect_maths_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_maths(PlantArray* bd, PlantArray* params, PlantArray* subst);
@@ -295,6 +296,9 @@ tx_t is_keyword(tx_t wrd) {
     return 1;
     }
     if (strcmp(wrd,"global") == 0) {
+    return 1;
+    }
+    if (strcmp(wrd,"global_free") == 0) {
     return 1;
     }
     if (strcmp(wrd,"MATCH") == 0) {
@@ -578,6 +582,9 @@ tx_t keyword_to_type(tx_t wrd) {
     }
     if (strcmp(wrd,"global") == 0) {
     return "GLOBAL";
+    }
+    if (strcmp(wrd,"global_free") == 0) {
+    return "GLOBAL_FREE";
     }
     if (strcmp(wrd,"MATCH") == 0) {
     return "MATCH";
@@ -10075,6 +10082,78 @@ tx_t collect_nums_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
     }
     return res;
 }
+tx_t collect_globals_walk(PlantArray* bd, PlantArray* res) {
+  tx_t gtg = "";
+  tx_t gvt = "";
+  tx_t gvl = "";
+  tx_t gfound = "";
+  tx_t gsb = "";
+  tx_t grt = "";
+  tx_t gib = "";
+  tx_t gibd = "";
+  tx_t gcb = "";
+  tx_t gml = "";
+  tx_t gmc = "";
+  tx_t gmb = "";
+  tx_t gwl = "";
+  tx_t gwbd = "";
+    long gi = 0;
+    tx_t gnd = "";
+    tx_t gty = "";
+    while (gi < plant_array_length(bd)) {
+    gnd = plant_list_get(bd, gi);
+    gty = _map_get(gnd, "type");
+    if (strcmp(gty,"global_stmt") == 0) {
+    gtg = _map_get(gnd, "target");
+    gvt = _map_get(gnd, "var_type");
+    gvl = _map_get(gnd, "value");
+    gfound = list_contains(res, gtg);
+    if (gfound == 0) {
+                res = plant_list_add(res, gtg);
+                res = plant_list_add(res, gvt);
+                res = plant_list_add(res, gvl);
+    }
+    }
+    if (strcmp(gty,"suite_stmt") == 0) {
+    gsb = _map_get(gnd, "body");
+    grt = collect_globals_walk(gsb, res);
+    }
+    if (strcmp(gty,"if_stmt") == 0) {
+    gib = _if_bodies(gnd);
+    long gii = 0;
+    while (gii < plant_array_length(gib)) {
+    gibd = plant_list_get(gib, gii);
+    grt = collect_globals_walk(gibd, res);
+    gii = gii+1;
+    }
+    }
+    if (strcmp(gty,"season_stmt") == 0 || strcmp(gty,"cycle_stmt") == 0) {
+    gcb = _map_get(gnd, "body");
+    grt = collect_globals_walk(gcb, res);
+    }
+    if (strcmp(gty,"match_stmt") == 0) {
+    gml = _map_get(gnd, "clauses");
+    long gmi = 0;
+    while (gmi < plant_array_length(gml)) {
+    gmc = plant_list_get(gml, gmi);
+    gmb = _map_get(gmc, "bodyStatements");
+    grt = collect_globals_walk(gmb, res);
+    gmi = gmi+1;
+    }
+    }
+    if (strcmp(gty,"weather_stmt") == 0) {
+    gwl = _weather_bodies(gnd);
+    long gwi = 0;
+    while (gwi < plant_array_length(gwl)) {
+    gwbd = plant_list_get(gwl, gwi);
+    grt = collect_globals_walk(gwbd, res);
+    gwi = gwi+1;
+    }
+    }
+    gi = gi+1;
+    }
+    return res;
+}
 tx_t collect_nums(PlantArray* bd, PlantArray* params, PlantArray* subst) {
   tx_t ret = "";
     PlantArray* res = plant_list_make ( 0 );
@@ -12468,6 +12547,9 @@ tx_t generate_node(tx_t node, PlantArray* env) {
   tx_t tgt = "";
   tx_t isn2 = "";
   tx_t isn3 = "";
+  tx_t gs_tgt = "";
+  tx_t gs_val = "";
+  tx_t gs_cv = "";
   tx_t ftgt = "";
   tx_t fcv = "";
   tx_t fskip = "";
@@ -13111,6 +13193,9 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     if (strcmp(ca2,"FREE") == 0) {
     ca2 = "plant_free";
     }
+    if (strcmp(ca2,"GLOBAL_FREE") == 0) {
+    ca2 = "plant_free";
+    }
     if (strcmp(ca2orig,"LIST_FREE") == 0 || strcmp(ca2orig,"TENSOR_FREE") == 0 || strcmp(ca2orig,"FREE") == 0) {
     fargs = _map_get(node, "args");
     if (plant_array_length(fargs) > 0) {
@@ -13210,6 +13295,13 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     }
     isel = indent_str(indent_num);
     return _cat4(isel, "  plant_iReport_print(get_report(), plant_typeof(", cval2, "));\n");
+    }
+    if (strcmp(ntype,"global_stmt") == 0) {
+    gs_tgt = _map_get(node, "target");
+    gs_val = _map_get(node, "value");
+    gs_cv = translate_expr(gs_val, nums, evars, maths);
+    gs_cv = _handle_cat(gs_cv, nums, evars);
+    return _cat3(_cat4(isel0, "  ", gs_tgt, " = "), gs_cv, ";\n");
     }
     if (strcmp(ntype,"free_stmt") == 0) {
     ftgt = _map_get(node, "target");
@@ -15318,15 +15410,16 @@ tx_t generate_c(PlantArray* ast) {
   tx_t cprm = "";
   tx_t pstr2 = "";
   tx_t fd = "";
+  tx_t gwn = "";
+  tx_t gwv0 = "";
+  tx_t gwl = "";
+  tx_t gwv = "";
+  tx_t gcv0 = "";
+  tx_t gcv = "";
+  tx_t gnum = "";
+  tx_t gnf = "";
   tx_t asy4 = "";
   tx_t cmact = "";
-  tx_t gname = "";
-  tx_t gvtype = "";
-  tx_t gvalue = "";
-  tx_t gcv = "";
-  tx_t gfound = "";
-  tx_t gnum = "";
-  tx_t gfound2 = "";
   tx_t ns_code = "";
   tx_t sae = "";
   tx_t san = "";
@@ -15957,7 +16050,29 @@ tx_t generate_c(PlantArray* ast) {
     long drn_main = async_reachable ( ast );
     PlantArray* nums_top = collect_nums ( ast , plant_list_make ( 0 ) , esub );
     tx_t glob_code = "";
-    PlantArray* globals = plant_list_make ( 0 );
+    PlantArray* globals = collect_globals_walk ( ast , plant_list_make ( 0 ) );
+    long gwi = 0;
+    while (gwi + 2 < plant_array_length(globals)) {
+    gwn = plant_list_get(globals, gwi);
+    gwv0 = plant_list_get(globals, gwi+1);
+    gwl = plant_list_get(globals, gwi+2);
+    gwv = subst_type(gwv0, esub);
+    tx_t gwc = "tx_t";
+    if (strcmp(gwv,"") > 0) {
+    gwc = plant_ctype(gwv);
+    }
+    glob_code = _cat3(_cat4(glob_code, "static ", gwc, " "), gwn, ";\n");
+    gcv0 = translate_expr(gwl, nums_top, plant_list_make ( 0 ), plant_list_make ( 0 ));
+    gcv = _handle_cat(gcv0, nums_top, plant_list_make ( 0 ));
+    gnum = expr_is_numeric(gcv, nums_top);
+    if (gnum == 1) {
+    gnf = list_contains(nums_top, gwn);
+    if (gnf == 0) {
+                nums_top = plant_list_add(nums_top, gwn);
+    }
+    }
+    gwi = gwi+3;
+    }
     i = 0;
     while (i < plant_array_length(ast)) {
     node_el = plant_list_get(ast, i);
@@ -15991,32 +16106,7 @@ tx_t generate_c(PlantArray* ast) {
     if (strcmp(ntype,"union_decl") == 0) {
     has_decl = 1;
     }
-    if (strcmp(ntype,"global_stmt") == 0) {
-    gname = _map_get(node_el, "target");
-    gvtype = _map_get(node_el, "var_type");
-    gvtype = subst_type(gvtype, esub);
-    gvalue = _map_get(node_el, "value");
-    tx_t gctype = "tx_t";
-    if (strcmp(gvtype,"") > 0) {
-    gctype = plant_ctype(gvtype);
-    }
-    glob_code = _cat3(_cat4(glob_code, "static ", gctype, " "), gname, ";\n");
-    gcv = translate_expr(gvalue, nums_top, plant_list_make ( 0 ), plant_list_make ( 0 ));
-    gcv = _handle_cat(gcv, nums_top, plant_list_make ( 0 ));
-    stmt_code = _cat3(_cat4(stmt_code, "  ", gname, " = "), gcv, ";\n");
-    gfound = list_contains(globals, gname);
-    if (gfound == 0) {
-                globals = plant_list_add(globals, gname);
-    }
-    gnum = expr_is_numeric(gcv, nums_top);
-    if (gnum == 1) {
-    gfound2 = list_contains(nums_top, gname);
-    if (gfound2 == 0) {
-                    nums_top = plant_list_add(nums_top, gname);
-    }
-    }
-    }
-    if (strcmp(ntype,"action_decl") != 0 && strcmp(ntype,"global_stmt") != 0 && strcmp(ntype,"enum_decl") != 0 && strcmp(ntype,"external_decl") != 0 && strcmp(ntype,"struct_decl") != 0 && strcmp(ntype,"union_decl") != 0 && strcmp(ntype,"import_stmt") != 0 && strcmp(ntype,"type_decl") != 0 && strcmp(ntype,"species_decl") != 0 && strcmp(ntype,"interface_decl") != 0) {
+    if (strcmp(ntype,"action_decl") != 0 && strcmp(ntype,"enum_decl") != 0 && strcmp(ntype,"external_decl") != 0 && strcmp(ntype,"struct_decl") != 0 && strcmp(ntype,"union_decl") != 0 && strcmp(ntype,"import_stmt") != 0 && strcmp(ntype,"type_decl") != 0 && strcmp(ntype,"species_decl") != 0 && strcmp(ntype,"interface_decl") != 0) {
     ns_code = generate_node(node_el, env_make ( 0 , sigs , esub , plant_list_make ( 0 ) , "" , nums_top , plant_list_make ( 0 ) , eregs , "" , "" , "" , plant_list_make ( 0 ) ));
     stmt_code = _cat(stmt_code, ns_code);
     has_stmt = 1;
@@ -16784,7 +16874,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.51.3a (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.51.3b (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

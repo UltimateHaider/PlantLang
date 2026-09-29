@@ -184,37 +184,29 @@ SHOW n.
 - **Fixed:** `tensor_basic` and `tensor_refcount` now free their tensors
   (test hygiene).
 
-## TD-015: Global/cross-scope lifecycle tracking — PARTIALLY RESOLVED
-- **Status:** PARTIALLY RESOLVED in v0.51.3a (GLOBAL keyword added).
-- **Introduced:** pre-v0.51.2 (long-standing).
-- **Target for remaining:** v0.51.4.
-
-### Resolved (v0.51.3a)
-- Mutable shared state across ACTIONs now exists.
-- `GLOBAL name TO value.` / `GLOBAL name (TYPE) TO value.`
-- File-scope `static` emission (C89-compliant: declaration without
-  initializer + main-position assignment).
-- Visible to all ACTIONs (C scoping).
-- `SET counter TO …` in ACTIONs works.
-
-### Remaining (v0.51.4)
-- **GLOBAL inside SUITE/IF/loop bodies is ignored** (only top-level
-  is processed — the file-scope handler runs on the top-level AST).
-- GLOBAL lifecycle (auto-cleanup).
-- GLOBAL list mutation semantics.
-- GLOBAL init order (multi-global) — currently declaration order.
-- GLOBAL_FREE keyword.
-- ACTION-body numeric GLOBAL in `nums` (partial: a numeric global is
-  in the top-level `nums`, but not in an ACTION body's `nums`).
-- **Nested-block cross-scope free** (from the original TD-015 finding):
-  a `LIST_FREE` inside an `IF`/loop body of an outer variable is not
-  visible to the enclosing scope → a later `FREE` double-frees. Cause:
-  `freed_vars` is block-scoped (v0.51.2c.1). Trade-off: block-scoping →
-  double-free; function-scoping → leak. Needs proper scope tracking.
+## TD-015: Global/cross-scope lifecycle tracking — PARTIAL CLOSED
+- **Status:** PARTIAL CLOSED in v0.51.3b
+- **Resolved:**
+  - GLOBAL keyword (v0.51.3a).
+  - GLOBAL in SUITE/IF/CYCLE (v0.51.3b).
+  - GLOBAL_FREE (v0.51.3b).
+  - GLOBAL list mutation via `PUT … INTO …` (v0.51.3b) — the only
+    supported list mutation (see TD-020 for the unsupported forms).
+  - Init order documented (v0.51.3b).
+- **Remaining:**
+  - Auto-cleanup → v0.51.4.
+  - GLOBAL in nested functions → v0.51.4.
+  - ACTION-body numeric GLOBAL in `nums` (partial: a numeric global is
+    in the top-level `nums`, but not in an ACTION body's `nums`).
+  - **Nested-block cross-scope free** (original TD-015 finding): a
+    `LIST_FREE` inside an `IF`/loop body of an outer variable is not
+    visible to the enclosing scope → a later `FREE` double-frees.
+    Cause: `freed_vars` is block-scoped (v0.51.2c.1).
 
 ### Related
 - TD-016 (STATIC variables).
 - TD-017 (closure capture lifecycle).
+- TD-019 (SUITE parsing), TD-020 (list operations).
 
 ## TD-016: STATIC variables not supported — DEFERRED
 - **Status:** DEFERRED to v0.52.0 (Type System Audit)
@@ -253,3 +245,42 @@ v0.52.0 — define capture ownership and free closure envs.
 ### User Guidance
 Do not rely on captured container lifetimes; free containers in the
 defining scope.
+
+## TD-018: CHAR segfaults
+- **Status:** OPEN
+- **Introduced:** v0.50.0a (CHAR primitive)
+- **Target fix:** v0.51.4
+- **Impact:** MEDIUM — `CHAR` is unusable.
+- **Symptom:** `CREATE C (CHAR) TO "A".` → `char C = plant_char_create("A");`
+  → runtime SEGFAULT.
+- **Discovered by:** v0.51.3 BYT type audit.
+- **Related:** type registry (v0.51.3c).
+
+## TD-019: Top-level SUITE terminates parsing
+- **Status:** OPEN
+- **Introduced:** pre-v0.51 (long-standing)
+- **Target fix:** v0.51.4
+- **Impact:** MEDIUM — statements after `/SUITE.` are dropped.
+- **Symptom:**
+```plantlang
+SUITE "A"
+  SHOW "a".
+/SUITE.
+SHOW "end".   # ← dropped
+```
+- **Cause:** the top-level SUITE parser is terminal.
+- **Discovered by:** v0.51.3b Phase 1 (GLOBAL in SUITE testing).
+- **Related:** TD-020 (list ops).
+
+## TD-020: List operations unsupported
+- **Status:** OPEN
+- **Introduced:** pre-v0.51 (long-standing)
+- **Target fix:** v0.51.4 or v0.52.0
+- **Impact:** MEDIUM — three common list mutations are not supported:
+  - `SET lst TO lst + [item]` (list concat) → invalid C.
+  - `SET lst[i] TO value` (index assignment) → not lowered.
+  - `PUSH(lst, item)` (push) → `PUSH` is not a keyword.
+- **Supported:** `PUT item INTO lst.` (append only).
+- **Affects:** locals and globals alike (not GLOBAL-specific).
+- **Discovered by:** v0.51.3b Phase 3.
+- **Related:** TD-019.

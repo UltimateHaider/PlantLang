@@ -1,0 +1,15 @@
+# tests/native/global_list_mutation.plant — v0.51.3b GLOBAL list mutation
+# NOTE: list append uses PUT ... INTO ... (the supported form). The
+# directive's `SET numbers TO numbers + [n]` / `SET numbers[0]` / `PUSH`
+# are general (non-GLOBAL) list-operation gaps — see TD-020.
+GLOBAL numbers TO [1, 2, 3].
+
+ACTION add(n),
+  PUT n INTO numbers.
+/ACTION.
+
+add(4).
+add(5).
+
+SHOW COUNT(numbers).
+SHOW "list-mutation-ok".

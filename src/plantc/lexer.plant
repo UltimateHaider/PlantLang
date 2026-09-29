@@ -9,6 +9,8 @@ ACTION is_keyword(wrd(TX)),
   IF wrd IS "CREATE", GIVE TRUE. /IF.
   # v0.51.3a — GLOBAL mutable file-scope variables.
   IF wrd IS "global", GIVE TRUE. /IF.
+  # v0.51.3b — GLOBAL_FREE explicit global free.
+  IF wrd IS "global_free", GIVE TRUE. /IF.
   IF wrd IS "MATCH", GIVE TRUE. /IF.
   IF wrd IS "IF", GIVE TRUE. /IF.
   IF wrd IS "ELSE", GIVE TRUE. /IF.
@@ -118,6 +120,8 @@ ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "CREATE", GIVE "CREATE". /IF.
   # v0.51.3a — GLOBAL mutable file-scope variables.
   IF wrd IS "global", GIVE "GLOBAL". /IF.
+  # v0.51.3b — GLOBAL_FREE explicit global free.
+  IF wrd IS "global_free", GIVE "GLOBAL_FREE". /IF.
   IF wrd IS "MATCH", GIVE "MATCH". /IF.
   IF wrd IS "IF", GIVE "IF". /IF.
   IF wrd IS "ELSE", GIVE "ELSE". /IF.
