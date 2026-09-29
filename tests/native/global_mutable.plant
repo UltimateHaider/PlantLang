@@ -1,0 +1,22 @@
+# tests/native/global_mutable.plant — v0.51.3a GLOBAL mutability
+# NOTE: top-level form (SUITE-with-nested-ACTION is unsupported, and
+# GLOBAL inside a SUITE is not reached by the file-scope handler).
+GLOBAL counter TO 0.
+
+ACTION increment(),
+  SET counter TO counter + 1.
+/ACTION.
+
+ACTION reset(),
+  SET counter TO 0.
+/ACTION.
+
+increment().
+increment().
+increment().
+SHOW counter.
+
+reset().
+SHOW counter.
+
+SHOW "global-mutable-ok".

@@ -8697,6 +8697,9 @@ ACTION generate_c(ast(LIST)),
     # at the end of the C main() entry (v0.48.3a).
     CREATE drn_main(NUM) TO async_reachable(ast).
     CREATE nums_top(LIST) TO collect_nums(ast, plant_list_make(0), esub).
+    # v0.51.3a — GLOBAL file-scope statics + their names.
+    CREATE glob_code(TX) TO "".
+    CREATE globals(LIST) TO plant_list_make(0).
     SET i TO 0.
     SEASON i < COUNT ast,
         REAP node_el FROM plant_list_get, ast, i.
@@ -8730,9 +8733,35 @@ ACTION generate_c(ast(LIST)),
         IF ntype IS "union_decl",
             SET has_decl TO 1.
         /IF.
+        # v0.51.3a — GLOBAL: file-scope static decl + main-position init.
+        # (C89 file-scope initializers must be constant, so we declare
+        #  without an initializer and assign at the statement position.)
+        IF ntype IS "global_stmt",
+            REAP gname FROM _map_get, node_el, "target".
+            REAP gvtype FROM _map_get, node_el, "var_type".
+            REAP gvtype FROM subst_type, gvtype, esub.
+            REAP gvalue FROM _map_get, node_el, "value".
+            CREATE gctype(TX) TO "tx_t".
+            IF gvtype > "",
+                REAP gctype FROM plant_ctype, gvtype.
+            /IF.
+            SET glob_code TO glob_code + "static " + gctype + " " + gname + ";\n".
+            REAP gcv FROM translate_expr, gvalue, nums_top, plant_list_make(0), plant_list_make(0).
+            REAP gcv FROM _handle_cat, gcv, nums_top, plant_list_make(0).
+            SET stmt_code TO stmt_code + "  " + gname + " = " + gcv + ";\n".
+            REAP gfound FROM list_contains, globals, gname.
+            IF gfound IS 0, PUT gname INTO globals. /IF.
+            # Only numeric globals join `nums` (so SHOW wraps them in
+            # _from_long); string/container globals must NOT be wrapped.
+            REAP gnum FROM expr_is_numeric, gcv, nums_top.
+            IF gnum IS 1,
+                REAP gfound2 FROM list_contains, nums_top, gname.
+                IF gfound2 IS 0, PUT gname INTO nums_top. /IF.
+            /IF.
+        /IF.
         # v0.49.25: import_stmt nodes are loader-level no-ops and must
         # not flip has_stmt (which would force a duplicate CLI main).
-        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "union_decl" AND ntype ISNT "import_stmt" AND ntype ISNT "type_decl" AND ntype ISNT "species_decl" AND ntype ISNT "interface_decl",
+        IF ntype ISNT "action_decl" AND ntype ISNT "global_stmt" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "union_decl" AND ntype ISNT "import_stmt" AND ntype ISNT "type_decl" AND ntype ISNT "species_decl" AND ntype ISNT "interface_decl",
             REAP ns_code FROM generate_node, node_el, env_make(0, sigs, esub, plant_list_make(0), "", nums_top, plant_list_make(0), eregs, "", "", "", plant_list_make(0)).
             SET stmt_code TO stmt_code + ns_code.
             SET has_stmt TO 1.
@@ -8822,7 +8851,7 @@ ACTION generate_c(ast(LIST)),
         SET td_code TO td_code + "typedef " + ct2 + " " + tal + ";\n".
         SET i TO i + 2.
     /SEASON.
-    GIVE header + roots_code + struct_code + td_code + ffi_topo + cltype_code + pro_code + cb_code + clfwd_code + "\n" + cldef_code + "\n" + decl_code + adapter_code + stmt_code.
+    GIVE header + roots_code + struct_code + td_code + ffi_topo + cltype_code + pro_code + cb_code + clfwd_code + glob_code + "\n" + cldef_code + "\n" + decl_code + adapter_code + stmt_code.
 /ACTION.
 
 # ═══════════════════════════════════════════════════════════════

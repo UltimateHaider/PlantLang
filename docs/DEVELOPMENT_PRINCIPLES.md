@@ -176,3 +176,25 @@ All verify-* targets must include valgrind-check-tensor.
     - Closure captures use heap env structs (plant_env_alloc).
     - Env lifecycle is not individually managed.
     - Deferred to v0.52.0 (TD-017).
+
+### QQQ. GLOBAL keyword (v0.51.3a)
+
+    - GLOBAL declares a mutable variable at file scope.
+    - Syntax: GLOBAL name TO value. / GLOBAL name (TYPE) TO value.
+    - Visibility: all ACTIONs.
+    - Lifecycle: persistent (no auto-cleanup).
+    - Storage: C `static` at file scope (C89-compatible:
+      declaration without init + main-position assignment).
+    - Partially resolves TD-015.
+
+### RRR. GLOBAL scope (v0.51.3a)
+
+    - GLOBAL only at top-level (module scope).
+    - GLOBAL inside SUITE/IF/loop bodies is NOT processed.
+    - Nested GLOBAL support deferred to v0.51.4.
+
+### SSS. GLOBAL lifecycle (v0.51.3a)
+
+    - GLOBAL variables are persistent.
+    - No auto-cleanup at program exit.
+    - GLOBAL_FREE deferred to v0.51.4.

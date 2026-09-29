@@ -42,6 +42,7 @@ tx_t parse_cancel_stmt(PlantArray* tokens, long pos);
 tx_t parse_trace_stmt(PlantArray* tokens, long pos);
 tx_t parse_mission_stmt(PlantArray* tokens, long pos);
 tx_t parse_create_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode);
+tx_t parse_global_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode);
 tx_t parse_array_decl(PlantArray* tokens, long pos, PlantArray* rtab);
 tx_t parse_show_stmt(PlantArray* tokens, long pos);
 tx_t parse_verify_stmt(PlantArray* tokens, long pos);
@@ -291,6 +292,9 @@ tx_t is_keyword(tx_t wrd) {
     return 1;
     }
     if (strcmp(wrd,"CREATE") == 0) {
+    return 1;
+    }
+    if (strcmp(wrd,"global") == 0) {
     return 1;
     }
     if (strcmp(wrd,"MATCH") == 0) {
@@ -571,6 +575,9 @@ tx_t keyword_to_type(tx_t wrd) {
     }
     if (strcmp(wrd,"CREATE") == 0) {
     return "CREATE";
+    }
+    if (strcmp(wrd,"global") == 0) {
+    return "GLOBAL";
     }
     if (strcmp(wrd,"MATCH") == 0) {
     return "MATCH";
@@ -1547,7 +1554,7 @@ tx_t parse_field_access(PlantArray* tokens, long pos, tx_t text, tx_t dpth) {
     if (strcmp(text,"") == 0) {
     return plant_list_make ( 3 , "0" , text , pos );
     }
-    if (strcmp(flx,"SET") == 0 || strcmp(flx,"REAP") == 0 || strcmp(flx,"SHOW") == 0 || strcmp(flx,"CREATE") == 0 || strcmp(flx,"GIVE") == 0 || strcmp(flx,"IF") == 0 || strcmp(flx,"ORIF") == 0 || strcmp(flx,"SEASON") == 0 || strcmp(flx,"WHILE") == 0 || strcmp(flx,"FOR") == 0 || strcmp(flx,"CALL") == 0 || strcmp(flx,"START") == 0 || strcmp(flx,"AWAIT") == 0 || strcmp(flx,"CANCEL") == 0 || strcmp(flx,"TRACE") == 0 || strcmp(flx,"MISSION") == 0 || strcmp(flx,"FREE") == 0 || strcmp(flx,"WAIT") == 0 || strcmp(flx,"LOCK") == 0 || strcmp(flx,"ARC") == 0 || strcmp(flx,"PUT") == 0 || strcmp(flx,"TAKE") == 0 || strcmp(flx,"BRAID") == 0 || strcmp(flx,"LINK") == 0 || strcmp(flx,"SORT") == 0 || strcmp(flx,"SHAKE") == 0 || strcmp(flx,"BREAK") == 0 || strcmp(flx,"CONTINUE") == 0 || strcmp(flx,"LET") == 0 || strcmp(flx,"NOW") == 0 || strcmp(flx,"ANALYZE") == 0 || strcmp(flx,"TYPEOF") == 0 || strcmp(flx,"ROOT") == 0 || strcmp(flx,"ROOT_SCOPE") == 0 || strcmp(flx,"CONST") == 0 || strcmp(flx,"IN") == 0 || strcmp(flx,"FROM") == 0 || strcmp(flx,"TO") == 0 || strcmp(flx,"WITH") == 0 || strcmp(flx,"AS") == 0 || strcmp(flx,"INTO") == 0 || strcmp(flx,"BY") == 0 || strcmp(flx,"ASYNC") == 0 || strcmp(flx,"MATCH") == 0 || strcmp(flx,"CYCLE") == 0 || strcmp(flx,"WEATHER") == 0 || strcmp(flx,"THROW") == 0 || strcmp(flx,"STOP") == 0 || strcmp(flx,"INCREASE") == 0 || strcmp(flx,"DECREASE") == 0 || strcmp(flx,"HARVEST") == 0 || strcmp(flx,"LISTEN") == 0 || strcmp(flx,"FAST") == 0) {
+    if (strcmp(flx,"SET") == 0 || strcmp(flx,"REAP") == 0 || strcmp(flx,"SHOW") == 0 || strcmp(flx,"CREATE") == 0 || strcmp(flx,"GLOBAL") == 0 || strcmp(flx,"GIVE") == 0 || strcmp(flx,"IF") == 0 || strcmp(flx,"ORIF") == 0 || strcmp(flx,"SEASON") == 0 || strcmp(flx,"WHILE") == 0 || strcmp(flx,"FOR") == 0 || strcmp(flx,"CALL") == 0 || strcmp(flx,"START") == 0 || strcmp(flx,"AWAIT") == 0 || strcmp(flx,"CANCEL") == 0 || strcmp(flx,"TRACE") == 0 || strcmp(flx,"MISSION") == 0 || strcmp(flx,"FREE") == 0 || strcmp(flx,"WAIT") == 0 || strcmp(flx,"LOCK") == 0 || strcmp(flx,"ARC") == 0 || strcmp(flx,"PUT") == 0 || strcmp(flx,"TAKE") == 0 || strcmp(flx,"BRAID") == 0 || strcmp(flx,"LINK") == 0 || strcmp(flx,"SORT") == 0 || strcmp(flx,"SHAKE") == 0 || strcmp(flx,"BREAK") == 0 || strcmp(flx,"CONTINUE") == 0 || strcmp(flx,"LET") == 0 || strcmp(flx,"NOW") == 0 || strcmp(flx,"ANALYZE") == 0 || strcmp(flx,"TYPEOF") == 0 || strcmp(flx,"ROOT") == 0 || strcmp(flx,"ROOT_SCOPE") == 0 || strcmp(flx,"CONST") == 0 || strcmp(flx,"IN") == 0 || strcmp(flx,"FROM") == 0 || strcmp(flx,"TO") == 0 || strcmp(flx,"WITH") == 0 || strcmp(flx,"AS") == 0 || strcmp(flx,"INTO") == 0 || strcmp(flx,"BY") == 0 || strcmp(flx,"ASYNC") == 0 || strcmp(flx,"MATCH") == 0 || strcmp(flx,"CYCLE") == 0 || strcmp(flx,"WEATHER") == 0 || strcmp(flx,"THROW") == 0 || strcmp(flx,"STOP") == 0 || strcmp(flx,"INCREASE") == 0 || strcmp(flx,"DECREASE") == 0 || strcmp(flx,"HARVEST") == 0 || strcmp(flx,"LISTEN") == 0 || strcmp(flx,"FAST") == 0) {
     return plant_list_make ( 3 , "0" , text , pos );
     }
     nt2 = plant_iLexer_peek_at(lexer, tokens, pos+2);
@@ -2294,6 +2301,70 @@ tx_t parse_create_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emod
     tx_t expr = plant_list_get(vpair ,  0 );
     p4 = _second(vpair);
     return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "create_stmt" , "target" , id_name , "var_type" , vtype , "value" , expr ) , p4 );
+}
+tx_t parse_global_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) {
+  tx_t lexer = "";
+  tx_t pair = "";
+  tx_t p2 = "";
+  tx_t id_pair = "";
+  tx_t id_name = "";
+  tx_t p3 = "";
+  tx_t tok = "";
+  tx_t lx = "";
+  tx_t lp = "";
+  tx_t p4 = "";
+  tx_t tv = "";
+  tx_t tt = "";
+  tx_t p5 = "";
+  tx_t rp = "";
+  tx_t p6 = "";
+  tx_t tok2 = "";
+  tx_t lx2 = "";
+  tx_t to_pair = "";
+  tx_t vpair = "";
+  tx_t eq_pair = "";
+    lexer = get_lexer();
+    pair = plant_iLexer_consume_at(lexer, tokens, pos);
+    p2 = _second(pair);
+    id_pair = plant_iLexer_consume_at(lexer, tokens, p2);
+    id_name = plant_iLexer_tok_lex(lexer, plant_list_get(id_pair ,  0 ));
+    p3 = _second(id_pair);
+    tok = plant_iLexer_peek_at(lexer, tokens, p3);
+    lx = plant_iLexer_tok_lex(lexer, tok);
+    tx_t vtype = "";
+    if (strcmp(lx,"(") == 0) {
+    lp = plant_iLexer_consume_at(lexer, tokens, p3);
+    p4 = _second(lp);
+    tv = collect_type_text(tokens, p4, ")", 0);
+    tt = _first(tv);
+    p5 = _second(tv);
+    rp = plant_iLexer_consume_at(lexer, tokens, p5);
+    p6 = _second(rp);
+    vtype = tt;
+    p3 = p6;
+    }
+    tok2 = plant_iLexer_peek_at(lexer, tokens, p3);
+    lx2 = plant_iLexer_tok_lex(lexer, tok2);
+    if (strcmp(lx2,"TO") == 0) {
+    to_pair = plant_iLexer_consume_at(lexer, tokens, p3);
+    p4 = _second(to_pair);
+    vpair = collect_value(tokens, p4);
+    tx_t expr = plant_list_get(vpair ,  0 );
+    p5 = _second(vpair);
+    return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "global_stmt" , "target" , id_name , "var_type" , vtype , "value" , expr ) , p5 );
+    }
+    if (strcmp(lx2,"=") == 0) {
+    eq_pair = plant_iLexer_consume_at(lexer, tokens, p3);
+    p4 = _second(eq_pair);
+    vpair = collect_value(tokens, p4);
+    tx_t expr = plant_list_get(vpair ,  0 );
+    p5 = _second(vpair);
+    return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "global_stmt" , "target" , id_name , "var_type" , vtype , "value" , expr ) , p5 );
+    }
+    vpair = collect_value(tokens, p3);
+    tx_t expr = plant_list_get(vpair ,  0 );
+    p4 = _second(vpair);
+    return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "global_stmt" , "target" , id_name , "var_type" , vtype , "value" , expr ) , p4 );
 }
 tx_t parse_array_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
   tx_t lexer = "";
@@ -5199,6 +5270,10 @@ tx_t parse_statement(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab, P
     }
     if (strcmp(lx,"CREATE") == 0) {
     r = parse_create_stmt(tokens, pos, rtab, emode);
+    return r;
+    }
+    if (strcmp(lx,"GLOBAL") == 0) {
+    r = parse_global_stmt(tokens, pos, rtab, emode);
     return r;
     }
     if (strcmp(lx,"ARRAY") == 0 || strcmp(lx,"array") == 0) {
@@ -15245,6 +15320,13 @@ tx_t generate_c(PlantArray* ast) {
   tx_t fd = "";
   tx_t asy4 = "";
   tx_t cmact = "";
+  tx_t gname = "";
+  tx_t gvtype = "";
+  tx_t gvalue = "";
+  tx_t gcv = "";
+  tx_t gfound = "";
+  tx_t gnum = "";
+  tx_t gfound2 = "";
   tx_t ns_code = "";
   tx_t sae = "";
   tx_t san = "";
@@ -15874,6 +15956,8 @@ tx_t generate_c(PlantArray* ast) {
     }
     long drn_main = async_reachable ( ast );
     PlantArray* nums_top = collect_nums ( ast , plant_list_make ( 0 ) , esub );
+    tx_t glob_code = "";
+    PlantArray* globals = plant_list_make ( 0 );
     i = 0;
     while (i < plant_array_length(ast)) {
     node_el = plant_list_get(ast, i);
@@ -15907,7 +15991,32 @@ tx_t generate_c(PlantArray* ast) {
     if (strcmp(ntype,"union_decl") == 0) {
     has_decl = 1;
     }
-    if (strcmp(ntype,"action_decl") != 0 && strcmp(ntype,"enum_decl") != 0 && strcmp(ntype,"external_decl") != 0 && strcmp(ntype,"struct_decl") != 0 && strcmp(ntype,"union_decl") != 0 && strcmp(ntype,"import_stmt") != 0 && strcmp(ntype,"type_decl") != 0 && strcmp(ntype,"species_decl") != 0 && strcmp(ntype,"interface_decl") != 0) {
+    if (strcmp(ntype,"global_stmt") == 0) {
+    gname = _map_get(node_el, "target");
+    gvtype = _map_get(node_el, "var_type");
+    gvtype = subst_type(gvtype, esub);
+    gvalue = _map_get(node_el, "value");
+    tx_t gctype = "tx_t";
+    if (strcmp(gvtype,"") > 0) {
+    gctype = plant_ctype(gvtype);
+    }
+    glob_code = _cat3(_cat4(glob_code, "static ", gctype, " "), gname, ";\n");
+    gcv = translate_expr(gvalue, nums_top, plant_list_make ( 0 ), plant_list_make ( 0 ));
+    gcv = _handle_cat(gcv, nums_top, plant_list_make ( 0 ));
+    stmt_code = _cat3(_cat4(stmt_code, "  ", gname, " = "), gcv, ";\n");
+    gfound = list_contains(globals, gname);
+    if (gfound == 0) {
+                globals = plant_list_add(globals, gname);
+    }
+    gnum = expr_is_numeric(gcv, nums_top);
+    if (gnum == 1) {
+    gfound2 = list_contains(nums_top, gname);
+    if (gfound2 == 0) {
+                    nums_top = plant_list_add(nums_top, gname);
+    }
+    }
+    }
+    if (strcmp(ntype,"action_decl") != 0 && strcmp(ntype,"global_stmt") != 0 && strcmp(ntype,"enum_decl") != 0 && strcmp(ntype,"external_decl") != 0 && strcmp(ntype,"struct_decl") != 0 && strcmp(ntype,"union_decl") != 0 && strcmp(ntype,"import_stmt") != 0 && strcmp(ntype,"type_decl") != 0 && strcmp(ntype,"species_decl") != 0 && strcmp(ntype,"interface_decl") != 0) {
     ns_code = generate_node(node_el, env_make ( 0 , sigs , esub , plant_list_make ( 0 ) , "" , nums_top , plant_list_make ( 0 ) , eregs , "" , "" , "" , plant_list_make ( 0 ) ));
     stmt_code = _cat(stmt_code, ns_code);
     has_stmt = 1;
@@ -15993,7 +16102,7 @@ tx_t generate_c(PlantArray* ast) {
     td_code = _cat3(_cat4(td_code, "typedef ", ct2, " "), tal, ";\n");
     i = i+2;
     }
-    return _cat3(_cat4(_cat4(_cat4(_cat4(header, roots_code, struct_code, td_code), ffi_topo, cltype_code, pro_code), cb_code, clfwd_code, "\n"), cldef_code, "\n", decl_code), adapter_code, stmt_code);
+    return _cat4(_cat4(_cat4(_cat4(_cat4(header, roots_code, struct_code, td_code), ffi_topo, cltype_code, pro_code), cb_code, clfwd_code, glob_code), "\n", cldef_code, "\n"), decl_code, adapter_code, stmt_code);
 }
 tx_t _cl_is_arg(tx_t arg) {
   tx_t pre = "";
@@ -16675,7 +16784,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.51.2d.2 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.51.3a (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

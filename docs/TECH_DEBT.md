@@ -184,40 +184,37 @@ SHOW n.
 - **Fixed:** `tensor_basic` and `tensor_refcount` now free their tensors
   (test hygiene).
 
-## TD-015: Global/cross-scope lifecycle tracking — DEFERRED
-- **Status:** DEFERRED to v0.52.0 (Type System Audit)
-- **Introduced:** v0.51.2d.2 (scope analysis)
-- **Impact:** MEDIUM — affects nested-block frees of outer variables.
+## TD-015: Global/cross-scope lifecycle tracking — PARTIALLY RESOLVED
+- **Status:** PARTIALLY RESOLVED in v0.51.3a (GLOBAL keyword added).
+- **Introduced:** pre-v0.51.2 (long-standing).
+- **Target for remaining:** v0.51.4.
 
-### Findings
-1. **Global variables tracking is not applicable.**
-   - In PlantLang, "globals" are top-level statements compiled into
-     `main()` locals. They are NOT visible to ACTIONs.
-   - The codegen has no cross-function mutable state (no shared env).
-   - The directive's global-tracking scenario (top-level free via
-     ACTION) is not expressible.
-   - Top-level free tracking already works via `freed_vars` (slot 13).
-   - Slot 14 (`global_freed_vars`) would be dead code.
-2. **Nested-block cross-scope double-free exists.**
-   - Example:
-```plantlang
-CREATE G TO [1, 2, 3].
-IF 1 > 0, LIST_FREE(G). /IF.
-FREE G.    # double-free
-```
-   - Cause: `freed_vars` is block-scoped (from v0.51.2c.1) — a free
-     inside a nested block is invisible to the outer scope.
-   - Trade-off: block-scoping → double-free; function-scoping → leak.
-   - This is the documented conditional/cross-scope free limitation.
+### Resolved (v0.51.3a)
+- Mutable shared state across ACTIONs now exists.
+- `GLOBAL name TO value.` / `GLOBAL name (TYPE) TO value.`
+- File-scope `static` emission (C89-compliant: declaration without
+  initializer + main-position assignment).
+- Visible to all ACTIONs (C scoping).
+- `SET counter TO …` in ACTIONs works.
 
-### Target
-v0.52.0 (Type System Audit): implement proper scope tracking; decide
-block- vs function-scope with type information; or implement safe
-double-free detection.
+### Remaining (v0.51.4)
+- **GLOBAL inside SUITE/IF/loop bodies is ignored** (only top-level
+  is processed — the file-scope handler runs on the top-level AST).
+- GLOBAL lifecycle (auto-cleanup).
+- GLOBAL list mutation semantics.
+- GLOBAL init order (multi-global) — currently declaration order.
+- GLOBAL_FREE keyword.
+- ACTION-body numeric GLOBAL in `nums` (partial: a numeric global is
+  in the top-level `nums`, but not in an ACTION body's `nums`).
+- **Nested-block cross-scope free** (from the original TD-015 finding):
+  a `LIST_FREE` inside an `IF`/loop body of an outer variable is not
+  visible to the enclosing scope → a later `FREE` double-frees. Cause:
+  `freed_vars` is block-scoped (v0.51.2c.1). Trade-off: block-scoping →
+  double-free; function-scoping → leak. Needs proper scope tracking.
 
-### User Guidance
-Avoid freeing an outer variable inside a nested block and then freeing
-it again outside. Use a single free point.
+### Related
+- TD-016 (STATIC variables).
+- TD-017 (closure capture lifecycle).
 
 ## TD-016: STATIC variables not supported — DEFERRED
 - **Status:** DEFERRED to v0.52.0 (Type System Audit)

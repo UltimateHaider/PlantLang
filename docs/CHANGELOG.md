@@ -1,3 +1,36 @@
+## v0.51.3a — GLOBAL Keyword
+
+### Added
+- GLOBAL keyword: mutable global variables at file scope.
+- Syntax: `GLOBAL name TO value.` / `GLOBAL name (TYPE) TO value.`
+- Visibility: all ACTIONs.
+- Generated C: `static <ctype> <name>;` (file scope) +
+  `<name> = <value>;` (main-position init) — C89-compliant.
+- 2 new tests: global_basic, global_mutable.
+
+### Resolved (partial)
+- TD-015: mutable globals now exist.
+
+### Deferred (v0.51.4)
+- GLOBAL inside SUITE/IF/loop bodies.
+- GLOBAL lifecycle (auto-cleanup).
+- GLOBAL list mutation semantics.
+- GLOBAL init order.
+- GLOBAL_FREE keyword.
+
+### Verified
+- Native: 69/69 (was 67)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (md5 b0f5bc73)
+- Binary: 924,040 bytes
+- Non-GLOBAL C: byte-identical to v0.51.2d.2
+
+### Out of Scope (v0.51.3b/c)
+- BYT (8-bit unsigned).
+- Type Registry.
+- SBT, SHORT, BOOL.
+
 ## v0.51.2d.2 — Advanced Scopes + JJ + 6D
 
 ### Performance Benchmark (6D)

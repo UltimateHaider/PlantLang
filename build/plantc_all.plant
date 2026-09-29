@@ -7,6 +7,8 @@
 ACTION is_keyword(wrd(TX)),
   IF wrd IS "LET", GIVE TRUE. /IF.
   IF wrd IS "CREATE", GIVE TRUE. /IF.
+  # v0.51.3a — GLOBAL mutable file-scope variables.
+  IF wrd IS "global", GIVE TRUE. /IF.
   IF wrd IS "MATCH", GIVE TRUE. /IF.
   IF wrd IS "IF", GIVE TRUE. /IF.
   IF wrd IS "ELSE", GIVE TRUE. /IF.
@@ -114,6 +116,8 @@ ACTION is_keyword(wrd(TX)),
 ACTION keyword_to_type(wrd(TX)),
   IF wrd IS "LET", GIVE "LET". /IF.
   IF wrd IS "CREATE", GIVE "CREATE". /IF.
+  # v0.51.3a — GLOBAL mutable file-scope variables.
+  IF wrd IS "global", GIVE "GLOBAL". /IF.
   IF wrd IS "MATCH", GIVE "MATCH". /IF.
   IF wrd IS "IF", GIVE "IF". /IF.
   IF wrd IS "ELSE", GIVE "ELSE". /IF.
@@ -766,7 +770,7 @@ ACTION parse_field_access(tokens(LIST), pos(NUM), text(TX), dpth(TX)),
   REAP fll FROM tok_line_leading, ftok.
   IF fll IS "1", GIVE plant_list_make(3, "0", text, pos). /IF.
   IF text IS "", GIVE plant_list_make(3, "0", text, pos). /IF.
-  IF flx IS "SET" OR flx IS "REAP" OR flx IS "SHOW" OR flx IS "CREATE" OR flx IS "GIVE" OR flx IS "IF" OR flx IS "ORIF" OR flx IS "SEASON" OR flx IS "WHILE" OR flx IS "FOR" OR flx IS "CALL" OR flx IS "START" OR flx IS "AWAIT" OR flx IS "CANCEL" OR flx IS "TRACE" OR flx IS "MISSION" OR flx IS "FREE" OR flx IS "WAIT" OR flx IS "LOCK" OR flx IS "ARC" OR flx IS "PUT" OR flx IS "TAKE" OR flx IS "BRAID" OR flx IS "LINK" OR flx IS "SORT" OR flx IS "SHAKE" OR flx IS "BREAK" OR flx IS "CONTINUE" OR flx IS "LET" OR flx IS "NOW" OR flx IS "ANALYZE" OR flx IS "TYPEOF" OR flx IS "ROOT" OR flx IS "ROOT_SCOPE" OR flx IS "CONST" OR flx IS "IN" OR flx IS "FROM" OR flx IS "TO" OR flx IS "WITH" OR flx IS "AS" OR flx IS "INTO" OR flx IS "BY" OR flx IS "ASYNC" OR flx IS "MATCH" OR flx IS "CYCLE" OR flx IS "WEATHER" OR flx IS "THROW" OR flx IS "STOP" OR flx IS "INCREASE" OR flx IS "DECREASE" OR flx IS "HARVEST" OR flx IS "LISTEN" OR flx IS "FAST",
+  IF flx IS "SET" OR flx IS "REAP" OR flx IS "SHOW" OR flx IS "CREATE" OR flx IS "GLOBAL" OR flx IS "GIVE" OR flx IS "IF" OR flx IS "ORIF" OR flx IS "SEASON" OR flx IS "WHILE" OR flx IS "FOR" OR flx IS "CALL" OR flx IS "START" OR flx IS "AWAIT" OR flx IS "CANCEL" OR flx IS "TRACE" OR flx IS "MISSION" OR flx IS "FREE" OR flx IS "WAIT" OR flx IS "LOCK" OR flx IS "ARC" OR flx IS "PUT" OR flx IS "TAKE" OR flx IS "BRAID" OR flx IS "LINK" OR flx IS "SORT" OR flx IS "SHAKE" OR flx IS "BREAK" OR flx IS "CONTINUE" OR flx IS "LET" OR flx IS "NOW" OR flx IS "ANALYZE" OR flx IS "TYPEOF" OR flx IS "ROOT" OR flx IS "ROOT_SCOPE" OR flx IS "CONST" OR flx IS "IN" OR flx IS "FROM" OR flx IS "TO" OR flx IS "WITH" OR flx IS "AS" OR flx IS "INTO" OR flx IS "BY" OR flx IS "ASYNC" OR flx IS "MATCH" OR flx IS "CYCLE" OR flx IS "WEATHER" OR flx IS "THROW" OR flx IS "STOP" OR flx IS "INCREASE" OR flx IS "DECREASE" OR flx IS "HARVEST" OR flx IS "LISTEN" OR flx IS "FAST",
     GIVE plant_list_make(3, "0", text, pos).
   /IF.
   REAP nt2 FROM plant_iLexer_peek_at, lexer, tokens, pos + 2.
@@ -1370,6 +1374,53 @@ ACTION parse_create_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
   CREATE expr TO vpair[0].
   REAP p4 FROM _second, vpair.
   GIVE plant_list_make(2, plant_list_make(8, "type", "create_stmt", "target", id_name, "var_type", vtype, "value", expr), p4).
+/ACTION.
+
+# v0.51.3a — GLOBAL name [ (TYPE) ] TO value.
+# Emits { type: global_stmt, target, var_type, value }.
+ACTION parse_global_stmt(tokens(LIST), pos(NUM), rtab(LIST), emode(TX)),
+  REAP lexer FROM get_lexer.
+  REAP pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
+  REAP p2 FROM _second, pair.
+  REAP id_pair FROM plant_iLexer_consume_at, lexer, tokens, p2.
+  REAP id_name FROM plant_iLexer_tok_lex, lexer, id_pair[0].
+  REAP p3 FROM _second, id_pair.
+  REAP tok FROM plant_iLexer_peek_at, lexer, tokens, p3.
+  REAP lx FROM plant_iLexer_tok_lex, lexer, tok.
+  CREATE vtype(TX) TO "".
+  IF lx IS "(",
+    REAP lp FROM plant_iLexer_consume_at, lexer, tokens, p3.
+    REAP p4 FROM _second, lp.
+    REAP tv FROM collect_type_text, tokens, p4, ")", 0.
+    REAP tt FROM _first, tv.
+    REAP p5 FROM _second, tv.
+    REAP rp FROM plant_iLexer_consume_at, lexer, tokens, p5.
+    REAP p6 FROM _second, rp.
+    SET vtype TO tt.
+    SET p3 TO p6.
+  /IF.
+  REAP tok2 FROM plant_iLexer_peek_at, lexer, tokens, p3.
+  REAP lx2 FROM plant_iLexer_tok_lex, lexer, tok2.
+  IF lx2 IS "TO",
+    REAP to_pair FROM plant_iLexer_consume_at, lexer, tokens, p3.
+    REAP p4 FROM _second, to_pair.
+    REAP vpair FROM collect_value, tokens, p4.
+    CREATE expr TO vpair[0].
+    REAP p5 FROM _second, vpair.
+    GIVE plant_list_make(2, plant_list_make(8, "type", "global_stmt", "target", id_name, "var_type", vtype, "value", expr), p5).
+  /IF.
+  IF lx2 IS "=",
+    REAP eq_pair FROM plant_iLexer_consume_at, lexer, tokens, p3.
+    REAP p4 FROM _second, eq_pair.
+    REAP vpair FROM collect_value, tokens, p4.
+    CREATE expr TO vpair[0].
+    REAP p5 FROM _second, vpair.
+    GIVE plant_list_make(2, plant_list_make(8, "type", "global_stmt", "target", id_name, "var_type", vtype, "value", expr), p5).
+  /IF.
+  REAP vpair FROM collect_value, tokens, p3.
+  CREATE expr TO vpair[0].
+  REAP p4 FROM _second, vpair.
+  GIVE plant_list_make(2, plant_list_make(8, "type", "global_stmt", "target", id_name, "var_type", vtype, "value", expr), p4).
 /ACTION.
 
 # v0.50.0e — parse_array_decl: array[T, N] varname = [init...].
@@ -3726,6 +3777,11 @@ ACTION parse_statement(tokens(LIST), pos(NUM), clv(TX), ctab(LIST), rtab(LIST), 
   /IF.
   IF lx IS "CREATE",
     REAP r FROM parse_create_stmt, tokens, pos, rtab, emode.
+    GIVE r.
+  /IF.
+  # v0.51.3a — GLOBAL mutable file-scope variables.
+  IF lx IS "GLOBAL",
+    REAP r FROM parse_global_stmt, tokens, pos, rtab, emode.
     GIVE r.
   /IF.
   # v0.50.0e — native fixed-size arrays (inside action bodies).
@@ -13846,6 +13902,9 @@ ACTION generate_c(ast(LIST)),
     # at the end of the C main() entry (v0.48.3a).
     CREATE drn_main(NUM) TO async_reachable(ast).
     CREATE nums_top(LIST) TO collect_nums(ast, plant_list_make(0), esub).
+    # v0.51.3a — GLOBAL file-scope statics + their names.
+    CREATE glob_code(TX) TO "".
+    CREATE globals(LIST) TO plant_list_make(0).
     SET i TO 0.
     SEASON i < COUNT ast,
         REAP node_el FROM plant_list_get, ast, i.
@@ -13879,9 +13938,35 @@ ACTION generate_c(ast(LIST)),
         IF ntype IS "union_decl",
             SET has_decl TO 1.
         /IF.
+        # v0.51.3a — GLOBAL: file-scope static decl + main-position init.
+        # (C89 file-scope initializers must be constant, so we declare
+        #  without an initializer and assign at the statement position.)
+        IF ntype IS "global_stmt",
+            REAP gname FROM _map_get, node_el, "target".
+            REAP gvtype FROM _map_get, node_el, "var_type".
+            REAP gvtype FROM subst_type, gvtype, esub.
+            REAP gvalue FROM _map_get, node_el, "value".
+            CREATE gctype(TX) TO "tx_t".
+            IF gvtype > "",
+                REAP gctype FROM plant_ctype, gvtype.
+            /IF.
+            SET glob_code TO glob_code + "static " + gctype + " " + gname + ";\n".
+            REAP gcv FROM translate_expr, gvalue, nums_top, plant_list_make(0), plant_list_make(0).
+            REAP gcv FROM _handle_cat, gcv, nums_top, plant_list_make(0).
+            SET stmt_code TO stmt_code + "  " + gname + " = " + gcv + ";\n".
+            REAP gfound FROM list_contains, globals, gname.
+            IF gfound IS 0, PUT gname INTO globals. /IF.
+            # Only numeric globals join `nums` (so SHOW wraps them in
+            # _from_long); string/container globals must NOT be wrapped.
+            REAP gnum FROM expr_is_numeric, gcv, nums_top.
+            IF gnum IS 1,
+                REAP gfound2 FROM list_contains, nums_top, gname.
+                IF gfound2 IS 0, PUT gname INTO nums_top. /IF.
+            /IF.
+        /IF.
         # v0.49.25: import_stmt nodes are loader-level no-ops and must
         # not flip has_stmt (which would force a duplicate CLI main).
-        IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "union_decl" AND ntype ISNT "import_stmt" AND ntype ISNT "type_decl" AND ntype ISNT "species_decl" AND ntype ISNT "interface_decl",
+        IF ntype ISNT "action_decl" AND ntype ISNT "global_stmt" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "union_decl" AND ntype ISNT "import_stmt" AND ntype ISNT "type_decl" AND ntype ISNT "species_decl" AND ntype ISNT "interface_decl",
             REAP ns_code FROM generate_node, node_el, env_make(0, sigs, esub, plant_list_make(0), "", nums_top, plant_list_make(0), eregs, "", "", "", plant_list_make(0)).
             SET stmt_code TO stmt_code + ns_code.
             SET has_stmt TO 1.
@@ -13971,7 +14056,7 @@ ACTION generate_c(ast(LIST)),
         SET td_code TO td_code + "typedef " + ct2 + " " + tal + ";\n".
         SET i TO i + 2.
     /SEASON.
-    GIVE header + roots_code + struct_code + td_code + ffi_topo + cltype_code + pro_code + cb_code + clfwd_code + "\n" + cldef_code + "\n" + decl_code + adapter_code + stmt_code.
+    GIVE header + roots_code + struct_code + td_code + ffi_topo + cltype_code + pro_code + cb_code + clfwd_code + glob_code + "\n" + cldef_code + "\n" + decl_code + adapter_code + stmt_code.
 /ACTION.
 
 # ═══════════════════════════════════════════════════════════════
@@ -14602,7 +14687,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.51.2d.2 (pure native)".
+  SHOW "Chloroplast 0.51.3a (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

@@ -1,0 +1,14 @@
+# tests/native/global_basic.plant — v0.51.3a GLOBAL
+# NOTE: top-level form. GLOBAL inside a SUITE body is not reached by the
+# file-scope handler (it runs on the top-level AST), so GLOBAL must be at
+# module scope. See docs/TECH_DEBT.md (TD-015 deferred items).
+GLOBAL counter TO 0.
+SHOW counter.
+
+GLOBAL message TO "hello".
+SHOW message.
+
+GLOBAL numbers TO [1, 2, 3].
+SHOW COUNT(numbers).
+
+SHOW "global-basic-ok".
