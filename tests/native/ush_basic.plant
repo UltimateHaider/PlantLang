@@ -1,0 +1,13 @@
+SUITE "USH Basic (unsigned)"
+  CREATE U (USH) TO 40000.
+  SHOW U.
+  SHOW U + 1.
+
+  CREATE MAX (USH) TO 65535.
+  SHOW MAX.
+
+  CREATE ZERO (USH) TO 0.
+  SHOW ZERO.
+
+  SHOW "ush-basic-ok".
+/SUITE.

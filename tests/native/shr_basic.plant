@@ -1,0 +1,13 @@
+SUITE "SHR Basic (signed)"
+  CREATE S (SHR) TO 1000.
+  SHOW S.
+  SHOW S + 1.
+
+  CREATE MAX (SHR) TO 32767.
+  SHOW MAX.
+
+  CREATE ZERO (SHR) TO 0.
+  SHOW ZERO.
+
+  SHOW "shr-basic-ok".
+/SUITE.

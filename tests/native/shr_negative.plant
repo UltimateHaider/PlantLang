@@ -1,0 +1,9 @@
+SUITE "SHR Negative (signed)"
+  CREATE NEG (SHR) TO -1000.
+  SHOW NEG.
+
+  CREATE MIN (SHR) TO -32768.
+  SHOW MIN.
+
+  SHOW "shr-negative-ok".
+/SUITE.

@@ -1,0 +1,13 @@
+SUITE "SHR + USH Numeric Integration"
+  CREATE S (SHR) TO 500.
+  CREATE U (USH) TO 40000.
+  CREATE N (NUM) TO 100000.
+
+  SHOW S + U.
+  SHOW S + N.
+  SHOW U + N.
+  SHOW N - S.
+  SHOW N - U.
+
+  SHOW "shr-ush-numeric-ok".
+/SUITE.

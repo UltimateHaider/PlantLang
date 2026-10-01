@@ -1,3 +1,28 @@
+## v0.51.7 — SHR (signed 16-bit) + USH (unsigned 16-bit)
+
+### Added
+- SHR type: 16-bit signed integer.
+  - C: short; Range: -32,768..32,767; Parity: short/i16.
+- USH type: 16-bit unsigned integer.
+  - C: unsigned short; Range: 0..65,535; Parity: ushort/u16.
+- 4 new tests: shr_basic, shr_negative, ush_basic, shr_ush_numeric.
+
+### Implementation
+- TWO records added to GLOBAL TYPE_REGISTRY in codegen_c.plant.
+- No codegen logic changes (registry-driven).
+- Binary size unchanged from v0.51.6 (zero-cost type addition).
+
+### Verified
+- Native: 89/89 (was 85)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged
+- Binary: 928448 bytes (unchanged).
+
+### Out of Scope (v0.51.8)
+- FLT (32-bit float).
+- BOOL (boolean).
+
 ## v0.51.6 — BYT (signed 8-bit) + UBT (unsigned 8-bit)
 
 ### Added

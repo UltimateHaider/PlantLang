@@ -24,6 +24,8 @@ PlantLang uses a **single opaque pointer** (`tx_t = void*`) as the universal run
 | `MATH` | `PlantMath*` | 16 bytes (pointer) | N/A | `plant_math_create("0")` | Symbolic math expression (v0.50.0h) |
 | `BYT` | `signed char` | 1 byte (8-bit) | -128 to 127 | `0` | Signed 8-bit integer (v0.51.6) |
 | `UBT` | `unsigned char` | 1 byte (8-bit) | 0 to 255 | `0` | Unsigned 8-bit integer (v0.51.6) |
+| `SHR` | `short` | 2 bytes (16-bit) | -32,768 to 32,767 | `0` | Signed 16-bit integer (v0.51.7) |
+| `USH` | `unsigned short` | 2 bytes (16-bit) | 0 to 65,535 | `0` | Unsigned 16-bit integer (v0.51.7) |
 
 **Source:** `src/plantc/codegen_c.plant:5344-5362` (`plant_ctype`)
 
@@ -641,6 +643,60 @@ SHOW U + 1.   # → 201
 - Image pixels (0-255 RGB)
 - Binary data
 - Network protocols
+
+---
+
+## SHR (16-bit signed integer) — v0.51.7
+
+| Property | Value |
+|----------|-------|
+| Size | 16 bits (2 bytes) |
+| C type | short |
+| Range | -32,768..32,767 |
+| Signed | Yes |
+| Parity | C# short / Rust i16 / ML int16 |
+| Registry | TYPE_REGISTRY (v0.51.7) |
+
+### Syntax
+
+```plant
+CREATE S (SHR) TO -1000.
+SHOW S + 1.   # → -999
+```
+
+### Use Cases
+
+- int16 quantization
+- Audio PCM samples
+- UTF-16 code units
+- Sensor data
+
+---
+
+## USH (16-bit unsigned integer) — v0.51.7
+
+| Property | Value |
+|----------|-------|
+| Size | 16 bits (2 bytes) |
+| C type | unsigned short |
+| Range | 0..65,535 |
+| Signed | No |
+| Parity | C# ushort / Rust u16 / ML uint16 |
+| Registry | TYPE_REGISTRY (v0.51.7) |
+
+### Syntax
+
+```plant
+CREATE U (USH) TO 40000.
+SHOW U + 1.   # → 40001
+```
+
+### Use Cases
+
+- uint16 quantization
+- Pixel values (16-bit per channel)
+- Port numbers
+- Counters (bounded)
 
 ---
 

@@ -27,7 +27,9 @@ GLOBAL TYPE_REGISTRY TO [
     ["CHAR",  "char",          "0", "1", "scalar"],
     ["BYTES", "tx_t",          "0", "1", "scalar"],
     ["BYT",   "signed char",   "1", "1", "scalar"],
-    ["UBT",   "unsigned char", "1", "1", "scalar"]
+    ["UBT",   "unsigned char", "1", "1", "scalar"],
+    ["SHR",   "short",         "1", "1", "scalar"],
+    ["USH",   "unsigned short","1", "1", "scalar"]
 ].
 
 # v0.51.4 — Registry lookup: returns the record for `name`, or empty list.
