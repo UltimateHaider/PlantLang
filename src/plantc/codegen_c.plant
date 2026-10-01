@@ -20,9 +20,8 @@ PLANT strings.
 # ──────────────────────────────────────────────────────────────
 GLOBAL TYPE_REGISTRY TO [
     ["LON",   "long",          "1", "1", "scalar"],
-    ["FACT",  "int",           "1", "1", "scalar"],
-    ["UNUM",  "unsigned long", "1", "1", "scalar"],
-    ["UFACT", "unsigned int",  "1", "1", "scalar"],
+    ["NUM",  "int",           "1", "1", "scalar"],
+    ["UNU", "unsigned int",  "1", "1", "scalar"],
     ["SCL",   "double",        "1", "1", "scalar"],
     ["CHAR",  "char",          "0", "1", "scalar"],
     ["BYTES", "tx_t",          "0", "1", "scalar"],
@@ -694,7 +693,7 @@ ACTION _handle_range(e(TX)),
   SET res TO res + e.
   # repeat: rewrite the first in-range occurrence, splice, rescan
   # (terminates because each splice removes one "..")
-  CREATE scanning(FACT) TO TRUE.
+  CREATE scanning(NUM) TO TRUE.
   SEASON scanning IS TRUE,
     REAP f FROM _range_once, res.
     IF str_eq(f, res) IS "1", SET scanning TO FALSE. /IF.
@@ -712,8 +711,8 @@ ACTION _range_once(e(TX)),
   CREATE i(LON) TO 0.
   CREATE dep(LON) TO 0.
   CREATE hit(LON) TO -1.
-  CREATE instr(FACT) TO FALSE.
-  CREATE wasin(FACT) TO FALSE.
+  CREATE instr(NUM) TO FALSE.
+  CREATE wasin(NUM) TO FALSE.
   CREATE qch(TX) TO "\"".
   SEASON i + 1 < LEN(e),
     REAP c3 FROM char_at, e, i.
@@ -1515,7 +1514,7 @@ ACTION is_identifier(tok(TX)),
 # ──────────────────────────────────────────────────────────────
 #  seg_is_numeric — 1 when a concatenation segment is a numeric
 #  value or expression: digit literals and identifiers/expressions
-#  built only from NUM/FACT vars (nums) and arithmetic operators.
+#  built only from NUM/NUM vars (nums) and arithmetic operators.
 #  Identifier tokens are checked against nums even when they
 #  contain digits (is_identifier), so "eb2" is never treated as a
 #  raw literal (v0.48.20-patch).
@@ -1634,7 +1633,7 @@ ACTION seg_is_numeric(seg(TX), nums(LIST)),
 
 # ──────────────────────────────────────────────
 #  expr_is_numeric — 1 when a tx_t-context value expression is a
-#  scalar C numeric: a digit literal, a NUM/FACT var reference,
+#  scalar C numeric: a digit literal, a NUM/NUM var reference,
 #  arithmetic built only from numerics, or a known numeric-returning
 #  call (LEN/COUNT/_to_long/std numeric readers). Quoted string
 #  literals are never numeric ("12" stays text). Used by the
@@ -1650,7 +1649,7 @@ ACTION expr_is_numeric(e(TX), nums(LIST)),
 
 # ──────────────────────────────────────────────────────────────
 #  is_numeric_type — 1 when a (substituted) PlantLang type is a
-#  scalar numeric type (NUM/FACT/UNUM/UFACT). gen_give_stmt wraps the GIVE
+#  scalar numeric type (NUM/NUM/UNU). gen_give_stmt wraps the GIVE
 #  value of numeric-typed actions in _from_long so callers receive the
 #  value as text instead of raw long bits (v0.48.13).
 # ──────────────────────────────────────────────────────────────
@@ -1666,7 +1665,7 @@ ACTION is_numeric_type(t(TX)),
 #  numeric (seg_is_numeric); identifiers containing digits like
 #  "eb2" now concatenate instead of producing void*+void* C errors
 #  (v0.48.20-patch).
-#  nums: names of scalar NUM/FACT vars in scope; bare identifiers
+#  nums: names of scalar NUM/NUM vars in scope; bare identifiers
 #  listed there get _from_long() so "x" + n works (v0.48.3a)
 #  NOTE: does NOT handle quoted + inside string literals correctly
 #  so it should only be called on show_stmt values which rarely
@@ -2161,7 +2160,7 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
         GIVE strings_REPLACE(wres, " + ", "+").
     /IF.
     # no genuine literal: ambiguous — every segment verifiably numeric
-    # (digit literal, NUM/FACT var in nums, known numeric-returning
+    # (digit literal, NUM/NUM var in nums, known numeric-returning
     # call) → keep C "+"; otherwise fall through so string variables
     # concatenate (identifiers with digits like eb2 route to _cat,
     # v0.48.20-patch).
@@ -2843,7 +2842,7 @@ ACTION list_contains(lst(LIST), x(TX)),
 /ACTION.
 
 # ──────────────────────────────────────────────────────────────
-#  collect_nums_walk — add names of scalar NUM/FACT CREATE/LET
+#  collect_nums_walk — add names of scalar NUM/NUM CREATE/LET
 #  targets in bd (recursing into IF/SEASON/CYCLE/MATCH bodies)
 # ──────────────────────────────────────────────────────────────
 ACTION collect_nums_walk(bd(LIST), subst(LIST), res(LIST)),
@@ -3000,7 +2999,7 @@ ACTION collect_globals_walk(bd(LIST), res(LIST)),
 
 # ──────────────────────────────────────────────────────────────
 #  collect_nums — names of numeric scalar vars in scope for an
-#  action body: NUM/FACT params (after subst) plus NUM/FACT
+#  action body: NUM/NUM params (after subst) plus NUM/NUM
 #  CREATE/LET targets anywhere in the body. Used by _handle_cat
 #  so "text" + i concatenates numeric vars via _from_long.
 # ──────────────────────────────────────────────────────────────
@@ -3187,7 +3186,7 @@ ACTION nums_from_avars(vars(LIST)),
 
 # ──────────────────────────────────────────────────────────────
 #  collect_nums_cb — numeric var names for closure bodies:
-#  NUM/FACT closure params (after subst) + MOVE/REF shadows with
+#  NUM/NUM closure params (after subst) + MOVE/REF shadows with
 #  numeric ctype + numeric CREATE/LET targets in the body.
 # ──────────────────────────────────────────────────────────────
 ACTION collect_nums_cb(bd(LIST), params(LIST), shads(LIST), subst(LIST)),
@@ -4497,7 +4496,7 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
       /IF.
       GIVE isel + "  long " + target + " = " + cval + ";\n".
   /IF.
-  IF vtype IS "FACT",
+  IF vtype IS "NUM",
       IF isnc2 IS 0 AND is_lookup_prefix(cval) IS "1",
           SET cval TO "_to_long(" + cval + ")".
       /IF.
@@ -4509,14 +4508,7 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
       GIVE isel + "  char " + target + " = plant_char_create(" + cval + ");\n".
   /IF.
   # v0.50.0b — unsigned numeric primitives.
-  IF vtype IS "UNUM",
-      # Wrap numeric values in _from_long to convert to string for plant_unum_create.
-      IF isnc2 IS 1,
-          SET cval TO "_from_long(" + cval + ")".
-      /IF.
-      GIVE isel + "  unsigned long " + target + " = plant_unum_create(" + cval + ");\n".
-  /IF.
-  IF vtype IS "UFACT",
+  IF vtype IS "UNU",
       IF isnc2 IS 1,
           SET cval TO "_from_long(" + cval + ")".
       /IF.
@@ -4558,7 +4550,7 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
       /IF.
       GIVE isel + "  " + vct2 + " " + target + " = " + cval + ";\n".
   /IF.
-  IF vtype ISNT "LON" AND vtype ISNT "FACT" AND vtype ISNT "CHAR" AND vtype ISNT "UNUM" AND vtype ISNT "UFACT" AND vtype ISNT "SCL" AND vtype ISNT "LIST" AND vtype ISNT "MATH",
+  IF vtype ISNT "LON" AND vtype ISNT "NUM" AND vtype ISNT "CHAR" AND vtype ISNT "UNU" AND vtype ISNT "SCL" AND vtype ISNT "LIST" AND vtype ISNT "MATH",
       REAP vst3 FROM is_struct_type, vtype.
       REAP iut3 FROM is_union_type, vtype, evars.
       IF vst3 ISNT "1" AND iut3 ISNT "1",
@@ -5628,14 +5620,7 @@ ACTION generate_node(node, env(LIST)),
             GIVE isel + "  char " + target + " = plant_char_create(" + cval + ");\n".
         /IF.
         # v0.50.0b — unsigned numeric primitives.
-        IF vtype IS "UNUM",
-            REAP isnc3 FROM expr_is_numeric, cval, nums.
-            IF isnc3 IS 1,
-                SET cval TO "_from_long(" + cval + ")".
-            /IF.
-            GIVE isel + "  unsigned long " + target + " = plant_unum_create(" + cval + ");\n".
-        /IF.
-        IF vtype IS "UFACT",
+        IF vtype IS "UNU",
             REAP isnc3 FROM expr_is_numeric, cval, nums.
             IF isnc3 IS 1,
                 SET cval TO "_from_long(" + cval + ")".
@@ -5675,7 +5660,7 @@ ACTION generate_node(node, env(LIST)),
             /IF.
             GIVE isel + "  " + vct4 + " " + target + " = " + cval + ";\n".
         /IF.
-        IF vtype ISNT "LON" AND vtype ISNT "CHAR" AND vtype ISNT "UNUM" AND vtype ISNT "UFACT" AND vtype ISNT "SCL" AND vtype ISNT "MATH",
+        IF vtype ISNT "LON" AND vtype ISNT "CHAR" AND vtype ISNT "UNU" AND vtype ISNT "SCL" AND vtype ISNT "MATH",
             REAP vst5 FROM is_struct_type, vtype.
             REAP iut5 FROM is_union_type, vtype, evars.
             IF vst5 ISNT "1" AND iut5 ISNT "1",
@@ -6489,7 +6474,7 @@ ACTION generate_node(node, env(LIST)),
         # v0.49.53: scan body for verify_stmt nodes; wrap with
         # plant_verify_begin/end only for actions that contain VERIFY
         # assertions (test actions).
-        CREATE has_verify(FACT) TO FALSE.
+        CREATE has_verify(NUM) TO FALSE.
         CREATE vbdi(LON) TO 0.
         SEASON vbdi < COUNT bd,
             REAP vbnd FROM plant_list_get, bd, vbdi.
@@ -6622,10 +6607,9 @@ ACTION plant_ctype(ptype(TX)),
     IF COUNT rk > 0, GIVE type_ctype(base). /IF.
     IF base IS "LIST", GIVE "PlantArray*". /IF.
     IF base IS "REF LON", GIVE "long*". /IF.
-    IF base IS "REF FACT", GIVE "int*". /IF.
+    IF base IS "REF NUM", GIVE "int*". /IF.
     IF base IS "REF CHAR", GIVE "char*". /IF.
-    IF base IS "REF UNUM", GIVE "unsigned long*". /IF.
-    IF base IS "REF UFACT", GIVE "unsigned int*". /IF.
+    IF base IS "REF UNU", GIVE "unsigned int*". /IF.
     IF base IS "REF SCL", GIVE "double*". /IF.
     IF base IS "REF LIST", GIVE "PlantArray**". /IF.
     IF base IS "REF TX", GIVE "tx_t*". /IF.
@@ -6719,17 +6703,16 @@ ACTION ffi_struct_cname(typ(TX)),
 /ACTION.
 
 # is_struct_type — 1 when a type is a struct type (not a primitive
-# scalar NUM/FACT/TX/LIST, not a REF, not empty, not a union)
+# scalar NUM/NUM/TX/LIST, not a REF, not empty, not a union)
 ACTION is_struct_type(t(TX)),
   REAP base FROM type_base, t.
   REAP tb FROM trim, base.
   IF tb IS "LON", GIVE "0". /IF.
-  IF tb IS "FACT", GIVE "0". /IF.
+  IF tb IS "NUM", GIVE "0". /IF.
   IF tb IS "TX", GIVE "0". /IF.
   IF tb IS "LIST", GIVE "0". /IF.
   IF tb IS "SCL", GIVE "0". /IF.
-  IF tb IS "UNUM", GIVE "0". /IF.
-  IF tb IS "UFACT", GIVE "0". /IF.
+  IF tb IS "UNU", GIVE "0". /IF.
   IF tb IS "CHAR", GIVE "0". /IF.
   # v0.50.0e — ARRAY[T, N] is not a struct type.
   IF tb IS "ARRAY", GIVE "0". /IF.
@@ -7074,7 +7057,7 @@ ACTION ffi_emit_struct_helpers(cname(TX), flds(LIST)),
     IF fb8 IS "LON",
       SET h1 TO h1 + "  r." + fn8 + " = (long)(intptr_t)plant_map_get(m, \"" + fn8 + "\");\n".
     /IF.
-    IF fb8 IS "FACT",
+    IF fb8 IS "NUM",
       SET h1 TO h1 + "  r." + fn8 + " = (int)(intptr_t)plant_map_get(m, \"" + fn8 + "\");\n".
     /IF.
     IF fb8 IS "TX",
@@ -7112,7 +7095,7 @@ ACTION ffi_emit_struct_helpers(cname(TX), flds(LIST)),
     IF fb7 IS "LON",
       SET h4 TO h4 + "  plant_map_hash_set(r, \"" + fn7 + "\", (void*)(intptr_t)v." + fn7 + ");\n".
     /IF.
-    IF fb7 IS "FACT",
+    IF fb7 IS "NUM",
       SET h4 TO h4 + "  plant_map_hash_set(r, \"" + fn7 + "\", (void*)(intptr_t)v." + fn7 + ");\n".
     /IF.
     IF fb7 IS "TX",
@@ -7569,10 +7552,10 @@ ACTION struct_typedef(tpl(LIST), args(LIST)),
             /IF.
             IF fk9 ISNT "struct_ref",
                 REAP base9 FROM type_base, fsub.
-                IF base9 IS "LON" OR base9 IS "FACT" OR base9 IS "TX" OR base9 IS "LIST",
+                IF base9 IS "LON" OR base9 IS "NUM" OR base9 IS "TX" OR base9 IS "LIST",
                     REAP ctype FROM plant_ctype, fsub.
                 /IF.
-                IF base9 ISNT "LON" AND base9 ISNT "FACT" AND base9 ISNT "TX" AND base9 ISNT "LIST",
+                IF base9 ISNT "LON" AND base9 ISNT "NUM" AND base9 ISNT "TX" AND base9 ISNT "LIST",
                     SET ctype TO "tx_t".
                 /IF.
             /IF.
@@ -8741,7 +8724,7 @@ ACTION generate_c(ast(LIST)),
             REAP cbtk FROM ffi_param_kind, cbt.
             SET cbcast TO "".
             IF cbtk IS "plain" AND cbt IS "LON", SET cbcast TO "(long)(intptr_t)". /IF.
-            IF cbtk IS "plain" AND cbt IS "FACT", SET cbcast TO "(int)(intptr_t)". /IF.
+            IF cbtk IS "plain" AND cbt IS "NUM", SET cbcast TO "(int)(intptr_t)". /IF.
             IF cbak > 0, SET cbcn TO cbcn + ", ". /IF.
             IF cbak IS 0 AND COUNT cbprms IS 1,
                 SET cbcn TO cbcn + cbcast + "val".
@@ -9077,7 +9060,7 @@ ACTION _cl_map_get(clmap(LIST), key(TX)),
 /ACTION.
 
 # is_prim_type — "1" when a PlantLang type is a built-in scalar
-# (NUM/FACT/TX/LIST/STRING/DOUBLE/JSON/SET/QUEUE/STACK/BYTES/FUNC);
+# (NUM/NUM/TX/LIST/STRING/DOUBLE/JSON/SET/QUEUE/STACK/BYTES/FUNC);
 # "0" for enum/struct/generic/REF types. Closure scopes skip the
 # "#t" twin keys for primitives since only enum/struct types can
 # carry enum values (v0.48.11).
@@ -9085,7 +9068,7 @@ ACTION is_prim_type(ptype(TX)),
   REAP pb FROM type_base, ptype.
   REAP pbt FROM trim, pb.
   IF pbt IS "LON", GIVE "1". /IF.
-  IF pbt IS "FACT", GIVE "1". /IF.
+  IF pbt IS "NUM", GIVE "1". /IF.
   IF pbt IS "LIST", GIVE "1". /IF.
   IF pbt IS "TX", GIVE "1". /IF.
   IF pbt IS "STRING", GIVE "1". /IF.

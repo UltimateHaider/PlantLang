@@ -1,7 +1,7 @@
 # tests/native/registry_basic.plant — v0.51.4 Type Registry
 SUITE "Type Registry Basic"
   CREATE N (LON) TO 100.
-  CREATE F (FACT) TO 200.
+  CREATE F (NUM) TO 200.
 
   SHOW N.
   SHOW F.

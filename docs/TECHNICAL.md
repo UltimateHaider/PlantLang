@@ -369,7 +369,7 @@ CHOICE values are stored as a fixed-size struct:
 ```
 
 - `tag`: variant index (0-based, in declaration order)
-- `payload`: variant's value, stored as i64 (all PlantLang types fit in i64: LON→i64, SCL→bitcast, TX→ptrtoint, FACT→zext)
+- `payload`: variant's value, stored as i64 (all PlantLang types fit in i64: LON→i64, SCL→bitcast, TX→ptrtoint, NUM→zext)
 
 ### 5.2 Variant Construction
 
@@ -465,7 +465,7 @@ All function return values pass through `i64`:
 - `LON`: direct (i64 → i64)
 - `SCL`: `bitcast double %val to i64`
 - `TX`: `ptrtoint i8* %val to i64`
-- `FACT`: `zext i1 %val to i64`
+- `NUM`: `zext i1 %val to i64`
 
 Caller reverses via the target variable's declared type.
 
@@ -522,7 +522,7 @@ When `len >= cap * 3 / 4` during a put:
 | `emitTxHash(fpReg, node)` | Emit djb2 hash loop over TX buffer → `i64` |
 | `genMapPut(node, mapType, mapPtr, key, value)` | Check load factor, grow if needed, probe, insert/overwrite |
 | `emitMapGrow(...)` | Allocate 2× array, rehash all entries, update map pointer |
-| `genMapHas(node, mapType, mapReg, key)` | Probe loop, return `icmp ne i64 result, 0` as `FACT` |
+| `genMapHas(node, mapType, mapReg, key)` | Probe loop, return `icmp ne i64 result, 0` as `NUM` |
 | `mapBucketSize()` | Compute padded bucket stride (accounts for ABI alignment) |
 | `mapBucketLlvmType()` | Return anonymous struct type `{ i1, keyLt, valLt }` |
 
@@ -2025,7 +2025,7 @@ Three modules under `src/codegen/llvm/`:
   |---|---|
   | LON / INT | `i64` |
   | SCL / DECIMAL | `double` |
-  | FACT / BOOL | `i1` |
+  | NUM / BOOL | `i1` |
   | TX / TEXT | `i8*` |
 
 - `getPrintFunction(llvmType)` — returns the matching `declare`/`call` signature
@@ -2059,7 +2059,7 @@ Two-pass emitter:
 | Node type | LLVM IR emission |
 |---|---|
 | `LiteralNode('NUMBER')` | `%N = add i64 <val>, 0` or `%N = fadd double <hex>, 0.0` |
-| `LiteralNode('FACT')` | `%N = add i1 0, true\|false` |
+| `LiteralNode('NUM')` | `%N = add i1 0, true\|false` |
 | `LiteralNode('STRING')` | `@.str.N` global + `getelementptr` to `i8*` |
 | `LiteralNode('RAW_EXPR')` | Delegates to expression parser (see 22.5) |
 | `IdentifierNode(name)` | `%N = load <type>, <type>* %name` |
@@ -2115,7 +2115,7 @@ Where the interpreter falls back to the legacy regex path for compound RAW_EXPR 
 
 39 tests across 7 categories:
 - Literal SHOW (integer, decimal, boolean, string)
-- Variable CREATE + SHOW (LON, SCL, FACT, TX)
+- Variable CREATE + SHOW (LON, SCL, NUM, TX)
 - SET reassignment
 - Arithmetic expressions (precedence, parentheses, mixed-type)
 - Comparison operators (IS, IS NOT, GT, LT, GTE, LTE)
@@ -3102,7 +3102,7 @@ pre-pass over the program body building a signature table (`sigs`) for every
 through `generate_node`/`generate_body` into `reap_stmt` codegen. There, each
 argument is checked with `is_ref_at`; REF positions emit `&var` instead of
 `var`. The C type mapping (`plant_ctype`) is: `REF LON` → `long*`,
-`REF FACT` → `int*`, `REF LIST` → `PlantArray**`, `REF TX` → `tx_t*`.
+`REF NUM` → `int*`, `REF LIST` → `PlantArray**`, `REF TX` → `tx_t*`.
 
 Because the compiler is single-pass with no runtime symbol table, the
 signature pre-pass is what makes call-site rewriting possible at all —
@@ -3505,7 +3505,7 @@ scanning it outside string literals at paren depth 0:
 - **no string, has digit** — v0.48.3 behavior preserved: strip spaces
   (`sum + i` → `sum+i`, `parse_type_args(bi + 1)` etc. stay arithmetic)
 - **no string, no digit** — if every segment is numeric per
-  `seg_is_numeric` (LON/FACT vars in scope, `strlen(`/`plant_array_length(`/
+  `seg_is_numeric` (LON/NUM vars in scope, `strlen(`/`plant_array_length(`/
   `_to_long(` prefixes, digits, operators `+-*/%^<>=!&|()`) → strip spaces;
   otherwise fall through to concat
 - **any string** — string concat: each numeric segment is wrapped with
@@ -3513,7 +3513,7 @@ scanning it outside string literals at paren depth 0:
   `_cat(_cat("v: ", _from_long(i)), "!")`
 
 The numeric-identifier set (`nums`) is computed per function: params whose
-`type_base` is LON/FACT, `CREATE`/`LET` targets (through generics `subst`),
+`type_base` is LON/NUM, `CREATE`/`LET` targets (through generics `subst`),
 async state fields (`nums_from_avars`, ctype `long`/`int`), and closure
 captures (`collect_nums_cb`, including MOVE/REF shadows). It is threaded
 through `generate_body`/`generate_node`/`async_argstr`/`async_emit_step`/

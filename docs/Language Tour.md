@@ -98,12 +98,12 @@ ACTION main(),
 | Type | Keyword | Example |
 |------|---------|---------|
 | Integer | `LON` | `CREATE age(LON) TO 25.` |
-| Unsigned integer | `UNUM` | `CREATE flags(UNUM) TO 42.` |
+| Unsigned integer | `ULO` | `CREATE flags(ULO) TO 42.` |
 | Decimal | `SCL` | `CREATE pi(SCL) TO 3.14.` |
 | Text | `TX` | `CREATE name(TX) TO "Haider".` |
 | Character | `CHAR` | `CREATE c(CHAR) TO "A".` |
-| Boolean | `FACT` | `CREATE active(FACT) TO TRUE.` |
-| Unsigned boolean | `UFACT` | `CREATE mask(UFACT) TO 255.` |
+| Boolean | `NUM` | `CREATE active(NUM) TO TRUE.` |
+| Unsigned boolean | `UNU` | `CREATE mask(UNU) TO 255.` |
 | List | `LIST` | `CREATE parts(LIST) TO plant_list_make(0).` |
 | Generic list | `LIST[T]` | `CREATE xs(LIST[LON]) TO plant_list_make(0).` |
 | Map | `MAP` | `CREATE m(MAP) TO { "key": "val" }.` |
@@ -124,7 +124,7 @@ SHOW "score=" + score.   # → 100
 
 CREATE name(TX) TO "Haider".
 CREATE pi(SCL) TO 3.14159.
-CREATE active(FACT) TO TRUE.
+CREATE active(NUM) TO TRUE.
 CREATE c(CHAR) TO "A".
 CREATE fruits(LIST) TO plant_list_make(3, "apple", "banana", "kiwi").
 ```
@@ -388,16 +388,16 @@ aggregate initializer. Supported element types:
 | Element Type | C Declaration |
 |---|---|
 | `LON` | `long name[N] = {…};` |
-| `FACT` | `int name[N] = {…};` |
+| `NUM` | `int name[N] = {…};` |
 | `SCL` | `double name[N] = {…};` |
 | `CHAR` | `char name[N] = {…};` |
-| `UNUM` | `unsigned long name[N] = {…};` |
-| `UFACT` | `unsigned int name[N] = {…};` |
+| `ULO` | `unsigned long name[N] = {…};` |
+| `UNU` | `unsigned int name[N] = {…};` |
 
 ```
 ACTION main(),
   CREATE nums(ARRAY[LON, 5]) TO [10, 20, 30, 40, 50].
-  array[FACT, 3] flags = [1, 0, 1].
+  array[NUM, 3] flags = [1, 0, 1].
   SHOW "arrays created".
   GIVE 0.
 /GIVE main.
@@ -472,7 +472,7 @@ ACTION greet(name(TX)) -> TX,
 /GIVE greet.
 ```
 
-- Typed parameters (`LON`, `SCL`, `TX`, `FACT`, `LIST[T]`, structs, enums).
+- Typed parameters (`LON`, `SCL`, `TX`, `NUM`, `LIST[T]`, structs, enums).
 - Optional `-> Type` return annotation (purely informative at this stage).
 - `GIVE expr.` returns; bodies may use `IF`/`SEASON`, recursion, closures.
 - `REAP target FROM action, args.` calls an action and binds the result.

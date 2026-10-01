@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.51.8
+# Auto-updated: 0.51.9
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.51.8 | 928448 | 8941 | 448 | 109 | 322 | 5361 |
+| v0.51.9 | 928448 | 8941 | 448 | 109 | 322 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -27,6 +27,7 @@
 | v0.51.6 | 2026 | BYT + UBT (8-bit pair) | Released |
 | v0.51.7 | 2026 | SHR + USH (16-bit pair) | Released |
 | v0.51.8 | 2026 | Rename NUM→LON + ULO | Released |
+| v0.51.9 | 2026 | Rename FACT→NUM + UFACT→UNU + Remove UNUM | Released |
 
 ## Growth Chart (ASCII)
 

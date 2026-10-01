@@ -23,7 +23,7 @@ ACTION main(),
   SHOW "a=" + a.
   REAP b FROM wrap[TX], "xy".
   SHOW "b=" + b.
-  REAP c FROM echo[FACT], 7.
+  REAP c FROM echo[NUM], 7.
   REAP cs FROM _from_long, c.
   SHOW "c=" + cs.
   REAP m FROM mul2[LON], 6, 7.

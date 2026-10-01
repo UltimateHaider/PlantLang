@@ -79,7 +79,7 @@ SUITE "Variables & Types",
   1\ CREATE n(LON)   TO 42.
   1\ CREATE pi(SCL)  TO 3.14.
   1\ CREATE msg(TX)  TO "hello".
-  1\ CREATE ok(FACT) TO TRUE.
+  1\ CREATE ok(NUM) TO TRUE.
   1\ CREATE empty_list(LIST) TO.
   1\ CREATE scores(LIST) TO 85, 92, 78, 96.
 
@@ -92,7 +92,7 @@ SUITE "Variables & Types",
   VERIFY "TX creation",
     msg IS "hello".
 
-  VERIFY "FACT creation",
+  VERIFY "NUM creation",
     ok IS TRUE.
 
   VERIFY "TYPE of NUM",

@@ -348,8 +348,8 @@
 | Sub-goal | Approach |
 |---|---|
 | C Runtime (print helpers) | `runtime/c/plant_runtime.{h,c}` — `plnt_print_int(i64)`, `plnt_print_decimal(double)`, `plnt_print_bool(i1)`, `plnt_print_text(i8*)`, `plnt_pow_i64(i64, i64)`. Compiled to `.o` and linked with `gcc`. |
-| LLVM Codegen Infrastructure | `llvm_context.js` (register counter `%1`-based, string pool, declare accumulator, x86-64 triple), `llvm_type_mapper.js` (LON→i64, SCL→double, FACT→i1, TX→i8*), `llvm_symbol_table.js` (variable tracker → alloca). |
-| AST Emitter | `llvm_emitter.js` — dispatches on `ProgramNode`, `LiteralNode` (NUMBER/STRING/FACT/RAW_EXPR), `IdentifierNode`, `CreateStatementNode`, `SetStatementNode`, `ShowStatementNode`. Includes recursive-descent expression parser for RAW_EXPR with full precedence (arithmetic, comparison, logical, parentheses, mixed-type promotion). |
+| LLVM Codegen Infrastructure | `llvm_context.js` (register counter `%1`-based, string pool, declare accumulator, x86-64 triple), `llvm_type_mapper.js` (LON→i64, SCL→double, NUM→i1, TX→i8*), `llvm_symbol_table.js` (variable tracker → alloca). |
+| AST Emitter | `llvm_emitter.js` — dispatches on `ProgramNode`, `LiteralNode` (NUMBER/STRING/NUM/RAW_EXPR), `IdentifierNode`, `CreateStatementNode`, `SetStatementNode`, `ShowStatementNode`. Includes recursive-descent expression parser for RAW_EXPR with full precedence (arithmetic, comparison, logical, parentheses, mixed-type promotion). |
 | Differential Test Harness | `tests/llvm/01_primitives.test.js` — 39 tests: parses PlantLang → generates `.ll` → `llc -O2` → links `plant_runtime.o` → runs binary → compares output against AST interpreter. Validated by `llvm-as`. |
 | Test Count | ~1212+ → **~1251+** across **29 test suites**. All green. |
 

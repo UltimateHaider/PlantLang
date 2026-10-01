@@ -308,3 +308,10 @@ SHOW "end".   # ← dropped
 - **Fix direction:** use `_from_double` for doubles, or type-aware wrapping.
 - **Discovered by:** v0.51.4 Phase 4.
 - **Related:** TD-021.
+
+## TD-023: UNUM (unsigned long) removed — CLOSED in v0.51.9
+- **Status:** ✅ CLOSED in v0.51.9
+- **Reason:** Duplicated by ULO.
+- **Removed:** UNUM record + any references.
+- **Replacement:** ULO (unsigned long).
+- **Related:** TD-022.

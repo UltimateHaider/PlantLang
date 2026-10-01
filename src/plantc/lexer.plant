@@ -101,7 +101,6 @@ ACTION is_keyword(wrd(TX)),
   # v0.50.0a — CHAR single-character primitive.
   IF wrd IS "char", GIVE TRUE. /IF.
   # v0.50.0b — unsigned numeric primitives.
-  IF wrd IS "unum", GIVE TRUE. /IF.
   IF wrd IS "ufact", GIVE TRUE. /IF.
   # v0.50.0c — double-precision real primitive.
   IF wrd IS "scl", GIVE TRUE. /IF.
@@ -265,8 +264,7 @@ ACTION keyword_to_type(wrd(TX)),
   # v0.50.0a — CHAR single-character primitive.
   IF wrd IS "char", GIVE "CHAR". /IF.
   # v0.50.0b — unsigned numeric primitives.
-  IF wrd IS "unum", GIVE "UNUM". /IF.
-  IF wrd IS "ufact", GIVE "UFACT". /IF.
+  IF wrd IS "ufact", GIVE "UNU". /IF.
   # v0.50.0c — double-precision real primitive.
   IF wrd IS "scl", GIVE "SCL". /IF.
   # v0.50.0d — union composite type.
@@ -374,7 +372,7 @@ ACTION match_number(src(TX), i(LON), n(LON)),
 ACTION match_string(src(TX), i(LON), n(LON)),
   CREATE val(TX) TO "".
   CREATE si(LON) TO i.
-  CREATE done(FACT) TO FALSE.
+  CREATE done(NUM) TO FALSE.
   CREATE ch(TX) TO "".
   # v0.49.20 — the opening character selects the delimiter: " or '
   CREATE q(TX) TO "".
@@ -422,7 +420,7 @@ ACTION match_string(src(TX), i(LON), n(LON)),
 ACTION match_string_i(src(TX), i(LON), n(LON)),
   CREATE val(TX) TO "".
   CREATE si(LON) TO i.
-  CREATE done(FACT) TO FALSE.
+  CREATE done(NUM) TO FALSE.
   CREATE ch(TX) TO "".
   CREATE idepth(LON) TO 0.
   CREATE instr(LON) TO 0.

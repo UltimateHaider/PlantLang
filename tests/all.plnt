@@ -28,13 +28,13 @@ PLANT lists.
 1\ CREATE n(LON)  TO 42.
 1\ CREATE s(SCL)  TO 3.14.
 1\ CREATE t(TX)   TO "hello".
-1\ CREATE f(FACT) TO TRUE.
+1\ CREATE f(NUM) TO TRUE.
 1\ CREATE lst(LIST) TO 1, 2, 3.
 
 1\ REAP _ FROM assert, "NUM correct",  n,   42.
 1\ REAP _ FROM assert, "SCL correct",  s,   3.14.
 1\ REAP _ FROM assert, "TX correct",   t,   "hello".
-1\ REAP _ FROM assert, "FACT correct", f,   TRUE.
+1\ REAP _ FROM assert, "NUM correct", f,   TRUE.
 1\ REAP _ FROM assert, "COUNT LIST", COUNT lst, 3.
 
 # ═══ 2. Arithmetic ════════════════════════════════

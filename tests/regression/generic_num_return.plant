@@ -19,7 +19,7 @@ ACTION main(),
   SHOW "max=" + n.
   REAP s FROM add[LON], 30, 12.
   SHOW "sum=" + s.
-  REAP f FROM add[FACT], 2, 3.
+  REAP f FROM add[NUM], 2, 3.
   SHOW "f=" + f.
   GIVE 0.
 /ACTION.

@@ -16,7 +16,8 @@ PlantLang uses a **single opaque pointer** (`tx_t = void*`) as the universal run
 |---|---|---|---|---|---|
 | `LON` | `long` | 8 bytes (64-bit) | -(2^63) to 2^63-1 | `0` | Integer numbers |
 | `SCL` | `long` (or `double` for decimals) | 8 bytes | -(2^63) to 2^63-1 | `0` | Scalar/decimal; decimals wrap via `_from_double` |
-| `FACT` | `int` | 4 bytes | -(2^31) to 2^31-1 | `0` | Boolean-like fact values |
+| `NUM` | `int` | 4 bytes (32-bit) | -(2^31) to 2^31-1 | `0` | Signed 32-bit integer (v0.51.9) |
+| `UNU` | `unsigned int` | 4 bytes (32-bit) | 0 to 4,294,967,295 | `0` | Unsigned 32-bit integer (v0.51.9) |
 | `TX` | `tx_t` (void*) | 8 bytes (pointer) | N/A | `""` (empty string) | Text/string; default type when unspecified |
 | `LIST[T]` | `PlantArray*` | 16 bytes (pointer) | N/A | `plant_list_make(0)` | Dynamic array of T values |
 | `MAP` | `PlantArray*` (pair-list) | 16 bytes (pointer) | N/A | `plant_map_create()` | Key-value pair-list (kind=1) |
@@ -35,7 +36,7 @@ PlantLang uses a **single opaque pointer** (`tx_t = void*`) as the universal run
 | PlantLang Type | C Equivalent | Notes |
 |---|---|---|
 | `REF LON` | `long*` | Pointer to numeric |
-| `REF FACT` | `int*` | Pointer to fact |
+| `REF NUM` | `int*` | Pointer to fact |
 | `REF LIST[T]` | `PlantArray**` | Pointer to list |
 | `REF TX` | `tx_t*` | Pointer to text |
 | `REF STRUCT X` | `plant_X*` | Pointer to struct |
@@ -514,17 +515,17 @@ tx_t plant_analyze(tx_t v);   /* Returns: {type, size, keys} MAP */
 
 | Category | Count | Types |
 |---|---|---|
-| **Primitive** | 6 | LON, SCL, FACT, TX, BOOL (via literals), NULL |
+| **Primitive** | 6 | LON, SCL, NUM, TX, BOOL (via literals), NULL |
 | **Composite** | 8 | LIST, MAP, STRUCT, ENUM, SPECIES, ACTION, CALLBACK, MATH |
 | **Special** | 5 | VOID, STORM, ANY, JSON, OPTION/RESULT |
-| **Reference** | 4 | REF LON, REF FACT, REF LIST, REF TX |
+| **Reference** | 4 | REF LON, REF NUM, REF LIST, REF TX |
 | **Total** | **23** | |
 
 ### Primitive vs Composite
 
 | Category | Types | C Representation |
 |---|---|---|
-| **Primitive** | LON, SCL, FACT, TX | `long`, `int`, `tx_t` (all stored as `tx_t` at runtime) |
+| **Primitive** | LON, SCL, NUM, TX | `long`, `int`, `tx_t` (all stored as `tx_t` at runtime) |
 | **Composite** | LIST, MAP, STRUCT, ENUM, SPECIES, MATH | `PlantArray*`, generated structs, map-backed objects, `PlantMath*` |
 | **Functional** | ACTION, CALLBACK | Function pointers with context |
 | **Special** | NULL, VOID, STORM, ANY, JSON, OPTION, RESULT | Null pointer, void, ARC objects, tagged unions |
@@ -553,7 +554,7 @@ tx_t plant_analyze(tx_t v);   /* Returns: {type, size, keys} MAP */
 
 2. **Add `char` type:** Single characters are currently 1-char strings. A dedicated `CHAR` type with `plant_char_create`/`plant_char_value` would be more efficient for character manipulation.
 
-3. **Add `unsigned` types:** Currently all integers are signed. `UNUM`/`UFACT` types would enable unsigned arithmetic and bit manipulation.
+3. **Add `unsigned` types:** Currently all integers are signed. `ULO`/`UNU` types would enable unsigned arithmetic and bit manipulation.
 
 4. **Add fixed-size arrays:** `ARRAY[T, N]` would enable stack-allocated fixed-size arrays for performance-critical code.
 

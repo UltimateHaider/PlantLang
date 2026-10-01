@@ -10,8 +10,8 @@ SHOW "nums: created".
 array[LON, 3] codes = [65, 66, 67].
 SHOW "codes: created".
 
-# FACT array via CREATE.
-CREATE flags(ARRAY[FACT, 3]) TO [1, 0, 1].
+# NUM array via CREATE.
+CREATE flags(ARRAY[NUM, 3]) TO [1, 0, 1].
 SHOW "flags: created".
 
 # SCL array via CREATE.

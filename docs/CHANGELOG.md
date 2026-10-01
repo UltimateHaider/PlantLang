@@ -1,3 +1,34 @@
+## v0.51.9 — Rename FACT→NUM + UFACT→UNU + Remove UNUM
+
+### Changed (BREAKING)
+- **Renamed FACT → NUM (signed int, 32-bit).**
+- **Renamed UFACT → UNU (unsigned int, 32-bit).**
+- **Removed UNUM (unsigned long) — duplicated by ULO.**
+  - User code using (UNUM) must change to (ULO).
+  - No alias provided.
+
+### Bootstrap
+- 2-stage seed upgrade (documented pattern).
+
+### Type Set (after v0.51.9)
+| Category | Types |
+|----------|-------|
+| Integer | BYT, UBT, SHR, USH, NUM, UNU, LON, ULO |
+| Float | SCL |
+| Other | CHAR, BYTES |
+
+### Verified
+- Native: 92/92 (unchanged)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged
+- Binary: 928448 bytes.
+
+### Out of Scope (v0.51.10)
+- FLT (float 32-bit).
+- BOOL (boolean).
+- TD-022 (SCL truncation).
+
 ## v0.51.8 — Rename NUM→LON + ULO
 
 ### Changed (BREAKING)
