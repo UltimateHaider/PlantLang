@@ -1,3 +1,39 @@
+## v0.51.4 — Type Registry
+
+### Added
+- Type Registry: single source of truth for scalar types.
+- GLOBAL TYPE_REGISTRY in codegen_c.plant.
+- Accessors: type_info, type_ctype, type_is_numeric, type_is_prim.
+- 2 new tests: registry_basic, registry_types.
+- TD-021 (IS variable-variable bug) — discovered during migration.
+- TD-022 (SCL display truncation) — discovered during testing.
+
+### Changed
+- plant_ctype delegates to type_ctype (for scalars).
+- is_numeric_type delegates to type_is_numeric.
+- collect_nums* uses type_is_numeric.
+- is_prim_type NOT migrated (decision C).
+
+### Resolved (bug)
+- IS variable-variable: fixed via str_eq in type_info (Phase 2.5).
+
+### Verified
+- Native: 77/77 (was 75)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged
+- Binary: 928368 bytes.
+
+### Impact
+- Adding a new scalar type now requires 1 record.
+- Foundation for v0.51.5 (BYT).
+
+### Out of Scope (v0.51.5)
+- BYT (8-bit).
+- is_prim_type migration.
+- TD-021, TD-022 fixes.
+- Parser-level validation.
+
 ## v0.51.3b — GLOBAL Complete
 
 ### Added

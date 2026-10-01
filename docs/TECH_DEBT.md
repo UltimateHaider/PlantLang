@@ -284,3 +284,25 @@ SHOW "end".   # ← dropped
 - **Affects:** locals and globals alike (not GLOBAL-specific).
 - **Discovered by:** v0.51.3b Phase 3.
 - **Related:** TD-019.
+
+## TD-021: `IS` between variables does not lower to string compare
+- **Status:** OPEN
+- **Introduced:** pre-v0.51 (long-standing)
+- **Target fix:** v0.51.5 or v0.52.0
+- **Impact:** HIGH — silent mismatch between two string variables.
+- **Symptom:** `IF a IS b` where **both are variables** does not perform a
+  string comparison, so equal values do not match (it did not lower to
+  `strcmp`).
+- **Workaround:** use `str_eq(a, b) IS "1"`.
+- **Discovered by:** v0.51.4 Phase 2.5 (registry lookup diagnostic).
+- **Related:** TD-020, TD-019.
+
+## TD-022: SCL display truncates doubles
+- **Status:** OPEN
+- **Introduced:** v0.51.4 (`collect_nums*` migration made SCL numeric).
+- **Target fix:** v0.51.5 or v0.52.0
+- **Impact:** LOW-MEDIUM — `SHOW S + 1.` for an SCL double truncates (`4.14` → `4`).
+- **Cause:** `_from_long` wraps a double → integer truncation.
+- **Fix direction:** use `_from_double` for doubles, or type-aware wrapping.
+- **Discovered by:** v0.51.4 Phase 4.
+- **Related:** TD-021.

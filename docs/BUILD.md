@@ -170,3 +170,13 @@ chain. Update it after each stable release:
 
 Then verify: make clean && make all && make self && make test
 
+### v0.51.4 bootstrap upgrade
+
+`dist/Chloroplast` was upgraded from **v0.50.0h** to **v0.51.3b**. The old
+v0.50.0h seed did not support the `GLOBAL` keyword and silently **dropped**
+`GLOBAL` statements; putting a `GLOBAL` (the Type Registry) in the compiler
+source therefore produced a broken first bootstrap step
+(`TYPE_REGISTRY undeclared`). The seed now supports GLOBAL, so the compiler
+source may use it. Keep `dist/Chloroplast` in sync with `bin/Chloroplast`
+at each release (`make bootstrap-update`).
+

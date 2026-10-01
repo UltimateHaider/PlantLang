@@ -222,3 +222,36 @@ All verify-* targets must include valgrind-check-tensor.
     - GLOBAL variables are persistent (programme-scope).
     - No auto-cleanup at program exit.
     - Auto-cleanup deferred to v0.51.4.
+
+### XXX. Type Registry (v0.51.4)
+
+    - Single source of truth for scalar types (NUM, FACT, UNUM,
+      UFACT, SCL, CHAR, BYTES).
+    - Stored as GLOBAL TYPE_REGISTRY in codegen_c.plant.
+    - Records: [name, ctype, numeric, prim, category, default].
+    - Adding a scalar type = one record (not 6-8 edits).
+
+### YYY. Accessor pattern (v0.51.4)
+
+    - type_info(name) → record or empty.
+    - type_ctype(name) → C type string; fallback "tx_t".
+    - type_is_numeric(name) → "1" or "0".
+    - type_is_prim(name) → "1" or "0".
+    - All return strings (consistent with codegen conventions).
+
+### ZZZ. Migration byte-identical (v0.51.4)
+
+    - Migration from IF-chains to registry must NOT change generated C
+      for any existing scalar type (verified for is_numeric_type,
+      collect_nums*, plant_ctype).
+
+### XXX2. is_prim_type not migrated (v0.51.4)
+
+    - is_prim_type retains its IF-chain.
+    - Reason: callers are closure-scope; registry prim semantics
+      don't match the current table (NUM/FACT/BYTES only).
+    - The registry remains the source of truth for type_ctype,
+      type_is_numeric (and future type_is_prim if the semantics
+      are aligned).
+    - Deferred: aligning registry prim with is_prim_type semantics
+      → v0.51.5 or v0.52.0.

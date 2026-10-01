@@ -15,6 +15,66 @@ IMPORT "ast.plant".
 PLANT strings.
 
 # ──────────────────────────────────────────────────────────────
+#  v0.51.4 — Type Registry: single source of truth for scalar types.
+#  Records: [name, ctype, numeric, prim, category].
+# ──────────────────────────────────────────────────────────────
+GLOBAL TYPE_REGISTRY TO [
+    ["NUM",   "long",          "1", "1", "scalar"],
+    ["FACT",  "int",           "1", "1", "scalar"],
+    ["UNUM",  "unsigned long", "1", "1", "scalar"],
+    ["UFACT", "unsigned int",  "1", "1", "scalar"],
+    ["SCL",   "double",        "1", "1", "scalar"],
+    ["CHAR",  "char",          "0", "1", "scalar"],
+    ["BYTES", "tx_t",          "0", "1", "scalar"]
+].
+
+# v0.51.4 — Registry lookup: returns the record for `name`, or empty list.
+ACTION type_info(name(TX)),
+    CREATE i(NUM) TO 0.
+    CREATE found(LIST) TO plant_list_make(0).
+    SEASON i < COUNT TYPE_REGISTRY,
+        REAP rec FROM plant_list_get, TYPE_REGISTRY, i.
+        REAP n FROM plant_list_get, rec, 0.
+        IF str_eq(n, name) IS "1",
+            SET found TO rec.
+            SET i TO COUNT TYPE_REGISTRY.
+        /IF.
+        SET i TO i + 1.
+    /SEASON.
+    GIVE found.
+/ACTION.
+
+# v0.51.4 — C type for `name`. Fallback: "tx_t".
+ACTION type_ctype(name(TX)),
+    REAP rec FROM type_info, name.
+    IF COUNT rec IS 0,
+        GIVE "tx_t".
+    /IF.
+    REAP v FROM plant_list_get, rec, 1.
+    GIVE v.
+/ACTION.
+
+# v0.51.4 — "1" if numeric, "0" otherwise.
+ACTION type_is_numeric(name(TX)),
+    REAP rec FROM type_info, name.
+    IF COUNT rec IS 0,
+        GIVE "0".
+    /IF.
+    REAP v FROM plant_list_get, rec, 2.
+    GIVE v.
+/ACTION.
+
+# v0.51.4 — "1" if primitive, "0" otherwise.
+ACTION type_is_prim(name(TX)),
+    REAP rec FROM type_info, name.
+    IF COUNT rec IS 0,
+        GIVE "0".
+    /IF.
+    REAP v FROM plant_list_get, rec, 3.
+    GIVE v.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
 #  _substr — extract substring [start, end) from str
 # ──────────────────────────────────────────────────────────────
 ACTION _substr(str(TX), start(NUM), end(NUM)),
@@ -1590,7 +1650,8 @@ ACTION expr_is_numeric(e(TX), nums(LIST)),
 #  value as text instead of raw long bits (v0.48.13).
 # ──────────────────────────────────────────────────────────────
 ACTION is_numeric_type(t(TX)),
-  IF t IS "NUM" OR t IS "FACT" OR t IS "UNUM" OR t IS "UFACT" OR t IS "SCL", GIVE 1. /IF.
+  # v0.51.4 — registry-backed, preserving the number contract (1/0).
+  IF type_is_numeric(t) IS "1", GIVE 1. /IF.
   GIVE 0.
 /ACTION.
 
@@ -2796,7 +2857,7 @@ ACTION collect_nums_walk(bd(LIST), subst(LIST), res(LIST)),
       REAP wvt FROM _map_get, wnd, "var_type".
       REAP wbs FROM subst_type, wvt, subst.
       REAP wbb FROM type_base, wbs.
-      IF wbb IS "NUM" OR wbb IS "FACT",
+      IF type_is_numeric(wbb) IS "1",
         REAP wfound FROM list_contains, res, wtg.
         IF wfound IS 0, PUT wtg INTO res. /IF.
       /IF.
@@ -2952,7 +3013,7 @@ ACTION collect_nums(bd(LIST), params(LIST), subst(LIST)),
     REAP pty2 FROM _map_get, pnd, "type".
     REAP psu2 FROM subst_type, pty2, subst.
     REAP pbs2 FROM type_base, psu2.
-    IF pbs2 IS "NUM" OR pbs2 IS "FACT",
+    IF type_is_numeric(pbs2) IS "1",
       PUT pn2 INTO res.
     /IF.
     SET pi TO pi + 1.
@@ -3138,7 +3199,7 @@ ACTION collect_nums_cb(bd(LIST), params(LIST), shads(LIST), subst(LIST)),
     REAP cty2 FROM _map_get, cnd, "type".
     REAP csu2 FROM subst_type, cty2, subst.
     REAP cbs2 FROM type_base, csu2.
-    IF cbs2 IS "NUM" OR cbs2 IS "FACT",
+    IF type_is_numeric(cbs2) IS "1",
       PUT cn2 INTO res.
     /IF.
     SET ci TO ci + 1.
@@ -6507,13 +6568,9 @@ ACTION type_base(ptype(TX)),
 
 ACTION plant_ctype(ptype(TX)),
     REAP base FROM type_base, ptype.
-    IF base IS "NUM", GIVE "long". /IF.
-    IF base IS "FACT", GIVE "int". /IF.
-    IF base IS "CHAR", GIVE "char". /IF.
-    IF base IS "UNUM", GIVE "unsigned long". /IF.
-    IF base IS "UFACT", GIVE "unsigned int". /IF.
-    # v0.50.0c — double-precision real primitive.
-    IF base IS "SCL", GIVE "double". /IF.
+    # v0.51.4 — scalar types via the Type Registry (single source of truth).
+    REAP rk FROM type_info, base.
+    IF COUNT rk > 0, GIVE type_ctype(base). /IF.
     IF base IS "LIST", GIVE "PlantArray*". /IF.
     IF base IS "REF NUM", GIVE "long*". /IF.
     IF base IS "REF FACT", GIVE "int*". /IF.
