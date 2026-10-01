@@ -13,11 +13,11 @@ ACTION add[T](a(T), b(T)) -> T,
 /ACTION.
 
 ACTION main(),
-  REAP m FROM max2[NUM], 15, 9.
+  REAP m FROM max2[LON], 15, 9.
   SHOW m.
-  REAP n FROM max2[NUM], 3, 8.
+  REAP n FROM max2[LON], 3, 8.
   SHOW "max=" + n.
-  REAP s FROM add[NUM], 30, 12.
+  REAP s FROM add[LON], 30, 12.
   SHOW "sum=" + s.
   REAP f FROM add[FACT], 2, 3.
   SHOW "f=" + f.

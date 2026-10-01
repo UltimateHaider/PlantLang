@@ -5,9 +5,9 @@
 # the BALANCED numeric_bench and FAST fast_loop baselines: SMART must
 # stay within a small constant factor per decision while auditing
 # every route and chunk dispatch (v0.48.17).
-ACTION proc(n(NUM)) WITH MISSION SMART,
-  CREATE k(NUM) TO 0.
-  CREATE acc(NUM) TO 0.
+ACTION proc(n(LON)) WITH MISSION SMART,
+  CREATE k(LON) TO 0.
+  CREATE acc(LON) TO 0.
   SEASON k < n,
     SET acc TO acc + k % 7.
     SET k TO k + 1.
@@ -18,8 +18,8 @@ ACTION proc(n(NUM)) WITH MISSION SMART,
 /ACTION.
 
 ACTION main()
-  CREATE j(NUM) TO 0.
-  CREATE s(NUM) TO 0.
+  CREATE j(LON) TO 0.
+  CREATE s(LON) TO 0.
   SEASON j < 200000,
     IF (j & 1) IS 0,
       CALL proc(100).

@@ -6,7 +6,7 @@ ENUM Color { RED, GREEN, BLUE }.
 ACTION ffi_color() -> ENUM Color.
 ACTION ffi_is_green(c(ENUM Color)) -> external.
 
-ACTION pick(n(NUM)) -> Color,
+ACTION pick(n(LON)) -> Color,
   IF n IS 0, GIVE RED. /IF.
   GIVE GREEN.
 /ACTION.

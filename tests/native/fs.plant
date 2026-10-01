@@ -15,7 +15,7 @@ ACTION main(),
   REAP mo FROM _map_get, st, "mode".
   SHOW "mode=" + mo.
   REAP mt FROM _map_get, st, "mtime".
-  CREATE mlen(NUM) TO LEN(mt).
+  CREATE mlen(LON) TO LEN(mt).
   CREATE ms(TX) TO "".
   REAP ms FROM _from_long, mlen.
   SHOW "mtimelen=" + ms.

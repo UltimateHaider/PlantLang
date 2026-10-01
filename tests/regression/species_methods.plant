@@ -4,7 +4,7 @@
 #   obj.method(args) dispatches with the receiver prepended.
 SPECIES Person {
   name: TX
-  age: NUM
+  age: LON
 
   ACTION greet() -> TX {
     GIVE "Hello, " + self.name + "!".

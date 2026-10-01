@@ -2,7 +2,7 @@
 # threshold (1MB); the codec hands it over zero-copy via memfd +
 # SCM_RIGHTS ('F') and the parent recovers every byte, proving the big
 # payload path end-to-end across a real process (v0.48.37c).
-ACTION big(n(NUM)) WITH MISSION SAFE,
+ACTION big(n(LON)) WITH MISSION SAFE,
   GIVE ffi_make_big(n).
 /ACTION.
 

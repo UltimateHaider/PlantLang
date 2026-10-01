@@ -6,7 +6,7 @@
 ACTION main()
   SHOW "s0=" + plant_map_to_string(ffi_weather_status()).
   WEATHER,
-    CREATE p(NUM) TO ffi_arc_alloc(64).
+    CREATE p(LON) TO ffi_arc_alloc(64).
     SHOW "reg=" + ffi_weather_register(p).
     SHOW "defer=" + ffi_weather_defer(p).
     SHOW "sin=" + plant_map_to_string(ffi_weather_status()).

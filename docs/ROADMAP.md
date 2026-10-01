@@ -150,7 +150,7 @@
 
 #### Slicing (`expr[start:end]`)
 - `SliceExpressionNode` AST class; optional start (default 0) and end (default len)
-- Works on TX strings and NUM arrays
+- Works on TX strings and LON arrays
 - C runtime: `plant_array_slice(arr, start, end)`, `plant_string_slice(str, start, end)`
 
 #### Destructuring
@@ -348,7 +348,7 @@
 | Sub-goal | Approach |
 |---|---|
 | C Runtime (print helpers) | `runtime/c/plant_runtime.{h,c}` — `plnt_print_int(i64)`, `plnt_print_decimal(double)`, `plnt_print_bool(i1)`, `plnt_print_text(i8*)`, `plnt_pow_i64(i64, i64)`. Compiled to `.o` and linked with `gcc`. |
-| LLVM Codegen Infrastructure | `llvm_context.js` (register counter `%1`-based, string pool, declare accumulator, x86-64 triple), `llvm_type_mapper.js` (NUM→i64, SCL→double, FACT→i1, TX→i8*), `llvm_symbol_table.js` (variable tracker → alloca). |
+| LLVM Codegen Infrastructure | `llvm_context.js` (register counter `%1`-based, string pool, declare accumulator, x86-64 triple), `llvm_type_mapper.js` (LON→i64, SCL→double, FACT→i1, TX→i8*), `llvm_symbol_table.js` (variable tracker → alloca). |
 | AST Emitter | `llvm_emitter.js` — dispatches on `ProgramNode`, `LiteralNode` (NUMBER/STRING/FACT/RAW_EXPR), `IdentifierNode`, `CreateStatementNode`, `SetStatementNode`, `ShowStatementNode`. Includes recursive-descent expression parser for RAW_EXPR with full precedence (arithmetic, comparison, logical, parentheses, mixed-type promotion). |
 | Differential Test Harness | `tests/llvm/01_primitives.test.js` — 39 tests: parses PlantLang → generates `.ll` → `llc -O2` → links `plant_runtime.o` → runs binary → compares output against AST interpreter. Validated by `llvm-as`. |
 | Test Count | ~1212+ → **~1251+** across **29 test suites**. All green. |
@@ -362,7 +362,7 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 | Sub-goal | Approach |
 |---|---|
 | **Math FFI (sqrt, sin, cos, tan, floor, ceil, abs)** | C wrappers in `runtime/runtime.c` calling libm; `RUNTIME_FFI` map in `llvm_codegen.js` for proper `declare double @sqrt(double)` emission |
-| **Array sort (NUM / SCL)** | `plnt_sort_i64`, `plnt_sort_double` in C using `qsort`; void return, pointer+count params |
+| **Array sort (LON / SCL)** | `plnt_sort_i64`, `plnt_sort_double` in C using `qsort`; void return, pointer+count params |
 | **String concat / length / split / join** | `plnt_string_concat`, `plnt_string_len`, `plnt_str_split`, `plnt_str_join` in C with `%fat_ptr` struct return |
 | **Build system** | `Makefile` with `runtime`, `exec`, `test`, `clean` targets; `libplantlang.so` built with `-fPIC -shared` |
 | **NATIVE keyword** | Parser recognizes `NATIVE ACTION name(params) -> external.` syntax; sets `isExternal = true` |
@@ -540,7 +540,7 @@ This release establishes the foundation for a second compilation pipeline: Plant
 #### CYCLE...IN with Index Variable
 - Grammar: `CYCLE item [, idx] IN list, body 1\.`
 - Lookahead-based `,` disambiguation (index-var comma vs body-delimiter comma)
-- Per-iteration scope isolation with index variable auto-binding as `NUM` at depth 0
+- Per-iteration scope isolation with index variable auto-binding as `LON` at depth 0
 - BREAK/CONTINUE signal propagation through `_evalBody` wrapper
 - Empty/null/undefined list safety
 
@@ -564,7 +564,7 @@ This release establishes the foundation for a second compilation pipeline: Plant
 #### Nested Struct Formatting
 - `formatShowValue()` produces indented JSON-like tree for nested struct instances
 - Circular reference protection via `visited` Set
-- Type-prefixed key display: `NUM`, `TX`, `LIST`, `MAP`, struct name
+- Type-prefixed key display: `LON`, `TX`, `LIST`, `MAP`, struct name
 
 #### Memory Allocators
 - `ArenaAllocator` (FAST): bump allocator with child arena cascading reset

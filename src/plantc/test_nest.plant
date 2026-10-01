@@ -2,7 +2,7 @@ IMPORT "ast.plant".
 IMPORT "codegen_c.plant".
 
 CREATE test_ast(LIST) TO [
-  { "type": "create_stmt", "target": "x", "var_type": "NUM", "value": "42" },
+  { "type": "create_stmt", "target": "x", "var_type": "LON", "value": "42" },
   { "type": "set_stmt", "target": "x", "value": "x + 1" }
 ].
 

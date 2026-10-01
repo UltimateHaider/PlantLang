@@ -1,4 +1,4 @@
-ACTION twice(n(NUM)) -> NUM {
+ACTION twice(n(LON)) -> LON {
   GIVE n * 2.
 }
 ACTION main(),

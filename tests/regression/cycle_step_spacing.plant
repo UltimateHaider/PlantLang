@@ -33,7 +33,7 @@ ACTION main(),
     SET s6 TO s6 + _from_long(i) + " ".
   /CYCLE.
   SHOW "neg-spaced=" + s6.
-  CREATE k(NUM) TO 4.
+  CREATE k(LON) TO 4.
   CREATE s7(TX) TO "".
   CYCLE i FROM 1 TO 9 STEP k,
     SET s7 TO s7 + _from_long(i) + " ".

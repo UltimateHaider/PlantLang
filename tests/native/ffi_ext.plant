@@ -1,25 +1,25 @@
-STRUCT Point { x: NUM, y: NUM }
-STRUCT WrapV { p: STRUCT Point, tag: NUM }
+STRUCT Point { x: LON, y: LON }
+STRUCT WrapV { p: STRUCT Point, tag: LON }
 STRUCT L4 { a: STRUCT L3 }
 STRUCT L3 { a: STRUCT L2 }
 STRUCT L2 { a: STRUCT L1 }
-STRUCT L1 { v: NUM }
+STRUCT L1 { v: LON }
 
 ACTION ffi_point_sumv(p(STRUCT Point)) -> external.
-ACTION ffi_scale_ref(p(REF STRUCT Point), k(NUM)) -> external.
+ACTION ffi_scale_ref(p(REF STRUCT Point), k(LON)) -> external.
 ACTION ffi_get_point() -> STRUCT Point.
 ACTION ffi_wrap_sumv(w(STRUCT WrapV)) -> external.
 ACTION ffi_l4_v(v(STRUCT L4)) -> external.
-ACTION ffi_run_cb(cb(CALLBACK), ctx(NUM), v(TX)) -> external.
+ACTION ffi_run_cb(cb(CALLBACK), ctx(LON), v(TX)) -> external.
 ACTION ffi_buf_lenv(b(void*)) -> external.
 ACTION ffi_get_buf() -> void*.
 ACTION ffi_vprintf(fmt(TX), ...) -> external.
 
-ACTION double_it(ctx(NUM), v(TX)),
+ACTION double_it(ctx(LON), v(TX)),
   GIVE ctx * 2 + v.
 /ACTION.
 
-ACTION cb_demo(n(NUM)),
+ACTION cb_demo(n(LON)),
   SHOW "cb_demo got " + n.
   GIVE n + 1.
 /ACTION.

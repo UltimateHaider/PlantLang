@@ -26,7 +26,7 @@ ACTION main(),
   PUT "10" INTO nums.
   PUT "20" INTO nums.
   PUT "30" INTO nums.
-  CREATE total(NUM) TO 0.
+  CREATE total(LON) TO 0.
   CYCLE item IN nums,
     SET total TO total + _to_long(item).
   /CYCLE.

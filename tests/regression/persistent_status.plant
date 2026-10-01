@@ -4,8 +4,8 @@
 MISSION CONFIG PERSIST_PRESSURE = 85.
 MISSION CONFIG PERSIST_LEASE_MS = 30.
 ACTION main()
-  CREATE o1(NUM) TO ffi_arc_alloc(64).
-  CREATE o2(NUM) TO ffi_arc_alloc(64).
+  CREATE o1(LON) TO ffi_arc_alloc(64).
+  CREATE o2(LON) TO ffi_arc_alloc(64).
   SHOW "lease1=" + ffi_arc_lease(o1, 20).
   SHOW "lease2=" + ffi_arc_lease(o2, 20).
   SHOW "rel1=" + ffi_arc_release(o1).

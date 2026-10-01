@@ -4,8 +4,8 @@
 # [captures](params) -> body closure syntax; the nested-ACTION form
 # emits malformed C (see TD-017).
 ACTION main(),
-  CREATE x(NUM) TO 1.
-  CREATE h TO [MOVE x](v(NUM)) -> (
+  CREATE x(LON) TO 1.
+  CREATE h TO [MOVE x](v(LON)) -> (
     CREATE L TO [v].
     LIST_FREE(L).
     FREE L.

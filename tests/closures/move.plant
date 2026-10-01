@@ -2,8 +2,8 @@
 # outer variable is cleared (consumed), and the closure keeps its
 # own private state across invocations.
 ACTION main(),
-  CREATE x(NUM) TO 10.
-  CREATE f TO [MOVE x](v(NUM)) -> v + x + 1.
+  CREATE x(LON) TO 10.
+  CREATE f TO [MOVE x](v(LON)) -> v + x + 1.
   REAP r FROM f, 5.
   REAP rs FROM _from_long, r.
   SHOW "first=" + rs.

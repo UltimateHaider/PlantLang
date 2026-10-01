@@ -5,8 +5,8 @@
 ACTION main()
   SHOW "s0=" + plant_map_to_string(ffi_weather_status()).
   WEATHER,
-    CREATE a(NUM) TO ffi_arc_alloc(128).
-    CREATE b(NUM) TO ffi_arc_alloc(256).
+    CREATE a(LON) TO ffi_arc_alloc(128).
+    CREATE b(LON) TO ffi_arc_alloc(256).
     SHOW "reg=" + ffi_weather_register(a) + "," + ffi_weather_register(b).
     SHOW "sin=" + plant_map_to_string(ffi_weather_status()).
   CALM,

@@ -1,6 +1,6 @@
 # v0.48.20: ORIF — multi-branch chains with optional ELSE,
 # no-else fallthrough, and string conditions on ORIF arms.
-ACTION grade(n(NUM)),
+ACTION grade(n(LON)),
   IF n >= 90,
     GIVE "A".
   ORIF n >= 80,
@@ -30,7 +30,7 @@ ACTION main(),
   SHOW grade(75).
   SHOW grade(65).
   SHOW grade(10).
-  CREATE n(NUM) TO 5.
+  CREATE n(LON) TO 5.
   IF n > 10,
     SHOW "big".
   ORIF n > 7,

@@ -5,7 +5,7 @@
 MISSION CONFIG PERSIST_LEASE_MS = 30.
 
 ACTION serve() WITH MISSION PERSISTENT,
-  CREATE o(NUM) TO ffi_arc_alloc(64).
+  CREATE o(LON) TO ffi_arc_alloc(64).
   SHOW "lease=" + ffi_arc_lease(o, 30).
   GIVE o.
 /ACTION.

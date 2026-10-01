@@ -2,21 +2,21 @@
 # Validates thread-safe output and isolation across multiple concurrent
 # SAFE workers (v0.49.63).
 ACTION worker_a() WITH MISSION SAFE,
-  CREATE i(NUM) TO 0.
+  CREATE i(LON) TO 0.
   SEASON i < 100,
     SET i TO i + 1.
   /SEASON.
   SHOW "a-done=" + _from_long(i).
 /ACTION.
 ACTION worker_b() WITH MISSION SAFE,
-  CREATE i(NUM) TO 0.
+  CREATE i(LON) TO 0.
   SEASON i < 100,
     SET i TO i + 1.
   /SEASON.
   SHOW "b-done=" + _from_long(i).
 /ACTION.
 ACTION worker_c() WITH MISSION SAFE,
-  CREATE i(NUM) TO 0.
+  CREATE i(LON) TO 0.
   SEASON i < 100,
     SET i TO i + 1.
   /SEASON.

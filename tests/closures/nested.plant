@@ -2,9 +2,9 @@
 # block body captures the outer closure's parameter (a shadow
 # local), and its fn is resolvable from inside the outer body.
 ACTION main(),
-  CREATE x(NUM) TO 5.
-  CREATE outer TO [MOVE x](a(NUM)) -> (
-    CREATE inner TO [MOVE a](b(NUM)) -> b + a + 1.
+  CREATE x(LON) TO 5.
+  CREATE outer TO [MOVE x](a(LON)) -> (
+    CREATE inner TO [MOVE a](b(LON)) -> b + a + 1.
     REAP ri FROM inner, 10.
     REAP ris FROM _from_long, ri.
     SHOW "inner=" + ris.

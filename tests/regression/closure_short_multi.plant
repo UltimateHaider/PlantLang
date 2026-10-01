@@ -11,7 +11,7 @@ ACTION main(),
   CREATE h TO [p q] -> p - q.
   REAP r3 FROM h, 30, 8.
   SHOW "diff=" + _from_long(r3).
-  CREATE k TO [MOVE u v w] -> ( CREATE acc(NUM) TO (u + v) * w. GIVE acc ).
+  CREATE k TO [MOVE u v w] -> ( CREATE acc(LON) TO (u + v) * w. GIVE acc ).
   REAP r4 FROM k, 2, 3, 4.
   SHOW "mul3=" + _from_long(r4).
   GIVE 0.

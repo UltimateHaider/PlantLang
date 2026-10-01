@@ -5,9 +5,9 @@ ASYNC ACTION phase2(tag(TX)),
   GIVE "p2-" + tag.
 /ACTION.
 
-ASYNC ACTION worker(tag(TX), n(NUM)),
-  CREATE i(NUM) TO 0.
-  CREATE sum(NUM) TO 0.
+ASYNC ACTION worker(tag(TX), n(LON)),
+  CREATE i(LON) TO 0.
+  CREATE sum(LON) TO 0.
   SEASON i < n,
     SET sum TO sum + i.
     SET i TO i + 1.
@@ -21,7 +21,7 @@ ASYNC ACTION worker(tag(TX), n(NUM)),
 /ACTION.
 
 ACTION main(),
-  CREATE i(NUM) TO 0.
+  CREATE i(LON) TO 0.
   SEASON i < 20,
     START worker, "w" + i, 1000.
     SET i TO i + 1.

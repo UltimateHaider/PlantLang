@@ -1,8 +1,8 @@
 # Block-form closure bodies run real statements, including an
 # inner CREATE, and thread the closure map into nested blocks.
 ACTION main(),
-  CREATE x(NUM) TO 8.
-  CREATE h TO [MOVE x](v(NUM)) -> (
+  CREATE x(LON) TO 8.
+  CREATE h TO [MOVE x](v(LON)) -> (
     CREATE acc(TX) TO _from_long(v + x + 1).
     SHOW "inner show".
     GIVE acc

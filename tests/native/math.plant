@@ -18,7 +18,7 @@ ACTION main(),
   REAP mx FROM math_max, "3", "7".
   SHOW "max=" + mx.
   REAP rd FROM math_random.
-  CREATE rl(NUM) TO LEN(rd).
+  CREATE rl(LON) TO LEN(rd).
   CREATE rls(TX) TO "".
   REAP rls FROM _from_long, rl.
   SHOW "rndlen=" + rls.

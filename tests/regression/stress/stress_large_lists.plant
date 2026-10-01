@@ -3,13 +3,13 @@
 # magnitudes without OOM (v0.49.63).
 ACTION main(),
   CREATE lst(LIST) TO plant_list_make(0).
-  CREATE i(NUM) TO 0.
+  CREATE i(LON) TO 0.
   SEASON i < 1000,
     PUT _from_long(i) INTO lst.
     SET i TO i + 1.
   /SEASON.
   SHOW "count1k=" + _from_long(COUNT lst).
-  CREATE total(NUM) TO 0.
+  CREATE total(LON) TO 0.
   CYCLE item IN lst,
     SET total TO total + _to_long(item).
   /CYCLE.
@@ -29,8 +29,8 @@ ACTION main(),
     SET i TO i + 1.
   /SEASON.
   SHOW "count10k=" + _from_long(COUNT lst).
-  CREATE bigsum(NUM) TO 0.
-  CREATE j(NUM) TO 0.
+  CREATE bigsum(LON) TO 0.
+  CREATE j(LON) TO 0.
   SEASON j < 10000,
     REAP v FROM plant_list_get, lst, j.
     SET bigsum TO bigsum + _to_long(v).

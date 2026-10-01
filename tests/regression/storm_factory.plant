@@ -35,7 +35,7 @@ ACTION main()
     SHOW "outer msg=" + _map_get(e2, "message").
   CALM,
   /WEATHER.
-  CREATE i(NUM) TO 0.
+  CREATE i(LON) TO 0.
   SEASON i < 5,
     WEATHER,
       THROW storm("RANGE_STORM", "rapid").

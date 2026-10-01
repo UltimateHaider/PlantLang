@@ -1,3 +1,43 @@
+## v0.51.8 — Rename NUM→LON + ULO
+
+### Changed (BREAKING)
+- **Renamed NUM → LON (signed long).**
+  - User code using `(NUM)` must change to `(LON)`.
+  - No alias provided.
+  - Files affected: all src/plantc/*.plant, all tests, docs.
+  - Bootstrap: 2-stage seed upgrade (documented pattern).
+
+### Added
+- ULO type: 64-bit unsigned integer.
+  - C: unsigned long; Range: 0..18.4e18; Parity: ulong/u64.
+- 3 new tests: lon_basic, ulo_basic, lon_ulo_numeric.
+
+### Implementation
+- Rename in ALL src/plantc/*.plant (12 files).
+- Rename in all tests (native, generics, closures, perf,
+  regression, smoke).
+- ULO record added via Registry.
+- Bootstrap seed upgraded (2-stage, per BUILD.md).
+
+### Type Set (after v0.51.8)
+| Category | Types |
+|----------|-------|
+| Integer | BYT, UBT, SHR, USH, FACT, UFACT, LON, ULO |
+| Float | SCL |
+| Other | CHAR, BYTES |
+
+### Verified
+- Native: 92/92 (was 89)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (522,488 B; md5 a9d5f3d5)
+- Binary: 928,448 B (unchanged)
+
+### Out of Scope (v0.51.9)
+- FLT (float 32-bit).
+- BOOL (boolean).
+- TD-022 (SCL truncation).
+
 ## v0.51.7 — SHR (signed 16-bit) + USH (unsigned 16-bit)
 
 ### Added

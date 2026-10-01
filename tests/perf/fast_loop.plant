@@ -4,8 +4,8 @@
 # allocations, stays under the 8MB default capacity — no escalation).
 # Benchmarks the FAST path against the BALANCED default (numeric_bench).
 ACTION main() WITH MISSION FAST,
-  CREATE i(NUM) TO 0.
-  CREATE acc(NUM) TO 0.
+  CREATE i(LON) TO 0.
+  CREATE acc(LON) TO 0.
   CREATE h(TX) TO "".
   SEASON i < 50000000,
     IF (i & 4095) IS 0,

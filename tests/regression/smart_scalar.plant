@@ -4,7 +4,7 @@
 # telemetry is deterministic (v0.48.17).
 MISSION CONFIG SMART_POOL_CAPACITY = 4.
 
-ACTION proc(n(NUM)) WITH MISSION SMART,
+ACTION proc(n(LON)) WITH MISSION SMART,
   SHOW "s" + _from_long(n).
 /ACTION.
 

@@ -4,8 +4,8 @@
 # numeric_bench baseline: SAFE must stay within a small constant factor
 # per call while every entry runs under the zero-permission context.
 ACTION safe_worker() WITH MISSION SAFE,
-  CREATE i(NUM) TO 0.
-  CREATE acc(NUM) TO 0.
+  CREATE i(LON) TO 0.
+  CREATE acc(LON) TO 0.
   SEASON i < 8,
     SET acc TO acc + i.
     SET i TO i + 1.
@@ -16,8 +16,8 @@ ACTION safe_worker() WITH MISSION SAFE,
 /ACTION.
 
 ACTION main()
-  CREATE j(NUM) TO 0.
-  CREATE s(NUM) TO 0.
+  CREATE j(LON) TO 0.
+  CREATE s(LON) TO 0.
   SEASON j < 200000,
     CALL safe_worker().
     SET s TO s + 1.

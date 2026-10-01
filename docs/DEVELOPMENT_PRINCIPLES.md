@@ -225,7 +225,7 @@ All verify-* targets must include valgrind-check-tensor.
 
 ### XXX. Type Registry (v0.51.4)
 
-    - Single source of truth for scalar types (NUM, FACT, UNUM,
+    - Single source of truth for scalar types (LON, FACT, UNUM,
       UFACT, SCL, CHAR, BYTES).
     - Stored as GLOBAL TYPE_REGISTRY in codegen_c.plant.
     - Records: [name, ctype, numeric, prim, category, default].
@@ -249,7 +249,7 @@ All verify-* targets must include valgrind-check-tensor.
 
     - is_prim_type retains its IF-chain.
     - Reason: callers are closure-scope; registry prim semantics
-      don't match the current table (NUM/FACT/BYTES only).
+      don't match the current table (LON/FACT/BYTES only).
     - The registry remains the source of truth for type_ctype,
       type_is_numeric (and future type_is_prim if the semantics
       are aligned).

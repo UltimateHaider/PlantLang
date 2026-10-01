@@ -31,9 +31,9 @@ ACTION main(),
   REAP ue FROM plant_unwrap_err, e.
   SHOW ue.
   REAP nn FROM Option_None().
-  CREATE chk(NUM) TO plant_is_none(nn).
+  CREATE chk(LON) TO plant_is_none(nn).
   SHOW chk.
-  CREATE som(NUM) TO plant_is_some(t).
+  CREATE som(LON) TO plant_is_some(t).
   SHOW som.
   GIVE 0.
 /GIVE main.

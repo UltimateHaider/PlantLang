@@ -12,7 +12,7 @@ ACTION main(),
   SET d TO "pi=" + 3.
   SHOW d.
   # v0.48.3a: bare numeric vars auto-concat in string mixes
-  CREATE x(NUM) TO 41.
+  CREATE x(LON) TO 41.
   CREATE msg(TX) TO "hi".
   CREATE e(TX) TO "x=" + x.
   SHOW e.
@@ -25,10 +25,10 @@ ACTION main(),
   CREATE j(TX) TO "len " + LEN(msg).
   SHOW j.
   # numeric-only expressions must stay arithmetic, not concat
-  CREATE k(NUM) TO 7 + 2.
+  CREATE k(LON) TO 7 + 2.
   CREATE k2(TX) TO "" + k.
   SHOW k2.
-  CREATE l(NUM) TO x + 3.
+  CREATE l(LON) TO x + 3.
   CREATE l2(TX) TO "" + l.
   SHOW l2.
   GIVE 0.

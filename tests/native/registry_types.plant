@@ -1,10 +1,10 @@
 # tests/native/registry_types.plant — v0.51.4 Type Registry coverage
-# NUM/FACT/UNUM resolve via the registry and display correctly.
+# LON/FACT/UNUM resolve via the registry and display correctly.
 # SCL is created (exercising registry ctype resolution) but NOT displayed:
 # SCL display truncates via _from_long (pre-existing; see TD-022), so the
 # directive's `4.14` is unattainable.
 SUITE "Type Registry Coverage"
-  CREATE N (NUM) TO 1000.
+  CREATE N (LON) TO 1000.
   CREATE F (FACT) TO 500.
   CREATE U (UNUM) TO 2000.
   CREATE S (SCL) TO 3.14.

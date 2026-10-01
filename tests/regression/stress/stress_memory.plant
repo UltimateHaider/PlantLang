@@ -7,7 +7,7 @@ SPECIES Node {
   ACTION describe() -> TX { GIVE self.id + "=" + self.val. }
 }
 ACTION main(),
-  CREATE count(NUM) TO 0.
+  CREATE count(LON) TO 0.
   SEASON count < 1000,
     BLOOM Node AS n.
     CALL n.put("id", _from_long(count)).
@@ -18,7 +18,7 @@ ACTION main(),
     /IF.
   /SEASON.
   SHOW "allocated=" + _from_long(count).
-  CREATE round(NUM) TO 0.
+  CREATE round(LON) TO 0.
   SEASON round < 500,
     BLOOM Node AS n.
     CALL n.put("id", _from_long(round)).

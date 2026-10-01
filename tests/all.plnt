@@ -8,8 +8,8 @@ PLANT math.
 PLANT strings.
 PLANT lists.
 
-1\ CREATE passed(NUM) TO 0.
-1\ CREATE failed(NUM) TO 0.
+1\ CREATE passed(LON) TO 0.
+1\ CREATE failed(LON) TO 0.
 
 # ── Assert Function ───────────────────────────────────────────
 1\ ACTION assert(label(TX), actual(TX), expected(TX)),
@@ -25,7 +25,7 @@ PLANT lists.
 # ═══ 1. Data Types ════════════════════════════════════
 1\ SHOW "── Data Types ──".
 
-1\ CREATE n(NUM)  TO 42.
+1\ CREATE n(LON)  TO 42.
 1\ CREATE s(SCL)  TO 3.14.
 1\ CREATE t(TX)   TO "hello".
 1\ CREATE f(FACT) TO TRUE.
@@ -40,13 +40,13 @@ PLANT lists.
 # ═══ 2. Arithmetic ════════════════════════════════
 1\ SHOW "── Arithmetic ──".
 
-1\ CREATE r_add(NUM) TO 10 + 5.
-1\ CREATE r_sub(NUM) TO 10 - 3.
-1\ CREATE r_mul(NUM) TO 4 * 7.
+1\ CREATE r_add(LON) TO 10 + 5.
+1\ CREATE r_sub(LON) TO 10 - 3.
+1\ CREATE r_mul(LON) TO 4 * 7.
 1\ CREATE r_div(SCL) TO 10 / 4.
-1\ CREATE r_mod(NUM) TO 10 % 3.
-1\ CREATE r_pow(NUM) TO 2 ** 8.
-1\ CREATE r_fld(NUM) TO 7 // 2.
+1\ CREATE r_mod(LON) TO 10 % 3.
+1\ CREATE r_pow(LON) TO 2 ** 8.
+1\ CREATE r_fld(LON) TO 7 // 2.
 
 1\ REAP _ FROM assert, "Add",          r_add, 15.
 1\ REAP _ FROM assert, "Subtract",          r_sub, 7.
@@ -72,11 +72,11 @@ PLANT lists.
 # ═══ 4. Verbs ══════════════════════════════════════════
 1\ SHOW "── Verbs ──".
 
-1\ ACTION multiply(a(NUM), b(NUM)),
+1\ ACTION multiply(a(LON), b(LON)),
 2\   GIVE a * b.
 1\ /ACTION.
 
-1\ ACTION power_of_two(n(NUM)),
+1\ ACTION power_of_two(n(LON)),
 2\   GIVE 2 ** n.
 1\ /ACTION.
 
@@ -99,7 +99,7 @@ PLANT lists.
 # ═══ 5. Recursion ══════════════════════════════
 1\ SHOW "── Recursion ──".
 
-1\ ACTION fib(n(NUM)),
+1\ ACTION fib(n(LON)),
 2\   IF n IS 0, GIVE 0.
 2\   IF n IS 1, GIVE 1.
 2\   REAP a FROM fib, n - 1.
@@ -118,7 +118,7 @@ PLANT lists.
 # ═══ 6. MATCH / YIELD ════════════════════════════════════
 1\ SHOW "── MATCH/YIELD ──".
 
-1\ ACTION classify_score(score(NUM)),
+1\ ACTION classify_score(score(LON)),
 2\   MATCH score,
 3\     IS BETWEEN 90 100 YIELD GIVE "A".
 3\     IS BETWEEN 80 89  YIELD GIVE "B".
@@ -188,8 +188,8 @@ PLANT lists.
 1\ SHOW "── SPECIES/BLOOM ──".
 
 1\ SPECIES Counter,
-2\   VAR value(NUM) TO 0.
-2\   VAR step(NUM)  TO 1.
+2\   VAR value(LON) TO 0.
+2\   VAR step(LON)  TO 1.
 2\   ACTION tick(),
 3\     INCREASE SELF:value BY SELF:step.
 3\     GIVE SELF:value.
@@ -234,7 +234,7 @@ PLANT lists.
 
 1\ CREATE zero_caught(TX) TO "no".
 1\ WEATHER,
-2\   CREATE bad(NUM) TO 5 / 0.
+2\   CREATE bad(LON) TO 5 / 0.
 1\ SHELTER ZERO_STORM,
 2\   SET zero_caught TO "yes".
 1\ CALM.
@@ -244,7 +244,7 @@ PLANT lists.
 # ═══ 12. CYCLE / SEASON ══════════════════════════════════
 1\ SHOW "── CYCLE/SEASON ──".
 
-1\ CREATE cycle_sum(NUM) TO 0.
+1\ CREATE cycle_sum(LON) TO 0.
 1\ CREATE items(LIST) TO 10, 20, 30, 40.
 
 1\ CYCLE item IN items,
@@ -253,8 +253,8 @@ PLANT lists.
 
 1\ REAP _ FROM assert, "CYCLE sum", cycle_sum, 100.
 
-1\ CREATE season_n(NUM) TO 1.
-1\ CREATE season_sum(NUM) TO 0.
+1\ CREATE season_n(LON) TO 1.
+1\ CREATE season_sum(LON) TO 0.
 
 1\ SEASON season_n LESS THAN 6,
 2\   INCREASE season_sum BY season_n.
@@ -279,7 +279,7 @@ PLANT lists.
 
 1\ REAP astamp FROM NOW FORMAT:STAMP.
 1\ REAP stamp_type FROM TYPEOF astamp.
-1\ REAP _ FROM assert, "NOW STAMP is NUM", stamp_type, "NUM".
+1\ REAP _ FROM assert, "NOW STAMP is NUM", stamp_type, "LON".
 
 1\ WAIT 0.
 1\ REAP _ FROM assert, "WAIT 0 completes", "ok", "ok".
@@ -302,6 +302,6 @@ ROOT_SCOPE/.
 1\ SHOW "Test Results:".
 1\ SHOW "  ✓ Passed: " + passed.
 1\ SHOW "  ✕ Failed: " + failed.
-1\ CREATE total(NUM) TO passed + failed.
+1\ CREATE total(LON) TO passed + failed.
 1\ SHOW "  Total: " + total.
 1\ IF failed IS 0, SHOW "🌿 All tests passed!".

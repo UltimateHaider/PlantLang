@@ -1,8 +1,8 @@
 # REF captures: the env stores a pointer to the outer variable;
 # mutations made after closure creation are visible inside.
 ACTION main(),
-  CREATE y(NUM) TO 20.
-  CREATE g TO [REF y](v(NUM)) -> v + y + 1.
+  CREATE y(LON) TO 20.
+  CREATE g TO [REF y](v(LON)) -> v + y + 1.
   REAP r FROM g, 1.
   REAP rs FROM _from_long, r.
   SHOW "before=" + rs.

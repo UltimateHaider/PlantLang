@@ -13,7 +13,7 @@ ACTION main()
   SHOW "x=" + inner.name.
   SET sx TO inner.name.
   SHOW sx.
-  CREATE n(NUM) TO inner.count.
+  CREATE n(LON) TO inner.count.
   SHOW n + 1.
   CREATE outer(LIST) TO plant_list_make(4, "pt", plant_list_make(4, "name", "root", "nest", plant_list_make(4, "val", "9", "name", "deep")), "list", plant_list_make(3, "a", "b", "c")).
   SHOW outer.pt.name.

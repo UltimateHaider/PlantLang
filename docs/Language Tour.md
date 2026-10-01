@@ -70,15 +70,15 @@ is written in this language and bootstraps to a byte-identical fixed point.
 
 ```
 # Functions
-ACTION add(a(NUM), b(NUM)),
+ACTION add(a(LON), b(LON)),
   GIVE a + b.
 /GIVE add.
 
 # Entry point
 ACTION main(),
   REAP r FROM add, 10, 25.
-  CREATE rn(NUM) TO 0.
-  SET rn TO r.            # numeric result → NUM var
+  CREATE rn(LON) TO 0.
+  SET rn TO r.            # numeric result → LON var
   REAP rs FROM _from_long, rn.
   SHOW rs.                # → 35
   GIVE 0.
@@ -97,7 +97,7 @@ ACTION main(),
 
 | Type | Keyword | Example |
 |------|---------|---------|
-| Integer | `NUM` | `CREATE age(NUM) TO 25.` |
+| Integer | `LON` | `CREATE age(LON) TO 25.` |
 | Unsigned integer | `UNUM` | `CREATE flags(UNUM) TO 42.` |
 | Decimal | `SCL` | `CREATE pi(SCL) TO 3.14.` |
 | Text | `TX` | `CREATE name(TX) TO "Haider".` |
@@ -105,20 +105,20 @@ ACTION main(),
 | Boolean | `FACT` | `CREATE active(FACT) TO TRUE.` |
 | Unsigned boolean | `UFACT` | `CREATE mask(UFACT) TO 255.` |
 | List | `LIST` | `CREATE parts(LIST) TO plant_list_make(0).` |
-| Generic list | `LIST[T]` | `CREATE xs(LIST[NUM]) TO plant_list_make(0).` |
+| Generic list | `LIST[T]` | `CREATE xs(LIST[LON]) TO plant_list_make(0).` |
 | Map | `MAP` | `CREATE m(MAP) TO { "key": "val" }.` |
-| Struct | `STRUCT` | `STRUCT Point { x: NUM, y: NUM }` |
-| Anonymous struct | `STRUCT` | `STRUCT { x: NUM, y: NUM }` (auto-named) |
-| Union | `UNION` | `UNION V { i: NUM, f: SCL }` |
-| Fixed-size array | `ARRAY` | `ARRAY[NUM, 5] nums = [1, 2, 3, 4, 5].` |
+| Struct | `STRUCT` | `STRUCT Point { x: LON, y: LON }` |
+| Anonymous struct | `STRUCT` | `STRUCT { x: LON, y: LON }` (auto-named) |
+| Union | `UNION` | `UNION V { i: LON, f: SCL }` |
+| Fixed-size array | `ARRAY` | `ARRAY[LON, 5] nums = [1, 2, 3, 4, 5].` |
 | Symbolic math | `MATH` | `CREATE expr(MATH) TO "2 + 3 * 4".` |
 | Enum | `ENUM` | `ENUM Color { RED, GREEN, BLUE }.` |
-| Species | `SPECIES` | `SPECIES Animal { name: TX, age: NUM }.` |
+| Species | `SPECIES` | `SPECIES Animal { name: TX, age: LON }.` |
 
 Declare a variable with `CREATE` (and re-assign with `SET`):
 
 ```
-CREATE score(NUM) TO 94.
+CREATE score(LON) TO 94.
 SET score TO score + 6.
 SHOW "score=" + score.   # → 100
 
@@ -150,13 +150,13 @@ prior `CREATE` — there is no implicit declaration.
 **Map literals (v0.49.5):** `{k: v}` declares and initializes a
 key-value structure in place — keys and values are quoted strings,
 numbers, variables, nested lists `[ ... ]`, or nested maps `{ ... }`;
-NUM-typed values wrap in `_from_long`:
+LON-typed values wrap in `_from_long`:
 
 ```
 CREATE user(LIST) TO { "name": "Haider", "score": 94 }.
 SHOW _map_get(user, "name").            # → Haider
 
-CREATE n(NUM) TO 10.
+CREATE n(LON) TO 10.
 CREATE cfg(LIST) TO { "tags": ["a", "b"], "limits": { "max": n + 1 } }.
 CREATE empty(LIST) TO {}.               # → plant_map_create()
 ```
@@ -181,7 +181,7 @@ SHOW nm.             # → Haider
 ```
 
 `plant_map_set(...)` as a bare call statement is a first-class statement
-(v0.48.4) and upserts (existing keys are replaced). Note: bare NUM
+(v0.48.4) and upserts (existing keys are replaced). Note: bare LON
 variables as keys or values (e.g. `{n: "x"}`) are not yet wrapped —
 use a numeric expression or literal. The C-level hash-table API used
 by struct/FFI marshalling is `plant_map_hash_create` /
@@ -213,7 +213,7 @@ concatenating a variant directly is not supported by the v0.48 generator).
 ### STRUCT
 
 ```
-STRUCT Point { x: NUM, y: NUM }
+STRUCT Point { x: LON, y: LON }
 ```
 
 `STRUCT` declares a typed aggregate. The codegen emits a C typedef
@@ -222,9 +222,9 @@ STRUCT Point { x: NUM, y: NUM }
 `tx_t` handles:
 
 ```
-STRUCT Point { x: NUM, y: NUM }
+STRUCT Point { x: LON, y: LON }
 
-ACTION ffi_make_point(x(NUM), y(NUM)) -> external.
+ACTION ffi_make_point(x(LON), y(LON)) -> external.
 ACTION ffi_point_sum(p(Point)) -> external.
 
 ACTION main(),
@@ -251,7 +251,7 @@ emit nothing.
 
 ```
 UNION V {
-  i: NUM,
+  i: LON,
   f: SCL
 }
 ```
@@ -261,7 +261,7 @@ block in the shared types section. Union values are stack-allocated:
 
 ```
 UNION Value {
-  i: NUM,
+  i: LON,
   f: SCL,
   s: TX
 }
@@ -320,7 +320,7 @@ SHOW m.inner.val.           # → 9             (chained, 3 levels)
 SHOW m.count + 1.           # → 8             (numeric coercion)
 SHOW "x=" + m.name.         # → x=root        (concatenates)
 SHOW m.list[0].             # → a             (index into a field)
-CREATE n(NUM) TO m.count.   # numeric field read wraps in _to_long
+CREATE n(LON) TO m.count.   # numeric field read wraps in _to_long
 ```
 
 Rules: a trailing bare `IDENT .` binds to that IDENT only; other tails
@@ -370,14 +370,14 @@ stays two statements (lexer marks line-leading tokens).
 Fixed-size stack-allocated arrays with compile-time-known length:
 
 ```
-CREATE nums(ARRAY[NUM, 5]) TO [10, 20, 30, 40, 50].
+CREATE nums(ARRAY[LON, 5]) TO [10, 20, 30, 40, 50].
 # → long nums[5] = {10, 20, 30, 40, 50};
 ```
 
 The lowercase shorthand is also supported:
 
 ```
-array[NUM, 5] nums = [10, 20, 30, 40, 50].
+array[LON, 5] nums = [10, 20, 30, 40, 50].
 # → long nums[5] = {10, 20, 30, 40, 50};
 ```
 
@@ -387,7 +387,7 @@ aggregate initializer. Supported element types:
 
 | Element Type | C Declaration |
 |---|---|
-| `NUM` | `long name[N] = {…};` |
+| `LON` | `long name[N] = {…};` |
 | `FACT` | `int name[N] = {…};` |
 | `SCL` | `double name[N] = {…};` |
 | `CHAR` | `char name[N] = {…};` |
@@ -396,7 +396,7 @@ aggregate initializer. Supported element types:
 
 ```
 ACTION main(),
-  CREATE nums(ARRAY[NUM, 5]) TO [10, 20, 30, 40, 50].
+  CREATE nums(ARRAY[LON, 5]) TO [10, 20, 30, 40, 50].
   array[FACT, 3] flags = [1, 0, 1].
   SHOW "arrays created".
   GIVE 0.
@@ -463,7 +463,7 @@ evaluate an expression string, or `MATH_SIMPLIFY()` to get the simplified form.
 ### Actions (functions)
 
 ```
-ACTION add(a(NUM), b(NUM)),
+ACTION add(a(LON), b(LON)),
   GIVE a + b.
 /GIVE add.
 
@@ -472,7 +472,7 @@ ACTION greet(name(TX)) -> TX,
 /GIVE greet.
 ```
 
-- Typed parameters (`NUM`, `SCL`, `TX`, `FACT`, `LIST[T]`, structs, enums).
+- Typed parameters (`LON`, `SCL`, `TX`, `FACT`, `LIST[T]`, structs, enums).
 - Optional `-> Type` return annotation (purely informative at this stage).
 - `GIVE expr.` returns; bodies may use `IF`/`SEASON`, recursion, closures.
 - `REAP target FROM action, args.` calls an action and binds the result.
@@ -497,33 +497,33 @@ ACTION max2[T](a(T), b(T)),
 
 ACTION main(),
   REAP a FROM echo[TX], "hi".
-  REAP m FROM max2[NUM], 9, 4.
-  CREATE mn(NUM) TO 0.
-  SET mn TO m.           # numeric generic result → NUM var
+  REAP m FROM max2[LON], 9, 4.
+  CREATE mn(LON) TO 0.
+  SET mn TO m.           # numeric generic result → LON var
   REAP ms FROM _from_long, mn.
   SHOW "max=" + ms.       # → max=9
   GIVE 0.
 /GIVE main.
 ```
 
-Each instantiation (e.g. `echo[TX]`, `max2[NUM]`) emits a unique native C
+Each instantiation (e.g. `echo[TX]`, `max2[LON]`) emits a unique native C
 function (`plant_echo_TX`, `plant_max2_NUM`) — zero runtime overhead.
-Numeric generic results come back as raw integers: assign them to a `NUM`
+Numeric generic results come back as raw integers: assign them to a `LON`
 (like `max2` above) and convert with `_from_long` before printing. Once the
-value is in a `NUM` variable, `SHOW` prints it directly (it is value-aware).
+value is in a `LON` variable, `SHOW` prints it directly (it is value-aware).
 
 ### Calling & Return Values
 
 ```
-ACTION square(n(NUM)),
+ACTION square(n(LON)),
   GIVE n * n.
 /GIVE square.
 
 ACTION main(),
-  CREATE x(NUM) TO 7.
+  CREATE x(LON) TO 7.
   REAP s FROM square, x.
-  CREATE sn(NUM) TO 0.
-  SET sn TO s.           # numeric result → NUM var
+  CREATE sn(LON) TO 0.
+  SET sn TO s.           # numeric result → LON var
   REAP ss FROM _from_long, sn.
   SHOW ss.               # → 49
   REAP _ FROM square, 2.          # ignore the result
@@ -531,8 +531,8 @@ ACTION main(),
 /GIVE main.
 ```
 
-> Numeric results: a `GIVE` of a `NUM` comes back from the runtime as a raw
-> integer, so copy it into a `NUM` variable (`SET` + `_from_long`) before
+> Numeric results: a `GIVE` of a `LON` comes back from the runtime as a raw
+> integer, so copy it into a `LON` variable (`SET` + `_from_long`) before
 > string operations — see the example above. Bare `SHOW` of numeric values
 > (vars, arithmetic, `LEN`/`COUNT`) is value-aware (prints the number); the
 > remaining case that needs the explicit pattern is a raw return held in a
@@ -590,7 +590,7 @@ Boolean composition: `AND`, `OR`, `NOT`. Constants `TRUE`, `FALSE`,
 ### SEASON (while loop)
 
 ```
-CREATE count(NUM) TO 5.
+CREATE count(LON) TO 5.
 SEASON count GREATER THAN 0,
   SHOW "count=" + count.
   SET count TO count - 1.
@@ -622,7 +622,7 @@ CYCLE item, idx IN lst,
 ```
 
 **Range iteration** — `CYCLE i FROM lo TO hi` counts lo..hi
-inclusive (both bounds are expressions; the counter is a `NUM`):
+inclusive (both bounds are expressions; the counter is a `LON`):
 
 ```
 CYCLE i FROM 1 TO 5,
@@ -685,7 +685,7 @@ ACTION main(),
 ### Lists
 
 **List literals (v0.49.4):** `[e1, e2, ...]` declares and initializes a
-list in place — integer literals and NUM-typed expressions are stored
+list in place — integer literals and LON-typed expressions are stored
 as number strings, strings and variables pass through, and brackets
 nest recursively. Element access uses `name[expr]`:
 
@@ -693,7 +693,7 @@ nest recursively. Element access uses `name[expr]`:
 CREATE a(LIST) TO [1, 2, 3].              # [1, 2, 3]
 CREATE b(LIST) TO ["x", ["y", "z"], "w"]. # nested lists
 CREATE c(LIST) TO [].                     # empty → plant_list_make(0)
-CREATE n(NUM) TO 10.
+CREATE n(LON) TO 10.
 CREATE d(LIST) TO [n + 1, "var"].         # expressions + variables
 SHOW JOIN(d, "-").                        # → 11-var
 SHOW a[0].                                # → 1 (name[expr] → plant_list_get)
@@ -797,7 +797,7 @@ number into a string works automatically (v0.48.3a): `"x=" + i` emits
 `_cat("x=", _from_long(i))`. Pure-numeric `+` stays plain C arithmetic.
 
 ```
-CREATE x(NUM) TO 41.
+CREATE x(LON) TO 41.
 CREATE msg(TX) TO "n=" + x.
 SHOW msg.            # → n=41
 SHOW "len " + LEN(msg).     # → len 3
@@ -846,8 +846,8 @@ into the closure environment (the outer variable is cleared); `REF` tracks
 a variable live via pointer so changes are visible inside.
 
 ```
-ACTION counter(start(NUM)),          # e.g. counter(3)
-  CREATE f TO [MOVE start](step(NUM)) -> step + start.
+ACTION counter(start(LON)),          # e.g. counter(3)
+  CREATE f TO [MOVE start](step(LON)) -> step + start.
   REAP a FROM f, 5.
   REAP b FROM f, 5.
   SET a1 TO a.
@@ -858,17 +858,17 @@ ACTION counter(start(NUM)),          # e.g. counter(3)
   SHOW "moved=" + _from_long(start).  # → moved=0 (MOVE cleared outer var)
 /GIVE counter.
 
-ACTION tracer(v(NUM)),                # called with 0
-  CREATE t TO [REF v](d(NUM)) -> d + v.
+ACTION tracer(v(LON)),                # called with 0
+  CREATE t TO [REF v](d(LON)) -> d + v.
   SET v TO 100.            # visible inside t via REF
   REAP r FROM t, 1.
-  CREATE rn(NUM) TO 0.
+  CREATE rn(LON) TO 0.
   SET rn TO r.
   SHOW "ref=" + _from_long(rn).       # → ref=101
 /GIVE tracer.
 ```
 
-Numeric closure results and outer `NUM` variables are raw integers, so the
+Numeric closure results and outer `LON` variables are raw integers, so the
 `SET`+`_from_long` conversion pattern applies here too (see the example).
 `SHOW` of any numeric variable/expression itself is value-aware and prints
 the number directly; the explicit conversion is only needed when converting
@@ -879,9 +879,9 @@ must declare a parameter list; the body runs between `( … )`:
 
 ```
 ACTION main(),
-  CREATE x(NUM) TO 5.
-  CREATE outer TO [MOVE x](a(NUM)) -> (
-    CREATE inner TO [MOVE a](b(NUM)) -> b + a + 1.
+  CREATE x(LON) TO 5.
+  CREATE outer TO [MOVE x](a(LON)) -> (
+    CREATE inner TO [MOVE a](b(LON)) -> b + a + 1.
     REAP ri FROM inner, 10.
     SHOW "inner=" + _from_long(ri).
     GIVE ri
@@ -904,9 +904,9 @@ Declare native C functions and call them directly. An external is an
 `ACTION` with no body whose return type is `external`:
 
 ```
-ACTION ffi_add(a(NUM), b(NUM)) -> external.
-ACTION ffi_swap_ref(a(REF NUM), b(REF NUM)) -> external.
-ACTION ffi_open(mode(NUM)) -> Result<NUM, TX>.
+ACTION ffi_add(a(LON), b(LON)) -> external.
+ACTION ffi_swap_ref(a(REF LON), b(REF LON)) -> external.
+ACTION ffi_open(mode(LON)) -> Result<LON, TX>.
 ```
 
 - **Plain externals** — `ACTION name(args) -> external.` must be backed by
@@ -928,11 +928,11 @@ ACTION ffi_open(mode(NUM)) -> Result<NUM, TX>.
 Example (from `tests/native/ffi.plant`):
 
 ```
-ACTION ffi_open_mock(mode(NUM)) -> Result<NUM, TX>.
+ACTION ffi_open_mock(mode(LON)) -> Result<LON, TX>.
 
 ACTION main(),
   REAP h1 FROM ffi_open_mock, 0.      # "" on failure, errno set
-  CREATE e(NUM) TO 0.
+  CREATE e(LON) TO 0.
   REAP e FROM ffi_last_error.         # errno (2 = ENOENT)
   REAP m FROM ffi_last_error_msg.
   SHOW m.                             # "No such file or directory"
@@ -966,7 +966,7 @@ SHOW json_val(nm).                   # → Alice
 REAP out FROM json_stringify, j.
 SHOW out.                            # → {"name":"Alice","age":30}
 REAP tags FROM json_get, j, "tags".
-CREATE tl(NUM) TO json_len(tags).    # array/object element count
+CREATE tl(LON) TO json_len(tags).    # array/object element count
 REAP t0 FROM json_at, tags, 0.
 SHOW json_val(t0).                   # first element
 ```
@@ -1100,7 +1100,7 @@ SHOW MATH_INVERSE_LAPLACE("1/(s-a)", "s", "t").          # → EXP(a*t)
 
 17 new math built-ins as bare expression built-ins and FFI module
 bindings — all dispatch through `_plant_math_num` for safe numeric
-coercion (tagged small ints, numeric strings, `_from_long` NUM vars).
+coercion (tagged small ints, numeric strings, `_from_long` LON vars).
 Results render as a long integer when integral, otherwise "%.10g"
 ("nan" / "-nan" for domain errors).
 
@@ -1196,7 +1196,7 @@ SHOW u.                        # v7
 REAP e FROM Result_Err('boom').
 REAP ue FROM plant_unwrap_err, e.
 SHOW ue.                       # boom
-CREATE n(NUM) TO plant_is_some(t).   # predicates are numeric
+CREATE n(LON) TO plant_is_some(t).   # predicates are numeric
 ```
 
 Variants use underscore compounds (`Option_Some`, `Option_None`,
@@ -1278,7 +1278,7 @@ REAP r FROM set_add, s, 10.          # "1" added
 REAP r FROM set_add, s, 10.          # "0" duplicate
 REAP r FROM set_has, s, 10.          # "1" present
 REAP r FROM set_remove, s, 10.       # "1" removed
-CREATE n(NUM) TO set_size(s).        # unique element count
+CREATE n(LON) TO set_size(s).        # unique element count
 REAP lst FROM set_to_list, s.        # → LIST for iteration/export
 
 # Queue — FIFO ring buffer
@@ -1287,7 +1287,7 @@ REAP _ FROM queue_push, q, "first".
 REAP _ FROM queue_push, q, "second".
 REAP v FROM queue_pop, q.            # → "first"
 REAP v FROM queue_peek, q.           # → "second" (front, kept)
-CREATE n(NUM) TO queue_size(q).      # item count
+CREATE n(LON) TO queue_size(q).      # item count
 
 # Stack — LIFO dynamic array
 REAP st FROM stack_create.
@@ -1315,9 +1315,9 @@ ASYNC ACTION phase2(tag(TX)),
   GIVE "p2-" + tag.
 /GIVE phase2.
 
-ASYNC ACTION worker(tag(TX), n(NUM)),
-  CREATE i(NUM) TO 0.
-  CREATE sum(NUM) TO 0.
+ASYNC ACTION worker(tag(TX), n(LON)),
+  CREATE i(LON) TO 0.
+  CREATE sum(LON) TO 0.
   SEASON i < n,
     SET sum TO sum + i.
     SET i TO i + 1.
@@ -1327,7 +1327,7 @@ ASYNC ACTION worker(tag(TX), n(NUM)),
 /GIVE worker.
 
 ACTION main(),
-  CREATE i(NUM) TO 0.
+  CREATE i(LON) TO 0.
   SEASON i < 20,
     START worker, "w" + i, 1000.
     SET i TO i + 1.
@@ -1511,7 +1511,7 @@ ACTION main() {
   GIVE 0.
 }
 
-ACTION double(n(NUM)) -> NUM {
+ACTION double(n(LON)) -> LON {
   GIVE n * 2.
 }
 
@@ -1520,7 +1520,7 @@ ACTION noop() {
 ```
 
 Inner statements keep the standard forms (`IF cond,` ... `/IF.`);
-empty blocks return ""; numeric returns need `-> NUM` as usual.
+empty blocks return ""; numeric returns need `-> LON` as usual.
 
 
 ### File Imports (v0.49.25)
@@ -1559,12 +1559,12 @@ binding; nesting is unlimited.
 ### TYPE Aliases (v0.49.27)
 
 ```
-TYPE MyInt = NUM.
+TYPE MyInt = LON.
 TYPE Name = TX.
-TYPE IntList = LIST[NUM].
+TYPE IntList = LIST[LON].
 TYPE SameList = IntList.      # chains resolve transitively
 
-CREATE n(MyInt) TO 7.         # behaves exactly like NUM
+CREATE n(MyInt) TO 7.         # behaves exactly like LON
 CREATE xs(IntList) TO [1, 2].
 ```
 
@@ -1577,7 +1577,7 @@ lower to C typedefs and resolve in CREATE/LET type positions.
 ```
 SPECIES Person {
   name: TX
-  age: NUM
+  age: LON
 }
 
 BLOOM Person AS p.
@@ -1595,7 +1595,7 @@ the existing obj.field selector and .put(...) method.
 ```
 SPECIES Person {
   name: TX
-  age: NUM
+  age: LON
 
   ACTION greet() -> TX {
     GIVE "Hello, " + self.name + "!".

@@ -10,12 +10,12 @@ STRUCT Pair[T, U] { first: T, second: U }
 STRUCT Wrap[T] { box: Box[T], tag: TX }
 
 ACTION ffi_make_box(v(TX)) -> external.
-ACTION ffi_box_write(b(Box[NUM]), v(NUM)) -> external.
-ACTION ffi_box_read(b(Box[NUM])) -> external.
+ACTION ffi_box_write(b(Box[LON]), v(LON)) -> external.
+ACTION ffi_box_read(b(Box[LON])) -> external.
 ACTION ffi_make_pair(a(TX), b(TX)) -> external.
-ACTION ffi_pair_read(p(Pair[NUM, TX])) -> external.
+ACTION ffi_pair_read(p(Pair[LON, TX])) -> external.
 ACTION ffi_make_wrap(box(TX), tag(TX)) -> external.
-ACTION ffi_w_read(w(Wrap[NUM])) -> external.
+ACTION ffi_w_read(w(Wrap[LON])) -> external.
 
 ACTION main(),
   REAP b FROM ffi_make_box, "0".

@@ -1,7 +1,7 @@
 SUITE "BYT + UBT Numeric Integration"
   CREATE B (BYT) TO 50.
   CREATE U (UBT) TO 200.
-  CREATE N (NUM) TO 1000.
+  CREATE N (LON) TO 1000.
 
   SHOW B + U.
   SHOW B + N.

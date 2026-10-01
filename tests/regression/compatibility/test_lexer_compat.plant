@@ -2,7 +2,7 @@
 # Exercises the extracted modular lexer (scan_tokens/tokenize in
 # lexer.plant) by compiling a program that exercises all lexer token types.
 ACTION main(),
-  CREATE x(NUM) TO 1.
+  CREATE x(LON) TO 1.
   SHOW "id=" + x.
   IF x > 0 AND x GREATER THAN 0,
     SHOW "numeric".

@@ -1,14 +1,14 @@
 # v0.49.27 - TYPE aliases:
-#   TYPE MyInt = NUM.            simple base types
+#   TYPE MyInt = LON.            simple base types
 #   TYPE Name = TX.              text
-#   TYPE IntList = LIST[NUM].    composite generics
+#   TYPE IntList = LIST[LON].    composite generics
 #   TYPE SameList = IntList.     chained aliases resolve transitively
 # Aliases resolve in CREATE and LET var_type positions (variables
 # behave exactly as if declared with the underlying type).
 ACTION main(),
-  TYPE MyInt = NUM.
+  TYPE MyInt = LON.
   TYPE Name = TX.
-  TYPE IntList = LIST[NUM].
+  TYPE IntList = LIST[LON].
   TYPE SameList = IntList.
   CREATE n(MyInt) TO 7.
   SHOW n.

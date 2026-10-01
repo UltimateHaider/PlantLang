@@ -14,7 +14,7 @@ PlantLang uses a **single opaque pointer** (`tx_t = void*`) as the universal run
 
 | PlantLang Type | C Equivalent | Size | Range | Default | Notes |
 |---|---|---|---|---|---|
-| `NUM` | `long` | 8 bytes (64-bit) | -(2^63) to 2^63-1 | `0` | Integer numbers |
+| `LON` | `long` | 8 bytes (64-bit) | -(2^63) to 2^63-1 | `0` | Integer numbers |
 | `SCL` | `long` (or `double` for decimals) | 8 bytes | -(2^63) to 2^63-1 | `0` | Scalar/decimal; decimals wrap via `_from_double` |
 | `FACT` | `int` | 4 bytes | -(2^31) to 2^31-1 | `0` | Boolean-like fact values |
 | `TX` | `tx_t` (void*) | 8 bytes (pointer) | N/A | `""` (empty string) | Text/string; default type when unspecified |
@@ -26,6 +26,7 @@ PlantLang uses a **single opaque pointer** (`tx_t = void*`) as the universal run
 | `UBT` | `unsigned char` | 1 byte (8-bit) | 0 to 255 | `0` | Unsigned 8-bit integer (v0.51.6) |
 | `SHR` | `short` | 2 bytes (16-bit) | -32,768 to 32,767 | `0` | Signed 16-bit integer (v0.51.7) |
 | `USH` | `unsigned short` | 2 bytes (16-bit) | 0 to 65,535 | `0` | Unsigned 16-bit integer (v0.51.7) |
+| `ULO` | `unsigned long` | 8 bytes (64-bit) | 0 to 18,446,744,073,709,551,615 | `0` | Unsigned 64-bit integer (v0.51.8) |
 
 **Source:** `src/plantc/codegen_c.plant:5344-5362` (`plant_ctype`)
 
@@ -33,7 +34,7 @@ PlantLang uses a **single opaque pointer** (`tx_t = void*`) as the universal run
 
 | PlantLang Type | C Equivalent | Notes |
 |---|---|---|
-| `REF NUM` | `long*` | Pointer to numeric |
+| `REF LON` | `long*` | Pointer to numeric |
 | `REF FACT` | `int*` | Pointer to fact |
 | `REF LIST[T]` | `PlantArray**` | Pointer to list |
 | `REF TX` | `tx_t*` | Pointer to text |
@@ -62,7 +63,7 @@ typedef struct PlantArray {
 
 **Declaration:**
 ```plantlang
-CREATE items (LIST[NUM]) TO [1, 2, 3].
+CREATE items (LIST[LON]) TO [1, 2, 3].
 CREATE names (LIST[TX]) TO ["a", "b", "c"].
 LET mixed (LIST) TO [1, "two", TRUE].
 ```
@@ -123,8 +124,8 @@ typedef struct plant_Point {
 **Declaration:**
 ```plantlang
 STRUCT Point {
-    x: NUM,
-    y: NUM
+    x: LON,
+    y: LON
 }.
 ```
 
@@ -164,7 +165,7 @@ SHOW Color:RED.                  # displays "RED"
 ```plantlang
 SPECIES Animal {
     name: TX,
-    age: NUM
+    age: LON
 }.
 ```
 
@@ -180,7 +181,7 @@ dog:method_name().
 
 **Declaration:**
 ```plantlang
-ACTION add(a(NUM), b(NUM)) -> NUM,
+ACTION add(a(LON), b(LON)) -> LON,
     GIVE a + b.
 /ACTION.
 ```
@@ -299,13 +300,13 @@ REAP k FROM json_kind, j.
 
 ```plantlang
 # CREATE with type annotation
-CREATE x (NUM) TO 5.
+CREATE x (LON) TO 5.
 CREATE name (TX) TO "hello".
-CREATE items (LIST[NUM]) TO [1, 2, 3].
+CREATE items (LIST[LON]) TO [1, 2, 3].
 CREATE m (MAP) TO { "key": "val" }.
 
 # CREATE with type inference
-CREATE x TO 5.             # inferred as NUM
+CREATE x TO 5.             # inferred as LON
 CREATE name TO "hello".    # inferred as TX
 ```
 
@@ -313,11 +314,11 @@ CREATE name TO "hello".    # inferred as TX
 
 ```plantlang
 # LET with type annotation
-LET y (NUM) TO 10.
+LET y (LON) TO 10.
 LET msg (TX) TO "world".
 
 # LET with type inference
-LET z TO 20.               # inferred as NUM
+LET z TO 20.               # inferred as LON
 ```
 
 ### 4.3 Constants
@@ -334,7 +335,7 @@ ROOT_SCOPE APP_NAME TO "MyApp".
 ### 4.4 Type Aliases
 
 ```plantlang
-TYPE UserID = NUM.
+TYPE UserID = LON.
 TYPE NameMap = MAP.
 ```
 
@@ -342,13 +343,13 @@ TYPE NameMap = MAP.
 
 ```plantlang
 STRUCT Point {
-    x: NUM,
-    y: NUM
+    x: LON,
+    y: LON
 }.
 
 STRUCT Person {
     name: TX,
-    age: NUM
+    age: LON
 }.
 ```
 
@@ -369,7 +370,7 @@ ENUM Status {
 ```plantlang
 SPECIES Animal {
     name: TX,
-    age: NUM
+    age: LON
 }.
 
 SPECIES Dog FROM Animal {
@@ -471,7 +472,7 @@ The runtime identifies types via multiple heuristics:
 |---|---|
 | LIST/MAP | `magic == PLANT_ARRAY_MAGIC (0x504C4152)` |
 | ENUM | Values < 65536 are integers; values >= 65536 are name strings |
-| NUM | `atol()` succeeds on string content |
+| LON | `atol()` succeeds on string content |
 | BOOL | String is `"TRUE"`, `"true"`, `"1"`, `"FALSE"`, `"false"`, `"0"` |
 | NULL | Pointer is `(tx_t)0` |
 | STRUCT | Magic prefix in struct name |
@@ -513,17 +514,17 @@ tx_t plant_analyze(tx_t v);   /* Returns: {type, size, keys} MAP */
 
 | Category | Count | Types |
 |---|---|---|
-| **Primitive** | 6 | NUM, SCL, FACT, TX, BOOL (via literals), NULL |
+| **Primitive** | 6 | LON, SCL, FACT, TX, BOOL (via literals), NULL |
 | **Composite** | 8 | LIST, MAP, STRUCT, ENUM, SPECIES, ACTION, CALLBACK, MATH |
 | **Special** | 5 | VOID, STORM, ANY, JSON, OPTION/RESULT |
-| **Reference** | 4 | REF NUM, REF FACT, REF LIST, REF TX |
+| **Reference** | 4 | REF LON, REF FACT, REF LIST, REF TX |
 | **Total** | **23** | |
 
 ### Primitive vs Composite
 
 | Category | Types | C Representation |
 |---|---|---|
-| **Primitive** | NUM, SCL, FACT, TX | `long`, `int`, `tx_t` (all stored as `tx_t` at runtime) |
+| **Primitive** | LON, SCL, FACT, TX | `long`, `int`, `tx_t` (all stored as `tx_t` at runtime) |
 | **Composite** | LIST, MAP, STRUCT, ENUM, SPECIES, MATH | `PlantArray*`, generated structs, map-backed objects, `PlantMath*` |
 | **Functional** | ACTION, CALLBACK | Function pointers with context |
 | **Special** | NULL, VOID, STORM, ANY, JSON, OPTION, RESULT | Null pointer, void, ARC objects, tagged unions |
@@ -697,6 +698,33 @@ SHOW U + 1.   # → 40001
 - Pixel values (16-bit per channel)
 - Port numbers
 - Counters (bounded)
+
+---
+
+## ULO (64-bit unsigned integer) — v0.51.8
+
+| Property | Value |
+|----------|-------|
+| Size | 64 bits (8 bytes) |
+| C type | unsigned long |
+| Range | 0..18,446,744,073,709,551,615 |
+| Signed | No |
+| Parity | C# ulong / Rust u64 / ML uint64 |
+| Registry | TYPE_REGISTRY (v0.51.8) |
+
+### Syntax
+
+```plant
+CREATE U (ULO) TO 100000.
+SHOW U + 1.   # → 100001
+```
+
+### Use Cases
+
+- uint64 quantization
+- Large counters
+- Bitmasks (64-bit)
+- Memory addresses / sizes
 
 ---
 

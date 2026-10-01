@@ -330,9 +330,9 @@ ACTION is_alpha_start(ch(TX)),
 /ACTION.
 
 # ── match_ident_or_keyword(src, i, n) ─────────────────────
-ACTION match_ident_or_keyword(src(TX), i(NUM), n(NUM)),
+ACTION match_ident_or_keyword(src(TX), i(LON), n(LON)),
   CREATE wd(TX) TO "".
-  CREATE ni(NUM) TO i.
+  CREATE ni(LON) TO i.
   CREATE ch(TX) TO "".
   SEASON ni < n,
     REAP ok FROM is_alnum, char_at(src, ni).
@@ -346,9 +346,9 @@ ACTION match_ident_or_keyword(src(TX), i(NUM), n(NUM)),
 /ACTION.
 
 # ── match_number(src, i, n) ───────────────────────────────
-ACTION match_number(src(TX), i(NUM), n(NUM)),
+ACTION match_number(src(TX), i(LON), n(LON)),
   CREATE num(TX) TO "".
-  CREATE ni(NUM) TO i.
+  CREATE ni(LON) TO i.
   CREATE ch(TX) TO "".
   SEASON ni < n AND char_at(src, ni) GREATER THAN OR EQUAL "0" AND char_at(src, ni) LESS THAN OR EQUAL "9",
     REAP ch FROM char_at, src, ni.
@@ -371,9 +371,9 @@ ACTION match_number(src(TX), i(NUM), n(NUM)),
 /ACTION.
 
 # ── match_string(src, i, n) ───────────────────────────────
-ACTION match_string(src(TX), i(NUM), n(NUM)),
+ACTION match_string(src(TX), i(LON), n(LON)),
   CREATE val(TX) TO "".
-  CREATE si(NUM) TO i.
+  CREATE si(LON) TO i.
   CREATE done(FACT) TO FALSE.
   CREATE ch(TX) TO "".
   # v0.49.20 — the opening character selects the delimiter: " or '
@@ -419,14 +419,14 @@ ACTION match_string(src(TX), i(NUM), n(NUM)),
 # inside the region do not close it. Returns [value, endpos, hasi].
 # Escape rules match match_string (\n \t \r), applied only outside
 # expression regions so embedded expressions stay raw.
-ACTION match_string_i(src(TX), i(NUM), n(NUM)),
+ACTION match_string_i(src(TX), i(LON), n(LON)),
   CREATE val(TX) TO "".
-  CREATE si(NUM) TO i.
+  CREATE si(LON) TO i.
   CREATE done(FACT) TO FALSE.
   CREATE ch(TX) TO "".
-  CREATE idepth(NUM) TO 0.
-  CREATE instr(NUM) TO 0.
-  CREATE hasi(NUM) TO 0.
+  CREATE idepth(LON) TO 0.
+  CREATE instr(LON) TO 0.
+  CREATE hasi(LON) TO 0.
   IF si < n AND char_at(src, si) IS "\"", SET si TO si + 1. /IF.
   SEASON NOT done AND si < n,
     REAP ch FROM char_at, src, si.
@@ -502,7 +502,7 @@ ACTION match_string_i(src(TX), i(NUM), n(NUM)),
 /ACTION.
 
 # ── skip_comment(src, i, n) ───────────────────────────────
-ACTION skip_comment(src(TX), i(NUM), n(NUM)),
+ACTION skip_comment(src(TX), i(LON), n(LON)),
   SEASON i < n AND char_at(src, i) ISNT "\n",
     SET i TO i + 1.
   /SEASON.
@@ -512,14 +512,14 @@ ACTION skip_comment(src(TX), i(NUM), n(NUM)),
 # ── scan_tokens(source) ───────────────────────────────────
 ACTION scan_tokens(src(TX)),
   CREATE tokens(LIST) TO plant_list_make(0).
-  CREATE i(NUM) TO 0.
-  CREATE n(NUM) TO LEN(src).
+  CREATE i(LON) TO 0.
+  CREATE n(LON) TO LEN(src).
   CREATE ch(TX) TO "".
   # v0.49.11 — line_start marks the first token on each line (3rd
   # element of the token pair); parse_field_access uses it to tell a
   # chain dot from a statement-terminator dot followed by a new
   # statement (m.name. / m.put(...) must not merge into one chain)
-  CREATE line_start(NUM) TO 1.
+  CREATE line_start(LON) TO 1.
 
   SEASON i < n,
     REAP ch FROM char_at, src, i.
@@ -539,7 +539,7 @@ ACTION scan_tokens(src(TX)),
     IF ch IS "#", CONTINUE. /IF.
 
     # any token emitted this iteration opens the line?
-    CREATE ls0(NUM) TO line_start.
+    CREATE ls0(LON) TO line_start.
     SET line_start TO 0.
 
     # String literal (with ${...} interpolation, v0.48.22-patch2)
@@ -665,7 +665,7 @@ ACTION tok_line_leading(tok(LIST)),
 # ── peek(tokens, pos) ─────────────────────────────────────────
 # v0.49.55: Inspect the token at position `pos` without advancing.
 # Returns a 2-element sentinel [null, ""] at EOF.
-ACTION peek(tokens(LIST), pos(NUM)),
+ACTION peek(tokens(LIST), pos(LON)),
   IF pos < COUNT tokens,
     GIVE tokens[pos].
   /IF.
@@ -675,13 +675,13 @@ ACTION peek(tokens(LIST), pos(NUM)),
 # ── consume(tokens, pos) ──────────────────────────────────────
 # v0.49.55: Advance position and return the token at the old position.
 # Returns [tok, pos+1] so the caller carries its own cursor.
-ACTION consume(tokens(LIST), pos(NUM)),
+ACTION consume(tokens(LIST), pos(LON)),
   GIVE plant_list_make(2, tokens[pos], pos + 1).
 /ACTION.
 
 # ── is_eof(tokens, pos) ───────────────────────────────────────
 # v0.49.55: True if `pos` is past the token list or the token is EOF.
-ACTION is_eof(tokens(LIST), pos(NUM)),
+ACTION is_eof(tokens(LIST), pos(LON)),
   IF pos >= COUNT tokens,
     GIVE TRUE.
   /IF.

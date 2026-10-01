@@ -2,13 +2,13 @@
 # default step of 1, expression bounds, lo == hi, lo > hi (no
 # iterations), nested loops, and BREAK/CONTINUE.
 ACTION main(),
-  CREATE s(NUM) TO 0.
+  CREATE s(LON) TO 0.
   CYCLE i FROM 1 TO 5,
     SET s TO s + i.
   /CYCLE.
   SHOW "sum1-5=" + s.
-  CREATE b(NUM) TO 3.
-  CREATE s2(NUM) TO 0.
+  CREATE b(LON) TO 3.
+  CREATE s2(LON) TO 0.
   CYCLE i FROM b TO b + 3,
     SET s2 TO s2 + i.
   /CYCLE.

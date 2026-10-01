@@ -5,7 +5,7 @@ ACTION main(),
   CREATE f TO [MOVE x] -> x + 1.
   REAP r FROM f, 5.
   SHOW "one=" + _from_long(r).
-  CREATE g TO [MOVE n] -> ( CREATE acc(NUM) TO n * 3. GIVE acc ).
+  CREATE g TO [MOVE n] -> ( CREATE acc(LON) TO n * 3. GIVE acc ).
   REAP r2 FROM g, 7.
   SHOW "block=" + _from_long(r2).
   CREATE h TO [MOVE a] -> a - 10.

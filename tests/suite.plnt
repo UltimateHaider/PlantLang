@@ -9,15 +9,15 @@ PLANT lists.
 
 
 # ── Helpers ─────────────────────────────────────────────────
-1\ ACTION add(a(NUM), b(NUM)),
+1\ ACTION add(a(LON), b(LON)),
 2\   GIVE a + b.
 1\ /ACTION.
 
-1\ ACTION multiply(a(NUM), b(NUM)),
+1\ ACTION multiply(a(LON), b(LON)),
 2\   GIVE a * b.
 1\ /ACTION.
 
-1\ ACTION factorial(n(NUM)),
+1\ ACTION factorial(n(LON)),
 2\   IF n IS 0, GIVE 1.
 2\   REAP sub FROM factorial, n - 1.
 2\   GIVE n * sub.
@@ -27,7 +27,7 @@ PLANT lists.
 2\   GIVE "Hello, " + name + "!".
 1\ /ACTION.
 
-1\ ACTION safe_div(a(NUM), b(NUM)),
+1\ ACTION safe_div(a(LON), b(LON)),
 2\   WEATHER,
 3\     GIVE a / b.
 2\   SHELTER ZERO_STORM,
@@ -36,8 +36,8 @@ PLANT lists.
 1\ /ACTION.
 
 1\ SPECIES Counter,
-2\   VAR count(NUM) TO 0.
-2\   VAR step(NUM) TO 1.
+2\   VAR count(LON) TO 0.
+2\   VAR step(LON) TO 1.
 2\   ACTION tick(),
 3\     INCREASE SELF:count BY SELF:step.
 3\     GIVE SELF:count.
@@ -76,7 +76,7 @@ ROOT_SCOPE/.
 # ═══════════════════════════════════════════════════════════
 SUITE "Variables & Types",
 
-  1\ CREATE n(NUM)   TO 42.
+  1\ CREATE n(LON)   TO 42.
   1\ CREATE pi(SCL)  TO 3.14.
   1\ CREATE msg(TX)  TO "hello".
   1\ CREATE ok(FACT) TO TRUE.
@@ -116,8 +116,8 @@ SUITE/.
 # ═══════════════════════════════════════════════════════════
 SUITE "Math & Arithmetic",
 
-  1\ CREATE x(NUM) TO 10.
-  1\ CREATE y(NUM) TO 3.
+  1\ CREATE x(LON) TO 10.
+  1\ CREATE y(LON) TO 3.
 
   VERIFY "addition",
     x + y IS 13.

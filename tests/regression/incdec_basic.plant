@@ -1,5 +1,5 @@
 ACTION main(),
-  CREATE a(NUM) TO 10.
+  CREATE a(LON) TO 10.
   INCREASE a BY 5.
   SHOW "a=" + a.
   DECREASE a BY 3.

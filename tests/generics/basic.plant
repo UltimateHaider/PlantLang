@@ -8,7 +8,7 @@ ACTION wrap[T](v(T)),
 /ACTION.
 
 ACTION mul2[T](a(T), b(T)),
-  CREATE r(NUM) TO 0.
+  CREATE r(LON) TO 0.
   SET r TO a * b.
   GIVE r.
 /ACTION.
@@ -26,8 +26,8 @@ ACTION main(),
   REAP c FROM echo[FACT], 7.
   REAP cs FROM _from_long, c.
   SHOW "c=" + cs.
-  REAP m FROM mul2[NUM], 6, 7.
-  CREATE mn(NUM) TO 0.
+  REAP m FROM mul2[LON], 6, 7.
+  CREATE mn(LON) TO 0.
   SET mn TO m.
   REAP ms FROM _from_long, mn.
   SHOW "mul=" + ms.

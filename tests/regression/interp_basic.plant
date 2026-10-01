@@ -1,7 +1,7 @@
 ACTION main(),
-  CREATE n(NUM) TO 42.
+  CREATE n(LON) TO 42.
   CREATE s(TX) TO "world".
-  CREATE eb2(NUM) TO 7.
+  CREATE eb2(LON) TO 7.
   SHOW "hello ${n}".
   SHOW "n=${n}".
   SHOW "s=${s}".

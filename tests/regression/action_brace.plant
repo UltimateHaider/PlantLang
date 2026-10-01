@@ -2,15 +2,15 @@
 # curly-brace bodies parse via LBRACE/RBRACE depth matching (nested
 # constructs cannot terminate an action early); comma bodies and
 # /ACTION. terminators remain fully supported; empty blocks return "".
-# Numeric returns still require the -> NUM annotation for tx_t
+# Numeric returns still require the -> LON annotation for tx_t
 # wrapping (unchanged rule).
 ACTION main() {
   SHOW "brace main".
-  CREATE x(NUM) TO 6.
+  CREATE x(LON) TO 6.
   IF x > 5,
     SHOW "big".
   /IF.
-  CREATE i(NUM) TO 0.
+  CREATE i(LON) TO 0.
   SEASON i < 3,
     SHOW "tick".
     SET i TO i + 1.
@@ -22,7 +22,7 @@ ACTION main() {
   GIVE 0.
 }
 
-ACTION twice(n(NUM)) -> NUM {
+ACTION twice(n(LON)) -> LON {
   GIVE n * 2.
 }
 
@@ -35,6 +35,6 @@ ACTION comma_legacy(),
   GIVE 0.
 /ACTION.
 
-ACTION thrice(n(NUM)) -> NUM,
+ACTION thrice(n(LON)) -> LON,
   GIVE n * 3.
 /ACTION.

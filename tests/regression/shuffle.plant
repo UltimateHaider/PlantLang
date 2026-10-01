@@ -16,12 +16,12 @@ ACTION main(),
   PUT "6" INTO nums.
   PUT "7" INTO nums.
   PUT "8" INTO nums.
-  CREATE before(NUM) TO 0.
+  CREATE before(LON) TO 0.
   CYCLE n, i IN nums,
     SET before TO before + _to_long(n).
   /CYCLE.
   SHAKE nums.
-  CREATE after(NUM) TO 0.
+  CREATE after(LON) TO 0.
   CYCLE n, i IN nums,
     SET after TO after + _to_long(n).
   /CYCLE.

@@ -4,8 +4,8 @@ ACTION idref[T](a(REF T), b(T)),
 /ACTION.
 
 ACTION main(),
-  CREATE x(NUM) TO 5.
-  REAP r FROM idref[NUM], x, 7.
+  CREATE x(LON) TO 5.
+  REAP r FROM idref[LON], x, 7.
   REAP rs FROM _from_long, r.
   SHOW "idref=" + rs.
   GIVE 0.

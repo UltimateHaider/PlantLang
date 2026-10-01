@@ -1,5 +1,5 @@
 ACTION main(),
-  CREATE n(NUM) TO 5.
+  CREATE n(LON) TO 5.
   CREATE s(TX) TO "B".
   CREATE r(TX) TO "".
   SHOW "x=" + "a${n}b".

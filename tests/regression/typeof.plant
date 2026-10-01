@@ -1,7 +1,7 @@
 ACTION main(),
   TYPEOF 42.
   TYPEOF "abc".
-  CREATE n(NUM) TO 5.
+  CREATE n(LON) TO 5.
   TYPEOF n.
   CREATE s(STRING) TO "hello".
   TYPEOF s.

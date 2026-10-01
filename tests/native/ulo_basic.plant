@@ -1,0 +1,7 @@
+SUITE "ULO Basic (unsigned long)"
+  CREATE U (ULO) TO 100000.
+  SHOW U.
+  SHOW U + 1.
+
+  SHOW "ulo-basic-ok".
+/SUITE.

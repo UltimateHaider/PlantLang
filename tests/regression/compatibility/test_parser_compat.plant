@@ -3,7 +3,7 @@
 # lexer interface (peek/consume/tok_lex/tok_type) by parsing a
 # complete program structure with all statement types.
 ACTION main(),
-  CREATE x(NUM) TO 1.
+  CREATE x(LON) TO 1.
   SET x TO x + 1.
   SHOW "x=" + x.
   IF x == 2,

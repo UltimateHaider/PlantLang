@@ -3,7 +3,7 @@
 # UPPER/LOWER/ABS/ROUND), COUNT, arithmetic, indexing, literals, and
 # nested combinations — plus the preserved legacy forms (zero-arg
 # bare call, parens call, comma call, module call).
-ACTION helper(a(NUM)),
+ACTION helper(a(LON)),
   GIVE _from_long(a * 2).
 /GIVE helper.
 ACTION zero(),

@@ -23,7 +23,7 @@ ACTION main(),
     SET hit TO "ran".
   /CYCLE.
   SHOW "empty=" + hit.
-  CREATE t(NUM) TO 0.
+  CREATE t(LON) TO 0.
   CYCLE item, idx IN items,
     SET t TO t + idx.
   /CYCLE.
@@ -39,7 +39,7 @@ ACTION main(),
   PUT "5" INTO nums.
   PUT "15" INTO nums.
   PUT "25" INTO nums.
-  CREATE total(NUM) TO 0.
+  CREATE total(LON) TO 0.
   CYCLE item, idx IN nums,
     SET total TO total + _to_long(item) + idx.
   /CYCLE.

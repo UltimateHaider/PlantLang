@@ -1,5 +1,5 @@
 ACTION main(),
-  CREATE n(NUM) TO 9.
+  CREATE n(LON) TO 9.
   CREATE s(TX) TO "x".
   SHOW "a" + "b" + "c" + "d" + "e" + "f" + "g" + "h" + "i" + "j".
   SHOW "p" + s + "q" + s + "r".

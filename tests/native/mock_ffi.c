@@ -33,7 +33,7 @@ tx_t ffi_make_buf(long n) {
     return (tx_t)b;
 }
 
-/* simulated open(): Result<NUM,TX> semantics — fails with ENOENT
+/* simulated open(): Result<LON,TX> semantics — fails with ENOENT
    when mode == 0, otherwise succeeds with handle 42 */
 tx_t ffi_open_mock(long mode) {
     if (mode == 0) { errno = ENOENT; return ""; }
@@ -41,7 +41,7 @@ tx_t ffi_open_mock(long mode) {
     return _from_long(42);
 }
 
-/* Result<NUM,TX> semantics: returns -1 + errno=EINVAL unless
+/* Result<LON,TX> semantics: returns -1 + errno=EINVAL unless
    path == "ok", which returns 7 */
 long ffi_parse_cfg(tx_t path) {
     if (!path || strcmp(_S(path), "ok") != 0) { errno = EINVAL; return -1; }
@@ -59,7 +59,7 @@ typedef struct { tx_t val; }      MockBox;
 typedef struct { tx_t first, second; } MockPair;
 typedef struct { tx_t box, tag; } MockWrap;
 
-/* non-generic STRUCT Point { x: NUM, y: NUM } */
+/* non-generic STRUCT Point { x: LON, y: LON } */
 tx_t ffi_make_point(long x, long y) {
     MockPoint* p = (MockPoint*)malloc(sizeof(MockPoint));
     if (!p) return "";
@@ -73,7 +73,7 @@ tx_t ffi_point_sum(tx_t p) {
     return _from_long(mp->x + mp->y);
 }
 
-/* generic STRUCT Box[T] { val: T } — NUM instantiation */
+/* generic STRUCT Box[T] { val: T } — LON instantiation */
 tx_t ffi_make_box(tx_t v) {
     MockBox* b = (MockBox*)malloc(sizeof(MockBox));
     if (!b) return "";

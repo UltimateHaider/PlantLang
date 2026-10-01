@@ -1,9 +1,9 @@
 # non-generic STRUCT + FFI interop through opaque tx_t handles.
 # STRUCT Point emits the C typedef plant_Point (checked via .grep);
 # runtime values stay tx_t and the mock FFI casts internally.
-STRUCT Point { x: NUM, y: NUM }
+STRUCT Point { x: LON, y: LON }
 
-ACTION ffi_make_point(x(NUM), y(NUM)) -> external.
+ACTION ffi_make_point(x(LON), y(LON)) -> external.
 ACTION ffi_point_sum(p(Point)) -> external.
 
 ACTION main(),

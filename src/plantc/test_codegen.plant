@@ -11,7 +11,7 @@ IMPORT "codegen_c.plant".
 
 # ── Test 1: Basic statements ──────────────────────────────────
 CREATE test_ast(LIST) TO [
-  { "type": "create_stmt", "target": "x", "var_type": "NUM", "value": "42" },
+  { "type": "create_stmt", "target": "x", "var_type": "LON", "value": "42" },
   { "type": "set_stmt", "target": "x", "value": "x + 1" },
   { "type": "show_stmt", "value": "x" },
   { "type": "give_stmt", "value": "x" },
@@ -81,8 +81,8 @@ SHOW ccode6.
 
 # ── Test 7: action_decl with parameters and body ──────────────
 CREATE add_params(LIST) TO [
-  { "name": "a", "type": "NUM" },
-  { "name": "b", "type": "NUM" }
+  { "name": "a", "type": "LON" },
+  { "name": "b", "type": "LON" }
 ].
 CREATE add_body(LIST) TO [
   { "type": "give_stmt", "value": "a + b" }
@@ -139,7 +139,7 @@ CREATE countdown_body(LIST) TO [
   { "type": "show_stmt", "value": "\"done\"" }
 ].
 CREATE countdown_params(LIST) TO [
-  { "name": "n", "type": "NUM" }
+  { "name": "n", "type": "LON" }
 ].
 CREATE combined_ast(LIST) TO [
   { "type": "action_decl", "name": "countdown", "params": countdown_params, "body": countdown_body }

@@ -2926,7 +2926,7 @@ tx_t _lower_dots(tx_t e) {
     }
     if (strcmp(q,"") != 0) {
     out = _cat(out, ch);
-    if (ch == q) {
+    if (strcmp(ch, q) == 0) {
     q = "";
     }
     i = i+1;
@@ -3206,7 +3206,7 @@ tx_t _parse_ds_pattern(PlantArray* tokens, long pos) {
     while (1) {
     tk = plant_iLexer_peek_at(lexer, tokens, p);
     ty = plant_iLexer_tok_type(lexer, tk);
-    if (ty == closek) {
+    if (strcmp(ty, closek) == 0) {
     cp = plant_iLexer_consume_at(lexer, tokens, p);
     p = _second(cp);
                       break;
@@ -3587,7 +3587,7 @@ tx_t parse_closure(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) {
     while (si2 < plant_array_length(entries)) {
     se2 = plant_list_get(entries, si2);
     sn2 = _second(se2);
-            params = plant_list_add(params, plant_list_make ( 4 , "name" , sn2 , "type" , "NUM" ));
+            params = plant_list_add(params, plant_list_make ( 4 , "name" , sn2 , "type" , "LON" ));
     si2 = si2+1;
     }
     p4 = p2;
@@ -11620,7 +11620,7 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     return _cat3(_cat4(isel, "  ", target, " = "), cval, ";\n");
     }
     isnc2 = expr_is_numeric(cval, nums);
-    if (strcmp(vtype,"NUM") == 0) {
+    if (strcmp(vtype,"LON") == 0) {
     if (isnc2 == 0 && strcmp(is_lookup_prefix ( cval ),"1") == 0) {
     cval = _cat3("_to_long(", cval, ")");
     }
@@ -11678,7 +11678,7 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     }
     return _cat(_cat4(_cat4(isel, "  ", vct2, " "), target, " = ", cval), ";\n");
     }
-    if (strcmp(vtype,"NUM") != 0 && strcmp(vtype,"FACT") != 0 && strcmp(vtype,"CHAR") != 0 && strcmp(vtype,"UNUM") != 0 && strcmp(vtype,"UFACT") != 0 && strcmp(vtype,"SCL") != 0 && strcmp(vtype,"LIST") != 0 && strcmp(vtype,"MATH") != 0) {
+    if (strcmp(vtype,"LON") != 0 && strcmp(vtype,"FACT") != 0 && strcmp(vtype,"CHAR") != 0 && strcmp(vtype,"UNUM") != 0 && strcmp(vtype,"UFACT") != 0 && strcmp(vtype,"SCL") != 0 && strcmp(vtype,"LIST") != 0 && strcmp(vtype,"MATH") != 0) {
     vst3 = is_struct_type(vtype);
     iut3 = is_union_type(vtype, evars);
     if (strcmp(vst3,"1") != 0 && strcmp(iut3,"1") != 0) {
@@ -12953,7 +12953,7 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     if (strcmp(actx,"a") == 0) {
     return _cat3(_cat4(isel, "  ", target, " = "), cval, ";\n");
     }
-    if (strcmp(vtype,"NUM") == 0) {
+    if (strcmp(vtype,"LON") == 0) {
     return _cat3(_cat4(isel, "  long ", target, " = "), cval, ";\n");
     }
     if (strcmp(vtype,"CHAR") == 0) {
@@ -13001,7 +13001,7 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     }
     return _cat(_cat4(_cat4(isel, "  ", vct4, " "), target, " = ", cval), ";\n");
     }
-    if (strcmp(vtype,"NUM") != 0 && strcmp(vtype,"CHAR") != 0 && strcmp(vtype,"UNUM") != 0 && strcmp(vtype,"UFACT") != 0 && strcmp(vtype,"SCL") != 0 && strcmp(vtype,"MATH") != 0) {
+    if (strcmp(vtype,"LON") != 0 && strcmp(vtype,"CHAR") != 0 && strcmp(vtype,"UNUM") != 0 && strcmp(vtype,"UFACT") != 0 && strcmp(vtype,"SCL") != 0 && strcmp(vtype,"MATH") != 0) {
     vst5 = is_struct_type(vtype);
     iut5 = is_union_type(vtype, evars);
     if (strcmp(vst5,"1") != 0 && strcmp(iut5,"1") != 0) {
@@ -13652,7 +13652,7 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     long spi = 0;
     while (spi < plant_array_length(params)) {
     sp_ty = _map_get(plant_list_get(params ,  spi ), "type");
-    if (strcmp(sp_ty,"NUM") == 0) {
+    if (strcmp(sp_ty,"LON") == 0) {
     sp = _map_get(plant_list_get(params ,  spi ), "name");
     spi = plant_array_length(params);
     }
@@ -13755,7 +13755,7 @@ tx_t plant_ctype(tx_t ptype) {
     if (strcmp(base,"LIST") == 0) {
     return "PlantArray*";
     }
-    if (strcmp(base,"REF NUM") == 0) {
+    if (strcmp(base,"REF LON") == 0) {
     return "long*";
     }
     if (strcmp(base,"REF FACT") == 0) {
@@ -13874,7 +13874,7 @@ tx_t is_struct_type(tx_t t) {
   tx_t rf = "";
     base = type_base(t);
     tb = trim(base);
-    if (strcmp(tb,"NUM") == 0) {
+    if (strcmp(tb,"LON") == 0) {
     return "0";
     }
     if (strcmp(tb,"FACT") == 0) {
@@ -14274,7 +14274,7 @@ tx_t ffi_emit_struct_helpers(tx_t cname, PlantArray* flds) {
     fn8 = plant_list_get(flds, fi8);
     ft8 = plant_list_get(flds, fi8+1);
     fb8 = type_base(ft8);
-    if (strcmp(fb8,"NUM") == 0) {
+    if (strcmp(fb8,"LON") == 0) {
     h1 = _cat3(_cat4(h1, "  r.", fn8, " = (long)(intptr_t)plant_map_get(m, \""), fn8, "\");\n");
     }
     if (strcmp(fb8,"FACT") == 0) {
@@ -14312,7 +14312,7 @@ tx_t ffi_emit_struct_helpers(tx_t cname, PlantArray* flds) {
     fn7 = plant_list_get(flds, fi7);
     ft7 = plant_list_get(flds, fi7+1);
     fb7 = type_base(ft7);
-    if (strcmp(fb7,"NUM") == 0) {
+    if (strcmp(fb7,"LON") == 0) {
     h4 = _cat3(_cat4(h4, "  plant_map_hash_set(r, \"", fn7, "\", (void*)(intptr_t)v."), fn7, ");\n");
     }
     if (strcmp(fb7,"FACT") == 0) {
@@ -14753,10 +14753,10 @@ tx_t struct_typedef(PlantArray* tpl, PlantArray* args) {
     }
     if (strcmp(fk9,"struct_ref") != 0) {
     base9 = type_base(fsub);
-    if (strcmp(base9,"NUM") == 0 || strcmp(base9,"FACT") == 0 || strcmp(base9,"TX") == 0 || strcmp(base9,"LIST") == 0) {
+    if (strcmp(base9,"LON") == 0 || strcmp(base9,"FACT") == 0 || strcmp(base9,"TX") == 0 || strcmp(base9,"LIST") == 0) {
     ctype = plant_ctype(fsub);
     }
-    if (strcmp(base9,"NUM") != 0 && strcmp(base9,"FACT") != 0 && strcmp(base9,"TX") != 0 && strcmp(base9,"LIST") != 0) {
+    if (strcmp(base9,"LON") != 0 && strcmp(base9,"FACT") != 0 && strcmp(base9,"TX") != 0 && strcmp(base9,"LIST") != 0) {
     ctype = "tx_t";
     }
     }
@@ -16008,7 +16008,7 @@ tx_t generate_c(PlantArray* ast) {
     cbt = _map_get(cbp, "type");
     cbtk = ffi_param_kind(cbt);
     cbcast = "";
-    if (strcmp(cbtk,"plain") == 0 && strcmp(cbt,"NUM") == 0) {
+    if (strcmp(cbtk,"plain") == 0 && strcmp(cbt,"LON") == 0) {
     cbcast = "(long)(intptr_t)";
     }
     if (strcmp(cbtk,"plain") == 0 && strcmp(cbt,"FACT") == 0) {
@@ -16317,7 +16317,7 @@ tx_t is_prim_type(tx_t ptype) {
   tx_t pbt = "";
     pb = type_base(ptype);
     pbt = trim(pb);
-    if (strcmp(pbt,"NUM") == 0) {
+    if (strcmp(pbt,"LON") == 0) {
     return "1";
     }
     if (strcmp(pbt,"FACT") == 0) {
@@ -16960,7 +16960,7 @@ int main(int argc, char **argv) {
   tx_t out_path = "";
   tx_t written = "";
   tx_t c_len = "";
-  TYPE_REGISTRY = plant_list_make(11, plant_list_make(5, "NUM", "long", "1", "1", "scalar"), plant_list_make(5, "FACT", "int", "1", "1", "scalar"), plant_list_make(5, "UNUM", "unsigned long", "1", "1", "scalar"), plant_list_make(5, "UFACT", "unsigned int", "1", "1", "scalar"), plant_list_make(5, "SCL", "double", "1", "1", "scalar"), plant_list_make(5, "CHAR", "char", "0", "1", "scalar"), plant_list_make(5, "BYTES", "tx_t", "0", "1", "scalar"), plant_list_make(5, "BYT", "signed char", "1", "1", "scalar"), plant_list_make(5, "UBT", "unsigned char", "1", "1", "scalar"), plant_list_make(5, "SHR", "short", "1", "1", "scalar"), plant_list_make(5, "USH", "unsigned short", "1", "1", "scalar"));
+  TYPE_REGISTRY = plant_list_make(12, plant_list_make(5, "LON", "long", "1", "1", "scalar"), plant_list_make(5, "FACT", "int", "1", "1", "scalar"), plant_list_make(5, "UNUM", "unsigned long", "1", "1", "scalar"), plant_list_make(5, "UFACT", "unsigned int", "1", "1", "scalar"), plant_list_make(5, "SCL", "double", "1", "1", "scalar"), plant_list_make(5, "CHAR", "char", "0", "1", "scalar"), plant_list_make(5, "BYTES", "tx_t", "0", "1", "scalar"), plant_list_make(5, "BYT", "signed char", "1", "1", "scalar"), plant_list_make(5, "UBT", "unsigned char", "1", "1", "scalar"), plant_list_make(5, "SHR", "short", "1", "1", "scalar"), plant_list_make(5, "USH", "unsigned short", "1", "1", "scalar"), plant_list_make(5, "ULO", "unsigned long", "1", "1", "scalar"));
   arg0 = get_cli_arg(0);
   if (strcmp(arg0,"-h") == 0 || strcmp(arg0,"--help") == 0) {
   plant_iReport_print(get_report(), "Chloroplast — Pure Native PlantLang compiler");
@@ -16971,7 +16971,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.51.7 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.51.8 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

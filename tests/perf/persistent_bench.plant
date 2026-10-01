@@ -6,10 +6,10 @@
 # baseline: per-op overhead must stay in the microsecond range while
 # every lifecycle event is hash-chained into the audit log (v0.48.18).
 ACTION main()
-  CREATE j(NUM) TO 0.
-  CREATE s(NUM) TO 0.
+  CREATE j(LON) TO 0.
+  CREATE s(LON) TO 0.
   SEASON j < 200000,
-    CREATE o(NUM) TO plant_arc_alloc(64).
+    CREATE o(LON) TO plant_arc_alloc(64).
     CALL plant_arc_retain(o).
     CALL plant_arc_release(o).
     CALL plant_arc_release(o).

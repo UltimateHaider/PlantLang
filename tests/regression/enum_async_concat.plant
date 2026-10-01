@@ -2,7 +2,7 @@
 # async context, including passing the enum through AWAIT (v0.48.8).
 ENUM Suit { HEARTS, SPADES, DIAMONDS, CLUBS }.
 
-ASYNC ACTION tag(su(Suit), n(NUM)),
+ASYNC ACTION tag(su(Suit), n(LON)),
   SHOW "suit " + su + " n=" + n.
   AWAIT echo, su.
   SHOW "done " + su.

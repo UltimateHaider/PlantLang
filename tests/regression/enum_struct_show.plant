@@ -3,7 +3,7 @@
 ENUM Color { RED, GREEN, BLUE }.
 ENUM State { IDLE, RUN, DONE }.
 
-STRUCT Ball { weight: NUM, color: Color }
+STRUCT Ball { weight: LON, color: Color }
 STRUCT Game { state: State, color: Color }
 ACTION ffi_get_ball() -> STRUCT Ball.
 ACTION ffi_get_game() -> STRUCT Game.

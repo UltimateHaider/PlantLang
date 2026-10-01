@@ -4,7 +4,7 @@ ACTION main(),
     SHOW "FAIL: parse".
     GIVE 1.
   /IF.
-  CREATE k(NUM) TO 0.
+  CREATE k(LON) TO 0.
   REAP k FROM json_kind, j.
   CREATE ks(TX) TO "".
   REAP ks FROM _from_long, k.
@@ -16,7 +16,7 @@ ACTION main(),
   REAP ok FROM json_get, j, "ok".
   SHOW "ok=" + json_val(ok).
   REAP nu FROM json_get, j, "nothing".
-  CREATE nk(NUM) TO 0.
+  CREATE nk(LON) TO 0.
   REAP nk FROM json_kind, nu.
   CREATE nks(TX) TO "".
   REAP nks FROM _from_long, nk.
@@ -26,7 +26,7 @@ ACTION main(),
     SHOW "missing-nil".
   /IF.
   REAP tags FROM json_get, j, "tags".
-  CREATE tl(NUM) TO 0.
+  CREATE tl(LON) TO 0.
   REAP tl FROM json_len, tags.
   CREATE tls(TX) TO "".
   REAP tls FROM _from_long, tl.
@@ -42,7 +42,7 @@ ACTION main(),
   REAP out FROM json_stringify, j.
   SHOW out.
   REAP ja FROM json_parse, "[1, 2, 3]".
-  CREATE jal(NUM) TO 0.
+  CREATE jal(LON) TO 0.
   REAP jal FROM json_len, ja.
   CREATE jals(TX) TO "".
   REAP jals FROM _from_long, jal.
@@ -52,7 +52,7 @@ ACTION main(),
   REAP jao FROM json_stringify, ja.
   SHOW jao.
   REAP jn FROM json_parse, "42".
-  CREATE jnk(NUM) TO 0.
+  CREATE jnk(LON) TO 0.
   REAP jnk FROM json_kind, jn.
   CREATE jnks(TX) TO "".
   REAP jnks FROM _from_long, jnk.

@@ -35,7 +35,7 @@ ACTION main(),
     SET s4 TO s4 + _from_long(i) + " ".
   /CYCLE.
   SHOW "fold-pos=" + s4.
-  CREATE z(NUM) TO 0.
+  CREATE z(LON) TO 0.
   CREATE hit3(TX) TO "none".
   CYCLE i FROM 1 TO 3 STEP z,
     SET hit3 TO "ran".

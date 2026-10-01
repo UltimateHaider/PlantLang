@@ -1,0 +1,13 @@
+SUITE "LON + ULO Numeric Integration"
+  CREATE L (LON) TO 1000000.
+  CREATE U (ULO) TO 2000000.
+  CREATE S (SHR) TO 500.
+  CREATE B (BYT) TO 50.
+
+  SHOW L + U.
+  SHOW L + S.
+  SHOW L + B.
+  SHOW U - L.
+
+  SHOW "lon-ulo-numeric-ok".
+/SUITE.

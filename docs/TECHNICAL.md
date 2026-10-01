@@ -21,9 +21,9 @@ See sections 9–10 below for the IMPORT/FFI and Standard Library architecture.
 Every statement carries a compile-time depth prefix (`\N`) that declares its scope level:
 
 ```plantlang
-1\ CREATE x(NUM) TO 42.     # depth 1 — root-level variable
+1\ CREATE x(LON) TO 42.     # depth 1 — root-level variable
 2\   CYCLE i FROM 1 TO 10,  # depth 2 — loop scope
-3\     CREATE y(NUM) TO i.  # depth 3 — inner body scope
+3\     CREATE y(LON) TO i.  # depth 3 — inner body scope
 ```
 
 The depth is set by the tokenizer: `N\` at the start of a line is consumed as a `DEPTH` token before the statement keyword.
@@ -54,7 +54,7 @@ The returned `i8*` is bitcast to the appropriate typed pointer (`i64*`, `double*
 
 | Site | Arena Depth | Notes |
 |---|---|---|
-| `CREATE x(NUM) TO val.` | Statement depth (`node.depth`) | Destination must be ≤ current depth (Contract Law) |
+| `CREATE x(LON) TO val.` | Statement depth (`node.depth`) | Destination must be ≤ current depth (Contract Law) |
 | `REAP x FROM fn, ...` auto-create | Statement depth | Implicitly declares the target variable |
 | `CYCLE i FROM ...` loop variable | Loop's statement depth | Fixed `%ptr` address survives iteration reset |
 | ACTION function params | Depth 0 | Not reset on GIVE — preserved for caller's recursive frames |
@@ -369,7 +369,7 @@ CHOICE values are stored as a fixed-size struct:
 ```
 
 - `tag`: variant index (0-based, in declaration order)
-- `payload`: variant's value, stored as i64 (all PlantLang types fit in i64: NUM→i64, SCL→bitcast, TX→ptrtoint, FACT→zext)
+- `payload`: variant's value, stored as i64 (all PlantLang types fit in i64: LON→i64, SCL→bitcast, TX→ptrtoint, FACT→zext)
 
 ### 5.2 Variant Construction
 
@@ -457,12 +457,12 @@ unary       (-)
 atom        (numbers, strings, identifiers, parenthesized)
 ```
 
-Each operation emits LLVM IR directly to `Module.body`. String concatenation uses `@malloc`/`@strcpy`/`@strcat` runtime calls. Type promotion follows: `NUM + SCL → SCL` (int → double via `sitofp`).
+Each operation emits LLVM IR directly to `Module.body`. String concatenation uses `@malloc`/`@strcpy`/`@strcat` runtime calls. Type promotion follows: `LON + SCL → SCL` (int → double via `sitofp`).
 
 ### 4.3 Type Coercions (Return Register)
 
 All function return values pass through `i64`:
-- `NUM`: direct (i64 → i64)
+- `LON`: direct (i64 → i64)
 - `SCL`: `bitcast double %val to i64`
 - `TX`: `ptrtoint i8* %val to i64`
 - `FACT`: `zext i1 %val to i64`
@@ -482,7 +482,7 @@ Each bucket is a padded struct:
 { i1 is_occupied, key_type, value_type }
 ```
 
-For `MAP[NUM,TX]` this is `{ i1, i64, %fat_ptr }` with ABI alignment:
+For `MAP[LON,TX]` this is `{ i1, i64, %fat_ptr }` with ABI alignment:
 - Offset 0: i1 (1 byte) + 7 bytes padding
 - Offset 8: i64 key (8 bytes)
 - Offset 16: %fat_ptr value (24 bytes)
@@ -494,7 +494,7 @@ The bucket size is computed by `mapBucketSize()` which accounts for natural alig
 
 | Key Type | Hash | Implementation |
 |---|---|---|
-| `NUM` | Identity | Key value used directly (modulo capacity) |
+| `LON` | Identity | Key value used directly (modulo capacity) |
 | `TX` | djb2 | Inline LLVM IR loop: `hash = hash * 33 + byte[i]` over string bytes |
 
 ### 7.3 Linear Probing
@@ -650,9 +650,9 @@ The expression itself handles `sret` allocation internally (e.g., `StringOpNode`
 |---|---|---|
 | `SPLIT(str, delim)` | `[TX]` | `%fat_ptr` via `plnt_str_split` sret call |
 | `JOIN(arr, delim)` | `TX` | `%fat_ptr` via `plnt_str_join` sret call |
-| `COUNT(arr)` | `NUM` | `extractvalue` on `%fat_ptr` length field |
+| `COUNT(arr)` | `LON` | `extractvalue` on `%fat_ptr` length field |
 | `arr[index]` | Element type | GEP + load on array pointer |
-| `SORT(arr)` | `NUM` (statement) | `plnt_sort_i64` / `plnt_sort_double` call |
+| `SORT(arr)` | `LON` (statement) | `plnt_sort_i64` / `plnt_sort_double` call |
 
 ---
 
@@ -724,7 +724,7 @@ ACTION plant_printf(fmt(TX)) -> external.
 declare i64 @plant_printf(i64)
 ```
 
-The function name is mangled from the PlantLang identifier. Parameters use the standard type coercion (TX → i64 via ptrtoint, NUM → i64, SCL → i64 via bitcast).
+The function name is mangled from the PlantLang identifier. Parameters use the standard type coercion (TX → i64 via ptrtoint, LON → i64, SCL → i64 via bitcast).
 
 **Interpreter**: FFI stubs are pre-registered in the interpreter's runtime. Each stub wraps the corresponding `runtime_bridge.c` function via a JS implementation. When the interpreter encounters a call to an external ACTION, it dispatches to the registered stub instead of looking for a body.
 
@@ -1471,7 +1471,7 @@ SmartExecutionRouter (extends EventEmitter)
 │   └── GPU_ACCELERATED: isMatrixOrVectorOp() AND payloadSize ≥ gpuMinBytes AND GPU pipeline registered
 ├── route(action, payload) → async dispatch to selected target
 ├── Decision Metrics:
-│   ├── estimatePayloadSize(payload) — NUM=8B, TX=length, Array=N×element
+│   ├── estimatePayloadSize(payload) — LON=8B, TX=length, Array=N×element
 │   ├── isMatrixOrVectorOp(action) — keyword match (mat, vec, tensor, fft, ...)
 │   ├── measureLatency(nodeId) — cached multi-tap measurement (5s TTL)
 │   └── updateLocalCpuLoad(load) — from telemetry
@@ -1862,7 +1862,7 @@ if (this.current().type === TOKEN.PUNCT && this.current().value === ',' &&
 
 Runtime (`cycle_evaluator.js`):
 - Per-iteration scope isolation: a fresh sub-scope is created for each iteration
-- Index variable bound at depth 0 as `NUM`, starting at 0, incremented each iteration
+- Index variable bound at depth 0 as `LON`, starting at 0, incremented each iteration
 - Empty/null/undefined lists produce zero iterations (no error)
 - BREAK signal caught by try/catch around the iteration loop — iterator stops immediately
 - CONTINUE signal caught and suppressed, proceeding to next iteration
@@ -1896,7 +1896,7 @@ Sort engine (`sort_evaluator.js`):
 - `_makeChainedComparator(fields)` — iterates fields sequentially; if field N compares equal, proceeds to field N+1
 - Null-to-end: regardless of ASC/DESC, `null` values sort after all non-null values
 - String comparison uses `localeCompare` for locale-aware ordering
-- Numeric comparison uses subtraction (handles SCL/NUM)
+- Numeric comparison uses subtraction (handles SCL/LON)
 
 ### 21.5 BLOOM AS Visual Governance
 
@@ -1922,8 +1922,8 @@ Renderers (`bloom_evaluator.js`):
 
 ```
 <Point>
-  x (NUM): 10
-  y (NUM): 20
+  x (LON): 10
+  y (LON): 20
 ```
 
 Recursive descent: if a value has a `__shape` or `__structType` property, it's rendered as a struct with type-prefixed keys. Arrays and plain objects are flattened with their type prefix. Circular references are detected and rendered as `[Circular]`.
@@ -2023,7 +2023,7 @@ Three modules under `src/codegen/llvm/`:
 
   | PlantLang | LLVM IR |
   |---|---|
-  | NUM / INT | `i64` |
+  | LON / INT | `i64` |
   | SCL / DECIMAL | `double` |
   | FACT / BOOL | `i1` |
   | TX / TEXT | `i8*` |
@@ -2115,7 +2115,7 @@ Where the interpreter falls back to the legacy regex path for compound RAW_EXPR 
 
 39 tests across 7 categories:
 - Literal SHOW (integer, decimal, boolean, string)
-- Variable CREATE + SHOW (NUM, SCL, FACT, TX)
+- Variable CREATE + SHOW (LON, SCL, FACT, TX)
 - SET reassignment
 - Arithmetic expressions (precedence, parentheses, mixed-type)
 - Comparison operators (IS, IS NOT, GT, LT, GTE, LTE)
@@ -2688,7 +2688,7 @@ ENUM Color { RED, GREEN, BLUE }
 ### 26.5 TYPE Aliases
 
 ```plantlang
-TYPE MyNum = NUM.
+TYPE MyNum = LON.
 TYPE MyText = TX.
 ```
 
@@ -2700,7 +2700,7 @@ TYPE MyText = TX.
 ### 26.6 CONST Declarations
 
 ```plantlang
-CONST pi(NUM) TO 314.
+CONST pi(LON) TO 314.
 CONST greeting(TX) TO "Hello".
 ```
 
@@ -3033,7 +3033,7 @@ typedef struct PlantSet {
 ```
 
 - **Hashing**: splitmix64 over the raw value bits (`(uintptr_t)val`), so any
-  Chloroplast value works — NUM (long bits), TX (pointer), MAP/LIST
+  Chloroplast value works — LON (long bits), TX (pointer), MAP/LIST
   (PlantArray* pointer). Uniqueness is identity-based: equal bits = same
   element. Value `0`/NULL is reserved as nil and not storable.
 - **Probing**: linear probing with `idx = (idx + 1) & (cap - 1)`; load factor
@@ -3096,12 +3096,12 @@ insert/lookup/delete/pop cycles to monitor memory stability.
 
 `parse_action_decl` accepts `(REF TYPE)` parameters: the lexeme `REF` is
 consumed and the following type token is folded into the stored type string
-(`"REF " + TYPE`), so `a(REF NUM)` yields `"REF NUM"`. `generate_c` runs a
+(`"REF " + TYPE`), so `a(REF LON)` yields `"REF LON"`. `generate_c` runs a
 pre-pass over the program body building a signature table (`sigs`) for every
 `external_decl` and `action_decl` (name → params list), which is threaded
 through `generate_node`/`generate_body` into `reap_stmt` codegen. There, each
 argument is checked with `is_ref_at`; REF positions emit `&var` instead of
-`var`. The C type mapping (`plant_ctype`) is: `REF NUM` → `long*`,
+`var`. The C type mapping (`plant_ctype`) is: `REF LON` → `long*`,
 `REF FACT` → `int*`, `REF LIST` → `PlantArray**`, `REF TX` → `tx_t*`.
 
 Because the compiler is single-pass with no runtime symbol table, the
@@ -3153,7 +3153,7 @@ only design-convention string allocations remain at exit.
 ### 30.5 Test Coverage
 
 `tests/native/ffi.plant` exercises: plain calls, REF swap through pointers
-(verified via arithmetic on the swapped variables), `Result<NUM,TX>` failure
+(verified via arithmetic on the swapped variables), `Result<LON,TX>` failure
 (ENOENT) and success (errno cleared), `Result`-style parse failure (EINVAL),
 `ffi_free` on a `ffi_make_buf` allocation and NULL rejection. The mock library
 `mock_ffi.c`/`mock_ffi.h` is force-included (`-include`) and linked into every
@@ -3176,13 +3176,13 @@ ACTION process_list[T](item(T), list(LIST[T])) -> T,
   GIVE head.
 /ACTION.
 
-REAP r FROM process_list[NUM], 5, xs.   # call-site type arguments
+REAP r FROM process_list[LON], 5, xs.   # call-site type arguments
 ```
 
 - Type-parameter lists `[T, U]` follow the action name (square brackets;
   `[`/`]` already lex as `LBRACKET`/`RBRACKET`).
 - Parameter types may be generic names (`T`), containers (`LIST[T]`),
-  references (`REF T`, `REF LIST[T]`) or concrete types (`NUM`, `TX`…).
+  references (`REF T`, `REF LIST[T]`) or concrete types (`LON`, `TX`…).
   The parser collects the full type text until the closing `)` at
   bracket/paren depth 0 (`collect_type_text`), replacing the old
   single-token + `REF`-special-case reading.
@@ -3195,7 +3195,7 @@ REAP r FROM process_list[NUM], 5, xs.   # call-site type arguments
   STRUCT Pair[T, U] { first: T, second: U }
   STRUCT Wrap[T] { box: Box[T], tag: TX }   # nested generic struct
 
-  ACTION ffi_box_write(b(Box[NUM]), v(NUM)) -> external.
+  ACTION ffi_box_write(b(Box[LON]), v(LON)) -> external.
   ```
 
   `parse_struct_decl` consumes `STRUCT`, the name, an optional `[T, U]`
@@ -3215,7 +3215,7 @@ REAP r FROM process_list[NUM], 5, xs.   # call-site type arguments
 2. **Pass 0b — instantiation discovery** (`collect_insts`): every body is
    walked for REAP actions containing `[`. For each generic call, the type
    arguments are substituted through the *current* type context
-   (`subst_reap_act`) and the fully concrete key (e.g. `process_list[NUM]`)
+   (`subst_reap_act`) and the fully concrete key (e.g. `process_list[LON]`)
    is added to the **instantiation cache** if absent; the template's own body
    is then walked with the zipped substitution (`build_subst`) so nested
    generic calls (`outer[T]` calling `inner[T]`) resolve transitively.
@@ -3237,7 +3237,7 @@ concrete type arguments:
 
 | Source | Instantiation | Generated C |
 |---|---|---|
-| `ACTION compute[T](...)` | `compute[NUM]` | `tx_t plant_compute_NUM(...)` |
+| `ACTION compute[T](...)` | `compute[LON]` | `tx_t plant_compute_NUM(...)` |
 | `ACTION compute[T](...)` | `compute[TX]` | `tx_t plant_compute_TX(...)` |
 | `ACTION firstof[T, U](...)` | `firstof[TX, TX]` | `tx_t plant_firstof_TX_TX(...)` |
 
@@ -3248,11 +3248,11 @@ and definition), so repeated and nested calls compile to a single C function.
 
 ### 31.4 Type Substitution
 
-`subst` is a flat key/value list (`[T, NUM, U, TX, …]`). `subst_type` splits
+`subst` is a flat key/value list (`[T, LON, U, TX, …]`). `subst_type` splits
 type strings on space/`( ) [ ] ,` boundaries and replaces whole tokens that
-match a generic name — `LIST[T]` → `LIST[NUM]`, `REF T` → `REF NUM`. The C
+match a generic name — `LIST[T]` → `LIST[LON]`, `REF T` → `REF LON`. The C
 type mapping (`plant_ctype`) strips bracketed suffixes via `type_base`
-(`LIST[NUM]` → `PlantArray*`), so container types need no special handling.
+(`LIST[LON]` → `PlantArray*`), so container types need no special handling.
 REF-ness is preserved through substitution, and REF call-site rewriting
 (`&var`) reuses the existing `sigs`/`is_ref_at` machinery with the template's
 base name.
@@ -3273,9 +3273,9 @@ discovery and before decl emission:
    (`find_struct` on the base name after stripping `REF `), type arguments
    are extracted and substituted (`build_subst`), and the template's own
    fields are scanned recursively — so `Wrap[T] { box: Box[T], tag: TX }`
-   reached via `Wrap[NUM]` pulls in `Box[NUM]`. The **instantiation cache**
-   is keyed by the fully substituted type string (`Box [ NUM ]`), so
-   `ffi_box_write(b(Box[NUM]), …)` and `Wrap[NUM]`'s field share one
+   reached via `Wrap[LON]` pulls in `Box[LON]`. The **instantiation cache**
+   is keyed by the fully substituted type string (`Box [ LON ]`), so
+   `ffi_box_write(b(Box[LON]), …)` and `Wrap[LON]`'s field share one
    typedef.
 3. **Typedef emission** — cached instantiations emit
    `typedef struct { <ctype> <field>; … } plant_<Name>_<T1>_<T2>;` ahead of
@@ -3313,16 +3313,16 @@ is no runtime closure machinery — generated code is `typedef struct` +
 ### 32.1 Syntax
 
 ```plant
-ACTION make_counter(base(NUM)),
+ACTION make_counter(base(LON)),
   SET n TO base.
-  CREATE f TO [MOVE n](step(NUM)) -> step + n.   # capture n BY VALUE
+  CREATE f TO [MOVE n](step(LON)) -> step + n.   # capture n BY VALUE
   REAP r1 FROM f, 3.
   REAP r2 FROM f, 4.    # state persists: r2 = 7 + n-in-closure, outer n == 0
   GIVE r2.
 /ACTION.
 
-ACTION tracer(v(NUM)),
-  CREATE t TO [REF v](d(NUM)) -> d + v.   # capture v BY REFERENCE
+ACTION tracer(v(LON)),
+  CREATE t TO [REF v](d(LON)) -> d + v.   # capture v BY REFERENCE
   SET v TO 100.                           # change visible inside t
   REAP r FROM t, 1.   # r == 101
   GIVE r.
@@ -3332,7 +3332,7 @@ ACTION tracer(v(NUM)),
 - `[MOVE x, REF y]` after the action name — the **explicit capture list**.
   `MOVE` = value copy (outer var cleared to `0` at create time);
   `REF` = borrow (`&var` stored in the env).
-- Args `(n(NUM))` — normal parameters (names optional).
+- Args `(n(LON))` — normal parameters (names optional).
 - Body: expression form `-> expr.` or block form `-> ( stmts )`.
 
 ### 32.2 Parser
@@ -3404,7 +3404,7 @@ tx_t plant_Closure_N_fn(tx_t env, <argtypes>) {         /* definition */
 
 `tests/closures/` (6 cases, wired into `make test`): `move` (MOVE capture +
 state persistence + outer clearing), `ref` (REF live tracking), `mix`
-(multi-capture NUM/REF/TX + string concat body), `nested` (closure defined
+(multi-capture LON/REF/TX + string concat body), `nested` (closure defined
 inside a closure block body), `block` (block-form body with multiple
 statements), `invoke` (invocation from SEASON/IF bodies). `.grep` files
 check the emitted C structurally (`typedef struct { long cap; } plant_Env_…;`,
@@ -3426,9 +3426,9 @@ ASYNC ACTION phase2(tag(TX)),
   GIVE "p2-" + tag.
 /ACTION.
 
-ASYNC ACTION worker(tag(TX), n(NUM)),
-  CREATE i(NUM) TO 0.
-  CREATE sum(NUM) TO 0.
+ASYNC ACTION worker(tag(TX), n(LON)),
+  CREATE i(LON) TO 0.
+  CREATE sum(LON) TO 0.
   SEASON i < n,
     SET sum TO sum + i.
     SET i TO i + 1.
@@ -3505,7 +3505,7 @@ scanning it outside string literals at paren depth 0:
 - **no string, has digit** — v0.48.3 behavior preserved: strip spaces
   (`sum + i` → `sum+i`, `parse_type_args(bi + 1)` etc. stay arithmetic)
 - **no string, no digit** — if every segment is numeric per
-  `seg_is_numeric` (NUM/FACT vars in scope, `strlen(`/`plant_array_length(`/
+  `seg_is_numeric` (LON/FACT vars in scope, `strlen(`/`plant_array_length(`/
   `_to_long(` prefixes, digits, operators `+-*/%^<>=!&|()`) → strip spaces;
   otherwise fall through to concat
 - **any string** — string concat: each numeric segment is wrapped with
@@ -3513,7 +3513,7 @@ scanning it outside string literals at paren depth 0:
   `_cat(_cat("v: ", _from_long(i)), "!")`
 
 The numeric-identifier set (`nums`) is computed per function: params whose
-`type_base` is NUM/FACT, `CREATE`/`LET` targets (through generics `subst`),
+`type_base` is LON/FACT, `CREATE`/`LET` targets (through generics `subst`),
 async state fields (`nums_from_avars`, ctype `long`/`int`), and closure
 captures (`collect_nums_cb`, including MOVE/REF shadows). It is threaded
 through `generate_body`/`generate_node`/`async_argstr`/`async_emit_step`/
@@ -3533,7 +3533,7 @@ does not end in an explicit `GIVE` (drain would be unreachable there).
 
 ```plant
 ACTION main(),
-  CREATE i(NUM) TO 0.
+  CREATE i(LON) TO 0.
   SEASON i < 20, START worker, "w" + i, 1000. SET i TO i + 1. /SEASON.
 /ACTION.
 ```

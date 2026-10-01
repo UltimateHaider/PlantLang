@@ -22,7 +22,7 @@ ACTION main(),
   CALM,
   /WEATHER.
   SHOW "c".
-  CREATE n(NUM) TO 7.
+  CREATE n(LON) TO 7.
   WEATHER,
     STOP IF n >= 7.
     SHOW "never2".

@@ -1,5 +1,5 @@
 ACTION main(),
-  CREATE n(NUM) TO 42.
+  CREATE n(LON) TO 42.
   SHOW "d=${0}".
   SHOW "d=${1}".
   SHOW "d=${2}".

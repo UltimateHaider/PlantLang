@@ -1,6 +1,6 @@
 # list_ops — FIRST / LAST / SUM list operations (v0.48.38d).
 # FIRST(list) / LAST(list) extract the boundary element ("" for
-# empty lists). SUM(list) aggregates numeric elements: NUM/SCL
+# empty lists). SUM(list) aggregates numeric elements: LON/SCL
 # arrive pre-converted as tx_t text, parsable strings ("2") are
 # converted with a full-consumption scan, and everything else —
 # non-parsable strings, bare booleans (which materialize as the

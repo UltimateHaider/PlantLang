@@ -2,7 +2,7 @@
 # steps (descending lo > hi), runtime step variables, and reverse
 # ranges that must iterate down to and including hi.
 ACTION main(),
-  CREATE s(NUM) TO 0.
+  CREATE s(LON) TO 0.
   CYCLE i FROM 1 TO 10 STEP 2,
     SET s TO s + i.
   /CYCLE.
@@ -17,7 +17,7 @@ ACTION main(),
     SET s3 TO s3 + _from_long(i) + " ".
   /CYCLE.
   SHOW "down3=" + s3.
-  CREATE k(NUM) TO 2.
+  CREATE k(LON) TO 2.
   CREATE s4(TX) TO "".
   CYCLE i FROM 1 TO 6 STEP k,
     SET s4 TO s4 + _from_long(i) + " ".
@@ -28,7 +28,7 @@ ACTION main(),
     SET hit TO "ran".
   /CYCLE.
   SHOW "neg-norun=" + hit.
-  CREATE s5(NUM) TO 0.
+  CREATE s5(LON) TO 0.
   CYCLE i FROM 10 TO 2 STEP -4,
     SET s5 TO s5 + i.
   /CYCLE.

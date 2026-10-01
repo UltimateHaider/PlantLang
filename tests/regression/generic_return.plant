@@ -1,5 +1,5 @@
-# generic_return — generic numeric results (max2[NUM]) are received
-# into a NUM var and SHOW correctly; string instantiation of a plain
+# generic_return — generic numeric results (max2[LON]) are received
+# into a LON var and SHOW correctly; string instantiation of a plain
 # echo passes the string back verbatim.
 ACTION max2[T](a(T), b(T)),
   IF a > b, GIVE a. /IF.
@@ -11,8 +11,8 @@ ACTION echo[T](v(T)),
 /ACTION.
 
 ACTION main()
-  REAP m FROM max2[NUM], 15, 9.
-  CREATE m2(NUM) TO 0.
+  REAP m FROM max2[LON], 15, 9.
+  CREATE m2(LON) TO 0.
   SET m2 TO m.
   SHOW m2.
   SHOW m2 + 1.

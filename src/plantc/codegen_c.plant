@@ -19,7 +19,7 @@ PLANT strings.
 #  Records: [name, ctype, numeric, prim, category].
 # ──────────────────────────────────────────────────────────────
 GLOBAL TYPE_REGISTRY TO [
-    ["NUM",   "long",          "1", "1", "scalar"],
+    ["LON",   "long",          "1", "1", "scalar"],
     ["FACT",  "int",           "1", "1", "scalar"],
     ["UNUM",  "unsigned long", "1", "1", "scalar"],
     ["UFACT", "unsigned int",  "1", "1", "scalar"],
@@ -29,12 +29,13 @@ GLOBAL TYPE_REGISTRY TO [
     ["BYT",   "signed char",   "1", "1", "scalar"],
     ["UBT",   "unsigned char", "1", "1", "scalar"],
     ["SHR",   "short",         "1", "1", "scalar"],
-    ["USH",   "unsigned short","1", "1", "scalar"]
+    ["USH",   "unsigned short","1", "1", "scalar"],
+    ["ULO",   "unsigned long", "1", "1", "scalar"]
 ].
 
 # v0.51.4 — Registry lookup: returns the record for `name`, or empty list.
 ACTION type_info(name(TX)),
-    CREATE i(NUM) TO 0.
+    CREATE i(LON) TO 0.
     CREATE found(LIST) TO plant_list_make(0).
     SEASON i < COUNT TYPE_REGISTRY,
         REAP rec FROM plant_list_get, TYPE_REGISTRY, i.
@@ -81,7 +82,7 @@ ACTION type_is_prim(name(TX)),
 # ──────────────────────────────────────────────────────────────
 #  _substr — extract substring [start, end) from str
 # ──────────────────────────────────────────────────────────────
-ACTION _substr(str(TX), start(NUM), end(NUM)),
+ACTION _substr(str(TX), start(LON), end(LON)),
     GIVE substring(str, start, end).
 /ACTION.
 
@@ -93,7 +94,7 @@ ACTION _handle_func(expr(TX), kw(TX), cfn(TX)),
     IF COUNT parts IS 1, GIVE expr. /IF.
     REAP p0 FROM plant_list_get, parts, 0.
     CREATE res(TX) TO p0.
-    CREATE idx(NUM) TO 1.
+    CREATE idx(LON) TO 1.
     SEASON idx < COUNT parts,
         REAP cur FROM plant_list_get, parts, idx.
         REAP pos FROM find_any, cur, " +)(".
@@ -117,7 +118,7 @@ ACTION _handle_func_paren(expr(TX), kw(TX), cfn(TX)),
     IF COUNT parts IS 1, GIVE expr. /IF.
     REAP p0 FROM plant_list_get, parts, 0.
     CREATE res(TX) TO p0.
-    CREATE idx(NUM) TO 1.
+    CREATE idx(LON) TO 1.
     SEASON idx < COUNT parts,
         REAP p FROM plant_list_get, parts, idx.
         SET res TO res + cfn + "(" + p.
@@ -137,13 +138,13 @@ ACTION _handle_func_paren2(expr(TX), kw(TX), cfn(TX)),
   IF COUNT parts IS 1, GIVE expr. /IF.
   REAP p0 FROM plant_list_get, parts, 0.
   CREATE res(TX) TO p0.
-  CREATE idx(NUM) TO 1.
+  CREATE idx(LON) TO 1.
   SEASON idx < COUNT parts,
     REAP p FROM plant_list_get, parts, idx.
     # Find matching close-paren for first open-paren in p.
-    CREATE dep(NUM) TO 0.
-    CREATE close_pos(NUM) TO -1.
-    CREATE ci(NUM) TO 0.
+    CREATE dep(LON) TO 0.
+    CREATE close_pos(LON) TO -1.
+    CREATE ci(LON) TO 0.
     SEASON ci < LEN(p),
       REAP cc FROM char_at, p, ci.
       IF cc IS "(", SET dep TO dep + 1. /IF.
@@ -157,9 +158,9 @@ ACTION _handle_func_paren2(expr(TX), kw(TX), cfn(TX)),
     IF close_pos IS -1, GIVE res + cfn + "(" + p. /IF.
     REAP inner FROM substring, p, 1, close_pos.
     # Find the top-level comma separating arg1 and arg2.
-    CREATE comma_pos(NUM) TO -1.
-    CREATE ad(NUM) TO 0.
-    CREATE ai(NUM) TO 0.
+    CREATE comma_pos(LON) TO -1.
+    CREATE ad(LON) TO 0.
+    CREATE ai(LON) TO 0.
     SEASON ai < LEN(inner),
       REAP ac FROM char_at, inner, ai.
       IF ac IS "(" OR ac IS "[", SET ad TO ad + 1. /IF.
@@ -196,13 +197,13 @@ ACTION _handle_func_paren3(expr(TX), kw(TX), cfn(TX)),
   IF COUNT parts IS 1, GIVE expr. /IF.
   REAP p0 FROM plant_list_get, parts, 0.
   CREATE res(TX) TO p0.
-  CREATE idx(NUM) TO 1.
+  CREATE idx(LON) TO 1.
   SEASON idx < COUNT parts,
     REAP p FROM plant_list_get, parts, idx.
     # Find matching close-paren for first open-paren in p.
-    CREATE dep(NUM) TO 0.
-    CREATE close_pos(NUM) TO -1.
-    CREATE ci(NUM) TO 0.
+    CREATE dep(LON) TO 0.
+    CREATE close_pos(LON) TO -1.
+    CREATE ci(LON) TO 0.
     SEASON ci < LEN(p),
       REAP cc FROM char_at, p, ci.
       IF cc IS "(", SET dep TO dep + 1. /IF.
@@ -216,9 +217,9 @@ ACTION _handle_func_paren3(expr(TX), kw(TX), cfn(TX)),
     IF close_pos IS -1, GIVE res + cfn + "(" + p. /IF.
     REAP inner FROM substring, p, 1, close_pos.
     # Find the first top-level comma.
-    CREATE comma1(NUM) TO -1.
-    CREATE ad(NUM) TO 0.
-    CREATE ai(NUM) TO 0.
+    CREATE comma1(LON) TO -1.
+    CREATE ad(LON) TO 0.
+    CREATE ai(LON) TO 0.
     SEASON ai < LEN(inner),
       REAP ac FROM char_at, inner, ai.
       IF ac IS "(" OR ac IS "[", SET ad TO ad + 1. /IF.
@@ -234,7 +235,7 @@ ACTION _handle_func_paren3(expr(TX), kw(TX), cfn(TX)),
       SET res TO res + cfn + "(" + inner + ")" + substring(p, close_pos + 1, LEN(p)).
     ELSE.
       # Find second comma after first
-      CREATE comma2(NUM) TO -1.
+      CREATE comma2(LON) TO -1.
       SET ad TO 0.
       SET ai TO comma1 + 1.
       SEASON ai < LEN(inner),
@@ -278,12 +279,12 @@ ACTION _handle_func_paren4(expr(TX), kw(TX), cfn(TX)),
   IF COUNT parts IS 1, GIVE expr. /IF.
   REAP p0 FROM plant_list_get, parts, 0.
   CREATE res(TX) TO p0.
-  CREATE idx(NUM) TO 1.
+  CREATE idx(LON) TO 1.
   SEASON idx < COUNT parts,
     REAP p FROM plant_list_get, parts, idx.
-    CREATE dep(NUM) TO 0.
-    CREATE close_pos(NUM) TO -1.
-    CREATE ci(NUM) TO 0.
+    CREATE dep(LON) TO 0.
+    CREATE close_pos(LON) TO -1.
+    CREATE ci(LON) TO 0.
     SEASON ci < LEN(p),
       REAP cc FROM char_at, p, ci.
       IF cc IS "(", SET dep TO dep + 1. /IF.
@@ -297,9 +298,9 @@ ACTION _handle_func_paren4(expr(TX), kw(TX), cfn(TX)),
     IF close_pos IS -1, GIVE res + cfn + "(" + p. /IF.
     REAP inner FROM substring, p, 1, close_pos.
     # Find first comma
-    CREATE comma1(NUM) TO -1.
-    CREATE ad(NUM) TO 0.
-    CREATE ai(NUM) TO 0.
+    CREATE comma1(LON) TO -1.
+    CREATE ad(LON) TO 0.
+    CREATE ai(LON) TO 0.
     SEASON ai < LEN(inner),
       REAP ac FROM char_at, inner, ai.
       IF ac IS "(" OR ac IS "[", SET ad TO ad + 1. /IF.
@@ -314,7 +315,7 @@ ACTION _handle_func_paren4(expr(TX), kw(TX), cfn(TX)),
       SET res TO res + cfn + "(" + inner + ")" + substring(p, close_pos + 1, LEN(p)).
     ELSE.
       # Find second comma
-      CREATE comma2(NUM) TO -1.
+      CREATE comma2(LON) TO -1.
       SET ad TO 0.
       SET ai TO comma1 + 1.
       SEASON ai < LEN(inner),
@@ -335,7 +336,7 @@ ACTION _handle_func_paren4(expr(TX), kw(TX), cfn(TX)),
         SET res TO res + cfn + "(" + wa1 + ", " + wa2 + ")" + substring(p, close_pos + 1, LEN(p)).
       ELSE.
         # Find third comma
-        CREATE comma3(NUM) TO -1.
+        CREATE comma3(LON) TO -1.
         SET ad TO 0.
         SET ai TO comma2 + 1.
         SEASON ai < LEN(inner),
@@ -383,12 +384,12 @@ ACTION _handle_func_paren5(expr(TX), kw(TX), cfn(TX)),
   IF COUNT parts IS 1, GIVE expr. /IF.
   REAP p0 FROM plant_list_get, parts, 0.
   CREATE res(TX) TO p0.
-  CREATE idx(NUM) TO 1.
+  CREATE idx(LON) TO 1.
   SEASON idx < COUNT parts,
     REAP p FROM plant_list_get, parts, idx.
-    CREATE dep(NUM) TO 0.
-    CREATE close_pos(NUM) TO -1.
-    CREATE ci(NUM) TO 0.
+    CREATE dep(LON) TO 0.
+    CREATE close_pos(LON) TO -1.
+    CREATE ci(LON) TO 0.
     SEASON ci < LEN(p),
       REAP cc FROM char_at, p, ci.
       IF cc IS "(", SET dep TO dep + 1. /IF.
@@ -402,9 +403,9 @@ ACTION _handle_func_paren5(expr(TX), kw(TX), cfn(TX)),
     IF close_pos IS -1, GIVE res + cfn + "(" + p. /IF.
     REAP inner FROM substring, p, 1, close_pos.
     # Find first comma
-    CREATE comma1(NUM) TO -1.
-    CREATE ad(NUM) TO 0.
-    CREATE ai(NUM) TO 0.
+    CREATE comma1(LON) TO -1.
+    CREATE ad(LON) TO 0.
+    CREATE ai(LON) TO 0.
     SEASON ai < LEN(inner),
       REAP ac FROM char_at, inner, ai.
       IF ac IS "(" OR ac IS "[", SET ad TO ad + 1. /IF.
@@ -419,7 +420,7 @@ ACTION _handle_func_paren5(expr(TX), kw(TX), cfn(TX)),
       SET res TO res + cfn + "(" + inner + ")" + substring(p, close_pos + 1, LEN(p)).
     ELSE.
       # Find second comma
-      CREATE comma2(NUM) TO -1.
+      CREATE comma2(LON) TO -1.
       SET ad TO 0.
       SET ai TO comma1 + 1.
       SEASON ai < LEN(inner),
@@ -440,7 +441,7 @@ ACTION _handle_func_paren5(expr(TX), kw(TX), cfn(TX)),
         SET res TO res + cfn + "(" + wa1 + ", " + wa2 + ")" + substring(p, close_pos + 1, LEN(p)).
       ELSE.
         # Find third comma
-        CREATE comma3(NUM) TO -1.
+        CREATE comma3(LON) TO -1.
         SET ad TO 0.
         SET ai TO comma2 + 1.
         SEASON ai < LEN(inner),
@@ -463,7 +464,7 @@ ACTION _handle_func_paren5(expr(TX), kw(TX), cfn(TX)),
           SET res TO res + cfn + "(" + wa1 + ", " + wa2 + ", " + wa3 + ")" + substring(p, close_pos + 1, LEN(p)).
         ELSE.
           # Find fourth comma
-          CREATE comma4(NUM) TO -1.
+          CREATE comma4(LON) TO -1.
           SET ad TO 0.
           SET ai TO comma3 + 1.
           SEASON ai < LEN(inner),
@@ -510,23 +511,23 @@ ACTION _handle_func_paren5(expr(TX), kw(TX), cfn(TX)),
 # tx_t constructor.
 ACTION _is_num_literal(s(TX)),
   CREATE comp(TX) TO "".
-  CREATE q(NUM) TO 0.
-  CREATE n(NUM) TO LEN(s).
+  CREATE q(LON) TO 0.
+  CREATE n(LON) TO LEN(s).
   SEASON q < n,
     REAP cq FROM char_at, s, q.
     IF cq ISNT " ", SET comp TO comp + cq. /IF.
     SET q TO q + 1.
   /SEASON.
-  CREATE m(NUM) TO LEN(comp).
+  CREATE m(LON) TO LEN(comp).
   IF m IS 0, GIVE "0". /IF.
-  CREATE i(NUM) TO 0.
+  CREATE i(LON) TO 0.
   IF char_at(comp, 0) IS "-",
     SET i TO 1.
     IF m IS 1, GIVE "0". /IF.
   /IF.
-  CREATE digits(NUM) TO 0.
-  CREATE dots(NUM) TO 0.
-  CREATE ok(NUM) TO 1.
+  CREATE digits(LON) TO 0.
+  CREATE dots(LON) TO 0.
+  CREATE ok(LON) TO 1.
   SEASON i < m,
     REAP c3 FROM char_at, comp, i.
     IF c3 IS ".",
@@ -560,10 +561,10 @@ ACTION _wrap_math_args(e(TX), cfn(TX)),
   # pointer values (hpos=1 → atol(*(char*)1) → segfault). The compat
   # converter checks (uintptr_t)v < 4096 first; registered as a known
   # numeric call in seg_is_numeric so '+' stays arithmetic.
-  CREATE open(NUM) TO plant_rw_arg_long(hpos) + LEN(cfn).
-  CREATE i(NUM) TO open + 1.
-  CREATE dep(NUM) TO 1.
-  CREATE close(NUM) TO -1.
+  CREATE open(LON) TO plant_rw_arg_long(hpos) + LEN(cfn).
+  CREATE i(LON) TO open + 1.
+  CREATE dep(LON) TO 1.
+  CREATE close(LON) TO -1.
   SEASON i < LEN(e),
     REAP ch FROM char_at, e, i.
     IF ch IS "(", SET dep TO dep + 1. /IF.
@@ -578,9 +579,9 @@ ACTION _wrap_math_args(e(TX), cfn(TX)),
   REAP inner FROM substring, e, open + 1, close.
   CREATE parts(LIST) TO plant_list_make(0).
   CREATE cur(TX) TO "".
-  CREATE d2(NUM) TO 0.
-  CREATE k(NUM) TO 0.
-  CREATE mm(NUM) TO LEN(inner).
+  CREATE d2(LON) TO 0.
+  CREATE k(LON) TO 0.
+  CREATE mm(LON) TO LEN(inner).
   SEASON k < mm,
     REAP ck FROM char_at, inner, k.
     IF ck IS "(" OR ck IS "[", SET d2 TO d2 + 1. /IF.
@@ -594,8 +595,8 @@ ACTION _wrap_math_args(e(TX), cfn(TX)),
   /SEASON.
   PUT cur INTO parts.
   CREATE res(TX) TO "".
-  CREATE idx(NUM) TO 0.
-  CREATE cn(NUM) TO COUNT parts.
+  CREATE idx(LON) TO 0.
+  CREATE cn(LON) TO COUNT parts.
   SEASON idx < cn,
     REAP p FROM plant_list_get, parts, idx.
     REAP isnum FROM _is_num_literal, p.
@@ -622,8 +623,8 @@ ACTION _math_func_paren(expr(TX), kw(TX), cfn(TX)),
 
 # _trim_sp — leading/trailing space strip (small local helper).
 ACTION _trim_sp(s(TX)),
-  CREATE st(NUM) TO 0.
-  CREATE en(NUM) TO LEN(s) - 1.
+  CREATE st(LON) TO 0.
+  CREATE en(LON) TO LEN(s) - 1.
   SEASON st <= en,
     REAP c FROM char_at, s, st.
     IF c ISNT " ", BREAK 0. /IF.
@@ -643,16 +644,16 @@ ACTION _trim_sp(s(TX)),
 # across () and [] so list-literal arguments do not inflate the count.
 ACTION _kw_commacount(expr(TX), kw(TX)),
   REAP h1 FROM _find_substr, expr, kw + " (".
-  CREATE open(NUM) TO -1.
+  CREATE open(LON) TO -1.
   IF h1 ISNT -1, SET open TO h1 + LEN(kw) + 1. /IF.
   IF open IS -1,
     REAP h2 FROM _find_substr, expr, kw + "(".
     IF h2 ISNT -1, SET open TO h2 + LEN(kw). /IF.
   /IF.
   IF open IS -1, GIVE "-1". /IF.
-  CREATE i(NUM) TO open + 1.
-  CREATE dep(NUM) TO 1.
-  CREATE commas(NUM) TO 0.
+  CREATE i(LON) TO open + 1.
+  CREATE dep(LON) TO 1.
+  CREATE commas(LON) TO 0.
   SEASON i < LEN(expr),
     REAP ch FROM char_at, expr, i.
     IF ch IS "(" OR ch IS "[", SET dep TO dep + 1. /IF.
@@ -708,9 +709,9 @@ ACTION _handle_range(e(TX)),
 # plant_range_list(lhs, rhs) in place. Returns e unchanged when no
 # range is present (compared via str_eq by the caller).
 ACTION _range_once(e(TX)),
-  CREATE i(NUM) TO 0.
-  CREATE dep(NUM) TO 0.
-  CREATE hit(NUM) TO -1.
+  CREATE i(LON) TO 0.
+  CREATE dep(LON) TO 0.
+  CREATE hit(LON) TO -1.
   CREATE instr(FACT) TO FALSE.
   CREATE wasin(FACT) TO FALSE.
   CREATE qch(TX) TO "\"".
@@ -743,8 +744,8 @@ ACTION _range_once(e(TX)),
   /SEASON.
   IF hit IS -1, GIVE e. /IF.
   # left boundary: nearest depth-matched '(', '[' or ',' before hit
-  CREATE p(NUM) TO hit - 1.
-  CREATE cur(NUM) TO dep.
+  CREATE p(LON) TO hit - 1.
+  CREATE cur(LON) TO dep.
   SEASON p >= 0,
     REAP lc FROM char_at, e, p.
     IF lc IS ")" OR lc IS "]", SET cur TO cur + 1. /IF.
@@ -755,11 +756,11 @@ ACTION _range_once(e(TX)),
     IF lc IS "," AND cur IS dep, BREAK 0. /IF.
     SET p TO p - 1.
   /SEASON.
-  CREATE lstart(NUM) TO p + 1.
+  CREATE lstart(LON) TO p + 1.
   # right boundary: nearest depth-matched ',', ')' or ']' after hit+2
-  CREATE k(NUM) TO hit + 2.
-  CREATE rend(NUM) TO LEN(e).
-  CREATE cur2(NUM) TO dep.
+  CREATE k(LON) TO hit + 2.
+  CREATE rend(LON) TO LEN(e).
+  CREATE cur2(LON) TO dep.
   SEASON k < LEN(e),
     REAP rc FROM char_at, e, k.
     IF rc IS "(" OR rc IS "[", SET cur2 TO cur2 + 1. /IF.
@@ -800,12 +801,12 @@ ACTION _range_once(e(TX)),
 # single character of its delimiter set — NOT a substring — so a
 # dedicated helper is required here.)
 ACTION _find_substr(s(TX), needle(TX)),
-  CREATE nlen(NUM) TO LEN(needle).
+  CREATE nlen(LON) TO LEN(needle).
   IF nlen IS 0, GIVE 0. /IF.
-  CREATE slen(NUM) TO LEN(s).
-  CREATE fi(NUM) TO 0.
+  CREATE slen(LON) TO LEN(s).
+  CREATE fi(LON) TO 0.
   SEASON fi + nlen <= slen,
-    CREATE bd(NUM) TO fi + nlen + 0.
+    CREATE bd(LON) TO fi + nlen + 0.
     REAP seg FROM substring, s, fi, bd.
     IF str_eq(seg, needle) IS "1", GIVE fi. /IF.
     SET fi TO fi + 1.
@@ -823,10 +824,10 @@ ACTION _find_substr(s(TX), needle(TX)),
 ACTION _quote_cond_arg(e(TX), cfn(TX)),
     REAP cpos FROM _find_substr, e, cfn + "(".
     IF cpos IS -1, GIVE e. /IF.
-    CREATE dep(NUM) TO 0.
-    CREATE qi(NUM) TO LEN(e) - 2.
+    CREATE dep(LON) TO 0.
+    CREATE qi(LON) TO LEN(e) - 2.
     CREATE qch(TX) TO "".
-    CREATE qcomma(NUM) TO -1.
+    CREATE qcomma(LON) TO -1.
     SEASON qi > cpos,
         REAP qch FROM char_at, e, qi.
         IF qch IS ")", SET dep TO dep + 1. /IF.
@@ -877,14 +878,14 @@ ACTION _storm_inject(expr(TX)),
     IF COUNT sparts IS 1, GIVE expr. /IF.
     REAP s0 FROM plant_list_get, sparts, 0.
     CREATE sres(TX) TO s0.
-    CREATE si2(NUM) TO 1.
+    CREATE si2(LON) TO 1.
     CREATE sp(TX) TO "".
     SEASON si2 < COUNT sparts,
         REAP sp FROM plant_list_get, sparts, si2.
         # identifier-guard: the char immediately before the split point
         # belongs to the previous part (sres). A letter/digit/_ there
         # means "storm (" is inside a longer identifier, not a call.
-        CREATE sisid(NUM) TO 0.
+        CREATE sisid(LON) TO 0.
         IF LEN(sres) > 0,
             CREATE slast(TX) TO "".
             REAP slast FROM char_at, sres, LEN(sres) - 1.
@@ -892,12 +893,12 @@ ACTION _storm_inject(expr(TX)),
             IF sip ISNT -1, SET sisid TO 1. /IF.
         /IF.
         IF sisid IS 0,
-            CREATE sdep(NUM) TO 0.
-            CREATE sinstr(NUM) TO 0.
+            CREATE sdep(LON) TO 0.
+            CREATE sinstr(LON) TO 0.
             CREATE sch(TX) TO "".
-            CREATE j2(NUM) TO 0.
-            CREATE sfin(NUM) TO 0.
-            CREATE smat(NUM) TO 0.
+            CREATE j2(LON) TO 0.
+            CREATE sfin(LON) TO 0.
+            CREATE smat(LON) TO 0.
             SEASON j2 < LEN(sp) AND sfin IS 0,
                 REAP sch FROM char_at, sp, j2.
                 IF sch IS "\"", SET sinstr TO 1 - sinstr. /IF.
@@ -943,7 +944,7 @@ ACTION _storm_inject(expr(TX)),
 # ──────────────────────────────────────────────────────────────
 
 ACTION _is_int(t(TX)),
-    CREATE k(NUM) TO 0.
+    CREATE k(LON) TO 0.
     CREATE ch(TX) TO "".
     IF LEN(t) IS 0, GIVE 0. /IF.
     IF t IS "-", GIVE 0. /IF.
@@ -962,10 +963,10 @@ ACTION _is_int(t(TX)),
 # single dot, with a digit on each side (1.5 yes; .5, 5., 1.2.3 no).
 # v0.49.6 — routes [1.5, 2.7] elements to _from_double.
 ACTION _is_decimal(t(TX)),
-    CREATE k(NUM) TO 0.
+    CREATE k(LON) TO 0.
     CREATE ch(TX) TO "".
-    CREATE dots(NUM) TO 0.
-    CREATE digs(NUM) TO 0.
+    CREATE dots(LON) TO 0.
+    CREATE digs(LON) TO 0.
     IF LEN(t) IS 0, GIVE 0. /IF.
     SEASON k < LEN(t),
         REAP ch FROM char_at, t, k.
@@ -1092,11 +1093,11 @@ ACTION _enc_el(elt(TX), nums(LIST), evars(LIST)),
 ACTION _seg_list(inner(TX), nums(LIST), evars(LIST)),
     CREATE els(LIST) TO plant_list_make(0).
     CREATE cur(TX) TO "".
-    CREATE dep(NUM) TO 0.
-    CREATE ist(NUM) TO 0.
-    CREATE ii(NUM) TO 0.
+    CREATE dep(LON) TO 0.
+    CREATE ist(LON) TO 0.
+    CREATE ii(LON) TO 0.
     CREATE ch(TX) TO "".
-    CREATE esc2(NUM) TO 0.
+    CREATE esc2(LON) TO 0.
     SEASON ii < LEN(inner),
         SET esc2 TO 0.
         REAP ch FROM char_at, inner, ii.
@@ -1131,7 +1132,7 @@ ACTION _seg_list(inner(TX), nums(LIST), evars(LIST)),
     CREATE cnt(TX) TO "".
     REAP cnt FROM _from_long, COUNT els.
     CREATE res(TX) TO "plant_list_make(" + cnt + ", ".
-    CREATE sii(NUM) TO 0.
+    CREATE sii(LON) TO 0.
     SEASON sii < COUNT els,
         REAP elx FROM plant_list_get, els, sii.
         SET res TO res + elx.
@@ -1147,14 +1148,14 @@ ACTION _list_literal(expr(TX), nums(LIST), evars(LIST)),
     REAP chk0 FROM find_any, expr, "[".
     IF chk0 IS -1, GIVE expr. /IF.
     CREATE out(TX) TO "".
-    CREATE bd(NUM) TO 0.
-    CREATE inst(NUM) TO 0.
-    CREATE ls(NUM) TO 0.
-    CREATE lc(NUM) TO 0.
+    CREATE bd(LON) TO 0.
+    CREATE inst(LON) TO 0.
+    CREATE ls(LON) TO 0.
+    CREATE lc(LON) TO 0.
     CREATE lst(TX) TO "".
-    CREATE li(NUM) TO 0.
+    CREATE li(LON) TO 0.
     CREATE ch(TX) TO "".
-    CREATE lesc(NUM) TO 0.
+    CREATE lesc(LON) TO 0.
     SEASON li < LEN(expr),
         SET lc TO 0.
         SET lesc TO 0.
@@ -1206,7 +1207,7 @@ ACTION _list_literal(expr(TX), nums(LIST), evars(LIST)),
             # char right before "[" may be a space. `)` / `]` also
             # block (call-result / chained indexing is not a list).
             CREATE pvc(TX) TO "".
-            CREATE pj(NUM) TO li - 1.
+            CREATE pj(LON) TO li - 1.
             CREATE pch(TX) TO "".
             SEASON pj >= 0,
                 REAP pch FROM char_at, expr, pj.
@@ -1258,11 +1259,11 @@ ACTION _list_literal(expr(TX), nums(LIST), evars(LIST)),
 ACTION _seg_map(inner(TX), nums(LIST), evars(LIST)),
     CREATE acc(TX) TO "plant_map_create()".
     CREATE cur(TX) TO "".
-    CREATE dep(NUM) TO 0.
-    CREATE ist(NUM) TO 0.
-    CREATE ii(NUM) TO 0.
+    CREATE dep(LON) TO 0.
+    CREATE ist(LON) TO 0.
+    CREATE ii(LON) TO 0.
     CREATE ch(TX) TO "".
-    CREATE esc2(NUM) TO 0.
+    CREATE esc2(LON) TO 0.
     SEASON ii < LEN(inner),
         SET esc2 TO 0.
         REAP ch FROM char_at, inner, ii.
@@ -1296,9 +1297,9 @@ ACTION _seg_map(inner(TX), nums(LIST), evars(LIST)),
 # _find_colon — index of the first top-level ":" (quote-, paren-,
 # bracket- and brace-aware); -1 when absent.
 ACTION _find_colon(ptext(TX)),
-    CREATE dep(NUM) TO 0.
-    CREATE ist(NUM) TO 0.
-    CREATE ii(NUM) TO 0.
+    CREATE dep(LON) TO 0.
+    CREATE ist(LON) TO 0.
+    CREATE ii(LON) TO 0.
     CREATE ch(TX) TO "".
     SEASON ii < LEN(ptext),
         REAP ch FROM char_at, ptext, ii.
@@ -1349,11 +1350,11 @@ ACTION _union_init(expr(TX), nums(LIST), evars(LIST)),
     IF ep IS -1, GIVE expr. /IF.
     REAP before FROM substring, expr, 0, lp.
     REAP before FROM trim, before.
-    CREATE blen(NUM) TO LEN(before).
+    CREATE blen(LON) TO LEN(before).
     IF blen IS 0, GIVE expr. /IF.
     REAP bc FROM char_at, before, blen - 1.
     IF bc IS ")" OR bc IS "]" OR bc IS "\"", GIVE expr. /IF.
-    CREATE bi(NUM) TO blen - 1.
+    CREATE bi(LON) TO blen - 1.
     SEASON bi >= 0,
         REAP bc2 FROM char_at, before, bi.
         IF bc2 IS " " OR bc2 IS "(" OR bc2 IS "," OR bc2 IS "+" OR bc2 IS "-" OR bc2 IS "*" OR bc2 IS "=", GIVE expr. /IF.
@@ -1379,14 +1380,14 @@ ACTION _map_literal(expr(TX), nums(LIST), evars(LIST)),
     REAP chk0 FROM find_any, expr, "{".
     IF chk0 IS -1, GIVE expr. /IF.
     CREATE out(TX) TO "".
-    CREATE bd(NUM) TO 0.
-    CREATE inst(NUM) TO 0.
-    CREATE ls(NUM) TO 0.
-    CREATE lc(NUM) TO 0.
+    CREATE bd(LON) TO 0.
+    CREATE inst(LON) TO 0.
+    CREATE ls(LON) TO 0.
+    CREATE lc(LON) TO 0.
     CREATE lst(TX) TO "".
-    CREATE li(NUM) TO 0.
+    CREATE li(LON) TO 0.
     CREATE ch(TX) TO "".
-    CREATE lesc(NUM) TO 0.
+    CREATE lesc(LON) TO 0.
     SEASON li < LEN(expr),
         SET lc TO 0.
         SET lesc TO 0.
@@ -1438,7 +1439,7 @@ ACTION _map_literal(expr(TX), nums(LIST), evars(LIST)),
             # before "{" may be a space. `)` / `]` also block
             # (call-result / chained access is not a map literal).
             CREATE pvc(TX) TO "".
-            CREATE pj(NUM) TO li - 1.
+            CREATE pj(LON) TO li - 1.
             CREATE pch(TX) TO "".
             SEASON pj >= 0,
                 REAP pch FROM char_at, expr, pj.
@@ -1495,7 +1496,7 @@ ACTION _map_literal(expr(TX), nums(LIST), evars(LIST)),
 # are never mistaken for raw numeric literals)
 # ──────────────────────────────────────────────────────────────
 ACTION is_identifier(tok(TX)),
-  CREATE i0(NUM) TO 0.
+  CREATE i0(LON) TO 0.
   CREATE ch0(TX) TO "".
   IF LEN(tok) IS 0, GIVE 0. /IF.
   REAP ch0 FROM char_at, tok, 0.
@@ -1532,7 +1533,7 @@ ACTION seg_has_literal_digit(seg(TX)),
   REAP sid FROM is_identifier, seg.
   IF sid IS 1, GIVE 0. /IF.
   REAP sb FROM strings:REPLACE, seg, " ", "".
-  CREATE si2(NUM) TO 0.
+  CREATE si2(LON) TO 0.
   CREATE sc2(TX) TO "".
   SEASON si2 < LEN(sb),
     REAP sc2 FROM char_at, sb, si2.
@@ -1594,10 +1595,10 @@ ACTION seg_is_numeric(seg(TX), nums(LIST)),
   IF pre14 IS "plant_tensor_ndim(", GIVE 1. /IF.
   REAP pre15 FROM substring, sb, 0, 18.
   IF pre15 IS "plant_tensor_size(", GIVE 1. /IF.
-  CREATE si(NUM) TO 0.
+  CREATE si(LON) TO 0.
   CREATE sc(TX) TO "".
   CREATE tok(TX) TO "".
-  CREATE toknum(NUM) TO 1.
+  CREATE toknum(LON) TO 1.
   SEASON si < LEN(sb),
     REAP sc FROM char_at, sb, si.
     REAP isid FROM find_any, sc, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_".
@@ -1686,8 +1687,8 @@ ACTION is_numeric_type(t(TX)),
 
 # _find_interp — 1 when t contains "${"
 ACTION _find_interp(t(TX)),
-  CREATE i(NUM) TO 0.
-  CREATE n(NUM) TO LEN(t).
+  CREATE i(LON) TO 0.
+  CREATE n(LON) TO LEN(t).
   SEASON i < n - 1,
     REAP c FROM char_at, t, i.
     IF c IS "$" AND char_at(t, i + 1) IS "{", GIVE 1. /IF.
@@ -1702,8 +1703,8 @@ ACTION _find_interp(t(TX)),
 # doesn't take its has_digit raw-+ shortcut on pure var+var concats.
 ACTION _unescape(s(TX)),
   CREATE rr(TX) TO "".
-  CREATE ii(NUM) TO 0.
-  CREATE nn(NUM) TO LEN(s).
+  CREATE ii(LON) TO 0.
+  CREATE nn(LON) TO LEN(s).
   SEASON ii < nn,
     REAP cc FROM char_at, s, ii.
     IF cc IS "\\" AND ii + 1 < nn,
@@ -1724,7 +1725,7 @@ ACTION _unescape(s(TX)),
 # Used at the _from_long wrap sites to select the _from_digit fast
 # path for single-digit literal segments.
 ACTION _is_digit_lit(s(TX)),
-  CREATE dn(NUM) TO 0.
+  CREATE dn(LON) TO 0.
   CREATE dc(TX) TO "".
   IF LEN(s) ISNT 1, GIVE 0. /IF.
   REAP dc FROM char_at, s, 0.
@@ -1738,7 +1739,7 @@ ACTION _is_digit_lit(s(TX)),
 # allocations and memcpys on interpolation-heavy expressions. A 2-part
 # chain keeps the plain _cat form (identical emission to before).
 ACTION _emit_cat_chain(parts(LIST)),
-  CREATE cn(NUM) TO COUNT parts.
+  CREATE cn(LON) TO COUNT parts.
   CREATE co(TX) TO "".
   CREATE a0(TX) TO "".
   CREATE a1(TX) TO "".
@@ -1766,9 +1767,9 @@ ACTION _emit_cat_chain(parts(LIST)),
     SET co TO "_cat4(" + a0 + ", " + a1 + ", " + a2 + ", " + a3 + ")".
   /IF.
   IF cn > 4,
-    CREATE cix(NUM) TO 0.
+    CREATE cix(LON) TO 0.
     CREATE cres(TX) TO "".
-    CREATE rem(NUM) TO 0.
+    CREATE rem(LON) TO 0.
     REAP a0 FROM plant_list_get, parts, 0.
     REAP a1 FROM plant_list_get, parts, 1.
     REAP a2 FROM plant_list_get, parts, 2.
@@ -1801,8 +1802,8 @@ ACTION _emit_cat_chain(parts(LIST)),
 # contains ${...}; copy everything else unchanged
 ACTION _interp_to_cat(expr(TX), nums(LIST), evars(LIST)),
   CREATE res(TX) TO "".
-  CREATE i(NUM) TO 0.
-  CREATE n(NUM) TO LEN(expr).
+  CREATE i(LON) TO 0.
+  CREATE n(LON) TO LEN(expr).
   CREATE ch(TX) TO "".
   SEASON i < n,
     REAP ch FROM char_at, expr, i.
@@ -1811,8 +1812,8 @@ ACTION _interp_to_cat(expr(TX), nums(LIST), evars(LIST)),
       SET i TO i + 1.
       CONTINUE.
     /IF.
-    CREATE j(NUM) TO i + 1.
-    CREATE dn(NUM) TO 0.
+    CREATE j(LON) TO i + 1.
+    CREATE dn(LON) TO 0.
     SEASON dn IS 0 AND j < n,
       REAP cj FROM char_at, expr, j.
       IF cj IS "\\",
@@ -1847,9 +1848,9 @@ ACTION _interp_to_cat(expr(TX), nums(LIST), evars(LIST)),
 # surrounding expression supplies the type.
 ACTION _expand_bare(t(TX), nums(LIST), evars(LIST)),
   CREATE res(TX) TO "".
-  CREATE i(NUM) TO 0.
-  CREATE n(NUM) TO LEN(t).
-  CREATE instr(NUM) TO 0.
+  CREATE i(LON) TO 0.
+  CREATE n(LON) TO LEN(t).
+  CREATE instr(LON) TO 0.
   SEASON i < n,
     REAP c FROM char_at, t, i.
     IF c IS "\"",
@@ -1876,8 +1877,8 @@ ACTION _expand_bare(t(TX), nums(LIST), evars(LIST)),
       CONTINUE.
     /IF.
     IF instr IS 0 AND c IS "$" AND i + 1 < n AND char_at(t, i + 1) IS "{",
-      CREATE d(NUM) TO 1.
-      CREATE j(NUM) TO i + 2.
+      CREATE d(LON) TO 1.
+      CREATE j(LON) TO i + 2.
       SEASON d > 0 AND j < n,
         REAP c2 FROM char_at, t, j.
         IF c2 IS "\\",
@@ -1917,11 +1918,11 @@ ACTION _expand_bare(t(TX), nums(LIST), evars(LIST)),
 ACTION _interp_expand(raw(TX), nums(LIST), evars(LIST)),
   CREATE content(TX) TO substring(raw, 1, LEN(raw) - 1).
   CREATE segs(LIST) TO plant_list_make(0).
-  CREATE i(NUM) TO 0.
-  CREATE n(NUM) TO LEN(content).
+  CREATE i(LON) TO 0.
+  CREATE n(LON) TO LEN(content).
   SEASON TRUE,
-    CREATE fnd(NUM) TO -1.
-    CREATE k(NUM) TO i.
+    CREATE fnd(LON) TO -1.
+    CREATE k(LON) TO i.
     SEASON k < n,
       REAP ck FROM char_at, content, k.
       # v0.48.22-patch4 — escaped marker: a `${` preceded by a
@@ -1944,8 +1945,8 @@ ACTION _interp_expand(raw(TX), nums(LIST), evars(LIST)),
     /IF.
     REAP lit FROM substring, content, i, fnd.
     PUT lit INTO segs.
-    CREATE d2(NUM) TO 1.
-    CREATE j2(NUM) TO fnd + 2.
+    CREATE d2(LON) TO 1.
+    CREATE j2(LON) TO fnd + 2.
     CREATE inner(TX) TO "".
     SEASON d2 > 0 AND j2 < n,
       REAP cj2 FROM char_at, content, j2.
@@ -1980,8 +1981,8 @@ ACTION _interp_expand(raw(TX), nums(LIST), evars(LIST)),
     /IF.
   /SEASON.
   CREATE fparts(LIST) TO plant_list_make(0).
-  CREATE si2(NUM) TO 0.
-  CREATE is_lit(NUM) TO 1.
+  CREATE si2(LON) TO 0.
+  CREATE is_lit(LON) TO 1.
   CREATE seg(TX) TO "".
   CREATE ws(TX) TO "".
   CREATE seg2(TX) TO "".
@@ -2033,18 +2034,18 @@ ACTION _interp_expand(raw(TX), nums(LIST), evars(LIST)),
 ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
     REAP expr FROM _interp_to_cat, expr, nums, evars.
     CREATE parts(LIST) TO plant_list_make(0).
-    CREATE depth(NUM) TO 0.
-    CREATE instr(NUM) TO 0.
-    CREATE i(NUM) TO 0.
+    CREATE depth(LON) TO 0.
+    CREATE instr(LON) TO 0.
+    CREATE i(LON) TO 0.
     CREATE ch(TX) TO "".
     CREATE c0(TX) TO "".
     CREATE c1(TX) TO "".
     CREATE seg(TX) TO "".
-    CREATE start(NUM) TO 0.
+    CREATE start(LON) TO 0.
     CREATE res(TX) TO "".
-    CREATE pi(NUM) TO 0.
+    CREATE pi(LON) TO 0.
     CREATE pel(TX) TO "".
-    CREATE has_str(NUM) TO 0.
+    CREATE has_str(LON) TO 0.
     # scan for top-level " + " (outside parens, brackets, and
     # strings) and split there. v0.49.6 — [ and { join the depth
     # tracking so a whole [ ... ] / { ... } literal passes through
@@ -2074,9 +2075,9 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
     # _map_get(...) segments (parser-emitted a.b.c lookups) must not
     # force the _cat path when a numeric literal is also present
     # (m.count + 1 is long arithmetic)
-    CREATE hp9(NUM) TO 0.
+    CREATE hp9(LON) TO 0.
     CREATE hseg(TX) TO "".
-    CREATE hqb(NUM) TO 0.
+    CREATE hqb(LON) TO 0.
     CREATE hqc(TX) TO "".
     CREATE hp1(TX) TO "".
     # a top-level segment is a string when it starts with a quote
@@ -2114,8 +2115,8 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
     # "1" in "p5 + 1") and no quoted string → raw numeric C "+", the
     # v0.48.3 shortcut REAP'd index vars (tx_t holding bit patterns)
     # depend on. Identifier digits alone (ccode + eb2) never fire it.
-    CREATE has_lit(NUM) TO 0.
-    CREATE ni9(NUM) TO 0.
+    CREATE has_lit(LON) TO 0.
+    CREATE ni9(LON) TO 0.
     CREATE p9(TX) TO "".
     SEASON ni9 < COUNT parts,
         REAP p9 FROM plant_list_get, parts, ni9.
@@ -2132,7 +2133,7 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
         # top-level field segment wraps in _to_long before the raw
         # "+" shortcut (n + 1 stays long arithmetic; n + s stays _cat)
         CREATE wparts(LIST) TO plant_list_make(0).
-        CREATE wi2(NUM) TO 0.
+        CREATE wi2(LON) TO 0.
         CREATE wseg(TX) TO "".
         SEASON wi2 < COUNT parts,
             REAP wseg FROM plant_list_get, parts, wi2.
@@ -2149,7 +2150,7 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
         # digit-free vars: the stale bootstrap compiler takes its
         # has_digit raw-+ shortcut on pure var+var concatenations
         CREATE wres(TX) TO "".
-        CREATE wi3(NUM) TO 0.
+        CREATE wi3(LON) TO 0.
         CREATE wsegb(TX) TO "".
         SEASON wi3 < COUNT wparts,
             REAP wsegb FROM plant_list_get, wparts, wi3.
@@ -2165,8 +2166,8 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
     # concatenate (identifiers with digits like eb2 route to _cat,
     # v0.48.20-patch).
     IF has_str IS 0,
-        CREATE allnum(NUM) TO 1.
-        CREATE ni0(NUM) TO 0.
+        CREATE allnum(LON) TO 1.
+        CREATE ni0(LON) TO 0.
         CREATE pe0(TX) TO "".
         SEASON ni0 < COUNT parts,
             REAP pe0 FROM plant_list_get, parts, ni0.
@@ -2182,9 +2183,9 @@ ACTION _handle_cat(expr(TX), nums(LIST), evars(LIST)),
     /IF.
     PUT seg INTO parts.
     CREATE nparts(LIST) TO plant_list_make(0).
-    CREATE ni(NUM) TO 0.
+    CREATE ni(LON) TO 0.
     CREATE pel2(TX) TO "".
-    CREATE dgl(NUM) TO 0.
+    CREATE dgl(LON) TO 0.
     SEASON ni < COUNT parts,
         REAP pel2 FROM plant_list_get, parts, ni.
         REAP sgn FROM seg_is_numeric, pel2, nums.
@@ -2221,7 +2222,7 @@ ACTION _if_bodies(nd),
   REAP mb FROM _map_get, nd, "body".
   PUT mb INTO out.
   REAP el FROM _map_get, nd, "elif".
-  CREATE ei(NUM) TO 1.
+  CREATE ei(LON) TO 1.
   SEASON ei < COUNT el,
     REAP eb FROM plant_list_get, el, ei.
     PUT eb INTO out.
@@ -2246,7 +2247,7 @@ ACTION _weather_bodies(nd),
   REAP wb FROM _map_get, nd, "body".
   PUT wb INTO out.
   REAP sh FROM _map_get, nd, "shelters".
-  CREATE si(NUM) TO 2.
+  CREATE si(LON) TO 2.
   SEASON si < COUNT sh,
     REAP sb FROM plant_list_get, sh, si.
     PUT sb INTO out.
@@ -2260,7 +2261,7 @@ ACTION _weather_bodies(nd),
 /ACTION.
 
 ACTION collect_declared_walk(bd(LIST), declared(LIST)),
-  CREATE wi(NUM) TO 0.
+  CREATE wi(LON) TO 0.
   CREATE nd(TX) TO "".
   CREATE ty(TX) TO "".
   SEASON wi < COUNT bd,
@@ -2272,7 +2273,7 @@ ACTION collect_declared_walk(bd(LIST), declared(LIST)),
     /IF.
     IF ty IS "if_stmt",
       REAP ib FROM _if_bodies, nd.
-      CREATE ii2(NUM) TO 0.
+      CREATE ii2(LON) TO 0.
       SEASON ii2 < COUNT ib,
         REAP ibd FROM plant_list_get, ib, ii2.
         REAP sub_ret FROM collect_declared_walk, ibd, declared.
@@ -2289,7 +2290,7 @@ ACTION collect_declared_walk(bd(LIST), declared(LIST)),
     /IF.
     IF ty IS "weather_stmt",
       REAP wbd2 FROM _weather_bodies, nd.
-      CREATE wbi2(NUM) TO 0.
+      CREATE wbi2(LON) TO 0.
       SEASON wbi2 < COUNT wbd2,
         REAP wbel2 FROM plant_list_get, wbd2, wbi2.
         REAP sub_ret FROM collect_declared_walk, wbel2, declared.
@@ -2302,7 +2303,7 @@ ACTION collect_declared_walk(bd(LIST), declared(LIST)),
 /ACTION.
 
 ACTION collect_used_walk(bd(LIST), used(LIST), declared(LIST)),
-  CREATE wi(NUM) TO 0.
+  CREATE wi(LON) TO 0.
   CREATE nd(TX) TO "".
   CREATE ty(TX) TO "".
   SEASON wi < COUNT bd,
@@ -2310,8 +2311,8 @@ ACTION collect_used_walk(bd(LIST), used(LIST), declared(LIST)),
     REAP ty FROM _map_get, nd, "type".
     IF ty IS "reap_stmt",
       REAP tgt FROM _map_get, nd, "target".
-      CREATE found(NUM) TO 0.
-      CREATE fi(NUM) TO 0.
+      CREATE found(LON) TO 0.
+      CREATE fi(LON) TO 0.
       CREATE fe(TX) TO "".
       SEASON fi < COUNT declared,
         REAP fe FROM plant_list_get, declared, fi.
@@ -2333,8 +2334,8 @@ ACTION collect_used_walk(bd(LIST), used(LIST), declared(LIST)),
     # declaration pass exactly like reap_stmt targets.
     IF ty IS "reap_expr_stmt",
       REAP tgt FROM _map_get, nd, "target".
-      CREATE found(NUM) TO 0.
-      CREATE fi(NUM) TO 0.
+      CREATE found(LON) TO 0.
+      CREATE fi(LON) TO 0.
       CREATE fe(TX) TO "".
       SEASON fi < COUNT declared,
         REAP fe FROM plant_list_get, declared, fi.
@@ -2361,8 +2362,8 @@ ACTION collect_used_walk(bd(LIST), used(LIST), declared(LIST)),
       REAP tid FROM is_identifier, tgt.
       # NULL/TRUE/FALSE are C-side constants, never implicit vars
       IF tid IS 1 AND tgt ISNT "NULL" AND tgt ISNT "TRUE" AND tgt ISNT "FALSE",
-        CREATE found(NUM) TO 0.
-        CREATE fi(NUM) TO 0.
+        CREATE found(LON) TO 0.
+        CREATE fi(LON) TO 0.
         CREATE fe(TX) TO "".
         SEASON fi < COUNT declared,
           REAP fe FROM plant_list_get, declared, fi.
@@ -2382,7 +2383,7 @@ ACTION collect_used_walk(bd(LIST), used(LIST), declared(LIST)),
     /IF.
     IF ty IS "if_stmt",
       REAP ib FROM _if_bodies, nd.
-      CREATE ii2(NUM) TO 0.
+      CREATE ii2(LON) TO 0.
       SEASON ii2 < COUNT ib,
         REAP ibd FROM plant_list_get, ib, ii2.
         REAP sub_ret FROM collect_used_walk, ibd, used, declared.
@@ -2399,7 +2400,7 @@ ACTION collect_used_walk(bd(LIST), used(LIST), declared(LIST)),
     /IF.
     IF ty IS "weather_stmt",
       REAP wbd3 FROM _weather_bodies, nd.
-      CREATE wbi3(NUM) TO 0.
+      CREATE wbi3(LON) TO 0.
       SEASON wbi3 < COUNT wbd3,
         REAP wbel3 FROM plant_list_get, wbd3, wbi3.
         REAP sub_ret FROM collect_used_walk, wbel3, used, declared.
@@ -2414,7 +2415,7 @@ ACTION collect_used_walk(bd(LIST), used(LIST), declared(LIST)),
 ACTION collect_implicit(bd(LIST), params(LIST)),
   CREATE used(LIST) TO plant_list_make(0).
   CREATE declared(LIST) TO plant_list_make(0).
-  CREATE ci(NUM) TO 0.
+  CREATE ci(LON) TO 0.
   CREATE pn(TX) TO "".
   SEASON ci < COUNT params,
     REAP pn FROM _map_get, params[ci], "name".
@@ -2438,7 +2439,7 @@ ACTION collect_implicit(bd(LIST), params(LIST)),
 # ──────────────────────────────────────────────────────────────
 ACTION build_enum_registry(ast(LIST)),
   CREATE reg(LIST) TO plant_list_make(0).
-  CREATE ei(NUM) TO 0.
+  CREATE ei(LON) TO 0.
   CREATE ne(TX) TO "".
   CREATE nty(TX) TO "".
   SEASON ei < COUNT ast,
@@ -2448,7 +2449,7 @@ ACTION build_enum_registry(ast(LIST)),
       REAP enm FROM _map_get, ne, "name".
       CREATE mems(LIST) TO _map_get(ne, "members").
       CREATE csv(TX) TO "".
-      CREATE mi(NUM) TO 0.
+      CREATE mi(LON) TO 0.
       SEASON mi < COUNT mems,
         IF mi > 0, SET csv TO csv + ",". /IF.
         SET csv TO csv + plant_list_get(mems, mi).
@@ -2464,8 +2465,8 @@ ACTION build_enum_registry(ast(LIST)),
   # collect_enums uses them to register enum field reads of
   # struct-typed vars as plant_map_get(var, "field") keys (v0.48.10).
   # v0.50.0a: anon_counter for anonymous struct name generation.
-  CREATE anon_counter(NUM) TO 0.
-  CREATE si(NUM) TO 0.
+  CREATE anon_counter(LON) TO 0.
+  CREATE si(LON) TO 0.
   CREATE sn(TX) TO "".
   CREATE sty(TX) TO "".
   SEASON si < COUNT ast,
@@ -2476,14 +2477,14 @@ ACTION build_enum_registry(ast(LIST)),
       CREATE gslst(LIST) TO _map_get(sn, "generics").
       CREATE fslst(LIST) TO _map_get(sn, "fields").
       CREATE gcsv(TX) TO "".
-      CREATE gidx(NUM) TO 0.
+      CREATE gidx(LON) TO 0.
       SEASON gidx < COUNT gslst,
         IF gidx > 0, SET gcsv TO gcsv + ",". /IF.
         SET gcsv TO gcsv + plant_list_get(gslst, gidx).
         SET gidx TO gidx + 1.
       /SEASON.
       CREATE fcsv(TX) TO "".
-      CREATE fidx(NUM) TO 0.
+      CREATE fidx(LON) TO 0.
       CREATE fel3(TX) TO "".
       SEASON fidx < COUNT fslst,
         REAP fel3 FROM plant_list_get, fslst, fidx.
@@ -2501,7 +2502,7 @@ ACTION build_enum_registry(ast(LIST)),
   # v0.50.0d — union entries: "UNION.<Name>" → "fieldCsv" (field
   # types, fields "name:type" comma-joined). Used by is_union_type
   # and union field access codegen.
-  CREATE ui(NUM) TO 0.
+  CREATE ui(LON) TO 0.
   CREATE un(TX) TO "".
   CREATE uty(TX) TO "".
   SEASON ui < COUNT ast,
@@ -2511,7 +2512,7 @@ ACTION build_enum_registry(ast(LIST)),
       REAP uname2 FROM _map_get, un, "name".
       CREATE ufldlst(LIST) TO _map_get(un, "fields").
       CREATE ufcsv(TX) TO "".
-      CREATE ufi2(NUM) TO 0.
+      CREATE ufi2(LON) TO 0.
       CREATE ufel(TX) TO "".
       SEASON ufi2 < COUNT ufldlst,
         REAP ufel FROM plant_list_get, ufldlst, ufi2.
@@ -2550,7 +2551,7 @@ ACTION add_struct_enum_keys(reg(LIST), vtype(TX), vname(TX), res(LIST)),
   IF COUNT halves > 1, REAP flds2 FROM strings:SPLIT, halves[1], ",". /IF.
   REAP args2 FROM parse_type_args, vtype.
   CREATE fsub2(LIST) TO build_subst(gens2, args2).
-  CREATE fi2(NUM) TO 0.
+  CREATE fi2(LON) TO 0.
   CREATE fe2(TX) TO "".
   CREATE fnm2(TX) TO "".
   CREATE fty2(TX) TO "".
@@ -2582,7 +2583,7 @@ ACTION enum_members_of(reg(LIST), ty(TX)),
   CREATE ty2(TX) TO ty.
   REAP rp0 FROM substring, ty2, 0, 5.
   IF rp0 IS "ENUM ", SET ty2 TO substring(ty2, 5, LEN(ty2)). /IF.
-  CREATE ri(NUM) TO 0.
+  CREATE ri(LON) TO 0.
   CREATE rn(TX) TO "".
   CREATE rv(TX) TO "".
   SEASON ri + 1 < COUNT reg,
@@ -2599,7 +2600,7 @@ ACTION enum_members_of(reg(LIST), ty(TX)),
 # Modules without enums fast-skip the whole collect_enums body
 # traversal instead of walking every statement (v0.48.11).
 ACTION reg_has_enum(reg(LIST)),
-  CREATE ri(NUM) TO 0.
+  CREATE ri(LON) TO 0.
   CREATE rk(TX) TO "".
   CREATE rpre(TX) TO "".
   SEASON ri + 1 < COUNT reg,
@@ -2619,7 +2620,7 @@ ACTION reg_has_enum(reg(LIST)),
 # callee's return type from sigs so struct-returning calls register
 # their struct field reads too (v0.48.10).
 ACTION collect_enums_walk(bd, subst, reg, sigs, res),
-  CREATE wi(NUM) TO 0.
+  CREATE wi(LON) TO 0.
   CREATE wnd(TX) TO "".
   CREATE wty(TX) TO "".
   CREATE wtg(TX) TO "".
@@ -2676,7 +2677,7 @@ ACTION collect_enums_walk(bd, subst, reg, sigs, res),
     /IF.
     IF wty IS "if_stmt",
       REAP ib FROM _if_bodies, wnd.
-      CREATE ii3(NUM) TO 0.
+      CREATE ii3(LON) TO 0.
       SEASON ii3 < COUNT ib,
         REAP ibd3 FROM plant_list_get, ib, ii3.
         REAP wret FROM collect_enums_walk, ibd3, subst, reg, sigs, res.
@@ -2689,7 +2690,7 @@ ACTION collect_enums_walk(bd, subst, reg, sigs, res),
     /IF.
     IF wty IS "match_stmt",
       CREATE mcl1(LIST) TO _map_get(wnd, "clauses").
-      CREATE mci1(NUM) TO 0.
+      CREATE mci1(LON) TO 0.
       SEASON mci1 < COUNT mcl1,
         REAP mcl2 FROM plant_list_get, mcl1, mci1.
         REAP mcb1 FROM _map_get, mcl2, "bodyStatements".
@@ -2699,7 +2700,7 @@ ACTION collect_enums_walk(bd, subst, reg, sigs, res),
     /IF.
     IF wty IS "weather_stmt",
       REAP wbl4 FROM _weather_bodies, wnd.
-      CREATE wbi4(NUM) TO 0.
+      CREATE wbi4(LON) TO 0.
       SEASON wbi4 < COUNT wbl4,
         REAP wbel4 FROM plant_list_get, wbl4, wbi4.
         REAP wret FROM collect_enums_walk, wbel4, subst, reg, sigs, res.
@@ -2719,7 +2720,7 @@ ACTION collect_enums(bd, params, subst, reg, sigs),
   CREATE res(LIST) TO plant_list_make(0).
   REAP he2 FROM reg_has_enum, reg.
   IF he2 IS 0, GIVE res. /IF.
-  CREATE pi(NUM) TO 0.
+  CREATE pi(LON) TO 0.
   CREATE pn2(TX) TO "".
   CREATE pt2(TX) TO "".
   CREATE psu2(TX) TO "".
@@ -2742,7 +2743,7 @@ ACTION collect_enums(bd, params, subst, reg, sigs),
     SET pi TO pi + 1.
   /SEASON.
   # member constants: every member name maps to its enum's csv
-  CREATE ri(NUM) TO 0.
+  CREATE ri(LON) TO 0.
   CREATE rn(TX) TO "".
   CREATE rv(TX) TO "".
   SEASON ri + 1 < COUNT reg,
@@ -2750,7 +2751,7 @@ ACTION collect_enums(bd, params, subst, reg, sigs),
     REAP rv FROM plant_list_get, reg, ri + 1.
     CREATE ms(LIST) TO plant_list_make(0).
     REAP ms FROM strings:SPLIT, rv, ",".
-    CREATE mi(NUM) TO 0.
+    CREATE mi(LON) TO 0.
     CREATE mname(TX) TO "".
     SEASON mi < COUNT ms,
       REAP mname FROM plant_list_get, ms, mi.
@@ -2776,7 +2777,7 @@ ACTION collect_enums(bd, params, subst, reg, sigs),
   /SEASON.
   # FFI call names with ENUM returns: inline ffi_color() expressions
   # display/concat correctly (matched via enum_expr_of) (v0.48.12)
-  CREATE fi3(NUM) TO 0.
+  CREATE fi3(LON) TO 0.
   CREATE fs3(TX) TO "".
   SEASON fi3 < COUNT sigs,
     REAP fs3 FROM plant_list_get, sigs, fi3.
@@ -2802,7 +2803,7 @@ ACTION collect_enums(bd, params, subst, reg, sigs),
 # enum_in_table — membersCsv for a name in a flat enum table, or ""
 ACTION enum_in_table(evars(LIST), name(TX)),
   CREATE res(TX) TO "".
-  CREATE ej(NUM) TO 0.
+  CREATE ej(LON) TO 0.
   CREATE ekey(TX) TO "".
   CREATE eval(TX) TO "".
   SEASON ej + 1 < COUNT evars,
@@ -2830,8 +2831,8 @@ ACTION enum_expr_of(evars(LIST), cval(TX)),
   GIVE "".
 /ACTION.
 ACTION list_contains(lst(LIST), x(TX)),
-  CREATE found(NUM) TO 0.
-  CREATE li(NUM) TO 0.
+  CREATE found(LON) TO 0.
+  CREATE li(LON) TO 0.
   CREATE le(TX) TO "".
   SEASON li < COUNT lst,
     REAP le FROM plant_list_get, lst, li.
@@ -2846,7 +2847,7 @@ ACTION list_contains(lst(LIST), x(TX)),
 #  targets in bd (recursing into IF/SEASON/CYCLE/MATCH bodies)
 # ──────────────────────────────────────────────────────────────
 ACTION collect_nums_walk(bd(LIST), subst(LIST), res(LIST)),
-  CREATE wi(NUM) TO 0.
+  CREATE wi(LON) TO 0.
   CREATE wnd(TX) TO "".
   CREATE wty(TX) TO "".
   CREATE wtg(TX) TO "".
@@ -2878,7 +2879,7 @@ ACTION collect_nums_walk(bd(LIST), subst(LIST), res(LIST)),
     /IF.
     IF wty IS "if_stmt",
       REAP ib FROM _if_bodies, wnd.
-      CREATE ii4(NUM) TO 0.
+      CREATE ii4(LON) TO 0.
       SEASON ii4 < COUNT ib,
         REAP ibd4 FROM plant_list_get, ib, ii4.
         REAP wret2 FROM collect_nums_walk, ibd4, subst, res.
@@ -2897,7 +2898,7 @@ ACTION collect_nums_walk(bd(LIST), subst(LIST), res(LIST)),
     /IF.
     IF wty IS "match_stmt",
       CREATE mcl3(LIST) TO _map_get(wnd, "clauses").
-      CREATE mci3(NUM) TO 0.
+      CREATE mci3(LON) TO 0.
       SEASON mci3 < COUNT mcl3,
         REAP mcl4 FROM plant_list_get, mcl3, mci3.
         REAP mcb2 FROM _map_get, mcl4, "bodyStatements".
@@ -2907,7 +2908,7 @@ ACTION collect_nums_walk(bd(LIST), subst(LIST), res(LIST)),
     /IF.
     IF wty IS "weather_stmt",
       REAP wbl5 FROM _weather_bodies, wnd.
-      CREATE wbi5(NUM) TO 0.
+      CREATE wbi5(LON) TO 0.
       SEASON wbi5 < COUNT wbl5,
         REAP wbel5 FROM plant_list_get, wbl5, wbi5.
         REAP wret2 FROM collect_nums_walk, wbel5, subst, res.
@@ -2939,7 +2940,7 @@ ACTION collect_nums_walk(bd(LIST), subst(LIST), res(LIST)),
 # MATCH/WEATHER bodies (GLOBAL is scope-aware but declared file-scope
 # once). Does NOT recurse into ACTION bodies (out of scope — v0.51.4).
 ACTION collect_globals_walk(bd(LIST), res(LIST)),
-  CREATE gi(NUM) TO 0.
+  CREATE gi(LON) TO 0.
   CREATE gnd(TX) TO "".
   CREATE gty(TX) TO "".
   SEASON gi < COUNT bd,
@@ -2962,7 +2963,7 @@ ACTION collect_globals_walk(bd(LIST), res(LIST)),
     /IF.
     IF gty IS "if_stmt",
       REAP gib FROM _if_bodies, gnd.
-      CREATE gii(NUM) TO 0.
+      CREATE gii(LON) TO 0.
       SEASON gii < COUNT gib,
         REAP gibd FROM plant_list_get, gib, gii.
         REAP grt FROM collect_globals_walk, gibd, res.
@@ -2975,7 +2976,7 @@ ACTION collect_globals_walk(bd(LIST), res(LIST)),
     /IF.
     IF gty IS "match_stmt",
       REAP gml FROM _map_get, gnd, "clauses".
-      CREATE gmi(NUM) TO 0.
+      CREATE gmi(LON) TO 0.
       SEASON gmi < COUNT gml,
         REAP gmc FROM plant_list_get, gml, gmi.
         REAP gmb FROM _map_get, gmc, "bodyStatements".
@@ -2985,7 +2986,7 @@ ACTION collect_globals_walk(bd(LIST), res(LIST)),
     /IF.
     IF gty IS "weather_stmt",
       REAP gwl FROM _weather_bodies, gnd.
-      CREATE gwi(NUM) TO 0.
+      CREATE gwi(LON) TO 0.
       SEASON gwi < COUNT gwl,
         REAP gwbd FROM plant_list_get, gwl, gwi.
         REAP grt FROM collect_globals_walk, gwbd, res.
@@ -3005,7 +3006,7 @@ ACTION collect_globals_walk(bd(LIST), res(LIST)),
 # ──────────────────────────────────────────────────────────────
 ACTION collect_nums(bd(LIST), params(LIST), subst(LIST)),
   CREATE res(LIST) TO plant_list_make(0).
-  CREATE pi(NUM) TO 0.
+  CREATE pi(LON) TO 0.
   CREATE pnd(TX) TO "".
   CREATE pn2(TX) TO "".
   CREATE pty2(TX) TO "".
@@ -3031,7 +3032,7 @@ ACTION collect_nums(bd(LIST), params(LIST), subst(LIST)),
 #  in bd (recursing into IF/SEASON/CYCLE/MATCH bodies)
 # ──────────────────────────────────────────────────────────────
 ACTION collect_maths_walk(bd(LIST), subst(LIST), res(LIST)),
-  CREATE wi(NUM) TO 0.
+  CREATE wi(LON) TO 0.
   CREATE wnd(TX) TO "".
   CREATE wty(TX) TO "".
   CREATE wtg(TX) TO "".
@@ -3053,7 +3054,7 @@ ACTION collect_maths_walk(bd(LIST), subst(LIST), res(LIST)),
     /IF.
     IF wty IS "if_stmt",
       REAP ib FROM _if_bodies, wnd.
-      CREATE ii4(NUM) TO 0.
+      CREATE ii4(LON) TO 0.
       SEASON ii4 < COUNT ib,
         REAP ibd4 FROM plant_list_get, ib, ii4.
         REAP wret2 FROM collect_maths_walk, ibd4, subst, res.
@@ -3066,7 +3067,7 @@ ACTION collect_maths_walk(bd(LIST), subst(LIST), res(LIST)),
     /IF.
     IF wty IS "match_stmt",
       CREATE mcl3(LIST) TO _map_get(wnd, "clauses").
-      CREATE mci3(NUM) TO 0.
+      CREATE mci3(LON) TO 0.
       SEASON mci3 < COUNT mcl3,
         REAP mcl4 FROM plant_list_get, mcl3, mci3.
         REAP mcb2 FROM _map_get, mcl4, "bodyStatements".
@@ -3087,7 +3088,7 @@ ACTION collect_maths_walk(bd(LIST), subst(LIST), res(LIST)),
 # ──────────────────────────────────────────────────────────────
 ACTION collect_maths(bd(LIST), params(LIST), subst(LIST)),
   CREATE res(LIST) TO plant_list_make(0).
-  CREATE pi(NUM) TO 0.
+  CREATE pi(LON) TO 0.
   CREATE pnd(TX) TO "".
   CREATE pn2(TX) TO "".
   CREATE pty2(TX) TO "".
@@ -3114,30 +3115,30 @@ ACTION collect_maths(bd(LIST), params(LIST), subst(LIST)),
 #  Scans for each maths var name and wraps bare references.
 # ──────────────────────────────────────────────────────────────
 ACTION _wrap_math_vars(e(TX), maths(LIST)),
-  CREATE mi(NUM) TO 0.
+  CREATE mi(LON) TO 0.
   CREATE mv(TX) TO "".
   SEASON mi < COUNT maths,
     REAP mv FROM plant_list_get, maths, mi.
     # Wrap standalone variable references: "mv" → "plant_math_eval(mv)"
     # Only wrap when the var is a standalone identifier (not part of a larger name)
     CREATE wrapped(TX) TO "".
-    CREATE pos(NUM) TO 0.
-    CREATE elen(NUM) TO LEN(e).
-    CREATE vlen(NUM) TO LEN(mv).
+    CREATE pos(LON) TO 0.
+    CREATE elen(LON) TO LEN(e).
+    CREATE vlen(LON) TO LEN(mv).
     SEASON pos < elen,
       # Check if current position starts with the variable name
       REAP chunk FROM substring, e, pos, pos + vlen.
       REAP chunk_eq FROM str_eq, chunk, mv.
       IF chunk_eq IS 1,
         # Check boundary: char before must not be alphanumeric/underscore
-        CREATE before_ok(NUM) TO 1.
+        CREATE before_ok(LON) TO 1.
         IF pos > 0,
           REAP bch FROM char_at, e, pos - 1.
           REAP bisid FROM find_any, bch, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_".
           IF bisid ISNT -1, SET before_ok TO 0. /IF.
         /IF.
         # Check boundary: char after must not be alphanumeric/underscore or '('
-        CREATE after_ok(NUM) TO 1.
+        CREATE after_ok(LON) TO 1.
         REAP apos TO pos + vlen.
         IF apos < elen,
           REAP ach FROM char_at, e, apos.
@@ -3169,7 +3170,7 @@ ACTION _wrap_math_vars(e(TX), maths(LIST)),
 # ──────────────────────────────────────────────────────────────
 ACTION nums_from_avars(vars(LIST)),
   CREATE res(LIST) TO plant_list_make(0).
-  CREATE vi(NUM) TO 0.
+  CREATE vi(LON) TO 0.
   CREATE vn(TX) TO "".
   CREATE vt(TX) TO "".
   SEASON vi + 1 < COUNT vars,
@@ -3191,7 +3192,7 @@ ACTION nums_from_avars(vars(LIST)),
 # ──────────────────────────────────────────────────────────────
 ACTION collect_nums_cb(bd(LIST), params(LIST), shads(LIST), subst(LIST)),
   CREATE res(LIST) TO plant_list_make(0).
-  CREATE ci(NUM) TO 0.
+  CREATE ci(LON) TO 0.
   CREATE cnd(TX) TO "".
   CREATE cn2(TX) TO "".
   CREATE cty2(TX) TO "".
@@ -3208,7 +3209,7 @@ ACTION collect_nums_cb(bd(LIST), params(LIST), shads(LIST), subst(LIST)),
     /IF.
     SET ci TO ci + 1.
   /SEASON.
-  CREATE si7(NUM) TO 0.
+  CREATE si7(LON) TO 0.
   CREATE se7(TX) TO "".
   CREATE sn7(TX) TO "".
   CREATE sc7(TX) TO "".
@@ -3249,7 +3250,7 @@ ACTION collect_nums_cb(bd(LIST), params(LIST), shads(LIST), subst(LIST)),
 ACTION async_argstr(args(LIST), sigs(LIST), act(TX), nums(LIST), stvars(LIST), evars(LIST)),
   CREATE argstr(TX) TO "".
   REAP fparams FROM find_params, sigs, act.
-  CREATE ai(NUM) TO 0.
+  CREATE ai(LON) TO 0.
   CREATE ael(TX) TO "".
   SEASON ai < COUNT args,
     REAP ael FROM plant_list_get, args, ai.
@@ -3315,8 +3316,8 @@ ACTION async_argstr(args(LIST), sigs(LIST), act(TX), nums(LIST), stvars(LIST), e
 
 # async_var_add — append [name, ctype] to acc unless name exists
 ACTION async_var_add(acc(LIST), name(TX), ctype(TX)),
-  CREATE found(NUM) TO 0.
-  CREATE fi(NUM) TO 0.
+  CREATE found(LON) TO 0.
+  CREATE fi(LON) TO 0.
   CREATE fe(TX) TO "".
   SEASON fi < COUNT acc,
     REAP fe FROM plant_list_get, acc, fi.
@@ -3333,7 +3334,7 @@ ACTION async_var_add(acc(LIST), name(TX), ctype(TX)),
 # async_walk_decl — collect CREATE/LET targets (recursive into
 # IF/SEASON/CYCLE bodies and MATCH clauses)
 ACTION async_walk_decl(bd(LIST), acc(LIST)),
-  CREATE wi(NUM) TO 0.
+  CREATE wi(LON) TO 0.
   CREATE nd(TX) TO "".
   CREATE ty(TX) TO "".
   SEASON wi < COUNT bd,
@@ -3347,7 +3348,7 @@ ACTION async_walk_decl(bd(LIST), acc(LIST)),
     /IF.
     IF ty IS "if_stmt",
       REAP ib FROM _if_bodies, nd.
-      CREATE ii5(NUM) TO 0.
+      CREATE ii5(LON) TO 0.
       SEASON ii5 < COUNT ib,
         REAP ibd5 FROM plant_list_get, ib, ii5.
         REAP acc FROM async_walk_decl, ibd5, acc.
@@ -3364,7 +3365,7 @@ ACTION async_walk_decl(bd(LIST), acc(LIST)),
     /IF.
     IF ty IS "match_stmt",
       CREATE cl(LIST) TO _map_get(nd, "clauses").
-      CREATE ci(NUM) TO 0.
+      CREATE ci(LON) TO 0.
       SEASON ci < COUNT cl,
         REAP cl2 FROM plant_list_get, cl, ci.
         REAP cb FROM _map_get, cl2, "bodyStatements".
@@ -3374,7 +3375,7 @@ ACTION async_walk_decl(bd(LIST), acc(LIST)),
     /IF.
     IF ty IS "weather_stmt",
       REAP wbl6 FROM _weather_bodies, nd.
-      CREATE wbi6(NUM) TO 0.
+      CREATE wbi6(LON) TO 0.
       SEASON wbi6 < COUNT wbl6,
         REAP wbel6 FROM plant_list_get, wbl6, wbi6.
         REAP acc FROM async_walk_decl, wbel6, acc.
@@ -3390,7 +3391,7 @@ ACTION async_walk_decl(bd(LIST), acc(LIST)),
 # params first, then CREATE/LET targets, then implicit (tx_t)
 ACTION async_collect_vars(bd(LIST), params(LIST)),
   CREATE acc(LIST) TO plant_list_make(0).
-  CREATE pi(NUM) TO 0.
+  CREATE pi(LON) TO 0.
   CREATE pe(TX) TO "".
   SEASON pi < COUNT params,
     REAP pe FROM plant_list_get, params, pi.
@@ -3402,7 +3403,7 @@ ACTION async_collect_vars(bd(LIST), params(LIST)),
   /SEASON.
   REAP acc FROM async_walk_decl, bd, acc.
   REAP imp FROM collect_implicit, bd, params.
-  CREATE ii(NUM) TO 0.
+  CREATE ii(LON) TO 0.
   SEASON ii < COUNT imp,
     REAP iv FROM plant_list_get, imp, ii.
     REAP acc FROM async_var_add, acc, iv, "tx_t".
@@ -3416,7 +3417,7 @@ ACTION async_collect_vars(bd(LIST), params(LIST)),
 ACTION async_split_phases(bd(LIST)),
   CREATE phases(LIST) TO plant_list_make(0).
   CREATE cur(LIST) TO plant_list_make(0).
-  CREATE wi(NUM) TO 0.
+  CREATE wi(LON) TO 0.
   CREATE nd(TX) TO "".
   CREATE ty(TX) TO "".
   SEASON wi < COUNT bd,
@@ -3441,7 +3442,7 @@ ACTION async_emit_state(name(TX), vars(LIST)),
   CREATE code(TX) TO "typedef struct \{\n".
   SET code TO code + "  tx_t __self;\n".
   SET code TO code + "  long __pc;\n".
-  CREATE vi(NUM) TO 0.
+  CREATE vi(LON) TO 0.
   CREATE vn(TX) TO "".
   CREATE vt(TX) TO "".
   SEASON vi + 1 < COUNT vars,
@@ -3459,7 +3460,7 @@ ACTION async_emit_state(name(TX), vars(LIST)),
 # inheritance handled by the engine via __parent)
 ACTION async_emit_entry(name(TX), params(LIST), prio(TX), mmode(TX)),
   CREATE pstr(TX) TO "".
-  CREATE pi(NUM) TO 0.
+  CREATE pi(LON) TO 0.
   CREATE pe(TX) TO "".
   SEASON pi < COUNT params,
     REAP pe FROM plant_list_get, params, pi.
@@ -3477,7 +3478,7 @@ ACTION async_emit_entry(name(TX), params(LIST), prio(TX), mmode(TX)),
     SET code TO code + "  plant_fast_enter(\"" + name + "\");\n".
   /IF.
   SET code TO code + "  plant_a_" + name + "_state* s = (plant_a_" + name + "_state*)plant_async_alloc_state(sizeof(plant_a_" + name + "_state), \"" + name + "\");\n".
-  CREATE ci(NUM) TO 0.
+  CREATE ci(LON) TO 0.
   SEASON ci < COUNT params,
     REAP pe2 FROM plant_list_get, params, ci.
     REAP pn2 FROM _map_get, pe2, "name".
@@ -3497,7 +3498,7 @@ ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIS
   CREATE code(TX) TO "static int plant_a_" + name + "_step(tx_t st) \{\n".
   SET code TO code + "  plant_a_" + name + "_state* s = (plant_a_" + name + "_state*)st;\n".
   SET code TO code + "  if (s->__pc > 0) plant_async_await_result(st);\n".
-  CREATE vi(NUM) TO 0.
+  CREATE vi(LON) TO 0.
   CREATE vn(TX) TO "".
   CREATE vt(TX) TO "".
   SEASON vi + 1 < COUNT vars,
@@ -3508,24 +3509,24 @@ ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIS
   /SEASON.
   SET code TO code + "  switch (s->__pc) \{\n".
   CREATE nums_s(LIST) TO nums_from_avars(vars).
-  CREATE ph(NUM) TO 0.
+  CREATE ph(LON) TO 0.
   SEASON ph < COUNT phases,
     CREATE phs(TX) TO _from_long(ph).
     SET code TO code + "    case " + phs + ": goto plant_a_" + name + "_L" + phs + ";\n".
     SET ph TO ph + 1.
   /SEASON.
   SET code TO code + "  \}\n".
-  CREATE ph2(NUM) TO 0.
+  CREATE ph2(LON) TO 0.
   SEASON ph2 < COUNT phases,
     CREATE ph2s(TX) TO _from_long(ph2).
     SET code TO code + "  plant_a_" + name + "_L" + ph2s + ":\n".
     REAP phd FROM plant_list_get, phases, ph2.
-    CREATE nph(NUM) TO COUNT phases.
-    CREATE nst(NUM) TO COUNT phd.
-    CREATE nxt(NUM) TO ph2 + 1.
+    CREATE nph(LON) TO COUNT phases.
+    CREATE nst(LON) TO COUNT phd.
+    CREATE nxt(LON) TO ph2 + 1.
     IF nxt < nph,
       CREATE lead(LIST) TO plant_list_make(0).
-      CREATE lj(NUM) TO 0.
+      CREATE lj(LON) TO 0.
       SEASON lj < nst - 1,
         REAP ls FROM plant_list_get, phd, lj.
         PUT ls INTO lead.
@@ -3533,13 +3534,13 @@ ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIS
       /SEASON.
       REAP lcode FROM generate_body, lead, env_make(1, sigs, subst, clmap, "a", nums_s, stvars, evars, "", "", "", plant_list_make(0)).
       SET code TO code + lcode.
-      CREATE aw_last(NUM) TO nst - 1.
+      CREATE aw_last(LON) TO nst - 1.
       REAP awnd FROM plant_list_get, phd, aw_last.
       REAP act_s FROM _map_get, awnd, "action".
       REAP awctx FROM _map_get, awnd, "ctx".
       CREATE awargs(LIST) TO _map_get(awnd, "args").
       REAP arg_s FROM async_argstr, awargs, sigs, act_s, nums_s, stvars, evars.
-      CREATE vi2(NUM) TO 0.
+      CREATE vi2(LON) TO 0.
       CREATE vn2(TX) TO "".
       SEASON vi2 + 1 < COUNT vars,
         REAP vn2 FROM plant_list_get, vars, vi2.
@@ -3579,7 +3580,7 @@ ACTION async_emit_step(name(TX), phases(LIST), vars(LIST), sigs(LIST), subst(LIS
 # ──────────────────────────────────────────────────────────────
 ACTION _ni_replace(e(TX)),
     CREATE out(TX) TO "".
-    CREATE i(NUM) TO 0.
+    CREATE i(LON) TO 0.
     CREATE ins(TX) TO "0".
     SEASON i < LEN(e),
         REAP ch FROM char_at, e, i.
@@ -3590,7 +3591,7 @@ ACTION _ni_replace(e(TX)),
                 REAP c2 FROM char_at, e, i + 12.
                 IF c1 IS ":" AND c2 IS " ",
                     CREATE nm(TX) TO "".
-                    CREATE j(NUM) TO i + 13.
+                    CREATE j(LON) TO i + 13.
                     SEASON j < LEN(e),
                         REAP jch FROM char_at, e, j.
                         IF jch IS " " OR jch IS "\"" OR jch IS "(" OR jch IS ")" OR jch IS ".",
@@ -3606,10 +3607,10 @@ ACTION _ni_replace(e(TX)),
             /IF.
             REAP pre2 FROM substring, e, i, i + 8.
             IF pre2 IS "ANALYZE ",
-                CREATE dep(NUM) TO 0.
+                CREATE dep(LON) TO 0.
                 CREATE qs(TX) TO "0".
                 CREATE opr(TX) TO "".
-                CREATE j2(NUM) TO i + 8.
+                CREATE j2(LON) TO i + 8.
                 SEASON j2 < LEN(e),
                     REAP jch FROM char_at, e, j2.
                     IF jch IS "(", SET dep TO dep + 1. /IF.
@@ -3633,10 +3634,10 @@ ACTION _ni_replace(e(TX)),
             /IF.
             REAP pre3 FROM substring, e, i, i + 7.
             IF pre3 IS "TYPEOF ",
-                CREATE dep2(NUM) TO 0.
+                CREATE dep2(LON) TO 0.
                 CREATE qs2(TX) TO "0".
                 CREATE oprb(TX) TO "".
-                CREATE j3(NUM) TO i + 7.
+                CREATE j3(LON) TO i + 7.
                 SEASON j3 < LEN(e),
                     REAP jch FROM char_at, e, j3.
                     IF jch IS "(", SET dep2 TO dep2 + 1. /IF.
@@ -3676,7 +3677,7 @@ ACTION _ni_replace(e(TX)),
 # skipped unless they carry a nested pattern.
 ACTION _emit_ds(items(LIST), kind(TX), base(TX), isel(TX), tag(TX)),
   CREATE code(TX) TO "".
-  CREATE i(NUM) TO 0.
+  CREATE i(LON) TO 0.
   SEASON i < COUNT items,
     REAP it FROM plant_list_get, items, i.
     REAP key FROM _map_get, it, "key".
@@ -3721,16 +3722,16 @@ ACTION _swap_self(e(TX)),
   # the modern dot form (self.field, self.method()); the legacy
   # colon form (SELF:field) is not rewritten here.
   CREATE out2(TX) TO "".
-  CREATE i(NUM) TO 0.
-  CREATE n(NUM) TO LEN(e).
+  CREATE i(LON) TO 0.
+  CREATE n(LON) TO LEN(e).
   SEASON i < n,
     REAP c FROM char_at, e, i.
     IF c IS "S" AND i + 3 < n,
       REAP s4 FROM substring, e, i, i + 4.
       REAP isself FROM str_eq, s4, "SELF".
       IF isself IS "1",
-        CREATE okL(NUM) TO 1.
-        CREATE okR(NUM) TO 1.
+        CREATE okL(LON) TO 1.
+        CREATE okR(LON) TO 1.
         IF i > 0,
           REAP pc FROM char_at, e, i - 1.
           IF pc GREATER THAN OR EQUAL "a" AND pc LESS THAN OR EQUAL "z", SET okL TO 0. /IF.
@@ -3766,15 +3767,15 @@ ACTION _swap_self(e(TX)),
 # ──────────────────────────────────────────────────────────────
 ACTION _handle_cast(e(TX)),
   CREATE out(TX) TO "".
-  CREATE pos(NUM) TO 0.
-  CREATE elen(NUM) TO LEN(e).
+  CREATE pos(LON) TO 0.
+  CREATE elen(LON) TO LEN(e).
   SEASON pos < elen,
     REAP ch FROM char_at, e, pos.
     # v0.50.5 — @ cast operator; detect "@" via str_eq to avoid v1 bootstrap issues
     REAP is_at FROM str_eq, ch, "@".
     IF is_at IS "1",
       # Find the start of the expression after @
-      CREATE npos(NUM) TO pos + 1.
+      CREATE npos(LON) TO pos + 1.
       # Skip whitespace
       SEASON npos < elen,
         REAP wch FROM char_at, e, npos.
@@ -3785,9 +3786,9 @@ ACTION _handle_cast(e(TX)),
       REAP ech FROM char_at, e, pos.
       IF ech IS "(",
         # Balanced parens: find matching close
-        CREATE depth(NUM) TO 1.
-        CREATE estart(NUM) TO pos + 1.
-        CREATE eend(NUM) TO estart.
+        CREATE depth(LON) TO 1.
+        CREATE estart(LON) TO pos + 1.
+        CREATE eend(LON) TO estart.
         SEASON eend < elen,
           REAP pch FROM char_at, e, eend.
           IF pch IS "(", SET depth TO depth + 1. /IF.
@@ -3803,8 +3804,8 @@ ACTION _handle_cast(e(TX)),
         SET pos TO eend.
       ELSE.
         # Bare identifier: collect name chars
-        CREATE id_start(NUM) TO pos.
-        CREATE id_end(NUM) TO pos.
+        CREATE id_start(LON) TO pos.
+        CREATE id_end(LON) TO pos.
         SEASON id_end < elen,
           REAP ich FROM char_at, e, id_end.
           REAP isid FROM find_any, ich, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_".
@@ -4194,9 +4195,9 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST), maths(LIST)),
 # ──────────────────────────────────────────────────────────────
 #  indent_str — generate indentation whitespace
 # ──────────────────────────────────────────────────────────────
-ACTION indent_str(level(NUM)),
+ACTION indent_str(level(LON)),
     CREATE res(TX) TO "".
-    CREATE i(NUM) TO 0.
+    CREATE i(LON) TO 0.
     SEASON i < level,
         SET res TO res + "  ".
         SET i TO i + 1.
@@ -4218,7 +4219,7 @@ ACTION indent_str(level(NUM)),
 #  uses it to wrap NUM-typed returns in _from_long (v0.48.13).
 # ──────────────────────────────────────────────────────────────
 ACTION _gb_dump(bd(LIST)),
-  CREATE i(NUM) TO 0.
+  CREATE i(LON) TO 0.
   SEASON i < COUNT bd,
     REAP nd FROM plant_list_get, bd, i.
     REAP ty FROM _map_get, nd, "type".
@@ -4234,12 +4235,12 @@ ACTION _gb_dump(bd(LIST)),
 # Index mapping: 0=indent(isel), 1=sigs, 2=subst, 3=clmap, 4=actx, 5=nums,
 # 6=stvars, 7=evars, 8=rty, 9=mexit, 10=wexit, 11=indent_num
 # ──────────────────────────────────────────────────────────────
-ACTION env_set(env(LIST), idx(NUM), value(TX)),
+ACTION env_set(env(LIST), idx(LON), value(TX)),
   REAP _ FROM plant_list_set, env, idx, value.
   GIVE env.
 /ACTION.
 
-ACTION env_get(env(LIST), idx(NUM)),
+ACTION env_get(env(LIST), idx(LON)),
   GIVE plant_list_get(env, idx).
 /ACTION.
 
@@ -4305,7 +4306,7 @@ ACTION env_freed(env(LIST)),
 #  Takes numeric indent (pre-computed into isel string for slot 0
 #  and _from_long for slot 11) plus all 12 state params (v0.50.5: +maths).
 # ──────────────────────────────────────────────────────────────
-ACTION env_make(indent_num(NUM), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST), rty(TX), mexit(TX), wexit(TX), maths(LIST)),
+ACTION env_make(indent_num(LON), sigs(LIST), subst(LIST), clmap(LIST), actx(TX), nums(LIST), stvars(LIST), evars(LIST), rty(TX), mexit(TX), wexit(TX), maths(LIST)),
   REAP isel FROM indent_str, indent_num.
   REAP env FROM plant_list_create(14).
   REAP _ FROM env_set, env, 0, isel.
@@ -4405,7 +4406,7 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
       CREATE ccode2(TX) TO isel + "  tx_t " + target + " = (tx_t)0;\n".
       IF actx IS "a", SET ccode2 TO isel + "  " + target + " = (tx_t)0;\n". /IF.
       SET ccode2 TO ccode2 + isel + "  { " + envname + "* __env_" + cid2 + " = (" + envname + "*)plant_env_alloc(sizeof(" + envname + "));\n".
-      CREATE cpi(NUM) TO 0.
+      CREATE cpi(LON) TO 0.
       CREATE capn(TX) TO "".
       CREATE capi(TX) TO "".
       SEASON cpi + 1 < COUNT caps,
@@ -4416,7 +4417,7 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
       /SEASON.
       SET ccode2 TO ccode2 + isel + "    " + target + " = (tx_t)__env_" + cid2 + ";\n".
       SET ccode2 TO ccode2 + isel + "  }\n".
-      CREATE cmi(NUM) TO 0.
+      CREATE cmi(LON) TO 0.
       CREATE cmv(TX) TO "".
       SEASON cmi < COUNT moved,
           REAP cmv FROM plant_list_get, moved, cmi.
@@ -4446,16 +4447,16 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
           REAP _plmk FROM substring, _cv2, 0, 16.
           IF _plmk IS "plant_list_make(",
               REAP _fc FROM find_any, _cv2, ",".
-              CREATE _elems_start(NUM) TO _fc + 2.
-              CREATE _elems_end(NUM) TO LEN(_cv2) - 1.
+              CREATE _elems_start(LON) TO _fc + 2.
+              CREATE _elems_end(LON) TO LEN(_cv2) - 1.
               REAP _elems FROM substring, _cv2, _elems_start, _elems_end.
               # build aggregate by stripping _from_long( and ) wrappers
               CREATE _out(TX) TO "".
-              CREATE _pi(NUM) TO 0.
-              CREATE _plen(NUM) TO LEN(_elems).
+              CREATE _pi(LON) TO 0.
+              CREATE _plen(LON) TO LEN(_elems).
               SEASON _pi < _plen,
                   REAP _ch FROM char_at, _elems, _pi.
-                  CREATE _is_from(NUM) TO 0.
+                  CREATE _is_from(LON) TO 0.
                   REAP _fl FROM substring, _elems, _pi, _pi + 11.
                   IF _fl IS "_from_long(",
                       SET _pi TO _pi + 11.
@@ -4490,7 +4491,7 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
       GIVE isel + "  " + target + " = " + cval + ";\n".
   /IF.
   REAP isnc2 FROM expr_is_numeric, cval, nums.
-  IF vtype IS "NUM",
+  IF vtype IS "LON",
       IF isnc2 IS 0 AND is_lookup_prefix(cval) IS "1",
           SET cval TO "_to_long(" + cval + ")".
       /IF.
@@ -4557,7 +4558,7 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
       /IF.
       GIVE isel + "  " + vct2 + " " + target + " = " + cval + ";\n".
   /IF.
-  IF vtype ISNT "NUM" AND vtype ISNT "FACT" AND vtype ISNT "CHAR" AND vtype ISNT "UNUM" AND vtype ISNT "UFACT" AND vtype ISNT "SCL" AND vtype ISNT "LIST" AND vtype ISNT "MATH",
+  IF vtype ISNT "LON" AND vtype ISNT "FACT" AND vtype ISNT "CHAR" AND vtype ISNT "UNUM" AND vtype ISNT "UFACT" AND vtype ISNT "SCL" AND vtype ISNT "LIST" AND vtype ISNT "MATH",
       REAP vst3 FROM is_struct_type, vtype.
       REAP iut3 FROM is_union_type, vtype, evars.
       IF vst3 ISNT "1" AND iut3 ISNT "1",
@@ -4631,7 +4632,7 @@ ACTION gen_give_stmt(node, nums(LIST), evars(LIST), rty(TX), actx(TX), mexit(TX)
 #  Env slots: 0=indent(isel), 1=sigs, 2=subst, 3=clmap, 4=actx,
 #  5=nums, 6=stvars, 7=evars, 8=rty, 9=mexit, 10=wexit
 # ──────────────────────────────────────────────────────────────
-ACTION gen_if_stmt(node, nums(LIST), evars(LIST), isel(TX), indent_num(NUM), env(LIST)),
+ACTION gen_if_stmt(node, nums(LIST), evars(LIST), isel(TX), indent_num(LON), env(LIST)),
   REAP cond FROM _map_get, node, "cond".
   REAP bd FROM _map_get, node, "body".
   REAP cond FROM rewrite_cond_is, cond, nums.
@@ -4652,7 +4653,7 @@ ACTION gen_if_stmt(node, nums(LIST), evars(LIST), isel(TX), indent_num(NUM), env
   SET ccode TO ccode + bcode.
   REAP elif FROM _map_get, node, "elif".
   IF COUNT elif > 0,
-      CREATE ei2(NUM) TO 0.
+      CREATE ei2(LON) TO 0.
       SEASON ei2 < COUNT elif,
           REAP econd FROM plant_list_get, elif, ei2.
           REAP ebd FROM plant_list_get, elif, ei2 + 1.
@@ -4691,7 +4692,7 @@ ACTION gen_reap_stmt(node, sigs(LIST), subst(LIST), clmap(LIST), nums(LIST), stv
   IF act IS "storm", SET act TO "plant_storm". /IF.
   CREATE callname(TX) TO act.
   CREATE fparams(LIST) TO plant_list_make(0).
-  CREATE gi(NUM) TO -1.
+  CREATE gi(LON) TO -1.
   REAP gi FROM find_any, act, "[".
   IF gi ISNT -1,
       REAP sact FROM subst_reap_act, act, subst.
@@ -4720,7 +4721,7 @@ ACTION gen_reap_stmt(node, sigs(LIST), subst(LIST), clmap(LIST), nums(LIST), stv
   CREATE argstr(TX) TO "".
   CREATE clpre(TX) TO "".
   CREATE clclears(TX) TO "".
-  CREATE ai(NUM) TO 0.
+  CREATE ai(LON) TO 0.
   CREATE arg_el(TX) TO "".
   CREATE safm(TX) TO "".
   REAP sfz2 FROM find_sig, sigs, act.
@@ -4731,7 +4732,7 @@ ACTION gen_reap_stmt(node, sigs(LIST), subst(LIST), clmap(LIST), nums(LIST), stv
   IF safm IS "SAFE", SET safe_call TO "1". /IF.
   CREATE sargstr(TX) TO "".
   CREATE sarg_el(TX) TO "".
-  CREATE sarcn(NUM) TO 0.
+  CREATE sarcn(LON) TO 0.
   SEASON ai < COUNT args,
       REAP arg_el FROM plant_list_get, args, ai.
       CREATE aexpr(TX) TO arg_el.
@@ -4749,7 +4750,7 @@ ACTION gen_reap_stmt(node, sigs(LIST), subst(LIST), clmap(LIST), nums(LIST), stv
               REAP moved FROM _map_get, cnd, "moved".
               SET clpre TO clpre + isel + "  tx_t __carg_" + ai + ";\n".
               SET clpre TO clpre + isel + "  { " + envname + "* __env_" + ai + " = (" + envname + "*)plant_env_alloc(sizeof(" + envname + "));\n".
-              CREATE cpi(NUM) TO 0.
+              CREATE cpi(LON) TO 0.
               CREATE capn(TX) TO "".
               CREATE capi(TX) TO "".
               SEASON cpi + 1 < COUNT caps,
@@ -4760,7 +4761,7 @@ ACTION gen_reap_stmt(node, sigs(LIST), subst(LIST), clmap(LIST), nums(LIST), stv
               /SEASON.
               SET clpre TO clpre + isel + "    __carg_" + ai + " = (tx_t)__env_" + ai + ";\n".
               SET clpre TO clpre + isel + "  }\n".
-              CREATE cmi(NUM) TO 0.
+              CREATE cmi(LON) TO 0.
               CREATE cmv(TX) TO "".
               SEASON cmi < COUNT moved,
                   REAP cmv FROM plant_list_get, moved, cmi.
@@ -4936,7 +4937,7 @@ ACTION gen_reap_stmt(node, sigs(LIST), subst(LIST), clmap(LIST), nums(LIST), stv
 #  Env slots: 0=indent(isel), 1=sigs, 2=subst, 3=clmap, 4=actx,
 #  5=nums, 6=stvars, 7=evars, 8=rty, 9=mexit, 10=wexit, 11=indent_num
 # ──────────────────────────────────────────────────────────────
-ACTION gen_season_stmt(node, nums(LIST), evars(LIST), isel(TX), indent_num(NUM), env(LIST)),
+ACTION gen_season_stmt(node, nums(LIST), evars(LIST), isel(TX), indent_num(LON), env(LIST)),
   REAP cond FROM _map_get, node, "cond".
   REAP bd FROM _map_get, node, "body".
   REAP cond FROM rewrite_cond_is, cond, nums.
@@ -4963,7 +4964,7 @@ ACTION gen_season_stmt(node, nums(LIST), evars(LIST), isel(TX), indent_num(NUM),
 #  Env slots: 0=indent(isel), 1=sigs, 2=subst, 3=clmap, 4=actx,
 #  5=nums, 6=stvars, 7=evars, 8=rty, 9=mexit, 10=wexit, 11=indent_num
 # ──────────────────────────────────────────────────────────────
-ACTION gen_cycle_stmt(node, nums(LIST), evars(LIST), isel(TX), indent_num(NUM), env(LIST)),
+ACTION gen_cycle_stmt(node, nums(LIST), evars(LIST), isel(TX), indent_num(LON), env(LIST)),
   REAP ivar FROM _map_get, node, "iterVar".
   REAP fromExpr FROM _map_get, node, "fromExpr".
   REAP toExpr FROM _map_get, node, "toExpr".
@@ -5020,7 +5021,7 @@ ACTION gen_cycle_stmt(node, nums(LIST), evars(LIST), isel(TX), indent_num(NUM), 
 #  Env slots: 0=indent(isel), 1=sigs, 2=subst, 3=clmap, 4=actx,
 #  5=nums, 6=stvars, 7=evars, 8=rty, 9=mexit, 10=wexit, 11=indent_num
 # ──────────────────────────────────────────────────────────────
-ACTION gen_weather_stmt(node, isel(TX), indent_num(NUM), env(LIST)),
+ACTION gen_weather_stmt(node, isel(TX), indent_num(LON), env(LIST)),
   REAP bd FROM _map_get, node, "body".
   REAP sh FROM _map_get, node, "shelters".
   REAP cb FROM _map_get, node, "calm".
@@ -5063,7 +5064,7 @@ ACTION gen_weather_stmt(node, isel(TX), indent_num(NUM), env(LIST)),
   SET ccode TO ccode + isel + "      tx_t __ev = plant_exc_val();\n".
   SET ccode TO ccode + isel + "      plant_weather_leave(&" + wnm + ");\n".
   SET ccode TO ccode + isel + "      plant_weather_handling_begin(&" + wnm + ");\n".
-  CREATE si2(NUM) TO 0.
+  CREATE si2(LON) TO 0.
   CREATE wty2(TX) TO "".
   CREATE wbd2(TX) TO "".
   CREATE wbind2(TX) TO "".
@@ -5125,7 +5126,7 @@ ACTION gen_throw_stmt(node, nums(LIST), evars(LIST), isel(TX)),
 
 ACTION generate_body(bd(LIST), env(LIST)),
   CREATE res(TX) TO "".
-  CREATE i(NUM) TO 0.
+  CREATE i(LON) TO 0.
   CREATE node_el(TX) TO "".
   # v0.51.2c.1 — block-scope the freed-variable tracker (TD-006).
   REAP fvsave FROM env_get, env, 13.
@@ -5152,7 +5153,7 @@ ACTION generate_body(bd(LIST), env(LIST)),
 #  Parameters:
 #    node  — AST node (flat key-value LIST) produced by the parser
 #    env   — contextual environment bundle:
-#      indent  — current indentation level (NUM)
+#      indent  — current indentation level (LON)
 #      sigs    — action signature map for call resolution (LIST)
 #      subst   — type substitution map (LIST)
 #      clmap   — closure-var map (flat [varname, closurenode])
@@ -5182,8 +5183,8 @@ ACTION _is_digit(c(TX)),
   GIVE 0.
 /ACTION.
 
-ACTION _st_num(s(TX), p(NUM)),
-  CREATE v(NUM) TO 0.
+ACTION _st_num(s(TX), p(LON)),
+  CREATE v(LON) TO 0.
   SEASON p < LEN(s),
     REAP c FROM char_at, s, p.
     IF _is_digit(c) IS 1,
@@ -5195,24 +5196,24 @@ ACTION _st_num(s(TX), p(NUM)),
   GIVE plant_list_make(2, _from_long(v), _from_long(p)).
 /ACTION.
 
-ACTION _st_factor(s(TX), p(NUM)),
+ACTION _st_factor(s(TX), p(LON)),
   REAP c FROM char_at, s, p.
   IF c IS "-",
     REAP q FROM _st_factor, s, p + 1.
-    CREATE v(NUM) TO 0.
+    CREATE v(LON) TO 0.
     SET v TO _to_long(_first(q)).
-    CREATE p2(NUM) TO 0.
+    CREATE p2(LON) TO 0.
     SET p2 TO _to_long(_second(q)).
     IF p2 IS -1, GIVE q. /IF.
-    CREATE nv(NUM) TO 0.
+    CREATE nv(LON) TO 0.
     SET nv TO 0 - v.
     GIVE plant_list_make(2, _from_long(nv), _from_long(p2)).
   /IF.
   IF c IS "(",
     REAP q FROM _st_expr, s, p + 1.
-    CREATE v(NUM) TO 0.
+    CREATE v(LON) TO 0.
     SET v TO _to_long(_first(q)).
-    CREATE p2(NUM) TO 0.
+    CREATE p2(LON) TO 0.
     SET p2 TO _to_long(_second(q)).
     IF p2 IS -1, GIVE q. /IF.
     REAP c2 FROM char_at, s, p2.
@@ -5224,20 +5225,20 @@ ACTION _st_factor(s(TX), p(NUM)),
   GIVE _st_num(s, p).
 /ACTION.
 
-ACTION _st_term(s(TX), p(NUM)),
+ACTION _st_term(s(TX), p(LON)),
   REAP q FROM _st_factor, s, p.
-  CREATE v(NUM) TO 0.
+  CREATE v(LON) TO 0.
   SET v TO _to_long(_first(q)).
-  CREATE p2(NUM) TO 0.
+  CREATE p2(LON) TO 0.
   SET p2 TO _to_long(_second(q)).
   SEASON TRUE,
     IF p2 IS -1, BREAK 0. /IF.
     REAP c FROM char_at, s, p2.
     IF c IS "*",
       REAP q2 FROM _st_factor, s, p2 + 1.
-      CREATE v2(NUM) TO 0.
+      CREATE v2(LON) TO 0.
       SET v2 TO _to_long(_first(q2)).
-      CREATE p3(NUM) TO 0.
+      CREATE p3(LON) TO 0.
       SET p3 TO _to_long(_second(q2)).
       IF p3 IS -1, SET p2 TO -1. /IF.
       IF p3 ISNT -1,
@@ -5248,9 +5249,9 @@ ACTION _st_term(s(TX), p(NUM)),
     /IF.
     IF c IS "/",
       REAP q2 FROM _st_factor, s, p2 + 1.
-      CREATE v2(NUM) TO 0.
+      CREATE v2(LON) TO 0.
       SET v2 TO _to_long(_first(q2)).
-      CREATE p3(NUM) TO 0.
+      CREATE p3(LON) TO 0.
       SET p3 TO _to_long(_second(q2)).
       IF p3 IS -1, SET p2 TO -1. /IF.
       IF p3 ISNT -1 AND v2 ISNT 0,
@@ -5265,20 +5266,20 @@ ACTION _st_term(s(TX), p(NUM)),
   GIVE plant_list_make(2, _from_long(v), _from_long(p2)).
 /ACTION.
 
-ACTION _st_expr(s(TX), p(NUM)),
+ACTION _st_expr(s(TX), p(LON)),
   REAP q FROM _st_term, s, p.
-  CREATE v(NUM) TO 0.
+  CREATE v(LON) TO 0.
   SET v TO _to_long(_first(q)).
-  CREATE p2(NUM) TO 0.
+  CREATE p2(LON) TO 0.
   SET p2 TO _to_long(_second(q)).
   SEASON TRUE,
     IF p2 IS -1, BREAK 0. /IF.
     REAP c FROM char_at, s, p2.
     IF c IS "+",
       REAP q2 FROM _st_term, s, p2 + 1.
-      CREATE v2(NUM) TO 0.
+      CREATE v2(LON) TO 0.
       SET v2 TO _to_long(_first(q2)).
-      CREATE p3(NUM) TO 0.
+      CREATE p3(LON) TO 0.
       SET p3 TO _to_long(_second(q2)).
       IF p3 IS -1, SET p2 TO -1. /IF.
       IF p3 ISNT -1,
@@ -5289,9 +5290,9 @@ ACTION _st_expr(s(TX), p(NUM)),
     /IF.
     IF c IS "-",
       REAP q2 FROM _st_term, s, p2 + 1.
-      CREATE v2(NUM) TO 0.
+      CREATE v2(LON) TO 0.
       SET v2 TO _to_long(_first(q2)).
-      CREATE p3(NUM) TO 0.
+      CREATE p3(LON) TO 0.
       SET p3 TO _to_long(_second(q2)).
       IF p3 IS -1, SET p2 TO -1. /IF.
       IF p3 ISNT -1,
@@ -5309,9 +5310,9 @@ ACTION _step_sign(e(TX)),
   REAP ne FROM strings:REPLACE, e, " ", "".
   IF ne IS "", GIVE "+". /IF.
   REAP q FROM _st_expr, ne, 0.
-  CREATE v(NUM) TO 0.
+  CREATE v(LON) TO 0.
   SET v TO _to_long(_first(q)).
-  CREATE p2(NUM) TO 0.
+  CREATE p2(LON) TO 0.
   SET p2 TO _to_long(_second(q)).
   IF p2 IS -1, GIVE "?". /IF.
   IF p2 < LEN(ne), GIVE "?". /IF.
@@ -5377,7 +5378,7 @@ ACTION generate_node(node, env(LIST)),
     IF ntype IS "suite_stmt",
         REAP body_nodes FROM _map_get, node, "body".
         CREATE body_code(TX) TO "".
-        CREATE bi(NUM) TO 0.
+        CREATE bi(LON) TO 0.
         SEASON bi < COUNT body_nodes,
             REAP bnode FROM plant_list_get, body_nodes, bi.
             REAP bnode_code FROM generate_node, bnode, env.
@@ -5386,14 +5387,14 @@ ACTION generate_node(node, env(LIST)),
         /SEASON.
         REAP isel FROM indent_str, indent_num.
         CREATE has_st(TX) TO "0".
-        CREATE bdi(NUM) TO 0.
+        CREATE bdi(LON) TO 0.
         SEASON bdi < COUNT body_nodes,
             REAP bsn FROM _map_get, plant_list_get(body_nodes, bdi), "type".
             IF bsn IS "setup_stmt", SET has_st TO "1". /IF.
             SET bdi TO bdi + 1.
         /SEASON.
         CREATE has_verify(TX) TO "0".
-        CREATE vdi(NUM) TO 0.
+        CREATE vdi(LON) TO 0.
         SEASON vdi < COUNT body_nodes,
             REAP vsn FROM _map_get, plant_list_get(body_nodes, vdi), "type".
             IF vsn IS "verify_stmt", SET has_verify TO "1". /IF.
@@ -5538,7 +5539,7 @@ ACTION generate_node(node, env(LIST)),
             CREATE ccode2(TX) TO isel + "  tx_t " + target + " = (tx_t)0;\n".
             IF actx IS "a", SET ccode2 TO isel + "  " + target + " = (tx_t)0;\n". /IF.
             SET ccode2 TO ccode2 + isel + "  { " + envname + "* __env_" + cid2 + " = (" + envname + "*)plant_env_alloc(sizeof(" + envname + "));\n".
-            CREATE cpi(NUM) TO 0.
+            CREATE cpi(LON) TO 0.
             CREATE capn(TX) TO "".
             CREATE capi(TX) TO "".
             SEASON cpi + 1 < COUNT caps,
@@ -5549,7 +5550,7 @@ ACTION generate_node(node, env(LIST)),
             /SEASON.
             SET ccode2 TO ccode2 + isel + "    " + target + " = (tx_t)__env_" + cid2 + ";\n".
             SET ccode2 TO ccode2 + isel + "  }\n".
-            CREATE cmi(NUM) TO 0.
+            CREATE cmi(LON) TO 0.
             CREATE cmv(TX) TO "".
             SEASON cmi < COUNT moved,
                 REAP cmv FROM plant_list_get, moved, cmi.
@@ -5577,15 +5578,15 @@ ACTION generate_node(node, env(LIST)),
                 REAP _plmk2 FROM substring, _cv3, 0, 16.
                 IF _plmk2 IS "plant_list_make(",
                     REAP _fc2 FROM find_any, _cv3, ",".
-                    CREATE _elems_start2(NUM) TO _fc2 + 2.
-                    CREATE _elems_end2(NUM) TO LEN(_cv3) - 1.
+                    CREATE _elems_start2(LON) TO _fc2 + 2.
+                    CREATE _elems_end2(LON) TO LEN(_cv3) - 1.
                     REAP _elems2 FROM substring, _cv3, _elems_start2, _elems_end2.
                     CREATE _out2(TX) TO "".
-                    CREATE _pi2(NUM) TO 0.
-                    CREATE _plen2(NUM) TO LEN(_elems2).
+                    CREATE _pi2(LON) TO 0.
+                    CREATE _plen2(LON) TO LEN(_elems2).
                     SEASON _pi2 < _plen2,
                         REAP _ch2 FROM char_at, _elems2, _pi2.
-                        CREATE _is_from2(NUM) TO 0.
+                        CREATE _is_from2(LON) TO 0.
                         REAP _fl2 FROM substring, _elems2, _pi2, _pi2 + 11.
                         IF _fl2 IS "_from_long(",
                             SET _pi2 TO _pi2 + 11.
@@ -5619,7 +5620,7 @@ ACTION generate_node(node, env(LIST)),
         IF actx IS "a",
             GIVE isel + "  " + target + " = " + cval + ";\n".
         /IF.
-        IF vtype IS "NUM",
+        IF vtype IS "LON",
             GIVE isel + "  long " + target + " = " + cval + ";\n".
         /IF.
         # v0.50.0a — CHAR single-character primitive.
@@ -5674,7 +5675,7 @@ ACTION generate_node(node, env(LIST)),
             /IF.
             GIVE isel + "  " + vct4 + " " + target + " = " + cval + ";\n".
         /IF.
-        IF vtype ISNT "NUM" AND vtype ISNT "CHAR" AND vtype ISNT "UNUM" AND vtype ISNT "UFACT" AND vtype ISNT "SCL" AND vtype ISNT "MATH",
+        IF vtype ISNT "LON" AND vtype ISNT "CHAR" AND vtype ISNT "UNUM" AND vtype ISNT "UFACT" AND vtype ISNT "SCL" AND vtype ISNT "MATH",
             REAP vst5 FROM is_struct_type, vtype.
             REAP iut5 FROM is_union_type, vtype, evars.
             IF vst5 ISNT "1" AND iut5 ISNT "1",
@@ -5905,7 +5906,7 @@ ACTION generate_node(node, env(LIST)),
             IF gdir IS "DESC", SET spec TO "DESC". /IF.
         /IF.
         IF COUNT fields > 0,
-            CREATE fi(NUM) TO 0.
+            CREATE fi(LON) TO 0.
             SEASON fi < COUNT fields,
                 REAP fn FROM plant_list_get, fields, fi.
                 REAP fd FROM plant_list_get, dirs, fi.
@@ -6058,7 +6059,7 @@ ACTION generate_node(node, env(LIST)),
         REAP ca2s FROM _swap_self, ca2.
         SET ca2 TO ca2s.
         CREATE cargs3(LIST) TO plant_list_make(0).
-        CREATE cai(NUM) TO 0.
+        CREATE cai(LON) TO 0.
         SEASON cai < COUNT cargs2,
           REAP ael FROM plant_list_get, cargs2, cai.
           REAP asw FROM _swap_self, ael.
@@ -6347,11 +6348,11 @@ ACTION generate_node(node, env(LIST)),
         REAP csubj FROM translate_expr, subj, nums, evars, maths.
         REAP isel FROM indent_str, indent_num.
         CREATE ccode(TX) TO isel + "  \{\n" + isel + "    tx_t __mt = " + csubj + ";\n".
-        CREATE ci(NUM) TO 0.
+        CREATE ci(LON) TO 0.
         CREATE clause(TX) TO "".
         CREATE vname(TX) TO "".
         CREATE binding(TX) TO "".
-        CREATE wc(NUM) TO 0.
+        CREATE wc(LON) TO 0.
         SEASON ci < COUNT clauses,
             REAP clause FROM plant_list_get, clauses, ci.
             REAP vname FROM _map_get, clause, "variantName".
@@ -6447,7 +6448,7 @@ ACTION generate_node(node, env(LIST)),
             GIVE "static int plant_a_" + aname + "_step(tx_t st);\n\n" + st_code + en_code + stp_code.
         /IF.
         CREATE paramstr(TX) TO "".
-        CREATE pi(NUM) TO 0.
+        CREATE pi(LON) TO 0.
         CREATE param_el(TX) TO "".
         SEASON pi < COUNT params,
             REAP param_el FROM plant_list_get, params, pi.
@@ -6463,7 +6464,7 @@ ACTION generate_node(node, env(LIST)),
         CREATE ccode(TX) TO "tx_t " + fnname + "(" + paramstr + ") \{\n".
         CREATE implicit(LIST) TO collect_implicit(bd, params).
         CREATE dcode(TX) TO "".
-        CREATE di(NUM) TO 0.
+        CREATE di(LON) TO 0.
         CREATE dv(TX) TO "".
         SEASON di < COUNT implicit,
             REAP dv FROM plant_list_get, implicit, di.
@@ -6489,7 +6490,7 @@ ACTION generate_node(node, env(LIST)),
         # plant_verify_begin/end only for actions that contain VERIFY
         # assertions (test actions).
         CREATE has_verify(FACT) TO FALSE.
-        CREATE vbdi(NUM) TO 0.
+        CREATE vbdi(LON) TO 0.
         SEASON vbdi < COUNT bd,
             REAP vbnd FROM plant_list_get, bd, vbdi.
             REAP vbnd_ty FROM _map_get, vbnd, "type".
@@ -6516,10 +6517,10 @@ ACTION generate_node(node, env(LIST)),
         # chunk dispatch over the dynamic vec pool.
         IF mmode IS "SMART",
             CREATE sp(TX) TO "0".
-            CREATE spi(NUM) TO 0.
+            CREATE spi(LON) TO 0.
             SEASON spi < COUNT params,
                 REAP sp_ty FROM _map_get, params[spi], "type".
-                IF sp_ty IS "NUM",
+                IF sp_ty IS "LON",
                     REAP sp FROM _map_get, params[spi], "name".
                     SET spi TO COUNT params.
                 /IF.
@@ -6536,8 +6537,8 @@ ACTION generate_node(node, env(LIST)),
         # were threaded into the body generator as mexit), so only
         # non-give tails get the exit appended here.
         IF (COUNT bd) > 0,
-            CREATE bd_count2(NUM) TO COUNT bd.
-            CREATE last_idx2(NUM) TO bd_count2 - 1.
+            CREATE bd_count2(LON) TO COUNT bd.
+            CREATE last_idx2(LON) TO bd_count2 - 1.
             CREATE last_nd2(TX) TO plant_list_get(bd, last_idx2).
             CREATE last_ty2(TX) TO _map_get(last_nd2, "type").
             IF amode_exit > "" AND last_ty2 ISNT "give_stmt",
@@ -6562,8 +6563,8 @@ ACTION generate_node(node, env(LIST)),
             SET bcode TO bcode + "  return \"\";\n".
         /IF.
         IF (COUNT bd) > 0,
-            CREATE bd_count(NUM) TO COUNT bd.
-            CREATE last_idx(NUM) TO bd_count - 1.
+            CREATE bd_count(LON) TO COUNT bd.
+            CREATE last_idx(LON) TO bd_count - 1.
             CREATE last_nd(TX) TO plant_list_get(bd, last_idx).
             CREATE last_ty(TX) TO _map_get(last_nd, "type").
             IF drn2 IS "1" AND last_ty ISNT "give_stmt",
@@ -6585,7 +6586,7 @@ ACTION generate_node(node, env(LIST)),
         REAP ename FROM _map_get, node, "name".
         CREATE members(LIST) TO _map_get(node, "members").
         CREATE ccode(TX) TO "typedef enum \{\n  ".
-        CREATE mi(NUM) TO 0.
+        CREATE mi(LON) TO 0.
         CREATE member_el(TX) TO "".
         SEASON mi < COUNT members,
             REAP member_el FROM plant_list_get, members, mi.
@@ -6620,7 +6621,7 @@ ACTION plant_ctype(ptype(TX)),
     REAP rk FROM type_info, base.
     IF COUNT rk > 0, GIVE type_ctype(base). /IF.
     IF base IS "LIST", GIVE "PlantArray*". /IF.
-    IF base IS "REF NUM", GIVE "long*". /IF.
+    IF base IS "REF LON", GIVE "long*". /IF.
     IF base IS "REF FACT", GIVE "int*". /IF.
     IF base IS "REF CHAR", GIVE "char*". /IF.
     IF base IS "REF UNUM", GIVE "unsigned long*". /IF.
@@ -6706,7 +6707,7 @@ ACTION ffi_struct_cname(typ(TX)),
   REAP bi FROM find_any, typ, "[".
   IF bi ISNT -1,
     REAP gargs FROM parse_type_args, typ.
-    CREATE ai(NUM) TO 0.
+    CREATE ai(LON) TO 0.
     CREATE av(TX) TO "".
     SEASON ai < COUNT gargs,
       REAP av FROM plant_list_get, gargs, ai.
@@ -6722,7 +6723,7 @@ ACTION ffi_struct_cname(typ(TX)),
 ACTION is_struct_type(t(TX)),
   REAP base FROM type_base, t.
   REAP tb FROM trim, base.
-  IF tb IS "NUM", GIVE "0". /IF.
+  IF tb IS "LON", GIVE "0". /IF.
   IF tb IS "FACT", GIVE "0". /IF.
   IF tb IS "TX", GIVE "0". /IF.
   IF tb IS "LIST", GIVE "0". /IF.
@@ -6746,7 +6747,7 @@ ACTION is_union_type(t(TX), reg(LIST)),
   REAP base FROM type_base, t.
   REAP tb FROM trim, base.
   CREATE lk(TX) TO "UNION." + tb.
-  CREATE ri(NUM) TO 0.
+  CREATE ri(LON) TO 0.
   SEASON ri + 1 < COUNT reg,
     REAP rn FROM plant_list_get, reg, ri.
     IF str_eq(rn, lk) IS "1", GIVE "1". /IF.
@@ -6758,7 +6759,7 @@ ACTION is_union_type(t(TX), reg(LIST)),
 # collect_union_names — flat list of union type names from the AST
 ACTION collect_union_names(ast(LIST)),
   CREATE res(LIST) TO plant_list_make(0).
-  CREATE ai(NUM) TO 0.
+  CREATE ai(LON) TO 0.
   CREATE nd(TX) TO "".
   CREATE nty(TX) TO "".
   SEASON ai < COUNT ast,
@@ -6775,7 +6776,7 @@ ACTION collect_union_names(ast(LIST)),
 
 # collect_stvars_walk — struct-typed CREATE/LET targets in a body
 ACTION collect_stvars_walk(bd(LIST), subst(LIST), res(LIST)),
-  CREATE wi(NUM) TO 0.
+  CREATE wi(LON) TO 0.
   CREATE wnd(TX) TO "".
   CREATE wty(TX) TO "".
   CREATE wtg(TX) TO "".
@@ -6800,7 +6801,7 @@ ACTION collect_stvars_walk(bd(LIST), subst(LIST), res(LIST)),
     /IF.
     IF wty IS "if_stmt",
       REAP ib FROM _if_bodies, wnd.
-      CREATE ii6(NUM) TO 0.
+      CREATE ii6(LON) TO 0.
       SEASON ii6 < COUNT ib,
         REAP ibd6 FROM plant_list_get, ib, ii6.
         REAP wret2 FROM collect_stvars_walk, ibd6, subst, res.
@@ -6813,7 +6814,7 @@ ACTION collect_stvars_walk(bd(LIST), subst(LIST), res(LIST)),
     /IF.
     IF wty IS "match_stmt",
       CREATE mcl5(LIST) TO _map_get(wnd, "clauses").
-      CREATE mci5(NUM) TO 0.
+      CREATE mci5(LON) TO 0.
       SEASON mci5 < COUNT mcl5,
         REAP mcl6 FROM plant_list_get, mcl5, mci5.
         REAP mcb3 FROM _map_get, mcl6, "bodyStatements".
@@ -6823,7 +6824,7 @@ ACTION collect_stvars_walk(bd(LIST), subst(LIST), res(LIST)),
     /IF.
     IF wty IS "weather_stmt",
       REAP wbl7 FROM _weather_bodies, wnd.
-      CREATE wbi7(NUM) TO 0.
+      CREATE wbi7(LON) TO 0.
       SEASON wbi7 < COUNT wbl7,
         REAP wbel7 FROM plant_list_get, wbl7, wbi7.
         REAP wret2 FROM collect_stvars_walk, wbel7, subst, res.
@@ -6840,7 +6841,7 @@ ACTION collect_stvars_walk(bd(LIST), subst(LIST), res(LIST)),
 # Flat [name, kind, …] pairs; kind = ffi_param_kind of the type.
 ACTION collect_stvars(bd(LIST), params(LIST), subst(LIST)),
   CREATE res(LIST) TO plant_list_make(0).
-  CREATE pi(NUM) TO 0.
+  CREATE pi(LON) TO 0.
   CREATE pnd(LIST) TO plant_list_make(0).
   CREATE pn2(TX) TO "".
   CREATE pty2(TX) TO "".
@@ -6868,7 +6869,7 @@ ACTION collect_stvars(bd(LIST), params(LIST), subst(LIST)),
 # find_sig — look up the full sigs entry (name/params/ret/varargs)
 # by declaration name; real empty LIST when missing
 ACTION find_sig(sigs(LIST), name(TX)),
-  CREATE fi(NUM) TO 0.
+  CREATE fi(LON) TO 0.
   CREATE fe(TX) TO "".
   CREATE fn(TX) TO "".
   CREATE found(LIST) TO plant_list_make(0).
@@ -6901,7 +6902,7 @@ ACTION ffi_ctype(ptype(TX)),
 
 # is_bare_id — expr is a single identifier [A-Za-z0-9_]+
 ACTION is_bare_id(e(TX)),
-  CREATE bi2(NUM) TO 0.
+  CREATE bi2(LON) TO 0.
   CREATE bc(TX) TO "".
   SEASON bi2 < LEN(e),
     REAP bc FROM char_at, e, bi2.
@@ -6936,7 +6937,7 @@ ACTION expr_is_stringlike(e(TX)),
 # stvar_kind — flat [name, kind, …] lookup: struct-var kind
 # ("struct_val"/"struct_ref") for a name, or "" when not a stvar
 ACTION stvar_kind(stvars(LIST), name(TX)),
-  CREATE si(NUM) TO 0.
+  CREATE si(LON) TO 0.
   SEASON si + 1 < COUNT stvars,
     REAP sv1 FROM plant_list_get, stvars, si.
     IF str_eq(sv1, name) IS "1",
@@ -6951,7 +6952,7 @@ ACTION stvar_kind(stvars(LIST), name(TX)),
 # collect_cb_uses — action names passed as CALLBACK args anywhere
 # in a body (recurses IF/SEASON/CYCLE/MATCH)
 ACTION collect_cb_uses(bd(LIST), sigs(LIST), acc(LIST)),
-  CREATE wi(NUM) TO 0.
+  CREATE wi(LON) TO 0.
   CREATE nd(TX) TO "".
   CREATE ty(TX) TO "".
   SEASON wi < COUNT bd,
@@ -6963,7 +6964,7 @@ ACTION collect_cb_uses(bd(LIST), sigs(LIST), acc(LIST)),
         REAP caact FROM strings:REPLACE, caact, ":", "_".
         REAP cafp FROM find_params, sigs, caact.
         CREATE caargs(LIST) TO _map_get(nd, "args").
-        CREATE kai(NUM) TO 0.
+        CREATE kai(LON) TO 0.
         SEASON kai < COUNT caargs,
           IF kai < COUNT cafp,
             REAP kap FROM plant_list_get, cafp, kai.
@@ -6984,7 +6985,7 @@ ACTION collect_cb_uses(bd(LIST), sigs(LIST), acc(LIST)),
     /IF.
     IF ty IS "if_stmt",
       REAP ib FROM _if_bodies, nd.
-      CREATE ii7(NUM) TO 0.
+      CREATE ii7(LON) TO 0.
       SEASON ii7 < COUNT ib,
         REAP ibd7 FROM plant_list_get, ib, ii7.
         REAP acc FROM collect_cb_uses, ibd7, sigs, acc.
@@ -6997,7 +6998,7 @@ ACTION collect_cb_uses(bd(LIST), sigs(LIST), acc(LIST)),
     /IF.
     IF ty IS "match_stmt",
       CREATE cl9(LIST) TO _map_get(nd, "clauses").
-      CREATE ci9(NUM) TO 0.
+      CREATE ci9(LON) TO 0.
       SEASON ci9 < COUNT cl9,
         REAP cl2 FROM plant_list_get, cl9, ci9.
         REAP cb9 FROM _map_get, cl2, "bodyStatements".
@@ -7007,7 +7008,7 @@ ACTION collect_cb_uses(bd(LIST), sigs(LIST), acc(LIST)),
     /IF.
     IF ty IS "weather_stmt",
       REAP wbl8 FROM _weather_bodies, nd.
-      CREATE wbi8(NUM) TO 0.
+      CREATE wbi8(LON) TO 0.
       SEASON wbi8 < COUNT wbl8,
         REAP wbel8 FROM plant_list_get, wbl8, wbi8.
         REAP acc FROM collect_cb_uses, wbel8, sigs, acc.
@@ -7037,7 +7038,7 @@ ACTION struct_fields_at(tpl(LIST), args(LIST)),
   CREATE sgens(LIST) TO _map_get(tpl, "generics").
   CREATE sfields(LIST) TO _map_get(tpl, "fields").
   CREATE fsub(LIST) TO build_subst(sgens, args).
-  CREATE fi9(NUM) TO 0.
+  CREATE fi9(LON) TO 0.
   CREATE fel9(TX) TO "".
   SEASON fi9 < COUNT sfields,
     REAP fel9 FROM plant_list_get, sfields, fi9.
@@ -7063,14 +7064,14 @@ ACTION ffi_emit_struct_helpers(cname(TX), flds(LIST)),
   SET h1 TO h1 + "  " + cname + " r;\n  memset(&r, 0, sizeof(r));\n".
   SET h1 TO h1 + "  if (depth > 3) { plant_ffi_errno = FFI_ERR_DEPTH; plant_ffi_debug_print(\"map_to_" + cname + ": depth limit\"); return r; }\n".
   SET h1 TO h1 + "  if (!m) { plant_ffi_errno = FFI_ERR_TYPE; return r; }\n".
-  CREATE fi8(NUM) TO 0.
+  CREATE fi8(LON) TO 0.
   CREATE fn8(TX) TO "".
   CREATE ft8(TX) TO "".
   SEASON fi8 + 1 < COUNT flds,
     REAP fn8 FROM plant_list_get, flds, fi8.
     REAP ft8 FROM plant_list_get, flds, fi8 + 1.
     REAP fb8 FROM type_base, ft8.
-    IF fb8 IS "NUM",
+    IF fb8 IS "LON",
       SET h1 TO h1 + "  r." + fn8 + " = (long)(intptr_t)plant_map_get(m, \"" + fn8 + "\");\n".
     /IF.
     IF fb8 IS "FACT",
@@ -7101,14 +7102,14 @@ ACTION ffi_emit_struct_helpers(cname(TX), flds(LIST)),
   SET h3 TO h3 + "static " + cname + "* plant_map_to_ref_" + cname + "(tx_t m) { return (" + cname + "*)plant_struct_alloc_copy_" + cname + "(plant_map_to_" + cname + "(m)); }\n".
   SET h4 TO "static tx_t plant_" + cname + "_to_map(" + cname + " v) \{\n".
   SET h4 TO h4 + "  tx_t r = (tx_t)plant_map_hash_create(8);\n".
-  CREATE fi7(NUM) TO 0.
+  CREATE fi7(LON) TO 0.
   CREATE fn7(TX) TO "".
   CREATE ft7(TX) TO "".
   SEASON fi7 + 1 < COUNT flds,
     REAP fn7 FROM plant_list_get, flds, fi7.
     REAP ft7 FROM plant_list_get, flds, fi7 + 1.
     REAP fb7 FROM type_base, ft7.
-    IF fb7 IS "NUM",
+    IF fb7 IS "LON",
       SET h4 TO h4 + "  plant_map_hash_set(r, \"" + fn7 + "\", (void*)(intptr_t)v." + fn7 + ");\n".
     /IF.
     IF fb7 IS "FACT",
@@ -7144,8 +7145,8 @@ ACTION ffi_emit_struct_helpers(cname(TX), flds(LIST)),
 #  trim — strip leading/trailing spaces
 # ──────────────────────────────────────────────────────────────
 ACTION trim(s(TX)),
-    CREATE st(NUM) TO 0.
-    CREATE en(NUM) TO LEN(s).
+    CREATE st(LON) TO 0.
+    CREATE en(LON) TO LEN(s).
     SEASON st < en,
         REAP c FROM char_at, s, st.
         IF c ISNT " ", BREAK 0. /IF.
@@ -7167,7 +7168,7 @@ ACTION trim(s(TX)),
 #  generic type parameters to concrete types.
 # ──────────────────────────────────────────────────────────────
 ACTION subst_append(acc(TX), w(TX), subst(LIST)),
-    CREATE fi(NUM) TO 0.
+    CREATE fi(LON) TO 0.
     CREATE fk(TX) TO "".
     CREATE fv(TX) TO "".
     SEASON fi + 1 < COUNT subst,
@@ -7189,7 +7190,7 @@ ACTION subst_type(t(TX), subst(LIST)),
     IF COUNT subst IS 0, GIVE t. /IF.
     CREATE res(TX) TO "".
     CREATE w(TX) TO "".
-    CREATE si(NUM) TO 0.
+    CREATE si(LON) TO 0.
     CREATE ch(TX) TO "".
     SEASON si < LEN(t),
         REAP ch FROM char_at, t, si.
@@ -7230,16 +7231,16 @@ ACTION base_of(act(TX)),
 # present in the entries are ignored). Returns the reordered list.
 ACTION ffi_topo_order(entries(LIST)),
   CREATE tdone(LIST) TO plant_list_make(0).
-  CREATE tprog(NUM) TO 1.
-  CREATE ti(NUM) TO 0.
+  CREATE tprog(LON) TO 1.
+  CREATE ti(LON) TO 0.
   CREATE te9(LIST) TO plant_list_make(0).
   CREATE tscn(TX) TO "".
   CREATE tflds2(LIST) TO plant_list_make(0).
   CREATE td1(TX) TO "0".
   CREATE td2(TX) TO "0".
   CREATE td3(TX) TO "0".
-  CREATE tj(NUM) TO 0.
-  CREATE tok(NUM) TO 1.
+  CREATE tj(LON) TO 0.
+  CREATE tok(LON) TO 1.
   CREATE ft9(TX) TO "".
   CREATE fs9(TX) TO "".
   CREATE fc9(TX) TO "".
@@ -7302,7 +7303,7 @@ ACTION ffi_topo_emit_helpers(entries(LIST)),
   CREATE tscn(TX) TO "".
   CREATE tflds2(LIST) TO plant_list_make(0).
   CREATE ffd1(TX) TO "".
-  CREATE ti(NUM) TO 0.
+  CREATE ti(LON) TO 0.
   CREATE te9(LIST) TO plant_list_make(0).
   SEASON ti < COUNT ord,
     REAP te9 FROM plant_list_get, ord, ti.
@@ -7325,7 +7326,7 @@ ACTION parse_type_args(act(TX)),
     REAP inner FROM substring, act, bi + 1, ei.
     REAP parts FROM strings:SPLIT, inner, ",".
     CREATE out(LIST) TO plant_list_make(0).
-    CREATE oi(NUM) TO 0.
+    CREATE oi(LON) TO 0.
     CREATE pe(TX) TO "".
     CREATE pt(TX) TO "".
     SEASON oi < COUNT parts,
@@ -7342,7 +7343,7 @@ ACTION parse_type_args(act(TX)),
 # mangle — unique C identifier: plant_<name>_<T1>_<T2>
 ACTION mangle(base(TX), args(LIST)),
     CREATE res(TX) TO "plant_" + base.
-    CREATE mi(NUM) TO 0.
+    CREATE mi(LON) TO 0.
     CREATE ae(TX) TO "".
     SEASON mi < COUNT args,
         REAP ae FROM plant_list_get, args, mi.
@@ -7356,7 +7357,7 @@ ACTION mangle(base(TX), args(LIST)),
 # (returns a real empty LIST when missing, so COUNT on the result
 # is safe — never the "" sentinel, which would be read as a list)
 ACTION find_template(templates(LIST), base(TX)),
-    CREATE fi(NUM) TO 0.
+    CREATE fi(LON) TO 0.
     CREATE fe(TX) TO "".
     CREATE fn(TX) TO "".
     CREATE found(LIST) TO plant_list_make(0).
@@ -7384,7 +7385,7 @@ ACTION find_template(templates(LIST), base(TX)),
 # (real empty LIST when missing — never the "" sentinel, so
 # COUNT on the result is safe)
 ACTION find_struct(structs(LIST), name(TX)),
-    CREATE fi(NUM) TO 0.
+    CREATE fi(LON) TO 0.
     CREATE fe(TX) TO "".
     CREATE fn(TX) TO "".
     CREATE found(LIST) TO plant_list_make(0).
@@ -7405,8 +7406,8 @@ ACTION find_struct(structs(LIST), name(TX)),
 # (LIST[Box[NUM]], Pair[NUM, Box[U]], Node[T] …).
 ACTION scan_type(t(TX), subst(LIST), structs(LIST), acc(LIST)),
     CREATE st(TX) TO "".
-    CREATE bi(NUM) TO -1.
-    CREATE ai2b(NUM) TO -1.
+    CREATE bi(LON) TO -1.
+    CREATE ai2b(LON) TO -1.
     REAP st FROM subst_type, t, subst.
     REAP bi FROM find_any, st, "[".
     IF bi ISNT -1,
@@ -7425,7 +7426,7 @@ ACTION scan_type(t(TX), subst(LIST), structs(LIST), acc(LIST)),
                 REAP generics FROM _map_get, tpl, "generics".
                 REAP nsubst FROM build_subst, generics, args.
                 REAP fields FROM _map_get, tpl, "fields".
-                CREATE fi2(NUM) TO 0.
+                CREATE fi2(LON) TO 0.
                 CREATE fv(TX) TO "".
                 SEASON fi2 < COUNT fields,
                     REAP fv FROM _map_get, fields[fi2], "type".
@@ -7435,7 +7436,7 @@ ACTION scan_type(t(TX), subst(LIST), structs(LIST), acc(LIST)),
             /IF.
         /IF.
         REAP args FROM parse_type_args, st.
-        CREATE ai2(NUM) TO 0.
+        CREATE ai2(LON) TO 0.
         CREATE av(TX) TO "".
         SEASON ai2 < COUNT args,
             REAP av FROM plant_list_get, args, ai2.
@@ -7451,7 +7452,7 @@ ACTION scan_type(t(TX), subst(LIST), structs(LIST), acc(LIST)),
 
 # scan_params — scan every param type of a decl
 ACTION scan_params(params(LIST), subst(LIST), structs(LIST), acc(LIST)),
-    CREATE pi(NUM) TO 0.
+    CREATE pi(LON) TO 0.
     CREATE pv(TX) TO "".
     SEASON pi < COUNT params,
         REAP pv FROM _map_get, params[pi], "type".
@@ -7463,7 +7464,7 @@ ACTION scan_params(params(LIST), subst(LIST), structs(LIST), acc(LIST)),
 
 # scan_fields — scan every field type of a struct template
 ACTION scan_fields(fields(LIST), subst(LIST), structs(LIST), acc(LIST)),
-    CREATE fi(NUM) TO 0.
+    CREATE fi(LON) TO 0.
     CREATE fv(TX) TO "".
     SEASON fi < COUNT fields,
         REAP fv FROM _map_get, fields[fi], "type".
@@ -7475,7 +7476,7 @@ ACTION scan_fields(fields(LIST), subst(LIST), structs(LIST), acc(LIST)),
 
 # collect_struct_insts — walk a body for struct-typed declarations
 ACTION collect_struct_insts(bd(LIST), subst(LIST), structs(LIST), acc(LIST)),
-    CREATE ci(NUM) TO 0.
+    CREATE ci(LON) TO 0.
     CREATE nd(TX) TO "".
     CREATE ty(TX) TO "".
     CREATE vt(TX) TO "".
@@ -7491,7 +7492,7 @@ ACTION collect_struct_insts(bd(LIST), subst(LIST), structs(LIST), acc(LIST)),
         /IF.
         IF ty IS "if_stmt",
             REAP ib FROM _if_bodies, nd.
-            CREATE ii8(NUM) TO 0.
+            CREATE ii8(LON) TO 0.
             SEASON ii8 < COUNT ib,
                 REAP ibd8 FROM plant_list_get, ib, ii8.
                 REAP acc FROM collect_struct_insts, ibd8, subst, structs, acc.
@@ -7504,7 +7505,7 @@ ACTION collect_struct_insts(bd(LIST), subst(LIST), structs(LIST), acc(LIST)),
         /IF.
         IF ty IS "match_stmt",
             CREATE mcl9(LIST) TO _map_get(nd, "clauses").
-            CREATE mci9(NUM) TO 0.
+            CREATE mci9(LON) TO 0.
             SEASON mci9 < COUNT mcl9,
                 REAP mcl10 FROM plant_list_get, mcl9, mci9.
                 REAP mcb5 FROM _map_get, mcl10, "bodyStatements".
@@ -7514,7 +7515,7 @@ ACTION collect_struct_insts(bd(LIST), subst(LIST), structs(LIST), acc(LIST)),
         /IF.
         IF ty IS "weather_stmt",
             REAP wbl9 FROM _weather_bodies, nd.
-            CREATE wbi9(NUM) TO 0.
+            CREATE wbi9(LON) TO 0.
             SEASON wbi9 < COUNT wbl9,
                 REAP wbel9 FROM plant_list_get, wbl9, wbi9.
                 REAP acc FROM collect_struct_insts, wbel9, subst, structs, acc.
@@ -7534,7 +7535,7 @@ ACTION struct_typedef(tpl(LIST), args(LIST)),
     REAP fields FROM _map_get, tpl, "fields".
     REAP subst FROM build_subst, generics, args.
     CREATE tname(TX) TO "plant_" + sname.
-    CREATE mi(NUM) TO 0.
+    CREATE mi(LON) TO 0.
     CREATE ae(TX) TO "".
     SEASON mi < COUNT args,
         REAP ae FROM plant_list_get, args, mi.
@@ -7542,7 +7543,7 @@ ACTION struct_typedef(tpl(LIST), args(LIST)),
         SET mi TO mi + 1.
     /SEASON.
     CREATE ccode(TX) TO "typedef struct \{\n".
-    CREATE fi(NUM) TO 0.
+    CREATE fi(LON) TO 0.
     CREATE fel(LIST) TO plant_list_make(0).
     CREATE fname(TX) TO "".
     CREATE ftype(TX) TO "".
@@ -7568,10 +7569,10 @@ ACTION struct_typedef(tpl(LIST), args(LIST)),
             /IF.
             IF fk9 ISNT "struct_ref",
                 REAP base9 FROM type_base, fsub.
-                IF base9 IS "NUM" OR base9 IS "FACT" OR base9 IS "TX" OR base9 IS "LIST",
+                IF base9 IS "LON" OR base9 IS "FACT" OR base9 IS "TX" OR base9 IS "LIST",
                     REAP ctype FROM plant_ctype, fsub.
                 /IF.
-                IF base9 ISNT "NUM" AND base9 ISNT "FACT" AND base9 ISNT "TX" AND base9 ISNT "LIST",
+                IF base9 ISNT "LON" AND base9 ISNT "FACT" AND base9 ISNT "TX" AND base9 ISNT "LIST",
                     SET ctype TO "tx_t".
                 /IF.
             /IF.
@@ -7585,7 +7586,7 @@ ACTION struct_typedef(tpl(LIST), args(LIST)),
 
 # key_in_acc — is key already in the instantiation cache?
 ACTION key_in_acc(key(TX), acc(LIST)),
-    CREATE fi(NUM) TO 0.
+    CREATE fi(LON) TO 0.
     CREATE fe(TX) TO "".
     SEASON fi < COUNT acc,
         REAP fe FROM plant_list_get, acc, fi.
@@ -7598,7 +7599,7 @@ ACTION key_in_acc(key(TX), acc(LIST)),
 # build_subst — zip template generics with concrete type args
 ACTION build_subst(generics(LIST), args(LIST)),
     CREATE subst(LIST) TO plant_list_make(0).
-    CREATE zi(NUM) TO 0.
+    CREATE zi(LON) TO 0.
     CREATE gv(TX) TO "".
     CREATE av(TX) TO "".
     SEASON zi < COUNT generics,
@@ -7617,11 +7618,11 @@ ACTION build_subst(generics(LIST), args(LIST)),
 # from a body; walks into generic templates with the substituted
 # type context. Functional accumulation (acc is returned).
 ACTION collect_insts(bd(LIST), subst(LIST), templates(LIST), acc(LIST)),
-    CREATE ci(NUM) TO 0.
+    CREATE ci(LON) TO 0.
     CREATE nd(TX) TO "".
     CREATE ty(TX) TO "".
     CREATE act(TX) TO "".
-    CREATE gi(NUM) TO -1.
+    CREATE gi(LON) TO -1.
     SEASON ci < COUNT bd,
         REAP nd FROM plant_list_get, bd, ci.
         REAP ty FROM _map_get, nd, "type".
@@ -7647,7 +7648,7 @@ ACTION collect_insts(bd(LIST), subst(LIST), templates(LIST), acc(LIST)),
         /IF.
         IF ty IS "if_stmt",
             REAP ib FROM _if_bodies, nd.
-            CREATE ii9(NUM) TO 0.
+            CREATE ii9(LON) TO 0.
             SEASON ii9 < COUNT ib,
                 REAP ibd9 FROM plant_list_get, ib, ii9.
                 REAP acc FROM collect_insts, ibd9, subst, templates, acc.
@@ -7660,7 +7661,7 @@ ACTION collect_insts(bd(LIST), subst(LIST), templates(LIST), acc(LIST)),
         /IF.
         IF ty IS "match_stmt",
             CREATE mcl11(LIST) TO _map_get(nd, "clauses").
-            CREATE mci11(NUM) TO 0.
+            CREATE mci11(LON) TO 0.
             SEASON mci11 < COUNT mcl11,
                 REAP mcl12 FROM plant_list_get, mcl11, mci11.
                 REAP mcb6 FROM _map_get, mcl12, "bodyStatements".
@@ -7670,7 +7671,7 @@ ACTION collect_insts(bd(LIST), subst(LIST), templates(LIST), acc(LIST)),
         /IF.
         IF ty IS "weather_stmt",
             REAP wbl10 FROM _weather_bodies, nd.
-            CREATE wbi10(NUM) TO 0.
+            CREATE wbi10(LON) TO 0.
             SEASON wbi10 < COUNT wbl10,
                 REAP wbel10 FROM plant_list_get, wbl10, wbi10.
                 REAP acc FROM collect_insts, wbel10, subst, templates, acc.
@@ -7693,7 +7694,7 @@ ACTION inst_fwddecl(inst(TX), templates(LIST)),
     REAP subst FROM build_subst, generics, args.
     REAP mname FROM mangle, base, args.
     CREATE paramstr(TX) TO "".
-    CREATE pi(NUM) TO 0.
+    CREATE pi(LON) TO 0.
     CREATE param_el(TX) TO "".
     CREATE pname(TX) TO "".
     CREATE ptype(TX) TO "".
@@ -7728,7 +7729,7 @@ ACTION emit_inst(inst(TX), templates(LIST), sigs(LIST), reg(LIST)),
     CREATE rtpl(TX) TO _map_get(tpl, "ret").
     CREATE rty_m(TX) TO subst_type(rtpl, subst).
     CREATE paramstr(TX) TO "".
-    CREATE pi(NUM) TO 0.
+    CREATE pi(LON) TO 0.
     CREATE param_el(TX) TO "".
     CREATE pname(TX) TO "".
     CREATE ptype(TX) TO "".
@@ -7750,7 +7751,7 @@ ACTION emit_inst(inst(TX), templates(LIST), sigs(LIST), reg(LIST)),
     CREATE evars_m(LIST) TO collect_enums(bd, params, subst, reg, sigs).
     CREATE implicit(LIST) TO collect_implicit(bd, params).
     CREATE dcode(TX) TO "".
-    CREATE di(NUM) TO 0.
+    CREATE di(LON) TO 0.
     CREATE dv(TX) TO "".
     SEASON di < COUNT implicit,
         REAP dv FROM plant_list_get, implicit, di.
@@ -7763,8 +7764,8 @@ ACTION emit_inst(inst(TX), templates(LIST), sigs(LIST), reg(LIST)),
         SET bcode TO "  return " + mname + ";\n".
     /IF.
     IF (COUNT bd) > 0,
-        CREATE bd_count(NUM) TO COUNT bd.
-        CREATE last_idx(NUM) TO bd_count - 1.
+        CREATE bd_count(LON) TO COUNT bd.
+        CREATE last_idx(LON) TO bd_count - 1.
         CREATE last_nd(TX) TO plant_list_get(bd, last_idx).
         CREATE last_ty(TX) TO _map_get(last_nd, "type").
         IF last_ty ISNT "give_stmt", SET bcode TO bcode + "  return " + mname + ";\n". /IF.
@@ -7777,7 +7778,7 @@ ACTION emit_inst(inst(TX), templates(LIST), sigs(LIST), reg(LIST)),
 #  find_params — look up a decl's params by name in sigs
 # ──────────────────────────────────────────────────────────────
 ACTION find_params(sigs(LIST), name(TX)),
-    CREATE fi(NUM) TO 0.
+    CREATE fi(LON) TO 0.
     CREATE fe(TX) TO "".
     CREATE fn(TX) TO "".
     CREATE fp(LIST) TO plant_list_make(0).
@@ -7794,7 +7795,7 @@ ACTION find_params(sigs(LIST), name(TX)),
 
 # find_ret — return type of a sig entry (by action name), or ""
 ACTION find_ret(sigs(LIST), name(TX)),
-    CREATE fi(NUM) TO 0.
+    CREATE fi(LON) TO 0.
     CREATE fe(TX) TO "".
     CREATE fn(TX) TO "".
     CREATE fr(TX) TO "".
@@ -7821,7 +7822,7 @@ ACTION is_ref_param(ptype(TX)),
 # ──────────────────────────────────────────────────────────────
 #  is_ref_at — params[idx] is a REF parameter
 # ──────────────────────────────────────────────────────────────
-ACTION is_ref_at(params(LIST), idx(NUM)),
+ACTION is_ref_at(params(LIST), idx(LON)),
     IF idx < COUNT params,
         REAP pel FROM plant_list_get, params, idx.
         REAP pty FROM _map_get, pel, "type".
@@ -7835,21 +7836,21 @@ ACTION is_ref_at(params(LIST), idx(NUM)),
 #  _map_get — safe MAP field access (external FFI)
 # ──────────────────────────────────────────────────────────────
 ACTION _map_get(m, key(TX)) -> external.
-ACTION plant_list_get(lst, idx(NUM)) -> external.
-ACTION char_at(s(TX), idx(NUM)) -> external.
-ACTION substring(s(TX), start(NUM), end(NUM)) -> external.
+ACTION plant_list_get(lst, idx(LON)) -> external.
+ACTION char_at(s(TX), idx(LON)) -> external.
+ACTION substring(s(TX), start(LON), end(LON)) -> external.
 ACTION find_any(s(TX), delims(TX)) -> external.
 ACTION handle_brackets(expr(TX)) -> external.
 ACTION handle_strcmp(expr(TX)) -> external.
 ACTION str_eq(a(TX), b(TX)) -> external.
 ACTION _to_long(s(TX)) -> external.
-ACTION _from_long(n(NUM)) -> external.
+ACTION _from_long(n(LON)) -> external.
 
 # ──────────────────────────────────────────────────────────────
 #  find_node — AST action_decl node by name ("" if none)
 # ──────────────────────────────────────────────────────────────
 ACTION find_node(ast(LIST), name(TX)),
-  CREATE fi(NUM) TO 0.
+  CREATE fi(LON) TO 0.
   CREATE fe(TX) TO "".
   CREATE fty(TX) TO "".
   CREATE fnm(TX) TO "".
@@ -7868,7 +7869,7 @@ ACTION find_node(ast(LIST), name(TX)),
 # find_ext_node — locate an external_decl node by name (FFI
 # signatures live on external_decl nodes, not action_decl)
 ACTION find_ext_node(ast(LIST), name(TX)),
-  CREATE fei(NUM) TO 0.
+  CREATE fei(LON) TO 0.
   CREATE fee(TX) TO "".
   CREATE fet(TX) TO "".
   CREATE fen(TX) TO "".
@@ -7892,8 +7893,8 @@ ACTION find_ext_node(ast(LIST), name(TX)),
 #  aren't declared (module calls, external fns).
 # ──────────────────────────────────────────────────────────────
 ACTION callee_add(acc(LIST), name(TX)),
-  CREATE cfound(NUM) TO 0.
-  CREATE ci(NUM) TO 0.
+  CREATE cfound(LON) TO 0.
+  CREATE ci(LON) TO 0.
   CREATE ce(TX) TO "".
   SEASON ci < COUNT acc,
     REAP ce FROM plant_list_get, acc, ci.
@@ -7924,7 +7925,7 @@ ACTION callee_from_value(acc(LIST), val(TX)),
 
 ACTION callees_of(bd(LIST)),
   CREATE acc(LIST) TO plant_list_make(0).
-  CREATE ci(NUM) TO 0.
+  CREATE ci(LON) TO 0.
   CREATE cnd(TX) TO "".
   CREATE cty(TX) TO "".
   CREATE cact(TX) TO "".
@@ -7956,11 +7957,11 @@ ACTION callees_of(bd(LIST)),
     /IF.
     IF cty IS "if_stmt",
       REAP ib FROM _if_bodies, cnd.
-      CREATE ii10(NUM) TO 0.
+      CREATE ii10(LON) TO 0.
       SEASON ii10 < COUNT ib,
         REAP ibd10 FROM plant_list_get, ib, ii10.
         REAP cret2 FROM callees_of, ibd10.
-        CREATE cj0(NUM) TO 0.
+        CREATE cj0(LON) TO 0.
         CREATE cje0(TX) TO "".
         SEASON cj0 < COUNT cret2,
           REAP cje0 FROM plant_list_get, cret2, cj0.
@@ -7973,7 +7974,7 @@ ACTION callees_of(bd(LIST)),
     IF cty IS "season_stmt" OR cty IS "cycle_stmt",
       REAP cbd2 FROM _map_get, cnd, "body".
       REAP cret2 FROM callees_of, cbd2.
-      CREATE cj(NUM) TO 0.
+      CREATE cj(LON) TO 0.
       CREATE cje(TX) TO "".
       SEASON cj < COUNT cret2,
         REAP cje FROM plant_list_get, cret2, cj.
@@ -7983,12 +7984,12 @@ ACTION callees_of(bd(LIST)),
     /IF.
     IF cty IS "match_stmt",
       CREATE mcl7(LIST) TO _map_get(cnd, "clauses").
-      CREATE mci7(NUM) TO 0.
+      CREATE mci7(LON) TO 0.
       SEASON mci7 < COUNT mcl7,
         REAP mcl8 FROM plant_list_get, mcl7, mci7.
         REAP mcb4 FROM _map_get, mcl8, "bodyStatements".
         REAP cret2 FROM callees_of, mcb4.
-        CREATE cj2(NUM) TO 0.
+        CREATE cj2(LON) TO 0.
         CREATE cje2(TX) TO "".
         SEASON cj2 < COUNT cret2,
           REAP cje2 FROM plant_list_get, cret2, cj2.
@@ -8000,11 +8001,11 @@ ACTION callees_of(bd(LIST)),
     /IF.
     IF cty IS "weather_stmt",
       REAP wbl11 FROM _weather_bodies, cnd.
-      CREATE wbi11(NUM) TO 0.
+      CREATE wbi11(LON) TO 0.
       SEASON wbi11 < COUNT wbl11,
         REAP wbel11 FROM plant_list_get, wbl11, wbi11.
         REAP cret2 FROM callees_of, wbel11.
-        CREATE cj2(NUM) TO 0.
+        CREATE cj2(LON) TO 0.
         CREATE cje2(TX) TO "".
         SEASON cj2 < COUNT cret2,
           REAP cje2 FROM plant_list_get, cret2, cj2.
@@ -8027,9 +8028,9 @@ ACTION callees_of(bd(LIST)),
 ACTION async_reachable(ast(LIST)),
   CREATE queue(LIST) TO plant_list_make(0).
   CREATE seen(LIST) TO plant_list_make(0).
-  CREATE found(NUM) TO 0.
+  CREATE found(LON) TO 0.
   PUT "main" INTO queue.
-  CREATE qi(NUM) TO 0.
+  CREATE qi(LON) TO 0.
   CREATE front(TX) TO "".
   SEASON qi < COUNT queue,
     REAP front FROM plant_list_get, queue, qi.
@@ -8041,7 +8042,7 @@ ACTION async_reachable(ast(LIST)),
         IF fas IS "1", SET found TO 1. /IF.
         REAP fbod FROM _map_get, fnd, "body".
         REAP callers2 FROM callees_of, fbod.
-        CREATE ck(NUM) TO 0.
+        CREATE ck(LON) TO 0.
         CREATE cke(TX) TO "".
         SEASON ck < COUNT callers2,
           REAP cke FROM plant_list_get, callers2, ck.
@@ -8075,7 +8076,7 @@ ACTION async_reachable(ast(LIST)),
 #  the table here is duplicate-free.
 # ═══════════════════════════════════════════════════════════════
 ACTION collect_roots(bd(LIST), acc(LIST)),
-  CREATE j2(NUM) TO 0.
+  CREATE j2(LON) TO 0.
   CREATE n2(TX) TO "".
   CREATE t2(TX) TO "".
   SEASON j2 < COUNT bd,
@@ -8098,7 +8099,7 @@ ACTION collect_roots(bd(LIST), acc(LIST)),
     /IF.
     IF t2 IS "if_stmt",
       REAP ifb FROM _if_bodies, n2.
-      CREATE jj2(NUM) TO 0.
+      CREATE jj2(LON) TO 0.
       SEASON jj2 < COUNT ifb,
         REAP ibd2 FROM plant_list_get, ifb, jj2.
         REAP acc FROM collect_roots, ibd2, acc.
@@ -8111,7 +8112,7 @@ ACTION collect_roots(bd(LIST), acc(LIST)),
     /IF.
     IF t2 IS "match_stmt",
       CREATE mcl13(LIST) TO _map_get(n2, "clauses").
-      CREATE mci13(NUM) TO 0.
+      CREATE mci13(LON) TO 0.
       SEASON mci13 < COUNT mcl13,
         REAP mcl14 FROM plant_list_get, mcl13, mci13.
         REAP mcb7 FROM _map_get, mcl14, "bodyStatements".
@@ -8121,7 +8122,7 @@ ACTION collect_roots(bd(LIST), acc(LIST)),
     /IF.
     IF t2 IS "weather_stmt",
       REAP wf2 FROM _weather_bodies, n2.
-      CREATE wj2(NUM) TO 0.
+      CREATE wj2(LON) TO 0.
       SEASON wj2 < COUNT wf2,
         REAP wbd2 FROM plant_list_get, wf2, wj2.
         REAP acc FROM collect_roots, wbd2, acc.
@@ -8140,7 +8141,7 @@ ACTION collect_roots(bd(LIST), acc(LIST)),
 # _map_replace - rebuild a pairs-list map with one value replaced.
 ACTION _map_replace(m(LIST), k(TX), v(TX)),
   CREATE out(LIST) TO plant_list_make(0).
-  CREATE i(NUM) TO 0.
+  CREATE i(LON) TO 0.
   SEASON i + 1 < COUNT m,
     REAP mk FROM plant_list_get, m, i.
     REAP mv FROM plant_list_get, m, i + 1.
@@ -8165,7 +8166,7 @@ ACTION _map_replace(m(LIST), k(TX), v(TX)),
 # _ta_collect_list - collect TYPE aliases from lst (recursing into
 # ACTION bodies) into the tsub pairs-list.
 ACTION _ta_collect_list(lst(LIST), tsub(LIST)),
-  CREATE i(NUM) TO 0.
+  CREATE i(LON) TO 0.
   SEASON i < COUNT lst,
     REAP tn FROM plant_list_get, lst, i.
     REAP tt FROM _map_get, tn, "type".
@@ -8186,7 +8187,7 @@ ACTION _ta_collect_list(lst(LIST), tsub(LIST)),
 
 ACTION _ta_rw_list(lst(LIST), tsub(LIST)),
   CREATE out2(LIST) TO plant_list_make(0).
-  CREATE i(NUM) TO 0.
+  CREATE i(LON) TO 0.
   SEASON i < COUNT lst,
     REAP tn FROM plant_list_get, lst, i.
     REAP tt FROM _map_get, tn, "type".
@@ -8215,10 +8216,10 @@ ACTION _ta_rw_list(lst(LIST), tsub(LIST)),
 
 ACTION _ts_resolve(tsub(LIST), name(TX)),
   CREATE cur(TX) TO name.
-  CREATE hops(NUM) TO 0.
+  CREATE hops(LON) TO 0.
   SEASON hops < 16,
     CREATE found(TX) TO "".
-    CREATE i(NUM) TO 0.
+    CREATE i(LON) TO 0.
     SEASON i + 1 < COUNT tsub,
       REAP an FROM plant_list_get, tsub, i.
       REAP at FROM plant_list_get, tsub, i + 1.
@@ -8244,12 +8245,12 @@ ACTION generate_c(ast(LIST)),
     CREATE header(TX) TO "#include <plant_compat.h>\n#include <plant_memory.h>\n\n".
     CREATE decl_code(TX) TO "".
     CREATE stmt_code(TX) TO "".
-    CREATE has_decl(NUM) TO 0.
-    CREATE has_stmt(NUM) TO 0.
-    CREATE i(NUM) TO 0.
+    CREATE has_decl(LON) TO 0.
+    CREATE has_stmt(LON) TO 0.
+    CREATE i(LON) TO 0.
     CREATE node_el(TX) TO "".
     CREATE pro_code(TX) TO "".
-    CREATE pi(NUM) TO 0.
+    CREATE pi(LON) TO 0.
     CREATE param_el(TX) TO "".
     CREATE pname(TX) TO "".
     CREATE ptype(TX) TO "".
@@ -8271,7 +8272,7 @@ ACTION generate_c(ast(LIST)),
     # across all blocks regardless of declaration order.
     CREATE roots(LIST) TO collect_roots(ast, plant_list_make(0)).
     CREATE roots_code(TX) TO "".
-    CREATE ri5(NUM) TO 0.
+    CREATE ri5(LON) TO 0.
     CREATE rn5(TX) TO "".
     CREATE rv5(TX) TO "".
     SEASON ri5 + 1 < COUNT roots,
@@ -8330,7 +8331,7 @@ ACTION generate_c(ast(LIST)),
             CREATE regl(TX) TO "_from_long(".
             SET regl TO regl + COUNT sf7.
             SET regl TO regl + ")".
-            CREATE fj9(NUM) TO 0.
+            CREATE fj9(LON) TO 0.
             SEASON fj9 < COUNT sf7,
               REAP fe9 FROM plant_list_get, sf7, fj9.
               REAP fn9 FROM _map_get, fe9, "name".
@@ -8342,7 +8343,7 @@ ACTION generate_c(ast(LIST)),
             SET sp_init_code TO sp_init_code + "  plant_species_register(\"" + sn7 + "\", " + regl + ", \"" + sp9 + "\");\n".
             # v0.49.34: register implemented interfaces
             REAP imps FROM _map_get, node_el, "implements".
-            CREATE ii9(NUM) TO 0.
+            CREATE ii9(LON) TO 0.
             SEASON ii9 < COUNT imps,
               REAP iv9 FROM plant_list_get, imps, ii9.
               SET sp_init_code TO sp_init_code + "  plant_impl_iface(\"" + sn7 + "\", \"" + iv9 + "\");\n".
@@ -8364,10 +8365,10 @@ ACTION generate_c(ast(LIST)),
             CREATE fparams7(LIST) TO _map_get(node_el, "params").
             CREATE fret7(TX) TO _map_get(node_el, "ret").
             CREATE fvg7(TX) TO _map_get(node_el, "varargs").
-            CREATE ffi_ok(NUM) TO 0.
+            CREATE ffi_ok(LON) TO 0.
             IF fret7 > "", SET ffi_ok TO 1. /IF.
             IF fvg7 IS "1", SET ffi_ok TO 1. /IF.
-            CREATE fai(NUM) TO 0.
+            CREATE fai(LON) TO 0.
             SEASON fai < COUNT fparams7,
                 REAP fpel FROM plant_list_get, fparams7, fai.
                 REAP fpty FROM _map_get, fpel, "type".
@@ -8497,7 +8498,7 @@ ACTION generate_c(ast(LIST)),
     CREATE tscnX(TX) TO "".
     CREATE tstdef(TX) TO "".
     # v0.50.0a: counter for anonymous struct name generation.
-    CREATE anon_counter(NUM) TO 0.
+    CREATE anon_counter(LON) TO 0.
     SET i TO 0.
     SEASON i < COUNT ast,
         REAP node_el FROM plant_list_get, ast, i.
@@ -8547,7 +8548,7 @@ ACTION generate_c(ast(LIST)),
             REAP uname4 FROM _map_get, node_el, "name".
             CREATE ufields4(LIST) TO _map_get(node_el, "fields").
             CREATE utdef(TX) TO "typedef union \{\n  ".
-            CREATE ufi(NUM) TO 0.
+            CREATE ufi(LON) TO 0.
             CREATE ufld(TX) TO "".
             SEASON ufi < COUNT ufields4,
                 REAP ufld FROM plant_list_get, ufields4, ufi.
@@ -8598,9 +8599,9 @@ ACTION generate_c(ast(LIST)),
     # FFI-extension prototypes (STRUCT/CALLBACK/void*/varargs sigs) —
     # the mock defines matching functions; plain externals keep the
     # hand-written mock_ffi.h prototypes (no duplicates).
-    CREATE ffi_has_cb(NUM) TO 0.
-    CREATE ffi_has_vp(NUM) TO 0.
-    CREATE ffi_has_va(NUM) TO 0.
+    CREATE ffi_has_cb(LON) TO 0.
+    CREATE ffi_has_vp(LON) TO 0.
+    CREATE ffi_has_va(LON) TO 0.
     SET i TO 0.
     SEASON i < COUNT ffi_exts,
         REAP fex FROM plant_list_get, ffi_exts, i.
@@ -8610,14 +8611,14 @@ ACTION generate_c(ast(LIST)),
             CREATE fret2(TX) TO _map_get(fnode, "ret").
             CREATE fvga(TX) TO _map_get(fnode, "varargs").
             REAP fretc FROM ffi_ret_ctype, fret2.
-            CREATE fexneed(NUM) TO 0.
+            CREATE fexneed(LON) TO 0.
             REAP fkr2 FROM ffi_param_kind, fret2.
             IF fkr2 IS "plain", SET fexneed TO 0. /IF.
             IF fkr2 IS "struct_val", SET fexneed TO 1. /IF.
             IF fkr2 IS "struct_ref", SET fexneed TO 1. /IF.
             IF fkr2 IS "callback", SET fexneed TO 1. /IF.
             IF fkr2 IS "voidptr", SET fexneed TO 1. /IF.
-            CREATE fci(NUM) TO 0.
+            CREATE fci(LON) TO 0.
             CREATE fcel(TX) TO "".
             SEASON fci < COUNT fpars,
                 REAP fcel FROM plant_list_get, fpars, fci.
@@ -8725,7 +8726,7 @@ ACTION generate_c(ast(LIST)),
     CREATE cbt(TX) TO "".
     CREATE cbtk(TX) TO "".
     CREATE cbcn(TX) TO "".
-    CREATE cbak(NUM) TO 0.
+    CREATE cbak(LON) TO 0.
     CREATE cbcast(TX) TO "".
     SET i TO 0.
     SEASON i < COUNT cb_acts,
@@ -8739,7 +8740,7 @@ ACTION generate_c(ast(LIST)),
             REAP cbt FROM _map_get, cbp, "type".
             REAP cbtk FROM ffi_param_kind, cbt.
             SET cbcast TO "".
-            IF cbtk IS "plain" AND cbt IS "NUM", SET cbcast TO "(long)(intptr_t)". /IF.
+            IF cbtk IS "plain" AND cbt IS "LON", SET cbcast TO "(long)(intptr_t)". /IF.
             IF cbtk IS "plain" AND cbt IS "FACT", SET cbcast TO "(int)(intptr_t)". /IF.
             IF cbak > 0, SET cbcn TO cbcn + ", ". /IF.
             IF cbak IS 0 AND COUNT cbprms IS 1,
@@ -8863,7 +8864,7 @@ ACTION generate_c(ast(LIST)),
     /SEASON.
     CREATE implicit(LIST) TO collect_implicit(ast, plant_list_make(0)).
     CREATE dcode(TX) TO "".
-    CREATE di(NUM) TO 0.
+    CREATE di(LON) TO 0.
     CREATE dv(TX) TO "".
     SEASON di < COUNT implicit,
         REAP dv FROM plant_list_get, implicit, di.
@@ -8874,7 +8875,7 @@ ACTION generate_c(ast(LIST)),
     # action in main's call graph is an ASYNC ACTION, stamp main
     # with drain_after so generate_node emits plant_async_drain()
     # at the end of the C main() entry (v0.48.3a).
-    CREATE drn_main(NUM) TO async_reachable(ast).
+    CREATE drn_main(LON) TO async_reachable(ast).
     CREATE nums_top(LIST) TO collect_nums(ast, plant_list_make(0), esub).
     # v0.51.3b — GLOBAL: collect all (incl. nested SUITE/IF/CYCLE) and
     # emit file-scope statics up front; the inits are emitted by
@@ -8882,7 +8883,7 @@ ACTION generate_c(ast(LIST)),
     # initialize when their scope runs). Declared once, C89-safe.
     CREATE glob_code(TX) TO "".
     CREATE globals(LIST) TO collect_globals_walk(ast, plant_list_make(0)).
-    CREATE gwi(NUM) TO 0.
+    CREATE gwi(LON) TO 0.
     SEASON gwi + 2 < COUNT globals,
         REAP gwn FROM plant_list_get, globals, gwi.
         REAP gwv0 FROM plant_list_get, globals, gwi + 1.
@@ -8965,7 +8966,7 @@ ACTION generate_c(ast(LIST)),
         REAP san FROM find_node, ast, sae.
         CREATE sprm(LIST) TO _map_get(san, "params").
         SET adapter_code TO adapter_code + "tx_t plant_safe_adapter_" + sae + "(int argc, tx_t* argv) {\n".
-        CREATE spi(NUM) TO 0.
+        CREATE spi(LON) TO 0.
         CREATE spe(TX) TO "".
         CREATE spn(TX) TO "".
         CREATE spt(TX) TO "".
@@ -9062,7 +9063,7 @@ ACTION _cl_is_arg(arg(TX)),
 
 # _cl_map_get — flat-pairs lookup: value for key, or ""
 ACTION _cl_map_get(clmap(LIST), key(TX)),
-    CREATE mi2(NUM) TO 0.
+    CREATE mi2(LON) TO 0.
     CREATE me2(TX) TO "".
     SEASON mi2 < COUNT clmap,
         REAP me2 FROM plant_list_get, clmap, mi2.
@@ -9083,7 +9084,7 @@ ACTION _cl_map_get(clmap(LIST), key(TX)),
 ACTION is_prim_type(ptype(TX)),
   REAP pb FROM type_base, ptype.
   REAP pbt FROM trim, pb.
-  IF pbt IS "NUM", GIVE "1". /IF.
+  IF pbt IS "LON", GIVE "1". /IF.
   IF pbt IS "FACT", GIVE "1". /IF.
   IF pbt IS "LIST", GIVE "1". /IF.
   IF pbt IS "TX", GIVE "1". /IF.
@@ -9103,7 +9104,7 @@ ACTION is_prim_type(ptype(TX)),
 # miss. Repeated types within one scope share one resolution
 # instead of recomputing plant_ctype/is_prim_type (v0.48.11).
 ACTION _cl_ccache_get(cache(LIST), t(TX)),
-  CREATE ci(NUM) TO 0.
+  CREATE ci(LON) TO 0.
   CREATE ck(TX) TO "".
   CREATE cv(TX) TO "".
   CREATE cp(TX) TO "".
@@ -9126,7 +9127,7 @@ ACTION _cl_ccache_get(cache(LIST), t(TX)),
 # Type resolution for create/let is memoized per call and the "#t"
 # twin keys are skipped for primitive types (v0.48.11).
 ACTION _cl_scopes(bd(LIST), scopes(LIST), sigs(LIST)),
-    CREATE n2(NUM) TO 0.
+    CREATE n2(LON) TO 0.
     CREATE st(TX) TO "".
     CREATE res(LIST) TO scopes.
     CREATE cch(LIST) TO plant_list_make(0).
@@ -9226,7 +9227,7 @@ ACTION _cl_scopes(bd(LIST), scopes(LIST), sigs(LIST)),
         /IF.
         IF sty IS "match_stmt",
             REAP mcl FROM _map_get, st, "clauses".
-            CREATE mn2(NUM) TO 0.
+            CREATE mn2(LON) TO 0.
             CREATE mel(TX) TO "".
             SEASON mn2 < COUNT mcl,
                 REAP mel FROM plant_list_get, mcl, mn2.
@@ -9240,7 +9241,7 @@ ACTION _cl_scopes(bd(LIST), scopes(LIST), sigs(LIST)),
         /IF.
         IF sty IS "weather_stmt",
             REAP wsh FROM _map_get, st, "shelters".
-            CREATE wni(NUM) TO 1.
+            CREATE wni(LON) TO 1.
             SEASON wni < COUNT wsh,
                 REAP wbe FROM plant_list_get, wsh, wni.
                 IF wbe > "" AND wbe ISNT "null",
@@ -9259,7 +9260,7 @@ ACTION _cl_scopes(bd(LIST), scopes(LIST), sigs(LIST)),
 # enclosing scope, recurse into its own body, stamp cid/envname/
 # fnname/captures/moved/shadows/clmap keys in place, append it to
 # the closure sequence. Returns [clseq, cid].
-ACTION _cl_stamp_cnode(cnode(LIST), scopes(LIST), cc(NUM), res(LIST), sigs(LIST)),
+ACTION _cl_stamp_cnode(cnode(LIST), scopes(LIST), cc(LON), res(LIST), sigs(LIST)),
     REAP cnp FROM _map_get, cnode, "params".
     REAP cnb FROM _map_get, cnode, "body".
     REAP ccap FROM _map_get, cnode, "captures".
@@ -9271,7 +9272,7 @@ ACTION _cl_stamp_cnode(cnode(LIST), scopes(LIST), cc(NUM), res(LIST), sigs(LIST)
     CREATE shads3(LIST) TO plant_list_make(0).
     CREATE cpsc(LIST) TO plant_list_make(0).
     # closure params are in scope inside the closure body
-    CREATE cpi3(NUM) TO 0.
+    CREATE cpi3(LON) TO 0.
     CREATE cpe3(TX) TO "".
     SEASON cpi3 < COUNT cnp,
         REAP cpe3 FROM plant_list_get, cnp, cpi3.
@@ -9288,7 +9289,7 @@ ACTION _cl_stamp_cnode(cnode(LIST), scopes(LIST), cc(NUM), res(LIST), sigs(LIST)
         SET cpi3 TO cpi3 + 1.
     /SEASON.
     # resolve each capture against the enclosing scope
-    CREATE cci3(NUM) TO 0.
+    CREATE cci3(LON) TO 0.
     CREATE cce3(TX) TO "".
     SEASON cci3 < COUNT ccap,
         REAP cce3 FROM plant_list_get, ccap, cci3.
@@ -9321,7 +9322,7 @@ ACTION _cl_stamp_cnode(cnode(LIST), scopes(LIST), cc(NUM), res(LIST), sigs(LIST)
     # nested closures inside this closure's own body (block form only;
     # expr bodies are plain text and contain no statements)
     CREATE cmap3(LIST) TO plant_list_make(0).
-    CREATE cck(NUM) TO cc + 1.
+    CREATE cck(LON) TO cc + 1.
     REAP cnk FROM _map_get, cnode, "bkind".
     IF str_eq(cnk, "block") IS "1",
         REAP cres FROM _cl_walk, cnb, cpsc, res, plant_list_make(0), cc + 1, sigs.
@@ -9351,12 +9352,12 @@ ACTION _cl_stamp_cnode(cnode(LIST), scopes(LIST), cc(NUM), res(LIST), sigs(LIST)
 # _cl_walk — walk one statement list, stamping closures in place.
 # scopes: flat [name, ctype, …] of the current C function scope.
 # Returns the accumulator triple [clseq, clmap, cid].
-ACTION _cl_walk(bd(LIST), scopes(LIST), clseq(LIST), clmap(LIST), cid(NUM), sigs(LIST)),
-    CREATE n3(NUM) TO 0.
+ACTION _cl_walk(bd(LIST), scopes(LIST), clseq(LIST), clmap(LIST), cid(LON), sigs(LIST)),
+    CREATE n3(LON) TO 0.
     CREATE st3(TX) TO "".
     CREATE res(LIST) TO clseq.
     CREATE rmap(LIST) TO clmap.
-    CREATE cc(NUM) TO cid.
+    CREATE cc(LON) TO cid.
     SEASON n3 < COUNT bd,
         REAP st3 FROM plant_list_get, bd, n3.
         REAP sty3 FROM _map_get, st3, "type".
@@ -9376,7 +9377,7 @@ ACTION _cl_walk(bd(LIST), scopes(LIST), clseq(LIST), clmap(LIST), cid(NUM), sigs
         IF sty3 IS "reap_stmt",
             REAP cla3 FROM _map_get, st3, "clargs".
             IF cla3 > "",
-                CREATE clai(NUM) TO 0.
+                CREATE clai(LON) TO 0.
                 CREATE clae(TX) TO "".
                 SEASON clai < COUNT cla3,
                     REAP clae FROM plant_list_get, cla3, clai.
@@ -9402,7 +9403,7 @@ ACTION _cl_walk(bd(LIST), scopes(LIST), clseq(LIST), clmap(LIST), cid(NUM), sigs
         /IF.
         IF sty3 IS "if_stmt",
             REAP ib3 FROM _if_bodies, st3.
-            CREATE ibi3(NUM) TO 0.
+            CREATE ibi3(LON) TO 0.
             SEASON ibi3 < COUNT ib3,
                 REAP ibd5 FROM plant_list_get, ib3, ibi3.
                 REAP scn FROM _cl_scopes, ibd5, sc3, sigs.
@@ -9415,7 +9416,7 @@ ACTION _cl_walk(bd(LIST), scopes(LIST), clseq(LIST), clmap(LIST), cid(NUM), sigs
         /IF.
         IF sty3 IS "weather_stmt",
             REAP wbl13 FROM _weather_bodies, st3.
-            CREATE wbi13(NUM) TO 0.
+            CREATE wbi13(LON) TO 0.
             SEASON wbi13 < COUNT wbl13,
                 REAP wbel13 FROM plant_list_get, wbl13, wbi13.
                 REAP scn FROM _cl_scopes, wbel13, sc3, sigs.
@@ -9428,7 +9429,7 @@ ACTION _cl_walk(bd(LIST), scopes(LIST), clseq(LIST), clmap(LIST), cid(NUM), sigs
         /IF.
         IF sty3 IS "match_stmt",
             REAP mcl3 FROM _map_get, st3, "clauses".
-            CREATE mn3(NUM) TO 0.
+            CREATE mn3(LON) TO 0.
             CREATE mel3(TX) TO "".
             SEASON mn3 < COUNT mcl3,
                 REAP mel3 FROM plant_list_get, mcl3, mn3.
@@ -9450,7 +9451,7 @@ ACTION _cl_walk(bd(LIST), scopes(LIST), clseq(LIST), clmap(LIST), cid(NUM), sigs
 ACTION collect_closures(ast(LIST), sigs(LIST)),
     CREATE clmaps(LIST) TO plant_list_make(0).
     CREATE cllist(LIST) TO plant_list_make(0).
-    CREATE ai5(NUM) TO 0.
+    CREATE ai5(LON) TO 0.
     CREATE ae5(TX) TO "".
     SEASON ai5 < COUNT ast,
         REAP ae5 FROM plant_list_get, ast, ai5.
@@ -9462,7 +9463,7 @@ ACTION collect_closures(ast(LIST), sigs(LIST)),
                 REAP apms5 FROM _map_get, ae5, "params".
                 REAP abd5 FROM _map_get, ae5, "body".
                 REAP apsc FROM _cl_scopes, abd5, plant_list_make(0), sigs.
-                CREATE ai6(NUM) TO 0.
+                CREATE ai6(LON) TO 0.
                 CREATE ae6(TX) TO "".
                 SEASON ai6 < COUNT apms5,
                     REAP ae6 FROM plant_list_get, apms5, ai6.
@@ -9476,7 +9477,7 @@ ACTION collect_closures(ast(LIST), sigs(LIST)),
                     SET ai6 TO ai6 + 1.
                 /SEASON.
                 REAP imp5 FROM collect_implicit, abd5, apms5.
-                CREATE di5(NUM) TO 0.
+                CREATE di5(LON) TO 0.
                 CREATE dv5(TX) TO "".
                 SEASON di5 < COUNT imp5,
                     REAP dv5 FROM plant_list_get, imp5, di5.
@@ -9484,7 +9485,7 @@ ACTION collect_closures(ast(LIST), sigs(LIST)),
                     PUT "tx_t" INTO apsc.
                     SET di5 TO di5 + 1.
                 /SEASON.
-                CREATE cseedd(NUM) TO COUNT cllist.
+                CREATE cseedd(LON) TO COUNT cllist.
                 REAP cres FROM _cl_walk, abd5, apsc, cllist, plant_list_make(0), cseedd, sigs.
                 REAP cllist FROM plant_list_get, cres, 0.
                 REAP cmap5 FROM plant_list_get, cres, 1.
@@ -9500,7 +9501,7 @@ ACTION collect_closures(ast(LIST), sigs(LIST)),
 # _cl_param_str — "type name, type name" for a params list
 ACTION _cl_param_str(params(LIST)),
     CREATE pstr(TX) TO "".
-    CREATE pi3(NUM) TO 0.
+    CREATE pi3(LON) TO 0.
     CREATE pe3(TX) TO "".
     SEASON pi3 < COUNT params,
         REAP pe3 FROM plant_list_get, params, pi3.
@@ -9521,7 +9522,7 @@ ACTION _cl_emit_typedef(cnode(LIST)),
     REAP envn FROM _map_get, cnode, "envname".
     REAP shads FROM _map_get, cnode, "shadows".
     CREATE tc(TX) TO "typedef struct \{\n".
-    CREATE si4(NUM) TO 0.
+    CREATE si4(LON) TO 0.
     CREATE se4(TX) TO "".
     CREATE sm4(TX) TO "".
     SEASON si4 < COUNT shads,
@@ -9561,14 +9562,14 @@ ACTION _cl_emit_fn(cnode(LIST), sigs(LIST), subst(LIST), reg(LIST)),
     # closure-scope param-style maps: closure params + captured
     # shadows (as name/type pairs) feed the enum table
     CREATE cbpars2(LIST) TO plant_list_make(0).
-    CREATE cbi(NUM) TO 0.
+    CREATE cbi(LON) TO 0.
     CREATE cbe(TX) TO "".
     SEASON cbi < COUNT params,
         REAP cbe FROM plant_list_get, params, cbi.
         PUT cbe INTO cbpars2.
         SET cbi TO cbi + 1.
     /SEASON.
-    CREATE cbsi(NUM) TO 0.
+    CREATE cbsi(LON) TO 0.
     CREATE cbse(TX) TO "".
     CREATE cbsn(TX) TO "".
     CREATE cbty(TX) TO "".
@@ -9582,7 +9583,7 @@ ACTION _cl_emit_fn(cnode(LIST), sigs(LIST), subst(LIST), reg(LIST)),
     CREATE fnc(TX) TO "tx_t " + fname + "(tx_t env".
     IF pstr > "", SET fnc TO fnc + ", " + pstr. /IF.
     SET fnc TO fnc + ") \{\n".
-    CREATE si5(NUM) TO 0.
+    CREATE si5(LON) TO 0.
     CREATE se5(TX) TO "".
     CREATE sm5(TX) TO "".
     CREATE sct5(TX) TO "".
@@ -9612,7 +9613,7 @@ ACTION _cl_emit_fn(cnode(LIST), sigs(LIST), subst(LIST), reg(LIST)),
         CREATE nums_c(LIST) TO collect_nums_cb(bb, params, shads, subst).
         CREATE stvars_c(LIST) TO collect_stvars_walk(bb, subst, plant_list_make(0)).
         CREATE cbpars(LIST) TO params.
-        CREATE si6(NUM) TO 0.
+        CREATE si6(LON) TO 0.
         CREATE se6(TX) TO "".
         SEASON si6 < COUNT shads,
             REAP se6 FROM plant_list_get, shads, si6.
@@ -9620,7 +9621,7 @@ ACTION _cl_emit_fn(cnode(LIST), sigs(LIST), subst(LIST), reg(LIST)),
             SET si6 TO si6 + 1.
         /SEASON.
         REAP imp6 FROM collect_implicit, bb, cbpars.
-        CREATE di6(NUM) TO 0.
+        CREATE di6(LON) TO 0.
         CREATE dv6(TX) TO "".
         SEASON di6 < COUNT imp6,
             REAP dv6 FROM plant_list_get, imp6, di6.

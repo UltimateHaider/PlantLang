@@ -5,7 +5,7 @@
 #   and .put(...) method calls.
 SPECIES Person {
   name: TX
-  age: NUM
+  age: LON
 }
 SPECIES Empty { }
 ACTION main(),

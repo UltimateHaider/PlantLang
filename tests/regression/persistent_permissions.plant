@@ -11,12 +11,12 @@ ACTION grant_check() WITH MISSION PERSISTENT,
 /ACTION.
 
 ACTION store() WITH MISSION PERSISTENT,
-  CREATE o(NUM) TO ffi_arc_alloc(8).
+  CREATE o(LON) TO ffi_arc_alloc(8).
   SHOW "persist_ok=" + ffi_arc_persist(o).
 /ACTION.
 
 ACTION safeleak() WITH MISSION SAFE,
-  CREATE o(NUM) TO ffi_arc_alloc(8).
+  CREATE o(LON) TO ffi_arc_alloc(8).
   SHOW "persist_safe=" + ffi_arc_persist(o).
 /ACTION.
 
