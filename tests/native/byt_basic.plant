@@ -1,0 +1,13 @@
+SUITE "BYT Basic (signed)"
+  CREATE B (BYT) TO 100.
+  SHOW B.
+  SHOW B + 1.
+
+  CREATE MAX (BYT) TO 127.
+  SHOW MAX.
+
+  CREATE ZERO (BYT) TO 0.
+  SHOW ZERO.
+
+  SHOW "byt-basic-ok".
+/SUITE.

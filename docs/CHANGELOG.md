@@ -1,3 +1,29 @@
+## v0.51.6 — BYT (signed 8-bit) + UBT (unsigned 8-bit)
+
+### Added
+- BYT type: 8-bit signed integer.
+  - C: signed char; Range: -128..127; Parity: sbyte/int8.
+- UBT type: 8-bit unsigned integer.
+  - C: unsigned char; Range: 0..255; Parity: byte/uint8.
+- 4 new tests: byt_basic, byt_negative, ubt_basic, byt_ubt_numeric.
+
+### Implementation
+- TWO records added to GLOBAL TYPE_REGISTRY in codegen_c.plant.
+- No codegen logic changes (registry handles the rest).
+- Binary size unchanged from v0.51.5 (zero-cost type addition).
+
+### Verified
+- Native: 85/85 (was 81)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged
+- Binary: 928448 bytes.
+
+### Out of Scope (v0.51.7)
+- SHORT (16-bit signed).
+- USHORT (16-bit unsigned).
+- FLT, BOOL.
+
 ## v0.51.5 — Fix `IS` Between Variables (TD-021 closure)
 
 ### Fixed

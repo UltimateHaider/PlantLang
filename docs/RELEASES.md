@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.51.5
+# Auto-updated: 0.51.6
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.51.5 | 928448 | 8941 | 448 | 109 | 322 | 5361 |
+| v0.51.6 | 928448 | 8941 | 448 | 109 | 322 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -24,6 +24,7 @@
 | v0.51.3b | 2026 | GLOBAL Complete | Released |
 | v0.51.4 | 2026 | Type Registry | Released |
 | v0.51.5 | 2026 | Fix IS Between Variables | Released |
+| v0.51.6 | 2026 | BYT + UBT (8-bit pair) | Released |
 
 ## Growth Chart (ASCII)
 

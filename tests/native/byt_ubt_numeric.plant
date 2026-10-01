@@ -1,0 +1,13 @@
+SUITE "BYT + UBT Numeric Integration"
+  CREATE B (BYT) TO 50.
+  CREATE U (UBT) TO 200.
+  CREATE N (NUM) TO 1000.
+
+  SHOW B + U.
+  SHOW B + N.
+  SHOW U + N.
+  SHOW N - B.
+  SHOW N - U.
+
+  SHOW "byt-ubt-numeric-ok".
+/SUITE.

@@ -22,6 +22,8 @@ PlantLang uses a **single opaque pointer** (`tx_t = void*`) as the universal run
 | `MAP` | `PlantArray*` (pair-list) | 16 bytes (pointer) | N/A | `plant_map_create()` | Key-value pair-list (kind=1) |
 | `ENUM X` | `tx_t` (int or name string) | 8 bytes (pointer) | 0 to 65535 (int) | first member | Enum member as integer or name string |
 | `MATH` | `PlantMath*` | 16 bytes (pointer) | N/A | `plant_math_create("0")` | Symbolic math expression (v0.50.0h) |
+| `BYT` | `signed char` | 1 byte (8-bit) | -128 to 127 | `0` | Signed 8-bit integer (v0.51.6) |
+| `UBT` | `unsigned char` | 1 byte (8-bit) | 0 to 255 | `0` | Unsigned 8-bit integer (v0.51.6) |
 
 **Source:** `src/plantc/codegen_c.plant:5344-5362` (`plant_ctype`)
 
@@ -586,6 +588,59 @@ GLOBAL d TO 20.
 
 The programmer is responsible for declaration order. There is no
 compile-time check for forward references.
+
+---
+
+## BYT (8-bit signed integer) — v0.51.6
+
+| Property | Value |
+|----------|-------|
+| Size | 8 bits (1 byte) |
+| C type | signed char |
+| Range | -128..127 |
+| Signed | Yes |
+| Parity | C# sbyte / ML int8 |
+| Registry | TYPE_REGISTRY (v0.51.6) |
+
+### Syntax
+
+```plant
+CREATE B (BYT) TO -100.
+SHOW B + 1.   # → -99
+```
+
+### Use Cases
+
+- Signed byte deltas
+- Signal processing
+- int8 quantization
+
+---
+
+## UBT (8-bit unsigned integer) — v0.51.6
+
+| Property | Value |
+|----------|-------|
+| Size | 8 bits (1 byte) |
+| C type | unsigned char |
+| Range | 0..255 |
+| Signed | No |
+| Parity | C# byte / ML uint8 |
+| Registry | TYPE_REGISTRY (v0.51.6) |
+
+### Syntax
+
+```plant
+CREATE U (UBT) TO 200.
+SHOW U + 1.   # → 201
+```
+
+### Use Cases
+
+- ML quantization (uint8 weights)
+- Image pixels (0-255 RGB)
+- Binary data
+- Network protocols
 
 ---
 

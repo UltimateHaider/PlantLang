@@ -1,0 +1,9 @@
+SUITE "BYT Negative (signed)"
+  CREATE NEG (BYT) TO -100.
+  SHOW NEG.
+
+  CREATE MIN (BYT) TO -128.
+  SHOW MIN.
+
+  SHOW "byt-negative-ok".
+/SUITE.

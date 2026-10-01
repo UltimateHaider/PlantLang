@@ -1,0 +1,13 @@
+SUITE "UBT Basic (unsigned)"
+  CREATE U (UBT) TO 200.
+  SHOW U.
+  SHOW U + 1.
+
+  CREATE MAX (UBT) TO 255.
+  SHOW MAX.
+
+  CREATE ZERO (UBT) TO 0.
+  SHOW ZERO.
+
+  SHOW "ubt-basic-ok".
+/SUITE.
