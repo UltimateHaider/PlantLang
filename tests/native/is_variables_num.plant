@@ -1,0 +1,17 @@
+SUITE "IS Variables Num"
+  CREATE x TO 5.
+  CREATE y TO 5.
+  CREATE z TO 10.
+
+  IF x IS y,
+    SHOW "x equals y".
+  /IF.
+
+  IF x IS z,
+    SHOW "x equals z".
+  ELSE,
+    SHOW "x not equals z".
+  /IF.
+
+  SHOW "is-vars-num-ok".
+/SUITE.

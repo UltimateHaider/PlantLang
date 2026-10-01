@@ -1,3 +1,28 @@
+## v0.51.5 — Fix `IS` Between Variables (TD-021 closure)
+
+### Fixed
+- TD-021: `IS` between variables now works correctly.
+  - String variables: strcmp-based comparison.
+  - Numeric variables: numeric comparison.
+  - Runtime-built strings (`"hel"+"lo"` IS `"hello"`): now equal.
+- Literals-vs-literals: unchanged (preserved).
+
+### Added
+- 4 new tests: is_variables_string, is_variables_num,
+  is_in_action, is_dynamic_string.
+- Principles: AAA (`IS` type-aware), BBB (`IS` consistency).
+
+### Verified
+- Native: 81/81 (was 77)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged
+- Binary: 928448 bytes.
+
+### Out of Scope (v0.51.6)
+- BYT (8-bit unsigned).
+- TD-022 (SCL truncation).
+
 ## v0.51.4 — Type Registry
 
 ### Added

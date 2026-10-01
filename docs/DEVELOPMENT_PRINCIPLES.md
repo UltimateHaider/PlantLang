@@ -255,3 +255,24 @@ All verify-* targets must include valgrind-check-tensor.
       are aligned).
     - Deferred: aligning registry prim with is_prim_type semantics
       → v0.51.5 or v0.52.0.
+
+### AAA. `IS` is type-aware (v0.51.5)
+
+    - `IS` works for all operand combinations:
+      - literals vs literals (existing; preserved).
+      - variables vs variables (NEW).
+      - runtime-built strings (NEW).
+      - numeric variables (via nums).
+    - Type-aware: numeric operands → `==`; string operands → strcmp.
+    - NULL/TRUE/FALSE excluded (compared by value, not string identity).
+    - Behavior is consistent across scopes (top-level, ACTION, IF,
+      CYCLE).
+    - C89-compatible generated C.
+
+### BBB. `IS` consistency (v0.51.5)
+
+    - Literal-vs-literal and variable-vs-variable behave identically.
+    - Runtime-built strings (concatenation) are compared by value.
+    - Regression tests guard against future breakage:
+      is_variables_string, is_variables_num, is_in_action,
+      is_dynamic_string.

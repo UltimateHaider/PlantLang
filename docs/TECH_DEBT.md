@@ -285,17 +285,19 @@ SHOW "end".   # ← dropped
 - **Discovered by:** v0.51.3b Phase 3.
 - **Related:** TD-019.
 
-## TD-021: `IS` between variables does not lower to string compare
-- **Status:** OPEN
-- **Introduced:** pre-v0.51 (long-standing)
-- **Target fix:** v0.51.5 or v0.52.0
-- **Impact:** HIGH — silent mismatch between two string variables.
-- **Symptom:** `IF a IS b` where **both are variables** does not perform a
-  string comparison, so equal values do not match (it did not lower to
-  `strcmp`).
-- **Workaround:** use `str_eq(a, b) IS "1"`.
-- **Discovered by:** v0.51.4 Phase 2.5 (registry lookup diagnostic).
-- **Related:** TD-020, TD-019.
+## TD-021: `IS` between variables does not lower to string compare — CLOSED
+- **Status:** ✅ CLOSED in v0.51.5
+- **Fixed:** `IS` now works consistently between variables.
+  - String variables: strcmp-based comparison.
+  - Numeric variables: numeric comparison (via nums).
+  - Runtime-built strings (e.g., `"hel"+"lo" IS "hello"`): now equal.
+- **Approach:** targeted pre-pass (`rewrite_cond_is`) at condition
+  sites; rewrites `<id> IS <id>` → `strcmp(l, r) == 0` only when both
+  operands are bare non-numeric identifiers (NULL/TRUE/FALSE excluded).
+- **Historical:** literals already worked (via handle_strcmp);
+  variable-vs-variable used pointer compare.
+- **Preserved:** literal-vs-literal behavior unchanged.
+- **Related:** TD-022.
 
 ## TD-022: SCL display truncates doubles
 - **Status:** OPEN

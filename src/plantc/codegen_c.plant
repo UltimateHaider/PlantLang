@@ -3824,6 +3824,47 @@ ACTION _handle_cast(e(TX)),
   GIVE out.
 /ACTION.
 
+# ──────────────────────────────────────────────────────────────
+#  v0.51.5 — TD-021: variable-vs-variable IS / ISNT in conditions.
+#  A condition of the exact form "<id> IS <id>" / "<id> ISNT <id>"
+#  whose operands are bare, non-numeric identifiers is lowered to a
+#  strcmp() identity test; otherwise the existing generic lowering
+#  (IS/ISNT → ==/!=, with handle_strcmp for literals) is used.
+# ──────────────────────────────────────────────────────────────
+ACTION is_plain_str_ident(x(TX), nums(LIST)),
+  IF is_identifier(x) IS 0, GIVE 0. /IF.
+  IF list_contains(nums, x) IS 1, GIVE 0. /IF.
+  IF str_eq(x, "NULL") IS "1", GIVE 0. /IF.
+  IF str_eq(x, "TRUE") IS "1", GIVE 0. /IF.
+  IF str_eq(x, "FALSE") IS "1", GIVE 0. /IF.
+  GIVE 1.
+/ACTION.
+
+ACTION rewrite_cond_is(cond(TX), nums(LIST)),
+  CREATE spi(TX) TO " I" + "S" + " ".
+  CREATE spn(TX) TO " I" + "S" + "N" + "T" + " ".
+  REAP parts FROM strings:SPLIT, cond, spi.
+  IF COUNT parts IS 2,
+    REAP l FROM plant_list_get, parts, 0.
+    REAP r FROM plant_list_get, parts, 1.
+    REAP lw FROM trim, l.
+    REAP rw FROM trim, r.
+    IF is_plain_str_ident(lw, nums) IS 1 AND is_plain_str_ident(rw, nums) IS 1,
+      GIVE "strcmp(" + lw + ", " + rw + ") == 0".
+    /IF.
+  /IF.
+  REAP nparts FROM strings:SPLIT, cond, spn.
+  IF COUNT nparts IS 2,
+    REAP l2 FROM plant_list_get, nparts, 0.
+    REAP r2 FROM plant_list_get, nparts, 1.
+    REAP lw2 FROM trim, l2.
+    REAP rw2 FROM trim, r2.
+    IF is_plain_str_ident(lw2, nums) IS 1 AND is_plain_str_ident(rw2, nums) IS 1,
+      GIVE "strcmp(" + lw2 + ", " + rw2 + ") != 0".
+    /IF.
+  /IF.
+  GIVE cond.
+/ACTION.
 
 ACTION translate_expr(expr(TX), nums(LIST), evars(LIST), maths(LIST)),
     REAP expr FROM _swap_self, expr.
@@ -4589,6 +4630,7 @@ ACTION gen_give_stmt(node, nums(LIST), evars(LIST), rty(TX), actx(TX), mexit(TX)
 ACTION gen_if_stmt(node, nums(LIST), evars(LIST), isel(TX), indent_num(NUM), env(LIST)),
   REAP cond FROM _map_get, node, "cond".
   REAP bd FROM _map_get, node, "body".
+  REAP cond FROM rewrite_cond_is, cond, nums.
   REAP ccond FROM translate_expr, cond, nums, evars, plant_list_make(0).
   REAP ccond FROM handle_strcmp, ccond.
   CREATE ccode(TX) TO isel + "  if (" + ccond + ") \{\n".
@@ -4610,6 +4652,7 @@ ACTION gen_if_stmt(node, nums(LIST), evars(LIST), isel(TX), indent_num(NUM), env
       SEASON ei2 < COUNT elif,
           REAP econd FROM plant_list_get, elif, ei2.
           REAP ebd FROM plant_list_get, elif, ei2 + 1.
+          REAP econd FROM rewrite_cond_is, econd, nums.
           REAP ecc FROM translate_expr, econd, nums, evars, plant_list_make(0).
           REAP ecc FROM handle_strcmp, ecc.
           SET ccode TO ccode + isel + "  \} else if (" + ecc + ") \{\n".
@@ -4892,6 +4935,7 @@ ACTION gen_reap_stmt(node, sigs(LIST), subst(LIST), clmap(LIST), nums(LIST), stv
 ACTION gen_season_stmt(node, nums(LIST), evars(LIST), isel(TX), indent_num(NUM), env(LIST)),
   REAP cond FROM _map_get, node, "cond".
   REAP bd FROM _map_get, node, "body".
+  REAP cond FROM rewrite_cond_is, cond, nums.
   REAP ccond FROM translate_expr, cond, nums, evars, plant_list_make(0).
   REAP ccond FROM handle_strcmp, ccond.
   CREATE ccode(TX) TO isel + "  while (" + ccond + ") \{\n".

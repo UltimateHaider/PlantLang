@@ -1,0 +1,17 @@
+SUITE "IS Variables String"
+  CREATE a TO "hello".
+  CREATE b TO "hello".
+  CREATE c TO "world".
+
+  IF a IS b,
+    SHOW "a equals b".
+  /IF.
+
+  IF a IS c,
+    SHOW "a equals c".
+  ELSE,
+    SHOW "a not equals c".
+  /IF.
+
+  SHOW "is-vars-string-ok".
+/SUITE.

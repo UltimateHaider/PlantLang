@@ -1,0 +1,12 @@
+ACTION check(a, b),
+  IF a IS b,
+    SHOW "match".
+  ELSE,
+    SHOW "differ".
+  /IF.
+/ACTION.
+
+check("hello", "hello").
+check("hello", "world").
+
+SHOW "is-action-ok".

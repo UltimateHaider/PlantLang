@@ -185,6 +185,8 @@ tx_t _ni_replace(tx_t e);
 tx_t _emit_ds(PlantArray* items, tx_t kind, tx_t base, tx_t isel, tx_t tag);
 tx_t _swap_self(tx_t e);
 tx_t _handle_cast(tx_t e);
+tx_t is_plain_str_ident(tx_t x, PlantArray* nums);
+tx_t rewrite_cond_is(tx_t cond, PlantArray* nums);
 tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* maths);
 tx_t indent_str(long level);
 tx_t _gb_dump(PlantArray* bd);
@@ -11070,6 +11072,59 @@ tx_t _handle_cast(tx_t e) {
     }
     return out;
 }
+tx_t is_plain_str_ident(tx_t x, PlantArray* nums) {
+    if (is_identifier ( x ) == 0) {
+    return 0;
+    }
+    if (list_contains ( nums , x ) == 1) {
+    return 0;
+    }
+    if (strcmp(str_eq ( x , "NULL" ),"1") == 0) {
+    return 0;
+    }
+    if (strcmp(str_eq ( x , "TRUE" ),"1") == 0) {
+    return 0;
+    }
+    if (strcmp(str_eq ( x , "FALSE" ),"1") == 0) {
+    return 0;
+    }
+    return 1;
+}
+tx_t rewrite_cond_is(tx_t cond, PlantArray* nums) {
+  tx_t parts = "";
+  tx_t l = "";
+  tx_t r = "";
+  tx_t lw = "";
+  tx_t rw = "";
+  tx_t nparts = "";
+  tx_t l2 = "";
+  tx_t r2 = "";
+  tx_t lw2 = "";
+  tx_t rw2 = "";
+    tx_t spi = _cat3(" I", "S", " ");
+    tx_t spn = _cat(_cat4(" I", "S", "N", "T"), " ");
+    parts = strings_SPLIT(cond, spi);
+    if (plant_array_length(parts) == 2) {
+    l = plant_list_get(parts, 0);
+    r = plant_list_get(parts, 1);
+    lw = trim(l);
+    rw = trim(r);
+    if (is_plain_str_ident ( lw , nums ) == 1 && is_plain_str_ident ( rw , nums ) == 1) {
+    return _cat(_cat4("strcmp(", lw, ", ", rw), ") == 0");
+    }
+    }
+    nparts = strings_SPLIT(cond, spn);
+    if (plant_array_length(nparts) == 2) {
+    l2 = plant_list_get(nparts, 0);
+    r2 = plant_list_get(nparts, 1);
+    lw2 = trim(l2);
+    rw2 = trim(r2);
+    if (is_plain_str_ident ( lw2 , nums ) == 1 && is_plain_str_ident ( rw2 , nums ) == 1) {
+    return _cat(_cat4("strcmp(", lw2, ", ", rw2), ") != 0");
+    }
+    }
+    return cond;
+}
 tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* maths) {
   tx_t e0 = "";
   tx_t e1 = "";
@@ -11710,6 +11765,7 @@ tx_t gen_if_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel, long
   tx_t ebod = "";
     cond = _map_get(node, "cond");
     bd = _map_get(node, "body");
+    cond = rewrite_cond_is(cond, nums);
     ccond = translate_expr(cond, nums, evars, plant_list_make ( 0 ));
     ccond = handle_strcmp(ccond);
     tx_t ccode = _cat4(isel, "  if (", ccond, ") {\n");
@@ -11731,6 +11787,7 @@ tx_t gen_if_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel, long
     while (ei2 < plant_array_length(elif)) {
     econd = plant_list_get(elif, ei2);
     ebd = plant_list_get(elif, ei2+1);
+    econd = rewrite_cond_is(econd, nums);
     ecc = translate_expr(econd, nums, evars, plant_list_make ( 0 ));
     ecc = handle_strcmp(ecc);
     ccode = _cat(_cat4(ccode, isel, "  } else if (", ecc), ") {\n");
@@ -12066,6 +12123,7 @@ tx_t gen_season_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel, 
   tx_t bcode = "";
     cond = _map_get(node, "cond");
     bd = _map_get(node, "body");
+    cond = rewrite_cond_is(cond, nums);
     ccond = translate_expr(cond, nums, evars, plant_list_make ( 0 ));
     ccond = handle_strcmp(ccond);
     tx_t ccode = _cat4(isel, "  while (", ccond, ") {\n");
@@ -16913,7 +16971,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.51.4 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.51.5 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

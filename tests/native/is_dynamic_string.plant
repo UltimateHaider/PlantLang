@@ -1,0 +1,13 @@
+SUITE "IS Dynamic String"
+  # Dynamic strings (runtime-built) — the real test for the fix.
+  CREATE a TO "hel" + "lo".
+  CREATE b TO "hello".
+
+  IF a IS b,
+    SHOW "dynamic-equal".
+  ELSE,
+    SHOW "dynamic-differ".
+  /IF.
+
+  SHOW "is-dynamic-ok".
+/SUITE.
