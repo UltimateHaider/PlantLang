@@ -1,3 +1,42 @@
+## v0.51.11 — CMP (Complex Number)
+
+### Added
+- CMP type: complex number (2 × double: real + imag).
+- C representation: PlantComplex (C89-compatible struct, reuses the
+  v0.50.2 Complex Number Subsystem in plant_math.c).
+- Runtime: runtime/c/plant_complex.{c,h} (accessors + transcendentals).
+- Operations: +, -, *, / (target-typed).
+- Functions: CREAL, CIMAG, CABS, CARG, CCONJ, CEXP, CLOG, CSQRT,
+  CSIN, CCOS.
+- 4 new tests: cmp_basic, cmp_ops, cmp_funcs, cmp_numeric.
+
+### Implementation
+- First runtime change since v0.51.4.
+- Registry record: ["CMP", "PlantComplex", "0", "1", "scalar"].
+- Generated C now includes <plant_math.h> and <plant_complex.h>.
+
+### Type Set (after v0.51.11)
+| Category | Types |
+|----------|-------|
+| Integer | BYT, UBT, SHR, USH, NUM, UNU, LON, ULO |
+| Float | FLT, DBL, DCM |
+| Complex | CMP |
+| Other | CHAR, BYTES |
+
+### Verified
+- Native: 100/100 (was 96)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged
+- valgrind strict: PASS
+- Binary: 955960 bytes (was 928448).
+
+### Out of Scope (v0.51.12)
+- BOOL (boolean).
+- Complex MATRIX (CMP_MATRIX).
+- FFT (uses CMP + MATRIX).
+- TD-022, TD-024.
+
 ## v0.51.10 — FLT + DBL + DCM (Complete Float Type Set)
 
 ### Changed (BREAKING)

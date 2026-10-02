@@ -328,3 +328,16 @@ SHOW "end".   # ← dropped
 - **Removed:** UNUM record + any references.
 - **Replacement:** ULO (unsigned long).
 - **Related:** TD-022.
+
+## TD-025: CMP arithmetic is target-typed — OPEN
+- **Status:** OPEN
+- **Introduced:** v0.51.11 (CMP added).
+- **Target fix:** v0.52.0 (Type System Audit).
+- **Impact:** LOW — `CREATE S (CMP) TO A + B.` works (target type
+  drives lowering), but operands in untargeted expression positions
+  (e.g. `SHOW CABS(A + B).`) are not lowered to complex ops.
+- **Cause:** CMP lowering is keyed off the CREATE/LET target type,
+  not full operand type inference.
+- **Fix direction:** track CMP variables like `nums` and lower ops on
+  operand types.
+- **Related:** TD-022, TD-024.

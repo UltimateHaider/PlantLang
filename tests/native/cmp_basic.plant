@@ -1,0 +1,6 @@
+SUITE "CMP Basic"
+  CREATE Z (CMP) TO CMP(3, 4).
+  SHOW CREAL(Z).
+  SHOW CIMAG(Z).
+  SHOW "cmp-basic-ok".
+/SUITE.

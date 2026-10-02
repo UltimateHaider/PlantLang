@@ -14,7 +14,7 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.51.10
+VERSION    ?= 0.51.11
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
@@ -33,7 +33,8 @@ CODEGEN    := runtime/c/plant_codegen.c
 MATH       := runtime/c/plant_math.c
 TENSOR     := runtime/c/plant_tensor.c
 MEMORY     := runtime/c/plant_memory.c
-RUNTIME_C  := $(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) $(REPORT_HTML) $(LEXER) $(PARSER) $(CODEGEN) $(MATH) $(TENSOR) $(MEMORY)
+COMPLEX    := runtime/c/plant_complex.c
+RUNTIME_C  := $(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) $(REPORT_HTML) $(LEXER) $(PARSER) $(CODEGEN) $(MATH) $(TENSOR) $(MEMORY) $(COMPLEX)
 COMPAT     := runtime/c/plant_compat.h
 
 SRC_DIR    := src/plantc
@@ -742,6 +743,25 @@ verify-v0.51.10: check-no-raw-malloc check-expected-files \
 	@echo "[6/6] Update RELEASES..."  && make update-growth && make check-releases-updated
 	@echo "========================================================"
 	@echo "  v0.51.10 VERIFIED"
+	@echo "========================================================"
+
+# ── verify-v0.51.11: comprehensive release gate ───────────────
+verify-v0.51.11: check-no-raw-malloc check-expected-files \
+                 check-changelog-numbers check-ffi-safety \
+                 check-dispatcher-only
+	@echo "========================================================"
+	@echo "  v0.51.11 VERIFICATION GATE"
+	@echo "========================================================"
+	@echo "[1/6] Native tests..."     && sh tests/native/run_native_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[2/6] Generics..."         && sh tests/generics/run_generics_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[3/6] Closures..."         && sh tests/closures/run_closures_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[4/6] Self-hosting..."     && make self || exit 1
+	@cmp -s build/plantc_v3 bin/Chloroplast || \
+		{ echo "STOP: Self-hosting failed"; exit 1; }
+	@echo "[5/6] valgrind strict..."  && $(MAKE) valgrind-check-tensor || exit 1
+	@echo "[6/6] Update RELEASES..."  && make update-growth && make check-releases-updated
+	@echo "========================================================"
+	@echo "  v0.51.11 VERIFIED"
 	@echo "========================================================"
 
 # ── verify-v0.51.1: comprehensive release gate ──────────────────

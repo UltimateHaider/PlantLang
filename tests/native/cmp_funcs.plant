@@ -1,0 +1,8 @@
+SUITE "CMP Functions"
+  CREATE Z (CMP) TO CMP(3, 4).
+  SHOW CABS(Z).
+  CREATE W (CMP) TO CCONJ(Z).
+  SHOW CREAL(W).
+  SHOW CIMAG(W).
+  SHOW "cmp-funcs-ok".
+/SUITE.

@@ -1,0 +1,5 @@
+SUITE "CMP + Numeric Integration"
+  CREATE Z (CMP) TO CMP(3, 4).
+  SHOW CABS(Z).
+  SHOW "cmp-numeric-ok".
+/SUITE.

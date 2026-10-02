@@ -31,7 +31,8 @@ GLOBAL TYPE_REGISTRY TO [
     ["UBT",   "unsigned char", "1", "1", "scalar"],
     ["SHR",   "short",         "1", "1", "scalar"],
     ["USH",   "unsigned short","1", "1", "scalar"],
-    ["ULO",   "unsigned long", "1", "1", "scalar"]
+    ["ULO",   "unsigned long", "1", "1", "scalar"],
+    ["CMP",   "PlantComplex",  "0", "1", "scalar"]
 ].
 
 # v0.51.4 — Registry lookup: returns the record for `name`, or empty list.
@@ -3029,6 +3030,113 @@ ACTION collect_nums(bd(LIST), params(LIST), subst(LIST)),
 /ACTION.
 
 # ──────────────────────────────────────────────────────────────
+#  v0.51.11 — collect_cmps_walk / collect_cmps
+#  Add names of CMP CREATE/LET targets in bd (recursing into
+#  IF/SEASON/CYCLE/MATCH/SUITE bodies). Used to lower CMP
+#  arithmetic (a OP b → plant_complex_OP(a, b)).
+# ──────────────────────────────────────────────────────────────
+ACTION collect_cmps_walk(bd(LIST), subst(LIST), res(LIST)),
+  CREATE cwi(LON) TO 0.
+  CREATE cwnd(TX) TO "".
+  CREATE cwty(TX) TO "".
+  CREATE cwtg(TX) TO "".
+  CREATE cwvt(TX) TO "".
+  CREATE cwbs(TX) TO "".
+  CREATE cwbb(TX) TO "".
+  SEASON cwi < COUNT bd,
+    REAP cwnd FROM plant_list_get, bd, cwi.
+    REAP cwty FROM _map_get, cwnd, "type".
+    IF cwty IS "create_stmt" OR cwty IS "let_stmt",
+      REAP cwtg FROM _map_get, cwnd, "target".
+      REAP cwvt FROM _map_get, cwnd, "var_type".
+      REAP cwbs FROM subst_type, cwvt, subst.
+      REAP cwbb FROM type_base, cwbs.
+      IF cwbb IS "CMP",
+        REAP cwfound FROM list_contains, res, cwtg.
+        IF cwfound IS 0, PUT cwtg INTO res. /IF.
+      /IF.
+    /IF.
+    IF cwty IS "if_stmt",
+      REAP cib FROM _if_bodies, cwnd.
+      CREATE cii4(LON) TO 0.
+      SEASON cii4 < COUNT cib,
+        REAP cibd4 FROM plant_list_get, cib, cii4.
+        REAP cwret2 FROM collect_cmps_walk, cibd4, subst, res.
+        SET cii4 TO cii4 + 1.
+      /SEASON.
+    /IF.
+    IF cwty IS "season_stmt" OR cwty IS "cycle_stmt",
+      REAP cwbd2 FROM _map_get, cwnd, "body".
+      REAP cwret3 FROM collect_cmps_walk, cwbd2, subst, res.
+    /IF.
+    IF cwty IS "suite_stmt",
+      REAP cwbd3 FROM _map_get, cwnd, "body".
+      REAP cwret4 FROM collect_cmps_walk, cwbd3, subst, res.
+    /IF.
+    IF cwty IS "match_stmt",
+      CREATE cmcl3(LIST) TO _map_get(cwnd, "clauses").
+      CREATE cmci3(LON) TO 0.
+      SEASON cmci3 < COUNT cmcl3,
+        REAP cmcl4 FROM plant_list_get, cmcl3, cmci3.
+        REAP cmcb2 FROM _map_get, cmcl4, "bodyStatements".
+        REAP cwret5 FROM collect_cmps_walk, cmcb2, subst, res.
+        SET cmci3 TO cmci3 + 1.
+      /SEASON.
+    /IF.
+    SET cwi TO cwi + 1.
+  /SEASON.
+  GIVE res.
+/ACTION.
+
+ACTION collect_cmps(bd(LIST), params(LIST), subst(LIST)),
+  CREATE res(LIST) TO plant_list_make(0).
+  CREATE pi(LON) TO 0.
+  CREATE pnd(TX) TO "".
+  CREATE pn2(TX) TO "".
+  CREATE pty2(TX) TO "".
+  CREATE psu2(TX) TO "".
+  CREATE pbs2(TX) TO "".
+  SEASON pi < COUNT params,
+    REAP pnd FROM plant_list_get, params, pi.
+    REAP pn2 FROM _map_get, pnd, "name".
+    REAP pty2 FROM _map_get, pnd, "type".
+    REAP psu2 FROM subst_type, pty2, subst.
+    REAP pbs2 FROM type_base, psu2.
+    IF pbs2 IS "CMP",
+      PUT pn2 INTO res.
+    /IF.
+    SET pi TO pi + 1.
+  /SEASON.
+  REAP cret FROM collect_cmps_walk, bd, subst, res.
+  GIVE res.
+/ACTION.
+
+# v0.51.11 — _evars_with_cmps: copy the enum-vars list, then append
+# CMP variable names for this scope. The CMP names ride along in the
+# evars slot so _handle_cmp_ops can lower complex arithmetic without a
+# new threaded parameter on every generator.
+ACTION _evars_with_cmps(bd(LIST), params(LIST), subst(LIST), base(LIST)),
+  CREATE out(LIST) TO plant_list_make(0).
+  CREATE bi(LON) TO 0.
+  CREATE be(TX) TO "".
+  SEASON bi < COUNT base,
+    REAP be FROM plant_list_get, base, bi.
+    PUT be INTO out.
+    SET bi TO bi + 1.
+  /SEASON.
+  REAP cm FROM collect_cmps, bd, params, subst.
+  CREATE ci(LON) TO 0.
+  CREATE ce(TX) TO "".
+  SEASON ci < COUNT cm,
+    REAP ce FROM plant_list_get, cm, ci.
+    REAP cf FROM list_contains, out, ce.
+    IF cf IS 0, PUT ce INTO out. /IF.
+    SET ci TO ci + 1.
+  /SEASON.
+  GIVE out.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
 #  collect_maths_walk — add names of MATH CREATE/LET targets
 #  in bd (recursing into IF/SEASON/CYCLE/MATCH bodies)
 # ──────────────────────────────────────────────────────────────
@@ -3872,6 +3980,101 @@ ACTION rewrite_cond_is(cond(TX), nums(LIST)),
   GIVE cond.
 /ACTION.
 
+# ──────────────────────────────────────────────────────────────
+#  v0.51.11 — _cmp_binop: lower a top-level complex binary op.
+#  Used when the CREATE/LET target type is CMP, so the operands are
+#  known to be complex. Scans for the first top-level " OP " (OP in
+#  + - * /) outside parens/brackets/strings and emits the matching
+#  plant_complex_* call. Falls through unchanged otherwise.
+# ──────────────────────────────────────────────────────────────
+ACTION _cmp_binop(expr(TX)),
+  CREATE ops(TX) TO "+-*/".
+  CREATE oi(LON) TO 0.
+  CREATE sc(TX) TO "".
+  CREATE ch(TX) TO "".
+  CREATE depth(LON) TO 0.
+  CREATE instr(LON) TO 0.
+  CREATE i(LON) TO 0.
+  SEASON oi < LEN(ops),
+    REAP sc FROM char_at, ops, oi.
+    SET i TO 0.
+    SET depth TO 0.
+    SET instr TO 0.
+    SEASON i < LEN(expr),
+      REAP ch FROM char_at, expr, i.
+      IF ch IS "\"", SET instr TO 1 - instr. /IF.
+      IF instr IS 0,
+        IF ch IS "(" OR ch IS "[", SET depth TO depth + 1. /IF.
+        IF ch IS ")" OR ch IS "]", SET depth TO depth - 1. /IF.
+        IF depth IS 0 AND str_eq(ch, sc) IS "1",
+          REAP c0 FROM char_at, expr, i - 1.
+          REAP c1 FROM char_at, expr, i + 1.
+          IF str_eq(c0, " ") IS "1" AND str_eq(c1, " ") IS "1",
+            REAP l FROM substring, expr, 0, i - 1.
+            REAP r FROM substring, expr, i + 2, LEN(expr).
+            REAP lw FROM trim, l.
+            REAP rw FROM trim, r.
+            IF str_eq(sc, "+") IS "1", GIVE "plant_complex_add(" + lw + ", " + rw + ")". /IF.
+            IF str_eq(sc, "-") IS "1", GIVE "plant_complex_sub(" + lw + ", " + rw + ")". /IF.
+            IF str_eq(sc, "*") IS "1", GIVE "plant_complex_mul(" + lw + ", " + rw + ")". /IF.
+            IF str_eq(sc, "/") IS "1", GIVE "plant_complex_div(" + lw + ", " + rw + ")". /IF.
+          /IF.
+        /IF.
+      /IF.
+      SET i TO i + 1.
+    /SEASON.
+    SET oi TO oi + 1.
+  /SEASON.
+  GIVE expr.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
+#  v0.51.11 — _handle_cmp_ops: lower CMP arithmetic.
+#  For each top-level binary op (+,-,*,/) whose BOTH operands are
+#  bare CMP variable names (from cmps list carried in evars),
+#  emit the matching plant_complex_* call.
+# ──────────────────────────────────────────────────────────────
+ACTION _handle_cmp_ops(expr(TX), evars(LIST)),  CREATE ops(TX) TO "+-*/".
+  CREATE oi(LON) TO 0.
+  CREATE pb(TX) TO "".
+  CREATE sc(TX) TO "".
+  CREATE depth(LON) TO 0.
+  CREATE instr(LON) TO 0.
+  SEASON oi < LEN(ops),
+    REAP sc FROM char_at, ops, oi.
+    CREATE i(LON) TO 0.
+    SEASON i < LEN(expr),
+      REAP pb FROM char_at, expr, i.
+      IF pb IS "\"", SET instr TO 1 - instr. /IF.
+      IF instr IS 0,
+        IF pb IS "(" OR pb IS "[", SET depth TO depth + 1. /IF.
+        IF pb IS ")" OR pb IS "]", SET depth TO depth - 1. /IF.
+        IF depth IS 0 AND pb IS sc,
+          REAP c0 FROM char_at, expr, i - 1.
+          REAP c1 FROM char_at, expr, i + 1.
+          IF c0 IS " " AND c1 IS " ",
+            REAP l FROM substring, expr, 0, i - 1.
+            REAP r FROM substring, expr, i + 2, LEN(expr).
+            REAP lw FROM trim, l.
+            REAP rw FROM trim, r.
+            REAP lc FROM list_contains, evars, lw.
+            REAP rc FROM list_contains, evars, rw.
+            IF lc IS 1 AND rc IS 1,
+              IF sc IS "+", GIVE "plant_complex_add(" + lw + ", " + rw + ")". /IF.
+              IF sc IS "-", GIVE "plant_complex_sub(" + lw + ", " + rw + ")". /IF.
+              IF sc IS "*", GIVE "plant_complex_mul(" + lw + ", " + rw + ")". /IF.
+              IF sc IS "/", GIVE "plant_complex_div(" + lw + ", " + rw + ")". /IF.
+            /IF.
+          /IF.
+        /IF.
+      /IF.
+      SET i TO i + 1.
+    /SEASON.
+    SET oi TO oi + 1.
+  /SEASON.
+  GIVE expr.
+/ACTION.
+
 ACTION translate_expr(expr(TX), nums(LIST), evars(LIST), maths(LIST)),
     REAP expr FROM _swap_self, expr.
     CREATE e(TX) TO expr.
@@ -4013,6 +4216,19 @@ ACTION translate_expr(expr(TX), nums(LIST), evars(LIST), maths(LIST)),
     REAP e FROM _handle_func_paren, e, "TENSOR_SHAPE", "plant_tensor_shape".
     REAP e FROM _handle_func_paren, e, "TENSOR_NDIM", "plant_tensor_ndim".
     REAP e FROM _handle_func_paren, e, "TENSOR_SIZE", "plant_tensor_size".
+    # v0.51.11 — CMP (complex) constructor + accessors/transcendentals.
+    # CMP(a, b) → plant_complex_make(a, b)  (PlantComplex, from plant_math.c)
+    REAP e FROM _handle_func_paren2, e, "CMP", "plant_complex_make".
+    REAP e FROM _handle_func_paren, e, "CREAL", "plant_cmp_real".
+    REAP e FROM _handle_func_paren, e, "CIMAG", "plant_cmp_imag".
+    REAP e FROM _handle_func_paren, e, "CARG", "plant_cmp_arg".
+    REAP e FROM _handle_func_paren, e, "CABS", "plant_cmp_cabs".
+    REAP e FROM _handle_func_paren, e, "CCONJ", "plant_complex_conj".
+    REAP e FROM _handle_func_paren, e, "CEXP", "plant_cmp_exp".
+    REAP e FROM _handle_func_paren, e, "CLOG", "plant_cmp_log".
+    REAP e FROM _handle_func_paren, e, "CSQRT", "plant_cmp_sqrt".
+    REAP e FROM _handle_func_paren, e, "CSIN", "plant_cmp_sin".
+    REAP e FROM _handle_func_paren, e, "CCOS", "plant_cmp_cos".
     # v0.49.23 — numerical analysis (factorization/eigen/solver).
     REAP e FROM _math_func_paren, e, "LU", "plant_lu".
     REAP e FROM _math_func_paren, e, "EIGEN", "plant_eigen".
@@ -4428,6 +4644,10 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
       GIVE ccode2.
   /IF.
   REAP val FROM _map_get, node, "value".
+  # v0.51.11 — CMP target: lower a top-level binary op to complex math.
+  IF vtype IS "CMP",
+      REAP val FROM _cmp_binop, val.
+  /IF.
   REAP cval FROM translate_expr, val, nums, evars, plant_list_make(0).
   REAP cval FROM _handle_cat, cval, nums, evars.
   # v0.50.0e — ARRAY[T, N]: emit T name[N] = {init}; BEFORE actx early return.
@@ -4541,6 +4761,10 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
           GIVE isel + "  long double " + target + " = plant_scl_create(" + cval + ");\n".
       /IF.
       GIVE isel + "  long double " + target + " = plant_scl_create(_from_double(" + cval + "));\n".
+  /IF.
+  # v0.51.11 — CMP complex number (PlantComplex struct by value).
+  IF vtype IS "CMP",
+      GIVE isel + "  PlantComplex " + target + " = " + cval + ";\n".
   /IF.
   IF vtype IS "LIST",
       GIVE isel + "  PlantArray* " + target + " = " + cval + ";\n".
@@ -8261,7 +8485,7 @@ ACTION _ts_resolve(tsub(LIST), name(TX)),
 
 
 ACTION generate_c(ast(LIST)),
-    CREATE header(TX) TO "#include <plant_compat.h>\n#include <plant_memory.h>\n\n".
+    CREATE header(TX) TO "#include <plant_compat.h>\n#include <plant_memory.h>\n#include <plant_math.h>\n#include <plant_complex.h>\n\n".
     CREATE decl_code(TX) TO "".
     CREATE stmt_code(TX) TO "".
     CREATE has_decl(LON) TO 0.

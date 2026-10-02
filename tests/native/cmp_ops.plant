@@ -1,0 +1,14 @@
+SUITE "CMP Operations"
+  CREATE A (CMP) TO CMP(3, 4).
+  CREATE B (CMP) TO CMP(1, 0 - 2).
+
+  CREATE S (CMP) TO A + B.
+  SHOW CREAL(S).
+  SHOW CIMAG(S).
+
+  CREATE M (CMP) TO A * B.
+  SHOW CREAL(M).
+  SHOW CIMAG(M).
+
+  SHOW "cmp-ops-ok".
+/SUITE.

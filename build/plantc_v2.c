@@ -168,6 +168,9 @@ tx_t list_contains(PlantArray* lst, tx_t x);
 tx_t collect_nums_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_globals_walk(PlantArray* bd, PlantArray* res);
 tx_t collect_nums(PlantArray* bd, PlantArray* params, PlantArray* subst);
+tx_t collect_cmps_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
+tx_t collect_cmps(PlantArray* bd, PlantArray* params, PlantArray* subst);
+tx_t _evars_with_cmps(PlantArray* bd, PlantArray* params, PlantArray* subst, PlantArray* base);
 tx_t collect_maths_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_maths(PlantArray* bd, PlantArray* params, PlantArray* subst);
 tx_t _wrap_math_vars(tx_t e, PlantArray* maths);
@@ -187,6 +190,8 @@ tx_t _swap_self(tx_t e);
 tx_t _handle_cast(tx_t e);
 tx_t is_plain_str_ident(tx_t x, PlantArray* nums);
 tx_t rewrite_cond_is(tx_t cond, PlantArray* nums);
+tx_t _cmp_binop(tx_t expr);
+tx_t _handle_cmp_ops(tx_t expr, PlantArray* evars);
 tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* maths);
 tx_t indent_str(long level);
 tx_t _gb_dump(PlantArray* bd);
@@ -10224,6 +10229,118 @@ tx_t collect_nums(PlantArray* bd, PlantArray* params, PlantArray* subst) {
     ret = collect_nums_walk(bd, subst, res);
     return res;
 }
+tx_t collect_cmps_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
+  tx_t cwfound = "";
+  tx_t cib = "";
+  tx_t cibd4 = "";
+  tx_t cwret2 = "";
+  tx_t cwbd2 = "";
+  tx_t cwret3 = "";
+  tx_t cwbd3 = "";
+  tx_t cwret4 = "";
+  tx_t cmcl4 = "";
+  tx_t cmcb2 = "";
+  tx_t cwret5 = "";
+    long cwi = 0;
+    tx_t cwnd = "";
+    tx_t cwty = "";
+    tx_t cwtg = "";
+    tx_t cwvt = "";
+    tx_t cwbs = "";
+    tx_t cwbb = "";
+    while (cwi < plant_array_length(bd)) {
+    cwnd = plant_list_get(bd, cwi);
+    cwty = _map_get(cwnd, "type");
+    if (strcmp(cwty,"create_stmt") == 0 || strcmp(cwty,"let_stmt") == 0) {
+    cwtg = _map_get(cwnd, "target");
+    cwvt = _map_get(cwnd, "var_type");
+    cwbs = subst_type(cwvt, subst);
+    cwbb = type_base(cwbs);
+    if (strcmp(cwbb,"CMP") == 0) {
+    cwfound = list_contains(res, cwtg);
+    if (cwfound == 0) {
+                    res = plant_list_add(res, cwtg);
+    }
+    }
+    }
+    if (strcmp(cwty,"if_stmt") == 0) {
+    cib = _if_bodies(cwnd);
+    long cii4 = 0;
+    while (cii4 < plant_array_length(cib)) {
+    cibd4 = plant_list_get(cib, cii4);
+    cwret2 = collect_cmps_walk(cibd4, subst, res);
+    cii4 = cii4+1;
+    }
+    }
+    if (strcmp(cwty,"season_stmt") == 0 || strcmp(cwty,"cycle_stmt") == 0) {
+    cwbd2 = _map_get(cwnd, "body");
+    cwret3 = collect_cmps_walk(cwbd2, subst, res);
+    }
+    if (strcmp(cwty,"suite_stmt") == 0) {
+    cwbd3 = _map_get(cwnd, "body");
+    cwret4 = collect_cmps_walk(cwbd3, subst, res);
+    }
+    if (strcmp(cwty,"match_stmt") == 0) {
+    PlantArray* cmcl3 = _map_get ( cwnd , "clauses" );
+    long cmci3 = 0;
+    while (cmci3 < plant_array_length(cmcl3)) {
+    cmcl4 = plant_list_get(cmcl3, cmci3);
+    cmcb2 = _map_get(cmcl4, "bodyStatements");
+    cwret5 = collect_cmps_walk(cmcb2, subst, res);
+    cmci3 = cmci3+1;
+    }
+    }
+    cwi = cwi+1;
+    }
+    return res;
+}
+tx_t collect_cmps(PlantArray* bd, PlantArray* params, PlantArray* subst) {
+  tx_t cret = "";
+    PlantArray* res = plant_list_make ( 0 );
+    long pi = 0;
+    tx_t pnd = "";
+    tx_t pn2 = "";
+    tx_t pty2 = "";
+    tx_t psu2 = "";
+    tx_t pbs2 = "";
+    while (pi < plant_array_length(params)) {
+    pnd = plant_list_get(params, pi);
+    pn2 = _map_get(pnd, "name");
+    pty2 = _map_get(pnd, "type");
+    psu2 = subst_type(pty2, subst);
+    pbs2 = type_base(psu2);
+    if (strcmp(pbs2,"CMP") == 0) {
+            res = plant_list_add(res, pn2);
+    }
+    pi = pi+1;
+    }
+    cret = collect_cmps_walk(bd, subst, res);
+    return res;
+}
+tx_t _evars_with_cmps(PlantArray* bd, PlantArray* params, PlantArray* subst, PlantArray* base) {
+  tx_t cm = "";
+  tx_t cf = "";
+    PlantArray* out = plant_list_make ( 0 );
+    long bi = 0;
+    tx_t be = "";
+    while (bi < plant_array_length(base)) {
+    be = plant_list_get(base, bi);
+        out = plant_list_add(out, be);
+    bi = bi+1;
+    }
+    cm = collect_cmps(bd, params, subst);
+    long ci = 0;
+    tx_t ce = "";
+    while (ci < plant_array_length(cm)) {
+    ce = plant_list_get(cm, ci);
+    cf = list_contains(out, ce);
+    if (cf == 0) {
+            out = plant_list_add(out, ce);
+    }
+    ci = ci+1;
+    }
+    return out;
+}
 tx_t collect_maths_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
   tx_t wfound = "";
   tx_t ib = "";
@@ -11119,6 +11236,129 @@ tx_t rewrite_cond_is(tx_t cond, PlantArray* nums) {
     }
     return cond;
 }
+tx_t _cmp_binop(tx_t expr) {
+  tx_t c0 = "";
+  tx_t c1 = "";
+  tx_t l = "";
+  tx_t r = "";
+  tx_t lw = "";
+  tx_t rw = "";
+    tx_t ops = "+-*/";
+    long oi = 0;
+    tx_t sc = "";
+    tx_t ch = "";
+    long depth = 0;
+    long instr = 0;
+    long i = 0;
+    while (oi < strlen( ops )) {
+    sc = char_at(ops, oi);
+    i = 0;
+    depth = 0;
+    instr = 0;
+    while (i < strlen( expr )) {
+    ch = char_at(expr, i);
+    if (strcmp(ch,"\"") == 0) {
+    instr = 1 - instr;
+    }
+    if (instr == 0) {
+    if (strcmp(ch,"(") == 0 || strcmp(ch,"[") == 0) {
+    depth = depth+1;
+    }
+    if (strcmp(ch,")") == 0 || strcmp(ch,"]") == 0) {
+    depth = depth - 1;
+    }
+    if (depth == 0 && strcmp(str_eq ( ch , sc ),"1") == 0) {
+    c0 = char_at(expr, i - 1);
+    c1 = char_at(expr, i+1);
+    if (strcmp(str_eq ( c0 , " " ),"1") == 0 && strcmp(str_eq ( c1 , " " ),"1") == 0) {
+    l = substring(expr, 0, i - 1);
+    r = substring(expr, i+2, strlen( expr ));
+    lw = trim(l);
+    rw = trim(r);
+    if (strcmp(str_eq ( sc , "+" ),"1") == 0) {
+    return _cat(_cat4("plant_complex_add(", lw, ", ", rw), ")");
+    }
+    if (strcmp(str_eq ( sc , "-" ),"1") == 0) {
+    return _cat(_cat4("plant_complex_sub(", lw, ", ", rw), ")");
+    }
+    if (strcmp(str_eq ( sc , "*" ),"1") == 0) {
+    return _cat(_cat4("plant_complex_mul(", lw, ", ", rw), ")");
+    }
+    if (strcmp(str_eq ( sc , "/" ),"1") == 0) {
+    return _cat(_cat4("plant_complex_div(", lw, ", ", rw), ")");
+    }
+    }
+    }
+    }
+    i = i+1;
+    }
+    oi = oi+1;
+    }
+    return expr;
+}
+tx_t _handle_cmp_ops(tx_t expr, PlantArray* evars) {
+  tx_t c0 = "";
+  tx_t c1 = "";
+  tx_t l = "";
+  tx_t r = "";
+  tx_t lw = "";
+  tx_t rw = "";
+  tx_t lc = "";
+  tx_t rc = "";
+    tx_t ops = "+-*/";
+    long oi = 0;
+    tx_t pb = "";
+    tx_t sc = "";
+    long depth = 0;
+    long instr = 0;
+    while (oi < strlen( ops )) {
+    sc = char_at(ops, oi);
+    long i = 0;
+    while (i < strlen( expr )) {
+    pb = char_at(expr, i);
+    if (strcmp(pb,"\"") == 0) {
+    instr = 1 - instr;
+    }
+    if (instr == 0) {
+    if (strcmp(pb,"(") == 0 || strcmp(pb,"[") == 0) {
+    depth = depth+1;
+    }
+    if (strcmp(pb,")") == 0 || strcmp(pb,"]") == 0) {
+    depth = depth - 1;
+    }
+    if (depth == 0 && pb == sc) {
+    c0 = char_at(expr, i - 1);
+    c1 = char_at(expr, i+1);
+    if (strcmp(c0," ") == 0 && strcmp(c1," ") == 0) {
+    l = substring(expr, 0, i - 1);
+    r = substring(expr, i+2, strlen( expr ));
+    lw = trim(l);
+    rw = trim(r);
+    lc = list_contains(evars, lw);
+    rc = list_contains(evars, rw);
+    if (lc == 1 && rc == 1) {
+    if (strcmp(sc,"+") == 0) {
+    return _cat(_cat4("plant_complex_add(", lw, ", ", rw), ")");
+    }
+    if (strcmp(sc,"-") == 0) {
+    return _cat(_cat4("plant_complex_sub(", lw, ", ", rw), ")");
+    }
+    if (strcmp(sc,"*") == 0) {
+    return _cat(_cat4("plant_complex_mul(", lw, ", ", rw), ")");
+    }
+    if (strcmp(sc,"/") == 0) {
+    return _cat(_cat4("plant_complex_div(", lw, ", ", rw), ")");
+    }
+    }
+    }
+    }
+    }
+    i = i+1;
+    }
+    oi = oi+1;
+    }
+    return expr;
+}
 tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* maths) {
   tx_t e0 = "";
   tx_t e1 = "";
@@ -11212,6 +11452,17 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* 
     e = _handle_func_paren(e, "TENSOR_SHAPE", "plant_tensor_shape");
     e = _handle_func_paren(e, "TENSOR_NDIM", "plant_tensor_ndim");
     e = _handle_func_paren(e, "TENSOR_SIZE", "plant_tensor_size");
+    e = _handle_func_paren2(e, "CMP", "plant_complex_make");
+    e = _handle_func_paren(e, "CREAL", "plant_cmp_real");
+    e = _handle_func_paren(e, "CIMAG", "plant_cmp_imag");
+    e = _handle_func_paren(e, "CARG", "plant_cmp_arg");
+    e = _handle_func_paren(e, "CABS", "plant_cmp_cabs");
+    e = _handle_func_paren(e, "CCONJ", "plant_complex_conj");
+    e = _handle_func_paren(e, "CEXP", "plant_cmp_exp");
+    e = _handle_func_paren(e, "CLOG", "plant_cmp_log");
+    e = _handle_func_paren(e, "CSQRT", "plant_cmp_sqrt");
+    e = _handle_func_paren(e, "CSIN", "plant_cmp_sin");
+    e = _handle_func_paren(e, "CCOS", "plant_cmp_cos");
     e = _math_func_paren(e, "LU", "plant_lu");
     e = _math_func_paren(e, "EIGEN", "plant_eigen");
     e = _math_func_paren(e, "SVD", "plant_svd");
@@ -11556,6 +11807,9 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     return ccode2;
     }
     val = _map_get(node, "value");
+    if (strcmp(vtype,"CMP") == 0) {
+    val = _cmp_binop(val);
+    }
     cval = translate_expr(val, nums, evars, plant_list_make ( 0 ));
     cval = _handle_cat(cval, nums, evars);
     _aby = find_any(vtype, "[");
@@ -11657,6 +11911,9 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     return _cat3(_cat4(isel, "  long double ", target, " = plant_scl_create("), cval, ");\n");
     }
     return _cat3(_cat4(isel, "  long double ", target, " = plant_scl_create(_from_double("), cval, "));\n");
+    }
+    if (strcmp(vtype,"CMP") == 0) {
+    return _cat3(_cat4(isel, "  PlantComplex ", target, " = "), cval, ";\n");
     }
     if (strcmp(vtype,"LIST") == 0) {
     return _cat3(_cat4(isel, "  PlantArray* ", target, " = "), cval, ";\n");
@@ -15536,7 +15793,7 @@ tx_t generate_c(PlantArray* ast) {
   tx_t trg = "";
   tx_t rv2 = "";
   tx_t ct2 = "";
-    tx_t header = "#include <plant_compat.h>\n#include <plant_memory.h>\n\n";
+    tx_t header = "#include <plant_compat.h>\n#include <plant_memory.h>\n#include <plant_math.h>\n#include <plant_complex.h>\n\n";
     tx_t decl_code = "";
     tx_t stmt_code = "";
     long has_decl = 0;
@@ -16973,7 +17230,7 @@ int main(int argc, char **argv) {
   tx_t out_path = "";
   tx_t written = "";
   tx_t c_len = "";
-  TYPE_REGISTRY = plant_list_make(13, plant_list_make(5, "LON", "long", "1", "1", "scalar"), plant_list_make(5, "NUM", "int", "1", "1", "scalar"), plant_list_make(5, "UNU", "unsigned int", "1", "1", "scalar"), plant_list_make(5, "DBL", "double", "1", "1", "scalar"), plant_list_make(5, "FLT", "float", "1", "1", "scalar"), plant_list_make(5, "DCM", "long double", "1", "1", "scalar"), plant_list_make(5, "CHAR", "char", "0", "1", "scalar"), plant_list_make(5, "BYTES", "tx_t", "0", "1", "scalar"), plant_list_make(5, "BYT", "signed char", "1", "1", "scalar"), plant_list_make(5, "UBT", "unsigned char", "1", "1", "scalar"), plant_list_make(5, "SHR", "short", "1", "1", "scalar"), plant_list_make(5, "USH", "unsigned short", "1", "1", "scalar"), plant_list_make(5, "ULO", "unsigned long", "1", "1", "scalar"));
+  TYPE_REGISTRY = plant_list_make(14, plant_list_make(5, "LON", "long", "1", "1", "scalar"), plant_list_make(5, "NUM", "int", "1", "1", "scalar"), plant_list_make(5, "UNU", "unsigned int", "1", "1", "scalar"), plant_list_make(5, "DBL", "double", "1", "1", "scalar"), plant_list_make(5, "FLT", "float", "1", "1", "scalar"), plant_list_make(5, "DCM", "long double", "1", "1", "scalar"), plant_list_make(5, "CHAR", "char", "0", "1", "scalar"), plant_list_make(5, "BYTES", "tx_t", "0", "1", "scalar"), plant_list_make(5, "BYT", "signed char", "1", "1", "scalar"), plant_list_make(5, "UBT", "unsigned char", "1", "1", "scalar"), plant_list_make(5, "SHR", "short", "1", "1", "scalar"), plant_list_make(5, "USH", "unsigned short", "1", "1", "scalar"), plant_list_make(5, "ULO", "unsigned long", "1", "1", "scalar"), plant_list_make(5, "CMP", "PlantComplex", "0", "1", "scalar"));
   arg0 = get_cli_arg(0);
   if (strcmp(arg0,"-h") == 0 || strcmp(arg0,"--help") == 0) {
   plant_iReport_print(get_report(), "Chloroplast — Pure Native PlantLang compiler");
@@ -16984,7 +17241,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.51.10 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.51.11 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

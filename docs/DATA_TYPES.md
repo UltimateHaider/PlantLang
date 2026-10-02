@@ -18,6 +18,7 @@ PlantLang uses a **single opaque pointer** (`tx_t = void*`) as the universal run
 | `DBL` | `double` | 8 bytes (64-bit) | ±1.8e308 | `0` | Double-precision float (v0.51.10) |
 | `FLT` | `float` | 4 bytes (32-bit) | ±3.4e38 | `0` | Single-precision float (v0.51.10) |
 | `DCM` | `long double` | 8+ bytes | implementation-defined | `0` | Extended-precision float (v0.51.10; see TD-024) |
+| `CMP` | `PlantComplex` | 16 bytes (2×double) | N/A | `0+0i` | Complex number (v0.51.11) |
 | `NUM` | `int` | 4 bytes (32-bit) | -(2^31) to 2^31-1 | `0` | Signed 32-bit integer (v0.51.9) |
 | `UNU` | `unsigned int` | 4 bytes (32-bit) | 0 to 4,294,967,295 | `0` | Unsigned 32-bit integer (v0.51.9) |
 | `TX` | `tx_t` (void*) | 8 bytes (pointer) | N/A | `""` (empty string) | Text/string; default type when unspecified |
@@ -758,6 +759,55 @@ SHOW U + 1.   # → 100001
 - ⚠️ Portability: `long double` size is implementation-defined.
   On x86 it's 80-bit; on ARM it may be 64-bit (same as double)
   or 128-bit. See TD-024.
+
+---
+
+## CMP (Complex Number) — v0.51.11
+
+| Property | Value |
+|----------|-------|
+| Size | 16 bytes (2 × double) |
+| C type | PlantComplex |
+| Structure | struct { double real; double imag; } |
+| Parity | C99 complex.h / C# System.Numerics.Complex |
+| Category | scalar (not numeric) |
+
+### Syntax
+
+```plant
+CREATE Z (CMP) TO CMP(3, 4).   # 3 + 4i
+SHOW CREAL(Z).   # 3
+SHOW CIMAG(Z).   # 4
+SHOW CABS(Z).    # 5
+CREATE W (CMP) TO CCONJ(Z).    # 3 - 4i
+```
+
+### Functions
+
+| Builtin | Meaning | Returns |
+|---------|---------|---------|
+| CMP(re, im) | construct | CMP |
+| CREAL(z) | real part | DBL |
+| CIMAG(z) | imaginary part | DBL |
+| CABS(z) | modulus | DBL |
+| CARG(z) | argument (atan2) | DBL |
+| CCONJ(z) | conjugate | CMP |
+| CEXP(z) | e^z | CMP |
+| CLOG(z) | natural log | CMP |
+| CSQRT(z) | square root | CMP |
+| CSIN(z) | sine | CMP |
+| CCOS(z) | cosine | CMP |
+
+Arithmetic `+ - * /` is supported when the target type is CMP
+(lowered to `plant_complex_add/sub/mul/div`).
+
+### Use Cases
+
+- FFT (Fast Fourier Transform)
+- Signal processing
+- Quantum mechanics (wave functions)
+- Quadratic equations with complex roots
+- Electrical engineering (impedance)
 
 ---
 
