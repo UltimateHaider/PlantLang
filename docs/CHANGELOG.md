@@ -1,3 +1,38 @@
+## v0.51.10 — FLT + DBL + DCM (Complete Float Type Set)
+
+### Changed (BREAKING)
+- **Renamed SCL → DBL (double, 64-bit).**
+  - User code using (SCL) must change to (DBL).
+  - No alias provided.
+
+### Added
+- FLT type: 32-bit float (±3.4e38); Parity: f32.
+- DCM type: extended-precision long double; Parity: f80.
+- 4 new tests: dbl_basic, flt_basic, dcm_basic,
+  float_types_numeric.
+
+### Bootstrap
+- 2-stage seed upgrade (SCL was in self-hosting source).
+
+### Type Set (after v0.51.10)
+| Category | Types |
+|----------|-------|
+| Integer | BYT, UBT, SHR, USH, NUM, UNU, LON, ULO |
+| Float | FLT, DBL, DCM |
+| Other | CHAR, BYTES |
+
+### Verified
+- Native: 96/96 (was 92)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged
+- Binary: 928448 bytes.
+
+### Out of Scope (v0.51.11)
+- BOOL (boolean).
+- TD-022 (DBL truncation).
+- TD-024 (long double portability).
+
 ## v0.51.9 — Rename FACT→NUM + UFACT→UNU + Remove UNUM
 
 ### Changed (BREAKING)

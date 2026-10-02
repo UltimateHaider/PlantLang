@@ -299,15 +299,28 @@ SHOW "end".   # ← dropped
 - **Preserved:** literal-vs-literal behavior unchanged.
 - **Related:** TD-022.
 
-## TD-022: SCL display truncates doubles
+## TD-022: DBL display truncates doubles
 - **Status:** OPEN
-- **Introduced:** v0.51.4 (`collect_nums*` migration made SCL numeric).
+- **Introduced:** v0.51.4 (SCL made numeric); renamed DBL in v0.51.10.
 - **Target fix:** v0.51.5 or v0.52.0
-- **Impact:** LOW-MEDIUM — `SHOW S + 1.` for an SCL double truncates (`4.14` → `4`).
+- **Impact:** LOW-MEDIUM — `SHOW D + 1.` for DBL truncates (`4.14` → `4`).
 - **Cause:** `_from_long` wraps a double → integer truncation.
 - **Fix direction:** use `_from_double` for doubles, or type-aware wrapping.
 - **Discovered by:** v0.51.4 Phase 4.
 - **Related:** TD-021.
+
+## TD-024: DCM (long double) size is implementation-defined — OPEN
+- **Status:** OPEN
+- **Introduced:** v0.51.10 (DCM added).
+- **Target fix:** v0.52.0 (Type System Audit) or document.
+- **Impact:** LOW — DCM behavior varies by platform.
+- **Issue:** In C89, `long double` size/precision is
+  implementation-defined:
+  - x86: 80-bit extended precision.
+  - ARM: may be 64-bit (same as double) or 128-bit.
+- **User guidance:** Avoid relying on DCM having more precision
+  than DBL across platforms.
+- **Related:** TD-022.
 
 ## TD-023: UNUM (unsigned long) removed — CLOSED in v0.51.9
 - **Status:** ✅ CLOSED in v0.51.9

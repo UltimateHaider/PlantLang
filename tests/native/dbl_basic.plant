@@ -1,0 +1,6 @@
+SUITE "DBL Basic (double)"
+  CREATE D (DBL) TO 3.
+  SHOW D.
+
+  SHOW "dbl-basic-ok".
+/SUITE.

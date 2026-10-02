@@ -103,7 +103,7 @@ ACTION is_keyword(wrd(TX)),
   # v0.50.0b — unsigned numeric primitives.
   IF wrd IS "ufact", GIVE TRUE. /IF.
   # v0.50.0c — double-precision real primitive.
-  IF wrd IS "scl", GIVE TRUE. /IF.
+  IF wrd IS "dbl", GIVE TRUE. /IF.
   # v0.50.0d — union composite type.
   IF wrd IS "union", GIVE TRUE. /IF.
   # v0.50.0e — native fixed-size arrays.
@@ -266,7 +266,7 @@ ACTION keyword_to_type(wrd(TX)),
   # v0.50.0b — unsigned numeric primitives.
   IF wrd IS "ufact", GIVE "UNU". /IF.
   # v0.50.0c — double-precision real primitive.
-  IF wrd IS "scl", GIVE "SCL". /IF.
+  IF wrd IS "dbl", GIVE "DBL". /IF.
   # v0.50.0d — union composite type.
   IF wrd IS "union", GIVE "UNION". /IF.
   # v0.50.0e — native fixed-size arrays.

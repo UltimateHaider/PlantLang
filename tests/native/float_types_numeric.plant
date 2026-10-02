@@ -1,0 +1,15 @@
+SUITE "Float Types Integration"
+  CREATE F (FLT) TO 1.
+  CREATE D (DBL) TO 2.
+  CREATE M (DCM) TO 3.
+  CREATE N (NUM) TO 100.
+
+  SHOW F.
+  SHOW D.
+  SHOW M.
+  SHOW N + F.
+  SHOW N + D.
+  SHOW N + M.
+
+  SHOW "float-types-ok".
+/SUITE.

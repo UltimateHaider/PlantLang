@@ -99,7 +99,7 @@ ACTION main(),
 |------|---------|---------|
 | Integer | `LON` | `CREATE age(LON) TO 25.` |
 | Unsigned integer | `ULO` | `CREATE flags(ULO) TO 42.` |
-| Decimal | `SCL` | `CREATE pi(SCL) TO 3.14.` |
+| Decimal | `DBL` | `CREATE pi(DBL) TO 3.14.` |
 | Text | `TX` | `CREATE name(TX) TO "Haider".` |
 | Character | `CHAR` | `CREATE c(CHAR) TO "A".` |
 | Boolean | `NUM` | `CREATE active(NUM) TO TRUE.` |
@@ -109,7 +109,7 @@ ACTION main(),
 | Map | `MAP` | `CREATE m(MAP) TO { "key": "val" }.` |
 | Struct | `STRUCT` | `STRUCT Point { x: LON, y: LON }` |
 | Anonymous struct | `STRUCT` | `STRUCT { x: LON, y: LON }` (auto-named) |
-| Union | `UNION` | `UNION V { i: LON, f: SCL }` |
+| Union | `UNION` | `UNION V { i: LON, f: DBL }` |
 | Fixed-size array | `ARRAY` | `ARRAY[LON, 5] nums = [1, 2, 3, 4, 5].` |
 | Symbolic math | `MATH` | `CREATE expr(MATH) TO "2 + 3 * 4".` |
 | Enum | `ENUM` | `ENUM Color { RED, GREEN, BLUE }.` |
@@ -123,7 +123,7 @@ SET score TO score + 6.
 SHOW "score=" + score.   # → 100
 
 CREATE name(TX) TO "Haider".
-CREATE pi(SCL) TO 3.14159.
+CREATE pi(DBL) TO 3.14159.
 CREATE active(NUM) TO TRUE.
 CREATE c(CHAR) TO "A".
 CREATE fruits(LIST) TO plant_list_make(3, "apple", "banana", "kiwi").
@@ -131,12 +131,12 @@ CREATE fruits(LIST) TO plant_list_make(3, "apple", "banana", "kiwi").
 
 ### Double-Precision Arithmetic (v0.50.0c)
 
-`SCL` provides native double-precision floating-point representation with full 17-digit precision:
+`DBL` provides native double-precision floating-point representation with full 17-digit precision:
 
 ```
-CREATE pi(SCL) TO 3.141592653589793.
-CREATE e(SCL) TO 2.718281828459045.
-CREATE x(SCL) TO "1.5".
+CREATE pi(DBL) TO 3.141592653589793.
+CREATE e(DBL) TO 2.718281828459045.
+CREATE x(DBL) TO "1.5".
 SHOW plant_scl_value(pi).         # → 3.141592653589793
 SHOW plant_scl_value(e).          # → 2.718281828459045
 SHOW plant_scl_value(x).          # → 1.5
@@ -252,7 +252,7 @@ emit nothing.
 ```
 UNION V {
   i: LON,
-  f: SCL
+  f: DBL
 }
 ```
 
@@ -262,7 +262,7 @@ block in the shared types section. Union values are stack-allocated:
 ```
 UNION Value {
   i: LON,
-  f: SCL,
+  f: DBL,
   s: TX
 }
 
@@ -389,7 +389,7 @@ aggregate initializer. Supported element types:
 |---|---|
 | `LON` | `long name[N] = {…};` |
 | `NUM` | `int name[N] = {…};` |
-| `SCL` | `double name[N] = {…};` |
+| `DBL` | `double name[N] = {…};` |
 | `CHAR` | `char name[N] = {…};` |
 | `ULO` | `unsigned long name[N] = {…};` |
 | `UNU` | `unsigned int name[N] = {…};` |
@@ -472,7 +472,7 @@ ACTION greet(name(TX)) -> TX,
 /GIVE greet.
 ```
 
-- Typed parameters (`LON`, `SCL`, `TX`, `NUM`, `LIST[T]`, structs, enums).
+- Typed parameters (`LON`, `DBL`, `TX`, `NUM`, `LIST[T]`, structs, enums).
 - Optional `-> Type` return annotation (purely informative at this stage).
 - `GIVE expr.` returns; bodies may use `IF`/`SEASON`, recursion, closures.
 - `REAP target FROM action, args.` calls an action and binds the result.

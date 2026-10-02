@@ -1,0 +1,6 @@
+SUITE "DCM Basic (long double)"
+  CREATE D (DCM) TO 7.
+  SHOW D.
+
+  SHOW "dcm-basic-ok".
+/SUITE.

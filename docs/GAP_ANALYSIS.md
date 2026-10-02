@@ -290,7 +290,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | Map access `m:"k"` | `_map_get(m, "k")` |
 | `{k: v}` map literal | `{ "k": v }` (v0.49.5) — or `plant_map_create()` + `plant_map_set(m, k, v)` |
 | `SORT l.` / `SHAKE l.` | `l = plant_sort(l, spec)` / `l = plant_shuffle(l)` (v0.48.29) |
-| `math:SQRT(x)` | declare `ACTION sqrt_(v(SCL)) -> external.` against `math_sqrt`, or call `std/math` externals |
+| `math:SQRT(x)` | declare `ACTION sqrt_(v(DBL)) -> external.` against `math_sqrt`, or call `std/math` externals |
 | `strings:UPPER(s)` | `UPPER(s)` expression built-in (v0.48.38e) or `REAP r FROM strings:UPPER, s.` |
 | `strings:FIND(s, sub)` / `COUNT_OF(s, sub)` / `SLICE(s, a, b)` / `JOIN(l, d)` | `FIND(s, sub)` / `COUNT_OF(s, sub)` / `SLICE(x, a, b)` / `JOIN(l, d)` expression built-ins (v0.48.38j/i/c) |
 | `fs:READ(p)` | `REAP r FROM fs:READ, p.` (works) |

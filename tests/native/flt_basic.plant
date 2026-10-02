@@ -1,0 +1,6 @@
+SUITE "FLT Basic (float)"
+  CREATE F (FLT) TO 5.
+  SHOW F.
+
+  SHOW "flt-basic-ok".
+/SUITE.

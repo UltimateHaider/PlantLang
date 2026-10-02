@@ -14,8 +14,8 @@ SHOW "codes: created".
 CREATE flags(ARRAY[NUM, 3]) TO [1, 0, 1].
 SHOW "flags: created".
 
-# SCL array via CREATE.
-CREATE ratios(ARRAY[SCL, 3]) TO [1.5, 2.5, 3.5].
+# DBL array via CREATE.
+CREATE ratios(ARRAY[DBL, 3]) TO [1.5, 2.5, 3.5].
 SHOW "ratios: created".
 
 # Empty LON array (default init).

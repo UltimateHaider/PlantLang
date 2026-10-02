@@ -1,13 +1,13 @@
 # tests/native/registry_types.plant — v0.51.4 Type Registry coverage
 # LON/NUM/ULO resolve via the registry and display correctly.
-# SCL is created (exercising registry ctype resolution) but NOT displayed:
-# SCL display truncates via _from_long (pre-existing; see TD-022), so the
+# DBL is created (exercising registry ctype resolution) but NOT displayed:
+# DBL display truncates via _from_long (pre-existing; see TD-022), so the
 # directive's `4.14` is unattainable.
 SUITE "Type Registry Coverage"
   CREATE N (LON) TO 1000.
   CREATE F (NUM) TO 500.
   CREATE U (ULO) TO 2000.
-  CREATE S (SCL) TO 3.14.
+  CREATE S (DBL) TO 3.14.
 
   SHOW N + 1.
   SHOW F + 1.

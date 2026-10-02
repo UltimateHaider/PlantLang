@@ -22,7 +22,9 @@ GLOBAL TYPE_REGISTRY TO [
     ["LON",   "long",          "1", "1", "scalar"],
     ["NUM",  "int",           "1", "1", "scalar"],
     ["UNU", "unsigned int",  "1", "1", "scalar"],
-    ["SCL",   "double",        "1", "1", "scalar"],
+    ["DBL",   "double",        "1", "1", "scalar"],
+    ["FLT",   "float",         "1", "1", "scalar"],
+    ["DCM",   "long double",   "1", "1", "scalar"],
     ["CHAR",  "char",          "0", "1", "scalar"],
     ["BYTES", "tx_t",          "0", "1", "scalar"],
     ["BYT",   "signed char",   "1", "1", "scalar"],
@@ -4515,7 +4517,7 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
       GIVE isel + "  unsigned int " + target + " = plant_ufact_create(" + cval + ");\n".
   /IF.
   # v0.50.0c — double-precision real primitive.
-  IF vtype IS "SCL",
+  IF vtype IS "DBL",
       # Check if value is a string literal (starts with quote) - pass directly.
       # Otherwise wrap numeric values in _from_double for string conversion.
       REAP fc FROM char_at, cval, 0.
@@ -4523,6 +4525,22 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
           GIVE isel + "  double " + target + " = plant_scl_create(" + cval + ");\n".
       /IF.
       GIVE isel + "  double " + target + " = plant_scl_create(_from_double(" + cval + "));\n".
+  /IF.
+  # v0.51.10 — single-precision float.
+  IF vtype IS "FLT",
+      REAP ff1 FROM char_at, cval, 0.
+      IF ff1 IS "\"",
+          GIVE isel + "  float " + target + " = plant_scl_create(" + cval + ");\n".
+      /IF.
+      GIVE isel + "  float " + target + " = plant_scl_create(_from_double(" + cval + "));\n".
+  /IF.
+  # v0.51.10 — extended-precision long double.
+  IF vtype IS "DCM",
+      REAP fd1 FROM char_at, cval, 0.
+      IF fd1 IS "\"",
+          GIVE isel + "  long double " + target + " = plant_scl_create(" + cval + ");\n".
+      /IF.
+      GIVE isel + "  long double " + target + " = plant_scl_create(_from_double(" + cval + "));\n".
   /IF.
   IF vtype IS "LIST",
       GIVE isel + "  PlantArray* " + target + " = " + cval + ";\n".
@@ -4550,7 +4568,7 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
       /IF.
       GIVE isel + "  " + vct2 + " " + target + " = " + cval + ";\n".
   /IF.
-  IF vtype ISNT "LON" AND vtype ISNT "NUM" AND vtype ISNT "CHAR" AND vtype ISNT "UNU" AND vtype ISNT "SCL" AND vtype ISNT "LIST" AND vtype ISNT "MATH",
+  IF vtype ISNT "LON" AND vtype ISNT "NUM" AND vtype ISNT "CHAR" AND vtype ISNT "UNU" AND vtype ISNT "DBL" AND vtype ISNT "FLT" AND vtype ISNT "DCM" AND vtype ISNT "LIST" AND vtype ISNT "MATH",
       REAP vst3 FROM is_struct_type, vtype.
       REAP iut3 FROM is_union_type, vtype, evars.
       IF vst3 ISNT "1" AND iut3 ISNT "1",
@@ -5628,7 +5646,7 @@ ACTION generate_node(node, env(LIST)),
             GIVE isel + "  unsigned int " + target + " = plant_ufact_create(" + cval + ");\n".
         /IF.
         # v0.50.0c — double-precision real primitive.
-        IF vtype IS "SCL",
+        IF vtype IS "DBL",
             # Check if value is a string literal (starts with quote) - pass directly.
             # Otherwise wrap numeric values in _from_double for string conversion.
             REAP fc2 FROM char_at, cval, 0.
@@ -5636,6 +5654,22 @@ ACTION generate_node(node, env(LIST)),
                 GIVE isel + "  double " + target + " = plant_scl_create(" + cval + ");\n".
             /IF.
             GIVE isel + "  double " + target + " = plant_scl_create(_from_double(" + cval + "));\n".
+        /IF.
+        # v0.51.10 — single-precision float (LET).
+        IF vtype IS "FLT",
+            REAP ff2 FROM char_at, cval, 0.
+            IF ff2 IS "\"",
+                GIVE isel + "  float " + target + " = plant_scl_create(" + cval + ");\n".
+            /IF.
+            GIVE isel + "  float " + target + " = plant_scl_create(_from_double(" + cval + "));\n".
+        /IF.
+        # v0.51.10 — extended-precision long double (LET).
+        IF vtype IS "DCM",
+            REAP fd2 FROM char_at, cval, 0.
+            IF fd2 IS "\"",
+                GIVE isel + "  long double " + target + " = plant_scl_create(" + cval + ");\n".
+            /IF.
+            GIVE isel + "  long double " + target + " = plant_scl_create(_from_double(" + cval + "));\n".
         /IF.
         # v0.50.0f — MATH symbolic expression in LET.
         IF vtype IS "MATH",
@@ -5660,7 +5694,7 @@ ACTION generate_node(node, env(LIST)),
             /IF.
             GIVE isel + "  " + vct4 + " " + target + " = " + cval + ";\n".
         /IF.
-        IF vtype ISNT "LON" AND vtype ISNT "CHAR" AND vtype ISNT "UNU" AND vtype ISNT "SCL" AND vtype ISNT "MATH",
+        IF vtype ISNT "LON" AND vtype ISNT "CHAR" AND vtype ISNT "UNU" AND vtype ISNT "DBL" AND vtype ISNT "FLT" AND vtype ISNT "DCM" AND vtype ISNT "MATH",
             REAP vst5 FROM is_struct_type, vtype.
             REAP iut5 FROM is_union_type, vtype, evars.
             IF vst5 ISNT "1" AND iut5 ISNT "1",
@@ -6610,7 +6644,7 @@ ACTION plant_ctype(ptype(TX)),
     IF base IS "REF NUM", GIVE "int*". /IF.
     IF base IS "REF CHAR", GIVE "char*". /IF.
     IF base IS "REF UNU", GIVE "unsigned int*". /IF.
-    IF base IS "REF SCL", GIVE "double*". /IF.
+    IF base IS "REF DBL", GIVE "double*". /IF.
     IF base IS "REF LIST", GIVE "PlantArray**". /IF.
     IF base IS "REF TX", GIVE "tx_t*". /IF.
     # v0.50.0d — union type maps to void* (opaque).
@@ -6711,7 +6745,9 @@ ACTION is_struct_type(t(TX)),
   IF tb IS "NUM", GIVE "0". /IF.
   IF tb IS "TX", GIVE "0". /IF.
   IF tb IS "LIST", GIVE "0". /IF.
-  IF tb IS "SCL", GIVE "0". /IF.
+  IF tb IS "DBL", GIVE "0". /IF.
+  IF tb IS "FLT", GIVE "0". /IF.
+  IF tb IS "DCM", GIVE "0". /IF.
   IF tb IS "UNU", GIVE "0". /IF.
   IF tb IS "CHAR", GIVE "0". /IF.
   # v0.50.0e — ARRAY[T, N] is not a struct type.

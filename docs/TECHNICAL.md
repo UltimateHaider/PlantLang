@@ -369,7 +369,7 @@ CHOICE values are stored as a fixed-size struct:
 ```
 
 - `tag`: variant index (0-based, in declaration order)
-- `payload`: variant's value, stored as i64 (all PlantLang types fit in i64: LON→i64, SCL→bitcast, TX→ptrtoint, NUM→zext)
+- `payload`: variant's value, stored as i64 (all PlantLang types fit in i64: LON→i64, DBL→bitcast, TX→ptrtoint, NUM→zext)
 
 ### 5.2 Variant Construction
 
@@ -457,13 +457,13 @@ unary       (-)
 atom        (numbers, strings, identifiers, parenthesized)
 ```
 
-Each operation emits LLVM IR directly to `Module.body`. String concatenation uses `@malloc`/`@strcpy`/`@strcat` runtime calls. Type promotion follows: `LON + SCL → SCL` (int → double via `sitofp`).
+Each operation emits LLVM IR directly to `Module.body`. String concatenation uses `@malloc`/`@strcpy`/`@strcat` runtime calls. Type promotion follows: `LON + DBL → DBL` (int → double via `sitofp`).
 
 ### 4.3 Type Coercions (Return Register)
 
 All function return values pass through `i64`:
 - `LON`: direct (i64 → i64)
-- `SCL`: `bitcast double %val to i64`
+- `DBL`: `bitcast double %val to i64`
 - `TX`: `ptrtoint i8* %val to i64`
 - `NUM`: `zext i1 %val to i64`
 
@@ -724,7 +724,7 @@ ACTION plant_printf(fmt(TX)) -> external.
 declare i64 @plant_printf(i64)
 ```
 
-The function name is mangled from the PlantLang identifier. Parameters use the standard type coercion (TX → i64 via ptrtoint, LON → i64, SCL → i64 via bitcast).
+The function name is mangled from the PlantLang identifier. Parameters use the standard type coercion (TX → i64 via ptrtoint, LON → i64, DBL → i64 via bitcast).
 
 **Interpreter**: FFI stubs are pre-registered in the interpreter's runtime. Each stub wraps the corresponding `runtime_bridge.c` function via a JS implementation. When the interpreter encounters a call to an external ACTION, it dispatches to the registered stub instead of looking for a body.
 
@@ -1896,7 +1896,7 @@ Sort engine (`sort_evaluator.js`):
 - `_makeChainedComparator(fields)` — iterates fields sequentially; if field N compares equal, proceeds to field N+1
 - Null-to-end: regardless of ASC/DESC, `null` values sort after all non-null values
 - String comparison uses `localeCompare` for locale-aware ordering
-- Numeric comparison uses subtraction (handles SCL/LON)
+- Numeric comparison uses subtraction (handles DBL/LON)
 
 ### 21.5 BLOOM AS Visual Governance
 
@@ -2024,7 +2024,7 @@ Three modules under `src/codegen/llvm/`:
   | PlantLang | LLVM IR |
   |---|---|
   | LON / INT | `i64` |
-  | SCL / DECIMAL | `double` |
+  | DBL / DECIMAL | `double` |
   | NUM / BOOL | `i1` |
   | TX / TEXT | `i8*` |
 
@@ -2115,7 +2115,7 @@ Where the interpreter falls back to the legacy regex path for compound RAW_EXPR 
 
 39 tests across 7 categories:
 - Literal SHOW (integer, decimal, boolean, string)
-- Variable CREATE + SHOW (LON, SCL, NUM, TX)
+- Variable CREATE + SHOW (LON, DBL, NUM, TX)
 - SET reassignment
 - Arithmetic expressions (precedence, parentheses, mixed-type)
 - Comparison operators (IS, IS NOT, GT, LT, GTE, LTE)
@@ -3647,7 +3647,7 @@ MATH variables store `PlantMath*` pointers via `plant_math_create()`. The codege
 |---|---|---|
 | `EVAL` | 1 | Evaluate math expression to number |
 | `SUBST` | 3 | Substitute variable in expression: `SUBST(expr, var, value)` |
-| `@` (cast) | 1 | Explicit type cast (e.g., `@ "3.14"` to SCL) |
+| `@` (cast) | 1 | Explicit type cast (e.g., `@ "3.14"` to DBL) |
 
 ### 36.3 Code Generation
 

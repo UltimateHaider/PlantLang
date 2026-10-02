@@ -15,7 +15,9 @@ PlantLang uses a **single opaque pointer** (`tx_t = void*`) as the universal run
 | PlantLang Type | C Equivalent | Size | Range | Default | Notes |
 |---|---|---|---|---|---|
 | `LON` | `long` | 8 bytes (64-bit) | -(2^63) to 2^63-1 | `0` | Integer numbers |
-| `SCL` | `long` (or `double` for decimals) | 8 bytes | -(2^63) to 2^63-1 | `0` | Scalar/decimal; decimals wrap via `_from_double` |
+| `DBL` | `double` | 8 bytes (64-bit) | ±1.8e308 | `0` | Double-precision float (v0.51.10) |
+| `FLT` | `float` | 4 bytes (32-bit) | ±3.4e38 | `0` | Single-precision float (v0.51.10) |
+| `DCM` | `long double` | 8+ bytes | implementation-defined | `0` | Extended-precision float (v0.51.10; see TD-024) |
 | `NUM` | `int` | 4 bytes (32-bit) | -(2^31) to 2^31-1 | `0` | Signed 32-bit integer (v0.51.9) |
 | `UNU` | `unsigned int` | 4 bytes (32-bit) | 0 to 4,294,967,295 | `0` | Unsigned 32-bit integer (v0.51.9) |
 | `TX` | `tx_t` (void*) | 8 bytes (pointer) | N/A | `""` (empty string) | Text/string; default type when unspecified |
@@ -515,7 +517,7 @@ tx_t plant_analyze(tx_t v);   /* Returns: {type, size, keys} MAP */
 
 | Category | Count | Types |
 |---|---|---|
-| **Primitive** | 6 | LON, SCL, NUM, TX, BOOL (via literals), NULL |
+| **Primitive** | 6 | LON, DBL, NUM, TX, BOOL (via literals), NULL |
 | **Composite** | 8 | LIST, MAP, STRUCT, ENUM, SPECIES, ACTION, CALLBACK, MATH |
 | **Special** | 5 | VOID, STORM, ANY, JSON, OPTION/RESULT |
 | **Reference** | 4 | REF LON, REF NUM, REF LIST, REF TX |
@@ -525,7 +527,7 @@ tx_t plant_analyze(tx_t v);   /* Returns: {type, size, keys} MAP */
 
 | Category | Types | C Representation |
 |---|---|---|
-| **Primitive** | LON, SCL, NUM, TX | `long`, `int`, `tx_t` (all stored as `tx_t` at runtime) |
+| **Primitive** | LON, DBL, NUM, TX | `long`, `int`, `tx_t` (all stored as `tx_t` at runtime) |
 | **Composite** | LIST, MAP, STRUCT, ENUM, SPECIES, MATH | `PlantArray*`, generated structs, map-backed objects, `PlantMath*` |
 | **Functional** | ACTION, CALLBACK | Function pointers with context |
 | **Special** | NULL, VOID, STORM, ANY, JSON, OPTION, RESULT | Null pointer, void, ARC objects, tagged unions |
@@ -726,6 +728,36 @@ SHOW U + 1.   # → 100001
 - Large counters
 - Bitmasks (64-bit)
 - Memory addresses / sizes
+
+---
+
+## Float Types (v0.51.10)
+
+| Type | C type | Size | Precision | Parity |
+|------|--------|------|-----------|--------|
+| FLT | float | 32-bit | ~7 digits | float / f32 |
+| DBL | double | 64-bit | ~15 digits | double / f64 |
+| DCM | long double | 80+ bits | ~18-19 digits | decimal / f80 |
+
+### FLT (32-bit float)
+
+- C: float; Range: ±3.4e38; Parity: f32.
+- Use cases: Memory-efficient ML, graphics.
+
+### DBL (64-bit double)
+
+- C: double; Range: ±1.8e308; Parity: f64.
+- Use cases: General floating-point, scientific computing.
+- (Renamed from SCL in v0.51.10.)
+
+### DCM (extended-precision decimal)
+
+- C: long double; Size: implementation-defined (80+ bits on x86).
+- Range: ±1.2e4932 (x86); Parity: f80.
+- Use cases: High-precision scientific computing.
+- ⚠️ Portability: `long double` size is implementation-defined.
+  On x86 it's 80-bit; on ARM it may be 64-bit (same as double)
+  or 128-bit. See TD-024.
 
 ---
 

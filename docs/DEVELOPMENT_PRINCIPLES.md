@@ -226,7 +226,7 @@ All verify-* targets must include valgrind-check-tensor.
 ### XXX. Type Registry (v0.51.4)
 
     - Single source of truth for scalar types (LON, NUM, ULO,
-      UNU, SCL, CHAR, BYTES).
+      UNU, DBL, CHAR, BYTES).
     - Stored as GLOBAL TYPE_REGISTRY in codegen_c.plant.
     - Records: [name, ctype, numeric, prim, category, default].
     - Adding a scalar type = one record (not 6-8 edits).

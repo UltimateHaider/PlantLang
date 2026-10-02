@@ -77,7 +77,7 @@ ROOT_SCOPE/.
 SUITE "Variables & Types",
 
   1\ CREATE n(LON)   TO 42.
-  1\ CREATE pi(SCL)  TO 3.14.
+  1\ CREATE pi(DBL)  TO 3.14.
   1\ CREATE msg(TX)  TO "hello".
   1\ CREATE ok(NUM) TO TRUE.
   1\ CREATE empty_list(LIST) TO.
@@ -86,7 +86,7 @@ SUITE "Variables & Types",
   VERIFY "NUM creation",
     n IS 42.
 
-  VERIFY "SCL creation",
+  VERIFY "DBL creation",
     pi IS 3.14.
 
   VERIFY "TX creation",
