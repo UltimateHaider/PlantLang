@@ -1,0 +1,9 @@
+SUITE "TXT Basic (text)"
+  CREATE S (TXT) TO "hello".
+  CREATE T (TXT) TO "world".
+
+  SHOW S.
+  SHOW T.
+
+  SHOW "txt-basic-ok".
+/SUITE.

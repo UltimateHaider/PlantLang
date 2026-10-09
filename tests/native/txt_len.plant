@@ -1,0 +1,6 @@
+SUITE "TXT Length"
+  CREATE S (TXT) TO "hello".
+  SHOW LEN(S).
+
+  SHOW "txt-len-ok".
+/SUITE.

@@ -25,7 +25,7 @@ GLOBAL TYPE_REGISTRY TO [
     ["DBL",   "double",        "1", "1", "scalar"],
     ["FLT",   "float",         "1", "1", "scalar"],
     ["DCM",   "long double",   "1", "1", "scalar"],
-    ["CHAR",  "char",          "0", "1", "scalar"],
+    ["CHA",  "char",          "0", "1", "scalar"],
     ["BYTES", "tx_t",          "0", "1", "scalar"],
     ["BYT",   "signed char",   "1", "1", "scalar"],
     ["UBT",   "unsigned char", "1", "1", "scalar"],
@@ -33,7 +33,9 @@ GLOBAL TYPE_REGISTRY TO [
     ["USH",   "unsigned short","1", "1", "scalar"],
     ["ULO",   "unsigned long", "1", "1", "scalar"],
     ["CMP",   "PlantComplex",  "0", "1", "scalar"],
-    ["BOL",   "bool",          "0", "1", "scalar"]
+    ["BOL",   "bool",          "0", "1", "scalar"],
+    ["TXT",   "tx_t",          "0", "1", "scalar"],
+    ["TX",    "tx_t",          "0", "1", "scalar"]
 ].
 
 # v0.51.4 — Registry lookup: returns the record for `name`, or empty list.
@@ -3195,6 +3197,61 @@ ACTION collect_bols_walk(bd(LIST), subst(LIST), res(LIST)),
   GIVE res.
 /ACTION.
 
+# v0.51.13 — collect_chas_walk: names of CHA CREATE/LET targets,
+# threaded via evars as "__CHA__" + name so gen_show_stmt wraps bare
+# CHA variables with plant_char_value (TD-018 fix).
+ACTION collect_chas_walk(bd(LIST), subst(LIST), res(LIST)),
+  CREATE cwi(LON) TO 0.
+  CREATE cwnd(TX) TO "".
+  CREATE cwty(TX) TO "".
+  CREATE cwtg(TX) TO "".
+  CREATE cwvt(TX) TO "".
+  CREATE cwbs(TX) TO "".
+  CREATE cwbb(TX) TO "".
+  SEASON cwi < COUNT bd,
+    REAP cwnd FROM plant_list_get, bd, cwi.
+    REAP cwty FROM _map_get, cwnd, "type".
+    IF cwty IS "create_stmt" OR cwty IS "let_stmt",
+      REAP cwtg FROM _map_get, cwnd, "target".
+      REAP cwvt FROM _map_get, cwnd, "var_type".
+      REAP cwbs FROM subst_type, cwvt, subst.
+      REAP cwbb FROM type_base, cwbs.
+      IF cwbb IS "CHA",
+        PUT _cat("__CHA__", cwtg) INTO res.
+      /IF.
+    /IF.
+    IF cwty IS "if_stmt",
+      REAP cib FROM _if_bodies, cwnd.
+      CREATE cii4(LON) TO 0.
+      SEASON cii4 < COUNT cib,
+        REAP cibd4 FROM plant_list_get, cib, cii4.
+        REAP cwret2 FROM collect_chas_walk, cibd4, subst, res.
+        SET cii4 TO cii4 + 1.
+      /SEASON.
+    /IF.
+    IF cwty IS "season_stmt" OR cwty IS "cycle_stmt",
+      REAP cwbd2 FROM _map_get, cwnd, "body".
+      REAP cwret3 FROM collect_chas_walk, cwbd2, subst, res.
+    /IF.
+    IF cwty IS "suite_stmt",
+      REAP cwbd3 FROM _map_get, cwnd, "body".
+      REAP cwret4 FROM collect_chas_walk, cwbd3, subst, res.
+    /IF.
+    IF cwty IS "match_stmt",
+      CREATE cmcl3(LIST) TO _map_get(cwnd, "clauses").
+      CREATE cmci3(LON) TO 0.
+      SEASON cmci3 < COUNT cmcl3,
+        REAP cmcl4 FROM plant_list_get, cmcl3, cmci3.
+        REAP cmcb2 FROM _map_get, cmcl4, "bodyStatements".
+        REAP cwret5 FROM collect_chas_walk, cmcb2, subst, res.
+        SET cmci3 TO cmci3 + 1.
+      /SEASON.
+    /IF.
+    SET cwi TO cwi + 1.
+  /SEASON.
+  GIVE res.
+/ACTION.
+
 ACTION _evars_with_bols(bd(LIST), subst(LIST), base(LIST)),
   CREATE out(LIST) TO plant_list_make(0).
   CREATE bi(LON) TO 0.
@@ -3212,6 +3269,15 @@ ACTION _evars_with_bols(bd(LIST), subst(LIST), base(LIST)),
     REAP cf FROM list_contains, out, ce.
     IF cf IS 0, PUT ce INTO out. /IF.
     SET ci TO ci + 1.
+  /SEASON.
+  REAP cm2 FROM collect_chas_walk, bd, subst, plant_list_make(0).
+  CREATE ci2(LON) TO 0.
+  CREATE ce2(TX) TO "".
+  SEASON ci2 < COUNT cm2,
+    REAP ce2 FROM plant_list_get, cm2, ci2.
+    REAP cf2 FROM list_contains, out, ce2.
+    IF cf2 IS 0, PUT ce2 INTO out. /IF.
+    SET ci2 TO ci2 + 1.
   /SEASON.
   GIVE out.
 /ACTION.
@@ -4637,6 +4703,17 @@ ACTION gen_show_stmt(node, nums(LIST), evars(LIST), isel(TX)),
   IF isn2 IS 1,
       SET cval TO "_from_long(" + cval + ")".
   /IF.
+  # v0.51.13 — CHA (char) display: wrap bare CHA variables with
+  # plant_char_value(char) so the char is shown as a 1-char string.
+  # Closes TD-018 (was: raw char passed as tx_t → segfault).
+  IF isn2 IS 0,
+      IF is_identifier(cval) IS 1,
+          REAP cchk FROM list_contains, evars, _cat("__CHA__", cval).
+          IF cchk IS 1,
+              SET cval TO "plant_char_value(" + cval + ")".
+          /IF.
+      /IF.
+  /IF.
   REAP snm2 FROM enum_expr_of, evars, cval.
   IF isn2 IS 0 AND snm2 ISNT "",
       SET cval TO "_from_enum(" + cval + ", \"" + snm2 + "\")".
@@ -4810,8 +4887,8 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
       /IF.
       GIVE isel + "  int " + target + " = " + cval + ";\n".
   /IF.
-  # v0.50.0a — CHAR single-character primitive.
-  IF vtype IS "CHAR",
+  # v0.50.0a — CHA single-character primitive.
+  IF vtype IS "CHA",
       # Wrap string value in plant_char_create to extract first character.
       GIVE isel + "  char " + target + " = plant_char_create(" + cval + ");\n".
   /IF.
@@ -4878,7 +4955,7 @@ ACTION gen_create_stmt(node, subst(LIST), nums(LIST), evars(LIST), actx(TX), ise
       /IF.
       GIVE isel + "  " + vct2 + " " + target + " = " + cval + ";\n".
   /IF.
-  IF vtype ISNT "LON" AND vtype ISNT "NUM" AND vtype ISNT "CHAR" AND vtype ISNT "UNU" AND vtype ISNT "DBL" AND vtype ISNT "FLT" AND vtype ISNT "DCM" AND vtype ISNT "LIST" AND vtype ISNT "MATH",
+  IF vtype ISNT "LON" AND vtype ISNT "NUM" AND vtype ISNT "CHA" AND vtype ISNT "UNU" AND vtype ISNT "DBL" AND vtype ISNT "FLT" AND vtype ISNT "DCM" AND vtype ISNT "LIST" AND vtype ISNT "MATH",
       REAP vst3 FROM is_struct_type, vtype.
       REAP iut3 FROM is_union_type, vtype, evars.
       IF vst3 ISNT "1" AND iut3 ISNT "1",
@@ -5943,8 +6020,8 @@ ACTION generate_node(node, env(LIST)),
         IF vtype IS "LON",
             GIVE isel + "  long " + target + " = " + cval + ";\n".
         /IF.
-        # v0.50.0a — CHAR single-character primitive.
-        IF vtype IS "CHAR",
+        # v0.50.0a — CHA single-character primitive.
+        IF vtype IS "CHA",
             GIVE isel + "  char " + target + " = plant_char_create(" + cval + ");\n".
         /IF.
         # v0.50.0b — unsigned numeric primitives.
@@ -6004,7 +6081,7 @@ ACTION generate_node(node, env(LIST)),
             /IF.
             GIVE isel + "  " + vct4 + " " + target + " = " + cval + ";\n".
         /IF.
-        IF vtype ISNT "LON" AND vtype ISNT "CHAR" AND vtype ISNT "UNU" AND vtype ISNT "DBL" AND vtype ISNT "FLT" AND vtype ISNT "DCM" AND vtype ISNT "MATH",
+        IF vtype ISNT "LON" AND vtype ISNT "CHA" AND vtype ISNT "UNU" AND vtype ISNT "DBL" AND vtype ISNT "FLT" AND vtype ISNT "DCM" AND vtype ISNT "MATH",
             REAP vst5 FROM is_struct_type, vtype.
             REAP iut5 FROM is_union_type, vtype, evars.
             IF vst5 ISNT "1" AND iut5 ISNT "1",
@@ -6952,7 +7029,7 @@ ACTION plant_ctype(ptype(TX)),
     IF base IS "LIST", GIVE "PlantArray*". /IF.
     IF base IS "REF LON", GIVE "long*". /IF.
     IF base IS "REF NUM", GIVE "int*". /IF.
-    IF base IS "REF CHAR", GIVE "char*". /IF.
+    IF base IS "REF CHA", GIVE "char*". /IF.
     IF base IS "REF UNU", GIVE "unsigned int*". /IF.
     IF base IS "REF DBL", GIVE "double*". /IF.
     IF base IS "REF LIST", GIVE "PlantArray**". /IF.
@@ -7059,7 +7136,7 @@ ACTION is_struct_type(t(TX)),
   IF tb IS "FLT", GIVE "0". /IF.
   IF tb IS "DCM", GIVE "0". /IF.
   IF tb IS "UNU", GIVE "0". /IF.
-  IF tb IS "CHAR", GIVE "0". /IF.
+  IF tb IS "CHA", GIVE "0". /IF.
   # v0.50.0e — ARRAY[T, N] is not a struct type.
   IF tb IS "ARRAY", GIVE "0". /IF.
   # v0.50.0f — MATH is not a struct type.

@@ -1,3 +1,44 @@
+## v0.51.13 — CHA + TXT (Text Types)
+
+### Changed (BREAKING)
+- Renamed CHAR → CHA (consistent with 3-letter scheme).
+- Bootstrap: 1-stage (CHAR rename only in self-hosting source).
+
+### Fixed
+- TD-018: CHA display now works (plant_char_value wrapping in SHOW).
+  The crash was in SHOW, not CREATE — corrected root cause.
+
+### Added
+- TXT type: canonical text type (tx_t).
+- TX type: registered as deprecated (tx_t; removal in v0.52.0).
+- 4 new tests: cha_basic, txt_basic, txt_concat, txt_len.
+
+### Deprecated
+- TX (text, tx_t) — use TXT instead. Removal: v0.52.0.
+
+### Type Set (after v0.51.13)
+| Category | Types |
+|----------|-------|
+| Integer | BYT, UBT, SHR, USH, NUM, UNU, LON, ULO |
+| Float | FLT, DBL, DCM |
+| Complex | CMP |
+| Boolean | BOL |
+| Text | CHA, TXT |
+| Other | BYTES |
+| Deprecated | TX |
+
+### Verified
+- Native: 106/106 (was 102)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (536,302 B)
+- valgrind strict: PASS
+- Binary: 960176 bytes (+0.43%).
+
+### Out of Scope (v0.52.0)
+- TX removal.
+- TD-022, TD-024, TD-025.
+
 ## v0.51.12 — BOL (C99 bool) + C89→C99 Transition
 
 ### Added

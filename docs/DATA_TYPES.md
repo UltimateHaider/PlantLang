@@ -20,6 +20,9 @@ PlantLang uses a **single opaque pointer** (`tx_t = void*`) as the universal run
 | `DCM` | `long double` | 8+ bytes | implementation-defined | `0` | Extended-precision float (v0.51.10; see TD-024) |
 | `CMP` | `PlantComplex` | 16 bytes (2×double) | N/A | `0+0i` | Complex number (v0.51.11) |
 | `BOL` | `bool` | 1 byte | 0 / 1 | `0` | Boolean, C99 (v0.51.12) |
+| `CHA` | `char` | 1 byte | ASCII/UTF-8 byte | `0` | Character (v0.51.13; renamed from CHAR) |
+| `TXT` | `tx_t` | variable | UTF-8 string | `""` | Text, canonical (v0.51.13) |
+| `TX` | `tx_t` | variable | UTF-8 string | `""` | Text, DEPRECATED — use TXT (v0.51.13) |
 | `NUM` | `int` | 4 bytes (32-bit) | -(2^31) to 2^31-1 | `0` | Signed 32-bit integer (v0.51.9) |
 | `UNU` | `unsigned int` | 4 bytes (32-bit) | 0 to 4,294,967,295 | `0` | Unsigned 32-bit integer (v0.51.9) |
 | `TX` | `tx_t` (void*) | 8 bytes (pointer) | N/A | `""` (empty string) | Text/string; default type when unspecified |
@@ -556,7 +559,7 @@ tx_t plant_analyze(tx_t v);   /* Returns: {type, size, keys} MAP */
 
 1. **Add native `double` type:** Currently decimals are stored as text strings, requiring repeated `atol`/`strtod` conversions. A native `DOUBLE` type with `plant_double_create`/`plant_double_value` would improve numeric performance.
 
-2. **Add `char` type:** Single characters are currently 1-char strings. A dedicated `CHAR` type with `plant_char_create`/`plant_char_value` would be more efficient for character manipulation.
+2. **Add `char` type:** Single characters are currently 1-char strings. A dedicated `CHA` type with `plant_char_create`/`plant_char_value` would be more efficient for character manipulation.
 
 3. **Add `unsigned` types:** Currently all integers are signed. `ULO`/`UNU` types would enable unsigned arithmetic and bit manipulation.
 
@@ -843,6 +846,65 @@ emitted in every generated C preamble).
 - Flags (on/off).
 
 **Note:** BOL is LOGICAL. Arithmetic with BOL is not supported.
+
+---
+
+## CHA (Character) — v0.51.13
+
+| Property | Value |
+|----------|-------|
+| Size | 1 byte |
+| C type | char |
+| Values | ASCII / UTF-8 byte |
+| Parity | C char |
+| Category | scalar |
+| Renamed | From CHAR in v0.51.13 |
+
+### Syntax
+
+```plant
+CREATE C (CHA) TO "A".
+SHOW C.   # A
+```
+
+**Note:** TD-018 (CHAR display segfault) was fixed in v0.51.13 via
+`plant_char_value` wrapping in SHOW.
+
+---
+
+## TXT (Text) — v0.51.13
+
+| Property | Value |
+|----------|-------|
+| Size | Variable (dynamic) |
+| C type | tx_t |
+| Values | String (UTF-8) |
+| Parity | C# string / Rust String |
+| Category | scalar (text) |
+
+### Syntax
+
+```plant
+CREATE S (TXT) TO "hello".
+SHOW S.   # hello
+
+CREATE U (TXT) TO S + T.   # concat
+SHOW LEN(S).                # 5
+```
+
+---
+
+## TX (Text — DEPRECATED) — v0.51.13
+
+| Property | Value |
+|----------|-------|
+| Status | DEPRECATED in v0.51.13 |
+| Replacement | TXT |
+| Removal | v0.52.0 |
+| C type | tx_t |
+
+**Note:** TX is the existing de-facto text type (939 src + 98 tests).
+It remains functional for backward compatibility. Use TXT for new code.
 
 ---
 

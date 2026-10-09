@@ -1,0 +1,9 @@
+SUITE "TXT Concat"
+  CREATE S (TXT) TO "hello".
+  CREATE T (TXT) TO "world".
+  CREATE U (TXT) TO S + T.
+
+  SHOW U.
+
+  SHOW "txt-concat-ok".
+/SUITE.

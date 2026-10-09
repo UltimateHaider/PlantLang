@@ -246,15 +246,14 @@ v0.52.0 — define capture ownership and free closure envs.
 Do not rely on captured container lifetimes; free containers in the
 defining scope.
 
-## TD-018: CHAR segfaults
-- **Status:** OPEN
-- **Introduced:** v0.50.0a (CHAR primitive)
-- **Target fix:** v0.51.4
-- **Impact:** MEDIUM — `CHAR` is unusable.
-- **Symptom:** `CREATE C (CHAR) TO "A".` → `char C = plant_char_create("A");`
-  → runtime SEGFAULT.
-- **Discovered by:** v0.51.3 BYT type audit.
-- **Related:** type registry (v0.51.3c).
+## TD-018: CHA display segfault — CLOSED
+- **Status:** ✅ CLOSED in v0.51.13
+- **Root cause (corrected):** the crash was in SHOW, not CREATE.
+  The raw char (int 65) was passed where a tx_t pointer was
+  expected.
+- **Fix:** gen_show_stmt now wraps bare CHA identifiers with
+  `plant_char_value(...)`.
+- **Related:** TD-026.
 
 ## TD-019: Top-level SUITE terminates parsing
 - **Status:** OPEN
@@ -341,3 +340,11 @@ SHOW "end".   # ← dropped
 - **Fix direction:** track CMP variables like `nums` and lower ops on
   operand types.
 - **Related:** TD-022, TD-024.
+
+## TD-026: TX (text alias) deprecated — remove in v0.52.0
+- **Status:** DEPRECATED in v0.51.13
+- **Target removal:** v0.52.0
+- **Impact:** LOW — TX still works; no behavior change.
+- **Reason:** TX is the legacy 2-letter text name; TXT is canonical.
+- **Action:** Migrate code to TXT; remove TX in v0.52.0.
+- **Related:** TD-018.

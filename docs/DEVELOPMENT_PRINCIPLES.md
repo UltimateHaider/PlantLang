@@ -226,7 +226,7 @@ All verify-* targets must include valgrind-check-tensor.
 ### XXX. Type Registry (v0.51.4)
 
     - Single source of truth for scalar types (LON, NUM, ULO,
-      UNU, DBL, CHAR, BYTES).
+      UNU, DBL, CHA, BYTES).
     - Stored as GLOBAL TYPE_REGISTRY in codegen_c.plant.
     - Records: [name, ctype, numeric, prim, category, default].
     - Adding a scalar type = one record (not 6-8 edits).
@@ -286,3 +286,11 @@ All verify-* targets must include valgrind-check-tensor.
       constructs); only the emitted preamble/type set changed.
     - The bootstrap seed passes "bool" and "<stdbool.h>" through as
       opaque strings, so no 2-stage seed upgrade is required.
+
+### DDD. Text types (v0.51.13)
+
+    - `CHA` = character (C `char`); renamed from CHAR. TD-018 fixed
+      (SHOW wraps with plant_char_value).
+    - `TXT` = canonical text type (C `tx_t`).
+    - `TX` = DEPRECATED text alias (`tx_t`); still functional.
+      Removal target: v0.52.0 (TD-026). Use TXT for new code.

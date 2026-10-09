@@ -1,0 +1,9 @@
+SUITE "CHA Basic (char)"
+  CREATE C (CHA) TO "A".
+  CREATE D (CHA) TO "B".
+
+  SHOW C.
+  SHOW D.
+
+  SHOW "cha-basic-ok".
+/SUITE.

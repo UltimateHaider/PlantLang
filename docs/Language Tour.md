@@ -101,7 +101,7 @@ ACTION main(),
 | Unsigned integer | `ULO` | `CREATE flags(ULO) TO 42.` |
 | Decimal | `DBL` | `CREATE pi(DBL) TO 3.14.` |
 | Text | `TX` | `CREATE name(TX) TO "Haider".` |
-| Character | `CHAR` | `CREATE c(CHAR) TO "A".` |
+| Character | `CHA` | `CREATE c(CHA) TO "A".` |
 | Boolean | `NUM` | `CREATE active(NUM) TO TRUE.` |
 | Unsigned boolean | `UNU` | `CREATE mask(UNU) TO 255.` |
 | List | `LIST` | `CREATE parts(LIST) TO plant_list_make(0).` |
@@ -125,7 +125,7 @@ SHOW "score=" + score.   # → 100
 CREATE name(TX) TO "Haider".
 CREATE pi(DBL) TO 3.14159.
 CREATE active(NUM) TO TRUE.
-CREATE c(CHAR) TO "A".
+CREATE c(CHA) TO "A".
 CREATE fruits(LIST) TO plant_list_make(3, "apple", "banana", "kiwi").
 ```
 
@@ -390,7 +390,7 @@ aggregate initializer. Supported element types:
 | `LON` | `long name[N] = {…};` |
 | `NUM` | `int name[N] = {…};` |
 | `DBL` | `double name[N] = {…};` |
-| `CHAR` | `char name[N] = {…};` |
+| `CHA` | `char name[N] = {…};` |
 | `ULO` | `unsigned long name[N] = {…};` |
 | `UNU` | `unsigned int name[N] = {…};` |
 
