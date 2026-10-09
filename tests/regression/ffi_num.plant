@@ -1,8 +1,8 @@
-# ffi_num — FFI numeric results: TX-string returns keep plain concat;
+# ffi_num — FFI numeric results: TXT-string returns keep plain concat;
 # raw long FFI returns (parse result / errno) land in LON vars and
 # SHOW correctly without the caller's explicit _from_long.
 ACTION ffi_add(a(LON), b(LON)) -> external.
-ACTION ffi_parse_cfg(path(TX)) -> Result<LON, TX>.
+ACTION ffi_parse_cfg(path(TXT)) -> Result<LON, TXT>.
 ACTION ffi_last_error() -> external.
 
 ACTION main()

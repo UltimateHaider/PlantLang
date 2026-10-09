@@ -19,7 +19,7 @@ ACTION main(),
   REAP mn2s FROM _from_long, mn2.
   SHOW "max2=" + mn2s.
   CREATE xs(LIST) TO plant_list_make(2, "1", "2").
-  REAP fa FROM firstof[TX, TX], "a", xs.
+  REAP fa FROM firstof[TXT, TXT], "a", xs.
   SHOW "first=" + fa.
   GIVE 0.
 /GIVE main.

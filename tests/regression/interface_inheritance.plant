@@ -7,11 +7,11 @@ INTERFACE Movable {
 INTERFACE SpeakingMover FROM Vocal, Movable {
 }
 SPECIES Robot IMPLEMENTS SpeakingMover {
-  name: TX
-  ACTION speak() -> TX {
+  name: TXT
+  ACTION speak() -> TXT {
     GIVE self.name + " beeps!".
   }
-  ACTION move() -> TX {
+  ACTION move() -> TXT {
     GIVE self.name + " rolls!".
   }
 }

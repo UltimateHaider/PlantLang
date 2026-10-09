@@ -3,11 +3,11 @@
 # patch the digit in "eb2" triggered the raw C "+" shortcut, emitting
 # `eb2+eb3` (void* + void* — a compile error).
 ACTION main(),
-  CREATE eb2(TX) TO "foo".
-  CREATE eb3(TX) TO "bar".
+  CREATE eb2(TXT) TO "foo".
+  CREATE eb3(TXT) TO "bar".
   SHOW eb2 + eb3.
-  CREATE s2(TX) TO "num".
-  CREATE s3(TX) TO "ber".
+  CREATE s2(TXT) TO "num".
+  CREATE s3(TXT) TO "ber".
   SHOW s2 + s3.
   GIVE 0.
 /GIVE main.

@@ -1,6 +1,6 @@
 # v0.48.13 — generic LON results inside string concatenation:
 # numeric GIVEs arrive as text, so _cat segments resolve without
-# any numeric-var bookkeeping at the caller; TX instantiations
+# any numeric-var bookkeeping at the caller; TXT instantiations
 # pass strings through unwrapped.
 ACTION id[T](v(T)) -> T,
   GIVE v.
@@ -10,7 +10,7 @@ ACTION main(),
   REAP a FROM id[LON], 7.
   SHOW "a=" + a.
   SHOW "a+" + a + "!".
-  REAP b FROM id[TX], "str".
+  REAP b FROM id[TXT], "str".
   SHOW "b=" + b.
   REAP c FROM id[LON], 12.
   SHOW "c=" + c + "+" + a.

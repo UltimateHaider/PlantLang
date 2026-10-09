@@ -1,3 +1,41 @@
+## v0.51.14 — VOI + TX Removal
+
+### Changed (BREAKING)
+- Renamed BYTES → VOI (void pointer / byte buffer).
+- Removed TX (deprecated text alias).
+  - All TX (947 src + 98 tests) migrated to TXT.
+  - No alias provided.
+- Bootstrap: 1-stage (TXT already known to v0.51.13 seed).
+
+### Removed
+- TX (text, tx_t) — use TXT instead.
+
+### Resolved
+- TD-026: TX removed.
+
+### Type Set (after v0.51.14 — 16 types)
+| Category | Types |
+|----------|-------|
+| Integer | BYT, UBT, SHR, USH, NUM, UNU, LON, ULO |
+| Float | FLT, DBL, DCM |
+| Complex | CMP |
+| Boolean | BOL |
+| Text | CHA, TXT |
+| Other | VOI |
+
+### Verified
+- Native: 108/108 (was 106)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (536,252 B)
+- valgrind strict: PASS
+- Binary: 960176 bytes.
+
+### Out of Scope (v0.52.0)
+- TD-019, TD-020, TD-022, TD-024, TD-025.
+- Parser validation.
+- Type inference.
+
 ## v0.51.13 — CHA + TXT (Text Types)
 
 ### Changed (BREAKING)

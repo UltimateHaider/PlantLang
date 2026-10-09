@@ -16,7 +16,7 @@ ACTION main(),
   SHOW "mode=" + mo.
   REAP mt FROM _map_get, st, "mtime".
   CREATE mlen(LON) TO LEN(mt).
-  CREATE ms(TX) TO "".
+  CREATE ms(TXT) TO "".
   REAP ms FROM _from_long, mlen.
   SHOW "mtimelen=" + ms.
   REAP mv FROM file_move, "/tmp/plantlang_fs_test_dst.txt", "/tmp/plantlang_fs_test_moved.txt".

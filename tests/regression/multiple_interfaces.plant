@@ -5,11 +5,11 @@ INTERFACE Movable {
   move.
 }
 SPECIES Dog IMPLEMENTS Speakable, Movable {
-  name: TX
-  ACTION speak() -> TX {
+  name: TXT
+  ACTION speak() -> TXT {
     GIVE self.name + " barks!".
   }
-  ACTION move() -> TX {
+  ACTION move() -> TXT {
     GIVE self.name + " runs!".
   }
 }

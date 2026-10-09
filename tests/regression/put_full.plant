@@ -7,7 +7,7 @@ ACTION main(),
   PUT "a" INTO items.
   PUT "b" INTO items.
   PUT "c" INTO items.
-  CREATE out1(TX) TO "".
+  CREATE out1(TXT) TO "".
   CYCLE it, i IN items,
     SET out1 TO out1 + it + " ".
   /CYCLE.
@@ -16,21 +16,21 @@ ACTION main(),
   CREATE fresh(LIST) TO NULL.
   PUT "first" INTO fresh.
   PUT "second" INTO fresh.
-  CREATE out2(TX) TO "".
+  CREATE out2(TXT) TO "".
   CYCLE it, i IN fresh,
     SET out2 TO out2 + it + " ".
   /CYCLE.
   SHOW "instantiate null target = " + out2.
 
   PUT "first" INTO fresh.
-  CREATE out3(TX) TO "".
+  CREATE out3(TXT) TO "".
   CYCLE it, i IN fresh,
     SET out3 TO out3 + it + " ".
   /CYCLE.
   SHOW "duplicate appended = " + out3.
 
   TAKE "first" FROM fresh.
-  CREATE out4(TX) TO "".
+  CREATE out4(TXT) TO "".
   CYCLE it, i IN fresh,
     SET out4 TO out4 + it + " ".
   /CYCLE.

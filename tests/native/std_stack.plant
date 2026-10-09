@@ -1,15 +1,15 @@
 ACTION main(),
   REAP s FROM stack_create.
   # ── LIFO order ─────────────────────────────────────────────
-  CREATE a(TX) TO "bottom".
-  CREATE b(TX) TO "middle".
-  CREATE c(TX) TO "top".
+  CREATE a(TXT) TO "bottom".
+  CREATE b(TXT) TO "middle".
+  CREATE c(TXT) TO "top".
   REAP _ FROM stack_push, s, a.
   REAP _ FROM stack_push, s, b.
   REAP _ FROM stack_push, s, c.
   CREATE sz1(LON) TO 0.
   REAP sz1 FROM stack_size, s.
-  CREATE sz1s(TX) TO "".
+  CREATE sz1s(TXT) TO "".
   REAP sz1s FROM _from_long, sz1.
   SHOW "size=" + sz1s.
   REAP pk FROM stack_peek, s.
@@ -25,12 +25,12 @@ ACTION main(),
   # ── empty pop/peek are safe, not crashes ──────────────────
   REAP pe FROM stack_pop, s.
   CREATE pe1(LON) TO LEN(pe).
-  CREATE pe1s(TX) TO "".
+  CREATE pe1s(TXT) TO "".
   REAP pe1s FROM _from_long, pe1.
   SHOW "empty-pop-len=" + pe1s.
   REAP pk3 FROM stack_peek, s.
   CREATE pk3l(LON) TO LEN(pk3).
-  CREATE pk3s(TX) TO "".
+  CREATE pk3s(TXT) TO "".
   REAP pk3s FROM _from_long, pk3l.
   SHOW "empty-peek-len=" + pk3s.
   # ── stress: 3000 pushes then 3000 pops, LIFO integrity ────
@@ -41,7 +41,7 @@ ACTION main(),
   /SEASON.
   CREATE sz2(LON) TO 0.
   REAP sz2 FROM stack_size, s.
-  CREATE sz2s(TX) TO "".
+  CREATE sz2s(TXT) TO "".
   REAP sz2s FROM _from_long, sz2.
   SHOW "stress-size=" + sz2s.
   CREATE ok(LON) TO 0.
@@ -51,12 +51,12 @@ ACTION main(),
     IF v IS a, SET ok TO ok + 1. /IF.
     SET sj TO sj + 1.
   /SEASON.
-  CREATE oks(TX) TO "".
+  CREATE oks(TXT) TO "".
   REAP oks FROM _from_long, ok.
   SHOW "lifo-ok=" + oks.
   CREATE sz3(LON) TO 0.
   REAP sz3 FROM stack_size, s.
-  CREATE sz3s(TX) TO "".
+  CREATE sz3s(TXT) TO "".
   REAP sz3s FROM _from_long, sz3.
   SHOW "after-drain=" + sz3s.
   GIVE 0.

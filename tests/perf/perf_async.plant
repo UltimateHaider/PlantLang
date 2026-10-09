@@ -1,11 +1,11 @@
 # perf_async — 20 concurrent async workers, each suspending once on
 # an AWAIT of a chained async action, then finishing numeric loops.
 # Exercises the async engine: spawn, suspend, resume, drain.
-ASYNC ACTION phase2(tag(TX)),
+ASYNC ACTION phase2(tag(TXT)),
   GIVE "p2-" + tag.
 /ACTION.
 
-ASYNC ACTION worker(tag(TX), n(LON)),
+ASYNC ACTION worker(tag(TXT), n(LON)),
   CREATE i(LON) TO 0.
   CREATE sum(LON) TO 0.
   SEASON i < n,

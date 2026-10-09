@@ -1,6 +1,6 @@
 /*
  * Mock FFI library for the v0.47.3 advanced-FFI integration tests.
- * Simulates the ABI of a shared C library: plain TX returns,
+ * Simulates the ABI of a shared C library: plain TXT returns,
  * pass-by-reference (REF) params, Result<T,E>-style error returns
  * via errno, and malloc'd buffers for the ffi_free lifecycle.
  * Linked directly into test binaries alongside plant_runtime.c.
@@ -11,7 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* plain TX-returning call: ffi_add(2, 3) -> "5" */
+/* plain TXT-returning call: ffi_add(2, 3) -> "5" */
 tx_t ffi_add(long a, long b) {
     return _from_long(a + b);
 }
@@ -33,7 +33,7 @@ tx_t ffi_make_buf(long n) {
     return (tx_t)b;
 }
 
-/* simulated open(): Result<LON,TX> semantics — fails with ENOENT
+/* simulated open(): Result<LON,TXT> semantics — fails with ENOENT
    when mode == 0, otherwise succeeds with handle 42 */
 tx_t ffi_open_mock(long mode) {
     if (mode == 0) { errno = ENOENT; return ""; }
@@ -41,7 +41,7 @@ tx_t ffi_open_mock(long mode) {
     return _from_long(42);
 }
 
-/* Result<LON,TX> semantics: returns -1 + errno=EINVAL unless
+/* Result<LON,TXT> semantics: returns -1 + errno=EINVAL unless
    path == "ok", which returns 7 */
 long ffi_parse_cfg(tx_t path) {
     if (!path || strcmp(_S(path), "ok") != 0) { errno = EINVAL; return -1; }
@@ -107,7 +107,7 @@ tx_t ffi_pair_read(tx_t p) {
     return _cat(_cat(_S(mp->first), ":"), _S(mp->second));
 }
 
-/* nested generic STRUCT Wrap[T] { box: Box[T], tag: TX } */
+/* nested generic STRUCT Wrap[T] { box: Box[T], tag: TXT } */
 tx_t ffi_make_wrap(tx_t box, tx_t tag) {
     MockWrap* w = (MockWrap*)malloc(sizeof(MockWrap));
     if (!w) return "";

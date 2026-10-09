@@ -9,7 +9,7 @@ ACTION main(),
   PUT "apple" INTO fruits.
   PUT "mango" INTO fruits.
   TAKE "apple" FROM fruits.
-  CREATE out1(TX) TO "".
+  CREATE out1(TXT) TO "".
   CYCLE f, i IN fruits,
     SET out1 TO out1 + f + " ".
   /CYCLE.
@@ -17,7 +17,7 @@ ACTION main(),
   SHOW "count after take = " + _from_long(COUNT fruits).
 
   TAKE "apple" FROM fruits.
-  CREATE out2(TX) TO "".
+  CREATE out2(TXT) TO "".
   CYCLE f, i IN fruits,
     SET out2 TO out2 + f + " ".
   /CYCLE.
@@ -37,7 +37,7 @@ ACTION main(),
   PUT "1" INTO dup.
   PUT "3" INTO dup.
   TAKE "1" FROM dup.
-  CREATE out3(TX) TO "".
+  CREATE out3(TXT) TO "".
   CYCLE n, i IN dup,
     SET out3 TO out3 + n + " ".
   /CYCLE.

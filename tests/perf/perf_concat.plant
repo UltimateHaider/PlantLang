@@ -2,7 +2,7 @@
 # Exercises _cat/_from_long codegen (v0.48.3a auto string+num concat).
 ACTION main(),
   CREATE i(LON) TO 0.
-  CREATE acc(TX) TO "".
+  CREATE acc(TXT) TO "".
   SEASON i < 5000,
     SET acc TO acc + "n" + i + ".".
     SET i TO i + 1.

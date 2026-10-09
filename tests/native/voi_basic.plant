@@ -1,0 +1,6 @@
+SUITE "VOI Basic (byte buffer)"
+  CREATE V (VOI) TO "hello".
+  SHOW V.
+
+  SHOW "voi-basic-ok".
+/SUITE.

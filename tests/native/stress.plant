@@ -1,5 +1,5 @@
-ACTION join(lst(LIST), sep(TX)),
-  CREATE out(TX) TO "".
+ACTION join(lst(LIST), sep(TXT)),
+  CREATE out(TXT) TO "".
   CREATE i(LON) TO 0.
   SEASON i < COUNT lst,
     IF out > "", SET out TO out + sep. /IF.

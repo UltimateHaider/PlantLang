@@ -3,10 +3,10 @@
 #   first parameter is the instance (self); SELF rewrites to self and
 #   obj.method(args) dispatches with the receiver prepended.
 SPECIES Person {
-  name: TX
+  name: TXT
   age: LON
 
-  ACTION greet() -> TX {
+  ACTION greet() -> TXT {
     GIVE "Hello, " + self.name + "!".
   }
 
@@ -14,14 +14,14 @@ SPECIES Person {
     CALL self.put("age", "37").
   }
 
-  ACTION isAdult() -> TX {
+  ACTION isAdult() -> TXT {
     IF self.age GREATER THAN OR EQUAL "18",
       GIVE "yes".
     /IF.
     GIVE "no".
   }
 
-  ACTION describe() -> TX {
+  ACTION describe() -> TXT {
     GIVE self.name + "/" + self.age.
   }
 }

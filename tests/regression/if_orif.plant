@@ -14,7 +14,7 @@ ACTION grade(n(LON)),
   /IF.
 /GIVE grade.
 
-ACTION mood(w(TX)),
+ACTION mood(w(TXT)),
   IF w IS "sunny",
     GIVE "happy".
   ORIF w IS "rainy",

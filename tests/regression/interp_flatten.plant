@@ -1,6 +1,6 @@
 ACTION main(),
   CREATE n(LON) TO 9.
-  CREATE s(TX) TO "x".
+  CREATE s(TXT) TO "x".
   SHOW "a" + "b" + "c" + "d" + "e" + "f" + "g" + "h" + "i" + "j".
   SHOW "p" + s + "q" + s + "r".
   SHOW "${n}${n}${n}${n}${n}${n}".

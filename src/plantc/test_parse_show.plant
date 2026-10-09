@@ -3,7 +3,7 @@ IMPORT "ast.plant".
 IMPORT "lexer.plant".
 IMPORT "parser.plant".
 
-CREATE src(TX) TO "SHOW 42.".
+CREATE src(TXT) TO "SHOW 42.".
 REAP tokens FROM scan_tokens, src.
 
 # Test parse_show_stmt directly

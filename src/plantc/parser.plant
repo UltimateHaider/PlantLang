@@ -19,12 +19,12 @@ IMPORT "ast.plant".
 # available to the concatenated compiler source.
 #────────────────────────────────────────────────────────────
 
-ACTION escape_string(s(TX)),
+ACTION escape_string(s(TXT)),
   REAP lexer FROM get_lexer.
-  CREATE r(TX) TO "".
+  CREATE r(TXT) TO "".
   CREATE ei(LON) TO 0.
   CREATE en(LON) TO LEN(s).
-  CREATE ec(TX) TO "".
+  CREATE ec(TXT) TO "".
   SEASON ei < en,
     REAP ec FROM char_at, s, ei.
     IF ec IS "\\", SET r TO r + "\\" + "\\". /IF.
@@ -50,7 +50,7 @@ ACTION escape_string(s(TX)),
 # new statement — the dot stays a terminator. At depth 0 the target
 # is the whole accumulated text; inside parens/brackets (dpth "1")
 # only a bare IDENT target is supported (f(a.b), [a.b, c]).
-ACTION parse_field_access(tokens(LIST), pos(LON), text(TX), dpth(TX)),
+ACTION parse_field_access(tokens(LIST), pos(LON), text(TXT), dpth(TXT)),
   REAP lexer FROM get_lexer.
 
   REAP ftok FROM plant_iLexer_peek_at, lexer, tokens, pos + 1.
@@ -88,8 +88,8 @@ ACTION parse_field_access(tokens(LIST), pos(LON), text(TX), dpth(TX)),
   REAP p3 FROM _second, fldp.
   # stepwise two-operand concatenations: the stale bootstrap
   # compiler only _cat's simple pairs, not multi-segment chains
-  CREATE nfld(TX) TO "\"" + fld + "\"".
-  CREATE fin(TX) TO "_map_get(".
+  CREATE nfld(TXT) TO "\"" + fld + "\"".
+  CREATE fin(TXT) TO "_map_get(".
   # target selection: a trailing bare IDENT is the lookup target
   # ("x=" + m.name → "x=" + _map_get(m, "name")); a text ending
   # in ")" (previous emission — a.b.c chains the last lookup) or
@@ -115,7 +115,7 @@ ACTION parse_field_access(tokens(LIST), pos(LON), text(TX), dpth(TX)),
   GIVE plant_list_make(3, "1", fin, p3).
 /ACTION.
 
-ACTION parse_method_call(tokens(LIST), pos(LON), text(TX)),
+ACTION parse_method_call(tokens(LIST), pos(LON), text(TXT)),
   REAP lexer FROM get_lexer.
   # v0.49.11 — obj.method(args): the token at pos is ".", pos+1 the
   # method IDENT, pos+2 the opening "(" (the caller guarantees this).
@@ -128,8 +128,8 @@ ACTION parse_method_call(tokens(LIST), pos(LON), text(TX)),
   REAP ltk0 FROM plant_iLexer_peek_at, lexer, tokens, pos - 1.
   REAP lt_ty0 FROM plant_iLexer_tok_type, lexer, ltk0.
   REAP ttail0 FROM substring, text, LEN(text) - 2, LEN(text).
-  CREATE recv(TX) TO text.
-  CREATE pre(TX) TO "".
+  CREATE recv(TXT) TO text.
+  CREATE pre(TXT) TO "".
   IF lt_ty0 IS "IDENT",
     IF ttail0 ISNT "\")",
       REAP lt_lx0 FROM plant_iLexer_tok_lex, lexer, ltk0.
@@ -139,7 +139,7 @@ ACTION parse_method_call(tokens(LIST), pos(LON), text(TX)),
     /IF.
   /IF.
   # method dispatch — maps directly onto the runtime API
-  CREATE mfn(TX) TO "".
+  CREATE mfn(TXT) TO "".
   IF mname IS "push", SET mfn TO "plant_list_push". /IF.
   IF mname IS "pop", SET mfn TO "plant_list_pop". /IF.
   IF mname IS "get", SET mfn TO "plant_map_get". /IF.
@@ -168,7 +168,7 @@ ACTION parse_method_call(tokens(LIST), pos(LON), text(TX)),
   REAP mpp FROM _second, mcp4.
   # build the emission in stepwise two-operand concats (the stale
   # bootstrap only _cat's simple pairs): pre + fn(recv, args)
-  CREATE minner(TX) TO mfn.
+  CREATE minner(TXT) TO mfn.
   SET minner TO minner + "(".
   SET minner TO minner + recv.
   IF margs > "",
@@ -176,7 +176,7 @@ ACTION parse_method_call(tokens(LIST), pos(LON), text(TX)),
     SET minner TO minner + margs.
   /IF.
   SET minner TO minner + ")".
-  CREATE mres(TX) TO minner.
+  CREATE mres(TXT) TO minner.
   IF mname IS "has",
     SET mres TO "_from_long(" + minner + ")".
   /IF.
@@ -188,7 +188,7 @@ ACTION parse_method_call(tokens(LIST), pos(LON), text(TX)),
 
 ACTION collect_value(tokens(LIST), start(LON)),
   REAP lexer FROM get_lexer.
-  CREATE text(TX) TO "".
+  CREATE text(TXT) TO "".
   CREATE p2(LON) TO start.
   CREATE depth(LON) TO 0.
   SEASON TRUE,
@@ -265,9 +265,9 @@ ACTION collect_value(tokens(LIST), start(LON)),
 /ACTION.
 
 # collect_until: collects text until delimiter at depth=0 (does NOT consume delimiter)
-ACTION collect_until(tokens(LIST), start(LON), delim(TX)),
+ACTION collect_until(tokens(LIST), start(LON), delim(TXT)),
   REAP lexer FROM get_lexer.
-  CREATE text(TX) TO "".
+  CREATE text(TXT) TO "".
   CREATE p2(LON) TO start.
   CREATE depth(LON) TO 0.
   SEASON TRUE,
@@ -330,10 +330,10 @@ ACTION collect_until(tokens(LIST), start(LON), delim(TX)),
 
 # collect_type_text: collects a type string until stopc (or "," when
 # stopcomma=1) at depth 0, WITHOUT consuming the delimiter.
-# Handles T, LIST[T], REF NUM, REF LIST[T], Box[NUM], Pair[NUM, TX] etc.
-ACTION collect_type_text(tokens(LIST), start(LON), stopc(TX), stopcomma(LON)),
+# Handles T, LIST[T], REF NUM, REF LIST[T], Box[NUM], Pair[NUM, TXT] etc.
+ACTION collect_type_text(tokens(LIST), start(LON), stopc(TXT), stopcomma(LON)),
   REAP lexer FROM get_lexer.
-  CREATE text(TX) TO "".
+  CREATE text(TXT) TO "".
   CREATE p2(LON) TO start.
   CREATE pdepth(LON) TO 0.
   CREATE bdepth(LON) TO 0.
@@ -396,7 +396,7 @@ ACTION collect_args(tokens(LIST), pos(LON)),
     IF lx IS "IN" AND ty ISNT "STRING",
       GIVE plant_list_make(2, args, p5).
     /IF.
-    CREATE arg_text(TX) TO "".
+    CREATE arg_text(TXT) TO "".
     CREATE adepth(LON) TO 0.
     SEASON TRUE,
       REAP atok FROM plant_iLexer_peek_at, lexer, tokens, p5.
@@ -439,7 +439,7 @@ ACTION parse_await_stmt(tokens(LIST), pos(LON)),
   REAP ap FROM collect_args, tokens, p3.
   CREATE args(LIST) TO ap[0].
   REAP p4 FROM _second, ap.
-  CREATE ctx_name(TX) TO "".
+  CREATE ctx_name(TXT) TO "".
   REAP tok FROM plant_iLexer_peek_at, lexer, tokens, p4.
   REAP lx FROM plant_iLexer_tok_lex, lexer, tok.
   IF lx IS "IN",
@@ -468,7 +468,7 @@ ACTION parse_start_stmt(tokens(LIST), pos(LON)),
   REAP ap FROM collect_args, tokens, p3.
   CREATE args(LIST) TO ap[0].
   REAP p4 FROM _second, ap.
-  CREATE ctx_name(TX) TO "".
+  CREATE ctx_name(TXT) TO "".
   REAP tok FROM plant_iLexer_peek_at, lexer, tokens, p4.
   REAP lx FROM plant_iLexer_tok_lex, lexer, tok.
   IF lx IS "IN",
@@ -518,7 +518,7 @@ ACTION parse_cancel_stmt(tokens(LIST), pos(LON)),
   REAP vpair FROM collect_value, tokens, p2.
   CREATE expr TO vpair[0].
   REAP p3 FROM _second, vpair.
-  CREATE ctx_name(TX) TO "".
+  CREATE ctx_name(TXT) TO "".
   REAP tok FROM plant_iLexer_peek_at, lexer, tokens, p3.
   REAP lx FROM plant_iLexer_tok_lex, lexer, tok.
   IF lx IS "IN",
@@ -546,7 +546,7 @@ ACTION parse_trace_stmt(tokens(LIST), pos(LON)),
   REAP vpair FROM collect_value, tokens, p3.
   CREATE expr TO vpair[0].
   REAP p4b FROM _second, vpair.
-  CREATE ctx_name(TX) TO "".
+  CREATE ctx_name(TXT) TO "".
   REAP tok FROM plant_iLexer_peek_at, lexer, tokens, p4b.
   REAP lx FROM plant_iLexer_tok_lex, lexer, tok.
   IF lx IS "IN",
@@ -593,7 +593,7 @@ ACTION parse_mission_stmt(tokens(LIST), pos(LON)),
   GIVE plant_list_make(2, plant_list_make(6, "type", "config_stmt", "key", cfg_key, "value", cfg_val), p6).
 /ACTION.
 
-ACTION parse_create_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
+ACTION parse_create_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TXT)),
   REAP lexer FROM get_lexer.
   REAP pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -602,7 +602,7 @@ ACTION parse_create_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
   REAP p3 FROM _second, id_pair.
   REAP tok FROM plant_iLexer_peek_at, lexer, tokens, p3.
   REAP lx FROM plant_iLexer_tok_lex, lexer, tok.
-  CREATE vtype(TX) TO "".
+  CREATE vtype(TXT) TO "".
   IF lx IS "(",
     REAP lp FROM plant_iLexer_consume_at, lexer, tokens, p3.
     REAP p4 FROM _second, lp.
@@ -672,7 +672,7 @@ ACTION parse_create_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
 
 # v0.51.3a — GLOBAL name [ (TYPE) ] TO value.
 # Emits { type: global_stmt, target, var_type, value }.
-ACTION parse_global_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
+ACTION parse_global_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TXT)),
   REAP lexer FROM get_lexer.
   REAP pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -681,7 +681,7 @@ ACTION parse_global_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
   REAP p3 FROM _second, id_pair.
   REAP tok FROM plant_iLexer_peek_at, lexer, tokens, p3.
   REAP lx FROM plant_iLexer_tok_lex, lexer, tok.
-  CREATE vtype(TX) TO "".
+  CREATE vtype(TXT) TO "".
   IF lx IS "(",
     REAP lp FROM plant_iLexer_consume_at, lexer, tokens, p3.
     REAP p4 FROM _second, lp.
@@ -752,10 +752,10 @@ ACTION parse_array_decl(tokens(LIST), pos(LON), rtab(LIST)),
   REAP rb_pair FROM plant_iLexer_consume_at, lexer, tokens, p5.
   REAP p6 FROM _second, rb_pair.
   # construct the type string: "ARRAY[NUM, 5]"
-  CREATE _lb(TX) TO _cat("[", "").
-  CREATE _rb(TX) TO _cat("]", "").
-  CREATE _cm(TX) TO ", ".
-  CREATE vtype(TX) TO _cat(_cat4("ARRAY", _lb, elem_type, _cm), _cat(arr_size, _rb)).
+  CREATE _lb(TXT) TO _cat("[", "").
+  CREATE _rb(TXT) TO _cat("]", "").
+  CREATE _cm(TXT) TO ", ".
+  CREATE vtype(TXT) TO _cat(_cat4("ARRAY", _lb, elem_type, _cm), _cat(arr_size, _rb)).
   # consume variable name
   REAP name_pair FROM plant_iLexer_consume_at, lexer, tokens, p6.
   REAP id_name FROM plant_iLexer_tok_lex, lexer, name_pair[0].
@@ -853,11 +853,11 @@ ACTION parse_teardown_stmt(tokens(LIST), pos(LON)),
 /ACTION.
 
 # v0.49.54 — SUITE "name", SETUP ... TEARDOWN ... statements /SUITE .
-ACTION parse_suite_stmt(tokens(LIST), pos(LON), clv(TX), ctab(LIST), rtab(LIST), bstart(LON), emode(TX)),
+ACTION parse_suite_stmt(tokens(LIST), pos(LON), clv(TXT), ctab(LIST), rtab(LIST), bstart(LON), emode(TXT)),
   REAP lexer FROM get_lexer.
   REAP pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
   REAP p2 FROM _second, pair.
-  CREATE sname(TX) TO "".
+  CREATE sname(TXT) TO "".
   CREATE body(LIST) TO plant_list_make(0).
   # v0.49.54: Optional suite name: SUITE "name", ... /SUITE .
   REAP ntok FROM plant_iLexer_peek_at, lexer, tokens, p2.
@@ -925,7 +925,7 @@ ACTION parse_now_stmt(tokens(LIST), pos(LON)),
   REAP lexer FROM get_lexer.
   REAP pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
   REAP p2 FROM _second, pair.
-  CREATE fmt(TX) TO "".
+  CREATE fmt(TXT) TO "".
   REAP ntok FROM plant_iLexer_peek_at, lexer, tokens, p2.
   REAP nlx FROM plant_iLexer_tok_lex, lexer, ntok.
   IF nlx IS "FORMAT",
@@ -1002,7 +1002,7 @@ ACTION parse_free_stmt(tokens(LIST), pos(LON)),
   REAP id_type FROM plant_iLexer_tok_type, lexer, id_pair[0].
   REAP p3 FROM _second, id_pair.
   IF id_type ISNT "IDENT",
-    CREATE dmsg(TX) TO "FREE requires an identifier target".
+    CREATE dmsg(TXT) TO "FREE requires an identifier target".
     GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", dmsg), p3).
   /IF.
   REAP dot_pair FROM plant_iLexer_consume_at, lexer, tokens, p3.
@@ -1049,7 +1049,7 @@ ACTION parse_lock_stmt(tokens(LIST), pos(LON)),
   REAP id_type FROM plant_iLexer_tok_type, lexer, id_pair[0].
   REAP p3 FROM _second, id_pair.
   IF id_type ISNT "IDENT",
-    CREATE dmsg(TX) TO "LOCK requires an identifier target".
+    CREATE dmsg(TXT) TO "LOCK requires an identifier target".
     GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", dmsg), p3).
   /IF.
   REAP dot_pair FROM plant_iLexer_consume_at, lexer, tokens, p3.
@@ -1099,7 +1099,7 @@ ACTION parse_fast_reset_stmt(tokens(LIST), pos(LON)),
   REAP r_lx FROM plant_iLexer_tok_lex, lexer, r_pair[0].
   REAP p3 FROM _second, r_pair.
   IF r_lx ISNT "RESET",
-    CREATE dmsg(TX) TO "FAST requires RESET".
+    CREATE dmsg(TXT) TO "FAST requires RESET".
     GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", dmsg), p3).
   /IF.
   REAP dot_pair FROM plant_iLexer_consume_at, lexer, tokens, p3.
@@ -1111,7 +1111,7 @@ ACTION parse_fast_reset_stmt(tokens(LIST), pos(LON)),
 #   replies on the active LISTEN request (respond_stmt node; the req
 #   slot is filled with the request variable tracked by the statement
 #   loops, or stays empty when no LISTEN is bound in the block).
-ACTION _is_idch(c(TX)),
+ACTION _is_idch(c(TXT)),
   REAP lexer FROM get_lexer.
   REAP r1 FROM str_eq, c, "_".
   IF r1 IS "1", GIVE "1". /IF.
@@ -1124,13 +1124,13 @@ ACTION _is_idch(c(TX)),
 # _lower_dots - textual IDENT.IDENT[.IDENT...] -> _map_get chains,
 # outside string literals. Used by GIVE (legacy collector has no
 # token-level field lowering).
-ACTION _lower_dots(e(TX)),
+ACTION _lower_dots(e(TXT)),
   REAP lexer FROM get_lexer.
-  CREATE out(TX) TO "".
-  CREATE res(TX) TO "".
+  CREATE out(TXT) TO "".
+  CREATE res(TXT) TO "".
   CREATE i(LON) TO 0.
   CREATE n(LON) TO LEN(e).
-  CREATE q(TX) TO "".
+  CREATE q(TXT) TO "".
   SEASON i < n,
     REAP ch FROM char_at, e, i.
     IF q IS "",
@@ -1160,13 +1160,13 @@ ACTION _lower_dots(e(TX)),
         REAP base FROM substring, e, js, i.
         # gather chain identifiers
         CREATE ids(LIST) TO plant_list_make(0).
-        CREATE pending(TX) TO base.
+        CREATE pending(TXT) TO base.
         CREATE k(LON) TO i + 1.
         SEASON k < n,
           REAP kid FROM char_at, e, k.
           REAP kok FROM _is_idch, kid.
           IF kok ISNT "1", BREAK 0. /IF.
-          CREATE w(TX) TO "".
+          CREATE w(TXT) TO "".
           SEASON k < n,
             REAP kc FROM char_at, e, k.
             REAP kcok FROM _is_idch, kc.
@@ -1206,7 +1206,7 @@ ACTION _lower_dots(e(TX)),
 
 # _swap_super_prefix - v0.49.31: rewrite SUPER_ to <Parent>_ prefix
 # inside all string-valued fields of every statement node in a body list.
-ACTION _swap_super_prefix(bd(LIST), parent(TX)),
+ACTION _swap_super_prefix(bd(LIST), parent(TXT)),
   REAP lexer FROM get_lexer.
   CREATE i(LON) TO 0.
   SEASON i < COUNT bd,
@@ -1222,7 +1222,7 @@ ACTION _swap_super_prefix(bd(LIST), parent(TX)),
   GIVE bd.
 /ACTION.
 
-ACTION parse_give_stmt(tokens(LIST), pos(LON), clv(TX)),
+ACTION parse_give_stmt(tokens(LIST), pos(LON), clv(TXT)),
   REAP lexer FROM get_lexer.
 
   REAP pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
@@ -1241,7 +1241,7 @@ ACTION parse_give_stmt(tokens(LIST), pos(LON), clv(TX)),
       REAP p4 FROM _second, as_pair.
       REAP rs_pair FROM plant_iLexer_consume_at, lexer, tokens, p4.
       REAP p5 FROM _second, rs_pair.
-      CREATE rjson(TX) TO "".
+      CREATE rjson(TXT) TO "".
       REAP rtok FROM plant_iLexer_peek_at, lexer, tokens, p5.
       REAP rlx FROM plant_iLexer_tok_lex, lexer, rtok.
       IF rlx IS "JSON",
@@ -1279,7 +1279,7 @@ ACTION parse_set_stmt(tokens(LIST), pos(LON)),
 # DECREASE target BY expr.  →  target -= expr;
 # op is "increase" or "decrease" (legacy PlantLang, gap 3.2).
 # Returns [node, pos]; a missing "BY" is a syntax error.
-ACTION parse_incdec_stmt(tokens(LIST), pos(LON), op(TX)),
+ACTION parse_incdec_stmt(tokens(LIST), pos(LON), op(TXT)),
   REAP lexer FROM get_lexer.
   REAP pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -1290,13 +1290,13 @@ ACTION parse_incdec_stmt(tokens(LIST), pos(LON), op(TX)),
   REAP by_lx FROM plant_iLexer_tok_lex, lexer, by_pair[0].
   REAP p4 FROM _second, by_pair.
   IF by_lx ISNT "BY",
-    CREATE dmsg(TX) TO "Expected BY in " + op + " statement".
+    CREATE dmsg(TXT) TO "Expected BY in " + op + " statement".
     GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", dmsg), p3).
   /IF.
   REAP vpair FROM collect_value, tokens, p4.
   CREATE expr TO vpair[0].
   REAP p5 FROM _second, vpair.
-  CREATE nty(TX) TO op + "_stmt".
+  CREATE nty(TXT) TO op + "_stmt".
   GIVE plant_list_make(2, plant_list_make(6, "type", nty, "target", id_name, "value", expr), p5).
 /ACTION.
 
@@ -1311,14 +1311,14 @@ ACTION parse_bloom_stmt(tokens(LIST), pos(LON)),
   REAP aspair FROM plant_iLexer_consume_at, lexer, tokens, p.
   REAP aslx FROM plant_iLexer_tok_lex, lexer, aspair[0].
   IF aslx ISNT "AS",
-    CREATE berr(TX) TO "BLOOM requires AS var".
+    CREATE berr(TXT) TO "BLOOM requires AS var".
     GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", berr), p).
   /IF.
   REAP p FROM _second, aspair.
   REAP vpair FROM plant_iLexer_consume_at, lexer, tokens, p.
   REAP vty FROM plant_iLexer_tok_type, lexer, vpair[0].
   IF vty ISNT "IDENT",
-    CREATE berr2(TX) TO "BLOOM requires a variable name".
+    CREATE berr2(TXT) TO "BLOOM requires a variable name".
     GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", berr2), p).
   /IF.
   REAP var FROM plant_iLexer_tok_lex, lexer, vpair[0].
@@ -1334,15 +1334,15 @@ ACTION _parse_ds_pattern(tokens(LIST), pos(LON)),
   REAP op_pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
   REAP oty FROM plant_iLexer_tok_type, lexer, op_pair[0].
   REAP p FROM _second, op_pair.
-  CREATE kind(TX) TO "array".
-  CREATE closek(TX) TO "RBRACKET".
+  CREATE kind(TXT) TO "array".
+  CREATE closek(TXT) TO "RBRACKET".
   IF oty IS "LBRACE",
     SET kind TO "object".
     SET closek TO "RBRACE".
   /IF.
   CREATE items(LIST) TO plant_list_make(0).
-  CREATE nm(TX) TO "".
-  CREATE sub(TX) TO "".
+  CREATE nm(TXT) TO "".
+  CREATE sub(TXT) TO "".
   SEASON TRUE,
     REAP tk FROM plant_iLexer_peek_at, lexer, tokens, p.
     REAP ty FROM plant_iLexer_tok_type, lexer, tk.
@@ -1406,7 +1406,7 @@ ACTION _parse_ds_pattern(tokens(LIST), pos(LON)),
   GIVE plant_list_make(2, plant_list_make(8, "type", "ds_pat", "kind", kind, "items", items), p).
 /ACTION.
 
-ACTION parse_let_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
+ACTION parse_let_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TXT)),
   REAP lexer FROM get_lexer.
   REAP pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -1422,7 +1422,7 @@ ACTION parse_let_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
     REAP eqtok FROM plant_iLexer_peek_at, lexer, tokens, p3d.
     REAP eqlx FROM plant_iLexer_tok_lex, lexer, eqtok.
     IF eqlx ISNT "=",
-      CREATE dderr(TX) TO "destructuring requires = expression".
+      CREATE dderr(TXT) TO "destructuring requires = expression".
       GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", dderr), p3d).
     /IF.
     REAP eqpair FROM plant_iLexer_consume_at, lexer, tokens, p3d.
@@ -1437,7 +1437,7 @@ ACTION parse_let_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
   REAP p3 FROM _second, id_pair.
   REAP tok FROM plant_iLexer_peek_at, lexer, tokens, p3.
   REAP lx FROM plant_iLexer_tok_lex, lexer, tok.
-  CREATE vtype(TX) TO "".
+  CREATE vtype(TXT) TO "".
   IF lx IS "(",
     REAP lp FROM plant_iLexer_consume_at, lexer, tokens, p3.
     REAP p4 FROM _second, lp.
@@ -1517,14 +1517,14 @@ ACTION parse_let_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
 # on mixed/invalid syntax [syntax_error_node, pos].
 # The terminating "," or "." is NOT consumed (the caller handles it).
 
-ACTION parse_closure(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
+ACTION parse_closure(tokens(LIST), pos(LON), rtab(LIST), emode(TXT)),
   REAP lexer FROM get_lexer.
   CREATE start_pos(LON) TO pos.
   REAP lb FROM plant_iLexer_consume_at, lexer, tokens, pos.
   REAP p2 FROM _second, lb.
   CREATE captures(LIST) TO plant_list_make(0).
   CREATE entries(LIST) TO plant_list_make(0).
-  CREATE had_comma(TX) TO "0".
+  CREATE had_comma(TXT) TO "0".
   SEASON TRUE,
     REAP is_eof_flag FROM plant_iLexer_is_eof_at, lexer, tokens, p2.
     IF is_eof_flag,
@@ -1546,8 +1546,8 @@ ACTION parse_closure(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
     REAP ent_pair FROM plant_iLexer_consume_at, lexer, tokens, p2.
     REAP en0 FROM plant_iLexer_tok_lex, lexer, ent_pair[0].
     REAP p2 FROM _second, ent_pair.
-    CREATE en_mode(TX) TO "".
-    CREATE en_name(TX) TO "".
+    CREATE en_mode(TXT) TO "".
+    CREATE en_name(TXT) TO "".
     IF en0 IS "MOVE" OR en0 IS "REF",
       SET en_mode TO en0.
       REAP ntok FROM plant_iLexer_peek_at, lexer, tokens, p2.
@@ -1674,7 +1674,7 @@ ACTION parse_closure(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
   /IF.
   # body: block form "-> ( stmts )" when "(" is followed by a
   # statement keyword; otherwise a single expression
-  CREATE body_kind(TX) TO "expr".
+  CREATE body_kind(TXT) TO "expr".
   REAP btok FROM plant_iLexer_peek_at, lexer, tokens, p5.
   REAP blx FROM plant_iLexer_tok_lex, lexer, btok.
   CREATE body(LIST) TO plant_list_make(0).
@@ -1683,7 +1683,7 @@ ACTION parse_closure(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
     REAP blx2 FROM plant_iLexer_tok_lex, lexer, btok2.
     IF blx2 IS "CREATE" OR blx2 IS "SHOW" OR blx2 IS "GIVE" OR blx2 IS "SET" OR blx2 IS "LET" OR blx2 IS "IF" OR blx2 IS "SEASON" OR blx2 IS "REAP" OR blx2 IS "PUT" OR blx2 IS "TAKE" OR blx2 IS "BREAK" OR blx2 IS "CONTINUE" OR blx2 IS "SORT" OR blx2 IS "SHAKE" OR blx2 IS "BRAID" OR blx2 IS "LINK" OR blx2 IS "HARVEST" OR blx2 IS "LISTEN" OR blx2 IS "CONST" OR blx2 IS "ROOT" OR blx2 IS "ROOT_SCOPE" OR blx2 IS "NOW" OR blx2 IS "ANALYZE" OR blx2 IS "TYPEOF" OR blx2 IS "FREE" OR blx2 IS "ARC" OR blx2 IS "FAST" OR blx2 IS "WAIT" OR blx2 IS "LOCK",
       SET body_kind TO "block".
-      CREATE clv(TX) TO "".
+      CREATE clv(TXT) TO "".
       # v0.48.35: the closure block is its own C scope → own table
       CREATE ctab7(LIST) TO plant_list_make(0).
       CREATE bstart7(LON) TO p6.
@@ -1720,7 +1720,7 @@ ACTION parse_closure(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
     /IF.
   /IF.
   IF body_kind IS "expr",
-    CREATE text(TX) TO "".
+    CREATE text(TXT) TO "".
     CREATE bd(LON) TO 0.
     CREATE pd(LON) TO 0.
     SEASON TRUE,
@@ -1754,15 +1754,15 @@ ACTION parse_closure(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
 
 # _is_type_text — "1" when t is comma-separated type names (plain
 # identifiers, optionally REF-prefixed or LIST[...]-parameterized).
-# v0.49.6 — distinguishes generic args (foo[NUM, TX], ped[Color])
+# v0.49.6 — distinguishes generic args (foo[NUM, TXT], ped[Color])
 # from index expressions at REAP call sites: any digit literal,
 # operator, or quote in the content marks an index (REAP x FROM
 # a[0].), since type names are always identifier-shaped.
-ACTION _is_type_text(t(TX), rtab(LIST)),
+ACTION _is_type_text(t(TXT), rtab(LIST)),
   REAP lexer FROM get_lexer.
   REAP parts FROM strings:SPLIT, t, ",".
   CREATE ti(LON) TO 0.
-  CREATE tp(TX) TO "".
+  CREATE tp(TXT) TO "".
   SEASON ti < COUNT parts,
     REAP tp FROM plant_list_get, parts, ti.
     REAP tp FROM trim, tp.
@@ -1784,7 +1784,7 @@ ACTION _is_type_text(t(TX), rtab(LIST)),
   GIVE 1.
 /ACTION.
 
-ACTION parse_reap_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
+ACTION parse_reap_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TXT)),
   REAP lexer FROM get_lexer.
   REAP pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -1810,8 +1810,8 @@ ACTION parse_reap_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
       SET act_name TO act_name + func_name.
       REAP p5 FROM _second, func_pair.
     /IF.
-  # generic type arguments at the call site: foo[NUM, TX]
-  CREATE is_genargs(TX) TO "0".
+  # generic type arguments at the call site: foo[NUM, TXT]
+  CREATE is_genargs(TXT) TO "0".
   REAP ga_tok FROM plant_iLexer_peek_at, lexer, tokens, p5.
   REAP ga_lx FROM plant_iLexer_tok_lex, lexer, ga_tok.
   IF ga_lx IS "[",
@@ -1856,7 +1856,7 @@ ACTION parse_reap_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
       # bare name followed by "." is a legacy zero-arg call
       # (action or module function) — never an expression; unless
       # the dot opens a field access (a.b), which is an expression
-      CREATE bare_call(TX) TO "0".
+      CREATE bare_call(TXT) TO "0".
       IF act_ty IS "IDENT",
         IF ex_lx IS ".",
           REAP fchk FROM parse_field_access, tokens, p5, act_name, "0".
@@ -1867,9 +1867,9 @@ ACTION parse_reap_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
         /IF.
       /IF.
       IF bare_call ISNT "1",
-      CREATE ex_builtin(TX) TO "0".
+      CREATE ex_builtin(TXT) TO "0".
       REAP ex_builtin FROM is_reap_builtin, act_name.
-      CREATE ex_ok(TX) TO "0".
+      CREATE ex_ok(TXT) TO "0".
       IF ex_builtin IS "1", SET ex_ok TO "1". /IF.
       IF ex_builtin ISNT "1",
         IF ex_ty ISNT "IDENT",
@@ -1891,7 +1891,7 @@ ACTION parse_reap_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
   # upfront so multi-arg calls split on "," at depth 0 instead of
   # collapsing into a single "( a , b , c )" expression (previously
   # only single-arg calls worked; f() and bare f. are still valid).
-  CREATE has_cparen(TX) TO "0".
+  CREATE has_cparen(TXT) TO "0".
   REAP cp_tok FROM plant_iLexer_peek_at, lexer, tokens, p5.
   REAP cp_lx FROM plant_iLexer_tok_lex, lexer, cp_tok.
   IF cp_lx IS "(",
@@ -1985,7 +1985,7 @@ ACTION parse_reap_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
       GIVE plant_list_make(2, plant_list_make(12, "type", "reap_stmt", "target", var_name, "action", act_name, "args", args, "clargs", clargs, "ctx", ""), p6r).
     /IF.
     # collect one argument until , or . at depth 0 (do NOT consume delimiter)
-    CREATE arg_text(TX) TO "".
+    CREATE arg_text(TXT) TO "".
     CREATE adepth(LON) TO 0.
     SEASON TRUE,
       REAP atok FROM plant_iLexer_peek_at, lexer, tokens, p5.
@@ -2050,7 +2050,7 @@ ACTION parse_reap_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
 # raw C name(...) call and fail at link time, so builtin REAPs are
 # routed to the expression path. Bare action identifiers are never
 # builtins.
-ACTION is_reap_builtin(name(TX)),
+ACTION is_reap_builtin(name(TXT)),
   REAP lexer FROM get_lexer.
   IF name IS "LEN" OR name IS "JOIN" OR name IS "FIRST" OR name IS "LAST" OR name IS "SUM" OR name IS "UPPER" OR name IS "LOWER" OR name IS "TRIM" OR name IS "REVERSE" OR name IS "ABS" OR name IS "ROUND" OR name IS "POW" OR name IS "CEIL" OR name IS "FLOOR" OR name IS "RANDOM" OR name IS "SIN" OR name IS "COS" OR name IS "SQRT" OR name IS "HAS" OR name IS "ANY" OR name IS "ALL" OR name IS "PICK" OR name IS "FIND" OR name IS "COUNT_OF" OR name IS "SLICE" OR name IS "TAP" OR name IS "INFUSE" OR name IS "ABSORB" OR name IS "SEAL" OR name IS "TEST" OR name IS "COUNT" OR name IS "NOW" OR name IS "ANALYZE" OR name IS "TYPEOF" OR name IS "INCLUDES" OR name IS "STARTS_WITH" OR name IS "ENDS_WITH" OR name IS "REPEAT" OR name IS "PAD" OR name IS "PAD_LEFT" OR name IS "REVERSE" OR name IS "RANGE" OR name IS "SORT" OR name IS "INDEX_OF" OR name IS "UNIQUE" OR name IS "AVERAGE" OR name IS "MEDIAN" OR name IS "FLATTEN" OR name IS "CHUNK" OR name IS "ZIP" OR name IS "FILTER_GT" OR name IS "FILTER_LT",
     GIVE "1".
@@ -2090,7 +2090,7 @@ ACTION is_reap_builtin(name(TX)),
 # parse_call_stmt — bare call: name(args). → call_stmt node.
 # (void FFI calls like plant_map_set / ffi_swap_ref; the codegen
 #  reuses the reap_stmt discard path with target "_")
-ACTION parse_call_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
+ACTION parse_call_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TXT)),
   REAP lexer FROM get_lexer.
   REAP act_pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
   REAP act_name FROM plant_iLexer_tok_lex, lexer, act_pair[0].
@@ -2161,7 +2161,7 @@ ACTION parse_call_stmt(tokens(LIST), pos(LON), rtab(LIST), emode(TX)),
       REAP p6 FROM _second, dot.
       GIVE plant_list_make(2, plant_list_make(8, "type", "call_stmt", "action", act_name, "args", args, "clargs", clargs), p6).
     /IF.
-    CREATE arg_text(TX) TO "".
+    CREATE arg_text(TXT) TO "".
     CREATE adepth(LON) TO 0.
     SEASON TRUE,
       REAP atok FROM plant_iLexer_peek_at, lexer, tokens, p5.
@@ -2240,7 +2240,7 @@ ACTION parse_braid_stmt(tokens(LIST), pos(LON)),
   REAP p5 FROM _second, rpair.
   REAP as_pair FROM plant_iLexer_consume_at, lexer, tokens, p5.
   REAP p6 FROM _second, as_pair.
-  CREATE target(TX) TO "".
+  CREATE target(TXT) TO "".
   SEASON TRUE,
     REAP tok FROM plant_iLexer_peek_at, lexer, tokens, p6.
     REAP lx FROM plant_iLexer_tok_lex, lexer, tok.
@@ -2251,7 +2251,7 @@ ACTION parse_braid_stmt(tokens(LIST), pos(LON)),
     REAP drop FROM plant_iLexer_consume_at, lexer, tokens, p6.
     REAP p6 FROM _second, drop.
   /SEASON.
-  CREATE is_map(TX) TO "0".
+  CREATE is_map(TXT) TO "0".
   REAP tok FROM plant_iLexer_peek_at, lexer, tokens, p6.
   REAP lx FROM plant_iLexer_tok_lex, lexer, tok.
   IF lx IS "MAP",
@@ -2298,8 +2298,8 @@ ACTION parse_sort_stmt(tokens(LIST), pos(LON)),
   REAP lexer FROM get_lexer.
   REAP pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
   REAP p2 FROM _second, pair.
-  CREATE target(TX) TO "".
-  CREATE gdir(TX) TO "".
+  CREATE target(TXT) TO "".
+  CREATE gdir(TXT) TO "".
   SEASON TRUE,
     REAP tok FROM plant_iLexer_peek_at, lexer, tokens, p2.
     REAP lx FROM plant_iLexer_tok_lex, lexer, tok.
@@ -2395,7 +2395,7 @@ ACTION parse_continue_stmt(tokens(LIST), pos(LON)),
   GIVE plant_list_make(2, plant_list_make(2, "type", "continue_stmt"), p3).
 /ACTION.
 
-ACTION parse_if_stmt(tokens(LIST), pos(LON), clv(TX), rtab(LIST), emode(TX)),
+ACTION parse_if_stmt(tokens(LIST), pos(LON), clv(TXT), rtab(LIST), emode(TXT)),
   REAP lexer FROM get_lexer.
   REAP pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -2408,12 +2408,12 @@ ACTION parse_if_stmt(tokens(LIST), pos(LON), clv(TX), rtab(LIST), emode(TX)),
   CREATE ctab(LIST) TO plant_list_make(0).
   CREATE bstart(LON) TO p4.
   CREATE body(LIST) TO plant_list_make(0).
-  CREATE cur_cond(TX) TO "".
+  CREATE cur_cond(TXT) TO "".
   CREATE cur_body(LIST) TO plant_list_make(0).
   CREATE elif(LIST) TO plant_list_make(0).
   CREATE else_body(LIST) TO plant_list_make(0).
-  CREATE in_elif(TX) TO "0".
-  CREATE in_else(TX) TO "0".
+  CREATE in_elif(TXT) TO "0".
+  CREATE in_else(TXT) TO "0".
   SEASON TRUE,
     REAP is_eof_flag FROM plant_iLexer_is_eof_at, lexer, tokens, p4.
     IF is_eof_flag,
@@ -2506,12 +2506,12 @@ ACTION parse_if_stmt(tokens(LIST), pos(LON), clv(TX), rtab(LIST), emode(TX)),
 #   AST: match_stmt with subjectExpr and clauses (a list of
 #   [variantName, binding, bodyStatements] triples; variantName is
 #   the C-quoted literal text, "_", or the bare tag name).
-ACTION parse_match_stmt(tokens(LIST), pos(LON), clv(TX), rtab(LIST), emode(TX)),
+ACTION parse_match_stmt(tokens(LIST), pos(LON), clv(TXT), rtab(LIST), emode(TXT)),
   REAP lexer FROM get_lexer.
   REAP pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
   REAP p2 FROM _second, pair.
   REAP spair FROM collect_until_keyword, tokens, p2, plant_list_make(1, "{").
-  CREATE subj(TX) TO spair[0].
+  CREATE subj(TXT) TO spair[0].
   REAP p3 FROM _second, spair.
   IF subj IS "",
     GIVE plant_list_make(2, null, p3).
@@ -2519,7 +2519,7 @@ ACTION parse_match_stmt(tokens(LIST), pos(LON), clv(TX), rtab(LIST), emode(TX)),
   REAP lb FROM plant_iLexer_consume_at, lexer, tokens, p3.
   REAP p4 FROM _second, lb.
   CREATE clauses(LIST) TO plant_list_make(0).
-  CREATE wild_seen(TX) TO "0".
+  CREATE wild_seen(TXT) TO "0".
   SEASON TRUE,
     REAP is_eof_flag FROM plant_iLexer_is_eof_at, lexer, tokens, p4.
     IF is_eof_flag,
@@ -2533,8 +2533,8 @@ ACTION parse_match_stmt(tokens(LIST), pos(LON), clv(TX), rtab(LIST), emode(TX)),
       REAP p5 FROM _second, rb.
       GIVE plant_list_make(2, plant_list_make(12, "type", "match_stmt", "subjectExpr", subj, "clauses", clauses), p5).
     /IF.
-    CREATE ptext(TX) TO "".
-    CREATE pbind(TX) TO "".
+    CREATE ptext(TXT) TO "".
+    CREATE pbind(TXT) TO "".
     IF tt IS "NUMBER" OR tt IS "STRING" OR tt IS "INTERP" OR tt IS _cat("TR", "UE") OR tt IS _cat("FA", "LSE"),
       IF tt IS "STRING" OR tt IS "INTERP",
         REAP esc FROM escape_string, lx.
@@ -2637,7 +2637,7 @@ ACTION parse_match_stmt(tokens(LIST), pos(LON), clv(TX), rtab(LIST), emode(TX)),
   /SEASON.
 /ACTION.
 
-ACTION parse_season_stmt(tokens(LIST), pos(LON), clv(TX), rtab(LIST), emode(TX)),
+ACTION parse_season_stmt(tokens(LIST), pos(LON), clv(TXT), rtab(LIST), emode(TXT)),
   REAP lexer FROM get_lexer.
   REAP pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -2690,7 +2690,7 @@ ACTION parse_season_stmt(tokens(LIST), pos(LON), clv(TX), rtab(LIST), emode(TX))
 # "STEP 2", "STEP  2", "STEP -2" and "STEP-2" all parse, with a
 # guarded prefix split recovering the attached "STEP2" form (see the
 # FROM branch).
-ACTION parse_cycle_stmt(tokens(LIST), pos(LON), clv(TX), rtab(LIST), emode(TX)),
+ACTION parse_cycle_stmt(tokens(LIST), pos(LON), clv(TXT), rtab(LIST), emode(TXT)),
   REAP lexer FROM get_lexer.
   REAP pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -2698,11 +2698,11 @@ ACTION parse_cycle_stmt(tokens(LIST), pos(LON), clv(TX), rtab(LIST), emode(TX)),
   REAP ivar FROM plant_iLexer_tok_lex, lexer, tok.
   REAP cpair FROM plant_iLexer_consume_at, lexer, tokens, p2.
   REAP p2 FROM _second, cpair.
-  CREATE fromExpr(TX) TO "".
-  CREATE toExpr(TX) TO "".
-  CREATE stepExpr(TX) TO "".
-  CREATE listExpr(TX) TO "".
-  CREATE indexVar(TX) TO "".
+  CREATE fromExpr(TXT) TO "".
+  CREATE toExpr(TXT) TO "".
+  CREATE stepExpr(TXT) TO "".
+  CREATE listExpr(TXT) TO "".
+  CREATE indexVar(TXT) TO "".
   REAP tok FROM plant_iLexer_peek_at, lexer, tokens, p2.
   REAP lx FROM plant_iLexer_tok_lex, lexer, tok.
   IF lx IS "FROM",
@@ -2745,7 +2745,7 @@ ACTION parse_cycle_stmt(tokens(LIST), pos(LON), clv(TX), rtab(LIST), emode(TX)),
         REAP sbefore FROM plant_list_get, sparts, 0.
         REAP safter FROM plant_list_get, sparts, 1.
         REAP after_c FROM substring, safter, 0, 1.
-        CREATE before_ok(TX) TO "0".
+        CREATE before_ok(TXT) TO "0".
         IF sbefore IS "", SET before_ok TO "1". /IF.
         IF sbefore ISNT "",
           REAP last_c FROM substring, sbefore, LEN(sbefore) - 1, LEN(sbefore).
@@ -2846,7 +2846,7 @@ ACTION parse_throw_stmt(tokens(LIST), pos(LON)),
   REAP t_pair FROM plant_iLexer_consume_at, lexer, tokens, p2.
   REAP p3 FROM _second, t_pair.
   REAP stype FROM plant_iLexer_tok_lex, lexer, t_pair[0].
-  CREATE msg(TX) TO "".
+  CREATE msg(TXT) TO "".
   REAP tok FROM plant_iLexer_peek_at, lexer, tokens, p3.
   REAP lx FROM plant_iLexer_tok_lex, lexer, tok.
   IF lx IS "(",
@@ -2907,7 +2907,7 @@ ACTION parse_stop_if_stmt(tokens(LIST), pos(LON)),
 #    reclamation structure so the runtime teardown (plant_weather_leave
 #    walking the frame's exit-list) runs deterministically on normal
 #    completion and exceptional propagation alike.
-ACTION parse_weather_stmt(tokens(LIST), pos(LON), clv(TX), rtab(LIST), emode(TX)),
+ACTION parse_weather_stmt(tokens(LIST), pos(LON), clv(TXT), rtab(LIST), emode(TXT)),
   REAP lexer FROM get_lexer.
   REAP pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -2924,10 +2924,10 @@ ACTION parse_weather_stmt(tokens(LIST), pos(LON), clv(TX), rtab(LIST), emode(TX)
   CREATE body(LIST) TO plant_list_make(0).
   CREATE shelters(LIST) TO plant_list_make(0).
   CREATE calm_body(LIST) TO plant_list_make(0).
-  CREATE cur_type(TX) TO "ANY_STORM".
-  CREATE cur_bind(TX) TO "".
+  CREATE cur_type(TXT) TO "ANY_STORM".
+  CREATE cur_bind(TXT) TO "".
   CREATE cur_body(LIST) TO plant_list_make(0).
-  CREATE phase(TX) TO "body".
+  CREATE phase(TXT) TO "body".
   SEASON TRUE,
     REAP is_eof_flag FROM plant_iLexer_is_eof_at, lexer, tokens, p2.
     IF is_eof_flag,
@@ -2962,8 +2962,8 @@ ACTION parse_weather_stmt(tokens(LIST), pos(LON), clv(TX), rtab(LIST), emode(TX)
       /IF.
       REAP s_pair FROM plant_iLexer_consume_at, lexer, tokens, p2.
       REAP p3 FROM _second, s_pair.
-      CREATE stype(TX) TO "ANY_STORM".
-      CREATE sbind(TX) TO "".
+      CREATE stype(TXT) TO "ANY_STORM".
+      CREATE sbind(TXT) TO "".
       REAP tok2 FROM plant_iLexer_peek_at, lexer, tokens, p3.
       REAP lx2 FROM plant_iLexer_tok_lex, lexer, tok2.
       IF lx2 ISNT ",",
@@ -3043,7 +3043,7 @@ ACTION parse_weather_stmt(tokens(LIST), pos(LON), clv(TX), rtab(LIST), emode(TX)
 #   begins — the use-before-definition scan range) and emode
 #   ("1" inside ROOT_SCOPE: CONST is elevated to ROOT) join the
 #   threading.
-ACTION parse_statement(tokens(LIST), pos(LON), clv(TX), ctab(LIST), rtab(LIST), bstart(LON), emode(TX)),
+ACTION parse_statement(tokens(LIST), pos(LON), clv(TXT), ctab(LIST), rtab(LIST), bstart(LON), emode(TXT)),
   REAP lexer FROM get_lexer.
   REAP tok FROM plant_iLexer_peek_at, lexer, tokens, pos.
   REAP lx FROM plant_iLexer_tok_lex, lexer, tok.
@@ -3293,7 +3293,7 @@ ACTION parse_statement(tokens(LIST), pos(LON), clv(TX), ctab(LIST), rtab(LIST), 
 ACTION collect_until_keyword(tokens(LIST), start(LON), kws(LIST)),
   REAP lexer FROM get_lexer.
 
-  CREATE text(TX) TO "".
+  CREATE text(TXT) TO "".
   CREATE p2(LON) TO start.
   CREATE depth(LON) TO 0.
   SEASON TRUE,
@@ -3308,7 +3308,7 @@ ACTION collect_until_keyword(tokens(LIST), start(LON), kws(LIST)),
       REAP lx FROM escape_string, lx.
       SET lx TO "\"" + lx + "\"".
     /IF.
-    CREATE kw_hit(TX) TO "0".
+    CREATE kw_hit(TXT) TO "0".
     CREATE ki(LON) TO 0.
     SEASON ki < COUNT kws,
       REAP kw FROM plant_list_get, kws, ki.
@@ -3354,13 +3354,13 @@ ACTION parse_harvest_stmt(tokens(LIST), pos(LON)),
   REAP p3 FROM _second, upair.
   REAP as_pair FROM plant_iLexer_consume_at, lexer, tokens, p3.
   REAP p4 FROM _second, as_pair.
-  CREATE resp(TX) TO "".
-  CREATE method(TX) TO "".
-  CREATE body(TX) TO "".
-  CREATE headers(TX) TO "".
-  CREATE timeout(TX) TO "".
-  CREATE map(TX) TO "".
-  CREATE json(TX) TO "".
+  CREATE resp(TXT) TO "".
+  CREATE method(TXT) TO "".
+  CREATE body(TXT) TO "".
+  CREATE headers(TXT) TO "".
+  CREATE timeout(TXT) TO "".
+  CREATE map(TXT) TO "".
+  CREATE json(TXT) TO "".
   CREATE okws(LIST) TO plant_list_make(7, "METHOD", "BODY", "HEADERS", "TIMEOUT", "MAP", "JSON", ".").
   REAP rpair FROM collect_until_keyword, tokens, p4, okws.
   SET resp TO rpair[0].
@@ -3431,7 +3431,7 @@ ACTION parse_listen_stmt(tokens(LIST), pos(LON)),
   REAP id_pair FROM plant_iLexer_consume_at, lexer, tokens, p5.
   REAP reqname FROM plant_iLexer_tok_lex, lexer, id_pair[0].
   REAP p6 FROM _second, id_pair.
-  CREATE tmo(TX) TO "".
+  CREATE tmo(TXT) TO "".
   REAP tok_t FROM plant_iLexer_peek_at, lexer, tokens, p6.
   REAP lx_t FROM plant_iLexer_tok_lex, lexer, tok_t.
   IF lx_t IS "TIMEOUT",
@@ -3491,7 +3491,7 @@ ACTION parse_struct_decl(tokens(LIST), pos(LON)),
   # v0.50.0a: anonymous struct — STRUCT { ... } without a name.
   REAP sg_tok0 FROM plant_iLexer_peek_at, lexer, tokens, p2.
   REAP sg_lx0 FROM plant_iLexer_tok_lex, lexer, sg_tok0.
-  CREATE sname(TX) TO "".
+  CREATE sname(TXT) TO "".
   CREATE p3(LON) TO p2.
   IF sg_lx0 ISNT "{",
     REAP name_pair FROM plant_iLexer_consume_at, lexer, tokens, p2.
@@ -3512,7 +3512,7 @@ ACTION parse_struct_decl(tokens(LIST), pos(LON)),
     REAP p3 FROM _second, sg_rb.
     REAP sgparts FROM strings:SPLIT, sgtext, ",".
     CREATE sgi(LON) TO 0.
-    CREATE sge(TX) TO "".
+    CREATE sge(TXT) TO "".
     SEASON sgi < COUNT sgparts,
       REAP sge FROM plant_list_get, sgparts, sgi.
       REAP sget FROM trim, sge.
@@ -3609,13 +3609,13 @@ ACTION parse_action_decl(tokens(LIST), pos(LON), rtab(LIST)),
   REAP aname FROM plant_iLexer_tok_lex, lexer, name_pair[0].
   REAP p3 FROM _second, name_pair.
   # v0.48.33: active LISTEN request variable for GIVE ... AS RESPONSE.
-  CREATE clv(TX) TO "".
+  CREATE clv(TXT) TO "".
   # async priority modifier (default NORMAL=1)
-  CREATE prio(TX) TO "1".
+  CREATE prio(TXT) TO "1".
   # v0.48.15: mission mode (default BALANCED; WITH MISSION FAST/SAFE)
-  CREATE mission_mode(TX) TO "BALANCED".
+  CREATE mission_mode(TXT) TO "BALANCED".
   # v0.49.24: curly-brace body mode (ACTION name(args) { ... })
-  CREATE bracemode(TX) TO "0".
+  CREATE bracemode(TXT) TO "0".
   CREATE closep(LON) TO -1.
   # generic type parameter list: [T, U] right after the action name
   CREATE generics(LIST) TO plant_list_make(0).
@@ -3631,7 +3631,7 @@ ACTION parse_action_decl(tokens(LIST), pos(LON), rtab(LIST)),
     REAP p3 FROM _second, ga_rb.
     REAP gparts FROM strings:SPLIT, gtext, ",".
     CREATE gi2(LON) TO 0.
-    CREATE ge2(TX) TO "".
+    CREATE ge2(TXT) TO "".
     SEASON gi2 < COUNT gparts,
       REAP ge2 FROM plant_list_get, gparts, gi2.
       REAP ge2t FROM trim, ge2.
@@ -3644,7 +3644,7 @@ ACTION parse_action_decl(tokens(LIST), pos(LON), rtab(LIST)),
   REAP lp FROM plant_iLexer_consume_at, lexer, tokens, p3.
   REAP p4 FROM _second, lp.
   CREATE params(LIST) TO plant_list_make(0).
-  CREATE vararg(TX) TO "0".
+  CREATE vararg(TXT) TO "0".
   SEASON TRUE,
     REAP is_eof_flag FROM plant_iLexer_is_eof_at, lexer, tokens, p4.
     IF is_eof_flag,
@@ -3735,7 +3735,7 @@ ACTION parse_action_decl(tokens(LIST), pos(LON), rtab(LIST)),
     SET p4 TO p5.
   /SEASON.
   # skip optional -> Type (then check if , or .)
-  CREATE ret(TX) TO "".
+  CREATE ret(TXT) TO "".
   REAP arrow_tok FROM plant_iLexer_peek_at, lexer, tokens, p5.
   REAP arrow_lx FROM plant_iLexer_tok_lex, lexer, arrow_tok.
   IF arrow_lx IS "->",
@@ -3777,7 +3777,7 @@ ACTION parse_action_decl(tokens(LIST), pos(LON), rtab(LIST)),
         SET ret TO "void*".
       /IF.
     /IF.
-    # Result<T, E> generics: -> Result<NUM, TX>. (E = TX error string)
+    # Result<T, E> generics: -> Result<NUM, TXT>. (E = TXT error string)
     IF ret_lx IS "Result",
       REAP lt_tok FROM plant_iLexer_peek_at, lexer, tokens, p5.
       REAP lt_lx FROM plant_iLexer_tok_lex, lexer, lt_tok.
@@ -3794,7 +3794,7 @@ ACTION parse_action_decl(tokens(LIST), pos(LON), rtab(LIST)),
         REAP p5 FROM _second, gt_pair.
       /IF.
     /IF.
-    # v0.48.13: plain return types (T, NUM, TX, enum names…) are
+    # v0.48.13: plain return types (T, NUM, TXT, enum names…) are
     # stored on the action_decl node so generic instantiations know
     # their substituted return type (drives _from_long wrapping of
     # numeric GIVEs). FFI marker keywords are never stored here.
@@ -3921,7 +3921,7 @@ ACTION parse_species_decl(tokens(LIST), pos(LON)),
   REAP npair FROM plant_iLexer_consume_at, lexer, tokens, p.
   REAP nty FROM plant_iLexer_tok_type, lexer, npair[0].
   IF nty ISNT "IDENT",
-    CREATE serr(TX) TO "SPECIES requires a name".
+    CREATE serr(TXT) TO "SPECIES requires a name".
     GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", serr), p).
   /IF.
   REAP sname FROM plant_iLexer_tok_lex, lexer, npair[0].
@@ -3974,7 +3974,7 @@ ACTION parse_species_decl(tokens(LIST), pos(LON)),
     /IF.
   /IF.
   # v0.49.30 - optional FROM Parent clause
-  CREATE parent(TX) TO "".
+  CREATE parent(TXT) TO "".
   REAP ftk FROM plant_iLexer_peek_at, lexer, tokens, p.
   REAP flx9 FROM plant_iLexer_tok_lex, lexer, ftk.
   IF flx9 IS "FROM",
@@ -4012,7 +4012,7 @@ ACTION parse_species_decl(tokens(LIST), pos(LON)),
         REAP onm FROM _map_replace, mnode, "name", mn.
         REAP oldp FROM _map_get, onm, "params".
         CREATE np2(LIST) TO plant_list_make(0).
-        PUT plant_list_make(4, "name", "self", "type", "TX") INTO np2.
+        PUT plant_list_make(4, "name", "self", "type", "TXT") INTO np2.
         CREATE ci2(LON) TO 0.
         SEASON ci2 < COUNT oldp,
           REAP pel FROM plant_list_get, oldp, ci2.
@@ -4064,7 +4064,7 @@ ACTION parse_type_decl(tokens(LIST), pos(LON)),
   REAP apair FROM plant_iLexer_consume_at, lexer, tokens, p.
   REAP aty FROM plant_iLexer_tok_type, lexer, apair[0].
   IF aty ISNT "IDENT",
-    CREATE terr(TX) TO "TYPE requires an alias name".
+    CREATE terr(TXT) TO "TYPE requires an alias name".
     GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", terr), p).
   /IF.
   REAP alias FROM plant_iLexer_tok_lex, lexer, apair[0].
@@ -4072,7 +4072,7 @@ ACTION parse_type_decl(tokens(LIST), pos(LON)),
   REAP eqtok FROM plant_iLexer_peek_at, lexer, tokens, p.
   REAP eqlx FROM plant_iLexer_tok_lex, lexer, eqtok.
   IF eqlx ISNT "=",
-    CREATE terr2(TX) TO "TYPE requires = target".
+    CREATE terr2(TXT) TO "TYPE requires = target".
     GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", terr2), p).
   /IF.
   REAP eqpair FROM plant_iLexer_consume_at, lexer, tokens, p.
@@ -4158,7 +4158,7 @@ ACTION parse_interface_decl(tokens(LIST), pos(LON)),
   GIVE plant_list_make(2, plant_list_make(10, "type", "interface_decl", "name", iname, "type_params", itparams, "parents", iparents, "methods", imethods), p).
 /ACTION.
 
-ACTION parse_declaration(tokens(LIST), pos(LON), clv(TX), ctab(LIST), rtab(LIST), bstart(LON)),
+ACTION parse_declaration(tokens(LIST), pos(LON), clv(TXT), ctab(LIST), rtab(LIST), bstart(LON)),
   REAP lexer FROM get_lexer.
   REAP tok FROM plant_iLexer_peek_at, lexer, tokens, pos.
   REAP lx FROM plant_iLexer_tok_lex, lexer, tok.
@@ -4204,7 +4204,7 @@ ACTION parse_declaration(tokens(LIST), pos(LON), clv(TX), ctab(LIST), rtab(LIST)
     REAP stok FROM plant_iLexer_peek_at, lexer, tokens, im_p2.
     REAP sty2 FROM plant_iLexer_tok_type, lexer, stok.
     IF sty2 ISNT "STRING",
-      CREATE ierr(TX) TO "IMPORT requires a quoted path string".
+      CREATE ierr(TXT) TO "IMPORT requires a quoted path string".
       GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", ierr), im_p2).
     /IF.
     REAP spair FROM plant_iLexer_consume_at, lexer, tokens, im_p2.
@@ -4249,7 +4249,7 @@ ACTION parse_declaration(tokens(LIST), pos(LON), clv(TX), ctab(LIST), rtab(LIST)
 /ACTION.
 
 # map_add: append a key/value pair to a flat map list
-ACTION map_add(m(LIST), k(TX), v(TX)),
+ACTION map_add(m(LIST), k(TXT), v(TXT)),
   REAP lexer FROM get_lexer.
   CREATE out(LIST) TO plant_list_make(0).
   CREATE mi3(LON) TO 0.
@@ -4277,10 +4277,10 @@ ACTION map_add(m(LIST), k(TX), v(TX)),
 
 # tab_has: "1" when a flat pairs-list table contains key (step 2 so
 # values can never be mistaken for names)
-ACTION tab_has(tab(LIST), key(TX)),
+ACTION tab_has(tab(LIST), key(TXT)),
   REAP lexer FROM get_lexer.
   CREATE ti4(LON) TO 0.
-  CREATE te4(TX) TO "".
+  CREATE te4(TXT) TO "".
   SEASON ti4 < COUNT tab,
     REAP te4 FROM plant_list_get, tab, ti4.
     IF str_eq(te4, key) IS "1",
@@ -4297,11 +4297,11 @@ ACTION tab_has(tab(LIST), key(TX)),
 # text cannot false-positive; keyword lexemes compare unequal to
 # identifiers, so CONST names (which must be plain identifiers) are
 # matched exactly.
-ACTION scan_ident_used(tokens(LIST), start(LON), end(LON), name(TX)),
+ACTION scan_ident_used(tokens(LIST), start(LON), end(LON), name(TXT)),
   REAP lexer FROM get_lexer.
   CREATE si3(LON) TO start.
-  CREATE stk3(TX) TO "".
-  CREATE stt3(TX) TO "".
+  CREATE stk3(TXT) TO "".
+  CREATE stt3(TXT) TO "".
   SEASON si3 < end,
     REAP stk3 FROM plant_iLexer_peek_at, lexer, tokens, si3.
     REAP stt3 FROM plant_iLexer_tok_type, lexer, stk3.
@@ -4326,7 +4326,7 @@ ACTION scan_ident_used(tokens(LIST), start(LON), end(LON), name(TX)),
 # use-before-definition scan — ROOT constants are hoisted); else →
 # ctab (with same-block redeclaration + use-before-definition
 # checks). Returns syntax_error nodes for every violation.
-ACTION parse_const_like(tokens(LIST), pos(LON), ctab(LIST), rtab(LIST), bstart(LON), elevate(TX), ntype(TX)),
+ACTION parse_const_like(tokens(LIST), pos(LON), ctab(LIST), rtab(LIST), bstart(LON), elevate(TXT), ntype(TXT)),
   REAP lexer FROM get_lexer.
   REAP pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -4364,7 +4364,7 @@ ACTION parse_const_like(tokens(LIST), pos(LON), ctab(LIST), rtab(LIST), bstart(L
   REAP p6 FROM _second, dp.
   IF elevate IS "1",
     IF tab_has(rtab, cname) IS "1",
-      CREATE rmsg(TX) TO "ROOT constant already declared: " + cname.
+      CREATE rmsg(TXT) TO "ROOT constant already declared: " + cname.
       GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", rmsg), p6).
     /IF.
     PUT cname INTO rtab.
@@ -4380,11 +4380,11 @@ ACTION parse_const_like(tokens(LIST), pos(LON), ctab(LIST), rtab(LIST), bstart(L
   # first pass hoists it; a block-scoped CONST is only visible after
   # its declaration point).
   IF tab_has(ctab, cname) IS "1",
-    CREATE dmsg(TX) TO "CONST '" + cname + "' is already declared in this block".
+    CREATE dmsg(TXT) TO "CONST '" + cname + "' is already declared in this block".
     GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", dmsg), p6).
   /IF.
   IF scan_ident_used(tokens, bstart, pos, cname) IS "1",
-    CREATE umsg(TX) TO "CONST '" + cname + "' is used before its definition in this block".
+    CREATE umsg(TXT) TO "CONST '" + cname + "' is used before its definition in this block".
     GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", umsg), p6).
   /IF.
   PUT cname INTO ctab.
@@ -4400,7 +4400,7 @@ ACTION parse_const_like(tokens(LIST), pos(LON), ctab(LIST), rtab(LIST), bstart(L
 # as-is and also land in rtab. The wrapper node keeps its body so
 # the codegen first pass can walk it and non-constant statements
 # (rare) still generate inline.
-ACTION parse_root_scope_stmt(tokens(LIST), pos(LON), clv(TX), rtab(LIST)),
+ACTION parse_root_scope_stmt(tokens(LIST), pos(LON), clv(TXT), rtab(LIST)),
   REAP lexer FROM get_lexer.
   REAP pair FROM plant_iLexer_consume_at, lexer, tokens, pos.
   REAP p2 FROM _second, pair.
@@ -4445,7 +4445,7 @@ ACTION parse_root_scope_stmt(tokens(LIST), pos(LON), clv(TX), rtab(LIST)),
 ACTION parse_program(tokens(LIST)),
   REAP lexer FROM get_lexer.
   CREATE pos(LON) TO 0.
-  CREATE clv(TX) TO "".
+  CREATE clv(TXT) TO "".
   # v0.48.35: module-wide ROOT table + top-level CONST table. The
   # top-level scan range for use-before-definition starts where the
   # current top-level statement begins (bstart is re-armed each

@@ -35,7 +35,7 @@ ACTION main(),
   ELSE,
     SHOW "small".
   /IF.
-  CREATE s(TX) TO "hi".
+  CREATE s(TXT) TO "hi".
   IF s IS "hi",
     SHOW "greeting".
   ELSE,

@@ -16,7 +16,7 @@ ACTION main()
   SET m2 TO m.
   SHOW m2.
   SHOW m2 + 1.
-  REAP s FROM echo[TX], "cd".
+  REAP s FROM echo[TXT], "cd".
   SHOW "str=" + s.
   GIVE 0.
 /ACTION.

@@ -4,7 +4,7 @@
 # ═══════════════════════════════════════════════════════════════
 
 # ── is_keyword(word) ──────────────────────────────────────
-ACTION is_keyword(wrd(TX)),
+ACTION is_keyword(wrd(TXT)),
   IF wrd IS "LET", GIVE TRUE. /IF.
   IF wrd IS "CREATE", GIVE TRUE. /IF.
   # v0.51.3a — GLOBAL mutable file-scope variables.
@@ -114,7 +114,7 @@ ACTION is_keyword(wrd(TX)),
 /ACTION.
 
 # ── keyword_to_type(word) ─────────────────────────────────
-ACTION keyword_to_type(wrd(TX)),
+ACTION keyword_to_type(wrd(TXT)),
   IF wrd IS "LET", GIVE "LET". /IF.
   IF wrd IS "CREATE", GIVE "CREATE". /IF.
   # v0.51.3a — GLOBAL mutable file-scope variables.
@@ -282,7 +282,7 @@ ACTION keyword_to_type(wrd(TX)),
 /ACTION.
 
 # ── char_type(ch) ─────────────────────────────────────────
-ACTION char_type(ch(TX)),
+ACTION char_type(ch(TXT)),
   IF ch IS "+", GIVE "PLUS". /IF.
   IF ch IS "-", GIVE "MINUS". /IF.
   IF ch IS "*", GIVE "STAR". /IF.
@@ -311,7 +311,7 @@ ACTION char_type(ch(TX)),
 /ACTION.
 
 # ── is_alnum(ch) ──────────────────────────────────────────
-ACTION is_alnum(ch(TX)),
+ACTION is_alnum(ch(TXT)),
   IF ch GREATER THAN OR EQUAL "a" AND ch LESS THAN OR EQUAL "z", GIVE TRUE. /IF.
   IF ch GREATER THAN OR EQUAL "A" AND ch LESS THAN OR EQUAL "Z", GIVE TRUE. /IF.
   IF ch GREATER THAN OR EQUAL "0" AND ch LESS THAN OR EQUAL "9", GIVE TRUE. /IF.
@@ -320,7 +320,7 @@ ACTION is_alnum(ch(TX)),
 /ACTION.
 
 # ── is_alpha_start(ch) ────────────────────────────────────
-ACTION is_alpha_start(ch(TX)),
+ACTION is_alpha_start(ch(TXT)),
   IF ch GREATER THAN OR EQUAL "a" AND ch LESS THAN OR EQUAL "z", GIVE TRUE. /IF.
   IF ch GREATER THAN OR EQUAL "A" AND ch LESS THAN OR EQUAL "Z", GIVE TRUE. /IF.
   IF ch IS "_", GIVE TRUE. /IF.
@@ -328,10 +328,10 @@ ACTION is_alpha_start(ch(TX)),
 /ACTION.
 
 # ── match_ident_or_keyword(src, i, n) ─────────────────────
-ACTION match_ident_or_keyword(src(TX), i(LON), n(LON)),
-  CREATE wd(TX) TO "".
+ACTION match_ident_or_keyword(src(TXT), i(LON), n(LON)),
+  CREATE wd(TXT) TO "".
   CREATE ni(LON) TO i.
-  CREATE ch(TX) TO "".
+  CREATE ch(TXT) TO "".
   SEASON ni < n,
     REAP ok FROM is_alnum, char_at(src, ni).
     IF NOT ok, BREAK. /IF.
@@ -344,10 +344,10 @@ ACTION match_ident_or_keyword(src(TX), i(LON), n(LON)),
 /ACTION.
 
 # ── match_number(src, i, n) ───────────────────────────────
-ACTION match_number(src(TX), i(LON), n(LON)),
-  CREATE num(TX) TO "".
+ACTION match_number(src(TXT), i(LON), n(LON)),
+  CREATE num(TXT) TO "".
   CREATE ni(LON) TO i.
-  CREATE ch(TX) TO "".
+  CREATE ch(TXT) TO "".
   SEASON ni < n AND char_at(src, ni) GREATER THAN OR EQUAL "0" AND char_at(src, ni) LESS THAN OR EQUAL "9",
     REAP ch FROM char_at, src, ni.
     SET num TO num + ch.
@@ -369,13 +369,13 @@ ACTION match_number(src(TX), i(LON), n(LON)),
 /ACTION.
 
 # ── match_string(src, i, n) ───────────────────────────────
-ACTION match_string(src(TX), i(LON), n(LON)),
-  CREATE val(TX) TO "".
+ACTION match_string(src(TXT), i(LON), n(LON)),
+  CREATE val(TXT) TO "".
   CREATE si(LON) TO i.
   CREATE done(NUM) TO FALSE.
-  CREATE ch(TX) TO "".
+  CREATE ch(TXT) TO "".
   # v0.49.20 — the opening character selects the delimiter: " or '
-  CREATE q(TX) TO "".
+  CREATE q(TXT) TO "".
   IF si < n,
     REAP cq FROM char_at, src, si.
     IF cq IS "\"", SET q TO "\"". /IF.
@@ -417,11 +417,11 @@ ACTION match_string(src(TX), i(LON), n(LON)),
 # inside the region do not close it. Returns [value, endpos, hasi].
 # Escape rules match match_string (\n \t \r), applied only outside
 # expression regions so embedded expressions stay raw.
-ACTION match_string_i(src(TX), i(LON), n(LON)),
-  CREATE val(TX) TO "".
+ACTION match_string_i(src(TXT), i(LON), n(LON)),
+  CREATE val(TXT) TO "".
   CREATE si(LON) TO i.
   CREATE done(NUM) TO FALSE.
-  CREATE ch(TX) TO "".
+  CREATE ch(TXT) TO "".
   CREATE idepth(LON) TO 0.
   CREATE instr(LON) TO 0.
   CREATE hasi(LON) TO 0.
@@ -500,7 +500,7 @@ ACTION match_string_i(src(TX), i(LON), n(LON)),
 /ACTION.
 
 # ── skip_comment(src, i, n) ───────────────────────────────
-ACTION skip_comment(src(TX), i(LON), n(LON)),
+ACTION skip_comment(src(TXT), i(LON), n(LON)),
   SEASON i < n AND char_at(src, i) ISNT "\n",
     SET i TO i + 1.
   /SEASON.
@@ -508,11 +508,11 @@ ACTION skip_comment(src(TX), i(LON), n(LON)),
 /ACTION.
 
 # ── scan_tokens(source) ───────────────────────────────────
-ACTION scan_tokens(src(TX)),
+ACTION scan_tokens(src(TXT)),
   CREATE tokens(LIST) TO plant_list_make(0).
   CREATE i(LON) TO 0.
   CREATE n(LON) TO LEN(src).
-  CREATE ch(TX) TO "".
+  CREATE ch(TXT) TO "".
   # v0.49.11 — line_start marks the first token on each line (3rd
   # element of the token pair); parse_field_access uses it to tell a
   # chain dot from a statement-terminator dot followed by a new
@@ -635,7 +635,7 @@ ACTION scan_tokens(src(TX)),
 # v0.49.55: Public entry point to the lexer. Wraps scan_tokens so
 # downstream consumers call one function rather than reaching into
 # internal scanning state.
-ACTION tokenize(src(TX)),
+ACTION tokenize(src(TXT)),
   GIVE scan_tokens(src).
 /ACTION.
 

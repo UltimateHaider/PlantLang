@@ -226,7 +226,7 @@ All verify-* targets must include valgrind-check-tensor.
 ### XXX. Type Registry (v0.51.4)
 
     - Single source of truth for scalar types (LON, NUM, ULO,
-      UNU, DBL, CHA, BYTES).
+      UNU, DBL, CHA, VOI).
     - Stored as GLOBAL TYPE_REGISTRY in codegen_c.plant.
     - Records: [name, ctype, numeric, prim, category, default].
     - Adding a scalar type = one record (not 6-8 edits).
@@ -249,7 +249,7 @@ All verify-* targets must include valgrind-check-tensor.
 
     - is_prim_type retains its IF-chain.
     - Reason: callers are closure-scope; registry prim semantics
-      don't match the current table (LON/NUM/BYTES only).
+      don't match the current table (LON/NUM/VOI only).
     - The registry remains the source of truth for type_ctype,
       type_is_numeric (and future type_is_prim if the semantics
       are aligned).
@@ -292,5 +292,5 @@ All verify-* targets must include valgrind-check-tensor.
     - `CHA` = character (C `char`); renamed from CHAR. TD-018 fixed
       (SHOW wraps with plant_char_value).
     - `TXT` = canonical text type (C `tx_t`).
-    - `TX` = DEPRECATED text alias (`tx_t`); still functional.
+    - `TXT` = DEPRECATED text alias (`tx_t`); still functional.
       Removal target: v0.52.0 (TD-026). Use TXT for new code.

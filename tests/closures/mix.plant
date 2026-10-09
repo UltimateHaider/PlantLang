@@ -3,7 +3,7 @@
 ACTION main(),
   CREATE a(LON) TO 3.
   CREATE b(LON) TO 4.
-  CREATE s(TX) TO "tag".
+  CREATE s(TXT) TO "tag".
   CREATE m TO [MOVE a, REF b](v(LON)) -> v + a + b + 1.
   CREATE t TO [MOVE s](u(LON)) -> "s:" + s + ":" + _from_long(u).
   REAP r FROM m, 10.

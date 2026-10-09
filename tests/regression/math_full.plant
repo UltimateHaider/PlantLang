@@ -1,5 +1,5 @@
 # math_full: std/math FFI bindings LOG/PI/E/SIGN/CLAMP (v0.48.27).
-# Values are passed as quoted strings so the FFI sees decimal TX
+# Values are passed as quoted strings so the FFI sees decimal TXT
 # inputs. Edge cases: log of 0 and negatives (error messaging),
 # exhaustive sign states (-1/0/1 incl. -0.0 and decimals), clamping
 # below/inside/above the bounds plus inclusive boundary hits.

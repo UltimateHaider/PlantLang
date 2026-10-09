@@ -8,7 +8,7 @@
 
 tx_t main();
 tx_t plant_max2_NUM(long a, long b);
-tx_t plant_echo_TX(tx_t v);
+tx_t plant_echo_TXT(tx_t v);
 
 
 tx_t main() {
@@ -19,7 +19,7 @@ tx_t main() {
     m2 = m;
     plant_iReport_print(get_report(), _from_long(m2));
     plant_iReport_print(get_report(), _from_long(m2+1));
-    s = plant_echo_TX("cd");
+    s = plant_echo_TXT("cd");
     plant_iReport_print(get_report(), _cat("str=", s));
     return 0;
 }
@@ -29,6 +29,6 @@ tx_t plant_max2_NUM(long a, long b) {
     }
     return b;
 }
-tx_t plant_echo_TX(tx_t v) {
+tx_t plant_echo_TXT(tx_t v) {
     return v;
 }

@@ -2,9 +2,9 @@
 # Exercises repeated object creation, field writes, and reads to detect
 # memory leaks or corruption under high allocation churn (v0.49.63).
 SPECIES Node {
-  id: TX
-  val: TX
-  ACTION describe() -> TX { GIVE self.id + "=" + self.val. }
+  id: TXT
+  val: TXT
+  ACTION describe() -> TXT { GIVE self.id + "=" + self.val. }
 }
 ACTION main(),
   CREATE count(LON) TO 0.

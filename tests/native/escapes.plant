@@ -1,8 +1,8 @@
 ACTION main(),
-  CREATE a(TX) TO "".
-  CREATE b(TX) TO "".
-  CREATE c(TX) TO "".
-  CREATE d(TX) TO "".
+  CREATE a(TXT) TO "".
+  CREATE b(TXT) TO "".
+  CREATE c(TXT) TO "".
+  CREATE d(TXT) TO "".
   SET a TO "\"" + "x" + "\"".
   SHOW a.
   SET b TO "he\"llo".

@@ -2,7 +2,7 @@
 # plant_net_harvest_https_url(url, method) returns {body,status,ok} map.
 ACTION main(),
   REAP r FROM plant_net_harvest_https_url, "https://httpbin.org/get", "GET".
-  CREATE ok_val(TX) TO _map_get(r, "ok").
+  CREATE ok_val(TXT) TO _map_get(r, "ok").
   SHOW ok_val.
   GIVE 0.
 /GIVE main.

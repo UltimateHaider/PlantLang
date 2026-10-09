@@ -12,7 +12,7 @@ ACTION main(),
   CREATE c(LIST) TO [].
   SHOW "empty=" + JOIN(c, ",").
   CREATE n(LON) TO 10.
-  CREATE y(TX) TO "var".
+  CREATE y(TXT) TO "var".
   CREATE d(LIST) TO [n + 1, y].
   SHOW "mixed=" + JOIN(d, "-").
   CREATE e(LIST) TO [1 + 1, 5].

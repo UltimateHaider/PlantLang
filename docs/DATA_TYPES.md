@@ -22,10 +22,10 @@ PlantLang uses a **single opaque pointer** (`tx_t = void*`) as the universal run
 | `BOL` | `bool` | 1 byte | 0 / 1 | `0` | Boolean, C99 (v0.51.12) |
 | `CHA` | `char` | 1 byte | ASCII/UTF-8 byte | `0` | Character (v0.51.13; renamed from CHAR) |
 | `TXT` | `tx_t` | variable | UTF-8 string | `""` | Text, canonical (v0.51.13) |
-| `TX` | `tx_t` | variable | UTF-8 string | `""` | Text, DEPRECATED — use TXT (v0.51.13) |
 | `NUM` | `int` | 4 bytes (32-bit) | -(2^31) to 2^31-1 | `0` | Signed 32-bit integer (v0.51.9) |
 | `UNU` | `unsigned int` | 4 bytes (32-bit) | 0 to 4,294,967,295 | `0` | Unsigned 32-bit integer (v0.51.9) |
-| `TX` | `tx_t` (void*) | 8 bytes (pointer) | N/A | `""` (empty string) | Text/string; default type when unspecified |
+| `TXT` | `tx_t` (void*) | 8 bytes (pointer) | N/A | `""` (empty string) | Text/string; default type when unspecified |
+| `VOI` | `tx_t` | variable | N/A | `""` | Void pointer / byte buffer (v0.51.14; renamed from BYTES) |
 | `LIST[T]` | `PlantArray*` | 16 bytes (pointer) | N/A | `plant_list_make(0)` | Dynamic array of T values |
 | `MAP` | `PlantArray*` (pair-list) | 16 bytes (pointer) | N/A | `plant_map_create()` | Key-value pair-list (kind=1) |
 | `ENUM X` | `tx_t` (int or name string) | 8 bytes (pointer) | 0 to 65535 (int) | first member | Enum member as integer or name string |
@@ -45,7 +45,7 @@ PlantLang uses a **single opaque pointer** (`tx_t = void*`) as the universal run
 | `REF LON` | `long*` | Pointer to numeric |
 | `REF NUM` | `int*` | Pointer to fact |
 | `REF LIST[T]` | `PlantArray**` | Pointer to list |
-| `REF TX` | `tx_t*` | Pointer to text |
+| `REF TXT` | `tx_t*` | Pointer to text |
 | `REF STRUCT X` | `plant_X*` | Pointer to struct |
 
 **Source:** `src/plantc/codegen_c.plant:5356-5361`
@@ -72,7 +72,7 @@ typedef struct PlantArray {
 **Declaration:**
 ```plantlang
 CREATE items (LIST[LON]) TO [1, 2, 3].
-CREATE names (LIST[TX]) TO ["a", "b", "c"].
+CREATE names (LIST[TXT]) TO ["a", "b", "c"].
 LET mixed (LIST) TO [1, "two", TRUE].
 ```
 
@@ -172,7 +172,7 @@ SHOW Color:RED.                  # displays "RED"
 **Declaration:**
 ```plantlang
 SPECIES Animal {
-    name: TX,
+    name: TXT,
     age: LON
 }.
 ```
@@ -309,13 +309,13 @@ REAP k FROM json_kind, j.
 ```plantlang
 # CREATE with type annotation
 CREATE x (LON) TO 5.
-CREATE name (TX) TO "hello".
+CREATE name (TXT) TO "hello".
 CREATE items (LIST[LON]) TO [1, 2, 3].
 CREATE m (MAP) TO { "key": "val" }.
 
 # CREATE with type inference
 CREATE x TO 5.             # inferred as LON
-CREATE name TO "hello".    # inferred as TX
+CREATE name TO "hello".    # inferred as TXT
 ```
 
 ### 4.2 Variable Binding
@@ -323,7 +323,7 @@ CREATE name TO "hello".    # inferred as TX
 ```plantlang
 # LET with type annotation
 LET y (LON) TO 10.
-LET msg (TX) TO "world".
+LET msg (TXT) TO "world".
 
 # LET with type inference
 LET z TO 20.               # inferred as LON
@@ -356,7 +356,7 @@ STRUCT Point {
 }.
 
 STRUCT Person {
-    name: TX,
+    name: TXT,
     age: LON
 }.
 ```
@@ -377,12 +377,12 @@ ENUM Status {
 
 ```plantlang
 SPECIES Animal {
-    name: TX,
+    name: TXT,
     age: LON
 }.
 
 SPECIES Dog FROM Animal {
-    breed: TX
+    breed: TXT
 }.
 ```
 
@@ -427,7 +427,7 @@ INTERFACE Drawable {
 
 ### 5.4 Implicit Conversion Rules
 
-1. **Unspecified type → TX:** If no type annotation is given, the variable defaults to `TX` (tx_t).
+1. **Unspecified type → TXT:** If no type annotation is given, the variable defaults to `TXT` (tx_t).
 2. **Numeric literals → long:** Integer literals compile to raw `long` C values; no wrapping needed.
 3. **Decimal literals → _from_double:** Decimal numbers wrap in `_from_double()` for list/map contexts.
 4. **String literals → tx_t:** Quoted strings pass through as `const char*` cast to `tx_t`.
@@ -522,17 +522,17 @@ tx_t plant_analyze(tx_t v);   /* Returns: {type, size, keys} MAP */
 
 | Category | Count | Types |
 |---|---|---|
-| **Primitive** | 6 | LON, DBL, NUM, TX, BOOL (via literals), NULL |
+| **Primitive** | 6 | LON, DBL, NUM, TXT, BOOL (via literals), NULL |
 | **Composite** | 8 | LIST, MAP, STRUCT, ENUM, SPECIES, ACTION, CALLBACK, MATH |
 | **Special** | 5 | VOID, STORM, ANY, JSON, OPTION/RESULT |
-| **Reference** | 4 | REF LON, REF NUM, REF LIST, REF TX |
+| **Reference** | 4 | REF LON, REF NUM, REF LIST, REF TXT |
 | **Total** | **23** | |
 
 ### Primitive vs Composite
 
 | Category | Types | C Representation |
 |---|---|---|
-| **Primitive** | LON, DBL, NUM, TX | `long`, `int`, `tx_t` (all stored as `tx_t` at runtime) |
+| **Primitive** | LON, DBL, NUM, TXT | `long`, `int`, `tx_t` (all stored as `tx_t` at runtime) |
 | **Composite** | LIST, MAP, STRUCT, ENUM, SPECIES, MATH | `PlantArray*`, generated structs, map-backed objects, `PlantMath*` |
 | **Functional** | ACTION, CALLBACK | Function pointers with context |
 | **Special** | NULL, VOID, STORM, ANY, JSON, OPTION, RESULT | Null pointer, void, ARC objects, tagged unions |
@@ -894,17 +894,23 @@ SHOW LEN(S).                # 5
 
 ---
 
-## TX (Text — DEPRECATED) — v0.51.13
+## VOI (Void Pointer / Byte Buffer) — v0.51.14
 
 | Property | Value |
 |----------|-------|
-| Status | DEPRECATED in v0.51.13 |
-| Replacement | TXT |
-| Removal | v0.52.0 |
+| Size | Variable (dynamic) |
 | C type | tx_t |
+| Purpose | Raw byte buffer / void pointer |
+| Parity | C void* |
+| Category | scalar |
+| Renamed | From BYTES in v0.51.14 |
 
-**Note:** TX is the existing de-facto text type (939 src + 98 tests).
-It remains functional for backward compatibility. Use TXT for new code.
+### Syntax
+
+```plant
+CREATE V (VOI) TO "hello".
+SHOW V.   # hello
+```
 
 ---
 

@@ -341,10 +341,8 @@ SHOW "end".   # ← dropped
   operand types.
 - **Related:** TD-022, TD-024.
 
-## TD-026: TX (text alias) deprecated — remove in v0.52.0
-- **Status:** DEPRECATED in v0.51.13
-- **Target removal:** v0.52.0
-- **Impact:** LOW — TX still works; no behavior change.
-- **Reason:** TX is the legacy 2-letter text name; TXT is canonical.
-- **Action:** Migrate code to TXT; remove TX in v0.52.0.
+## TD-026: TX (text alias) removed — CLOSED
+- **Status:** ✅ CLOSED in v0.51.14
+- **Removed:** TX record + all TX annotations (947 src + 98 tests).
+- **Replacement:** TXT (canonical).
 - **Related:** TD-018.

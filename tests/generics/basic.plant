@@ -19,9 +19,9 @@ ACTION mk[T](v(T)),
 /ACTION.
 
 ACTION main(),
-  REAP a FROM echo[TX], "hi".
+  REAP a FROM echo[TXT], "hi".
   SHOW "a=" + a.
-  REAP b FROM wrap[TX], "xy".
+  REAP b FROM wrap[TXT], "xy".
   SHOW "b=" + b.
   REAP c FROM echo[NUM], 7.
   REAP cs FROM _from_long, c.
@@ -31,7 +31,7 @@ ACTION main(),
   SET mn TO m.
   REAP ms FROM _from_long, mn.
   SHOW "mul=" + ms.
-  REAP k FROM mk[TX], "q".
+  REAP k FROM mk[TXT], "q".
   SHOW "mk=" + k.
   GIVE 0.
 /GIVE main.

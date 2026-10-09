@@ -4,11 +4,11 @@ ENUM Color { RED, GREEN, BLUE }.
 
 ACTION main(),
   CREATE c(Color) TO GREEN.
-  CREATE f TO [MOVE c](v(TX)) -> "moved:" + c + ":" + v.
+  CREATE f TO [MOVE c](v(TXT)) -> "moved:" + c + ":" + v.
   REAP r FROM f, "a".
   SHOW r.
   CREATE c2(Color) TO BLUE.
-  CREATE g TO [REF c2](v(TX)) -> "ref:" + c2 + ":" + v.
+  CREATE g TO [REF c2](v(TXT)) -> "ref:" + c2 + ":" + v.
   REAP r FROM g, "b".
   SHOW r.
   SET c2 TO RED.

@@ -1,0 +1,6 @@
+SUITE "TXT (no TX alias)"
+  CREATE S (TXT) TO "hello".
+  SHOW S.
+
+  SHOW "txt-no-tx-ok".
+/SUITE.

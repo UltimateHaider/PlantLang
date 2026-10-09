@@ -4,7 +4,7 @@
 # concatenation.
 STRUCT Box[T] { val: T }.
 
-ACTION ffi_make_box(v(TX)) -> external.
+ACTION ffi_make_box(v(TXT)) -> external.
 ACTION ffi_box_write(b(Box[LON]), v(LON)) -> external.
 ACTION ffi_box_read(b(Box[LON])) -> external.
 

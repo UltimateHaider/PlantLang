@@ -1,8 +1,8 @@
-# safe_real_arg — a SAFE worker receives typed args (LON/NUM/TX)
+# safe_real_arg — a SAFE worker receives typed args (LON/NUM/TXT)
 # through the generated adapter, combines them, and returns the result;
 # proves arg encode/decode + adapter type dispatch across a real process
 # boundary (v0.48.37c).
-ACTION combine(a(LON), b(NUM), tag(TX)) WITH MISSION SAFE,
+ACTION combine(a(LON), b(NUM), tag(TXT)) WITH MISSION SAFE,
   SHOW "worker args: " + a + " " + b + " " + tag.
   GIVE tag + ":" + a + ":" + b.
 /ACTION.

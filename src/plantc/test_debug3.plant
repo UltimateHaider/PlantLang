@@ -1,6 +1,6 @@
 IMPORT "ast.plant".
 
-ACTION test_action(x(TX)),
+ACTION test_action(x(TXT)),
   SHOW "INSIDE_ACTION".
   GIVE x.
 /ACTION.

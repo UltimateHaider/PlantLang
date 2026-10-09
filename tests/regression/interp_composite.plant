@@ -1,7 +1,7 @@
 ACTION main(),
   CREATE n(LON) TO 5.
-  CREATE s(TX) TO "B".
-  CREATE r(TX) TO "".
+  CREATE s(TXT) TO "B".
+  CREATE r(TXT) TO "".
   SHOW "x=" + "a${n}b".
   SHOW "esc=\"${s}\"".
   SHOW "nl=a\nb".

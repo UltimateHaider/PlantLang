@@ -6,7 +6,7 @@ ACTION main(),
   CREATE c(LON) TO a + b.
   SHOW c.
   SHOW a + b + 5.
-  CREATE t(TX) TO "sum " + c.
+  CREATE t(TXT) TO "sum " + c.
   SHOW t.
   GIVE 0.
 /ACTION.

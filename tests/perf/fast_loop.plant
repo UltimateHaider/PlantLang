@@ -6,7 +6,7 @@
 ACTION main() WITH MISSION FAST,
   CREATE i(LON) TO 0.
   CREATE acc(LON) TO 0.
-  CREATE h(TX) TO "".
+  CREATE h(TXT) TO "".
   SEASON i < 50000000,
     IF (i & 4095) IS 0,
       SET h TO plant_fast_alloc(256).

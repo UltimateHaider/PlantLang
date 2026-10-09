@@ -3,7 +3,7 @@
 ACTION main(),
   CREATE x(LON) TO 8.
   CREATE h TO [MOVE x](v(LON)) -> (
-    CREATE acc(TX) TO _from_long(v + x + 1).
+    CREATE acc(TXT) TO _from_long(v + x + 1).
     SHOW "inner show".
     GIVE acc
   ).

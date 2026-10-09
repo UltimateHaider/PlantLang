@@ -3,17 +3,17 @@
 #   the child's implementation wins (last-definition-wins).
 #   Non-overridden methods are inherited from the parent.
 SPECIES Animal {
-  name: TX
-  ACTION speak() -> TX {
+  name: TXT
+  ACTION speak() -> TXT {
     GIVE self.name + " makes a sound".
   }
-  ACTION describe() -> TX {
+  ACTION describe() -> TXT {
     GIVE "I am " + self.name.
   }
 }
 SPECIES Dog FROM Animal {
-  breed: TX
-  ACTION speak() -> TX {
+  breed: TXT
+  ACTION speak() -> TXT {
     GIVE self.name + " barks!".
   }
 }

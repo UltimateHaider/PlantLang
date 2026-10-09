@@ -9,11 +9,11 @@ ACTION outer[T](v(T)),
 /ACTION.
 
 ACTION main(),
-  REAP r FROM outer[TX], "x".
+  REAP r FROM outer[TXT], "x".
   SHOW "nested=" + r.
-  REAP r2 FROM outer[TX], "y".
+  REAP r2 FROM outer[TXT], "y".
   SHOW "nested2=" + r2.
-  REAP r3 FROM inner[TX], "z".
+  REAP r3 FROM inner[TXT], "z".
   SHOW "direct=" + r3.
   GIVE 0.
 /GIVE main.

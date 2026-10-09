@@ -1,20 +1,20 @@
 # generic STRUCTs through the monomorphization engine:
 #   Box[T] { val: T }            — single type param
 #   Pair[T, U] { first: T, second: U }  — multi type params
-#   Wrap[T] { box: Box[T], tag: TX }    — nested generic struct
+#   Wrap[T] { box: Box[T], tag: TXT }    — nested generic struct
 # The typedefs plant_Box_NUM / plant_Pair_NUM_TX / plant_Wrap_NUM
 # must be emitted (checked via .grep) and phantom instantiations
 # (plant_Box_T, plant_Pair_NUM_NUM) must NOT appear.
 STRUCT Box[T] { val: T }
 STRUCT Pair[T, U] { first: T, second: U }
-STRUCT Wrap[T] { box: Box[T], tag: TX }
+STRUCT Wrap[T] { box: Box[T], tag: TXT }
 
-ACTION ffi_make_box(v(TX)) -> external.
+ACTION ffi_make_box(v(TXT)) -> external.
 ACTION ffi_box_write(b(Box[LON]), v(LON)) -> external.
 ACTION ffi_box_read(b(Box[LON])) -> external.
-ACTION ffi_make_pair(a(TX), b(TX)) -> external.
-ACTION ffi_pair_read(p(Pair[LON, TX])) -> external.
-ACTION ffi_make_wrap(box(TX), tag(TX)) -> external.
+ACTION ffi_make_pair(a(TXT), b(TXT)) -> external.
+ACTION ffi_pair_read(p(Pair[LON, TXT])) -> external.
+ACTION ffi_make_wrap(box(TXT), tag(TXT)) -> external.
 ACTION ffi_w_read(w(Wrap[LON])) -> external.
 
 ACTION main(),

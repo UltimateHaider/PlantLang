@@ -23,7 +23,7 @@ PLANT lists.
 2\   GIVE n * sub.
 1\ /ACTION.
 
-1\ ACTION greet(name(TX)),
+1\ ACTION greet(name(TXT)),
 2\   GIVE "Hello, " + name + "!".
 1\ /ACTION.
 
@@ -49,15 +49,15 @@ PLANT lists.
 1\ /SPECIES.
 
 1\ SPECIES Animal,
-2\   VAR name(TX) TO "?".
-2\   VAR sound(TX) TO "...".
+2\   VAR name(TXT) TO "?".
+2\   VAR sound(TXT) TO "...".
 2\   ACTION speak(),
 3\     GIVE SELF:name + " says " + SELF:sound.
 2\   /ACTION.
 1\ /SPECIES.
 
 1\ SPECIES Dog PARENT Animal,
-2\   VAR breed(TX) TO "mixed".
+2\   VAR breed(TXT) TO "mixed".
 2\   ACTION fetch(),
 3\     GIVE SELF:name + " fetches!".
 2\   /ACTION.
@@ -78,7 +78,7 @@ SUITE "Variables & Types",
 
   1\ CREATE n(LON)   TO 42.
   1\ CREATE pi(DBL)  TO 3.14.
-  1\ CREATE msg(TX)  TO "hello".
+  1\ CREATE msg(TXT)  TO "hello".
   1\ CREATE ok(NUM) TO TRUE.
   1\ CREATE empty_list(LIST) TO.
   1\ CREATE scores(LIST) TO 85, 92, 78, 96.
@@ -89,7 +89,7 @@ SUITE "Variables & Types",
   VERIFY "DBL creation",
     pi IS 3.14.
 
-  VERIFY "TX creation",
+  VERIFY "TXT creation",
     msg IS "hello".
 
   VERIFY "NUM creation",
@@ -98,8 +98,8 @@ SUITE "Variables & Types",
   VERIFY "TYPE of NUM",
     TYPE n IS NUM.
 
-  VERIFY "TYPE of TX",
-    TYPE msg IS TX.
+  VERIFY "TYPE of TXT",
+    TYPE msg IS TXT.
 
   VERIFY "TYPE of LIST",
     TYPE scores IS LIST.
@@ -216,7 +216,7 @@ SUITE/.
 # ═══════════════════════════════════════════════════════════
 SUITE "Strings",
 
-  1\ CREATE word(TX) TO "  PlantLang  ".
+  1\ CREATE word(TXT) TO "  PlantLang  ".
 
   VERIFY "strings:TRIM",
     FROM strings:TRIM, word GIVES "PlantLang".
@@ -251,7 +251,7 @@ SUITE "Storms",
   VERIFY "LOCK_STORM on ROOT modification",
     STORMS LOCK_STORM FROM SET PASS_MARK TO 0.
 
-  1\ CREATE caught(TX) TO "no".
+  1\ CREATE caught(TXT) TO "no".
   1\ WEATHER,
   2\   SHOW 10 / 0.
   1\ SHELTER ZERO_STORM,
@@ -377,7 +377,7 @@ SUITE "HTTP / HARVEST",
   1\ HARVEST "https://pypi.org/pypi/requests/json" AS pkg.
 
   VERIFY "HARVEST GET returns MAP",        TYPE pkg IS MAP.
-  VERIFY "HARVEST body has info key",        TYPE pkg:"body":"info":"name" IS TX.
+  VERIFY "HARVEST body has info key",        TYPE pkg:"body":"info":"name" IS TXT.
   VERIFY "HARVEST package name is requests", pkg:"body":"info":"name" IS "requests".
 
   1\ CREATE hdr(MAP).
@@ -392,7 +392,7 @@ SUITE "HTTP / HARVEST",
 
   VERIFY "HARVEST POST completes without throwing", TYPE post_resp IS MAP.
 
-  1\ CREATE caught(TX) TO "no".
+  1\ CREATE caught(TXT) TO "no".
   1\ WEATHER,
   2\   HARVEST "https://this-domain-does-not-exist-9999.invalid/" AS bad.
   1\ SHELTER NETWORK_STORM,
@@ -411,10 +411,10 @@ SUITE "LISTEN BRANCH grammar",
 
   1\ CREATE lb_cfg(MAP).
   1\ LINK "timeout" WITH 30 IN lb_cfg.
-  1\ CREATE lb_result(TX) TO "unset".
+  1\ CREATE lb_result(TXT) TO "unset".
 
   1\ LISTEN BRANCH ON 8080 WITH lb_cfg AS req MAP,
-  2\   CREATE lb_msg(TX) TO "ok".
+  2\   CREATE lb_msg(TXT) TO "ok".
   2\   SET lb_result TO lb_msg.
   2\   GIVE lb_msg AS RESPONSE.
   1\ LISTEN/.

@@ -2,17 +2,17 @@
 #   Dog FROM Animal inherits name field and speak() method.
 #   fetch() is a child-only method using self.field access.
 SPECIES Animal {
-  name: TX
-  ACTION speak() -> TX {
+  name: TXT
+  ACTION speak() -> TXT {
     GIVE self.name + " makes a sound".
   }
-  ACTION describe() -> TX {
+  ACTION describe() -> TXT {
     GIVE "I am " + self.name.
   }
 }
 SPECIES Dog FROM Animal {
-  breed: TX
-  ACTION fetch() -> TX {
+  breed: TXT
+  ACTION fetch() -> TXT {
     GIVE self.name + " the " + self.breed + " fetches!".
   }
 }

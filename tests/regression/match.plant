@@ -3,7 +3,7 @@
 # matches the literal 1), the wildcard arm catches everything else,
 # and Name(var) arms match [tag, payload] pair lists and bind the
 # payload inside the arm. Bare Name arms match the tag only.
-ACTION classify(v(TX)),
+ACTION classify(v(TXT)),
   MATCH v {
     1 -> GIVE "one".
     2 -> GIVE "two".
@@ -11,7 +11,7 @@ ACTION classify(v(TX)),
   }
 /ACTION.
 
-ACTION tag_of(v(TX)),
+ACTION tag_of(v(TXT)),
   MATCH v {
     Ok(x) -> GIVE "ok:" + x.
     Err(e) -> GIVE "err:" + e.
@@ -19,7 +19,7 @@ ACTION tag_of(v(TX)),
   }
 /ACTION.
 
-ACTION flag_of(v(TX)),
+ACTION flag_of(v(TXT)),
   MATCH v {
     Maybe -> GIVE "maybe".
     Some(n) -> { SHOW "got " + n. GIVE "some". }

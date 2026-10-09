@@ -7,7 +7,7 @@ ACTION main(),
   PUT "b" INTO items.
   PUT "c" INTO items.
   PUT "d" INTO items.
-  CREATE s(TX) TO "".
+  CREATE s(TXT) TO "".
   CYCLE item, idx IN items,
     SET s TO s + _from_long(idx) + ":" + item + " ".
   /CYCLE.
@@ -18,7 +18,7 @@ ACTION main(),
     SHOW "single=" + _from_long(idx) + ":" + item.
   /CYCLE.
   CREATE empty(LIST) TO plant_list_make(0).
-  CREATE hit(TX) TO "none".
+  CREATE hit(TXT) TO "none".
   CYCLE item, idx IN empty,
     SET hit TO "ran".
   /CYCLE.
@@ -28,7 +28,7 @@ ACTION main(),
     SET t TO t + idx.
   /CYCLE.
   SHOW "idxsum=" + t.
-  CREATE evens(TX) TO "".
+  CREATE evens(TXT) TO "".
   CYCLE item, idx IN items,
     IF idx % 2 IS 0,
       SET evens TO evens + item + " ".

@@ -4,7 +4,7 @@ IMPORT "lexer.plant".
 IMPORT "parser.plant".
 
 # Tokenize a simple program
-CREATE src(TX) TO "SHOW 42.".
+CREATE src(TXT) TO "SHOW 42.".
 REAP tokens FROM scan_tokens, src.
 SHOW tokens.
 

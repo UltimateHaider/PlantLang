@@ -26,7 +26,7 @@ ACTION main(),
     SET after TO after + _to_long(n).
   /CYCLE.
   SORT nums.
-  CREATE sorted(TX) TO "".
+  CREATE sorted(TXT) TO "".
   CYCLE n, i IN nums,
     SET sorted TO sorted + n + " ".
   /CYCLE.
@@ -35,12 +35,12 @@ ACTION main(),
   SHOW "sorted after shake = " + sorted.
 
   SHAKE nums.
-  CREATE o1(TX) TO "".
+  CREATE o1(TXT) TO "".
   CYCLE n, i IN nums,
     SET o1 TO o1 + n + ",".
   /CYCLE.
   SHAKE nums.
-  CREATE o2(TX) TO "".
+  CREATE o2(TXT) TO "".
   CYCLE n, i IN nums,
     SET o2 TO o2 + n + ",".
   /CYCLE.
@@ -54,7 +54,7 @@ ACTION main(),
   CREATE one(LIST) TO plant_list_make(0).
   PUT "solo" INTO one.
   SHAKE one.
-  CREATE out1(TX) TO "".
+  CREATE out1(TXT) TO "".
   CYCLE n, i IN one,
     SET out1 TO out1 + n.
   /CYCLE.

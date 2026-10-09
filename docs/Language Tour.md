@@ -7,7 +7,7 @@
 > runtime. No Node.js, no JavaScript, no interpreter.
 
 ```
-ACTION greet(name(TX)) -> TX,
+ACTION greet(name(TXT)) -> TXT,
   GIVE "hello, " + name.
 /GIVE greet.
 
@@ -100,7 +100,7 @@ ACTION main(),
 | Integer | `LON` | `CREATE age(LON) TO 25.` |
 | Unsigned integer | `ULO` | `CREATE flags(ULO) TO 42.` |
 | Decimal | `DBL` | `CREATE pi(DBL) TO 3.14.` |
-| Text | `TX` | `CREATE name(TX) TO "Haider".` |
+| Text | `TXT` | `CREATE name(TXT) TO "Haider".` |
 | Character | `CHA` | `CREATE c(CHA) TO "A".` |
 | Boolean | `NUM` | `CREATE active(NUM) TO TRUE.` |
 | Unsigned boolean | `UNU` | `CREATE mask(UNU) TO 255.` |
@@ -113,7 +113,7 @@ ACTION main(),
 | Fixed-size array | `ARRAY` | `ARRAY[LON, 5] nums = [1, 2, 3, 4, 5].` |
 | Symbolic math | `MATH` | `CREATE expr(MATH) TO "2 + 3 * 4".` |
 | Enum | `ENUM` | `ENUM Color { RED, GREEN, BLUE }.` |
-| Species | `SPECIES` | `SPECIES Animal { name: TX, age: LON }.` |
+| Species | `SPECIES` | `SPECIES Animal { name: TXT, age: LON }.` |
 
 Declare a variable with `CREATE` (and re-assign with `SET`):
 
@@ -122,7 +122,7 @@ CREATE score(LON) TO 94.
 SET score TO score + 6.
 SHOW "score=" + score.   # → 100
 
-CREATE name(TX) TO "Haider".
+CREATE name(TXT) TO "Haider".
 CREATE pi(DBL) TO 3.14159.
 CREATE active(NUM) TO TRUE.
 CREATE c(CHA) TO "A".
@@ -263,7 +263,7 @@ block in the shared types section. Union values are stack-allocated:
 UNION Value {
   i: LON,
   f: DBL,
-  s: TX
+  s: TXT
 }
 
 ACTION main(),
@@ -467,12 +467,12 @@ ACTION add(a(LON), b(LON)),
   GIVE a + b.
 /GIVE add.
 
-ACTION greet(name(TX)) -> TX,
+ACTION greet(name(TXT)) -> TXT,
   GIVE "hello, " + name.
 /GIVE greet.
 ```
 
-- Typed parameters (`LON`, `DBL`, `TX`, `NUM`, `LIST[T]`, structs, enums).
+- Typed parameters (`LON`, `DBL`, `TXT`, `NUM`, `LIST[T]`, structs, enums).
 - Optional `-> Type` return annotation (purely informative at this stage).
 - `GIVE expr.` returns; bodies may use `IF`/`SEASON`, recursion, closures.
 - `REAP target FROM action, args.` calls an action and binds the result.
@@ -496,7 +496,7 @@ ACTION max2[T](a(T), b(T)),
 /GIVE max2.
 
 ACTION main(),
-  REAP a FROM echo[TX], "hi".
+  REAP a FROM echo[TXT], "hi".
   REAP m FROM max2[LON], 9, 4.
   CREATE mn(LON) TO 0.
   SET mn TO m.           # numeric generic result → LON var
@@ -506,7 +506,7 @@ ACTION main(),
 /GIVE main.
 ```
 
-Each instantiation (e.g. `echo[TX]`, `max2[LON]`) emits a unique native C
+Each instantiation (e.g. `echo[TXT]`, `max2[LON]`) emits a unique native C
 function (`plant_echo_TX`, `plant_max2_NUM`) — zero runtime overhead.
 Numeric generic results come back as raw integers: assign them to a `LON`
 (like `max2` above) and convert with `_from_long` before printing. Once the
@@ -536,7 +536,7 @@ ACTION main(),
 > string operations — see the example above. Bare `SHOW` of numeric values
 > (vars, arithmetic, `LEN`/`COUNT`) is value-aware (prints the number); the
 > remaining case that needs the explicit pattern is a raw return held in a
-> `TX`/implicit variable, where `SHOW r.` still reads it as a string pointer.
+> `TXT`/implicit variable, where `SHOW r.` still reads it as a string pointer.
 
 ### REAP Expressions (v0.49.9)
 
@@ -758,7 +758,7 @@ Semantics notes:
 - `INDEX_OF` returns the first matching index, or `-1` when absent
   (and for non-list inputs). `UNIQUE` keeps first occurrences in order.
 - Counts/lengths are numeric literals or numeric helpers — pass numeric
-  *values* from `TX` variables through the FFI forms if needed.
+  *values* from `TXT` variables through the FFI forms if needed.
 
 #### Advanced List Built-ins (v0.49.16)
 
@@ -792,13 +792,13 @@ Semantics notes:
 
 ### String Operations
 
-Strings are immutable `TX` values; `+` concatenates. Concatenating a
+Strings are immutable `TXT` values; `+` concatenates. Concatenating a
 number into a string works automatically (v0.48.3a): `"x=" + i` emits
 `_cat("x=", _from_long(i))`. Pure-numeric `+` stays plain C arithmetic.
 
 ```
 CREATE x(LON) TO 41.
-CREATE msg(TX) TO "n=" + x.
+CREATE msg(TXT) TO "n=" + x.
 SHOW msg.            # → n=41
 SHOW "len " + LEN(msg).     # → len 3
 ```
@@ -835,7 +835,7 @@ input) returns `""`; `PAD`/`PAD_LEFT` pass the input through unchanged
 when it already meets the target length. Counts and lengths are numeric
 literals or numeric helpers — pass numeric *values* through the
 `strings:` module forms (`strings:REPEAT, s, n`) when the count comes
-from a `TX`-typed variable. The `strings:` forms remain fully supported.
+from a `TXT`-typed variable. The `strings:` forms remain fully supported.
 
 ---
 
@@ -906,7 +906,7 @@ Declare native C functions and call them directly. An external is an
 ```
 ACTION ffi_add(a(LON), b(LON)) -> external.
 ACTION ffi_swap_ref(a(REF LON), b(REF LON)) -> external.
-ACTION ffi_open(mode(LON)) -> Result<LON, TX>.
+ACTION ffi_open(mode(LON)) -> Result<LON, TXT>.
 ```
 
 - **Plain externals** — `ACTION name(args) -> external.` must be backed by
@@ -928,7 +928,7 @@ ACTION ffi_open(mode(LON)) -> Result<LON, TX>.
 Example (from `tests/native/ffi.plant`):
 
 ```
-ACTION ffi_open_mock(mode(LON)) -> Result<LON, TX>.
+ACTION ffi_open_mock(mode(LON)) -> Result<LON, TXT>.
 
 ACTION main(),
   REAP h1 FROM ffi_open_mock, 0.      # "" on failure, errno set
@@ -1311,11 +1311,11 @@ compiles to a C state machine (no threads, no locks) with suspension and
 resume across awaits:
 
 ```
-ASYNC ACTION phase2(tag(TX)),
+ASYNC ACTION phase2(tag(TXT)),
   GIVE "p2-" + tag.
 /GIVE phase2.
 
-ASYNC ACTION worker(tag(TX), n(LON)),
+ASYNC ACTION worker(tag(TXT), n(LON)),
   CREATE i(LON) TO 0.
   CREATE sum(LON) TO 0.
   SEASON i < n,
@@ -1560,7 +1560,7 @@ binding; nesting is unlimited.
 
 ```
 TYPE MyInt = LON.
-TYPE Name = TX.
+TYPE Name = TXT.
 TYPE IntList = LIST[LON].
 TYPE SameList = IntList.      # chains resolve transitively
 
@@ -1576,7 +1576,7 @@ lower to C typedefs and resolve in CREATE/LET type positions.
 
 ```
 SPECIES Person {
-  name: TX
+  name: TXT
   age: LON
 }
 
@@ -1594,10 +1594,10 @@ the existing obj.field selector and .put(...) method.
 
 ```
 SPECIES Person {
-  name: TX
+  name: TXT
   age: LON
 
-  ACTION greet() -> TX {
+  ACTION greet() -> TXT {
     GIVE "Hello, " + self.name + "!".
   }
   ACTION haveBirthday() {
@@ -1621,12 +1621,12 @@ form for field/method access. Method names are global-unique.
 
 ```
 SPECIES Animal {
-  name: TX
-  ACTION speak() -> TX { GIVE self.name + " makes a sound". }
+  name: TXT
+  ACTION speak() -> TXT { GIVE self.name + " makes a sound". }
 }
 SPECIES Dog FROM Animal {
-  breed: TX
-  ACTION fetch() -> TX { GIVE self.name + " fetches!". }
+  breed: TXT
+  ACTION fetch() -> TXT { GIVE self.name + " fetches!". }
 }
 
 BLOOM Dog AS d.
@@ -1641,11 +1641,11 @@ Child fields merge with parent fields at creation time.
 ### Species Inheritance + Methods + SELF (v0.49.29-31)
 
 ```
-SPECIES Animal { name: TX }
+SPECIES Animal { name: TXT }
 SPECIES Dog FROM Animal {
-  breed: TX
+  breed: TXT
 }
-ACTION speak(self(TX)) -> TX {
+ACTION speak(self(TXT)) -> TXT {
   GIVE self.name + " speaks".
 }
 
@@ -1666,12 +1666,12 @@ child's implementation takes precedence:
 
 ```
 SPECIES Animal {
-  name: TX
-  ACTION speak() -> TX { GIVE self.name + " makes a sound". }
+  name: TXT
+  ACTION speak() -> TXT { GIVE self.name + " makes a sound". }
 }
 SPECIES Dog FROM Animal {
-  breed: TX
-  ACTION speak() -> TX { GIVE self.name + " barks!". }
+  breed: TXT
+  ACTION speak() -> TXT { GIVE self.name + " barks!". }
 }
 
 BLOOM Dog AS d.
@@ -1689,8 +1689,8 @@ INTERFACE Speakable {
 }
 
 SPECIES Dog {
-  name: TX
-  ACTION speak() -> TX { GIVE self.name + " barks!". }
+  name: TXT
+  ACTION speak() -> TXT { GIVE self.name + " barks!". }
 }
 
 BLOOM Dog AS d.
@@ -1706,8 +1706,8 @@ the plant_is_a helper which reads the __species metadata tag.
 
 ```
 SPECIES Dog IMPLEMENTS Speakable {
-  name: TX
-  ACTION speak() -> TX {
+  name: TXT
+  ACTION speak() -> TXT {
     GIVE self.name + " barks!".
   }
 }

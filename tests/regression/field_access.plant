@@ -5,7 +5,7 @@
 # semantics). Chained access nests: a.b.c -> _map_get(_map_get(a,
 # "b"), "c").
 ACTION main()
-  CREATE sx(TX) TO "".
+  CREATE sx(TXT) TO "".
   CREATE inner(LIST) TO plant_list_make(4, "name", "root", "count", "7").
   SHOW inner.name.
   SHOW inner.name + "!".

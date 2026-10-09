@@ -8,7 +8,7 @@
 
 tx_t main();
 tx_t plant_id_NUM(long v);
-tx_t plant_id_TX(tx_t v);
+tx_t plant_id_TXT(tx_t v);
 
 
 tx_t main() {
@@ -18,7 +18,7 @@ tx_t main() {
     a = plant_id_NUM(7);
     plant_iReport_print(get_report(), _cat("a=", a));
     plant_iReport_print(get_report(), _cat3("a+", a, "!"));
-    b = plant_id_TX("str");
+    b = plant_id_TXT("str");
     plant_iReport_print(get_report(), _cat("b=", b));
     c = plant_id_NUM(12);
     plant_iReport_print(get_report(), _cat4("c=", c, "+", a));
@@ -27,6 +27,6 @@ tx_t main() {
 tx_t plant_id_NUM(long v) {
     return _from_long(v);
 }
-tx_t plant_id_TX(tx_t v) {
+tx_t plant_id_TXT(tx_t v) {
     return v;
 }

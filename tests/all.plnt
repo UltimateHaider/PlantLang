@@ -12,7 +12,7 @@ PLANT lists.
 1\ CREATE failed(LON) TO 0.
 
 # ── Assert Function ───────────────────────────────────────────
-1\ ACTION assert(label(TX), actual(TX), expected(TX)),
+1\ ACTION assert(label(TXT), actual(TXT), expected(TXT)),
 2\   IF actual IS expected,
 3\     INCREASE passed BY 1.
 3\     SHOW "  ✓ " + label.
@@ -27,13 +27,13 @@ PLANT lists.
 
 1\ CREATE n(LON)  TO 42.
 1\ CREATE s(DBL)  TO 3.14.
-1\ CREATE t(TX)   TO "hello".
+1\ CREATE t(TXT)   TO "hello".
 1\ CREATE f(NUM) TO TRUE.
 1\ CREATE lst(LIST) TO 1, 2, 3.
 
 1\ REAP _ FROM assert, "NUM correct",  n,   42.
 1\ REAP _ FROM assert, "DBL correct",  s,   3.14.
-1\ REAP _ FROM assert, "TX correct",   t,   "hello".
+1\ REAP _ FROM assert, "TXT correct",   t,   "hello".
 1\ REAP _ FROM assert, "NUM correct", f,   TRUE.
 1\ REAP _ FROM assert, "COUNT LIST", COUNT lst, 3.
 
@@ -80,7 +80,7 @@ PLANT lists.
 2\   GIVE 2 ** n.
 1\ /ACTION.
 
-1\ ACTION is_palindrome(text(TX)),
+1\ ACTION is_palindrome(text(TXT)),
 2\   REAP rev FROM strings:REVERSE, text.
 2\   IF text IS rev, GIVE TRUE.
 2\   GIVE FALSE.
@@ -155,7 +155,7 @@ PLANT lists.
 # ═══ 8. strings library ════════════════════════════════════
 1\ SHOW "── strings library ──".
 
-1\ CREATE word(TX) TO "PlantLang".
+1\ CREATE word(TXT) TO "PlantLang".
 
 1\ REAP up   FROM strings:UPPER, word.
 1\ REAP low  FROM strings:LOWER, word.
@@ -222,7 +222,7 @@ PLANT lists.
 # ═══ 11. WEATHER / SHELTER ═══════════════════════════════
 1\ SHOW "── Storms ──".
 
-1\ CREATE storm_caught(TX) TO "no".
+1\ CREATE storm_caught(TXT) TO "no".
 
 1\ WEATHER,
 2\   SHOW ghost_for_test.
@@ -232,7 +232,7 @@ PLANT lists.
 
 1\ REAP _ FROM assert, "MISSING_STORM caught", storm_caught, "yes".
 
-1\ CREATE zero_caught(TX) TO "no".
+1\ CREATE zero_caught(TXT) TO "no".
 1\ WEATHER,
 2\   CREATE bad(LON) TO 5 / 0.
 1\ SHELTER ZERO_STORM,

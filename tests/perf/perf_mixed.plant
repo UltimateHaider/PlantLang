@@ -1,8 +1,8 @@
 # perf_mixed — 10 async workers doing string+number concatenation in
 # async step bodies (mixed concat + async overhead).
-ASYNC ACTION mixed_worker(tag(TX), n(LON)),
+ASYNC ACTION mixed_worker(tag(TXT), n(LON)),
   CREATE i(LON) TO 0.
-  CREATE acc(TX) TO "".
+  CREATE acc(TXT) TO "".
   SEASON i < n,
     SET acc TO acc + "k" + i + ";".
     SET i TO i + 1.

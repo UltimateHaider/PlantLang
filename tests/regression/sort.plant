@@ -11,21 +11,21 @@ ACTION main(),
   PUT "mango" INTO fruits.
   PUT "cherry" INTO fruits.
   SORT fruits.
-  CREATE out1(TX) TO "".
+  CREATE out1(TXT) TO "".
   CYCLE f, i IN fruits,
     SET out1 TO out1 + f + " ".
   /CYCLE.
   SHOW "sort default asc = " + out1.
 
   SORT fruits DESC.
-  CREATE out2(TX) TO "".
+  CREATE out2(TXT) TO "".
   CYCLE f, i IN fruits,
     SET out2 TO out2 + f + " ".
   /CYCLE.
   SHOW "sort explicit desc = " + out2.
 
   SORT fruits ASC.
-  CREATE out3(TX) TO "".
+  CREATE out3(TXT) TO "".
   CYCLE f, i IN fruits,
     SET out3 TO out3 + f + " ".
   /CYCLE.
@@ -39,14 +39,14 @@ ACTION main(),
   PUT "9" INTO nums.
   PUT "2" INTO nums.
   SORT nums.
-  CREATE out4(TX) TO "".
+  CREATE out4(TXT) TO "".
   CYCLE n, i IN nums,
     SET out4 TO out4 + n + " ".
   /CYCLE.
   SHOW "numeric sort asc = " + out4.
 
   SORT nums DESC.
-  CREATE out5(TX) TO "".
+  CREATE out5(TXT) TO "".
   CYCLE n, i IN nums,
     SET out5 TO out5 + n + " ".
   /CYCLE.
@@ -59,7 +59,7 @@ ACTION main(),
   PUT "3" INTO dup.
   PUT "2" INTO dup.
   SORT dup.
-  CREATE out6(TX) TO "".
+  CREATE out6(TXT) TO "".
   CYCLE n, i IN dup,
     SET out6 TO out6 + n + " ".
   /CYCLE.
@@ -68,7 +68,7 @@ ACTION main(),
   CREATE one(LIST) TO plant_list_make(0).
   PUT "solo" INTO one.
   SORT one DESC.
-  CREATE out7(TX) TO "".
+  CREATE out7(TXT) TO "".
   CYCLE n, i IN one,
     SET out7 TO out7 + n + " ".
   /CYCLE.
@@ -90,7 +90,7 @@ ACTION main(),
   PUT p4 INTO people.
 
   SORT people BY name.
-  CREATE out8(TX) TO "".
+  CREATE out8(TXT) TO "".
   CYCLE p, i IN people,
     REAP nm FROM _map_get, p, "name".
     SET out8 TO out8 + nm + " ".
@@ -98,7 +98,7 @@ ACTION main(),
   SHOW "by name asc = " + out8.
 
   SORT people BY age DESC.
-  CREATE out9(TX) TO "".
+  CREATE out9(TXT) TO "".
   CYCLE p, i IN people,
     REAP nm FROM _map_get, p, "name".
     SET out9 TO out9 + nm + " ".
@@ -106,7 +106,7 @@ ACTION main(),
   SHOW "by age desc = " + out9.
 
   SORT people BY dept ASC, age DESC.
-  CREATE out10(TX) TO "".
+  CREATE out10(TXT) TO "".
   CYCLE p, i IN people,
     REAP nm FROM _map_get, p, "name".
     REAP ag FROM _map_get, p, "age".
@@ -115,7 +115,7 @@ ACTION main(),
   SHOW "by dept asc, age desc = " + out10.
 
   SORT people BY dept, age.
-  CREATE out11(TX) TO "".
+  CREATE out11(TXT) TO "".
   CYCLE p, i IN people,
     REAP nm FROM _map_get, p, "name".
     REAP ag FROM _map_get, p, "age".

@@ -3,14 +3,14 @@
 # Fields merge (parent first, child overwrites), methods inherit via
 # bare-name dispatch, and child overrides replace parent impls.
 SPECIES Animal {
-  name: TX
-  ACTION speak() -> TX {
+  name: TXT
+  ACTION speak() -> TXT {
     GIVE self.name + " makes a sound".
   }
 }
 SPECIES Dog FROM Animal {
-  breed: TX
-  ACTION fetch() -> TX {
+  breed: TXT
+  ACTION fetch() -> TXT {
     GIVE self.name + " fetches!".
   }
 }

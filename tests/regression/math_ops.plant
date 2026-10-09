@@ -16,7 +16,7 @@ ACTION main(),
   SHOW "sqrt16=" + SQRT(16).
   SHOW "sqrt_neg=" + SQRT(-1).
   SHOW "pow00=" + POW(0, 0).
-  CREATE rr(TX) TO RANDOM().
+  CREATE rr(TXT) TO RANDOM().
   IF rr >= "0" AND rr < "1",
     SHOW "rand_ok=1".
   /IF.

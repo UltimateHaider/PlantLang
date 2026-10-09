@@ -9,7 +9,7 @@ ACTION ffi_get_ball() -> STRUCT Ball.
 ACTION main(),
   REAP b FROM ffi_get_ball.
   SHOW "ball=" + plant_map_get(b, "color") + ":" + _from_long(plant_map_get(b, "weight")).
-  CREATE f TO [MOVE b](q(TX)) -> "cl=" + plant_map_get(b, "color") + " q=" + q.
+  CREATE f TO [MOVE b](q(TXT)) -> "cl=" + plant_map_get(b, "color") + " q=" + q.
   REAP r FROM f, "z".
   SHOW r.
   GIVE 0.

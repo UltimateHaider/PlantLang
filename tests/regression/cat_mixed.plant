@@ -5,7 +5,7 @@ ACTION main(),
   SHOW "x" + 2.
   SHOW "n=" + n2.
   SHOW "n2=" + n2 + "!".
-  CREATE eb2(TX) TO "z".
+  CREATE eb2(TXT) TO "z".
   SHOW "tag" + eb2.
   GIVE 0.
 /GIVE main.

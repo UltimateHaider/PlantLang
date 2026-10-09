@@ -20,4 +20,4 @@ ENUM TokenType {
 # ── Token struct (doc sketch) ────────────────────────────────
 # v0.48.1: the language keyword is STRUCT; a generic form would be
 # STRUCT TokenData[T] { lexeme: T, line: NUM, col: NUM }.
-STRUCT TokenData { type: LON, lexeme: TX, line: LON, col: LON }
+STRUCT TokenData { type: LON, lexeme: TXT, line: LON, col: LON }

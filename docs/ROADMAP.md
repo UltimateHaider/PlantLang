@@ -150,7 +150,7 @@
 
 #### Slicing (`expr[start:end]`)
 - `SliceExpressionNode` AST class; optional start (default 0) and end (default len)
-- Works on TX strings and LON arrays
+- Works on TXT strings and LON arrays
 - C runtime: `plant_array_slice(arr, start, end)`, `plant_string_slice(str, start, end)`
 
 #### Destructuring
@@ -348,7 +348,7 @@
 | Sub-goal | Approach |
 |---|---|
 | C Runtime (print helpers) | `runtime/c/plant_runtime.{h,c}` — `plnt_print_int(i64)`, `plnt_print_decimal(double)`, `plnt_print_bool(i1)`, `plnt_print_text(i8*)`, `plnt_pow_i64(i64, i64)`. Compiled to `.o` and linked with `gcc`. |
-| LLVM Codegen Infrastructure | `llvm_context.js` (register counter `%1`-based, string pool, declare accumulator, x86-64 triple), `llvm_type_mapper.js` (LON→i64, DBL→double, NUM→i1, TX→i8*), `llvm_symbol_table.js` (variable tracker → alloca). |
+| LLVM Codegen Infrastructure | `llvm_context.js` (register counter `%1`-based, string pool, declare accumulator, x86-64 triple), `llvm_type_mapper.js` (LON→i64, DBL→double, NUM→i1, TXT→i8*), `llvm_symbol_table.js` (variable tracker → alloca). |
 | AST Emitter | `llvm_emitter.js` — dispatches on `ProgramNode`, `LiteralNode` (NUMBER/STRING/NUM/RAW_EXPR), `IdentifierNode`, `CreateStatementNode`, `SetStatementNode`, `ShowStatementNode`. Includes recursive-descent expression parser for RAW_EXPR with full precedence (arithmetic, comparison, logical, parentheses, mixed-type promotion). |
 | Differential Test Harness | `tests/llvm/01_primitives.test.js` — 39 tests: parses PlantLang → generates `.ll` → `llc -O2` → links `plant_runtime.o` → runs binary → compares output against AST interpreter. Validated by `llvm-as`. |
 | Test Count | ~1212+ → **~1251+** across **29 test suites**. All green. |
@@ -564,7 +564,7 @@ This release establishes the foundation for a second compilation pipeline: Plant
 #### Nested Struct Formatting
 - `formatShowValue()` produces indented JSON-like tree for nested struct instances
 - Circular reference protection via `visited` Set
-- Type-prefixed key display: `LON`, `TX`, `LIST`, `MAP`, struct name
+- Type-prefixed key display: `LON`, `TXT`, `LIST`, `MAP`, struct name
 
 #### Memory Allocators
 - `ArenaAllocator` (FAST): bump allocator with child arena cascading reset

@@ -9,12 +9,12 @@
 # default message.
 
 ACTION main()
-  CREATE s1m(TX) TO storm("ZERO_STORM", "divide!").
+  CREATE s1m(TXT) TO storm("ZERO_STORM", "divide!").
   SHOW "made=" + plant_map_to_string(s1m).
   SHOW "col_absent=" + _map_get(s1m, "column").
-  CREATE s2(TX) TO plant_map_to_string(storm("ARG_STORM", "")).
+  CREATE s2(TXT) TO plant_map_to_string(storm("ARG_STORM", "")).
   SHOW "empty_msg=" + s2.
-  CREATE s3(TX) TO plant_map_to_string(storm("", "no type")).
+  CREATE s3(TXT) TO plant_map_to_string(storm("", "no type")).
   SHOW "no_type=" + s3.
   WEATHER,
     THROW storm("ARG_STORM", "bad arg value").

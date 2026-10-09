@@ -324,7 +324,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
     processes shipped v0.48.37c**: SAFE actions run in forked workers
     with a typed wire codec (`'N'/'I'/'S'/'A'/'F'`; `'F'` = memfd +
     SCM_RIGHTS for payloads > 1MB) and generated adapters; numeric
-    SAFE args cross the wire as TX strings (the `< 4096` small-int
+    SAFE args cross the wire as TXT strings (the `< 4096` small-int
     heuristic would otherwise misread large raw literals as pointers)
     and are parsed back via `plant_rw_arg_long`.
 8. **`CONST`/`ROOT` immutables** — shipped v0.48.35 (`CONST`/`ROOT`/`ROOT_SCOPE`).

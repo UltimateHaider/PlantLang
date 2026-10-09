@@ -9,14 +9,14 @@ INTERFACE Named {
   name.
 }
 SPECIES Dog {
-  name: TX
-  ACTION speak() -> TX {
+  name: TXT
+  ACTION speak() -> TXT {
     GIVE self.name + " barks!".
   }
 }
 SPECIES Cat {
-  name: TX
-  ACTION meow() -> TX {
+  name: TXT
+  ACTION meow() -> TXT {
     GIVE self.name + " meows!".
   }
 }

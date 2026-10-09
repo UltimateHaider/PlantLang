@@ -1,14 +1,14 @@
 # v0.49.50 - Combined FROM inheritance + IMPLEMENTS
 # Tests that a species can inherit from a parent AND implement interfaces.
 SPECIES Animal {
-  name: TX
-  ACTION make_sound() -> TX {
+  name: TXT
+  ACTION make_sound() -> TXT {
     GIVE self.name + " makes sound!".
   }
 }
 SPECIES Dog FROM Animal IMPLEMENTS Speakable {
-  breed: TX
-  ACTION speak() -> TX {
+  breed: TXT
+  ACTION speak() -> TXT {
     GIVE self.name + " barks!".
   }
 }

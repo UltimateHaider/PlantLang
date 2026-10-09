@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.51.13
+# Auto-updated: 0.51.14
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.51.13 | 960176 | 8941 | 448 | 109 | 322 | 5361 |
+| v0.51.14 | 960176 | 8941 | 448 | 109 | 322 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -32,6 +32,7 @@
 | v0.51.11 | 2026 | CMP (Complex Number) | Released |
 | v0.51.12 | 2026 | BOL (C99 bool) + C89→C99 | Released |
 | v0.51.13 | 2026 | CHA + TXT (Text Types) | Released |
+| v0.51.14 | 2026 | VOI + TX Removal | Released |
 
 ## Growth Chart (ASCII)
 

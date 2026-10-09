@@ -6,7 +6,7 @@ ACTION main(),
   /IF.
   CREATE k(LON) TO 0.
   REAP k FROM json_kind, j.
-  CREATE ks(TX) TO "".
+  CREATE ks(TXT) TO "".
   REAP ks FROM _from_long, k.
   SHOW "kind=" + ks.
   REAP nm FROM json_get, j, "name".
@@ -18,7 +18,7 @@ ACTION main(),
   REAP nu FROM json_get, j, "nothing".
   CREATE nk(LON) TO 0.
   REAP nk FROM json_kind, nu.
-  CREATE nks(TX) TO "".
+  CREATE nks(TXT) TO "".
   REAP nks FROM _from_long, nk.
   SHOW "nullkind=" + nks.
   REAP miss FROM json_get, j, "nope".
@@ -28,7 +28,7 @@ ACTION main(),
   REAP tags FROM json_get, j, "tags".
   CREATE tl(LON) TO 0.
   REAP tl FROM json_len, tags.
-  CREATE tls(TX) TO "".
+  CREATE tls(TXT) TO "".
   REAP tls FROM _from_long, tl.
   SHOW "tagslen=" + tls.
   REAP t0 FROM json_at, tags, 0.
@@ -44,7 +44,7 @@ ACTION main(),
   REAP ja FROM json_parse, "[1, 2, 3]".
   CREATE jal(LON) TO 0.
   REAP jal FROM json_len, ja.
-  CREATE jals(TX) TO "".
+  CREATE jals(TXT) TO "".
   REAP jals FROM _from_long, jal.
   SHOW "arrlen=" + jals.
   REAP j1 FROM json_at, ja, 1.
@@ -54,7 +54,7 @@ ACTION main(),
   REAP jn FROM json_parse, "42".
   CREATE jnk(LON) TO 0.
   REAP jnk FROM json_kind, jn.
-  CREATE jnks(TX) TO "".
+  CREATE jnks(TXT) TO "".
   REAP jnks FROM _from_long, jnk.
   SHOW "numkind=" + jnks.
   REAP jnv FROM json_val, jn.

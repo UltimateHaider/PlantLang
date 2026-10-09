@@ -4,7 +4,7 @@
 #   default to "" and are read/written via existing obj.field access
 #   and .put(...) method calls.
 SPECIES Person {
-  name: TX
+  name: TXT
   age: LON
 }
 SPECIES Empty { }

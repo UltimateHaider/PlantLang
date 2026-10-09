@@ -369,7 +369,7 @@ CHOICE values are stored as a fixed-size struct:
 ```
 
 - `tag`: variant index (0-based, in declaration order)
-- `payload`: variant's value, stored as i64 (all PlantLang types fit in i64: LON→i64, DBL→bitcast, TX→ptrtoint, NUM→zext)
+- `payload`: variant's value, stored as i64 (all PlantLang types fit in i64: LON→i64, DBL→bitcast, TXT→ptrtoint, NUM→zext)
 
 ### 5.2 Variant Construction
 
@@ -464,7 +464,7 @@ Each operation emits LLVM IR directly to `Module.body`. String concatenation use
 All function return values pass through `i64`:
 - `LON`: direct (i64 → i64)
 - `DBL`: `bitcast double %val to i64`
-- `TX`: `ptrtoint i8* %val to i64`
+- `TXT`: `ptrtoint i8* %val to i64`
 - `NUM`: `zext i1 %val to i64`
 
 Caller reverses via the target variable's declared type.
@@ -475,14 +475,14 @@ Caller reverses via the target variable's declared type.
 
 ### 7.1 Data Layout
 
-MAPs are stored as `%fat_ptr` structs: `{ i8* buckets, i64 len, i64 cap }` — same layout as arrays and TX fat pointers.
+MAPs are stored as `%fat_ptr` structs: `{ i8* buckets, i64 len, i64 cap }` — same layout as arrays and TXT fat pointers.
 
 Each bucket is a padded struct:
 ```
 { i1 is_occupied, key_type, value_type }
 ```
 
-For `MAP[LON,TX]` this is `{ i1, i64, %fat_ptr }` with ABI alignment:
+For `MAP[LON,TXT]` this is `{ i1, i64, %fat_ptr }` with ABI alignment:
 - Offset 0: i1 (1 byte) + 7 bytes padding
 - Offset 8: i64 key (8 bytes)
 - Offset 16: %fat_ptr value (24 bytes)
@@ -495,7 +495,7 @@ The bucket size is computed by `mapBucketSize()` which accounts for natural alig
 | Key Type | Hash | Implementation |
 |---|---|---|
 | `LON` | Identity | Key value used directly (modulo capacity) |
-| `TX` | djb2 | Inline LLVM IR loop: `hash = hash * 33 + byte[i]` over string bytes |
+| `TXT` | djb2 | Inline LLVM IR loop: `hash = hash * 33 + byte[i]` over string bytes |
 
 ### 7.3 Linear Probing
 
@@ -519,7 +519,7 @@ When `len >= cap * 3 / 4` during a put:
 | Function | Purpose |
 |---|---|
 | `genCreateMap(node)` | Allocate 8-bucket array, zero-init, build `%fat_ptr`, store and scope-register |
-| `emitTxHash(fpReg, node)` | Emit djb2 hash loop over TX buffer → `i64` |
+| `emitTxHash(fpReg, node)` | Emit djb2 hash loop over TXT buffer → `i64` |
 | `genMapPut(node, mapType, mapPtr, key, value)` | Check load factor, grow if needed, probe, insert/overwrite |
 | `emitMapGrow(...)` | Allocate 2× array, rehash all entries, update map pointer |
 | `genMapHas(node, mapType, mapReg, key)` | Probe loop, return `icmp ne i64 result, 0` as `NUM` |
@@ -648,8 +648,8 @@ The expression itself handles `sret` allocation internally (e.g., `StringOpNode`
 
 | Expression | Return Type | LLVM Path |
 |---|---|---|
-| `SPLIT(str, delim)` | `[TX]` | `%fat_ptr` via `plnt_str_split` sret call |
-| `JOIN(arr, delim)` | `TX` | `%fat_ptr` via `plnt_str_join` sret call |
+| `SPLIT(str, delim)` | `[TXT]` | `%fat_ptr` via `plnt_str_split` sret call |
+| `JOIN(arr, delim)` | `TXT` | `%fat_ptr` via `plnt_str_join` sret call |
 | `COUNT(arr)` | `LON` | `extractvalue` on `%fat_ptr` length field |
 | `arr[index]` | Element type | GEP + load on array pointer |
 | `SORT(arr)` | `LON` (statement) | `plnt_sort_i64` / `plnt_sort_double` call |
@@ -711,7 +711,7 @@ This means depth tracking, type checking, and code generation operate on a flat,
 FFI functions are declared with `-> external` syntax:
 
 ```plantlang
-ACTION plant_printf(fmt(TX)) -> external.
+ACTION plant_printf(fmt(TXT)) -> external.
 ```
 
 **Parser**: Sets `isExternal = true` on the `ActionDeclaration` node. No body is parsed.
@@ -724,7 +724,7 @@ ACTION plant_printf(fmt(TX)) -> external.
 declare i64 @plant_printf(i64)
 ```
 
-The function name is mangled from the PlantLang identifier. Parameters use the standard type coercion (TX → i64 via ptrtoint, LON → i64, DBL → i64 via bitcast).
+The function name is mangled from the PlantLang identifier. Parameters use the standard type coercion (TXT → i64 via ptrtoint, LON → i64, DBL → i64 via bitcast).
 
 **Interpreter**: FFI stubs are pre-registered in the interpreter's runtime. Each stub wraps the corresponding `runtime_bridge.c` function via a JS implementation. When the interpreter encounters a call to an external ACTION, it dispatches to the registered stub instead of looking for a body.
 
@@ -796,7 +796,7 @@ The C bridge implements 10 FFI targets that compiled PlantLang programs link aga
 | `plant_replace` | `int64_t plant_replace(int64_t s, int64_t old, int64_t new)` | String replace |
 | `plant_concat` | `int64_t plant_concat(int64_t a, int64_t b)` | String concatenation via `strcat` |
 
-All functions receive and return `int64_t` (TX pointers as `int64_t` via ptrtoint/inttoptr). String operations use `malloc`/`strdup` for heap-allocated results.
+All functions receive and return `int64_t` (TXT pointers as `int64_t` via ptrtoint/inttoptr). String operations use `malloc`/`strdup` for heap-allocated results.
 
 ---
 
@@ -1471,7 +1471,7 @@ SmartExecutionRouter (extends EventEmitter)
 │   └── GPU_ACCELERATED: isMatrixOrVectorOp() AND payloadSize ≥ gpuMinBytes AND GPU pipeline registered
 ├── route(action, payload) → async dispatch to selected target
 ├── Decision Metrics:
-│   ├── estimatePayloadSize(payload) — LON=8B, TX=length, Array=N×element
+│   ├── estimatePayloadSize(payload) — LON=8B, TXT=length, Array=N×element
 │   ├── isMatrixOrVectorOp(action) — keyword match (mat, vec, tensor, fft, ...)
 │   ├── measureLatency(nodeId) — cached multi-tap measurement (5s TTL)
 │   └── updateLocalCpuLoad(load) — from telemetry
@@ -2026,7 +2026,7 @@ Three modules under `src/codegen/llvm/`:
   | LON / INT | `i64` |
   | DBL / DECIMAL | `double` |
   | NUM / BOOL | `i1` |
-  | TX / TEXT | `i8*` |
+  | TXT / TEXT | `i8*` |
 
 - `getPrintFunction(llvmType)` — returns the matching `declare`/`call` signature
 - `llvmTypeOf(value, literalType)` — infers LLVM type from LiteralNode payload
@@ -2115,7 +2115,7 @@ Where the interpreter falls back to the legacy regex path for compound RAW_EXPR 
 
 39 tests across 7 categories:
 - Literal SHOW (integer, decimal, boolean, string)
-- Variable CREATE + SHOW (LON, DBL, NUM, TX)
+- Variable CREATE + SHOW (LON, DBL, NUM, TXT)
 - SET reassignment
 - Arithmetic expressions (precedence, parentheses, mixed-type)
 - Comparison operators (IS, IS NOT, GT, LT, GTE, LTE)
@@ -2689,7 +2689,7 @@ ENUM Color { RED, GREEN, BLUE }
 
 ```plantlang
 TYPE MyNum = LON.
-TYPE MyText = TX.
+TYPE MyText = TXT.
 ```
 
 - `TypeAliasDeclarationNode` stores `{ alias: string, target: string }`
@@ -2701,7 +2701,7 @@ TYPE MyText = TX.
 
 ```plantlang
 CONST pi(LON) TO 314.
-CONST greeting(TX) TO "Hello".
+CONST greeting(TXT) TO "Hello".
 ```
 
 - `ConstDeclarationNode` stores `{ name, type, value }`
@@ -3033,7 +3033,7 @@ typedef struct PlantSet {
 ```
 
 - **Hashing**: splitmix64 over the raw value bits (`(uintptr_t)val`), so any
-  Chloroplast value works — LON (long bits), TX (pointer), MAP/LIST
+  Chloroplast value works — LON (long bits), TXT (pointer), MAP/LIST
   (PlantArray* pointer). Uniqueness is identity-based: equal bits = same
   element. Value `0`/NULL is reserved as nil and not storable.
 - **Probing**: linear probing with `idx = (idx + 1) & (cap - 1)`; load factor
@@ -3102,7 +3102,7 @@ pre-pass over the program body building a signature table (`sigs`) for every
 through `generate_node`/`generate_body` into `reap_stmt` codegen. There, each
 argument is checked with `is_ref_at`; REF positions emit `&var` instead of
 `var`. The C type mapping (`plant_ctype`) is: `REF LON` → `long*`,
-`REF NUM` → `int*`, `REF LIST` → `PlantArray**`, `REF TX` → `tx_t*`.
+`REF NUM` → `int*`, `REF LIST` → `PlantArray**`, `REF TXT` → `tx_t*`.
 
 Because the compiler is single-pass with no runtime symbol table, the
 signature pre-pass is what makes call-site rewriting possible at all —
@@ -3153,7 +3153,7 @@ only design-convention string allocations remain at exit.
 ### 30.5 Test Coverage
 
 `tests/native/ffi.plant` exercises: plain calls, REF swap through pointers
-(verified via arithmetic on the swapped variables), `Result<LON,TX>` failure
+(verified via arithmetic on the swapped variables), `Result<LON,TXT>` failure
 (ENOENT) and success (errno cleared), `Result`-style parse failure (EINVAL),
 `ffi_free` on a `ffi_make_buf` allocation and NULL rejection. The mock library
 `mock_ffi.c`/`mock_ffi.h` is force-included (`-include`) and linked into every
@@ -3182,7 +3182,7 @@ REAP r FROM process_list[LON], 5, xs.   # call-site type arguments
 - Type-parameter lists `[T, U]` follow the action name (square brackets;
   `[`/`]` already lex as `LBRACKET`/`RBRACKET`).
 - Parameter types may be generic names (`T`), containers (`LIST[T]`),
-  references (`REF T`, `REF LIST[T]`) or concrete types (`LON`, `TX`…).
+  references (`REF T`, `REF LIST[T]`) or concrete types (`LON`, `TXT`…).
   The parser collects the full type text until the closing `)` at
   bracket/paren depth 0 (`collect_type_text`), replacing the old
   single-token + `REF`-special-case reading.
@@ -3193,7 +3193,7 @@ REAP r FROM process_list[LON], 5, xs.   # call-site type arguments
   ```plant
   STRUCT Box[T] { val: T }
   STRUCT Pair[T, U] { first: T, second: U }
-  STRUCT Wrap[T] { box: Box[T], tag: TX }   # nested generic struct
+  STRUCT Wrap[T] { box: Box[T], tag: TXT }   # nested generic struct
 
   ACTION ffi_box_write(b(Box[LON]), v(LON)) -> external.
   ```
@@ -3238,8 +3238,8 @@ concrete type arguments:
 | Source | Instantiation | Generated C |
 |---|---|---|
 | `ACTION compute[T](...)` | `compute[LON]` | `tx_t plant_compute_NUM(...)` |
-| `ACTION compute[T](...)` | `compute[TX]` | `tx_t plant_compute_TX(...)` |
-| `ACTION firstof[T, U](...)` | `firstof[TX, TX]` | `tx_t plant_firstof_TX_TX(...)` |
+| `ACTION compute[T](...)` | `compute[TXT]` | `tx_t plant_compute_TX(...)` |
+| `ACTION firstof[T, U](...)` | `firstof[TXT, TXT]` | `tx_t plant_firstof_TX_TX(...)` |
 
 The `plant_` prefix is reserved for the runtime/compiler and the type suffix
 guarantees uniqueness per concrete argument tuple; the instantiation cache
@@ -3248,7 +3248,7 @@ and definition), so repeated and nested calls compile to a single C function.
 
 ### 31.4 Type Substitution
 
-`subst` is a flat key/value list (`[T, LON, U, TX, …]`). `subst_type` splits
+`subst` is a flat key/value list (`[T, LON, U, TXT, …]`). `subst_type` splits
 type strings on space/`( ) [ ] ,` boundaries and replaces whole tokens that
 match a generic name — `LIST[T]` → `LIST[LON]`, `REF T` → `REF LON`. The C
 type mapping (`plant_ctype`) strips bracketed suffixes via `type_base`
@@ -3272,7 +3272,7 @@ discovery and before decl emission:
 2. **Field recursion** — for each candidate struct type
    (`find_struct` on the base name after stripping `REF `), type arguments
    are extracted and substituted (`build_subst`), and the template's own
-   fields are scanned recursively — so `Wrap[T] { box: Box[T], tag: TX }`
+   fields are scanned recursively — so `Wrap[T] { box: Box[T], tag: TXT }`
    reached via `Wrap[LON]` pulls in `Box[LON]`. The **instantiation cache**
    is keyed by the fully substituted type string (`Box [ LON ]`), so
    `ffi_box_write(b(Box[LON]), …)` and `Wrap[LON]`'s field share one
@@ -3404,7 +3404,7 @@ tx_t plant_Closure_N_fn(tx_t env, <argtypes>) {         /* definition */
 
 `tests/closures/` (6 cases, wired into `make test`): `move` (MOVE capture +
 state persistence + outer clearing), `ref` (REF live tracking), `mix`
-(multi-capture LON/REF/TX + string concat body), `nested` (closure defined
+(multi-capture LON/REF/TXT + string concat body), `nested` (closure defined
 inside a closure block body), `block` (block-form body with multiple
 statements), `invoke` (invocation from SEASON/IF bodies). `.grep` files
 check the emitted C structurally (`typedef struct { long cap; } plant_Env_…;`,
@@ -3422,11 +3422,11 @@ a `plant_async_drain()` loop steps tasks to completion.
 `ASYNC ACTION name(params)` produces three C artifacts:
 
 ```plant
-ASYNC ACTION phase2(tag(TX)),
+ASYNC ACTION phase2(tag(TXT)),
   GIVE "p2-" + tag.
 /ACTION.
 
-ASYNC ACTION worker(tag(TX), n(LON)),
+ASYNC ACTION worker(tag(TXT), n(LON)),
   CREATE i(LON) TO 0.
   CREATE sum(LON) TO 0.
   SEASON i < n,
