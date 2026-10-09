@@ -1,0 +1,9 @@
+SUITE "BOL Logic Integration"
+  CREATE T (BOL) TO 1.
+  CREATE F (BOL) TO 0.
+
+  SHOW T.
+  SHOW F.
+
+  SHOW "bol-logic-ok".
+/SUITE.

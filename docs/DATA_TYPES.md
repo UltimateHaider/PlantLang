@@ -19,6 +19,7 @@ PlantLang uses a **single opaque pointer** (`tx_t = void*`) as the universal run
 | `FLT` | `float` | 4 bytes (32-bit) | ±3.4e38 | `0` | Single-precision float (v0.51.10) |
 | `DCM` | `long double` | 8+ bytes | implementation-defined | `0` | Extended-precision float (v0.51.10; see TD-024) |
 | `CMP` | `PlantComplex` | 16 bytes (2×double) | N/A | `0+0i` | Complex number (v0.51.11) |
+| `BOL` | `bool` | 1 byte | 0 / 1 | `0` | Boolean, C99 (v0.51.12) |
 | `NUM` | `int` | 4 bytes (32-bit) | -(2^31) to 2^31-1 | `0` | Signed 32-bit integer (v0.51.9) |
 | `UNU` | `unsigned int` | 4 bytes (32-bit) | 0 to 4,294,967,295 | `0` | Unsigned 32-bit integer (v0.51.9) |
 | `TX` | `tx_t` (void*) | 8 bytes (pointer) | N/A | `""` (empty string) | Text/string; default type when unspecified |
@@ -808,6 +809,40 @@ Arithmetic `+ - * /` is supported when the target type is CMP
 - Quantum mechanics (wave functions)
 - Quadratic equations with complex roots
 - Electrical engineering (impedance)
+
+---
+
+## BOL (Boolean) — v0.51.12
+
+| Property | Value |
+|----------|-------|
+| Size | 1 byte (C99 bool) |
+| C type | bool (from <stdbool.h>) |
+| Values | 0 (false), 1 (true) |
+| Parity | C# bool / Rust bool / ML bool |
+| Category | scalar (logical, not numeric) |
+
+### Syntax
+
+```plant
+CREATE T (BOL) TO 1.   # true
+CREATE F (BOL) TO 0.   # false
+SHOW T.   # 1
+SHOW F.   # 0
+```
+
+### C99 Note
+
+v0.51.12 transitions generated C from C89 to C99 to support true `bool`.
+This is a documented, project-wide change (`#include <stdbool.h>` is
+emitted in every generated C preamble).
+
+### Use Cases
+
+- Logic and conditionals.
+- Flags (on/off).
+
+**Note:** BOL is LOGICAL. Arithmetic with BOL is not supported.
 
 ---
 

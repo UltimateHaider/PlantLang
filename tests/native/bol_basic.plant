@@ -1,0 +1,9 @@
+SUITE "BOL Basic (C99 bool)"
+  CREATE T (BOL) TO 1.
+  CREATE F (BOL) TO 0.
+
+  SHOW T.
+  SHOW F.
+
+  SHOW "bol-basic-ok".
+/SUITE.

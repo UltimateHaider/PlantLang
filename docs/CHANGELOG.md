@@ -1,3 +1,39 @@
+## v0.51.12 — BOL (C99 bool) + C89→C99 Transition
+
+### Added
+- BOL type: true C99 bool (1 byte).
+- C: bool (from <stdbool.h>).
+- 2 new tests: bol_basic, bol_logic.
+
+### Changed (BREAKING — project-wide)
+- Generated C now uses C99 (was C89).
+- <stdbool.h> added to every generated C preamble.
+- Rationale: true bool support requires C99.
+- Bootstrap: regular (seed passes "bool"/"<stdbool.h>" through).
+
+### Type Set (after v0.51.12 — v0.51.x COMPLETE)
+| Category | Types |
+|----------|-------|
+| Integer | BYT, UBT, SHR, USH, NUM, UNU, LON, ULO |
+| Float | FLT, DBL, DCM |
+| Complex | CMP |
+| Boolean | BOL |
+| Other | CHAR, BYTES |
+| Total | 15 scalar types |
+
+### Verified
+- Native: 102/102 (was 100)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged
+- valgrind strict: PASS
+- Binary: 956040 bytes.
+
+### Out of Scope (v0.52.0)
+- TD-022, TD-024, TD-025.
+- Parser-level validation.
+- Type inference.
+
 ## v0.51.11 — CMP (Complex Number)
 
 ### Added

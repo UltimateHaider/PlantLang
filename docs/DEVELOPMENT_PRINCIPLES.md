@@ -183,8 +183,8 @@ All verify-* targets must include valgrind-check-tensor.
     - Syntax: GLOBAL name TO value. / GLOBAL name (TYPE) TO value.
     - Visibility: all ACTIONs.
     - Lifecycle: persistent (no auto-cleanup).
-    - Storage: C `static` at file scope (C89-compatible:
-      declaration without init + main-position assignment).
+    - Storage: C `static` at file scope (declaration without init +
+      main-position assignment).
     - Partially resolves TD-015.
 
 ### RRR. GLOBAL scope (v0.51.3a)
@@ -267,7 +267,7 @@ All verify-* targets must include valgrind-check-tensor.
     - NULL/TRUE/FALSE excluded (compared by value, not string identity).
     - Behavior is consistent across scopes (top-level, ACTION, IF,
       CYCLE).
-    - C89-compatible generated C.
+    - C99-compatible generated C (C89 → C99 in v0.51.12).
 
 ### BBB. `IS` consistency (v0.51.5)
 
@@ -276,3 +276,13 @@ All verify-* targets must include valgrind-check-tensor.
     - Regression tests guard against future breakage:
       is_variables_string, is_variables_num, is_in_action,
       is_dynamic_string.
+
+### CCC. Generated C is C99 (v0.51.12)
+
+    - Generated C transitions from C89 to C99.
+    - `#include <stdbool.h>` is emitted in every generated C preamble.
+    - Rationale: true `bool` (BOL) support requires C99.
+    - The compiler source itself remains plain C (no C99-only
+      constructs); only the emitted preamble/type set changed.
+    - The bootstrap seed passes "bool" and "<stdbool.h>" through as
+      opaque strings, so no 2-stage seed upgrade is required.
