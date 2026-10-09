@@ -5,7 +5,7 @@
 # numeric strings numerically. Edge cases: empty list, single element,
 # duplicates, multi-field tie-breaking.
 ACTION main(),
-  CREATE fruits(LIST) TO plant_list_make(0).
+  CREATE fruits(LST) TO plant_list_make(0).
   PUT "banana" INTO fruits.
   PUT "apple" INTO fruits.
   PUT "mango" INTO fruits.
@@ -31,7 +31,7 @@ ACTION main(),
   /CYCLE.
   SHOW "sort explicit asc = " + out3.
 
-  CREATE nums(LIST) TO plant_list_make(0).
+  CREATE nums(LST) TO plant_list_make(0).
   PUT "5" INTO nums.
   PUT "3" INTO nums.
   PUT "8" INTO nums.
@@ -52,7 +52,7 @@ ACTION main(),
   /CYCLE.
   SHOW "numeric sort desc = " + out5.
 
-  CREATE dup(LIST) TO plant_list_make(0).
+  CREATE dup(LST) TO plant_list_make(0).
   PUT "3" INTO dup.
   PUT "3" INTO dup.
   PUT "1" INTO dup.
@@ -65,7 +65,7 @@ ACTION main(),
   /CYCLE.
   SHOW "duplicates = " + out6.
 
-  CREATE one(LIST) TO plant_list_make(0).
+  CREATE one(LST) TO plant_list_make(0).
   PUT "solo" INTO one.
   SORT one DESC.
   CREATE out7(TXT) TO "".
@@ -74,7 +74,7 @@ ACTION main(),
   /CYCLE.
   SHOW "single element = " + out7.
 
-  CREATE empty(LIST) TO plant_list_make(0).
+  CREATE empty(LST) TO plant_list_make(0).
   SORT empty.
   SORT empty DESC.
   SHOW "empty list sorted = ok".
@@ -83,7 +83,7 @@ ACTION main(),
   REAP p2 FROM plant_list_make, 6, "name", "beta", "dept", "eng", "age", "30".
   REAP p3 FROM plant_list_make, 6, "name", "gamma", "dept", "ops", "age", "20".
   REAP p4 FROM plant_list_make, 6, "name", "delta", "dept", "ops", "age", "5".
-  CREATE people(LIST) TO plant_list_make(0).
+  CREATE people(LST) TO plant_list_make(0).
   PUT p1 INTO people.
   PUT p2 INTO people.
   PUT p3 INTO people.

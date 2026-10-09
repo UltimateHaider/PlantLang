@@ -1,0 +1,7 @@
+SUITE "LST Typed (LST[NUM])"
+  CREATE L (LST[NUM]) TO [10, 20, 30].
+
+  SHOW COUNT(L).
+
+  SHOW "lst-typed-ok".
+/SUITE.

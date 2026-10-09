@@ -4,11 +4,11 @@
 # collapsed (last value wins). Length mismatches ignore the excess
 # of the longer list; empty/NULL inputs yield an empty result.
 ACTION main(),
-  CREATE keys(LIST) TO plant_list_make(0).
+  CREATE keys(LST) TO plant_list_make(0).
   PUT "a" INTO keys.
   PUT "b" INTO keys.
   PUT "c" INTO keys.
-  CREATE vals(LIST) TO plant_list_make(0).
+  CREATE vals(LST) TO plant_list_make(0).
   PUT "1" INTO vals.
   PUT "2" INTO vals.
   PUT "3" INTO vals.
@@ -23,7 +23,7 @@ ACTION main(),
   SHOW "braid c = " + vc.
   SHOW "braid missing d = " + vd.
 
-  CREATE shortVals(LIST) TO plant_list_make(0).
+  CREATE shortVals(LST) TO plant_list_make(0).
   PUT "1" INTO shortVals.
   PUT "2" INTO shortVals.
   BRAID keys WITH shortVals AS pairs2.
@@ -34,7 +34,7 @@ ACTION main(),
   SHOW "shorter values b = " + sb.
   SHOW "shorter values c (excess key ignored) = " + sc.
 
-  CREATE shortKeys(LIST) TO plant_list_make(0).
+  CREATE shortKeys(LST) TO plant_list_make(0).
   PUT "x" INTO shortKeys.
   PUT "y" INTO shortKeys.
   BRAID shortKeys WITH vals AS pairs3.
@@ -53,11 +53,11 @@ ACTION main(),
   SHOW "map braid b = " + mb.
   SHOW "map braid c (absent, excess key dropped) = " + mc.
 
-  CREATE dk(LIST) TO plant_list_make(0).
+  CREATE dk(LST) TO plant_list_make(0).
   PUT "p" INTO dk.
   PUT "q" INTO dk.
   PUT "p" INTO dk.
-  CREATE dv(LIST) TO plant_list_make(0).
+  CREATE dv(LST) TO plant_list_make(0).
   PUT "1" INTO dv.
   PUT "2" INTO dv.
   PUT "9" INTO dv.
@@ -67,7 +67,7 @@ ACTION main(),
   SHOW "dup key p (last wins) = " + dp.
   SHOW "dup key q = " + dq.
 
-  CREATE empty(LIST) TO plant_list_make(0).
+  CREATE empty(LST) TO plant_list_make(0).
   BRAID empty WITH vals AS pe.
   REAP e1 FROM _map_get, pe, "a".
   SHOW "empty braid = done " + e1.

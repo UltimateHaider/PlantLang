@@ -3,12 +3,12 @@
 #  the self-hosting PlantLang compiler.
 #
 #  AST nodes are represented as MAP values with a "type" key.
-#  Children are stored in LIST values.
+#  Children are stored in LST values.
 # ═══════════════════════════════════════════════════════════════
 
 # ── Factory: make_node(type, value, children) ──────────────
 # Creates a generic AST node.
-ACTION make_node(ty(TXT), val(TXT), kids(LIST)),
+ACTION make_node(ty(TXT), val(TXT), kids(LST)),
   GIVE plant_list_make(6, "type", ty, "value", val, "children", kids).
 /ACTION.
 

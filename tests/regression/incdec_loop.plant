@@ -12,7 +12,7 @@ ACTION main(),
   /CYCLE.
   SHOW "down=" + down.
   CREATE j(LON) TO 0.
-  CREATE items(LIST) TO plant_list_make(0).
+  CREATE items(LST) TO plant_list_make(0).
   PUT "a" INTO items.
   PUT "b" INTO items.
   PUT "c" INTO items.

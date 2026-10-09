@@ -3,7 +3,7 @@
 # collection when the target is NULL/uninitialized, and integrates
 # with TAKE for duplicate handling (removal only hits the first).
 ACTION main(),
-  CREATE items(LIST) TO plant_list_make(0).
+  CREATE items(LST) TO plant_list_make(0).
   PUT "a" INTO items.
   PUT "b" INTO items.
   PUT "c" INTO items.
@@ -13,7 +13,7 @@ ACTION main(),
   /CYCLE.
   SHOW "append to existing = " + out1.
 
-  CREATE fresh(LIST) TO NULL.
+  CREATE fresh(LST) TO NULL.
   PUT "first" INTO fresh.
   PUT "second" INTO fresh.
   CREATE out2(TXT) TO "".

@@ -4,7 +4,7 @@
 # collections, and NULL targets are safe no-ops that leave the list
 # untouched.
 ACTION main(),
-  CREATE fruits(LIST) TO plant_list_make(0).
+  CREATE fruits(LST) TO plant_list_make(0).
   PUT "banana" INTO fruits.
   PUT "apple" INTO fruits.
   PUT "mango" INTO fruits.
@@ -23,15 +23,15 @@ ACTION main(),
   /CYCLE.
   SHOW "take missing value = " + out2.
 
-  CREATE empty(LIST) TO plant_list_make(0).
+  CREATE empty(LST) TO plant_list_make(0).
   TAKE "x" FROM empty.
   SHOW "take from empty = ok " + _from_long(COUNT empty).
 
-  CREATE nils(LIST) TO NULL.
+  CREATE nils(LST) TO NULL.
   TAKE "a" FROM nils.
   SHOW "take from null = ok".
 
-  CREATE dup(LIST) TO plant_list_make(0).
+  CREATE dup(LST) TO plant_list_make(0).
   PUT "1" INTO dup.
   PUT "2" INTO dup.
   PUT "1" INTO dup.

@@ -19,7 +19,7 @@ ALL allocations in new files MUST use `plant_malloc()` (from v0.51.0b), NEVER ra
 | v0.51.7 | 11D |
 
 ### C. Parser Regression with 4-Level Nesting
-Every release MUST test 4-level nesting: TENSOR → LIST → MATRIX → expression.
+Every release MUST test 4-level nesting: TENSOR → LST → MATRIX → expression.
 
 ### D. ref_count + Chained deep_copy (5 Levels)
 Every release MUST test ref_count and deep_copy at 5 levels.

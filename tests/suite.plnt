@@ -80,8 +80,8 @@ SUITE "Variables & Types",
   1\ CREATE pi(DBL)  TO 3.14.
   1\ CREATE msg(TXT)  TO "hello".
   1\ CREATE ok(NUM) TO TRUE.
-  1\ CREATE empty_list(LIST) TO.
-  1\ CREATE scores(LIST) TO 85, 92, 78, 96.
+  1\ CREATE empty_list(LST) TO.
+  1\ CREATE scores(LST) TO 85, 92, 78, 96.
 
   VERIFY "NUM creation",
     n IS 42.
@@ -101,13 +101,13 @@ SUITE "Variables & Types",
   VERIFY "TYPE of TXT",
     TYPE msg IS TXT.
 
-  VERIFY "TYPE of LIST",
-    TYPE scores IS LIST.
+  VERIFY "TYPE of LST",
+    TYPE scores IS LST.
 
   VERIFY "COUNT of scores",
     COUNT scores IS 4.
 
-  VERIFY "empty LIST has 0 items",
+  VERIFY "empty LST has 0 items",
     COUNT empty_list IS 0.
 
 SUITE/.
@@ -182,7 +182,7 @@ SUITE/.
 # ═══════════════════════════════════════════════════════════
 SUITE "Lists",
 
-  1\ CREATE fruits(LIST) TO apple, banana, mango.
+  1\ CREATE fruits(LST) TO apple, banana, mango.
   1\ PUT kiwi INTO fruits.
   1\ TAKE apple FROM fruits.
   1\ SORT fruits.
@@ -196,7 +196,7 @@ SUITE "Lists",
   VERIFY "SORT works",
     LAST fruits IS "mango".
 
-  1\ CREATE nums(LIST) TO 5, 3, 8, 1, 9, 2.
+  1\ CREATE nums(LST) TO 5, 3, 8, 1, 9, 2.
 
   VERIFY "SUM list",
     SUM nums IS 28.
@@ -333,7 +333,7 @@ SUITE "NOW & TYPEOF",
     TYPE ts IS NUM.
 
   VERIFY "TYPEOF list",
-    TYPE scores IS LIST.
+    TYPE scores IS LST.
 
   VERIFY "NOW STAMP is positive",
     ts GREATER THAN 0.
@@ -345,26 +345,26 @@ SUITE/.
 
 SUITE "BRAID",
 
-  1\ CREATE b_names(LIST) TO Alice, Bob, Charlie.
-  1\ CREATE b_scores(LIST) TO 95, 87, 72.
+  1\ CREATE b_names(LST) TO Alice, Bob, Charlie.
+  1\ CREATE b_scores(LST) TO 95, 87, 72.
 
   1\ BRAID b_names WITH b_scores AS b_pairs.
 
-  VERIFY "BRAID produces LIST",    TYPE b_pairs IS LIST.
+  VERIFY "BRAID produces LST",    TYPE b_pairs IS LST.
   VERIFY "BRAID length matches",   COUNT b_pairs IS 3.
 
   VERIFY "BRAID MAP mode",         FROM lists:AVERAGE, b_scores GIVES 84.67.
 
-  1\ CREATE b_keys(LIST) TO host, port.
-  1\ CREATE b_vals(LIST) TO localhost, 8080.
+  1\ CREATE b_keys(LST) TO host, port.
+  1\ CREATE b_vals(LST) TO localhost, 8080.
   1\ BRAID b_keys WITH b_vals AS b_cfg MAP.
 
   VERIFY "BRAID MAP creates MAP",  TYPE b_cfg IS MAP.
   VERIFY "BRAID MAP key access",   b_cfg:"host" IS "localhost".
   VERIFY "BRAID MAP port",         b_cfg:"port" IS 8080.
 
-  1\ CREATE b_short(LIST) TO x, y.
-  1\ CREATE b_long(LIST) TO 1, 2, 3, 4.
+  1\ CREATE b_short(LST) TO x, y.
+  1\ CREATE b_long(LST) TO 1, 2, 3, 4.
   1\ BRAID b_short WITH b_long AS b_zip.
   VERIFY "BRAID truncates to shorter list",  COUNT b_zip IS 2.
 

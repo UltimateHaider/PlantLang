@@ -5,7 +5,7 @@
 # elements are filtered; defaults per spec: variance/stddev/min/max/
 # range -> "0", product -> "1", mode -> "".
 ACTION main(),
-  CREATE nums(LIST) TO [1, 2, 3, 4].
+  CREATE nums(LST) TO [1, 2, 3, 4].
   SHOW "== variance/stddev/product ==".
   SHOW VARIANCE(nums).
   SHOW STDDEV(nums).
@@ -33,7 +33,7 @@ ACTION main(),
   REAP md FROM MODE(nums).
   SHOW md.
   SHOW "== edges ==".
-  CREATE empty(LIST) TO [].
+  CREATE empty(LST) TO [].
   SHOW VARIANCE(empty).
   SHOW STDDEV(empty).
   SHOW PRODUCT(empty).
@@ -43,7 +43,7 @@ ACTION main(),
   SHOW "[" + MODE(empty) + "]".
   SHOW "[" + JOIN(MODE([1, 1]), "") + "]".
   SHOW "== type coercion ==".
-  CREATE mixed(LIST) TO ["2", "x", "4", "b"].
+  CREATE mixed(LST) TO ["2", "x", "4", "b"].
   SHOW PRODUCT(mixed).
   SHOW MIN(mixed).
   SHOW MAX(mixed).

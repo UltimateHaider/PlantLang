@@ -77,11 +77,11 @@ LOOP i FROM 1 TO 100:
 ```
 Result: Only 1 tensor exists at exit (not 100). The compiler reuses the variable slot. **Leaks do NOT accumulate.**
 
-### LIST OF TENSOR warning (non-mitigating)
+### LST OF TENSOR warning (non-mitigating)
 
 Lists of tensors WILL accumulate leaks:
 ```plantlang
-CREATE L TO LIST OF TENSOR(...).
+CREATE L TO LST OF TENSOR(...).
 ```
 Each new tensor in the list leaks ~240 bytes. This is a known risk for future ML workloads. Fix requires codegen cleanup (TD-002, now closed).
 

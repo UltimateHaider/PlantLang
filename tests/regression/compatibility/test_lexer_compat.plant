@@ -9,7 +9,7 @@ ACTION main(),
   /IF.
   REAP r FROM "hello " + "world".
   SHOW r.
-  CREATE arr(LIST) TO [1, 2, 3].
+  CREATE arr(LST) TO [1, 2, 3].
   SHOW "count=" + COUNT arr.
   SHOW "first=" + arr[0].
 /GIVE main.

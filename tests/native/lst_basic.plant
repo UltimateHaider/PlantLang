@@ -1,0 +1,10 @@
+SUITE "LST Basic (formalized)"
+  CREATE L (LST) TO [1, 2, 3].
+
+  SHOW COUNT(L).
+
+  PUT 4 INTO L.
+  SHOW COUNT(L).
+
+  SHOW "lst-basic-ok".
+/SUITE.

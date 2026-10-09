@@ -18,7 +18,7 @@ ACTION main(),
   SHOW p.age.
   BLOOM Empty AS e.
   SHOW COUNT e.
-  CREATE other(LIST) TO { "age": 50 }.
+  CREATE other(LST) TO { "age": 50 }.
   CALL p.put("age", "40").
   SHOW p.age.
   GIVE 0.

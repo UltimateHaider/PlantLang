@@ -12098,7 +12098,7 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     if (strcmp(vtype,"CMP") == 0) {
     return _cat3(_cat4(isel, "  PlantComplex ", target, " = "), cval, ";\n");
     }
-    if (strcmp(vtype,"LIST") == 0) {
+    if (strcmp(vtype,"LST") == 0) {
     return _cat3(_cat4(isel, "  PlantArray* ", target, " = "), cval, ";\n");
     }
     if (strcmp(vtype,"MATH") == 0) {
@@ -12122,7 +12122,7 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     }
     return _cat(_cat4(_cat4(isel, "  ", vct2, " "), target, " = ", cval), ";\n");
     }
-    if (strcmp(vtype,"LON") != 0 && strcmp(vtype,"NUM") != 0 && strcmp(vtype,"CHA") != 0 && strcmp(vtype,"UNU") != 0 && strcmp(vtype,"DBL") != 0 && strcmp(vtype,"FLT") != 0 && strcmp(vtype,"DCM") != 0 && strcmp(vtype,"LIST") != 0 && strcmp(vtype,"MATH") != 0) {
+    if (strcmp(vtype,"LON") != 0 && strcmp(vtype,"NUM") != 0 && strcmp(vtype,"CHA") != 0 && strcmp(vtype,"UNU") != 0 && strcmp(vtype,"DBL") != 0 && strcmp(vtype,"FLT") != 0 && strcmp(vtype,"DCM") != 0 && strcmp(vtype,"LST") != 0 && strcmp(vtype,"MATH") != 0) {
     vst3 = is_struct_type(vtype);
     iut3 = is_union_type(vtype, evars);
     if (strcmp(vst3,"1") != 0 && strcmp(iut3,"1") != 0) {
@@ -14205,7 +14205,7 @@ tx_t plant_ctype(tx_t ptype) {
     if (plant_array_length(rk) > 0) {
     return type_ctype ( base );
     }
-    if (strcmp(base,"LIST") == 0) {
+    if (strcmp(base,"LST") == 0) {
     return "PlantArray*";
     }
     if (strcmp(base,"REF LON") == 0) {
@@ -14223,7 +14223,7 @@ tx_t plant_ctype(tx_t ptype) {
     if (strcmp(base,"REF DBL") == 0) {
     return "double*";
     }
-    if (strcmp(base,"REF LIST") == 0) {
+    if (strcmp(base,"REF LST") == 0) {
     return "PlantArray**";
     }
     if (strcmp(base,"REF TXT") == 0) {
@@ -14333,7 +14333,7 @@ tx_t is_struct_type(tx_t t) {
     if (strcmp(tb,"TXT") == 0) {
     return "0";
     }
-    if (strcmp(tb,"LIST") == 0) {
+    if (strcmp(tb,"LST") == 0) {
     return "0";
     }
     if (strcmp(tb,"DBL") == 0) {
@@ -14747,7 +14747,7 @@ tx_t ffi_emit_struct_helpers(tx_t cname, PlantArray* flds) {
     h1 = _cat3(_cat4(h1, "  r.", fn8, " = plant_map_get(m, \""), fn8, "\");\n");
     }
     }
-    if (strcmp(fb8,"LIST") == 0) {
+    if (strcmp(fb8,"LST") == 0) {
     h1 = _cat(h1, "  plant_ffi_errno = FFI_ERR_TYPE;\n  return r;\n");
     }
     fi8 = fi8+2;
@@ -14785,7 +14785,7 @@ tx_t ffi_emit_struct_helpers(tx_t cname, PlantArray* flds) {
     h4 = _cat3(_cat4(h4, "  plant_map_hash_set(r, \"", fn7, "\", v."), fn7, ");\n");
     }
     }
-    if (strcmp(fb7,"LIST") == 0) {
+    if (strcmp(fb7,"LST") == 0) {
     h4 = _cat(h4, "  plant_ffi_errno = FFI_ERR_TYPE;\n  return r;\n");
     }
     fi7 = fi7+2;
@@ -15206,10 +15206,10 @@ tx_t struct_typedef(PlantArray* tpl, PlantArray* args) {
     }
     if (strcmp(fk9,"struct_ref") != 0) {
     base9 = type_base(fsub);
-    if (strcmp(base9,"LON") == 0 || strcmp(base9,"NUM") == 0 || strcmp(base9,"TXT") == 0 || strcmp(base9,"LIST") == 0) {
+    if (strcmp(base9,"LON") == 0 || strcmp(base9,"NUM") == 0 || strcmp(base9,"TXT") == 0 || strcmp(base9,"LST") == 0) {
     ctype = plant_ctype(fsub);
     }
-    if (strcmp(base9,"LON") != 0 && strcmp(base9,"NUM") != 0 && strcmp(base9,"TXT") != 0 && strcmp(base9,"LIST") != 0) {
+    if (strcmp(base9,"LON") != 0 && strcmp(base9,"NUM") != 0 && strcmp(base9,"TXT") != 0 && strcmp(base9,"LST") != 0) {
     ctype = "tx_t";
     }
     }
@@ -16776,7 +16776,7 @@ tx_t is_prim_type(tx_t ptype) {
     if (strcmp(pbt,"NUM") == 0) {
     return "1";
     }
-    if (strcmp(pbt,"LIST") == 0) {
+    if (strcmp(pbt,"LST") == 0) {
     return "1";
     }
     if (strcmp(pbt,"TXT") == 0) {
@@ -17413,7 +17413,7 @@ int main(int argc, char **argv) {
   tx_t out_path = "";
   tx_t written = "";
   tx_t c_len = "";
-  TYPE_REGISTRY = plant_list_make(16, plant_list_make(5, "LON", "long", "1", "1", "scalar"), plant_list_make(5, "NUM", "int", "1", "1", "scalar"), plant_list_make(5, "UNU", "unsigned int", "1", "1", "scalar"), plant_list_make(5, "DBL", "double", "1", "1", "scalar"), plant_list_make(5, "FLT", "float", "1", "1", "scalar"), plant_list_make(5, "DCM", "long double", "1", "1", "scalar"), plant_list_make(5, "CHA", "char", "0", "1", "scalar"), plant_list_make(5, "VOI", "tx_t", "0", "1", "scalar"), plant_list_make(5, "BYT", "signed char", "1", "1", "scalar"), plant_list_make(5, "UBT", "unsigned char", "1", "1", "scalar"), plant_list_make(5, "SHR", "short", "1", "1", "scalar"), plant_list_make(5, "USH", "unsigned short", "1", "1", "scalar"), plant_list_make(5, "ULO", "unsigned long", "1", "1", "scalar"), plant_list_make(5, "CMP", "PlantComplex", "0", "1", "scalar"), plant_list_make(5, "BOL", "bool", "0", "1", "scalar"), plant_list_make(5, "TXT", "tx_t", "0", "1", "scalar"));
+  TYPE_REGISTRY = plant_list_make(17, plant_list_make(5, "LON", "long", "1", "1", "scalar"), plant_list_make(5, "NUM", "int", "1", "1", "scalar"), plant_list_make(5, "UNU", "unsigned int", "1", "1", "scalar"), plant_list_make(5, "DBL", "double", "1", "1", "scalar"), plant_list_make(5, "FLT", "float", "1", "1", "scalar"), plant_list_make(5, "DCM", "long double", "1", "1", "scalar"), plant_list_make(5, "CHA", "char", "0", "1", "scalar"), plant_list_make(5, "VOI", "tx_t", "0", "1", "scalar"), plant_list_make(5, "BYT", "signed char", "1", "1", "scalar"), plant_list_make(5, "UBT", "unsigned char", "1", "1", "scalar"), plant_list_make(5, "SHR", "short", "1", "1", "scalar"), plant_list_make(5, "USH", "unsigned short", "1", "1", "scalar"), plant_list_make(5, "ULO", "unsigned long", "1", "1", "scalar"), plant_list_make(5, "CMP", "PlantComplex", "0", "1", "scalar"), plant_list_make(5, "BOL", "bool", "0", "1", "scalar"), plant_list_make(5, "TXT", "tx_t", "0", "1", "scalar"), plant_list_make(5, "LST", "PlantArray*", "0", "1", "composite"));
   arg0 = get_cli_arg(0);
   if (strcmp(arg0,"-h") == 0 || strcmp(arg0,"--help") == 0) {
   plant_iReport_print(get_report(), "Chloroplast — Pure Native PlantLang compiler");
@@ -17424,7 +17424,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.51.14 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.51.15 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

@@ -10,7 +10,7 @@ ACTION main(),
   SHOW JOIN(CROSS([1, 0, 0], [0, 1, 0]), ",").
   SHOW CROSS([1, 2, 3], [4, 5, 6])[0].
   SHOW "== transpose ==".
-  CREATE M(LIST) TO [[1, 2], [3, 4]].
+  CREATE M(LST) TO [[1, 2], [3, 4]].
   SHOW JOIN(FLATTEN(TRANSPOSE(M)), ",").
   SHOW JOIN(FLATTEN(TRANSPOSE([[1, 2, 3]])), ",").
   SHOW "== det ==".

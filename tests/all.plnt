@@ -29,13 +29,13 @@ PLANT lists.
 1\ CREATE s(DBL)  TO 3.14.
 1\ CREATE t(TXT)   TO "hello".
 1\ CREATE f(NUM) TO TRUE.
-1\ CREATE lst(LIST) TO 1, 2, 3.
+1\ CREATE lst(LST) TO 1, 2, 3.
 
 1\ REAP _ FROM assert, "NUM correct",  n,   42.
 1\ REAP _ FROM assert, "DBL correct",  s,   3.14.
 1\ REAP _ FROM assert, "TXT correct",   t,   "hello".
 1\ REAP _ FROM assert, "NUM correct", f,   TRUE.
-1\ REAP _ FROM assert, "COUNT LIST", COUNT lst, 3.
+1\ REAP _ FROM assert, "COUNT LST", COUNT lst, 3.
 
 # ═══ 2. Arithmetic ════════════════════════════════
 1\ SHOW "── Arithmetic ──".
@@ -59,7 +59,7 @@ PLANT lists.
 # ═══ 3. Lists ══════════════════════════════════════════
 1\ SHOW "── Lists ──".
 
-1\ CREATE fruits(LIST) TO apple, banana, mango.
+1\ CREATE fruits(LST) TO apple, banana, mango.
 1\ PUT kiwi INTO fruits.
 1\ TAKE apple FROM fruits.
 1\ SORT fruits.
@@ -172,7 +172,7 @@ PLANT lists.
 # ═══ 9. lists library ══════════════════════════════════════
 1\ SHOW "── lists library ──".
 
-1\ CREATE data(LIST) TO 3, 1, 4, 1, 5, 9, 2, 6.
+1\ CREATE data(LST) TO 3, 1, 4, 1, 5, 9, 2, 6.
 
 1\ REAP sorted  FROM lists:SORT,    data.
 1\ REAP uniq    FROM lists:UNIQUE,  data.
@@ -245,7 +245,7 @@ PLANT lists.
 1\ SHOW "── CYCLE/SEASON ──".
 
 1\ CREATE cycle_sum(LON) TO 0.
-1\ CREATE items(LIST) TO 10, 20, 30, 40.
+1\ CREATE items(LST) TO 10, 20, 30, 40.
 
 1\ CYCLE item IN items,
 2\   INCREASE cycle_sum BY item.
@@ -266,10 +266,10 @@ PLANT lists.
 # ═══ ANALYZE / TYPEOF / NOW / WAIT / ROOT_SCOPE ════════════
 1\ SHOW "── ANALYZE / NOW / ROOT_SCOPE ──".
 
-1\ CREATE adata(LIST) TO 4,7,2,9,1,8.
+1\ CREATE adata(LST) TO 4,7,2,9,1,8.
 1\ ANALYZE adata.
 1\ REAP atype FROM TYPEOF adata.
-1\ REAP _ FROM assert, "TYPEOF list", atype, "LIST".
+1\ REAP _ FROM assert, "TYPEOF list", atype, "LST".
 
 1\ CREATE acfg(MAP).
 1\ LINK "host" WITH "localhost" IN acfg.

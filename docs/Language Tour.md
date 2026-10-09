@@ -104,8 +104,8 @@ ACTION main(),
 | Character | `CHA` | `CREATE c(CHA) TO "A".` |
 | Boolean | `NUM` | `CREATE active(NUM) TO TRUE.` |
 | Unsigned boolean | `UNU` | `CREATE mask(UNU) TO 255.` |
-| List | `LIST` | `CREATE parts(LIST) TO plant_list_make(0).` |
-| Generic list | `LIST[T]` | `CREATE xs(LIST[LON]) TO plant_list_make(0).` |
+| List | `LST` | `CREATE parts(LST) TO plant_list_make(0).` |
+| Generic list | `LST[T]` | `CREATE xs(LST[LON]) TO plant_list_make(0).` |
 | Map | `MAP` | `CREATE m(MAP) TO { "key": "val" }.` |
 | Struct | `STRUCT` | `STRUCT Point { x: LON, y: LON }` |
 | Anonymous struct | `STRUCT` | `STRUCT { x: LON, y: LON }` (auto-named) |
@@ -126,7 +126,7 @@ CREATE name(TXT) TO "Haider".
 CREATE pi(DBL) TO 3.14159.
 CREATE active(NUM) TO TRUE.
 CREATE c(CHA) TO "A".
-CREATE fruits(LIST) TO plant_list_make(3, "apple", "banana", "kiwi").
+CREATE fruits(LST) TO plant_list_make(3, "apple", "banana", "kiwi").
 ```
 
 ### Double-Precision Arithmetic (v0.50.0c)
@@ -153,12 +153,12 @@ numbers, variables, nested lists `[ ... ]`, or nested maps `{ ... }`;
 LON-typed values wrap in `_from_long`:
 
 ```
-CREATE user(LIST) TO { "name": "Haider", "score": 94 }.
+CREATE user(LST) TO { "name": "Haider", "score": 94 }.
 SHOW _map_get(user, "name").            # → Haider
 
 CREATE n(LON) TO 10.
-CREATE cfg(LIST) TO { "tags": ["a", "b"], "limits": { "max": n + 1 } }.
-CREATE empty(LIST) TO {}.               # → plant_map_create()
+CREATE cfg(LST) TO { "tags": ["a", "b"], "limits": { "max": n + 1 } }.
+CREATE empty(LST) TO {}.               # → plant_map_create()
 ```
 
 The literal compiles to a chain of pair-list MAP setters —
@@ -172,7 +172,7 @@ serialize with `plant_map_to_string` (→ `{name = Haider, ...}`) or
 Maps can also be built incrementally:
 
 ```
-CREATE user(LIST) TO plant_map_create().
+CREATE user(LST) TO plant_map_create().
 plant_map_set(user, "name", "Haider").
 plant_map_set(user, "score", _from_long(94)).
 
@@ -308,11 +308,11 @@ SHOW v.i.                              # 42
 - `plant_union_create(sizeof(U))` — allocate a heap union
 - `plant_union_free(u)` — free a heap union
 
-**Field access (v0.49.10):** `a.b.c` on a map-backed LIST reads a key
+**Field access (v0.49.10):** `a.b.c` on a map-backed LST reads a key
 with `_map_get` — no explicit `_map_get` call needed:
 
 ```
-CREATE m(LIST) TO { "name": "root", "count": 7,
+CREATE m(LST) TO { "name": "root", "count": 7,
                     "inner": { "val": "9" },
                     "list": ["a", "b", "c"] }.
 SHOW m.name.                # → root          (_map_get(m, "name"))
@@ -341,13 +341,13 @@ prints as text; in arithmetic it coerces numerically). Calls work in
 any expression position and chain with field access:
 
 ```
-CREATE m(LIST) TO { "name": "root", "count": 7 }.
+CREATE m(LST) TO { "name": "root", "count": 7 }.
 SHOW m.get("name").             # → root          (plant_map_get(m, "name"))
 SHOW m.has("name").             # → 1             (plant_map_has)
 SHOW m.get("count") + 1.        # → 8             (numeric coercion)
 m.put("extra", "9").            # bare mutation statement
 SHOW m.get("extra").            # → 9
-CREATE l(LIST) TO ["a", "b", "c"].
+CREATE l(LST) TO ["a", "b", "c"].
 l.push("d").                    # → l is [a b c d]
 SHOW l.pop().                   # → d
 SHOW l.push("x").pop().         # → x             (chained method-method)
@@ -472,7 +472,7 @@ ACTION greet(name(TXT)) -> TXT,
 /GIVE greet.
 ```
 
-- Typed parameters (`LON`, `DBL`, `TXT`, `NUM`, `LIST[T]`, structs, enums).
+- Typed parameters (`LON`, `DBL`, `TXT`, `NUM`, `LST[T]`, structs, enums).
 - Optional `-> Type` return annotation (purely informative at this stage).
 - `GIVE expr.` returns; bodies may use `IF`/`SEASON`, recursion, closures.
 - `REAP target FROM action, args.` calls an action and binds the result.
@@ -545,7 +545,7 @@ arithmetic, indexing, and literals — with no action involved:
 
 ```
 ACTION main(),
-  CREATE lst(LIST) TO plant_list_make(3, "aa", "bb", "cc").
+  CREATE lst(LST) TO plant_list_make(3, "aa", "bb", "cc").
   REAP f FROM FIND("abc", "b").       # builtin → "1"
   REAP j FROM JOIN(lst, "-").         # builtin → "aa-bb-cc"
   REAP s FROM SLICE("abcdef", 1, 3).  # builtin → "bc"
@@ -606,7 +606,7 @@ SEASON count GREATER THAN 0,
 **Collection iteration** — `CYCLE item IN list` visits every element:
 
 ```
-CREATE lst(LIST) TO ["a", "b", "c"].
+CREATE lst(LST) TO ["a", "b", "c"].
 CYCLE item IN lst,
   SHOW item.
 /CYCLE.
@@ -690,11 +690,11 @@ as number strings, strings and variables pass through, and brackets
 nest recursively. Element access uses `name[expr]`:
 
 ```
-CREATE a(LIST) TO [1, 2, 3].              # [1, 2, 3]
-CREATE b(LIST) TO ["x", ["y", "z"], "w"]. # nested lists
-CREATE c(LIST) TO [].                     # empty → plant_list_make(0)
+CREATE a(LST) TO [1, 2, 3].              # [1, 2, 3]
+CREATE b(LST) TO ["x", ["y", "z"], "w"]. # nested lists
+CREATE c(LST) TO [].                     # empty → plant_list_make(0)
 CREATE n(LON) TO 10.
-CREATE d(LIST) TO [n + 1, "var"].         # expressions + variables
+CREATE d(LST) TO [n + 1, "var"].         # expressions + variables
 SHOW JOIN(d, "-").                        # → 11-var
 SHOW a[0].                                # → 1 (name[expr] → plant_list_get)
 ```
@@ -702,7 +702,7 @@ SHOW a[0].                                # → 1 (name[expr] → plant_list_get
 Runtime helpers also build and manipulate lists natively:
 
 ```
-CREATE parts(LIST) TO plant_list_make(0).
+CREATE parts(LST) TO plant_list_make(0).
 PUT "first" INTO parts.
 PUT "second" INTO parts.
 REAP r FROM plant_list_get, parts, 1.
@@ -1206,7 +1206,7 @@ field access.
 ### Statistical Aggregations (v0.49.21)
 
 ```
-CREATE nums(LIST) TO [1, 2, 3, 4].
+CREATE nums(LST) TO [1, 2, 3, 4].
 SHOW VARIANCE(nums).           # 1.25     (population)
 SHOW STDDEV(nums).             # 1.118033989
 SHOW PRODUCT(nums).            # 24
@@ -1224,13 +1224,13 @@ non-parsable elements are filtered before aggregating.
 
 ### Matrix & Linear Algebra (v0.49.22)
 
-Matrices are nested lists (LIST of LIST); vectors are flat lists.
+Matrices are nested lists (LST of LST); vectors are flat lists.
 
 ```
 SHOW DOT([2, 3], [4, 1]).              # 11
 SHOW NORM([3, 4]).                     # 5
 SHOW CROSS([1, 0, 0], [0, 1, 0]).      # [0, 0, 1]
-CREATE M(LIST) TO [[1, 2], [3, 4]].
+CREATE M(LST) TO [[1, 2], [3, 4]].
 SHOW JOIN(FLATTEN(TRANSPOSE(M)), ","). # 1,3,2,4
 SHOW DET(M).                           # -2
 SHOW JOIN(FLATTEN(INVERSE(M)), ",").   # -2,1,1.5,-0.5
@@ -1245,13 +1245,13 @@ determinants of singular matrices return "0".
 ### Numerical Analysis (v0.49.23)
 
 ```
-CREATE A(LIST) TO [[4, 3], [6, 3]].
-CREATE f(LIST) TO LU(A).               # [L, U]; PA = LU (row-pivoted)
+CREATE A(LST) TO [[4, 3], [6, 3]].
+CREATE f(LST) TO LU(A).               # [L, U]; PA = LU (row-pivoted)
 SHOW JOIN(FLATTEN(f[0]), ",").         # L = 1,0,0.6666666667,1
-CREATE S(LIST) TO [[2, 1], [1, 2]].
-CREATE eg(LIST) TO EIGEN(S).           # symmetric only; values desc
+CREATE S(LST) TO [[2, 1], [1, 2]].
+CREATE eg(LST) TO EIGEN(S).           # symmetric only; values desc
 SHOW JOIN(eg[0], ",").                 # 3,1
-CREATE sd(LIST) TO SVD([[3, 0], [0, 2]]).
+CREATE sd(LST) TO SVD([[3, 0], [0, 2]]).
 SHOW JOIN(sd[1], ",").                 # singular values: 3,2
 SHOW JOIN(SOLVE([[2, 1], [1, 3]], [5, 10]), ",").   # 1,3
 SHOW COND([[2, 0], [0, 2]]).           # 2
@@ -1279,7 +1279,7 @@ REAP r FROM set_add, s, 10.          # "0" duplicate
 REAP r FROM set_has, s, 10.          # "1" present
 REAP r FROM set_remove, s, 10.       # "1" removed
 CREATE n(LON) TO set_size(s).        # unique element count
-REAP lst FROM set_to_list, s.        # → LIST for iteration/export
+REAP lst FROM set_to_list, s.        # → LST for iteration/export
 
 # Queue — FIFO ring buffer
 REAP q FROM queue_create.
@@ -1454,7 +1454,7 @@ GIVE "Hello from Chloroplast" AS RESPONSE.
   no-op; bind failure and malformed requests surface as `ok = "FALSE"`.
 - `GIVE <body> AS RESPONSE JSON.` (v0.49.3) serializes the body with
   `json_stringify` and replies with `Content-Type: application/json`.
-  The body may be a pair-list MAP (→ JSON object), a plain LIST
+  The body may be a pair-list MAP (→ JSON object), a plain LST
   (odd element count → JSON array), or a `PlantJson` from `json_parse`;
   scalar values follow JSON rules (true/false/numbers raw, strings
   quoted). The non-JSON form stays `text/plain`.
@@ -1542,10 +1542,10 @@ keep using build-time concatenation.
 ### LET Destructuring (v0.49.26)
 
 ```
-CREATE m(LIST) TO { "x": 10, "y": 20 }.
+CREATE m(LST) TO { "x": 10, "y": 20 }.
 LET {x, y} = m.            # binds x=10, y=20
 LET {x: rx} = m.           # rename: key x -> var rx
-CREATE l(LIST) TO [7, 8, 9].
+CREATE l(LST) TO [7, 8, 9].
 LET [a, b, c] = l.         # positional
 LET [_, s] = l.            # "_" skips a position
 LET {pt: {px, py}} = nested.   # nested patterns recurse
@@ -1561,7 +1561,7 @@ binding; nesting is unlimited.
 ```
 TYPE MyInt = LON.
 TYPE Name = TXT.
-TYPE IntList = LIST[LON].
+TYPE IntList = LST[LON].
 TYPE SameList = IntList.      # chains resolve transitively
 
 CREATE n(MyInt) TO 7.         # behaves exactly like LON

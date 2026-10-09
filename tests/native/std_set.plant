@@ -16,12 +16,12 @@ ACTION main(),
   CREATE sz1s(TXT) TO "".
   REAP sz1s FROM _from_long, sz1.
   SHOW "size=" + sz1s.
-  # ── TXT and LIST values (identity-based uniqueness) ────────
+  # ── TXT and LST values (identity-based uniqueness) ────────
   CREATE t(TXT) TO "alpha".
   REAP at1 FROM set_add, s, t.
   REAP at2 FROM set_add, s, t.
   SHOW "txt-dedup=" + at2.
-  CREATE m(LIST) TO plant_list_make(0).
+  CREATE m(LST) TO plant_list_make(0).
   REAP am1 FROM set_add, s, m.
   REAP am2 FROM set_add, s, m.
   SHOW "map-dedup=" + am2.

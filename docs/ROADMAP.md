@@ -54,7 +54,7 @@
 - `std/json` — JSON parsing and serialization in pure native
 - `std/math` — typed math functions (trig, exp/log, random)
 - `std/time` — wall-clock and monotonic time APIs
-- Collections — richer `LIST`/`MAP` operations (filter, map, reduce, sort, iterators)
+- Collections — richer `LST`/`MAP` operations (filter, map, reduce, sort, iterators)
 - Native C FFI direct calls — first-class call syntax for arbitrary C functions
   (beyond the current `-> external` declarations)
 
@@ -564,7 +564,7 @@ This release establishes the foundation for a second compilation pipeline: Plant
 #### Nested Struct Formatting
 - `formatShowValue()` produces indented JSON-like tree for nested struct instances
 - Circular reference protection via `visited` Set
-- Type-prefixed key display: `LON`, `TXT`, `LIST`, `MAP`, struct name
+- Type-prefixed key display: `LON`, `TXT`, `LST`, `MAP`, struct name
 
 #### Memory Allocators
 - `ArenaAllocator` (FAST): bump allocator with child arena cascading reset

@@ -2,7 +2,7 @@
 # [expr, expr, ...] compiles to plant_list_make(count, ...); integer
 # elements wrap in _from_long (tx_t are strings — numeric casts happen
 # at the call site), nested [ ... ] recurse, other elements pass
-# through as tx_t text. Nested MAP/LIST elements serialize through the
+# through as tx_t text. Nested MAP/LST elements serialize through the
 # runtime object serializer (a standalone plant_to_string does not
 # exist — the serializer stands in; its list format separates items
 # with ", ", so JOIN([1, [2, 3], 4], "-") yields 1-[2, 3]-4).
@@ -11,16 +11,16 @@
 # 1/0 only outside quotes), so "hello | TRUE" stays pristine.
 
 ACTION main()
-  CREATE l1(LIST) TO ["a", "b", "c"].
+  CREATE l1(LST) TO ["a", "b", "c"].
   SHOW "abc=" + JOIN(l1, ", ").
-  CREATE l2(LIST) TO ["1", "2", "3"].
+  CREATE l2(LST) TO ["1", "2", "3"].
   SHOW "nums=" + JOIN(l2, "-").
-  CREATE l3(LIST) TO [].
+  CREATE l3(LST) TO [].
   SHOW "empty=" + JOIN(l3, ",").
-  CREATE l4(LIST) TO ["a"].
+  CREATE l4(LST) TO ["a"].
   SHOW "single=" + JOIN(l4, ",").
   SHOW "mixed=" + JOIN(["hello", "42", "TRUE"], " | ").
-  CREATE m1(LIST) TO ["x", "1"].
+  CREATE m1(LST) TO ["x", "1"].
   SHOW "complex=" + JOIN([m1, [2, 3, 4]], ",").
   SHOW "null_delim=" + JOIN(["a", "b", "c"], NULL).
   SHOW "null_list=" + JOIN(NULL, ",").

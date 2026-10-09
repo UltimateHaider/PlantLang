@@ -1,4 +1,4 @@
-ACTION join(lst(LIST), sep(TXT)),
+ACTION join(lst(LST), sep(TXT)),
   CREATE out(TXT) TO "".
   CREATE i(LON) TO 0.
   SEASON i < COUNT lst,
@@ -10,7 +10,7 @@ ACTION join(lst(LIST), sep(TXT)),
 /GIVE join.
 
 ACTION main(),
-  CREATE parts(LIST) TO plant_list_make(0).
+  CREATE parts(LST) TO plant_list_make(0).
   PUT "a" INTO parts.
   PUT "b" INTO parts.
   PUT "c" INTO parts.

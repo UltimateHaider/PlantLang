@@ -1,5 +1,5 @@
 ACTION main(),
-  CREATE parts(LIST) TO plant_list_make(0).
+  CREATE parts(LST) TO plant_list_make(0).
   PUT "first" INTO parts.
   PUT "second" INTO parts.
   REAP r FROM plant_list_get, parts, 1.

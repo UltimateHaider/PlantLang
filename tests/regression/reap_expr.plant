@@ -10,7 +10,7 @@ ACTION zero(),
   GIVE "Z".
 /GIVE zero.
 ACTION main(),
-  CREATE lst(LIST) TO plant_list_make(3, "aa", "bb", "cc").
+  CREATE lst(LST) TO plant_list_make(3, "aa", "bb", "cc").
   REAP s FROM "hello".
   SHOW "lit=" + s.
   REAP f FROM FIND("abc", "b").

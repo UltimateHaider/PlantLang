@@ -563,7 +563,7 @@ All nodes inherit from `AstNode` (`core/ast.js`) with `type`, `line`, `column`, 
 ### 9.1 Compile-Time Errors
 
 The LLVM backend produces structured `CodegenError` objects for:
-- Unsupported constructs (LIST, MAP without explicit key/value type, SPECIES, etc.)
+- Unsupported constructs (LST, MAP without explicit key/value type, SPECIES, etc.)
 - Undeclared variable references
 - Contract Law violations (CREATE destination depth)
 - Type errors in operations
@@ -1162,7 +1162,7 @@ bytes 224-255: hash (SHA256 of this entry, 32 bytes)
 - `tests/test_phase15_for_in.js` — 19 tests for FOR...IN loops
 - `tests/test_phase16_structs.js` — 16 tests for STRUCT types
 - `tests/test_phase17_species.js` — 10 tests for SPECIES/BLOOM OOP
-- `tests/test_phase18_lists.js` — 15 tests for native LIST operations (COUNT, FIRST, LAST, SUM)
+- `tests/test_phase18_lists.js` — 15 tests for native LST operations (COUNT, FIRST, LAST, SUM)
 - `tests/test_phase21_runtime.js` — 20 tests for C runtime FFI: math, sort, string split/join (FFI and native via REAP), 70KB large-string stress test
 - `tests/test_depth_contract.js` — 13 tests for Block-Depth Contract Law Enforcement (valid: ACTION/SPECIES at depth 0, REAP/GIVE/CYCLE inside ACTION; invalid: REAP/CYCLE/GIVE at depth 0, nested ACTION, depth prefix mismatch)
 - `tests/matrix.test.js` — 28 tests for the 5x5 Boundary Handshake Matrix (all 25 transitions + error paths + context propagation)
@@ -3033,7 +3033,7 @@ typedef struct PlantSet {
 ```
 
 - **Hashing**: splitmix64 over the raw value bits (`(uintptr_t)val`), so any
-  Chloroplast value works — LON (long bits), TXT (pointer), MAP/LIST
+  Chloroplast value works — LON (long bits), TXT (pointer), MAP/LST
   (PlantArray* pointer). Uniqueness is identity-based: equal bits = same
   element. Value `0`/NULL is reserved as nil and not storable.
 - **Probing**: linear probing with `idx = (idx + 1) & (cap - 1)`; load factor
@@ -3102,7 +3102,7 @@ pre-pass over the program body building a signature table (`sigs`) for every
 through `generate_node`/`generate_body` into `reap_stmt` codegen. There, each
 argument is checked with `is_ref_at`; REF positions emit `&var` instead of
 `var`. The C type mapping (`plant_ctype`) is: `REF LON` → `long*`,
-`REF NUM` → `int*`, `REF LIST` → `PlantArray**`, `REF TXT` → `tx_t*`.
+`REF NUM` → `int*`, `REF LST` → `PlantArray**`, `REF TXT` → `tx_t*`.
 
 Because the compiler is single-pass with no runtime symbol table, the
 signature pre-pass is what makes call-site rewriting possible at all —
@@ -3171,7 +3171,7 @@ code is identical in shape and speed to hand-written C.
 ### 31.1 Syntax
 
 ```plant
-ACTION process_list[T](item(T), list(LIST[T])) -> T,
+ACTION process_list[T](item(T), list(LST[T])) -> T,
   REAP head FROM plant_list_get, list, 0.
   GIVE head.
 /ACTION.
@@ -3181,8 +3181,8 @@ REAP r FROM process_list[LON], 5, xs.   # call-site type arguments
 
 - Type-parameter lists `[T, U]` follow the action name (square brackets;
   `[`/`]` already lex as `LBRACKET`/`RBRACKET`).
-- Parameter types may be generic names (`T`), containers (`LIST[T]`),
-  references (`REF T`, `REF LIST[T]`) or concrete types (`LON`, `TXT`…).
+- Parameter types may be generic names (`T`), containers (`LST[T]`),
+  references (`REF T`, `REF LST[T]`) or concrete types (`LON`, `TXT`…).
   The parser collects the full type text until the closing `)` at
   bracket/paren depth 0 (`collect_type_text`), replacing the old
   single-token + `REF`-special-case reading.
@@ -3250,9 +3250,9 @@ and definition), so repeated and nested calls compile to a single C function.
 
 `subst` is a flat key/value list (`[T, LON, U, TXT, …]`). `subst_type` splits
 type strings on space/`( ) [ ] ,` boundaries and replaces whole tokens that
-match a generic name — `LIST[T]` → `LIST[LON]`, `REF T` → `REF LON`. The C
+match a generic name — `LST[T]` → `LST[LON]`, `REF T` → `REF LON`. The C
 type mapping (`plant_ctype`) strips bracketed suffixes via `type_base`
-(`LIST[LON]` → `PlantArray*`), so container types need no special handling.
+(`LST[LON]` → `PlantArray*`), so container types need no special handling.
 REF-ness is preserved through substitution, and REF call-site rewriting
 (`&var`) reuses the existing `sigs`/`is_ref_at` machinery with the template's
 base name.
@@ -3293,8 +3293,8 @@ Nested generic fields keep their opaque `tx_t` C type.
 
 `tests/generics/` (7 cases, wired into `make test`):
 `basic` (single param, three instantiations + cache reuse), `multi`
-(multi-type `[T, U]` + `LIST[U]` container params), `nested` (generic calls
-generic with substituted context), `listgen` (`LIST[T]` params), `refgen`
+(multi-type `[T, U]` + `LST[U]` container params), `nested` (generic calls
+generic with substituted context), `listgen` (`LST[T]` params), `refgen`
 (`REF T` params with `&var` emission), `structs` (non-generic `Point` +
 FFI round-trip), `gstruct` (generic `Box[T]`, multi-type `Pair[T, U]`,
 nested `Wrap[T]` with mock-FFI round-trips). The runner supports optional

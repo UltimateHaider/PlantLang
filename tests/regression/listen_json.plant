@@ -8,7 +8,7 @@ ACTION main(),
   LISTEN ON 41235 AS req.
   REAP ok FROM _map_get, req, "ok".
   SHOW "listen_json ok = " + ok.
-  CREATE m(LIST) TO plant_list_make(0).
+  CREATE m(LST) TO plant_list_make(0).
   LINK "name" WITH "chloroplast" IN m.
   LINK "ok" WITH "true" IN m.
   GIVE m AS RESPONSE JSON.

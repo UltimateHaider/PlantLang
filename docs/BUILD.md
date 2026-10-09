@@ -98,7 +98,7 @@ references libm functions.
 Since v0.47.1 the core standard library ships in the native runtime
 (signatures in `plant_compat.h`, implementations in `plant_runtime.c`):
 
-- `std/json` — `json_parse` (→ native MAP/LIST/scalars; safe nil `NULL` on
+- `std/json` — `json_parse` (→ native MAP/LST/scalars; safe nil `NULL` on
   invalid JSON, never crashes), `json_stringify`, `json_get`, `json_at`,
   `json_len`, `json_kind`, `json_val`
 - `std/string` — `string_repeat`, `string_reverse`, `string_pad`

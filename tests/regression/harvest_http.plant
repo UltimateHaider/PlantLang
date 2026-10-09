@@ -16,7 +16,7 @@ ACTION main(),
   SHOW "get status = " + st.
   SHOW "get body = " + body.
 
-  CREATE hdrs(LIST) TO plant_list_make(0).
+  CREATE hdrs(LST) TO plant_list_make(0).
   LINK "Content-Type" WITH "application/json" IN hdrs.
   LINK "X-Test" WITH "plantlang" IN hdrs.
   HARVEST "http://127.0.0.1:41234/post" AS post_res TIMEOUT 5 METHOD POST BODY "hello=world" HEADERS hdrs.

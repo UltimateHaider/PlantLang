@@ -49,12 +49,12 @@ LOOP i FROM 1 TO 100:
 /LOOP
 ```
 
-### LIST OF TENSOR Warning
+### LST OF TENSOR Warning
 
 Lists of tensors WILL accumulate leaks if not freed:
 
 ```plantlang
-CREATE L TO LIST OF TENSOR(...).
+CREATE L TO LST OF TENSOR(...).
 # Each new tensor leaks ~240 bytes until freed
 ```
 
@@ -64,7 +64,7 @@ CREATE L TO LIST OF TENSOR(...).
 2. Free lists when scope ends
 3. Use `LIST_FREE` for nested lists (recursive)
 4. Use `TENSOR_FREE` for tensors (flat free)
-5. Avoid LIST OF TENSOR without explicit cleanup
+5. Avoid LST OF TENSOR without explicit cleanup
 
 ## Performance
 

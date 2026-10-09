@@ -4,7 +4,7 @@
 # of the same key collapse to one entry; a NULL/uninitialized target
 # map is instantiated on first use.
 ACTION main(),
-  CREATE m(LIST) TO plant_list_make(0).
+  CREATE m(LST) TO plant_list_make(0).
   LINK "k1" WITH "v1" IN m.
   LINK "k2" WITH "v2" IN m.
   REAP g1 FROM _map_get, m, "k1".
@@ -26,7 +26,7 @@ ACTION main(),
   SHOW "dup link k3 = " + g5.
   SHOW "pair count after dup link = " + _from_long(COUNT m).
 
-  CREATE fresh(LIST) TO NULL.
+  CREATE fresh(LST) TO NULL.
   LINK "alpha" WITH "beta" IN fresh.
   REAP g6 FROM _map_get, fresh, "alpha".
   SHOW "null target instantiated = " + g6.

@@ -2,5 +2,5 @@ IMPORT "tokens.plant".
 IMPORT "lexer.plant".
 CREATE raw(TXT) TO scan_tokens("LET x(LON) TO 42. SHOW x.").
 SHOW raw.
-CREATE tok(LIST) TO raw.
+CREATE tok(LST) TO raw.
 SHOW tok.

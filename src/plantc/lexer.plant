@@ -509,7 +509,7 @@ ACTION skip_comment(src(TXT), i(LON), n(LON)),
 
 # ── scan_tokens(source) ───────────────────────────────────
 ACTION scan_tokens(src(TXT)),
-  CREATE tokens(LIST) TO plant_list_make(0).
+  CREATE tokens(LST) TO plant_list_make(0).
   CREATE i(LON) TO 0.
   CREATE n(LON) TO LEN(src).
   CREATE ch(TXT) TO "".
@@ -642,13 +642,13 @@ ACTION tokenize(src(TXT)),
 # ── tok_lex(tok) ──────────────────────────────────────────────
 # v0.49.55: Token literal accessor — returns the lexeme/value of a
 # token pair (3-element: type, value, line_leading).
-ACTION tok_lex(tok(LIST)),
+ACTION tok_lex(tok(LST)),
   GIVE tok[1].
 /ACTION.
 
 # ── tok_type(tok) ─────────────────────────────────────────────
 # v0.49.55: Token type accessor — returns the classification string.
-ACTION tok_type(tok(LIST)),
+ACTION tok_type(tok(LST)),
   GIVE tok[0].
 /ACTION.
 
@@ -656,14 +656,14 @@ ACTION tok_type(tok(LIST)),
 # v0.49.11: 3rd element of the lexer token pair marks the first token
 # on a line ("1"); 2-element tokens ("") are never line-leading.
 # v0.49.55: Moved here from parser.plant as part of lexer interface.
-ACTION tok_line_leading(tok(LIST)),
+ACTION tok_line_leading(tok(LST)),
   GIVE tok[2].
 /ACTION.
 
 # ── peek(tokens, pos) ─────────────────────────────────────────
 # v0.49.55: Inspect the token at position `pos` without advancing.
 # Returns a 2-element sentinel [null, ""] at EOF.
-ACTION peek(tokens(LIST), pos(LON)),
+ACTION peek(tokens(LST), pos(LON)),
   IF pos < COUNT tokens,
     GIVE tokens[pos].
   /IF.
@@ -673,13 +673,13 @@ ACTION peek(tokens(LIST), pos(LON)),
 # ── consume(tokens, pos) ──────────────────────────────────────
 # v0.49.55: Advance position and return the token at the old position.
 # Returns [tok, pos+1] so the caller carries its own cursor.
-ACTION consume(tokens(LIST), pos(LON)),
+ACTION consume(tokens(LST), pos(LON)),
   GIVE plant_list_make(2, tokens[pos], pos + 1).
 /ACTION.
 
 # ── is_eof(tokens, pos) ───────────────────────────────────────
 # v0.49.55: True if `pos` is past the token list or the token is EOF.
-ACTION is_eof(tokens(LIST), pos(LON)),
+ACTION is_eof(tokens(LST), pos(LON)),
   IF pos >= COUNT tokens,
     GIVE TRUE.
   /IF.
@@ -693,18 +693,18 @@ ACTION is_eof(tokens(LIST), pos(LON)),
 
 # ── _first(pair) ──────────────────────────────────────────────
 # Returns the 0-th element of a pair/list.
-ACTION _first(pair(LIST)),
+ACTION _first(pair(LST)),
   GIVE pair[0].
 /ACTION.
 
 # ── _second(pair) ────────────────────────────────────────────
 # Returns the 1-st element of a pair/list.
-ACTION _second(pair(LIST)),
+ACTION _second(pair(LST)),
   GIVE pair[1].
 /ACTION.
 
 # ── _third(pair) ─────────────────────────────────────────────
 # Returns the 2-nd element of a pair/list (line-leading flag).
-ACTION _third(pair(LIST)),
+ACTION _third(pair(LST)),
   GIVE pair[2].
 /ACTION.

@@ -3,7 +3,7 @@
 # each element, proving structured data crosses a real process boundary
 # (v0.48.37c).
 ACTION build_list() WITH MISSION SAFE,
-  CREATE l(LIST) TO plant_list_make(0).
+  CREATE l(LST) TO plant_list_make(0).
   PUT "alpha" INTO l.
   PUT "beta" INTO l.
   PUT "gamma" INTO l.

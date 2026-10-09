@@ -7,7 +7,7 @@
 # chance of two identical permutations is 1/40320). Edge cases: empty
 # and single-element lists are left untouched.
 ACTION main(),
-  CREATE nums(LIST) TO plant_list_make(0).
+  CREATE nums(LST) TO plant_list_make(0).
   PUT "1" INTO nums.
   PUT "2" INTO nums.
   PUT "3" INTO nums.
@@ -51,7 +51,7 @@ ACTION main(),
     SHOW "orders differ = 1".
   /IF.
 
-  CREATE one(LIST) TO plant_list_make(0).
+  CREATE one(LST) TO plant_list_make(0).
   PUT "solo" INTO one.
   SHAKE one.
   CREATE out1(TXT) TO "".
@@ -60,7 +60,7 @@ ACTION main(),
   /CYCLE.
   SHOW "single element after shake = " + out1.
 
-  CREATE empty(LIST) TO plant_list_make(0).
+  CREATE empty(LST) TO plant_list_make(0).
   SHAKE empty.
   SHOW "empty list shaken = ok".
   GIVE 0.

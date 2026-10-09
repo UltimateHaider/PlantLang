@@ -15,7 +15,7 @@ ACTION main(),
   REAP xm FROM _map_get, hd, "X-Mock".
   SHOW "get header X-Mock = " + xm.
 
-  CREATE hdrs(LIST) TO plant_list_make(0).
+  CREATE hdrs(LST) TO plant_list_make(0).
   LINK "X-Test" WITH "abc123" IN hdrs.
   HARVEST "http://127.0.0.1:41234/get" AS r2 HEADERS hdrs.
   REAP ok2 FROM _map_get, r2, "ok".
@@ -23,7 +23,7 @@ ACTION main(),
   SHOW "custom header ok = " + ok2.
   SHOW "custom header echo = " + body2.
 
-  CREATE emptyHdrs(LIST) TO plant_list_make(0).
+  CREATE emptyHdrs(LST) TO plant_list_make(0).
   HARVEST "http://127.0.0.1:41234/get" AS r3 HEADERS emptyHdrs.
   REAP body3 FROM _map_get, r3, "body".
   SHOW "empty headers body = " + body3.

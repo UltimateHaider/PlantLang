@@ -6,7 +6,7 @@
 # the result is the language's pair-list MAP form — readable via
 # _map_get, serializable via plant_map_to_string / json_stringify.
 ACTION main(),
-  CREATE m1(LIST) TO { "name": "plant", "kind": "tree", "year": 2026 }.
+  CREATE m1(LST) TO { "name": "plant", "kind": "tree", "year": 2026 }.
   REAP nm FROM _map_get, m1, "name".
   REAP yr FROM _map_get, m1, "year".
   SHOW "name=" + nm.
@@ -14,7 +14,7 @@ ACTION main(),
   SHOW "m1=" + plant_map_to_string(m1).
   SHOW "j1=" + json_stringify(m1).
   CREATE n(LON) TO 10.
-  CREATE m2(LIST) TO { "a": [1, 2], "b": { "x": n + 1 }, "lit": 1 + 1, "c": "z" }.
+  CREATE m2(LST) TO { "a": [1, 2], "b": { "x": n + 1 }, "lit": 1 + 1, "c": "z" }.
   REAP a1 FROM _map_get, m2, "a".
   REAP ax FROM plant_list_get, a1, 0.
   REAP b1 FROM _map_get, m2, "b".
@@ -22,7 +22,7 @@ ACTION main(),
   SHOW "ax=" + ax.
   SHOW "bx=" + bx.
   SHOW "m2=" + plant_map_to_string(m2).
-  CREATE e(LIST) TO {}.
+  CREATE e(LST) TO {}.
   SHOW "e=" + plant_map_to_string(e).
   GIVE 0.
 /GIVE main.

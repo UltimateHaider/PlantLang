@@ -1,3 +1,45 @@
+## v0.51.15 — LST (List Formalization)
+
+### Changed (BREAKING)
+- Renamed LIST → LST (consistent with 3-letter scheme).
+  - User code using (LIST) must change to (LST).
+  - LIST[T] → LST[T] (parameterized kept as-is).
+- Bootstrap: 2-stage (674 self-hosting annotations).
+
+### Added
+- LST formalized in Type Registry:
+  ["LST", "PlantArray*", "0", "1", "composite"]
+- First composite type in the registry.
+- 2 new tests: lst_basic, lst_typed.
+
+### Improved
+- LST and LST[T] now registry-driven (via type_base strip).
+- Special-cases for REF LST retained.
+
+### Type Set (after v0.51.15 — 17 types)
+| Category | Types |
+|----------|-------|
+| Integer | BYT, UBT, SHR, USH, NUM, UNU, LON, ULO |
+| Float | FLT, DBL, DCM |
+| Complex | CMP |
+| Boolean | BOL |
+| Text | CHA, TXT |
+| Other | VOI |
+| Composite | LST |
+
+### Verified
+- Native: 110/110 (was 108)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (536,307 B)
+- valgrind strict: PASS
+- Binary: 960176 bytes.
+
+### Out of Scope (v0.51.16 or v0.52.0)
+- TD-020 (list ops: +, [], PUSH).
+- MAP, SET, QUEUE, STACK, TENSOR formalization.
+- TD-019, TD-022, TD-024, TD-025.
+
 ## v0.51.14 — VOI + TX Removal
 
 ### Changed (BREAKING)

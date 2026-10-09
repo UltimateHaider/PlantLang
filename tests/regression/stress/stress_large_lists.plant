@@ -2,7 +2,7 @@
 # Validates list scalability, element access, and iteration at increasing
 # magnitudes without OOM (v0.49.63).
 ACTION main(),
-  CREATE lst(LIST) TO plant_list_make(0).
+  CREATE lst(LST) TO plant_list_make(0).
   CREATE i(LON) TO 0.
   SEASON i < 1000,
     PUT _from_long(i) INTO lst.

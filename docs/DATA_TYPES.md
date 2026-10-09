@@ -26,7 +26,7 @@ PlantLang uses a **single opaque pointer** (`tx_t = void*`) as the universal run
 | `UNU` | `unsigned int` | 4 bytes (32-bit) | 0 to 4,294,967,295 | `0` | Unsigned 32-bit integer (v0.51.9) |
 | `TXT` | `tx_t` (void*) | 8 bytes (pointer) | N/A | `""` (empty string) | Text/string; default type when unspecified |
 | `VOI` | `tx_t` | variable | N/A | `""` | Void pointer / byte buffer (v0.51.14; renamed from BYTES) |
-| `LIST[T]` | `PlantArray*` | 16 bytes (pointer) | N/A | `plant_list_make(0)` | Dynamic array of T values |
+| `LST[T]` | `PlantArray*` | 16 bytes (pointer) | N/A | `plant_list_make(0)` | Dynamic array of T values |
 | `MAP` | `PlantArray*` (pair-list) | 16 bytes (pointer) | N/A | `plant_map_create()` | Key-value pair-list (kind=1) |
 | `ENUM X` | `tx_t` (int or name string) | 8 bytes (pointer) | 0 to 65535 (int) | first member | Enum member as integer or name string |
 | `MATH` | `PlantMath*` | 16 bytes (pointer) | N/A | `plant_math_create("0")` | Symbolic math expression (v0.50.0h) |
@@ -44,7 +44,7 @@ PlantLang uses a **single opaque pointer** (`tx_t = void*`) as the universal run
 |---|---|---|
 | `REF LON` | `long*` | Pointer to numeric |
 | `REF NUM` | `int*` | Pointer to fact |
-| `REF LIST[T]` | `PlantArray**` | Pointer to list |
+| `REF LST[T]` | `PlantArray**` | Pointer to list |
 | `REF TXT` | `tx_t*` | Pointer to text |
 | `REF STRUCT X` | `plant_X*` | Pointer to struct |
 
@@ -54,7 +54,7 @@ PlantLang uses a **single opaque pointer** (`tx_t = void*`) as the universal run
 
 ## 2. Composite Types
 
-### 2.1 LIST (Dynamic Array)
+### 2.1 LST (Dynamic Array)
 
 **C Struct:**
 ```c
@@ -65,15 +65,15 @@ typedef struct PlantArray {
     int64_t  count;
     int64_t  capacity;
     char**   items;
-    int8_t   kind;      /* 0 = LIST, 1 = MAP (pair-list) */
+    int8_t   kind;      /* 0 = LST, 1 = MAP (pair-list) */
 } PlantArray;
 ```
 
 **Declaration:**
 ```plantlang
-CREATE items (LIST[LON]) TO [1, 2, 3].
-CREATE names (LIST[TXT]) TO ["a", "b", "c"].
-LET mixed (LIST) TO [1, "two", TRUE].
+CREATE items (LST[LON]) TO [1, 2, 3].
+CREATE names (LST[TXT]) TO ["a", "b", "c"].
+LET mixed (LST) TO [1, "two", TRUE].
 ```
 
 **Usage:**
@@ -310,7 +310,7 @@ REAP k FROM json_kind, j.
 # CREATE with type annotation
 CREATE x (LON) TO 5.
 CREATE name (TXT) TO "hello".
-CREATE items (LIST[LON]) TO [1, 2, 3].
+CREATE items (LST[LON]) TO [1, 2, 3].
 CREATE m (MAP) TO { "key": "val" }.
 
 # CREATE with type inference
@@ -478,7 +478,7 @@ The runtime identifies types via multiple heuristics:
 
 | Type | Detection Method |
 |---|---|
-| LIST/MAP | `magic == PLANT_ARRAY_MAGIC (0x504C4152)` |
+| LST/MAP | `magic == PLANT_ARRAY_MAGIC (0x504C4152)` |
 | ENUM | Values < 65536 are integers; values >= 65536 are name strings |
 | LON | `atol()` succeeds on string content |
 | BOOL | String is `"TRUE"`, `"true"`, `"1"`, `"FALSE"`, `"false"`, `"0"` |
@@ -523,9 +523,9 @@ tx_t plant_analyze(tx_t v);   /* Returns: {type, size, keys} MAP */
 | Category | Count | Types |
 |---|---|---|
 | **Primitive** | 6 | LON, DBL, NUM, TXT, BOOL (via literals), NULL |
-| **Composite** | 8 | LIST, MAP, STRUCT, ENUM, SPECIES, ACTION, CALLBACK, MATH |
+| **Composite** | 8 | LST, MAP, STRUCT, ENUM, SPECIES, ACTION, CALLBACK, MATH |
 | **Special** | 5 | VOID, STORM, ANY, JSON, OPTION/RESULT |
-| **Reference** | 4 | REF LON, REF NUM, REF LIST, REF TXT |
+| **Reference** | 4 | REF LON, REF NUM, REF LST, REF TXT |
 | **Total** | **23** | |
 
 ### Primitive vs Composite
@@ -533,7 +533,7 @@ tx_t plant_analyze(tx_t v);   /* Returns: {type, size, keys} MAP */
 | Category | Types | C Representation |
 |---|---|---|
 | **Primitive** | LON, DBL, NUM, TXT | `long`, `int`, `tx_t` (all stored as `tx_t` at runtime) |
-| **Composite** | LIST, MAP, STRUCT, ENUM, SPECIES, MATH | `PlantArray*`, generated structs, map-backed objects, `PlantMath*` |
+| **Composite** | LST, MAP, STRUCT, ENUM, SPECIES, MATH | `PlantArray*`, generated structs, map-backed objects, `PlantMath*` |
 | **Functional** | ACTION, CALLBACK | Function pointers with context |
 | **Special** | NULL, VOID, STORM, ANY, JSON, OPTION, RESULT | Null pointer, void, ARC objects, tagged unions |
 
@@ -911,6 +911,44 @@ SHOW LEN(S).                # 5
 CREATE V (VOI) TO "hello".
 SHOW V.   # hello
 ```
+
+---
+
+## LST (List) — v0.51.15
+
+| Property | Value |
+|----------|-------|
+| Size | Variable (dynamic) |
+| C type | PlantArray* |
+| Category | composite |
+| Parity | C# List<T> / Rust Vec<T> / Python list |
+| Renamed | From LIST in v0.51.15 |
+| Formalized | Registry record in v0.51.15 |
+
+### Syntax
+
+```plant
+CREATE L (LST) TO [1, 2, 3].
+CREATE L (LST[NUM]) TO [1, 2, 3].   # typed
+
+SHOW COUNT(L).   # 3
+PUT 4 INTO L.    # append
+```
+
+### Operations
+
+- `CREATE (LST)` / `(LST[T])`
+- `PUT item INTO lst.`
+- `COUNT lst`
+- `_at(lst, i)`
+- `REAP r FROM plant_list_get, lst, i`
+- Iteration (CYCLE, SEASON)
+
+### Missing (TD-020)
+
+- `lst + [item]` (concat)
+- `lst[i] = value` (index assignment)
+- `PUSH(lst, item)`
 
 ---
 

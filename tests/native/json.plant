@@ -71,7 +71,7 @@ ACTION main(),
   /IF.
   REAP njs FROM json_stringify, bad.
   SHOW "str-null=" + njs.
-  CREATE m(LIST) TO plant_list_make(0).
+  CREATE m(LST) TO plant_list_make(0).
   PUT "name" INTO m.
   PUT "Bob" INTO m.
   PUT "age" INTO m.

@@ -14,7 +14,7 @@ ACTION main(),
   SHOW d.speak().
   REAP chk FROM plant_is_a, d, "Speakable".
   SHOW chk.
-  CREATE c(LIST) TO { "nick": "Whiskers" }.
+  CREATE c(LST) TO { "nick": "Whiskers" }.
   REAP chk2 FROM plant_is_a, c, "Speakable".
   SHOW chk2.
   GIVE 0.

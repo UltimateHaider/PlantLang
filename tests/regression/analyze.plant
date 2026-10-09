@@ -1,7 +1,7 @@
 ACTION main(),
-  CREATE l(LIST) TO plant_list_make(3, "red", "green", "blue").
+  CREATE l(LST) TO plant_list_make(3, "red", "green", "blue").
   ANALYZE l.
-  CREATE m(LIST) TO plant_list_make(6, "name", "plant", "kind", "tree", "year", "2026").
+  CREATE m(LST) TO plant_list_make(6, "name", "plant", "kind", "tree", "year", "2026").
   ANALYZE m.
   ANALYZE NULL.
   ANALYZE 7.

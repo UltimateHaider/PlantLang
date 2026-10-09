@@ -6,7 +6,7 @@
 # "b"), "c").
 ACTION main()
   CREATE sx(TXT) TO "".
-  CREATE inner(LIST) TO plant_list_make(4, "name", "root", "count", "7").
+  CREATE inner(LST) TO plant_list_make(4, "name", "root", "count", "7").
   SHOW inner.name.
   SHOW inner.name + "!".
   SHOW inner.count + 1.
@@ -15,7 +15,7 @@ ACTION main()
   SHOW sx.
   CREATE n(LON) TO inner.count.
   SHOW n + 1.
-  CREATE outer(LIST) TO plant_list_make(4, "pt", plant_list_make(4, "name", "root", "nest", plant_list_make(4, "val", "9", "name", "deep")), "list", plant_list_make(3, "a", "b", "c")).
+  CREATE outer(LST) TO plant_list_make(4, "pt", plant_list_make(4, "name", "root", "nest", plant_list_make(4, "val", "9", "name", "deep")), "list", plant_list_make(3, "a", "b", "c")).
   SHOW outer.pt.name.
   SHOW outer.pt.nest.val.
   SHOW outer.pt.nest.val + 1.

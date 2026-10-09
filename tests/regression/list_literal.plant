@@ -5,17 +5,17 @@
 # through as tx_t, [] is plant_list_make(0), and name[expr] rewrites
 # to plant_list_get for element access.
 ACTION main(),
-  CREATE a(LIST) TO [1, 2, 3].
+  CREATE a(LST) TO [1, 2, 3].
   SHOW "simple=" + JOIN(a, ",").
-  CREATE b(LIST) TO ["x", ["y", "z"], "w"].
+  CREATE b(LST) TO ["x", ["y", "z"], "w"].
   SHOW "nested=" + JOIN(b, "|").
-  CREATE c(LIST) TO [].
+  CREATE c(LST) TO [].
   SHOW "empty=" + JOIN(c, ",").
   CREATE n(LON) TO 10.
   CREATE y(TXT) TO "var".
-  CREATE d(LIST) TO [n + 1, y].
+  CREATE d(LST) TO [n + 1, y].
   SHOW "mixed=" + JOIN(d, "-").
-  CREATE e(LIST) TO [1 + 1, 5].
+  CREATE e(LST) TO [1 + 1, 5].
   SHOW "arith=" + JOIN(e, ",").
   SHOW "lit=" + JOIN([n + 1, 2], ",").
   SHOW "i0=" + a[0].
