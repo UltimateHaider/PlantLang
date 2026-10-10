@@ -1,0 +1,4 @@
+SUITE "MAP Basic"
+  CREATE M (MAP).
+  SHOW "map-basic-ok".
+/SUITE.

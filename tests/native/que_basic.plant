@@ -1,0 +1,4 @@
+SUITE "QUE Basic"
+  CREATE Q (QUE).
+  SHOW "que-basic-ok".
+/SUITE.

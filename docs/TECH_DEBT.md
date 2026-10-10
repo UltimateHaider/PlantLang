@@ -355,3 +355,13 @@ SHOW "end".   # ← dropped
   "[" / "]" / "\"" / "+".
 - **Runtime change:** plant_compat.h (approved as root-cause fix).
 - **Discovered by:** v0.51.16 Phase 3.
+
+## TD-028: MAP — pair-list literal vs PlantMap* registry — OPEN
+- **Status:** OPEN
+- **Introduced:** v0.51.19 (MAP formalized as PlantMap*)
+- **Impact:** LOW — no native test uses (MAP) TO {...}.
+- **Symptom:** `CREATE M (MAP) TO {...}.` emits `PlantMap* M = plant_map_set(...)`
+  (pair-list assigned to PlantMap*).
+- **Fix direction:** v0.52.0 (align MAP literal with PlantMap* OR keep
+  pair-list + registry as PlantArray*).
+- **Discovered by:** v0.51.19 Phase 2.

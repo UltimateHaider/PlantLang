@@ -36,7 +36,11 @@ GLOBAL TYPE_REGISTRY TO [
     ["BOL",   "bool",          "0", "1", "scalar"],
     ["TXT",   "tx_t",          "0", "1", "scalar"],
     ["LST",   "PlantArray*",   "0", "1", "composite"],
-    ["TPL",   "PlantArray*",   "0", "1", "composite"]
+    ["TPL",   "PlantArray*",   "0", "1", "composite"],
+    ["MAP",   "PlantMap*",     "0", "1", "composite"],
+    ["QUE",   "PlantQueue*",   "0", "1", "composite"],
+    ["STK",   "PlantStack*",   "0", "1", "composite"],
+    ["JSN",   "PlantJson*",    "0", "1", "composite"]
 ].
 
 # v0.51.4 — Registry lookup: returns the record for `name`, or empty list.
@@ -4846,6 +4850,11 @@ ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(
       GIVE ccode2.
   /IF.
   REAP val FROM _map_get, node, "value".
+  # v0.51.19 — declaration-only CREATE: `CREATE X (TYPE).` (no value)
+  # previously emitted `<ctype> X = ;`. Default the value to 0.
+  IF val IS "",
+      SET val TO "0".
+  /IF.
   # v0.51.11 — CMP target: lower a top-level binary op to complex math.
   IF vtype IS "CMP",
       REAP val FROM _cmp_binop, val.
@@ -9539,7 +9548,7 @@ ACTION _cl_map_get(clmap(LST), key(TXT)),
 /ACTION.
 
 # is_prim_type — "1" when a PlantLang type is a built-in scalar
-# (NUM/NUM/TXT/LST/STRING/DOUBLE/JSON/SET/QUEUE/STACK/VOI/FUNC);
+# (NUM/NUM/TXT/LST/STRING/DOUBLE/JSN/SET/QUE/STK/VOI/FUNC);
 # "0" for enum/struct/generic/REF types. Closure scopes skip the
 # "#t" twin keys for primitives since only enum/struct types can
 # carry enum values (v0.48.11).
@@ -9552,10 +9561,10 @@ ACTION is_prim_type(ptype(TXT)),
   IF pbt IS "TXT", GIVE "1". /IF.
   IF pbt IS "STRING", GIVE "1". /IF.
   IF pbt IS "DOUBLE", GIVE "1". /IF.
-  IF pbt IS "JSON", GIVE "1". /IF.
+  IF pbt IS "JSN", GIVE "1". /IF.
   IF pbt IS "SET", GIVE "1". /IF.
-  IF pbt IS "QUEUE", GIVE "1". /IF.
-  IF pbt IS "STACK", GIVE "1". /IF.
+  IF pbt IS "QUE", GIVE "1". /IF.
+  IF pbt IS "STK", GIVE "1". /IF.
   IF pbt IS "VOI", GIVE "1". /IF.
   IF pbt IS "FUNC", GIVE "1". /IF.
   GIVE "0".

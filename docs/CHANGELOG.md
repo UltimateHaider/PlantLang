@@ -1,3 +1,50 @@
+## v0.51.19 — Formalize MAP + QUE + STK + JSN
+
+### Added
+- MAP formalized: ["MAP", "PlantMap*", "0", "1", "composite"].
+- QUE (renamed from QUEUE): ["QUE", "PlantQueue*", ...].
+- STK (renamed from STACK): ["STK", "PlantStack*", ...].
+- JSN (renamed from JSON): ["JSN", "PlantJson*", ...].
+- Declaration-only CREATE fix: `CREATE X (TYPE).` now emits `<ctype> X = 0;`.
+- 4 new tests: map_basic, que_basic, stk_basic, jsn_basic.
+
+### Changed (BREAKING)
+- QUEUE → QUE.
+- STACK → STK.
+- JSON → JSN (the TYPE; the format keyword `AS JSON` is unchanged).
+
+### Fixed
+- Declaration-only CREATE was broken for ALL types (`<ctype> X = ;`).
+- MAP doc/code discrepancy: DATA_TYPES now says PlantMap*.
+
+### Documented (new TD)
+- TD-028: MAP pair-list literal vs PlantMap* registry (latent).
+
+### Type Set (after v0.51.19 — 22 types)
+| Category | Types |
+|----------|-------|
+| Integer | BYT, UBT, SHR, USH, NUM, UNU, LON, ULO |
+| Float | FLT, DBL, DCM |
+| Complex | CMP |
+| Boolean | BOL |
+| Text | CHA, TXT |
+| Other | VOI |
+| Composite | LST, TPL, MAP, QUE, STK, JSN |
+
+### Verified
+- Native: 122/122 (was 118)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (539,013 B)
+- valgrind strict: PASS
+- Binary: 964352 bytes.
+
+### Out of Scope
+- TENSOR → v0.51.20.
+- SET → v0.51.21.
+- Multi-return → v0.51.18.1.
+- TD-019, TD-022, TD-024, TD-025, TD-028.
+
 ## v0.51.18 — TPL (Tuple)
 
 ### Added

@@ -28,7 +28,10 @@ PlantLang uses a **single opaque pointer** (`tx_t = void*`) as the universal run
 | `VOI` | `tx_t` | variable | N/A | `""` | Void pointer / byte buffer (v0.51.14; renamed from BYTES) |
 | `LST[T]` | `PlantArray*` | 16 bytes (pointer) | N/A | `plant_list_make(0)` | Dynamic array of T values |
 | `TPL[T...]` | `PlantArray*` | 16 bytes (pointer) | N/A | `plant_list_make(0)` | Tuple (v0.51.18; same runtime as LST) |
-| `MAP` | `PlantArray*` (pair-list) | 16 bytes (pointer) | N/A | `plant_map_create()` | Key-value pair-list (kind=1) |
+| `MAP` | `PlantMap*` | 16 bytes (pointer) | N/A | `0` | Hash map (v0.51.19; see TD-028 for literal note) |
+| `QUE` | `PlantQueue*` | 16 bytes (pointer) | N/A | `0` | FIFO queue (v0.51.19; renamed from QUEUE) |
+| `STK` | `PlantStack*` | 16 bytes (pointer) | N/A | `0` | LIFO stack (v0.51.19; renamed from STACK) |
+| `JSN` | `PlantJson*` | 16 bytes (pointer) | N/A | `0` | JSON value (v0.51.19; renamed from JSON) |
 | `ENUM X` | `tx_t` (int or name string) | 8 bytes (pointer) | 0 to 65535 (int) | first member | Enum member as integer or name string |
 | `MATH` | `PlantMath*` | 16 bytes (pointer) | N/A | `plant_math_create("0")` | Symbolic math expression (v0.50.0h) |
 | `BYT` | `signed char` | 1 byte (8-bit) | -128 to 127 | `0` | Signed 8-bit integer (v0.51.6) |
@@ -986,6 +989,37 @@ stripped via `type_base` → registry → `PlantArray*`.
 
 **Multi-return** (`-> (LON, TXT)`, `GIVE a, b`, `REAP a, b FROM f()`)
 is deferred to **v0.51.18.1** (HIGH risk, parser changes).
+
+---
+
+## Containers (v0.51.19)
+
+| Type | C type | Runtime |
+|------|--------|---------|
+| MAP | `PlantMap*` | hash map (`plant_map_hash_*`) |
+| QUE | `PlantQueue*` | FIFO (`queue_create/push/pop/peek/size`) |
+| STK | `PlantStack*` | LIFO (`stack_create/push/pop/peek/size`) |
+| JSN | `PlantJson*` | JSON value (`json_parse`/`json_get`/`json_at`) |
+
+### Syntax
+
+```plant
+CREATE M (MAP).
+CREATE Q (QUE).
+CREATE S (STK).
+CREATE J (JSN).
+```
+
+### Notes
+
+- **Declaration-only CREATE** (`CREATE X (TYPE).`) is supported since
+  v0.51.19 (emits `<ctype> X = 0;`).
+- **`JSN` (type) vs `JSON` (format keyword)** are DISTINCT. `JSN` is the
+  registry type; `JSON` is the data-format keyword used by
+  `HARVEST ... AS JSON` / `GIVE ... AS RESPONSE JSON` (unchanged).
+- **TD-028:** `MAP {...}` literals produce the pair-list representation
+  (`plant_map_set`), while `MAP` is registered as `PlantMap*` — a latent
+  mismatch (no native test uses `(MAP) TO {...}`).
 
 ---
 

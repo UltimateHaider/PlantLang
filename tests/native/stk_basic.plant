@@ -1,0 +1,4 @@
+SUITE "STK Basic"
+  CREATE S (STK).
+  SHOW "stk-basic-ok".
+/SUITE.

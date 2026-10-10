@@ -1,0 +1,4 @@
+SUITE "JSN Basic"
+  CREATE J (JSN).
+  SHOW "jsn-basic-ok".
+/SUITE.

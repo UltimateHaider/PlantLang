@@ -12055,6 +12055,9 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     return ccode2;
     }
     val = _map_get(node, "value");
+    if (strcmp(val,"") == 0) {
+    val = "0";
+    }
     if (strcmp(vtype,"CMP") == 0) {
     val = _cmp_binop(val);
     }
@@ -16872,16 +16875,16 @@ tx_t is_prim_type(tx_t ptype) {
     if (strcmp(pbt,"DOUBLE") == 0) {
     return "1";
     }
-    if (strcmp(pbt,"JSON") == 0) {
+    if (strcmp(pbt,"JSN") == 0) {
     return "1";
     }
     if (strcmp(pbt,"SET") == 0) {
     return "1";
     }
-    if (strcmp(pbt,"QUEUE") == 0) {
+    if (strcmp(pbt,"QUE") == 0) {
     return "1";
     }
-    if (strcmp(pbt,"STACK") == 0) {
+    if (strcmp(pbt,"STK") == 0) {
     return "1";
     }
     if (strcmp(pbt,"VOI") == 0) {
@@ -17497,7 +17500,7 @@ int main(int argc, char **argv) {
   tx_t out_path = "";
   tx_t written = "";
   tx_t c_len = "";
-  TYPE_REGISTRY = plant_list_make(18, plant_list_make(5, "LON", "long", "1", "1", "scalar"), plant_list_make(5, "NUM", "int", "1", "1", "scalar"), plant_list_make(5, "UNU", "unsigned int", "1", "1", "scalar"), plant_list_make(5, "DBL", "double", "1", "1", "scalar"), plant_list_make(5, "FLT", "float", "1", "1", "scalar"), plant_list_make(5, "DCM", "long double", "1", "1", "scalar"), plant_list_make(5, "CHA", "char", "0", "1", "scalar"), plant_list_make(5, "VOI", "tx_t", "0", "1", "scalar"), plant_list_make(5, "BYT", "signed char", "1", "1", "scalar"), plant_list_make(5, "UBT", "unsigned char", "1", "1", "scalar"), plant_list_make(5, "SHR", "short", "1", "1", "scalar"), plant_list_make(5, "USH", "unsigned short", "1", "1", "scalar"), plant_list_make(5, "ULO", "unsigned long", "1", "1", "scalar"), plant_list_make(5, "CMP", "PlantComplex", "0", "1", "scalar"), plant_list_make(5, "BOL", "bool", "0", "1", "scalar"), plant_list_make(5, "TXT", "tx_t", "0", "1", "scalar"), plant_list_make(5, "LST", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "TPL", "PlantArray*", "0", "1", "composite"));
+  TYPE_REGISTRY = plant_list_make(22, plant_list_make(5, "LON", "long", "1", "1", "scalar"), plant_list_make(5, "NUM", "int", "1", "1", "scalar"), plant_list_make(5, "UNU", "unsigned int", "1", "1", "scalar"), plant_list_make(5, "DBL", "double", "1", "1", "scalar"), plant_list_make(5, "FLT", "float", "1", "1", "scalar"), plant_list_make(5, "DCM", "long double", "1", "1", "scalar"), plant_list_make(5, "CHA", "char", "0", "1", "scalar"), plant_list_make(5, "VOI", "tx_t", "0", "1", "scalar"), plant_list_make(5, "BYT", "signed char", "1", "1", "scalar"), plant_list_make(5, "UBT", "unsigned char", "1", "1", "scalar"), plant_list_make(5, "SHR", "short", "1", "1", "scalar"), plant_list_make(5, "USH", "unsigned short", "1", "1", "scalar"), plant_list_make(5, "ULO", "unsigned long", "1", "1", "scalar"), plant_list_make(5, "CMP", "PlantComplex", "0", "1", "scalar"), plant_list_make(5, "BOL", "bool", "0", "1", "scalar"), plant_list_make(5, "TXT", "tx_t", "0", "1", "scalar"), plant_list_make(5, "LST", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "TPL", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "MAP", "PlantMap*", "0", "1", "composite"), plant_list_make(5, "QUE", "PlantQueue*", "0", "1", "composite"), plant_list_make(5, "STK", "PlantStack*", "0", "1", "composite"), plant_list_make(5, "JSN", "PlantJson*", "0", "1", "composite"));
   arg0 = get_cli_arg(0);
   if (strcmp(arg0,"-h") == 0 || strcmp(arg0,"--help") == 0) {
   plant_iReport_print(get_report(), "Chloroplast — Pure Native PlantLang compiler");
@@ -17508,7 +17511,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.51.18 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.51.19 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);
