@@ -344,12 +344,14 @@ SHOW "end".   # ← dropped
 - **Replacement:** TXT (canonical).
 - **Related:** TD-018.
 
-## TD-027: str_eq / handle_strcmp literal-paren bug — OPEN
-- **Status:** OPEN
-- **Introduced:** pre-v0.51.16 (long-standing, discovered in v0.51.16)
-- **Target fix:** v0.52.0
-- **Impact:** MEDIUM — a literal `"("` or `")"` inside `str_eq` arguments
-  confuses the runtime `handle_strcmp` pass, causing a build error.
-- **Workaround:** use variable chars (lp/rp/lb/rb) instead of literals.
-- **Discovered by:** v0.51.16 Phase 3 (_lst_binop implementation).
-- **Related:** TD-021 (IS between variables).
+## TD-027: str_eq / handle_strcmp literal-paren bug — CLOSED
+- **Status:** ✅ CLOSED in v0.51.17
+- **Fixed:** handle_strcmp pass now handles literal parens inside
+  str_eq arguments correctly via an escape-aware quote mask.
+- **Root cause:** the LEFT operand scan (ls loop) was not quote-aware,
+  unlike the right scan.
+- **Approach:** Option A (quote-aware scanning).
+- **Workaround removed:** _lst_binop now uses literal "(" / ")" /
+  "[" / "]" / "\"" / "+".
+- **Runtime change:** plant_compat.h (approved as root-cause fix).
+- **Discovered by:** v0.51.16 Phase 3.

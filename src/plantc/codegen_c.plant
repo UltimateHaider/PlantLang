@@ -4131,22 +4131,16 @@ ACTION rewrite_cond_is(cond(TXT), nums(LST)),
 # ──────────────────────────────────────────────────────────────
 ACTION _lst_binop(expr(TXT)),
   CREATE ch(TXT) TO "".
-  CREATE lp(TXT) TO "(".
-  CREATE rp(TXT) TO ")".
-  CREATE lb(TXT) TO "[".
-  CREATE rb(TXT) TO "]".
-  CREATE plus(TXT) TO "+".
-  CREATE q(TXT) TO "\"".
   CREATE depth(LON) TO 0.
   CREATE instr(LON) TO 0.
   CREATE i(LON) TO 0.
   SEASON i < LEN(expr),
     REAP ch FROM char_at, expr, i.
-    IF str_eq(ch, q) IS "1", SET instr TO 1 - instr. /IF.
+    IF str_eq(ch, "\"") IS "1", SET instr TO 1 - instr. /IF.
     IF instr IS 0,
-      IF str_eq(ch, lp) IS "1" OR str_eq(ch, lb) IS "1", SET depth TO depth + 1. /IF.
-      IF str_eq(ch, rp) IS "1" OR str_eq(ch, rb) IS "1", SET depth TO depth - 1. /IF.
-      IF depth IS 0 AND str_eq(ch, plus) IS "1",
+      IF str_eq(ch, "(") IS "1" OR str_eq(ch, "[") IS "1", SET depth TO depth + 1. /IF.
+      IF str_eq(ch, ")") IS "1" OR str_eq(ch, "]") IS "1", SET depth TO depth - 1. /IF.
+      IF depth IS 0 AND str_eq(ch, "+") IS "1",
         REAP c0 FROM char_at, expr, i - 1.
         REAP c1 FROM char_at, expr, i + 1.
         IF str_eq(c0, " ") IS "1" AND str_eq(c1, " ") IS "1",

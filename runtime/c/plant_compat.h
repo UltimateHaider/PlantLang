@@ -370,6 +370,10 @@ static tx_t handle_strcmp(tx_t expr) {  const char*_e=_S(expr);
   char *out = buf; *out = 0;
   size_t i = 0;
   size_t last_out = 0, last_in = 0;
+  /* v0.51.17 — TD-027: quote mask so the LEFT operand scan ignores
+     parens/brackets that live inside string literals. */
+  char *inq = (char*)calloc(len, 1);
+  if (inq) { int q = 0; size_t z = 0; while (z < len) { if (_e[z] == '"') { q = 1 - q; inq[z] = 1; z++; continue; } if (q) { inq[z] = 1; if (_e[z] == '\\') { z++; if (z < len) inq[z] = 1; } } z++; } }
   while (i < len) {
     if (_e[i] == '"') {
       size_t j = i + 1;
@@ -389,7 +393,7 @@ static tx_t handle_strcmp(tx_t expr) {  const char*_e=_S(expr);
     if (op_len > 0) {
       int d = 0, bd = 0, has_str = 0, lfound = 0;
       size_t left_start = 0;
-      size_t ls = i; while (ls > 0) { ls--; if (_e[ls] == ')' && d == 0 && bd == 0) { d++; continue; } if (_e[ls] == '(') { d--; if (d < 0) { ls++; break; } continue; } if (_e[ls] == ']' && d == 0) { bd++; continue; } if (_e[ls] == '[' && d == 0) { bd--; if (bd < 0) { ls++; break; } continue; } if (d == 0 && bd == 0) { if ((ls+1 < len && _e[ls] == '&' && _e[ls+1] == '&') || (ls+1 < len && _e[ls] == '|' && _e[ls+1] == '|')) { ls += 2; break; } if (_e[ls] == ',') { ls++; break; } } }
+      size_t ls = i; while (ls > 0) { ls--; if (inq && inq[ls]) continue; if (_e[ls] == ')' && d == 0 && bd == 0) { d++; continue; } if (_e[ls] == '(') { d--; if (d < 0) { ls++; break; } continue; } if (_e[ls] == ']' && d == 0) { bd++; continue; } if (_e[ls] == '[' && d == 0) { bd--; if (bd < 0) { ls++; break; } continue; } if (d == 0 && bd == 0) { if ((ls+1 < len && _e[ls] == '&' && _e[ls+1] == '&') || (ls+1 < len && _e[ls] == '|' && _e[ls+1] == '|')) { ls += 2; break; } if (_e[ls] == ',') { ls++; break; } } }
       while (ls <= i && (_e[ls] == ' ' || _e[ls] == '\t')) { ls++; if (ls > i) break; }
       size_t le = i;
       while (le > ls && (_e[le-1] == ' ' || _e[le-1] == '\t')) le--;
@@ -428,6 +432,7 @@ static tx_t handle_strcmp(tx_t expr) {  const char*_e=_S(expr);
   *out = 0;
   tx_t result = strdup(buf);
   free(buf);
+  free(inq);
   return result;
 }
 

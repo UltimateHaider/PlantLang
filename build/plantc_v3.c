@@ -11434,28 +11434,22 @@ tx_t _lst_binop(tx_t expr) {
   tx_t lw = "";
   tx_t rw = "";
     tx_t ch = "";
-    tx_t lp = "(";
-    tx_t rp = ")";
-    tx_t lb = "[";
-    tx_t rb = "]";
-    tx_t plus = "+";
-    tx_t q = "\"";
     long depth = 0;
     long instr = 0;
     long i = 0;
     while (i < strlen( expr )) {
     ch = char_at(expr, i);
-    if (strcmp(str_eq ( ch , q ),"1") == 0) {
+    if (strcmp(str_eq ( ch , "\"" ),"1") == 0) {
     instr = 1 - instr;
     }
     if (instr == 0) {
-    if (strcmp(str_eq ( ch , lp ),"1") == 0 || strcmp(str_eq ( ch , lb ),"1") == 0) {
+    if (strcmp(str_eq ( ch , "(" ),"1") == 0 || strcmp(str_eq ( ch , "[" ),"1") == 0) {
     depth = depth+1;
     }
-    if (strcmp(str_eq ( ch , rp ),"1") == 0 || strcmp(str_eq ( ch , rb ),"1") == 0) {
+    if (strcmp(str_eq ( ch , ")" ),"1") == 0 || strcmp(str_eq ( ch , "]" ),"1") == 0) {
     depth = depth - 1;
     }
-    if (depth == 0 && strcmp(str_eq ( ch , plus ),"1") == 0) {
+    if (depth == 0 && strcmp(str_eq ( ch , "+" ),"1") == 0) {
     c0 = char_at(expr, i - 1);
     c1 = char_at(expr, i+1);
     if (strcmp(str_eq ( c0 , " " ),"1") == 0 && strcmp(str_eq ( c1 , " " ),"1") == 0) {
@@ -17514,7 +17508,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.51.16 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.51.17 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

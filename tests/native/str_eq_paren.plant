@@ -1,0 +1,6 @@
+SUITE "str_eq with paren (TD-027 fix)"
+  CREATE A (LST) TO [1, 2, 3].
+  SHOW COUNT(A).
+
+  SHOW "str-eq-paren-ok".
+/SUITE.

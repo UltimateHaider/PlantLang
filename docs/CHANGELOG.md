@@ -1,3 +1,34 @@
+## v0.51.17 — TD-027 Fix (str_eq literal-paren bug)
+
+### Fixed
+- TD-027: handle_strcmp pass no longer confuses literal "(" or ")"
+  inside str_eq arguments.
+- Added escape-aware quote mask to the left operand scan.
+- _lst_binop workaround removed (uses literal "(" now).
+
+### Added
+- 1 new test: str_eq_paren.
+
+### Runtime change
+- runtime/c/plant_compat.h: handle_strcmp left scan now quote-aware.
+- (Approved as root-cause fix; constraint #3 "unless absolutely
+  necessary".)
+
+### Bootstrap
+- 2-stage (seed needed fixed handle_strcmp).
+
+### Verified
+- Native: 115/115 (was 114)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (538,644 B)
+- valgrind strict: PASS
+- Binary: 964352 bytes (was 960256).
+
+### Out of Scope (v0.51.18 or v0.52.0)
+- TENSOR/MAP/SET/QUEUE/STACK formalization.
+- TD-019, TD-022, TD-024, TD-025.
+
 ## v0.51.16 — List Operations (TD-020 closure)
 
 ### Added
