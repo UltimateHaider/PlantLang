@@ -1,0 +1,13 @@
+SUITE "LST All Operations"
+  CREATE L (LST) TO [1, 2, 3].
+
+  PUSH(L, 4).
+  SET L[0] TO 100.
+
+  CREATE M (LST) TO L + [5].
+
+  SHOW COUNT(L).
+  SHOW COUNT(M).
+
+  SHOW "lst-all-ops-ok".
+/SUITE.

@@ -1,0 +1,8 @@
+SUITE "LST Concat"
+  CREATE A (LST) TO [1, 2].
+  CREATE B (LST) TO A + [3].
+
+  SHOW COUNT(B).
+
+  SHOW "lst-concat-ok".
+/SUITE.

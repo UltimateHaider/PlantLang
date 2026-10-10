@@ -265,6 +265,8 @@ void*       plant_list_get(PlantArray* list, int64_t index);
 void        plant_list_set(PlantArray* list, int64_t index, void* value);
 PlantArray* plant_list_push(PlantArray* list, void* value);
 void*       plant_list_pop(PlantArray* list);   /* removes+returns last element; empty -> "" */
+/* v0.51.16 — Concatenate two lists (new list = a ++ b; non-mutating). */
+PlantArray* plant_list_concat(PlantArray* a, PlantArray* b);
 PlantArray* plant_list_make(int64_t count, ...);
 tx_t        plant_list_add(tx_t list, tx_t value);    /* NULL-safe: instantiate when list is NULL */
 tx_t        plant_list_remove(tx_t list, tx_t value); /* first matching occurrence; NULL/empty no-op */

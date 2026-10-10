@@ -1266,12 +1266,28 @@ ACTION parse_set_stmt(tokens(LST), pos(LON)),
   REAP id_pair FROM plant_iLexer_consume_at, lexer, tokens, p2.
   REAP id_name FROM plant_iLexer_tok_lex, lexer, id_pair[0].
   REAP p3 FROM _second, id_pair.
-  REAP eq FROM plant_iLexer_consume_at, lexer, tokens, p3.
+  # v0.51.16 — optional [index] for list index assignment.
+  CREATE sidx(TXT) TO "".
+  CREATE p3f(LON) TO p3.
+  REAP pk FROM plant_iLexer_peek_at, lexer, tokens, p3.
+  REAP pklex FROM plant_iLexer_tok_lex, lexer, pk.
+  IF pklex IS "[",
+    REAP opb FROM plant_iLexer_consume_at, lexer, tokens, p3.
+    REAP pob FROM _second, opb.
+    REAP ivp FROM collect_until, tokens, pob, "]".
+    REAP ivtxt FROM _first, ivp.
+    SET sidx TO ivtxt.
+    REAP poc FROM _second, ivp.
+    REAP cb FROM plant_iLexer_consume_at, lexer, tokens, poc.
+    REAP pcb FROM _second, cb.
+    SET p3f TO pcb.
+  /IF.
+  REAP eq FROM plant_iLexer_consume_at, lexer, tokens, p3f.
   REAP p4 FROM _second, eq.
   REAP vpair FROM collect_value, tokens, p4.
   CREATE expr TO vpair[0].
   REAP p5 FROM _second, vpair.
-  GIVE plant_list_make(2, plant_list_make(6, "type", "set_stmt", "target", id_name, "value", expr), p5).
+  GIVE plant_list_make(2, plant_list_make(8, "type", "set_stmt", "target", id_name, "index", sidx, "value", expr), p5).
 /ACTION.
 
 #── INCREASE / DECREASE ─────────────────────────────────────────

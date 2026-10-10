@@ -196,6 +196,7 @@ tx_t _swap_self(tx_t e);
 tx_t _handle_cast(tx_t e);
 tx_t is_plain_str_ident(tx_t x, PlantArray* nums);
 tx_t rewrite_cond_is(tx_t cond, PlantArray* nums);
+tx_t _lst_binop(tx_t expr);
 tx_t _cmp_binop(tx_t expr);
 tx_t _handle_cmp_ops(tx_t expr, PlantArray* evars);
 tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* maths);
@@ -3085,6 +3086,15 @@ tx_t parse_set_stmt(PlantArray* tokens, long pos) {
   tx_t id_pair = "";
   tx_t id_name = "";
   tx_t p3 = "";
+  tx_t pk = "";
+  tx_t pklex = "";
+  tx_t opb = "";
+  tx_t pob = "";
+  tx_t ivp = "";
+  tx_t ivtxt = "";
+  tx_t poc = "";
+  tx_t cb = "";
+  tx_t pcb = "";
   tx_t eq = "";
   tx_t p4 = "";
   tx_t vpair = "";
@@ -3095,12 +3105,27 @@ tx_t parse_set_stmt(PlantArray* tokens, long pos) {
     id_pair = plant_iLexer_consume_at(lexer, tokens, p2);
     id_name = plant_iLexer_tok_lex(lexer, plant_list_get(id_pair ,  0 ));
     p3 = _second(id_pair);
-    eq = plant_iLexer_consume_at(lexer, tokens, p3);
+    tx_t sidx = "";
+    long p3f = p3;
+    pk = plant_iLexer_peek_at(lexer, tokens, p3);
+    pklex = plant_iLexer_tok_lex(lexer, pk);
+    if (strcmp(pklex,"[") == 0) {
+    opb = plant_iLexer_consume_at(lexer, tokens, p3);
+    pob = _second(opb);
+    ivp = collect_until(tokens, pob, "]");
+    ivtxt = _first(ivp);
+    sidx = ivtxt;
+    poc = _second(ivp);
+    cb = plant_iLexer_consume_at(lexer, tokens, poc);
+    pcb = _second(cb);
+    p3f = pcb;
+    }
+    eq = plant_iLexer_consume_at(lexer, tokens, p3f);
     p4 = _second(eq);
     vpair = collect_value(tokens, p4);
     tx_t expr = plant_list_get(vpair ,  0 );
     p5 = _second(vpair);
-    return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "set_stmt" , "target" , id_name , "value" , expr ) , p5 );
+    return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "set_stmt" , "target" , id_name , "index" , sidx , "value" , expr ) , p5 );
 }
 tx_t parse_incdec_stmt(PlantArray* tokens, long pos, tx_t op) {
   tx_t lexer = "";
@@ -11401,6 +11426,51 @@ tx_t rewrite_cond_is(tx_t cond, PlantArray* nums) {
     }
     return cond;
 }
+tx_t _lst_binop(tx_t expr) {
+  tx_t c0 = "";
+  tx_t c1 = "";
+  tx_t l = "";
+  tx_t r = "";
+  tx_t lw = "";
+  tx_t rw = "";
+    tx_t ch = "";
+    tx_t lp = "(";
+    tx_t rp = ")";
+    tx_t lb = "[";
+    tx_t rb = "]";
+    tx_t plus = "+";
+    tx_t q = "\"";
+    long depth = 0;
+    long instr = 0;
+    long i = 0;
+    while (i < strlen( expr )) {
+    ch = char_at(expr, i);
+    if (strcmp(str_eq ( ch , q ),"1") == 0) {
+    instr = 1 - instr;
+    }
+    if (instr == 0) {
+    if (strcmp(str_eq ( ch , lp ),"1") == 0 || strcmp(str_eq ( ch , lb ),"1") == 0) {
+    depth = depth+1;
+    }
+    if (strcmp(str_eq ( ch , rp ),"1") == 0 || strcmp(str_eq ( ch , rb ),"1") == 0) {
+    depth = depth - 1;
+    }
+    if (depth == 0 && strcmp(str_eq ( ch , plus ),"1") == 0) {
+    c0 = char_at(expr, i - 1);
+    c1 = char_at(expr, i+1);
+    if (strcmp(str_eq ( c0 , " " ),"1") == 0 && strcmp(str_eq ( c1 , " " ),"1") == 0) {
+    l = substring(expr, 0, i - 1);
+    r = substring(expr, i+2, strlen( expr ));
+    lw = trim(l);
+    rw = trim(r);
+    return _cat(_cat4("plant_list_concat(", lw, ", ", rw), ")");
+    }
+    }
+    }
+    i = i+1;
+    }
+    return expr;
+}
 tx_t _cmp_binop(tx_t expr) {
   tx_t c0 = "";
   tx_t c1 = "";
@@ -11614,6 +11684,7 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* 
     e = _math_func_paren(e, "MAT_TRACE", "plant_mat_trace");
     e = _math_func_paren(e, "MAT_IDENTITY", "plant_mat_identity");
     e = _handle_func_paren(e, "TENSOR", "plant_tensor_from_list");
+    e = _handle_func_paren(e, "PUSH", "plant_list_push");
     e = _handle_func_paren(e, "TENSOR_SHAPE", "plant_tensor_shape");
     e = _handle_func_paren(e, "TENSOR_NDIM", "plant_tensor_ndim");
     e = _handle_func_paren(e, "TENSOR_SIZE", "plant_tensor_size");
@@ -11993,6 +12064,9 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     if (strcmp(vtype,"CMP") == 0) {
     val = _cmp_binop(val);
     }
+    if (strcmp(vtype,"LST") == 0) {
+    val = _lst_binop(val);
+    }
     cval = translate_expr(val, nums, evars, plant_list_make ( 0 ));
     cval = _handle_cat(cval, nums, evars);
     _aby = find_any(vtype, "[");
@@ -12144,10 +12218,23 @@ tx_t gen_set_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
   tx_t target = "";
   tx_t val = "";
   tx_t cval = "";
+  tx_t sidx = "";
+  tx_t cidx = "";
+  tx_t isnv = "";
     target = _map_get(node, "target");
     val = _map_get(node, "value");
     cval = translate_expr(val, nums, evars, plant_list_make ( 0 ));
     cval = _handle_cat(cval, nums, evars);
+    sidx = _map_get(node, "index");
+    if (strcmp(sidx,"") > 0) {
+    cidx = translate_expr(sidx, nums, evars, plant_list_make ( 0 ));
+    cidx = _handle_cat(cidx, nums, evars);
+    isnv = expr_is_numeric(cval, nums);
+    if (isnv == 1) {
+    cval = _cat3("_from_long(", cval, ")");
+    }
+    return _cat(_cat4(_cat4(isel, "  plant_list_set(", target, ", "), cidx, ", ", cval), ");\n");
+    }
     return _cat3(_cat4(isel, "  ", target, " = "), cval, ";\n");
 }
 tx_t gen_give_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t rty, tx_t actx, tx_t mexit, tx_t isel) {
@@ -13757,6 +13844,9 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     }
     if (strcmp(ca2,"GLOBAL_FREE") == 0) {
     ca2 = "plant_free";
+    }
+    if (strcmp(ca2,"PUSH") == 0) {
+    ca2 = "plant_list_push";
     }
     if (strcmp(ca2orig,"LIST_FREE") == 0 || strcmp(ca2orig,"TENSOR_FREE") == 0 || strcmp(ca2orig,"FREE") == 0) {
     fargs = _map_get(node, "args");
@@ -17424,7 +17514,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.51.15 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.51.16 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

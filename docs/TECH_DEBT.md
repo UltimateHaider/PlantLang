@@ -271,17 +271,14 @@ SHOW "end".   # ← dropped
 - **Discovered by:** v0.51.3b Phase 1 (GLOBAL in SUITE testing).
 - **Related:** TD-020 (list ops).
 
-## TD-020: List operations unsupported
-- **Status:** OPEN
-- **Introduced:** pre-v0.51 (long-standing)
-- **Target fix:** v0.51.4 or v0.52.0
-- **Impact:** MEDIUM — three common list mutations are not supported:
-  - `SET lst TO lst + [item]` (list concat) → invalid C.
-  - `SET lst[i] TO value` (index assignment) → not lowered.
-  - `PUSH(lst, item)` (push) → `PUSH` is not a keyword.
-- **Supported:** `PUT item INTO lst.` (append only).
-- **Affects:** locals and globals alike (not GLOBAL-specific).
-- **Discovered by:** v0.51.3b Phase 3.
+## TD-020: List operations (+, [], PUSH) — CLOSED
+- **Status:** ✅ CLOSED in v0.51.16
+- **Added:**
+  - `lst + [item]` (concat → new list)
+  - `lst[i] = value` (index assignment)
+  - `PUSH(lst, item)` (push keyword via function-rewrite)
+- **Runtime:** plant_list_concat, plant_list_set, plant_list_push.
+- **Preserved:** l.push() method syntax (PUSH via function-rewrite).
 - **Related:** TD-019.
 
 ## TD-021: `IS` between variables does not lower to string compare — CLOSED
@@ -346,3 +343,13 @@ SHOW "end".   # ← dropped
 - **Removed:** TX record + all TX annotations (947 src + 98 tests).
 - **Replacement:** TXT (canonical).
 - **Related:** TD-018.
+
+## TD-027: str_eq / handle_strcmp literal-paren bug — OPEN
+- **Status:** OPEN
+- **Introduced:** pre-v0.51.16 (long-standing, discovered in v0.51.16)
+- **Target fix:** v0.52.0
+- **Impact:** MEDIUM — a literal `"("` or `")"` inside `str_eq` arguments
+  confuses the runtime `handle_strcmp` pass, causing a build error.
+- **Workaround:** use variable chars (lp/rp/lb/rb) instead of literals.
+- **Discovered by:** v0.51.16 Phase 3 (_lst_binop implementation).
+- **Related:** TD-021 (IS between variables).

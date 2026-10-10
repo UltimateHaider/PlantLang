@@ -938,17 +938,15 @@ PUT 4 INTO L.    # append
 ### Operations
 
 - `CREATE (LST)` / `(LST[T])`
-- `PUT item INTO lst.`
+- `PUT item INTO lst.`              # append
+- `lst + [item]`                    # concat (new list)
+- `lst[i] = value`                  # index assignment
+- `PUSH(lst, item)`                 # push keyword
 - `COUNT lst`
 - `_at(lst, i)`
+- `l.push() / l.pop() / l.get()`    # method syntax
 - `REAP r FROM plant_list_get, lst, i`
 - Iteration (CYCLE, SEASON)
-
-### Missing (TD-020)
-
-- `lst + [item]` (concat)
-- `lst[i] = value` (index assignment)
-- `PUSH(lst, item)`
 
 ---
 

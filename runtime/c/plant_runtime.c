@@ -1512,7 +1512,29 @@ PlantArray* plant_list_push(PlantArray* list, void* value) {
 
 void* plant_list_pop(PlantArray* list) {
     if (!list || list->count == 0) return "";
-    return list->items[--list->count];
+    list->count--;
+    return list->items[list->count];
+}
+
+/* v0.51.16 — Concatenate two lists (new list = a ++ b; non-mutating). */
+PlantArray* plant_list_concat(PlantArray* a, PlantArray* b) {
+    int64_t i;
+    int64_t total = 0;
+    PlantArray* out;
+    if (a) total += a->count;
+    if (b) total += b->count;
+    out = plant_list_create(total);
+    if (a) {
+        for (i = 0; i < a->count; i++) {
+            out = plant_list_push(out, plant_list_get(a, i));
+        }
+    }
+    if (b) {
+        for (i = 0; i < b->count; i++) {
+            out = plant_list_push(out, plant_list_get(b, i));
+        }
+    }
+    return out;
 }
 
 PlantArray* plant_list_make(int64_t count, ...) {

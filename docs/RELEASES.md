@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.51.15
+# Auto-updated: 0.51.16
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.51.15 | 960176 | 8941 | 448 | 109 | 322 | 5361 |
+| v0.51.16 | 960256 | 8963 | 448 | 109 | 322 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -34,6 +34,7 @@
 | v0.51.13 | 2026 | CHA + TXT (Text Types) | Released |
 | v0.51.14 | 2026 | VOI + TX Removal | Released |
 | v0.51.15 | 2026 | LST (List Formalization) | Released |
+| v0.51.16 | 2026 | List Operations (TD-020) | Released |
 
 ## Growth Chart (ASCII)
 

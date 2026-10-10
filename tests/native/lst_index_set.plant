@@ -1,0 +1,8 @@
+SUITE "LST Index Set"
+  CREATE L (LST) TO [1, 2, 3].
+  SET L[0] TO 100.
+
+  SHOW _at(L, 0).
+
+  SHOW "lst-index-set-ok".
+/SUITE.

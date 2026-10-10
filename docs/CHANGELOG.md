@@ -1,3 +1,37 @@
+## v0.51.16 — List Operations (TD-020 closure)
+
+### Added
+- `lst + [item]` (concat → new list).
+- `lst[i] = value` (index assignment).
+- `PUSH(lst, item)` (push keyword).
+- 4 new tests: lst_concat, lst_index_set, lst_push, lst_all_ops.
+
+### Runtime
+- plant_list_concat added (new list = a ++ b; non-mutating).
+- plant_list_set, plant_list_push reused (already existed).
+
+### Resolved
+- TD-020: List operations (+, [], PUSH) now supported.
+
+### Documented (new TD)
+- TD-027: str_eq / handle_strcmp literal-paren bug.
+
+### Deviation
+- PUSH implemented via function-rewrite (not lexer keyword), to
+  preserve l.push() method syntax (used by method_call.plant).
+
+### Verified
+- Native: 114/114 (was 110)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (538,754 B)
+- valgrind strict: PASS
+- Binary: 960256 bytes (+80).
+
+### Out of Scope (v0.51.17 or v0.52.0)
+- TENSOR/MAP/SET/QUEUE/STACK formalization.
+- TD-019, TD-022, TD-024, TD-025, TD-027.
+
 ## v0.51.15 — LST (List Formalization)
 
 ### Changed (BREAKING)
