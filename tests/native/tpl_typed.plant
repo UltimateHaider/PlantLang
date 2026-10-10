@@ -1,0 +1,8 @@
+SUITE "TPL Typed (TPL[LON, TXT])"
+  CREATE T (TPL[LON, TXT]) TO [1, "hello"].
+
+  SHOW T[0].
+  SHOW T[1].
+
+  SHOW "tpl-typed-ok".
+/SUITE.

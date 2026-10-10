@@ -17497,7 +17497,7 @@ int main(int argc, char **argv) {
   tx_t out_path = "";
   tx_t written = "";
   tx_t c_len = "";
-  TYPE_REGISTRY = plant_list_make(17, plant_list_make(5, "LON", "long", "1", "1", "scalar"), plant_list_make(5, "NUM", "int", "1", "1", "scalar"), plant_list_make(5, "UNU", "unsigned int", "1", "1", "scalar"), plant_list_make(5, "DBL", "double", "1", "1", "scalar"), plant_list_make(5, "FLT", "float", "1", "1", "scalar"), plant_list_make(5, "DCM", "long double", "1", "1", "scalar"), plant_list_make(5, "CHA", "char", "0", "1", "scalar"), plant_list_make(5, "VOI", "tx_t", "0", "1", "scalar"), plant_list_make(5, "BYT", "signed char", "1", "1", "scalar"), plant_list_make(5, "UBT", "unsigned char", "1", "1", "scalar"), plant_list_make(5, "SHR", "short", "1", "1", "scalar"), plant_list_make(5, "USH", "unsigned short", "1", "1", "scalar"), plant_list_make(5, "ULO", "unsigned long", "1", "1", "scalar"), plant_list_make(5, "CMP", "PlantComplex", "0", "1", "scalar"), plant_list_make(5, "BOL", "bool", "0", "1", "scalar"), plant_list_make(5, "TXT", "tx_t", "0", "1", "scalar"), plant_list_make(5, "LST", "PlantArray*", "0", "1", "composite"));
+  TYPE_REGISTRY = plant_list_make(18, plant_list_make(5, "LON", "long", "1", "1", "scalar"), plant_list_make(5, "NUM", "int", "1", "1", "scalar"), plant_list_make(5, "UNU", "unsigned int", "1", "1", "scalar"), plant_list_make(5, "DBL", "double", "1", "1", "scalar"), plant_list_make(5, "FLT", "float", "1", "1", "scalar"), plant_list_make(5, "DCM", "long double", "1", "1", "scalar"), plant_list_make(5, "CHA", "char", "0", "1", "scalar"), plant_list_make(5, "VOI", "tx_t", "0", "1", "scalar"), plant_list_make(5, "BYT", "signed char", "1", "1", "scalar"), plant_list_make(5, "UBT", "unsigned char", "1", "1", "scalar"), plant_list_make(5, "SHR", "short", "1", "1", "scalar"), plant_list_make(5, "USH", "unsigned short", "1", "1", "scalar"), plant_list_make(5, "ULO", "unsigned long", "1", "1", "scalar"), plant_list_make(5, "CMP", "PlantComplex", "0", "1", "scalar"), plant_list_make(5, "BOL", "bool", "0", "1", "scalar"), plant_list_make(5, "TXT", "tx_t", "0", "1", "scalar"), plant_list_make(5, "LST", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "TPL", "PlantArray*", "0", "1", "composite"));
   arg0 = get_cli_arg(0);
   if (strcmp(arg0,"-h") == 0 || strcmp(arg0,"--help") == 0) {
   plant_iReport_print(get_report(), "Chloroplast — Pure Native PlantLang compiler");
@@ -17508,7 +17508,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.51.17 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.51.18 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

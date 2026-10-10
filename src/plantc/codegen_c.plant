@@ -35,7 +35,8 @@ GLOBAL TYPE_REGISTRY TO [
     ["CMP",   "PlantComplex",  "0", "1", "scalar"],
     ["BOL",   "bool",          "0", "1", "scalar"],
     ["TXT",   "tx_t",          "0", "1", "scalar"],
-    ["LST",   "PlantArray*",   "0", "1", "composite"]
+    ["LST",   "PlantArray*",   "0", "1", "composite"],
+    ["TPL",   "PlantArray*",   "0", "1", "composite"]
 ].
 
 # v0.51.4 — Registry lookup: returns the record for `name`, or empty list.

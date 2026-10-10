@@ -27,6 +27,7 @@ PlantLang uses a **single opaque pointer** (`tx_t = void*`) as the universal run
 | `TXT` | `tx_t` (void*) | 8 bytes (pointer) | N/A | `""` (empty string) | Text/string; default type when unspecified |
 | `VOI` | `tx_t` | variable | N/A | `""` | Void pointer / byte buffer (v0.51.14; renamed from BYTES) |
 | `LST[T]` | `PlantArray*` | 16 bytes (pointer) | N/A | `plant_list_make(0)` | Dynamic array of T values |
+| `TPL[T...]` | `PlantArray*` | 16 bytes (pointer) | N/A | `plant_list_make(0)` | Tuple (v0.51.18; same runtime as LST) |
 | `MAP` | `PlantArray*` (pair-list) | 16 bytes (pointer) | N/A | `plant_map_create()` | Key-value pair-list (kind=1) |
 | `ENUM X` | `tx_t` (int or name string) | 8 bytes (pointer) | 0 to 65535 (int) | first member | Enum member as integer or name string |
 | `MATH` | `PlantMath*` | 16 bytes (pointer) | N/A | `plant_math_create("0")` | Symbolic math expression (v0.50.0h) |
@@ -947,6 +948,44 @@ PUT 4 INTO L.    # append
 - `l.push() / l.pop() / l.get()`    # method syntax
 - `REAP r FROM plant_list_get, lst, i`
 - Iteration (CYCLE, SEASON)
+
+---
+
+## TPL (Tuple) — v0.51.18
+
+| Property | Value |
+|----------|-------|
+| Size | Variable (dynamic) |
+| C type | PlantArray* |
+| Category | composite |
+| Parity | C# ValueTuple / Rust tuple / Python tuple |
+| Related | LST (same runtime representation) |
+
+### Syntax
+
+```plant
+CREATE T (TPL) TO [1, "a", 1].            # heterogeneous tuple
+CREATE T (TPL[LON, TXT]) TO [1, "hello"]. # typed tuple
+
+SHOW T[0].   # 1
+SHOW T[1].   # a (or "hello")
+```
+
+### Operations
+
+- `CREATE (TPL)` / `(TPL[LON, TXT], ...)`
+- `t[0]` (index access → `plant_list_get`)
+- `LET [a, b, c] = t` (destructuring, existing)
+- Same as LST (`PlantArray*` runtime).
+
+### Note
+
+TPL and LST share `[1, "a"]` syntax but differ by **DECLARED type**.
+PlantLang is fully typed; no ambiguity. `TPL[LON, TXT]` type args are
+stripped via `type_base` → registry → `PlantArray*`.
+
+**Multi-return** (`-> (LON, TXT)`, `GIVE a, b`, `REAP a, b FROM f()`)
+is deferred to **v0.51.18.1** (HIGH risk, parser changes).
 
 ---
 

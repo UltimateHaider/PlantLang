@@ -1,3 +1,35 @@
+## v0.51.18 — TPL (Tuple)
+
+### Added
+- TPL type: tuple (registry composite, PlantArray*).
+- TPL[LON, TXT] typed tuple (via type_base strip).
+- t[0] access (inherited from LST's plant_list_get).
+- 3 new tests: tpl_basic, tpl_typed, tpl_access.
+
+### Type Set (after v0.51.18 — 18 types)
+| Category | Types |
+|----------|-------|
+| Integer | BYT, UBT, SHR, USH, NUM, UNU, LON, ULO |
+| Float | FLT, DBL, DCM |
+| Complex | CMP |
+| Boolean | BOL |
+| Text | CHA, TXT |
+| Other | VOI |
+| Composite | LST, TPL |
+
+### Verified
+- Native: 118/118 (was 115)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (538,709 B)
+- valgrind strict: PASS
+- Binary: 964352 bytes.
+
+### Out of Scope (v0.51.18.1 or v0.52.0)
+- Multi-return (-> (LON, TXT), GIVE a, b, REAP a, b FROM f()).
+- TENSOR/MAP/SET/QUEUE/STACK formalization.
+- TD-019, TD-022, TD-024, TD-025.
+
 ## v0.51.17 — TD-027 Fix (str_eq literal-paren bug)
 
 ### Fixed

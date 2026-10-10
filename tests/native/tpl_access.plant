@@ -1,0 +1,9 @@
+SUITE "TPL Access (t[0])"
+  CREATE T (TPL) TO [10, 20, 30].
+
+  SHOW T[0].
+  SHOW T[1].
+  SHOW T[2].
+
+  SHOW "tpl-access-ok".
+/SUITE.
