@@ -14,7 +14,7 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.51.23
+VERSION    ?= 0.52.0
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
@@ -36,6 +36,15 @@ MEMORY     := runtime/c/plant_memory.c
 COMPLEX    := runtime/c/plant_complex.c
 RUNTIME_C  := $(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) $(REPORT_HTML) $(LEXER) $(PARSER) $(CODEGEN) $(MATH) $(TENSOR) $(MEMORY) $(COMPLEX)
 COMPAT     := runtime/c/plant_compat.h
+
+# v0.52.0 — Precompile the test-runtime subset once (link per test).
+TEST_RUNTIME_C := runtime/c/plant_runtime.c runtime/c/plant_error.c \
+                  runtime/c/plant_report.c runtime/c/plant_report_json.c \
+                  runtime/c/plant_report_xml.c runtime/c/plant_report_html.c \
+                  runtime/c/plant_math.c runtime/c/plant_tensor.c \
+                  runtime/c/plant_memory.c runtime/c/plant_complex.c
+TEST_RUNTIME_OBJS := $(addprefix build/trt/, $(notdir $(TEST_RUNTIME_C:.c=.o)))
+TEST_RUNTIME_LIB  := build/libplant_test_runtime.a
 
 SRC_DIR    := src/plantc
 PLANT_SRC  := $(SRC_DIR)/lexer.plant $(SRC_DIR)/parser.plant $(SRC_DIR)/codegen_c.plant $(SRC_DIR)/main.plant
@@ -120,6 +129,17 @@ test: $(NATIVE_BIN) ## Run native + generics + closures + regression suites
 	@sh tests/generics/run_generics_tests.sh $(NATIVE_BIN)
 	@sh tests/closures/run_closures_tests.sh $(NATIVE_BIN)
 	@sh tests/regression/run_regression_tests.sh $(NATIVE_BIN)
+
+# v0.52.0 — Precompile the test-runtime subset once (5-10x faster tests).
+build/trt/%.o: runtime/c/%.c
+	@mkdir -p build/trt
+	@$(CC) -w -O0 -DPLANT_MALLOC_SIMULATE -include tests/native/mock_ffi.h \
+		-I runtime/c -I tests/native -c $< -o $@
+
+$(TEST_RUNTIME_LIB): $(TEST_RUNTIME_OBJS)
+	@ar rcs $(TEST_RUNTIME_LIB) $(TEST_RUNTIME_OBJS)
+
+test-runtime-lib: $(TEST_RUNTIME_LIB) ## Precompile test runtime to a static lib
 
 test-stress: $(NATIVE_BIN) ## Run stress test suite (tests/regression/stress/)
 	@sh tests/regression/run_regression_tests.sh $(NATIVE_BIN) --stress
@@ -992,6 +1012,25 @@ verify-v0.51.23: check-no-raw-malloc check-expected-files \
 	@echo "  v0.51.23 VERIFIED"
 	@echo "========================================================"
 
+# ── verify-v0.52.0: comprehensive release gate ────────────────
+verify-v0.52.0: check-no-raw-malloc check-expected-files \
+                check-changelog-numbers check-ffi-safety \
+                check-dispatcher-only
+	@echo "========================================================"
+	@echo "  v0.52.0 VERIFICATION GATE"
+	@echo "========================================================"
+	@echo "[1/6] Native tests..."     && sh tests/native/run_native_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[2/6] Generics..."         && sh tests/generics/run_generics_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[3/6] Closures..."         && sh tests/closures/run_closures_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[4/6] Self-hosting..."     && make self || exit 1
+	@cmp -s build/plantc_v3 bin/Chloroplast || \
+		{ echo "STOP: Self-hosting failed"; exit 1; }
+	@echo "[5/6] valgrind strict..."  && $(MAKE) valgrind-check-tensor || exit 1
+	@echo "[6/6] Update RELEASES..."  && make update-growth && make check-releases-updated
+	@echo "========================================================"
+	@echo "  v0.52.0 VERIFIED"
+	@echo "========================================================"
+
 # ── verify-v0.51.1: comprehensive release gate ──────────────────
 verify-v0.51.1: check-no-raw-malloc check-expected-files check-changelog-numbers ## Run v0.51.1 verification gate
 	@echo "========================================================"
@@ -1010,7 +1049,8 @@ verify-v0.51.1: check-no-raw-malloc check-expected-files check-changelog-numbers
 # ── clean ──────────────────────────────────────────────────────
 clean: ## Remove build artifacts (keeps dist/Chloroplast bootstrap)
 	@rm -rf build/*.c build/plantc_v2 build/plantc_v3 build/plantc_v4 build/plantc_v5 \
-		build/plantc_all.plant build/distcheck release $(NATIVE_BIN)
+		build/plantc_all.plant build/distcheck release $(NATIVE_BIN) \
+		build/trt build/libplant_test_runtime.a
 	@echo "== cleaned =="
 
 # ── help ───────────────────────────────────────────────────────

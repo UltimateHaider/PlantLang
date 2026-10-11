@@ -1,3 +1,35 @@
+## v0.52.0 — Performance (Precompile Runtime)
+
+### Performance
+- Precompile the test-runtime subset (10 .c files) to
+  build/libplant_test_runtime.a once.
+- Test runners now link per test against the precompiled runtime.
+- Native suite: ~10 min → 46 s (~13x faster).
+- Generics: 2.5s. Closures: 2.2s.
+- No compiler change (binary unchanged).
+
+### Added
+- Makefile target: test-runtime-lib.
+- .gitignore: build/trt/, build/libplant_test_runtime.a.
+
+### Resolved
+- TD-029: native test suite slow (~10 min).
+
+### Verified
+- Native: 127/127 (46.3s)
+- Generics: 7/7 (2.5s)
+- Closures: 6/6 (2.2s)
+- Self-hosting: converged
+- valgrind strict: PASS
+- Binary: 968,528 B (unchanged).
+
+### Out of Scope (v0.52.1+)
+- TD-025 (CMP operands).
+- Parser validation.
+- Return types.
+- Type inference.
+- TD-009 (structs).
+
 ## v0.51.23 — Close TD-019 + TD-024
 
 ### Fixed

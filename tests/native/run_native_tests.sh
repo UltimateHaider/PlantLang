@@ -11,6 +11,11 @@ mkdir -p "$BUILD"
 pass=0
 fail=0
 
+# v0.52.0 — precompile the test runtime once (5-10x faster tests).
+if [ ! -f "$ROOT/build/libplant_test_runtime.a" ]; then
+  make -s -C "$ROOT" test-runtime-lib || { echo "FAIL: runtime precompile"; exit 1; }
+fi
+
 echo "== CLI checks =="
 
 out=$("$PLANTC" --help 2>&1)
@@ -23,7 +28,7 @@ fi
 
 out=$("$PLANTC" --version 2>&1)
 rc=$?
-  if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '0.51.23'; then
+  if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '0.52.0'; then
   echo "PASS  cli --version"; pass=$((pass+1))
 else
   echo "FAIL  cli --version"; fail=$((fail+1))
@@ -50,14 +55,8 @@ for src in "$DIR"/*.plant; do
        "$BUILD/$name.c" | sed '1d;$d' > "$types"
   if ! gcc -w -O0 -DPLANT_MALLOC_SIMULATE -include "$ROOT/tests/native/mock_ffi.h" \
         -include "$types" -I "$ROOT/runtime/c" "$BUILD/$name.c" \
-        "$ROOT/runtime/c/plant_runtime.c" "$ROOT/runtime/c/plant_error.c" \
-        "$ROOT/runtime/c/plant_report.c" "$ROOT/runtime/c/plant_report_json.c" \
-        "$ROOT/runtime/c/plant_report_xml.c" "$ROOT/runtime/c/plant_report_html.c" \
-        "$ROOT/runtime/c/plant_math.c" \
-        "$ROOT/runtime/c/plant_tensor.c" \
-        "$ROOT/runtime/c/plant_memory.c" \
-        "$ROOT/runtime/c/plant_complex.c" \
         "$ROOT/tests/native/mock_ffi.c" \
+        "$ROOT/build/libplant_test_runtime.a" \
         -lm -ldl -o "$BUILD/$name" \
         >>"$BUILD/$name.compile.log" 2>&1; then
     echo "FAIL  $name (gcc)"; fail=$((fail+1)); continue

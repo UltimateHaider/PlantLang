@@ -349,3 +349,10 @@ defining scope.
 - **Fixed:** MAP registry aligned to PlantArray* (pair-list).
 - **Reason:** MAP {...} literal produces pair-list (PlantArray*, kind=1).
 - **Related:** TD-022.
+
+## TD-029: Native test suite is slow (~10 min) — CLOSED
+- **Status:** ✅ CLOSED in v0.52.0
+- **Cause:** Test runner recompiled the full runtime (10 .c files) per test (~2.7s × 123).
+- **Fix:** Precompile the test-runtime subset to build/libplant_test_runtime.a once; link per test.
+- **Result:** Native suite ~10 min → 46 s (~13x faster).
+- **Related:** —

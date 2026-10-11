@@ -14,6 +14,11 @@ mkdir -p "$BUILD"
 pass=0
 fail=0
 
+# v0.52.0 — precompile the test runtime once (5-10x faster tests).
+if [ ! -f "$ROOT/build/libplant_test_runtime.a" ]; then
+  make -s -C "$ROOT" test-runtime-lib || { echo "FAIL: runtime precompile"; exit 1; }
+fi
+
 for src in "$DIR"/*.plant; do
   name=$(basename "$src" .plant)
   [ -f "$DIR/$name.expected" ] || continue
@@ -21,14 +26,8 @@ for src in "$DIR"/*.plant; do
     echo "FAIL  $name (compile)"; fail=$((fail+1)); continue
   fi
   if ! gcc -w -O0 -include "$ROOT/tests/native/mock_ffi.h" -I "$ROOT/runtime/c" "$BUILD/$name.c" \
-        "$ROOT/runtime/c/plant_runtime.c" "$ROOT/runtime/c/plant_error.c" \
-        "$ROOT/runtime/c/plant_report.c" "$ROOT/runtime/c/plant_report_json.c" \
-        "$ROOT/runtime/c/plant_report_xml.c" "$ROOT/runtime/c/plant_report_html.c" \
-        "$ROOT/runtime/c/plant_math.c" \
-        "$ROOT/runtime/c/plant_tensor.c" \
-        "$ROOT/runtime/c/plant_memory.c" \
-        "$ROOT/runtime/c/plant_complex.c" \
         "$ROOT/tests/native/mock_ffi.c" \
+        "$ROOT/build/libplant_test_runtime.a" \
         -lm -ldl -o "$BUILD/$name" \
         >>"$BUILD/$name.compile.log" 2>&1; then
     echo "FAIL  $name (gcc)"; fail=$((fail+1)); continue
