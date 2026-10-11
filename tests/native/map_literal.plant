@@ -1,0 +1,7 @@
+SUITE "MAP Literal (TD-028)"
+  CREATE M (MAP) TO {}.
+  SHOW "map-literal-ok".
+
+  CREATE N (MAP).
+  SHOW "map-decl-ok".
+/SUITE.

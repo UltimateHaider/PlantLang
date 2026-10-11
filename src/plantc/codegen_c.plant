@@ -37,7 +37,7 @@ GLOBAL TYPE_REGISTRY TO [
     ["TXT",   "tx_t",          "0", "1", "scalar"],
     ["LST",   "PlantArray*",   "0", "1", "composite"],
     ["TPL",   "PlantArray*",   "0", "1", "composite"],
-    ["MAP",   "PlantMap*",     "0", "1", "composite"],
+    ["MAP",   "PlantArray*",   "0", "1", "composite"],
     ["QUE",   "PlantQueue*",   "0", "1", "composite"],
     ["STK",   "PlantStack*",   "0", "1", "composite"],
     ["JSN",   "PlantJson*",    "0", "1", "composite"],
@@ -3259,6 +3259,78 @@ ACTION collect_chas_walk(bd(LST), subst(LST), res(LST)),
   GIVE res.
 /ACTION.
 
+# v0.51.22 — collect_dbls_walk: names of DBL/FLT/DCM CREATE/LET targets,
+# threaded via evars as "__DBL__" + name so gen_show_stmt wraps them with
+# _from_double (TD-022: doubles no longer truncate via _from_long).
+ACTION collect_dbls_walk(bd(LST), subst(LST), res(LST)),
+  CREATE dwi(LON) TO 0.
+  CREATE dwnd(TXT) TO "".
+  CREATE dwty(TXT) TO "".
+  CREATE dwtg(TXT) TO "".
+  CREATE dwvt(TXT) TO "".
+  CREATE dwbs(TXT) TO "".
+  CREATE dwbb(TXT) TO "".
+  SEASON dwi < COUNT bd,
+    REAP dwnd FROM plant_list_get, bd, dwi.
+    REAP dwty FROM _map_get, dwnd, "type".
+    IF dwty IS "create_stmt" OR dwty IS "let_stmt",
+      REAP dwtg FROM _map_get, dwnd, "target".
+      REAP dwvt FROM _map_get, dwnd, "var_type".
+      REAP dwbs FROM subst_type, dwvt, subst.
+      REAP dwbb FROM type_base, dwbs.
+      IF dwbb IS "DBL" OR dwbb IS "FLT" OR dwbb IS "DCM",
+        PUT _cat("__DBL__", dwtg) INTO res.
+      /IF.
+    /IF.
+    IF dwty IS "if_stmt",
+      REAP dib FROM _if_bodies, dwnd.
+      CREATE dii4(LON) TO 0.
+      SEASON dii4 < COUNT dib,
+        REAP dibd4 FROM plant_list_get, dib, dii4.
+        REAP dwret2 FROM collect_dbls_walk, dibd4, subst, res.
+        SET dii4 TO dii4 + 1.
+      /SEASON.
+    /IF.
+    IF dwty IS "season_stmt" OR dwty IS "cycle_stmt",
+      REAP dwbd2 FROM _map_get, dwnd, "body".
+      REAP dwret3 FROM collect_dbls_walk, dwbd2, subst, res.
+    /IF.
+    IF dwty IS "suite_stmt",
+      REAP dwbd3 FROM _map_get, dwnd, "body".
+      REAP dwret4 FROM collect_dbls_walk, dwbd3, subst, res.
+    /IF.
+    IF dwty IS "match_stmt",
+      CREATE dmcl3(LST) TO _map_get(dwnd, "clauses").
+      CREATE dmci3(LON) TO 0.
+      SEASON dmci3 < COUNT dmcl3,
+        REAP dmcl4 FROM plant_list_get, dmcl3, dmci3.
+        REAP dmcb2 FROM _map_get, dmcl4, "bodyStatements".
+        REAP dwret5 FROM collect_dbls_walk, dmcb2, subst, res.
+        SET dmci3 TO dmci3 + 1.
+      /SEASON.
+    /IF.
+    SET dwi TO dwi + 1.
+  /SEASON.
+  GIVE res.
+/ACTION.
+
+# v0.51.22 — _expr_has_dbl: 1 if cval references any "__DBL__"-marked var.
+ACTION _expr_has_dbl(cval(TXT), evars(LST)),
+  CREATE i(LON) TO 0.
+  CREATE e(TXT) TO "".
+  SEASON i < COUNT evars,
+    REAP e FROM plant_list_get, evars, i.
+    REAP pre FROM substring, e, 0, 7.
+    IF pre IS "__DBL__",
+      REAP nm FROM substring, e, 7, LEN(e).
+      REAP sp FROM strings:SPLIT, cval, nm.
+      IF COUNT sp > 1, GIVE 1. /IF.
+    /IF.
+    SET i TO i + 1.
+  /SEASON.
+  GIVE 0.
+/ACTION.
+
 ACTION _evars_with_bols(bd(LST), subst(LST), base(LST)),
   CREATE out(LST) TO plant_list_make(0).
   CREATE bi(LON) TO 0.
@@ -3285,6 +3357,15 @@ ACTION _evars_with_bols(bd(LST), subst(LST), base(LST)),
     REAP cf2 FROM list_contains, out, ce2.
     IF cf2 IS 0, PUT ce2 INTO out. /IF.
     SET ci2 TO ci2 + 1.
+  /SEASON.
+  REAP dm FROM collect_dbls_walk, bd, subst, plant_list_make(0).
+  CREATE di(LON) TO 0.
+  CREATE de(TXT) TO "".
+  SEASON di < COUNT dm,
+    REAP de FROM plant_list_get, dm, di.
+    REAP df FROM list_contains, out, de.
+    IF df IS 0, PUT de INTO out. /IF.
+    SET di TO di + 1.
   /SEASON.
   GIVE out.
 /ACTION.
@@ -4735,6 +4816,12 @@ ACTION gen_show_stmt(node, nums(LST), evars(LST), isel(TXT)),
   REAP cval FROM translate_expr, val, nums, evars, plant_list_make(0).
   REAP cval FROM _handle_cat, cval, nums, evars.
   REAP isn2 FROM expr_is_numeric, cval, nums.
+  # v0.51.22 — TD-022: DBL/FLT/DCM display uses _from_double (no truncation).
+  REAP dblhit FROM _expr_has_dbl, cval, evars.
+  IF dblhit IS 1,
+      SET cval TO "_from_double(" + cval + ")".
+      SET isn2 TO 2.
+  /IF.
   # v0.51.12 — BOL is logical (not numeric): bare BOL variables are
   # still displayed as 0/1 ints by wrapping with _from_long.
   IF isn2 IS 0,

@@ -1,3 +1,31 @@
+## v0.51.22 — Close TD-022 + TD-028
+
+### Fixed
+- TD-022: DBL/FLT/DCM display no longer truncates.
+  - Added collect_dbls_walk + __DBL__ markers.
+  - Added _expr_has_dbl helper.
+  - gen_show_stmt: type-aware _from_double (DBL/FLT/DCM) vs
+    _from_long (LON/ULO).
+- TD-028: MAP registry aligned to PlantArray* (pair-list).
+  - Consistent with MAP {...} literal.
+
+### Added
+- 2 new tests: dbl_display, map_literal.
+
+### Verified
+- Native: 126/126 (was 124)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (542,043 B)
+- valgrind strict: PASS
+- Binary: 968528 bytes.
+
+### Out of Scope (v0.51.23 or v0.52.0)
+- TD-019, TD-024, TD-025.
+- Multi-return → v0.51.18.1.
+- Parser validation.
+- Type inference.
+
 ## v0.51.21 — Formalize SET (as-is)
 
 ### Added

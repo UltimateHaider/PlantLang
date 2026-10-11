@@ -1,0 +1,7 @@
+SUITE "DBL Display (TD-022)"
+  CREATE D (DBL) TO 3.14.
+  SHOW D.
+  SHOW D + 1.
+
+  SHOW "dbl-display-ok".
+/SUITE.

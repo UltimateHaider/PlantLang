@@ -295,15 +295,12 @@ SHOW "end".   # ← dropped
 - **Preserved:** literal-vs-literal behavior unchanged.
 - **Related:** TD-022.
 
-## TD-022: DBL display truncates doubles
-- **Status:** OPEN
-- **Introduced:** v0.51.4 (SCL made numeric); renamed DBL in v0.51.10.
-- **Target fix:** v0.51.5 or v0.52.0
-- **Impact:** LOW-MEDIUM — `SHOW D + 1.` for DBL truncates (`4.14` → `4`).
-- **Cause:** `_from_long` wraps a double → integer truncation.
-- **Fix direction:** use `_from_double` for doubles, or type-aware wrapping.
-- **Discovered by:** v0.51.4 Phase 4.
-- **Related:** TD-021.
+## TD-022: DBL display truncates doubles — CLOSED
+- **Status:** ✅ CLOSED in v0.51.22
+- **Fixed:** DBL/FLT/DCM display uses _from_double (no truncation).
+- **Approach:** collect_dbls_walk + __DBL__ markers + _expr_has_dbl.
+- **Preserved:** LON/ULO still use _from_long (avoid scientific notation).
+- **Related:** TD-024 (DCM portability).
 
 ## TD-024: DCM (long double) size is implementation-defined — OPEN
 - **Status:** OPEN
@@ -356,12 +353,8 @@ SHOW "end".   # ← dropped
 - **Runtime change:** plant_compat.h (approved as root-cause fix).
 - **Discovered by:** v0.51.16 Phase 3.
 
-## TD-028: MAP — pair-list literal vs PlantMap* registry — OPEN
-- **Status:** OPEN
-- **Introduced:** v0.51.19 (MAP formalized as PlantMap*)
-- **Impact:** LOW — no native test uses (MAP) TO {...}.
-- **Symptom:** `CREATE M (MAP) TO {...}.` emits `PlantMap* M = plant_map_set(...)`
-  (pair-list assigned to PlantMap*).
-- **Fix direction:** v0.52.0 (align MAP literal with PlantMap* OR keep
-  pair-list + registry as PlantArray*).
-- **Discovered by:** v0.51.19 Phase 2.
+## TD-028: MAP — pair-list literal vs PlantMap* registry — CLOSED
+- **Status:** ✅ CLOSED in v0.51.22
+- **Fixed:** MAP registry aligned to PlantArray* (pair-list).
+- **Reason:** MAP {...} literal produces pair-list (PlantArray*, kind=1).
+- **Related:** TD-022.

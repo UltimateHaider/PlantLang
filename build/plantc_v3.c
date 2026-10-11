@@ -176,6 +176,8 @@ tx_t collect_cmps(PlantArray* bd, PlantArray* params, PlantArray* subst);
 tx_t _evars_with_cmps(PlantArray* bd, PlantArray* params, PlantArray* subst, PlantArray* base);
 tx_t collect_bols_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_chas_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
+tx_t collect_dbls_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
+tx_t _expr_has_dbl(tx_t cval, PlantArray* evars);
 tx_t _evars_with_bols(PlantArray* bd, PlantArray* subst, PlantArray* base);
 tx_t collect_maths_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_maths(PlantArray* bd, PlantArray* params, PlantArray* subst);
@@ -10494,11 +10496,94 @@ tx_t collect_chas_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
     }
     return res;
 }
+tx_t collect_dbls_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
+  tx_t dib = "";
+  tx_t dibd4 = "";
+  tx_t dwret2 = "";
+  tx_t dwbd2 = "";
+  tx_t dwret3 = "";
+  tx_t dwbd3 = "";
+  tx_t dwret4 = "";
+  tx_t dmcl4 = "";
+  tx_t dmcb2 = "";
+  tx_t dwret5 = "";
+    long dwi = 0;
+    tx_t dwnd = "";
+    tx_t dwty = "";
+    tx_t dwtg = "";
+    tx_t dwvt = "";
+    tx_t dwbs = "";
+    tx_t dwbb = "";
+    while (dwi < plant_array_length(bd)) {
+    dwnd = plant_list_get(bd, dwi);
+    dwty = _map_get(dwnd, "type");
+    if (strcmp(dwty,"create_stmt") == 0 || strcmp(dwty,"let_stmt") == 0) {
+    dwtg = _map_get(dwnd, "target");
+    dwvt = _map_get(dwnd, "var_type");
+    dwbs = subst_type(dwvt, subst);
+    dwbb = type_base(dwbs);
+    if (strcmp(dwbb,"DBL") == 0 || strcmp(dwbb,"FLT") == 0 || strcmp(dwbb,"DCM") == 0) {
+                res = plant_list_add(res, _cat ( "__DBL__" , dwtg ));
+    }
+    }
+    if (strcmp(dwty,"if_stmt") == 0) {
+    dib = _if_bodies(dwnd);
+    long dii4 = 0;
+    while (dii4 < plant_array_length(dib)) {
+    dibd4 = plant_list_get(dib, dii4);
+    dwret2 = collect_dbls_walk(dibd4, subst, res);
+    dii4 = dii4+1;
+    }
+    }
+    if (strcmp(dwty,"season_stmt") == 0 || strcmp(dwty,"cycle_stmt") == 0) {
+    dwbd2 = _map_get(dwnd, "body");
+    dwret3 = collect_dbls_walk(dwbd2, subst, res);
+    }
+    if (strcmp(dwty,"suite_stmt") == 0) {
+    dwbd3 = _map_get(dwnd, "body");
+    dwret4 = collect_dbls_walk(dwbd3, subst, res);
+    }
+    if (strcmp(dwty,"match_stmt") == 0) {
+    PlantArray* dmcl3 = _map_get ( dwnd , "clauses" );
+    long dmci3 = 0;
+    while (dmci3 < plant_array_length(dmcl3)) {
+    dmcl4 = plant_list_get(dmcl3, dmci3);
+    dmcb2 = _map_get(dmcl4, "bodyStatements");
+    dwret5 = collect_dbls_walk(dmcb2, subst, res);
+    dmci3 = dmci3+1;
+    }
+    }
+    dwi = dwi+1;
+    }
+    return res;
+}
+tx_t _expr_has_dbl(tx_t cval, PlantArray* evars) {
+  tx_t pre = "";
+  tx_t nm = "";
+  tx_t sp = "";
+    long i = 0;
+    tx_t e = "";
+    while (i < plant_array_length(evars)) {
+    e = plant_list_get(evars, i);
+    pre = substring(e, 0, 7);
+    if (strcmp(pre,"__DBL__") == 0) {
+    nm = substring(e, 7, strlen( e ));
+    sp = strings_SPLIT(cval, nm);
+    if (plant_array_length(sp) > 1) {
+    return 1;
+    }
+    }
+    i = i+1;
+    }
+    return 0;
+}
 tx_t _evars_with_bols(PlantArray* bd, PlantArray* subst, PlantArray* base) {
   tx_t bm = "";
   tx_t cf = "";
   tx_t cm2 = "";
   tx_t cf2 = "";
+  tx_t dm = "";
+  tx_t df = "";
     PlantArray* out = plant_list_make ( 0 );
     long bi = 0;
     tx_t be = "";
@@ -10528,6 +10613,17 @@ tx_t _evars_with_bols(PlantArray* bd, PlantArray* subst, PlantArray* base) {
             out = plant_list_add(out, ce2);
     }
     ci2 = ci2+1;
+    }
+    dm = collect_dbls_walk(bd, subst, plant_list_make ( 0 ));
+    long di = 0;
+    tx_t de = "";
+    while (di < plant_array_length(dm)) {
+    de = plant_list_get(dm, di);
+    df = list_contains(out, de);
+    if (df == 0) {
+            out = plant_list_add(out, de);
+    }
+    di = di+1;
     }
     return out;
 }
@@ -11894,6 +11990,7 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
   tx_t val = "";
   tx_t cval = "";
   tx_t isn2 = "";
+  tx_t dblhit = "";
   tx_t bchk = "";
   tx_t cchk = "";
   tx_t snm2 = "";
@@ -11913,6 +12010,11 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
     cval = translate_expr(val, nums, evars, plant_list_make ( 0 ));
     cval = _handle_cat(cval, nums, evars);
     isn2 = expr_is_numeric(cval, nums);
+    dblhit = _expr_has_dbl(cval, evars);
+    if (dblhit == 1) {
+    cval = _cat3("_from_double(", cval, ")");
+    isn2 = 2;
+    }
     if (isn2 == 0) {
     if (is_identifier ( cval ) == 1) {
     bchk = list_contains(evars, _cat ( "__BOL__" , cval ));
@@ -17500,7 +17602,7 @@ int main(int argc, char **argv) {
   tx_t out_path = "";
   tx_t written = "";
   tx_t c_len = "";
-  TYPE_REGISTRY = plant_list_make(24, plant_list_make(5, "LON", "long", "1", "1", "scalar"), plant_list_make(5, "NUM", "int", "1", "1", "scalar"), plant_list_make(5, "UNU", "unsigned int", "1", "1", "scalar"), plant_list_make(5, "DBL", "double", "1", "1", "scalar"), plant_list_make(5, "FLT", "float", "1", "1", "scalar"), plant_list_make(5, "DCM", "long double", "1", "1", "scalar"), plant_list_make(5, "CHA", "char", "0", "1", "scalar"), plant_list_make(5, "VOI", "tx_t", "0", "1", "scalar"), plant_list_make(5, "BYT", "signed char", "1", "1", "scalar"), plant_list_make(5, "UBT", "unsigned char", "1", "1", "scalar"), plant_list_make(5, "SHR", "short", "1", "1", "scalar"), plant_list_make(5, "USH", "unsigned short", "1", "1", "scalar"), plant_list_make(5, "ULO", "unsigned long", "1", "1", "scalar"), plant_list_make(5, "CMP", "PlantComplex", "0", "1", "scalar"), plant_list_make(5, "BOL", "bool", "0", "1", "scalar"), plant_list_make(5, "TXT", "tx_t", "0", "1", "scalar"), plant_list_make(5, "LST", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "TPL", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "MAP", "PlantMap*", "0", "1", "composite"), plant_list_make(5, "QUE", "PlantQueue*", "0", "1", "composite"), plant_list_make(5, "STK", "PlantStack*", "0", "1", "composite"), plant_list_make(5, "JSN", "PlantJson*", "0", "1", "composite"), plant_list_make(5, "TENSOR", "PlantTensor*", "0", "1", "composite"), plant_list_make(5, "SET", "PlantSet*", "0", "1", "composite"));
+  TYPE_REGISTRY = plant_list_make(24, plant_list_make(5, "LON", "long", "1", "1", "scalar"), plant_list_make(5, "NUM", "int", "1", "1", "scalar"), plant_list_make(5, "UNU", "unsigned int", "1", "1", "scalar"), plant_list_make(5, "DBL", "double", "1", "1", "scalar"), plant_list_make(5, "FLT", "float", "1", "1", "scalar"), plant_list_make(5, "DCM", "long double", "1", "1", "scalar"), plant_list_make(5, "CHA", "char", "0", "1", "scalar"), plant_list_make(5, "VOI", "tx_t", "0", "1", "scalar"), plant_list_make(5, "BYT", "signed char", "1", "1", "scalar"), plant_list_make(5, "UBT", "unsigned char", "1", "1", "scalar"), plant_list_make(5, "SHR", "short", "1", "1", "scalar"), plant_list_make(5, "USH", "unsigned short", "1", "1", "scalar"), plant_list_make(5, "ULO", "unsigned long", "1", "1", "scalar"), plant_list_make(5, "CMP", "PlantComplex", "0", "1", "scalar"), plant_list_make(5, "BOL", "bool", "0", "1", "scalar"), plant_list_make(5, "TXT", "tx_t", "0", "1", "scalar"), plant_list_make(5, "LST", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "TPL", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "MAP", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "QUE", "PlantQueue*", "0", "1", "composite"), plant_list_make(5, "STK", "PlantStack*", "0", "1", "composite"), plant_list_make(5, "JSN", "PlantJson*", "0", "1", "composite"), plant_list_make(5, "TENSOR", "PlantTensor*", "0", "1", "composite"), plant_list_make(5, "SET", "PlantSet*", "0", "1", "composite"));
   arg0 = get_cli_arg(0);
   if (strcmp(arg0,"-h") == 0 || strcmp(arg0,"--help") == 0) {
   plant_iReport_print(get_report(), "Chloroplast — Pure Native PlantLang compiler");
@@ -17511,7 +17613,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.51.21 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.51.22 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

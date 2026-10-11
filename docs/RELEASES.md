@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.51.21
+# Auto-updated: 0.51.22
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.51.21 | 964352 | 8963 | 448 | 109 | 322 | 5361 |
+| v0.51.22 | 968528 | 8963 | 448 | 109 | 322 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -40,6 +40,7 @@
 | v0.51.19 | 2026 | Formalize MAP + QUE + STK + JSN | Released |
 | v0.51.20 | 2026 | Formalize TENSOR | Released |
 | v0.51.21 | 2026 | Formalize SET | Released |
+| v0.51.22 | 2026 | Close TD-022 + TD-028 | Released |
 
 ## Growth Chart (ASCII)
 
