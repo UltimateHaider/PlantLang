@@ -1000,6 +1000,7 @@ is deferred to **v0.51.18.1** (HIGH risk, parser changes).
 | QUE | `PlantQueue*` | FIFO (`queue_create/push/pop/peek/size`) |
 | STK | `PlantStack*` | LIFO (`stack_create/push/pop/peek/size`) |
 | JSN | `PlantJson*` | JSON value (`json_parse`/`json_get`/`json_at`) |
+| TENSOR | `PlantTensor*` | N-d numeric array (`plant_tensor_*`) — v0.51.20 |
 
 ### Syntax
 
@@ -1020,6 +1021,42 @@ CREATE J (JSN).
 - **TD-028:** `MAP {...}` literals produce the pair-list representation
   (`plant_map_set`), while `MAP` is registered as `PlantMap*` — a latent
   mismatch (no native test uses `(MAP) TO {...}`).
+
+---
+
+## TENSOR (N-dimensional array) — v0.51.20
+
+| Property | Value |
+|----------|-------|
+| Size | Variable (dynamic) |
+| C type | PlantTensor* |
+| Category | composite |
+| Parity | C# Tensor<T> / Rust ndarray / Python numpy.ndarray |
+| ML-native | Yes |
+
+### Syntax
+
+```plant
+CREATE T (TENSOR) TO TENSOR([1, 2, 3]).
+SHOW TENSOR_SIZE(T).   # 3
+SHOW TENSOR_NDIM(T).   # 1
+SHOW TENSOR_SHAPE(T).  # [3]
+TENSOR_FREE(T).
+```
+
+### Builtins
+
+- `TENSOR([...])` — constructor
+- `TENSOR_SIZE(t)`
+- `TENSOR_NDIM(t)`
+- `TENSOR_SHAPE(t)`
+- `TENSOR_FREE(t)`
+
+### Notes
+
+TENSOR kept its 6-letter name (exception to the 3-letter scheme) —
+established, 22 native tests, ML-native type. Formalized in the registry
+(as-is): `["TENSOR", "PlantTensor*", "0", "1", "composite"]`.
 
 ---
 

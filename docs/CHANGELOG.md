@@ -1,3 +1,43 @@
+## v0.51.20 — Formalize TENSOR (as-is)
+
+### Added
+- TENSOR formalized in Type Registry:
+  ["TENSOR", "PlantTensor*", "0", "1", "composite"].
+- 1 new test: tensor_formalized.
+
+### Changed
+- TENSOR declaration: tx_t t → PlantTensor* t (explicit type).
+- TENSOR name kept (not TNS) — exception to 3-letter scheme.
+
+### Preserved
+- Builtins unchanged (TENSOR_FREE/SIZE/NDIM/SHAPE).
+- Constructor TENSOR([...]) unchanged.
+- All 22 existing TENSOR tests pass.
+
+### Type Set (after v0.51.20 — 23 types)
+| Category | Types |
+|----------|-------|
+| Integer | BYT, UBT, SHR, USH, NUM, UNU, LON, ULO |
+| Float | FLT, DBL, DCM |
+| Complex | CMP |
+| Boolean | BOL |
+| Text | CHA, TXT |
+| Other | VOI |
+| Composite | LST, TPL, MAP, QUE, STK, JSN, TENSOR |
+
+### Verified
+- Native: 123/123 (was 122)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (539,082 B)
+- valgrind strict: PASS
+- Binary: 964352 bytes.
+
+### Out of Scope
+- SET → v0.51.21 (keyword conflict) or deferred.
+- Multi-return → v0.51.18.1.
+- TD-019, TD-022, TD-024, TD-025, TD-028.
+
 ## v0.51.19 — Formalize MAP + QUE + STK + JSN
 
 ### Added

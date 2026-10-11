@@ -1,0 +1,7 @@
+SUITE "TENSOR Basic (formalized)"
+  CREATE T (TENSOR) TO TENSOR([1, 2, 3]).
+
+  SHOW TENSOR_SIZE(T).
+
+  SHOW "tensor-basic-ok".
+/SUITE.

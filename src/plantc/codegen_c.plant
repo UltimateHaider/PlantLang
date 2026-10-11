@@ -40,7 +40,8 @@ GLOBAL TYPE_REGISTRY TO [
     ["MAP",   "PlantMap*",     "0", "1", "composite"],
     ["QUE",   "PlantQueue*",   "0", "1", "composite"],
     ["STK",   "PlantStack*",   "0", "1", "composite"],
-    ["JSN",   "PlantJson*",    "0", "1", "composite"]
+    ["JSN",   "PlantJson*",    "0", "1", "composite"],
+    ["TENSOR","PlantTensor*",  "0", "1", "composite"]
 ].
 
 # v0.51.4 — Registry lookup: returns the record for `name`, or empty list.
