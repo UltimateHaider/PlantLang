@@ -1001,6 +1001,7 @@ is deferred to **v0.51.18.1** (HIGH risk, parser changes).
 | STK | `PlantStack*` | LIFO (`stack_create/push/pop/peek/size`) |
 | JSN | `PlantJson*` | JSON value (`json_parse`/`json_get`/`json_at`) |
 | TENSOR | `PlantTensor*` | N-d numeric array (`plant_tensor_*`) — v0.51.20 |
+| SET | `PlantSet*` | hash set (`set_create/add/has/remove/size`) — v0.51.21 |
 
 ### Syntax
 
@@ -1057,6 +1058,43 @@ TENSOR_FREE(T).
 TENSOR kept its 6-letter name (exception to the 3-letter scheme) —
 established, 22 native tests, ML-native type. Formalized in the registry
 (as-is): `["TENSOR", "PlantTensor*", "0", "1", "composite"]`.
+
+---
+
+## SET (Hash Set) — v0.51.21
+
+| Property | Value |
+|----------|-------|
+| Size | Variable (dynamic) |
+| C type | PlantSet* |
+| Category | composite |
+| Parity | C# HashSet<T> / Rust HashSet<T> / Python set |
+
+### Syntax
+
+```plant
+CREATE S (SET).
+
+# Or via runtime:
+set_create()
+```
+
+### Statement/Type Coexistence
+
+- `SET x TO value.` — **statement** (assignment).
+- `CREATE S (SET).` — **type** (hash set).
+
+Context-distinguished by position (statement-start vs inside parens).
+No conflict (same as TENSOR: keyword + type).
+
+### Builtins (runtime)
+
+- `set_create()`
+- `set_add(s, item)`
+- `set_has(s, item)`
+- `set_remove(s, item)`
+- `set_size(s)`
+- `set_to_list(s)`
 
 ---
 

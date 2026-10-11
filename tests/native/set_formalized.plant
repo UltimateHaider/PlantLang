@@ -1,0 +1,10 @@
+SUITE "SET Formalized"
+  CREATE S (SET).
+  SHOW "set-formalized-ok".
+
+  CREATE X (LON) TO 0.
+  SET X TO 42.
+  SHOW X.
+
+  SHOW "set-coexist-ok".
+/SUITE.

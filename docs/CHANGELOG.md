@@ -1,3 +1,43 @@
+## v0.51.21 — Formalize SET (as-is)
+
+### Added
+- SET formalized in Type Registry:
+  ["SET", "PlantSet*", "0", "1", "composite"].
+- 1 new test: set_formalized.
+
+### Changed
+- SET declaration: tx_t s → PlantSet* s (explicit type).
+- SET name kept (not STS) — keyword/type coexistence confirmed.
+
+### Preserved
+- Statement keyword `SET x TO ...` unchanged.
+- All 10 SET-statement tests pass.
+
+### Verified
+- Native: 124/124 (was 123)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (539,145 B)
+- valgrind strict: PASS
+- Binary: 964352 bytes.
+
+### Type Set (after v0.51.21 — 24 types)
+| Category | Types |
+|----------|-------|
+| Integer | BYT, UBT, SHR, USH, NUM, UNU, LON, ULO |
+| Float | FLT, DBL, DCM |
+| Complex | CMP |
+| Boolean | BOL |
+| Text | CHA, TXT |
+| Other | VOI |
+| Composite | LST, TPL, MAP, QUE, STK, JSN, TENSOR, SET |
+
+### Out of Scope (v0.52.0)
+- Multi-return → v0.51.18.1 or v0.52.0.
+- TD-019, TD-022, TD-024, TD-025, TD-028.
+- Parser validation.
+- Type inference.
+
 ## v0.51.20 — Formalize TENSOR (as-is)
 
 ### Added
