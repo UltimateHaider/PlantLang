@@ -1,0 +1,9 @@
+SUITE "A"
+  SHOW "a".
+/SUITE.
+
+SUITE "B"
+  SHOW "b".
+/SUITE.
+
+SHOW "end".

@@ -255,21 +255,14 @@ defining scope.
   `plant_char_value(...)`.
 - **Related:** TD-026.
 
-## TD-019: Top-level SUITE terminates parsing
-- **Status:** OPEN
-- **Introduced:** pre-v0.51 (long-standing)
-- **Target fix:** v0.51.4
-- **Impact:** MEDIUM — statements after `/SUITE.` are dropped.
-- **Symptom:**
-```plantlang
-SUITE "A"
-  SHOW "a".
-/SUITE.
-SHOW "end".   # ← dropped
-```
-- **Cause:** the top-level SUITE parser is terminal.
-- **Discovered by:** v0.51.3b Phase 1 (GLOBAL in SUITE testing).
-- **Related:** TD-020 (list ops).
+## TD-019: Top-level SUITE terminates parsing — CLOSED
+- **Status:** ✅ CLOSED in v0.51.23
+- **Fixed:** parse_suite_stmt returned `_from_long(p5)` (a tx_t string)
+  as the position instead of `p5` (LON).
+  - 1-line fix: `_from_long(p5)` → `p5`.
+- **Impact:** Multi-SUITE (and statements after) now parse correctly.
+- **Bootstrap:** 1-stage (compiler source has no top-level SUITE).
+- **Related:** —
 
 ## TD-020: List operations (+, [], PUSH) — CLOSED
 - **Status:** ✅ CLOSED in v0.51.16
@@ -302,17 +295,15 @@ SHOW "end".   # ← dropped
 - **Preserved:** LON/ULO still use _from_long (avoid scientific notation).
 - **Related:** TD-024 (DCM portability).
 
-## TD-024: DCM (long double) size is implementation-defined — OPEN
-- **Status:** OPEN
-- **Introduced:** v0.51.10 (DCM added).
-- **Target fix:** v0.52.0 (Type System Audit) or document.
-- **Impact:** LOW — DCM behavior varies by platform.
-- **Issue:** In C89, `long double` size/precision is
-  implementation-defined:
-  - x86: 80-bit extended precision.
-  - ARM: may be 64-bit (same as double) or 128-bit.
-- **User guidance:** Avoid relying on DCM having more precision
-  than DBL across platforms.
+## TD-024: DCM (long double) size is implementation-defined — CLOSED (documented)
+- **Status:** ✅ CLOSED (documented) in v0.51.23
+- **Reason:** DCM precision is inherently platform-defined. No portable
+  guarantee without a specific extended type.
+- **Documented:**
+  - x86-64: 16 bytes (80-bit extended, stored in 16B).
+  - ARM: 64-bit (same as DBL) or 128-bit.
+- **Display:** Fixed in v0.51.22 (_from_double).
+- **Decision:** Document as-is (Option A). No code change.
 - **Related:** TD-022.
 
 ## TD-023: UNUM (unsigned long) removed — CLOSED in v0.51.9

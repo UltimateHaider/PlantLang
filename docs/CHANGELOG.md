@@ -1,3 +1,28 @@
+## v0.51.23 — Close TD-019 + TD-024
+
+### Fixed
+- TD-019: top-level SUITE no longer terminates parsing.
+  - parse_suite_stmt returned _from_long(p5) instead of p5.
+  - 1-line fix.
+- TD-024: documented as-is (DCM long double is implementation-defined).
+
+### Added
+- 1 new test: suite_multi (multi-SUITE + trailing statements).
+
+### Verified
+- Native: 127/127 (was 126)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (542,028 B)
+- valgrind strict: PASS
+- Binary: 968528 bytes.
+
+### Out of Scope (v0.52.0)
+- TD-025 (CMP target-typed arithmetic).
+- Parser validation.
+- Type inference.
+- Multi-return → v0.51.18.1.
+
 ## v0.51.22 — Close TD-022 + TD-028
 
 ### Fixed

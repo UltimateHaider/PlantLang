@@ -2628,7 +2628,7 @@ tx_t parse_suite_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab, 
     p4 = _second(kw);
     dot = plant_iLexer_consume_at(lexer, tokens, p4);
     p5 = _second(dot);
-    return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "suite_stmt" , "name" , sname , "body" , body ) , _from_long ( p5 ) );
+    return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "suite_stmt" , "name" , sname , "body" , body ) , p5 );
     }
     if (strcmp(tt,"SETUP") == 0) {
     sb_pair = parse_setup_stmt(tokens, p2);
@@ -17613,7 +17613,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.51.22 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.51.23 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);
