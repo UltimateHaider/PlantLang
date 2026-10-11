@@ -313,17 +313,15 @@ defining scope.
 - **Replacement:** ULO (unsigned long).
 - **Related:** TD-022.
 
-## TD-025: CMP arithmetic is target-typed — OPEN
-- **Status:** OPEN
+## TD-025: CMP arithmetic is target-typed — CLOSED
+- **Status:** ✅ CLOSED in v0.52.1
 - **Introduced:** v0.51.11 (CMP added).
-- **Target fix:** v0.52.0 (Type System Audit).
-- **Impact:** LOW — `CREATE S (CMP) TO A + B.` works (target type
-  drives lowering), but operands in untargeted expression positions
-  (e.g. `SHOW CABS(A + B).`) are not lowered to complex ops.
-- **Cause:** CMP lowering is keyed off the CREATE/LET target type,
-  not full operand type inference.
-- **Fix direction:** track CMP variables like `nums` and lower ops on
-  operand types.
+- **Fixed:** CMP ops now operand-based (via `__CMP__` markers) + target-typed.
+  - `SHOW A + B.` works (`plant_complex_add(A, B)`).
+  - `SHOW Z.` (CMP var) works (via `plant_complex_to_str`).
+  - `CREATE S (CMP) TO A + B.` still works (target-typed path preserved).
+- **Regression caught & fixed:** real accessors (`plant_cmp_real/imag/arg/cabs`)
+  guarded — they already return `tx_t` and must not be re-wrapped.
 - **Related:** TD-022, TD-024.
 
 ## TD-026: TX (text alias) removed — CLOSED

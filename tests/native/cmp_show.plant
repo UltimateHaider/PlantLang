@@ -1,0 +1,6 @@
+SUITE "CMP Display (TD-025)"
+  CREATE Z (CMP) TO CMP(3, 4).
+  SHOW Z.
+
+  SHOW "cmp-show-ok".
+/SUITE.

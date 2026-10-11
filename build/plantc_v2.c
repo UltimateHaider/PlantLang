@@ -178,6 +178,7 @@ tx_t collect_bols_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_chas_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_dbls_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t _expr_has_dbl(tx_t cval, PlantArray* evars);
+tx_t _expr_has_cmp(tx_t cval, PlantArray* evars);
 tx_t _evars_with_bols(PlantArray* bd, PlantArray* subst, PlantArray* base);
 tx_t collect_maths_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_maths(PlantArray* bd, PlantArray* params, PlantArray* subst);
@@ -201,6 +202,7 @@ tx_t rewrite_cond_is(tx_t cond, PlantArray* nums);
 tx_t _lst_binop(tx_t expr);
 tx_t _cmp_binop(tx_t expr);
 tx_t _handle_cmp_ops(tx_t expr, PlantArray* evars);
+tx_t _cmp_operand_ops(tx_t expr, PlantArray* evars);
 tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* maths);
 tx_t indent_str(long level);
 tx_t _gb_dump(PlantArray* bd);
@@ -10263,67 +10265,63 @@ tx_t collect_nums(PlantArray* bd, PlantArray* params, PlantArray* subst) {
     return res;
 }
 tx_t collect_cmps_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
-  tx_t cwfound = "";
-  tx_t cib = "";
-  tx_t cibd4 = "";
-  tx_t cwret2 = "";
-  tx_t cwbd2 = "";
-  tx_t cwret3 = "";
-  tx_t cwbd3 = "";
-  tx_t cwret4 = "";
-  tx_t cmcl4 = "";
-  tx_t cmcb2 = "";
-  tx_t cwret5 = "";
-    long cwi = 0;
-    tx_t cwnd = "";
-    tx_t cwty = "";
-    tx_t cwtg = "";
-    tx_t cwvt = "";
-    tx_t cwbs = "";
-    tx_t cwbb = "";
-    while (cwi < plant_array_length(bd)) {
-    cwnd = plant_list_get(bd, cwi);
-    cwty = _map_get(cwnd, "type");
-    if (strcmp(cwty,"create_stmt") == 0 || strcmp(cwty,"let_stmt") == 0) {
-    cwtg = _map_get(cwnd, "target");
-    cwvt = _map_get(cwnd, "var_type");
-    cwbs = subst_type(cwvt, subst);
-    cwbb = type_base(cwbs);
-    if (strcmp(cwbb,"CMP") == 0) {
-    cwfound = list_contains(res, cwtg);
-    if (cwfound == 0) {
-                    res = plant_list_add(res, cwtg);
+  tx_t cib2 = "";
+  tx_t cibd5 = "";
+  tx_t cwret6 = "";
+  tx_t cwbd4 = "";
+  tx_t cwret7 = "";
+  tx_t cwbd5 = "";
+  tx_t cwret8 = "";
+  tx_t cmcl6 = "";
+  tx_t cmcb3 = "";
+  tx_t cwret9 = "";
+    long cwi2 = 0;
+    tx_t cwnd2 = "";
+    tx_t cwty2 = "";
+    tx_t cwtg2 = "";
+    tx_t cwvt2 = "";
+    tx_t cwbs2 = "";
+    tx_t cwbb2 = "";
+    while (cwi2 < plant_array_length(bd)) {
+    cwnd2 = plant_list_get(bd, cwi2);
+    cwty2 = _map_get(cwnd2, "type");
+    if (strcmp(cwty2,"create_stmt") == 0 || strcmp(cwty2,"let_stmt") == 0) {
+    cwtg2 = _map_get(cwnd2, "target");
+    cwvt2 = _map_get(cwnd2, "var_type");
+    cwbs2 = subst_type(cwvt2, subst);
+    cwbb2 = type_base(cwbs2);
+    if (strcmp(cwbb2,"CMP") == 0) {
+                res = plant_list_add(res, _cat ( "__CMP__" , cwtg2 ));
     }
     }
-    }
-    if (strcmp(cwty,"if_stmt") == 0) {
-    cib = _if_bodies(cwnd);
-    long cii4 = 0;
-    while (cii4 < plant_array_length(cib)) {
-    cibd4 = plant_list_get(cib, cii4);
-    cwret2 = collect_cmps_walk(cibd4, subst, res);
-    cii4 = cii4+1;
-    }
-    }
-    if (strcmp(cwty,"season_stmt") == 0 || strcmp(cwty,"cycle_stmt") == 0) {
-    cwbd2 = _map_get(cwnd, "body");
-    cwret3 = collect_cmps_walk(cwbd2, subst, res);
-    }
-    if (strcmp(cwty,"suite_stmt") == 0) {
-    cwbd3 = _map_get(cwnd, "body");
-    cwret4 = collect_cmps_walk(cwbd3, subst, res);
-    }
-    if (strcmp(cwty,"match_stmt") == 0) {
-    PlantArray* cmcl3 = _map_get ( cwnd , "clauses" );
-    long cmci3 = 0;
-    while (cmci3 < plant_array_length(cmcl3)) {
-    cmcl4 = plant_list_get(cmcl3, cmci3);
-    cmcb2 = _map_get(cmcl4, "bodyStatements");
-    cwret5 = collect_cmps_walk(cmcb2, subst, res);
-    cmci3 = cmci3+1;
+    if (strcmp(cwty2,"if_stmt") == 0) {
+    cib2 = _if_bodies(cwnd2);
+    long cii5 = 0;
+    while (cii5 < plant_array_length(cib2)) {
+    cibd5 = plant_list_get(cib2, cii5);
+    cwret6 = collect_cmps_walk(cibd5, subst, res);
+    cii5 = cii5+1;
     }
     }
-    cwi = cwi+1;
+    if (strcmp(cwty2,"season_stmt") == 0 || strcmp(cwty2,"cycle_stmt") == 0) {
+    cwbd4 = _map_get(cwnd2, "body");
+    cwret7 = collect_cmps_walk(cwbd4, subst, res);
+    }
+    if (strcmp(cwty2,"suite_stmt") == 0) {
+    cwbd5 = _map_get(cwnd2, "body");
+    cwret8 = collect_cmps_walk(cwbd5, subst, res);
+    }
+    if (strcmp(cwty2,"match_stmt") == 0) {
+    tx_t cmcl5 = _map_get ( cwnd2 , "clauses" );
+    long cmci5 = 0;
+    while (cmci5 < plant_array_length(cmcl5)) {
+    cmcl6 = plant_list_get(cmcl5, cmci5);
+    cmcb3 = _map_get(cmcl6, "bodyStatements");
+    cwret9 = collect_cmps_walk(cmcb3, subst, res);
+    cmci5 = cmci5+1;
+    }
+    }
+    cwi2 = cwi2+1;
     }
     return res;
 }
@@ -10577,6 +10575,26 @@ tx_t _expr_has_dbl(tx_t cval, PlantArray* evars) {
     }
     return 0;
 }
+tx_t _expr_has_cmp(tx_t cval, PlantArray* evars) {
+  tx_t pre = "";
+  tx_t nm = "";
+  tx_t sp = "";
+    long i = 0;
+    tx_t e = "";
+    while (i < plant_array_length(evars)) {
+    e = plant_list_get(evars, i);
+    pre = substring(e, 0, 7);
+    if (strcmp(pre,"__CMP__") == 0) {
+    nm = substring(e, 7, strlen( e ));
+    sp = strings_SPLIT(cval, nm);
+    if (plant_array_length(sp) > 1) {
+    return 1;
+    }
+    }
+    i = i+1;
+    }
+    return 0;
+}
 tx_t _evars_with_bols(PlantArray* bd, PlantArray* subst, PlantArray* base) {
   tx_t bm = "";
   tx_t cf = "";
@@ -10584,6 +10602,8 @@ tx_t _evars_with_bols(PlantArray* bd, PlantArray* subst, PlantArray* base) {
   tx_t cf2 = "";
   tx_t dm = "";
   tx_t df = "";
+  tx_t cml = "";
+  tx_t clf = "";
     PlantArray* out = plant_list_make ( 0 );
     long bi = 0;
     tx_t be = "";
@@ -10624,6 +10644,17 @@ tx_t _evars_with_bols(PlantArray* bd, PlantArray* subst, PlantArray* base) {
             out = plant_list_add(out, de);
     }
     di = di+1;
+    }
+    cml = collect_cmps_walk(bd, subst, plant_list_make ( 0 ));
+    long cli = 0;
+    tx_t cle = "";
+    while (cli < plant_array_length(cml)) {
+    cle = plant_list_get(cml, cli);
+    clf = list_contains(out, cle);
+    if (clf == 0) {
+            out = plant_list_add(out, cle);
+    }
+    cli = cli+1;
     }
     return out;
 }
@@ -11684,6 +11715,72 @@ tx_t _handle_cmp_ops(tx_t expr, PlantArray* evars) {
     }
     return expr;
 }
+tx_t _cmp_operand_ops(tx_t expr, PlantArray* evars) {
+  tx_t c0 = "";
+  tx_t c1 = "";
+  tx_t l = "";
+  tx_t r = "";
+  tx_t lw = "";
+  tx_t rw = "";
+  tx_t lc = "";
+  tx_t rc = "";
+    tx_t ops = "+-*/";
+    long oi = 0;
+    tx_t sc = "";
+    tx_t ch = "";
+    long depth = 0;
+    long instr = 0;
+    long i = 0;
+    while (oi < strlen( ops )) {
+    sc = char_at(ops, oi);
+    i = 0;
+    depth = 0;
+    instr = 0;
+    while (i < strlen( expr )) {
+    ch = char_at(expr, i);
+    if (strcmp(ch,"\"") == 0) {
+    instr = 1 - instr;
+    }
+    if (instr == 0) {
+    if (strcmp(ch,"(") == 0 || strcmp(ch,"[") == 0) {
+    depth = depth+1;
+    }
+    if (strcmp(ch,")") == 0 || strcmp(ch,"]") == 0) {
+    depth = depth - 1;
+    }
+    if (depth == 0 && strcmp(str_eq ( ch , sc ),"1") == 0) {
+    c0 = char_at(expr, i - 1);
+    c1 = char_at(expr, i+1);
+    if (strcmp(str_eq ( c0 , " " ),"1") == 0 && strcmp(str_eq ( c1 , " " ),"1") == 0) {
+    l = substring(expr, 0, i - 1);
+    r = substring(expr, i+2, strlen( expr ));
+    lw = trim(l);
+    rw = trim(r);
+    lc = _expr_has_cmp(lw, evars);
+    rc = _expr_has_cmp(rw, evars);
+    if (lc == 1 && rc == 1) {
+    if (strcmp(str_eq ( sc , "+" ),"1") == 0) {
+    return _cat(_cat4("plant_complex_add(", lw, ", ", rw), ")");
+    }
+    if (strcmp(str_eq ( sc , "-" ),"1") == 0) {
+    return _cat(_cat4("plant_complex_sub(", lw, ", ", rw), ")");
+    }
+    if (strcmp(str_eq ( sc , "*" ),"1") == 0) {
+    return _cat(_cat4("plant_complex_mul(", lw, ", ", rw), ")");
+    }
+    if (strcmp(str_eq ( sc , "/" ),"1") == 0) {
+    return _cat(_cat4("plant_complex_div(", lw, ", ", rw), ")");
+    }
+    }
+    }
+    }
+    }
+    i = i+1;
+    }
+    oi = oi+1;
+    }
+    return expr;
+}
 tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* maths) {
   tx_t e0 = "";
   tx_t e1 = "";
@@ -11692,6 +11789,7 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* 
   tx_t args1 = "";
     expr = _swap_self(expr);
     tx_t e = expr;
+    e = _cmp_operand_ops(e, evars);
     e = _handle_func_paren2(e, "MATH_DERIVATIVE", "plant_math_derivative_str");
     e = _handle_func_paren2(e, "MATH_INTEGRAL", "plant_math_integral_str");
     e = _handle_func_paren3(e, "MATH_LIMIT", "plant_math_limit_str");
@@ -11990,6 +12088,11 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
   tx_t val = "";
   tx_t cval = "";
   tx_t isn2 = "";
+  tx_t cmphit = "";
+  tx_t cp0 = "";
+  tx_t cp1 = "";
+  tx_t cp2 = "";
+  tx_t cp3 = "";
   tx_t dblhit = "";
   tx_t bchk = "";
   tx_t cchk = "";
@@ -12010,6 +12113,29 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
     cval = translate_expr(val, nums, evars, plant_list_make ( 0 ));
     cval = _handle_cat(cval, nums, evars);
     isn2 = expr_is_numeric(cval, nums);
+    cmphit = _expr_has_cmp(cval, evars);
+    if (cmphit == 1) {
+    cp0 = substring(cval, 0, 15);
+    if (strcmp(cp0,"plant_cmp_real(") == 0) {
+    cmphit = 0;
+    }
+    cp1 = substring(cval, 0, 15);
+    if (strcmp(cp1,"plant_cmp_imag(") == 0) {
+    cmphit = 0;
+    }
+    cp2 = substring(cval, 0, 14);
+    if (strcmp(cp2,"plant_cmp_arg(") == 0) {
+    cmphit = 0;
+    }
+    cp3 = substring(cval, 0, 15);
+    if (strcmp(cp3,"plant_cmp_cabs(") == 0) {
+    cmphit = 0;
+    }
+    }
+    if (cmphit == 1) {
+    cval = _cat3("plant_complex_to_str(", cval, ")");
+    isn2 = 2;
+    }
     dblhit = _expr_has_dbl(cval, evars);
     if (dblhit == 1) {
     cval = _cat3("_from_double(", cval, ")");
@@ -17613,7 +17739,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.52.0 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.52.1 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

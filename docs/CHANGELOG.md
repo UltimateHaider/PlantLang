@@ -1,3 +1,30 @@
+## v0.52.1 — Close TD-025 (CMP Operands)
+
+### Fixed
+- TD-025: CMP arithmetic now operand-based (not just target-typed).
+  - Added `collect_cmps_walk` + `__CMP__` markers.
+  - Added `_expr_has_cmp`.
+  - Added `_cmp_operand_ops` (applied in `translate_expr`).
+  - CMP display via `plant_complex_to_str`.
+  - Real accessors (`plant_cmp_real/imag/arg/cabs`) guarded (return `tx_t`).
+
+### Added
+- 2 new tests: `cmp_show`, `cmp_operand_ops`.
+
+### Verified
+- Native: 129/129 (was 127)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (545,284 B)
+- valgrind strict: PASS
+- Binary: 968,608 B.
+
+### Out of Scope (v0.52.2+)
+- Parser validation.
+- Return types.
+- Type inference.
+- TD-009 (structs).
+
 ## v0.52.0 — Performance (Precompile Runtime)
 
 ### Performance

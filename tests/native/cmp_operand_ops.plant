@@ -1,0 +1,9 @@
+SUITE "CMP Operand Ops (TD-025)"
+  CREATE A (CMP) TO CMP(3, 4).
+  CREATE B (CMP) TO CMP(1, 0 - 2).
+
+  SHOW A + B.
+  SHOW A * B.
+
+  SHOW "cmp-ops-ok".
+/SUITE.
