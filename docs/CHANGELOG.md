@@ -1,3 +1,31 @@
+## v0.52.3e — TD-009 Partial Fix (Struct Construction)
+
+### Fixed
+- TD-009 (partial): `STR X` CREATE/LET vars → `tx_t` (map handle).
+- TD-009 (partial): named brace literal `X{k:v}` → `plant_map_set` chain.
+- Scoped via `type_info` so registry scalars (BYT/UBT/SHR/USH/ULO) keep their C types.
+- `:`→`_` corruption avoided (literal lowered before the substitution).
+
+### Added
+- 2 new tests: `str_construct_named`, `str_construct_plain`.
+
+### Remaining
+- Positional `X(v1, v2, …)` → v0.52.3f.
+
+### Verified
+- Native: 131/131 (was 129)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (556,756 B)
+- valgrind strict: PASS
+- Binary: 977,000 B.
+
+### Out of Scope
+- TD-009 positional (v0.52.3f).
+- TD-033 (species registration).
+- TD-035 (fixture brittleness).
+
 ## v0.52.3d — Close TD-034 (Regression Suite Green)
 
 ### Fixed

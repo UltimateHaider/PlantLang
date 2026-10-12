@@ -84,12 +84,19 @@
 - **Residual:** `tensor_basic` still leaks 128 B from its own
   unfreed `T4`/`T5` tensors (test hygiene — see TD-014).
 
-## TD-009: Structs are fundamentally broken
-- **Status:** OPEN
+## TD-009: Structs are fundamentally broken — PARTIAL CLOSED
+- **Status:** 🟠 PARTIAL CLOSED in v0.52.3e
 - **Introduced:** pre-v0.51.1 (long-standing limitation)
-- **Target fix:** v0.52.0 (Type System Audit)
 - **Impact:** HIGH — structs cannot be used reliably.
-- **Discovered by:** DeepSeek V4 Flash during v0.51.2c.2 Phase 2.
+- **Fixed (v0.52.3e):**
+  - `STR X` CREATE/LET vars → `tx_t` (map handle, matching SPECIES).
+  - Named brace literal `X{k:v}` → `plant_map_set` chain (bare keys quoted).
+  - `p.x` → `_map_get` (already worked for handles).
+  - Scoped via `type_info` so registry scalars (BYT/UBT/SHR/USH/ULO) keep their C types.
+- **Remaining:**
+  - Positional `X(v1, v2, …)` construction → v0.52.3f.
+  - Method calls on struct values.
+- **Related:** —
 
 ### Symptoms
 1. `STR Holder { values: LIST }` + `CREATE h TO Holder(...)`:

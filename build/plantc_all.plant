@@ -6582,6 +6582,12 @@ ACTION _push_pair(acc(TXT), cur(TXT), nums(LST), evars(LST)),
     REAP vt FROM trim, vtxt.
     IF LEN(kt) IS 0, GIVE acc. /IF.
     IF LEN(vt) IS 0, GIVE acc. /IF.
+    # v0.52.3e — TD-009: a bare identifier key is a field name; quote it
+    # (map-literal keys are already quoted and pass through).
+    REAP kc0 FROM char_at, kt, 0.
+    IF kc0 ISNT "\"",
+        SET kt TO "\"" + kt + "\"".
+    /IF.
     REAP ken FROM _enc_el, kt, nums, evars.
     REAP ven FROM _enc_el, vt, nums, evars.
     SET acc TO "plant_map_set(" + acc + ", " + ken + ", " + ven + ")".
@@ -6713,8 +6719,28 @@ ACTION _map_literal(expr(TXT), nums(LST), evars(LST)),
                 SET lc TO 1.
             /IF.
             IF li > 0 AND pvi ISNT -1,
-                SET out TO out + ch.
-                SET lc TO 1.
+                # v0.52.3e — TD-009: IDENT{...} is a struct/species
+                # literal; strip the preceding type name from `out` and
+                # lower the braces as a map. `)`/`]` (call-result or
+                # chained access) still pass through.
+                IF pvc IS ")" OR pvc IS "]",
+                    SET out TO out + ch.
+                    SET lc TO 1.
+                /IF.
+                IF pvc ISNT ")" AND pvc ISNT "]",
+                    CREATE cut(LON) TO LEN(out).
+                    SEASON cut > 0,
+                        REAP ccut FROM char_at, out, cut - 1.
+                        REAP ccid FROM find_any, ccut, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_ ".
+                        IF ccid IS -1, BREAK 0. /IF.
+                        SET cut TO cut - 1.
+                    /SEASON.
+                    SET out TO substring(out, 0, cut).
+                    SET ls TO 1.
+                    SET bd TO 1.
+                    SET lst TO "".
+                    SET lc TO 1.
+                /IF.
             /IF.
         /IF.
         IF ch ISNT "\"" AND inst IS 0 AND ls IS 0 AND ch ISNT "{" AND lc IS 0,
@@ -10547,11 +10573,25 @@ ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(
   /IF.
   REAP vst2 FROM is_struct_type, vtype.
   IF vst2 IS "1",
-      REAP vct2 FROM ffi_ctype, vtype.
-      IF actx IS "a",
-          GIVE isel + "  " + target + " = " + cval + ";\n".
+      # v0.52.3e — TD-009: a REAL struct type (not a registry scalar such
+      # as BYT/SHR/ULO) is a map handle (tx_t) for CREATE/LET. FFI
+      # signatures still use struct_val (ffi_ctype).
+      REAP vb2 FROM type_base, vtype.
+      REAP vb2 FROM trim, vb2.
+      REAP vrk2 FROM type_info, vb2.
+      IF COUNT vrk2 IS 0,
+          IF actx IS "a",
+              GIVE isel + "  " + target + " = " + cval + ";\n".
+          /IF.
+          GIVE isel + "  tx_t " + target + " = " + cval + ";\n".
       /IF.
-      GIVE isel + "  " + vct2 + " " + target + " = " + cval + ";\n".
+      IF COUNT vrk2 > 0,
+          REAP vct2 FROM ffi_ctype, vtype.
+          IF actx IS "a",
+              GIVE isel + "  " + target + " = " + cval + ";\n".
+          /IF.
+          GIVE isel + "  " + vct2 + " " + target + " = " + cval + ";\n".
+      /IF.
   /IF.
   IF vtype ISNT "LON" AND vtype ISNT "NUM" AND vtype ISNT "CHA" AND vtype ISNT "UNU" AND vtype ISNT "DBL" AND vtype ISNT "FLT" AND vtype ISNT "DCM" AND vtype ISNT "LST" AND vtype ISNT "MATH",
       REAP vst3 FROM is_struct_type, vtype.
@@ -11684,11 +11724,23 @@ ACTION generate_node(node, env(LST)),
         /IF.
         REAP vst4 FROM is_struct_type, vtype.
         IF vst4 IS "1",
-            REAP vct4 FROM ffi_ctype, vtype.
-            IF actx IS "a",
-                GIVE isel + "  " + target + " = " + cval + ";\n".
+            # v0.52.3e — TD-009: real struct types are map handles.
+            REAP vb4 FROM type_base, vtype.
+            REAP vb4 FROM trim, vb4.
+            REAP vrk4 FROM type_info, vb4.
+            IF COUNT vrk4 IS 0,
+                IF actx IS "a",
+                    GIVE isel + "  " + target + " = " + cval + ";\n".
+                /IF.
+                GIVE isel + "  tx_t " + target + " = " + cval + ";\n".
             /IF.
-            GIVE isel + "  " + vct4 + " " + target + " = " + cval + ";\n".
+            IF COUNT vrk4 > 0,
+                REAP vct4 FROM ffi_ctype, vtype.
+                IF actx IS "a",
+                    GIVE isel + "  " + target + " = " + cval + ";\n".
+                /IF.
+                GIVE isel + "  " + vct4 + " " + target + " = " + cval + ";\n".
+            /IF.
         /IF.
         IF vtype ISNT "LON" AND vtype ISNT "CHA" AND vtype ISNT "UNU" AND vtype ISNT "DBL" AND vtype ISNT "FLT" AND vtype ISNT "DCM" AND vtype ISNT "MATH",
             REAP vst5 FROM is_struct_type, vtype.
@@ -15877,7 +15929,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.52.3d (pure native)".
+  SHOW "Chloroplast 0.52.3e (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

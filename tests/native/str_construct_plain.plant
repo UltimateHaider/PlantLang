@@ -1,0 +1,5 @@
+STR Point { x: LON, y: LON }
+CREATE p TO Point{x: 3, y: 4}.
+SHOW p.x.
+SHOW p.y.
+SHOW "str-plain-ok".
