@@ -6392,6 +6392,7 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
   tx_t ppair = "";
   tx_t pnm = "";
   tx_t lb = "";
+  tx_t is_eof_sp = "";
   tx_t tk = "";
   tx_t ty = "";
   tx_t slx = "";
@@ -6416,6 +6417,9 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
   tx_t btv = "";
   tx_t btx = "";
   tx_t brb = "";
+  tx_t ct2 = "";
+  tx_t cl2 = "";
+  tx_t cc2 = "";
     lexer = get_lexer();
     PlantArray* srtab = plant_list_make ( 0 );
     kw_pair = plant_iLexer_consume_at(lexer, tokens, pos);
@@ -6493,6 +6497,10 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
     PlantArray* fields = plant_list_make ( 0 );
     PlantArray* methods = plant_list_make ( 0 );
     while (1) {
+    is_eof_sp = plant_iLexer_is_eof_at(lexer, tokens, p);
+    if (is_eof_sp) {
+    return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "species_decl" , "name" , sname , "type_params" , stparams , "parent" , parent , "fields" , fields , "methods" , methods ) , p );
+    }
     tk = plant_iLexer_peek_at(lexer, tokens, p);
     ty = plant_iLexer_tok_type(lexer, tk);
     slx = plant_iLexer_tok_lex(lexer, tk);
@@ -6549,6 +6557,12 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
     p = _second(brb);
     }
         fields = plant_list_add(fields, plant_list_make ( 4 , "name" , fname , "type" , ftt ));
+    ct2 = plant_iLexer_peek_at(lexer, tokens, p);
+    cl2 = plant_iLexer_tok_lex(lexer, ct2);
+    if (strcmp(cl2,",") == 0) {
+    cc2 = plant_iLexer_consume_at(lexer, tokens, p);
+    p = _second(cc2);
+    }
     }
     return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "species_decl" , "name" , sname , "type_params" , stparams , "parent" , parent , "fields" , fields , "methods" , methods ) , p );
 }
@@ -18018,7 +18032,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.52.3a (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.52.3b (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

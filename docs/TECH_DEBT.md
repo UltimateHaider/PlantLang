@@ -373,3 +373,21 @@ defining scope.
 - **Fix direction:** add `runtime/c/plant_memory.c` (and any other missing runtime units) to the regression runner's gcc line, or link the precompiled test-runtime archive.
 - **Target fix:** v0.52.x or v0.53.x.
 - **Related:** TD-029.
+
+## TD-032: SPC field list SIGSEGV (comma + EOF) — CLOSED
+- **Status:** ✅ CLOSED in v0.52.3b
+- **Introduced:** v0.49.28 (`parse_species_decl`).
+- **Impact:** `SPC H { x: LON, y: LON }` (comma), comma + embedded `ACTION`, and unterminated `SPC H { x: LON` all crashed with **SIGSEGV (exit 139)**.
+- **Cause:** the species field loop consumed the type as a single token and never handled a trailing `,`; and it had no EOF guard (unlike `parse_struct_decl`), so any mis-parse walked off the token array.
+- **Fixed:** `parse_species_decl` now (1) consumes an optional `,` between fields, and (2) has an `is_eof_at` guard mirroring `parse_struct_decl`.
+- **After:** graceful termination; `SPC H { x: LON, y: LON }` compiles and runs.
+- **Related:** TD-009.
+
+## TD-033: Species fields default to "" with explicit ACTION main() — OPEN
+- **Status:** OPEN
+- **Introduced:** pre-v0.52.3b (observed during v0.52.3b investigation).
+- **Impact:** MEDIUM — programs with an explicit `ACTION main()` never emit `plant_species_register(...)`, so species fields default to `""` at runtime (the map is only populated via `.put`).
+- **Cause:** `sp_init_code` (which carries `plant_species_register`) is only spliced into the implicit-main emission path (`codegen_c.plant:9933`), not the action-main path.
+- **Fix direction:** emit the species/interface registration prologue regardless of which main path is used.
+- **Target fix:** v0.52.x.
+- **Related:** TD-032.

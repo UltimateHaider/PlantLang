@@ -1,3 +1,31 @@
+## v0.52.3b — SPECIES Comma SIGSEGV Fix
+
+### Fixed
+- TD-032: `parse_species_decl` now accepts an optional comma between fields.
+- TD-032: EOF guard added (mirrors `parse_struct_decl`).
+- Before: SIGSEGV (exit 139) on comma, comma-with-embedded-ACTION, and unterminated species blocks.
+- After: graceful termination.
+
+### Added
+- 1 new test: `spc_comma` (`SPC H { x: LON, y: LON }`).
+- 1 new no-crash test: `spc_unterminated`.
+
+### Documented (new TD)
+- TD-033: species fields default to `""` with an explicit `ACTION main()`.
+
+### Verified
+- Native: 129/129
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (553,735 B)
+- valgrind strict: PASS
+- Binary: 976,960 B.
+
+### Out of Scope
+- TD-009 (struct construction) → v0.52.3c.
+- TD-031 (regression runner) → v0.52.3d.
+- TD-033 (species registration).
+
 ## v0.52.3a — Rename SPC + STR
 
 ### Changed (BREAKING)
