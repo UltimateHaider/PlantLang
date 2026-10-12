@@ -1,0 +1,7 @@
+ACTION foo(x(FOOBAR))
+  SHOW x.
+/ACTION.
+
+ACTION main(),
+  GIVE 0.
+/GIVE main.

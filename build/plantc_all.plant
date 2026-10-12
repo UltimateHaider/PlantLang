@@ -8595,7 +8595,7 @@ ACTION collect_cmps_walk(bd(LST), subst(LST), res(LST)),
       REAP cwret8 FROM collect_cmps_walk, cwbd5, subst, res.
     /IF.
     IF cwty2 IS "match_stmt",
-      CREATE cmcl5(LIST) TO _map_get(cwnd2, "clauses").
+      CREATE cmcl5(LST) TO _map_get(cwnd2, "clauses").
       CREATE cmci5(LON) TO 0.
       SEASON cmci5 < COUNT cmcl5,
         REAP cmcl6 FROM plant_list_get, cmcl5, cmci5.
@@ -14175,6 +14175,183 @@ ACTION _ts_resolve(tsub(LST), name(TXT)),
 
 
 
+# ──────────────────────────────────────────────────────────────
+#  v0.52.2 — Unknown type validation (TD-030).
+#  Walks the AST and rejects CREATE/LET/GLOBAL var_types and
+#  ACTION/EXTERNAL param + return types that are neither registry
+#  types, pseudo-forms, nor declared aliases/structs/enums/species/
+#  generic params. Returns the first error message, or "" if clean.
+# ──────────────────────────────────────────────────────────────
+ACTION _known_type(t(TXT), names(LST)),
+  REAP tt FROM trim, t.
+  IF tt IS "", GIVE "1". /IF.
+  REAP r0 FROM substring, tt, 0, 4.
+  IF r0 IS "REF ", SET tt TO trim(substring(tt, 4, LEN(tt))). /IF.
+  REAP s0 FROM substring, tt, 0, 7.
+  IF s0 IS "STRUCT ", GIVE "1". /IF.
+  REAP e0 FROM substring, tt, 0, 5.
+  IF e0 IS "ENUM ", GIVE "1". /IF.
+  IF str_eq(tt, "void*") IS "1", GIVE "1". /IF.
+  REAP lt FROM find_any, tt, "<".
+  IF lt ISNT -1, SET tt TO substring(tt, 0, lt). /IF.
+  REAP base FROM type_base, tt.
+  REAP base FROM trim, base.
+  REAP rk FROM type_info, base.
+  IF COUNT rk > 0, GIVE "1". /IF.
+  IF base IS "MATH" OR base IS "UNION" OR base IS "ARRAY" OR base IS "CALLBACK" OR base IS "VOID" OR base IS "external" OR base IS "Result" OR base IS "STRING" OR base IS "VEIN", GIVE "1". /IF.
+  REAP df FROM list_contains, names, base.
+  IF df IS 1, GIVE "1". /IF.
+  GIVE "0".
+/ACTION.
+
+# Collect every declared type name (aliases, struct/union/enum/species
+# names, and generic type params) into names, recursing into bodies.
+ACTION _collect_type_names(bd(LST), names(LST)),
+  CREATE i(LON) TO 0.
+  CREATE nd(TXT) TO "".
+  CREATE ty(TXT) TO "".
+  SEASON i < COUNT bd,
+    REAP nd FROM plant_list_get, bd, i.
+    REAP ty FROM _map_get, nd, "type".
+    IF ty IS "type_decl",
+      REAP al FROM _map_get, nd, "alias".
+      PUT al INTO names.
+    /IF.
+    IF ty IS "struct_decl" OR ty IS "union_decl" OR ty IS "enum_decl" OR ty IS "species_decl",
+      REAP nm FROM _map_get, nd, "name".
+      PUT nm INTO names.
+    /IF.
+    IF ty IS "action_decl" OR ty IS "struct_decl",
+      REAP gen FROM _map_get, nd, "generics".
+      CREATE gi(LON) TO 0.
+      SEASON gi < COUNT gen,
+        REAP ge FROM plant_list_get, gen, gi.
+        PUT ge INTO names.
+        SET gi TO gi + 1.
+      /SEASON.
+    /IF.
+    IF ty IS "action_decl",
+      REAP obd FROM _map_get, nd, "body".
+      REAP x FROM _collect_type_names, obd, names.
+    /IF.
+    IF ty IS "if_stmt",
+      REAP ib FROM _if_bodies, nd.
+      CREATE ii(LON) TO 0.
+      SEASON ii < COUNT ib,
+        REAP ibd FROM plant_list_get, ib, ii.
+        REAP x FROM _collect_type_names, ibd, names.
+        SET ii TO ii + 1.
+      /SEASON.
+    /IF.
+    IF ty IS "season_stmt" OR ty IS "cycle_stmt" OR ty IS "suite_stmt",
+      REAP sbd FROM _map_get, nd, "body".
+      REAP x FROM _collect_type_names, sbd, names.
+    /IF.
+    IF ty IS "weather_stmt",
+      REAP wbd FROM _weather_bodies, nd.
+      CREATE wi(LON) TO 0.
+      SEASON wi < COUNT wbd,
+        REAP wbel FROM plant_list_get, wbd, wi.
+        REAP x FROM _collect_type_names, wbel, names.
+        SET wi TO wi + 1.
+      /SEASON.
+    /IF.
+    IF ty IS "match_stmt",
+      CREATE mcl(LST) TO _map_get(nd, "clauses").
+      CREATE mi(LON) TO 0.
+      SEASON mi < COUNT mcl,
+        REAP mce FROM plant_list_get, mcl, mi.
+        REAP mcb FROM _map_get, mce, "bodyStatements".
+        REAP x FROM _collect_type_names, mcb, names.
+        SET mi TO mi + 1.
+      /SEASON.
+    /IF.
+    SET i TO i + 1.
+  /SEASON.
+  GIVE names.
+/ACTION.
+
+ACTION validate_types_walk(bd(LST), names(LST)),
+  CREATE i(LON) TO 0.
+  CREATE nd(TXT) TO "".
+  CREATE ty(TXT) TO "".
+  CREATE err(TXT) TO "".
+  SEASON i < COUNT bd,
+    REAP nd FROM plant_list_get, bd, i.
+    REAP ty FROM _map_get, nd, "type".
+    IF ty IS "create_stmt" OR ty IS "let_stmt" OR ty IS "global_stmt",
+      REAP vt FROM _map_get, nd, "var_type".
+      REAP k FROM _known_type, vt, names.
+      IF k IS "0", GIVE "unknown type '" + vt + "'". /IF.
+    /IF.
+    IF ty IS "action_decl" OR ty IS "external_decl",
+      REAP ps FROM _map_get, nd, "params".
+      CREATE pi(LON) TO 0.
+      SEASON pi < COUNT ps,
+        REAP pe FROM plant_list_get, ps, pi.
+        REAP pt FROM _map_get, pe, "type".
+        REAP kp FROM _known_type, pt, names.
+        IF kp IS "0", GIVE "unknown type '" + pt + "'". /IF.
+        SET pi TO pi + 1.
+      /SEASON.
+      REAP rt FROM _map_get, nd, "ret".
+      REAP kr FROM _known_type, rt, names.
+      IF kr IS "0", GIVE "unknown type '" + rt + "'". /IF.
+    /IF.
+    IF ty IS "action_decl",
+      REAP obd FROM _map_get, nd, "body".
+      REAP err FROM validate_types_walk, obd, names.
+      IF err > "", GIVE err. /IF.
+    /IF.
+    IF ty IS "if_stmt",
+      REAP ib FROM _if_bodies, nd.
+      CREATE ii(LON) TO 0.
+      SEASON ii < COUNT ib,
+        REAP ibd FROM plant_list_get, ib, ii.
+        REAP err FROM validate_types_walk, ibd, names.
+        IF err > "", GIVE err. /IF.
+        SET ii TO ii + 1.
+      /SEASON.
+    /IF.
+    IF ty IS "season_stmt" OR ty IS "cycle_stmt" OR ty IS "suite_stmt",
+      REAP sbd FROM _map_get, nd, "body".
+      REAP err FROM validate_types_walk, sbd, names.
+      IF err > "", GIVE err. /IF.
+    /IF.
+    IF ty IS "weather_stmt",
+      REAP wbd FROM _weather_bodies, nd.
+      CREATE wi(LON) TO 0.
+      SEASON wi < COUNT wbd,
+        REAP wbel FROM plant_list_get, wbd, wi.
+        REAP err FROM validate_types_walk, wbel, names.
+        IF err > "", GIVE err. /IF.
+        SET wi TO wi + 1.
+      /SEASON.
+    /IF.
+    IF ty IS "match_stmt",
+      CREATE mcl(LST) TO _map_get(nd, "clauses").
+      CREATE mi(LON) TO 0.
+      SEASON mi < COUNT mcl,
+        REAP mce FROM plant_list_get, mcl, mi.
+        REAP mcb FROM _map_get, mce, "bodyStatements".
+        REAP err FROM validate_types_walk, mcb, names.
+        IF err > "", GIVE err. /IF.
+        SET mi TO mi + 1.
+      /SEASON.
+    /IF.
+    SET i TO i + 1.
+  /SEASON.
+  GIVE "".
+/ACTION.
+
+# validate_types — public entry: returns first unknown-type error or "".
+ACTION validate_types(bd(LST)),
+  CREATE names(LST) TO plant_list_make(0).
+  REAP names FROM _collect_type_names, bd, names.
+  REAP err FROM validate_types_walk, bd, names.
+  GIVE err.
+/ACTION.
+
 ACTION generate_c(ast(LST)),
     CREATE header(TXT) TO "#include <stdbool.h>\n#include <plant_compat.h>\n#include <plant_memory.h>\n#include <plant_math.h>\n#include <plant_complex.h>\n\n".
     CREATE decl_code(TXT) TO "".
@@ -15595,7 +15772,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.52.1 (pure native)".
+  SHOW "Chloroplast 0.52.2 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.
@@ -15635,6 +15812,13 @@ IF perr > "",
   GIVE 1.
 /IF.
 REAP body FROM _map_get, program_ast, "body".
+
+# v0.52.2 — TD-030: reject unknown types before codegen.
+REAP terr FROM validate_types, body.
+IF terr > "",
+  SHOW "Error: " + terr + ".".
+  GIVE 1.
+/IF.
 
 # v0.49.39 - compile-time interface conformance validation
 CREATE iface_names(LST) TO plant_list_make(0).

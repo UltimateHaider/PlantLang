@@ -1,0 +1,5 @@
+ACTION main(),
+  CREATE X (FOOBAR) TO 5.
+  SHOW X.
+  GIVE 0.
+/GIVE main.

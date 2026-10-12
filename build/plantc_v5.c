@@ -296,6 +296,10 @@ tx_t _map_replace(PlantArray* m, tx_t k, tx_t v);
 tx_t _ta_collect_list(PlantArray* lst, PlantArray* tsub);
 tx_t _ta_rw_list(PlantArray* lst, PlantArray* tsub);
 tx_t _ts_resolve(PlantArray* tsub, tx_t name);
+tx_t _known_type(tx_t t, PlantArray* names);
+tx_t _collect_type_names(PlantArray* bd, PlantArray* names);
+tx_t validate_types_walk(PlantArray* bd, PlantArray* names);
+tx_t validate_types(PlantArray* bd);
 tx_t generate_c(PlantArray* ast);
 tx_t _cl_is_arg(tx_t arg);
 tx_t _cl_map_get(PlantArray* clmap, tx_t key);
@@ -10312,7 +10316,7 @@ tx_t collect_cmps_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
     cwret8 = collect_cmps_walk(cwbd5, subst, res);
     }
     if (strcmp(cwty2,"match_stmt") == 0) {
-    tx_t cmcl5 = _map_get ( cwnd2 , "clauses" );
+    PlantArray* cmcl5 = _map_get ( cwnd2 , "clauses" );
     long cmci5 = 0;
     while (cmci5 < plant_array_length(cmcl5)) {
     cmcl6 = plant_list_get(cmcl5, cmci5);
@@ -16208,6 +16212,241 @@ tx_t _ts_resolve(PlantArray* tsub, tx_t name) {
     }
     return cur;
 }
+tx_t _known_type(tx_t t, PlantArray* names) {
+  tx_t tt = "";
+  tx_t r0 = "";
+  tx_t s0 = "";
+  tx_t e0 = "";
+  tx_t lt = "";
+  tx_t base = "";
+  tx_t rk = "";
+  tx_t df = "";
+    tt = trim(t);
+    if (strcmp(tt,"") == 0) {
+    return "1";
+    }
+    r0 = substring(tt, 0, 4);
+    if (strcmp(r0,"REF ") == 0) {
+    tt = trim ( substring ( tt , 4 , strlen( tt ) ) );
+    }
+    s0 = substring(tt, 0, 7);
+    if (strcmp(s0,"STRUCT ") == 0) {
+    return "1";
+    }
+    e0 = substring(tt, 0, 5);
+    if (strcmp(e0,"ENUM ") == 0) {
+    return "1";
+    }
+    if (strcmp(str_eq ( tt , "void*" ),"1") == 0) {
+    return "1";
+    }
+    lt = find_any(tt, "<");
+    if (lt != - 1) {
+    tt = substring ( tt , 0 , lt );
+    }
+    base = type_base(tt);
+    base = trim(base);
+    rk = type_info(base);
+    if (plant_array_length(rk) > 0) {
+    return "1";
+    }
+    if (strcmp(base,"MATH") == 0 || strcmp(base,"UNION") == 0 || strcmp(base,"ARRAY") == 0 || strcmp(base,"CALLBACK") == 0 || strcmp(base,"VOID") == 0 || strcmp(base,"external") == 0 || strcmp(base,"Result") == 0 || strcmp(base,"STRING") == 0 || strcmp(base,"VEIN") == 0) {
+    return "1";
+    }
+    df = list_contains(names, base);
+    if (df == 1) {
+    return "1";
+    }
+    return "0";
+}
+tx_t _collect_type_names(PlantArray* bd, PlantArray* names) {
+  tx_t al = "";
+  tx_t nm = "";
+  tx_t gen = "";
+  tx_t ge = "";
+  tx_t obd = "";
+  tx_t x = "";
+  tx_t ib = "";
+  tx_t ibd = "";
+  tx_t sbd = "";
+  tx_t wbd = "";
+  tx_t wbel = "";
+  tx_t mce = "";
+  tx_t mcb = "";
+    long i = 0;
+    tx_t nd = "";
+    tx_t ty = "";
+    while (i < plant_array_length(bd)) {
+    nd = plant_list_get(bd, i);
+    ty = _map_get(nd, "type");
+    if (strcmp(ty,"type_decl") == 0) {
+    al = _map_get(nd, "alias");
+            names = plant_list_add(names, al);
+    }
+    if (strcmp(ty,"struct_decl") == 0 || strcmp(ty,"union_decl") == 0 || strcmp(ty,"enum_decl") == 0 || strcmp(ty,"species_decl") == 0) {
+    nm = _map_get(nd, "name");
+            names = plant_list_add(names, nm);
+    }
+    if (strcmp(ty,"action_decl") == 0 || strcmp(ty,"struct_decl") == 0) {
+    gen = _map_get(nd, "generics");
+    long gi = 0;
+    while (gi < plant_array_length(gen)) {
+    ge = plant_list_get(gen, gi);
+                names = plant_list_add(names, ge);
+    gi = gi+1;
+    }
+    }
+    if (strcmp(ty,"action_decl") == 0) {
+    obd = _map_get(nd, "body");
+    x = _collect_type_names(obd, names);
+    }
+    if (strcmp(ty,"if_stmt") == 0) {
+    ib = _if_bodies(nd);
+    long ii = 0;
+    while (ii < plant_array_length(ib)) {
+    ibd = plant_list_get(ib, ii);
+    x = _collect_type_names(ibd, names);
+    ii = ii+1;
+    }
+    }
+    if (strcmp(ty,"season_stmt") == 0 || strcmp(ty,"cycle_stmt") == 0 || strcmp(ty,"suite_stmt") == 0) {
+    sbd = _map_get(nd, "body");
+    x = _collect_type_names(sbd, names);
+    }
+    if (strcmp(ty,"weather_stmt") == 0) {
+    wbd = _weather_bodies(nd);
+    long wi = 0;
+    while (wi < plant_array_length(wbd)) {
+    wbel = plant_list_get(wbd, wi);
+    x = _collect_type_names(wbel, names);
+    wi = wi+1;
+    }
+    }
+    if (strcmp(ty,"match_stmt") == 0) {
+    PlantArray* mcl = _map_get ( nd , "clauses" );
+    long mi = 0;
+    while (mi < plant_array_length(mcl)) {
+    mce = plant_list_get(mcl, mi);
+    mcb = _map_get(mce, "bodyStatements");
+    x = _collect_type_names(mcb, names);
+    mi = mi+1;
+    }
+    }
+    i = i+1;
+    }
+    return names;
+}
+tx_t validate_types_walk(PlantArray* bd, PlantArray* names) {
+  tx_t vt = "";
+  tx_t k = "";
+  tx_t ps = "";
+  tx_t pe = "";
+  tx_t pt = "";
+  tx_t kp = "";
+  tx_t rt = "";
+  tx_t kr = "";
+  tx_t obd = "";
+  tx_t ib = "";
+  tx_t ibd = "";
+  tx_t sbd = "";
+  tx_t wbd = "";
+  tx_t wbel = "";
+  tx_t mce = "";
+  tx_t mcb = "";
+    long i = 0;
+    tx_t nd = "";
+    tx_t ty = "";
+    tx_t err = "";
+    while (i < plant_array_length(bd)) {
+    nd = plant_list_get(bd, i);
+    ty = _map_get(nd, "type");
+    if (strcmp(ty,"create_stmt") == 0 || strcmp(ty,"let_stmt") == 0 || strcmp(ty,"global_stmt") == 0) {
+    vt = _map_get(nd, "var_type");
+    k = _known_type(vt, names);
+    if (strcmp(k,"0") == 0) {
+    return _cat3("unknown type '", vt, "'");
+    }
+    }
+    if (strcmp(ty,"action_decl") == 0 || strcmp(ty,"external_decl") == 0) {
+    ps = _map_get(nd, "params");
+    long pi = 0;
+    while (pi < plant_array_length(ps)) {
+    pe = plant_list_get(ps, pi);
+    pt = _map_get(pe, "type");
+    kp = _known_type(pt, names);
+    if (strcmp(kp,"0") == 0) {
+    return _cat3("unknown type '", pt, "'");
+    }
+    pi = pi+1;
+    }
+    rt = _map_get(nd, "ret");
+    kr = _known_type(rt, names);
+    if (strcmp(kr,"0") == 0) {
+    return _cat3("unknown type '", rt, "'");
+    }
+    }
+    if (strcmp(ty,"action_decl") == 0) {
+    obd = _map_get(nd, "body");
+    err = validate_types_walk(obd, names);
+    if (strcmp(err,"") > 0) {
+    return err;
+    }
+    }
+    if (strcmp(ty,"if_stmt") == 0) {
+    ib = _if_bodies(nd);
+    long ii = 0;
+    while (ii < plant_array_length(ib)) {
+    ibd = plant_list_get(ib, ii);
+    err = validate_types_walk(ibd, names);
+    if (strcmp(err,"") > 0) {
+    return err;
+    }
+    ii = ii+1;
+    }
+    }
+    if (strcmp(ty,"season_stmt") == 0 || strcmp(ty,"cycle_stmt") == 0 || strcmp(ty,"suite_stmt") == 0) {
+    sbd = _map_get(nd, "body");
+    err = validate_types_walk(sbd, names);
+    if (strcmp(err,"") > 0) {
+    return err;
+    }
+    }
+    if (strcmp(ty,"weather_stmt") == 0) {
+    wbd = _weather_bodies(nd);
+    long wi = 0;
+    while (wi < plant_array_length(wbd)) {
+    wbel = plant_list_get(wbd, wi);
+    err = validate_types_walk(wbel, names);
+    if (strcmp(err,"") > 0) {
+    return err;
+    }
+    wi = wi+1;
+    }
+    }
+    if (strcmp(ty,"match_stmt") == 0) {
+    PlantArray* mcl = _map_get ( nd , "clauses" );
+    long mi = 0;
+    while (mi < plant_array_length(mcl)) {
+    mce = plant_list_get(mcl, mi);
+    mcb = _map_get(mce, "bodyStatements");
+    err = validate_types_walk(mcb, names);
+    if (strcmp(err,"") > 0) {
+    return err;
+    }
+    mi = mi+1;
+    }
+    }
+    i = i+1;
+    }
+    return "";
+}
+tx_t validate_types(PlantArray* bd) {
+  tx_t err = "";
+    PlantArray* names = plant_list_make ( 0 );
+    names = _collect_type_names(bd, names);
+    err = validate_types_walk(bd, names);
+    return err;
+}
 tx_t generate_c(PlantArray* ast) {
   tx_t rp55 = "";
   tx_t ntype = "";
@@ -17700,6 +17939,7 @@ int main(int argc, char **argv) {
   tx_t program_ast = "";
   tx_t perr = "";
   tx_t body = "";
+  tx_t terr = "";
   tx_t nd99 = "";
   tx_t ty99 = "";
   tx_t inm99 = "";
@@ -17739,7 +17979,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.52.1 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.52.2 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);
@@ -17769,6 +18009,11 @@ int main(int argc, char **argv) {
   return 1;
   }
   body = _map_get(program_ast, "body");
+  terr = validate_types(body);
+  if (strcmp(terr,"") > 0) {
+  plant_iReport_print(get_report(), _cat3("Error: ", terr, "."));
+  return 1;
+  }
   PlantArray* iface_names = plant_list_make ( 0 );
   PlantArray* iface_meths = plant_list_make ( 0 );
   long ci99 = 0;

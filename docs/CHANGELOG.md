@@ -1,3 +1,38 @@
+## v0.52.2 — Unknown Type Validation
+
+### Added
+- `validate_types` AST pass (rejects unknown type names before codegen).
+- Whitelist: registry types + `TYPE` aliases + struct/union/enum/species names
+  + generic params + pseudo-forms (`REF`, `STRUCT X`, `ENUM X`, `ARRAY[T,N]`,
+  `UNION`, `MATH`, `CALLBACK`, `VOID`, `void*`, `external`, `Result<T,E>`,
+  `STRING`, `VEIN`).
+- 3 new `.invalid` tests: `unknown_type_create`, `unknown_type_param`,
+  `unknown_type_let`.
+
+### Fixed
+- Unknown types no longer silently become `tx_t`; the compiler now emits
+  `Error: unknown type 'FOOBAR'.` and exits 1.
+- Incidental: `LIST` → `LST` typo in the self-hosting source (caught by the
+  new validator).
+
+### Documented (new TD)
+- TD-031: regression runner never links `plant_memory.c` (pre-existing).
+
+### Verified
+- Native: 129/129
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (551,908 B)
+- valgrind strict: PASS
+- Binary: 972,864 B.
+
+### Out of Scope (v0.52.3+)
+- Type mismatch detection.
+- Return-type enforcement.
+- Type inference.
+- TD-009 (structs).
+- TD-031 (regression runner).
+
 ## v0.52.1 — Close TD-025 (CMP Operands)
 
 ### Fixed

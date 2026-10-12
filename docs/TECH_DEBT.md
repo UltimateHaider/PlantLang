@@ -354,3 +354,22 @@ defining scope.
 - **Fix:** Precompile the test-runtime subset to build/libplant_test_runtime.a once; link per test.
 - **Result:** Native suite ~10 min → 46 s (~13x faster).
 - **Related:** —
+
+## TD-030: Unknown types fall through to tx_t (silent) — CLOSED
+- **Status:** ✅ CLOSED in v0.52.2
+- **Introduced:** v0.51.4 (Type Registry) — `plant_ctype` fell back to `tx_t` for any unrecognized type name.
+- **Impact:** `CREATE X (FOOBAR) TO 5.` compiled silently (`tx_t X = 5;`); typos surfaced only as later C errors (or not at all).
+- **Fixed:** `validate_types` AST pass (codegen_c.plant) invoked from `main.plant` before codegen; rejects unknown type names in CREATE/LET/GLOBAL var_types and ACTION/EXTERNAL param + return types.
+- **Whitelist:** registry types + TYPE aliases + struct/union/enum/species names + generic params + pseudo-forms (`REF`, `STRUCT X`, `ENUM X`, `ARRAY[T,N]`, `UNION`, `MATH`, `CALLBACK`, `VOID`, `void*`, `external`, `Result<T,E>`, `STRING`, `VEIN`).
+- **Error:** `Error: unknown type 'FOOBAR'.` (exit 1).
+- **Incidental:** caught a latent `LIST`→`LST` typo in the self-hosting source.
+- **Related:** —
+
+## TD-031: Regression runner never links plant_memory.c — OPEN
+- **Status:** OPEN
+- **Introduced:** pre-v0.51 (`tests/regression/run_regression_tests.sh` unchanged since v0.50.0f).
+- **Impact:** 302 gcc-stage link failures across the regression suite (compiler-independent). `.invalid` (compile-fail) tests still pass; compile-stage failures = 0.
+- **Cause:** the runner links `plant_runtime.c` (and friends) but not `runtime/c/plant_memory.c`, while `plant_runtime.c` references `plant_heapstr_alloc_copy` / `plant_heapstr_release` (defined only in `plant_memory.c`).
+- **Fix direction:** add `runtime/c/plant_memory.c` (and any other missing runtime units) to the regression runner's gcc line, or link the precompiled test-runtime archive.
+- **Target fix:** v0.52.x or v0.53.x.
+- **Related:** TD-029.
