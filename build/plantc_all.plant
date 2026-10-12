@@ -191,7 +191,9 @@ ACTION keyword_to_type(wrd(TXT)),
   IF wrd IS "INTERFACE", GIVE "INTERFACE". /IF.
   IF wrd IS "IMPLEMENTS", GIVE "IMPLEMENTS". /IF.
   # v0.49.28 - SPECIES/BLOOM object model.
+  # v0.52.3a — SPECIES renamed to SPC (both accepted during transition).
   IF wrd IS "SPECIES", GIVE "SPECIES". /IF.
+  IF wrd IS "SPC", GIVE "SPC". /IF.
   IF wrd IS "BLOOM", GIVE "BLOOM". /IF.
   # v0.49.23 — numerical analysis built-ins.
   IF wrd IS "LU", GIVE "LU". /IF.
@@ -4477,12 +4479,13 @@ ACTION parse_action_decl(tokens(LST), pos(LON), rtab(LST)),
     REAP p5 FROM _second, ret_pair.
     # v0.48.4: FFI return types — external (default), Result<T,E>,
     # STRUCT X (by-value struct), void*
+    # v0.52.3a — STR is the new keyword; STRUCT still accepted.
     IF ret_lx IS "Result", SET ret TO "Result". /IF.
-    IF ret_lx IS "STRUCT",
+    IF ret_lx IS "STRUCT" OR ret_lx IS "STR",
       REAP rtv FROM collect_type_text, tokens, p5, ".", 0.
       REAP rtt FROM _first, rtv.
       REAP p5 FROM _second, rtv.
-      SET ret TO "STRUCT " + rtt.
+      SET ret TO "STR " + rtt.
     /IF.
     # v0.48.12: ENUM X — FFI boundary enums (raw member ints in C,
     # wrapped with _from_enum on the PlantLang side)
@@ -4522,7 +4525,7 @@ ACTION parse_action_decl(tokens(LST), pos(LON), rtab(LST)),
     # stored on the action_decl node so generic instantiations know
     # their substituted return type (drives _from_long wrapping of
     # numeric GIVEs). FFI marker keywords are never stored here.
-    IF ret IS "" AND ret_lx ISNT "external" AND ret_lx ISNT "Result" AND ret_lx ISNT "STRUCT" AND ret_lx ISNT "ENUM" AND ret_lx ISNT "void",
+    IF ret IS "" AND ret_lx ISNT "external" AND ret_lx ISNT "Result" AND ret_lx ISNT "STRUCT" AND ret_lx ISNT "STR" AND ret_lx ISNT "ENUM" AND ret_lx ISNT "void",
       SET ret TO ret_lx.
     /IF.
   /IF.
@@ -4565,7 +4568,7 @@ ACTION parse_action_decl(tokens(LST), pos(LON), rtab(LST)),
     IF after_lx IS ".",
       REAP dot_pair FROM plant_iLexer_consume_at, lexer, tokens, p5.
       REAP p5 FROM _second, dot_pair.
-      IF ret_lx IS "external" OR ret_lx IS "Result" OR ret_lx IS "STRUCT" OR ret_lx IS "ENUM" OR ret IS "void*",
+      IF ret_lx IS "external" OR ret_lx IS "Result" OR ret_lx IS "STRUCT" OR ret_lx IS "STR" OR ret_lx IS "ENUM" OR ret IS "void*",
         GIVE plant_list_make(2, plant_list_make(10, "type", "external_decl", "name", aname, "params", params, "ret", ret, "varargs", vararg), p5).
       /IF.
       GIVE plant_list_make(2, plant_list_make(16, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", plant_list_make(0), "prio", prio, "ret", ret, "mission_mode", mission_mode), p5).
@@ -4645,7 +4648,7 @@ ACTION parse_species_decl(tokens(LST), pos(LON)),
   REAP npair FROM plant_iLexer_consume_at, lexer, tokens, p.
   REAP nty FROM plant_iLexer_tok_type, lexer, npair[0].
   IF nty ISNT "IDENT",
-    CREATE serr(TXT) TO "SPECIES requires a name".
+    CREATE serr(TXT) TO "SPC requires a name".
     GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", serr), p).
   /IF.
   REAP sname FROM plant_iLexer_tok_lex, lexer, npair[0].
@@ -4894,7 +4897,9 @@ ACTION parse_declaration(tokens(LST), pos(LON), clv(TXT), ctab(LST), rtab(LST), 
     REAP r FROM parse_interface_decl, tokens, pos.
     GIVE r.
   /IF.
-  IF lx IS "STRUCT",
+  # v0.48.1 - STRUCT name { field: TYPE, ... } (v0.50.0a anonymous form)
+  # v0.52.3a — STR is the new keyword; STRUCT still accepted.
+  IF lx IS "STRUCT" OR lx IS "STR",
     REAP r FROM parse_struct_decl, tokens, pos.
     GIVE r.
   /IF.
@@ -4914,7 +4919,8 @@ ACTION parse_declaration(tokens(LST), pos(LON), clv(TXT), ctab(LST), rtab(LST), 
     GIVE r.
   /IF.
   # v0.49.28 - SPECIES name { field: TYPE, ... }
-  IF lx IS "SPECIES",
+  # v0.52.3a — SPC is the new keyword; SPECIES still accepted.
+  IF lx IS "SPECIES" OR lx IS "SPC",
     REAP r FROM parse_species_decl, tokens, pos.
     GIVE r.
   /IF.
@@ -7775,6 +7781,9 @@ ACTION add_struct_enum_keys(reg(LST), vtype(TXT), vname(TXT), res(LST)),
   IF rp0 IS "REF ", SET vty2 TO substring(vty2, 4, LEN(vty2)). /IF.
   REAP rp1 FROM substring, vty2, 0, 7.
   IF rp1 IS "STRUCT ", SET vty2 TO substring(vty2, 7, LEN(vty2)). /IF.
+  # v0.52.3a — STR is the new keyword; STRUCT still accepted.
+  REAP rp1b FROM substring, vty2, 0, 4.
+  IF rp1b IS "STR ", SET vty2 TO substring(vty2, 4, LEN(vty2)). /IF.
   REAP wbase2 FROM type_base, vty2.
   CREATE srlk(TXT) TO "STRUCT." + wbase2.
   REAP raw2 FROM _cl_map_get, reg, srlk.
@@ -12599,10 +12608,16 @@ ACTION ffi_param_kind(ptype(TXT)),
     REAP rest FROM substring, ptype, 4, LEN(ptype).
     REAP r0 FROM substring, rest, 0, 7.
     IF r0 IS "STRUCT ", GIVE "struct_ref". /IF.
+    # v0.52.3a — STR is the new keyword; STRUCT still accepted.
+    REAP r0b FROM substring, rest, 0, 4.
+    IF r0b IS "STR ", GIVE "struct_ref". /IF.
     GIVE "plain".
   /IF.
   REAP s0 FROM substring, ptype, 0, 7.
   IF s0 IS "STRUCT ", GIVE "struct_val". /IF.
+  # v0.52.3a — STR is the new keyword; STRUCT still accepted.
+  REAP s0b FROM substring, ptype, 0, 4.
+  IF s0b IS "STR ", GIVE "struct_val". /IF.
   IF str_eq(ptype, "void*") IS "1", GIVE "voidptr". /IF.
   IF str_eq(ptype, "CALLBACK") IS "1", GIVE "callback". /IF.
   GIVE "plain".
@@ -12620,6 +12635,11 @@ ACTION ffi_struct_name(typ(TXT)),
   IF s0 IS "STRUCT ",
     GIVE substring(typ, 7, LEN(typ)).
   /IF.
+  # v0.52.3a — STR is the new keyword; STRUCT still accepted.
+  REAP s0b FROM substring, typ, 0, 4.
+  IF s0b IS "STR ",
+    GIVE substring(typ, 4, LEN(typ)).
+  /IF.
   GIVE typ.
 /ACTION.
 
@@ -12633,6 +12653,11 @@ ACTION ffi_struct_cname(typ(TXT)),
   REAP s0 FROM substring, typ, 0, 7.
   IF s0 IS "STRUCT ",
     REAP typ FROM substring, typ, 7, LEN(typ).
+  /IF.
+  # v0.52.3a — STR is the new keyword; STRUCT still accepted.
+  REAP s0b FROM substring, typ, 0, 4.
+  IF s0b IS "STR ",
+    REAP typ FROM substring, typ, 4, LEN(typ).
   /IF.
   REAP b0 FROM base_of, typ.
   REAP bt0 FROM trim, b0.
@@ -13017,11 +13042,12 @@ ACTION ffi_emit_struct_helpers(cname(TXT), flds(LST)),
     REAP fs8 FROM is_struct_type, ft8.
     IF fs8 IS "1",
       REAP es8 FROM substring, ft8, 0, 7.
-      IF es8 IS "STRUCT ",
+      REAP es8b FROM substring, ft8, 0, 4.
+      IF es8 IS "STRUCT " OR es8b IS "STR ",
         REAP fcn8 FROM ffi_struct_cname, ft8.
         SET h1 TO h1 + "  r." + fn8 + " = plant_map_to_" + fcn8 + "_d(plant_map_get(m, \"" + fn8 + "\"), depth + 1);\n".
       /IF.
-      IF es8 ISNT "STRUCT ",
+      IF es8 ISNT "STRUCT " AND es8b ISNT "STR ",
         SET h1 TO h1 + "  r." + fn8 + " = plant_map_get(m, \"" + fn8 + "\");\n".
       /IF.
     /IF.
@@ -13055,11 +13081,12 @@ ACTION ffi_emit_struct_helpers(cname(TXT), flds(LST)),
     REAP fs7 FROM is_struct_type, ft7.
     IF fs7 IS "1",
       REAP es7 FROM substring, ft7, 0, 7.
-      IF es7 IS "STRUCT ",
+      REAP es7b FROM substring, ft7, 0, 4.
+      IF es7 IS "STRUCT " OR es7b IS "STR ",
         REAP fcn7 FROM ffi_struct_cname, ft7.
         SET h4 TO h4 + "  plant_map_hash_set(r, \"" + fn7 + "\", plant_" + fcn7 + "_to_map(v." + fn7 + "));\n".
       /IF.
-      IF es7 ISNT "STRUCT ",
+      IF es7 ISNT "STRUCT " AND es7b ISNT "STR ",
         SET h4 TO h4 + "  plant_map_hash_set(r, \"" + fn7 + "\", v." + fn7 + ");\n".
       /IF.
     /IF.
@@ -13489,10 +13516,11 @@ ACTION struct_typedef(tpl(LST), args(LST)),
         REAP ftype FROM _map_get, fel, "type".
         REAP fsub FROM subst_type, ftype, subst.
         REAP sp8 FROM substring, fsub, 0, 7.
-        IF sp8 IS "STRUCT ",
+        REAP sp8b FROM substring, fsub, 0, 4.
+        IF sp8 IS "STRUCT " OR sp8b IS "STR ",
             REAP ctype FROM ffi_ctype, fsub.
         /IF.
-        IF sp8 ISNT "STRUCT ",
+        IF sp8 ISNT "STRUCT " AND sp8b ISNT "STR ",
             # Non-STRUCT fields: explicit REF STRUCT → pointer layout; a
             # plain/generic struct reference (Box[NUM]) is an opaque tx_t
             # handle at runtime, so the typedef keeps the handle and the
@@ -14189,6 +14217,9 @@ ACTION _known_type(t(TXT), names(LST)),
   IF r0 IS "REF ", SET tt TO trim(substring(tt, 4, LEN(tt))). /IF.
   REAP s0 FROM substring, tt, 0, 7.
   IF s0 IS "STRUCT ", GIVE "1". /IF.
+  # v0.52.3a — STR is the new keyword; STRUCT still accepted.
+  REAP s0b FROM substring, tt, 0, 4.
+  IF s0b IS "STR ", GIVE "1". /IF.
   REAP e0 FROM substring, tt, 0, 5.
   IF e0 IS "ENUM ", GIVE "1". /IF.
   IF str_eq(tt, "void*") IS "1", GIVE "1". /IF.
@@ -14702,7 +14733,7 @@ ACTION generate_c(ast(LST)),
     SEASON i < COUNT ffi_torder,
         REAP node_el FROM plant_list_get, ffi_torder, i.
         REAP tscnX FROM _map_get, node_el, "scn".
-        SET struct_code TO struct_code + "#define PLANT_STRUCT_" + tscnX + " 1\n".
+        SET struct_code TO struct_code + "#define PLANT_STR_" + tscnX + " 1\n".
         REAP tstdef FROM _map_get, node_el, "stdef".
         SET struct_code TO struct_code + tstdef.
         SET i TO i + 1.
@@ -15772,7 +15803,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.52.2 (pure native)".
+  SHOW "Chloroplast 0.52.3a (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

@@ -107,13 +107,13 @@ ACTION main(),
 | List | `LST` | `CREATE parts(LST) TO plant_list_make(0).` |
 | Generic list | `LST[T]` | `CREATE xs(LST[LON]) TO plant_list_make(0).` |
 | Map | `MAP` | `CREATE m(MAP) TO { "key": "val" }.` |
-| Struct | `STRUCT` | `STRUCT Point { x: LON, y: LON }` |
-| Anonymous struct | `STRUCT` | `STRUCT { x: LON, y: LON }` (auto-named) |
+| Struct | `STR` | `STR Point { x: LON, y: LON }` |
+| Anonymous struct | `STR` | `STR { x: LON, y: LON }` (auto-named) |
 | Union | `UNION` | `UNION V { i: LON, f: DBL }` |
 | Fixed-size array | `ARRAY` | `ARRAY[LON, 5] nums = [1, 2, 3, 4, 5].` |
 | Symbolic math | `MATH` | `CREATE expr(MATH) TO "2 + 3 * 4".` |
 | Enum | `ENUM` | `ENUM Color { RED, GREEN, BLUE }.` |
-| Species | `SPECIES` | `SPECIES Animal { name: TXT, age: LON }.` |
+| Species | `SPC` | `SPC Animal { name: TXT, age: LON }.` |
 
 Declare a variable with `CREATE` (and re-assign with `SET`):
 
@@ -210,19 +210,19 @@ Enums compile to native C `typedef enum` blocks; variants are plain
 integer identifiers, so compare them with `IF c IS GREEN` (string-
 concatenating a variant directly is not supported by the v0.48 generator).
 
-### STRUCT
+### STR
 
 ```
-STRUCT Point { x: LON, y: LON }
+STR Point { x: LON, y: LON }
 ```
 
-`STRUCT` declares a typed aggregate. The codegen emits a C typedef
+`STR` declares a typed aggregate. The codegen emits a C typedef
 (`plant_Point`) and conversion helpers (`plant_map_to_Point`,
 `plant_Point_to_map`, …). Struct values flow through the FFI as opaque
 `tx_t` handles:
 
 ```
-STRUCT Point { x: LON, y: LON }
+STR Point { x: LON, y: LON }
 
 ACTION ffi_make_point(x(LON), y(LON)) -> external.
 ACTION ffi_point_sum(p(Point)) -> external.
@@ -239,8 +239,8 @@ ACTION main(),
 **Generic structs** (v0.48.1):
 
 ```
-STRUCT Box[T] { val: T }
-STRUCT Pair[T, U] { first: T, second: U }
+STR Box[T] { val: T }
+STR Pair[T, U] { first: T, second: U }
 ```
 
 Each instantiation used in the program is monomorphized into a concrete
@@ -273,7 +273,7 @@ ACTION main(),
 /ACTION.
 ```
 
-Fields are comma-separated (consistent with `STRUCT`).
+Fields are comma-separated (consistent with `STR`).
 
 #### UNION CREATE/LET
 
@@ -920,7 +920,7 @@ ACTION ffi_open(mode(LON)) -> Result<LON, TXT>.
 - **`ffi_free(ptr)`** — release `malloc`'d handles; `ffi_free(NULL)` sets
   `EINVAL` (guarded, safe).
 - **Full signature space (v0.48.4)** — struct-by-value params and returns
-  (`STRUCT X`, mapped via `plant_map_to_X` / `plant_X_to_map`), `REF STRUCT`
+  (`STR X`, mapped via `plant_map_to_X` / `plant_X_to_map`), `REF STR`
   (`plant_map_to_ref_X`), `void*` handles, varargs (`..., ...`), and
   `CALLBACK` parameters (auto-generated `plant_cbw_<name>` adapters +
   `plant_cb_ensure`).
@@ -1572,10 +1572,10 @@ Aliases may be declared at file scope or inside ACTION bodies; they
 lower to C typedefs and resolve in CREATE/LET type positions.
 
 
-### SPECIES + BLOOM (v0.49.28)
+### SPC + BLOOM (v0.49.28)
 
 ```
-SPECIES Person {
+SPC Person {
   name: TXT
   age: LON
 }
@@ -1593,7 +1593,7 @@ the existing obj.field selector and .put(...) method.
 ### Species Methods + SELF (v0.49.29)
 
 ```
-SPECIES Person {
+SPC Person {
   name: TXT
   age: LON
 
@@ -1620,11 +1620,11 @@ form for field/method access. Method names are global-unique.
 ### Species Inheritance (v0.49.30)
 
 ```
-SPECIES Animal {
+SPC Animal {
   name: TXT
   ACTION speak() -> TXT { GIVE self.name + " makes a sound". }
 }
-SPECIES Dog FROM Animal {
+SPC Dog FROM Animal {
   breed: TXT
   ACTION fetch() -> TXT { GIVE self.name + " fetches!". }
 }
@@ -1641,8 +1641,8 @@ Child fields merge with parent fields at creation time.
 ### Species Inheritance + Methods + SELF (v0.49.29-31)
 
 ```
-SPECIES Animal { name: TXT }
-SPECIES Dog FROM Animal {
+SPC Animal { name: TXT }
+SPC Dog FROM Animal {
   breed: TXT
 }
 ACTION speak(self(TXT)) -> TXT {
@@ -1655,7 +1655,7 @@ SHOW COUNT d.       # 2 (name + breed merged)
 SHOW speak(d).      # Rex speaks
 ```
 
-Methods can also be embedded in SPECIES bodies; they lift to
+Methods can also be embedded in SPC bodies; they lift to
 top-level functions with an implicit self first parameter.
 
 
@@ -1665,11 +1665,11 @@ When both parent and child species define the same method, the
 child's implementation takes precedence:
 
 ```
-SPECIES Animal {
+SPC Animal {
   name: TXT
   ACTION speak() -> TXT { GIVE self.name + " makes a sound". }
 }
-SPECIES Dog FROM Animal {
+SPC Dog FROM Animal {
   breed: TXT
   ACTION speak() -> TXT { GIVE self.name + " barks!". }
 }
@@ -1688,7 +1688,7 @@ INTERFACE Speakable {
   speak.
 }
 
-SPECIES Dog {
+SPC Dog {
   name: TXT
   ACTION speak() -> TXT { GIVE self.name + " barks!". }
 }
@@ -1705,7 +1705,7 @@ the plant_is_a helper which reads the __species metadata tag.
 ### IMPLEMENTS Clause (v0.49.37)
 
 ```
-SPECIES Dog IMPLEMENTS Speakable {
+SPC Dog IMPLEMENTS Speakable {
   name: TXT
   ACTION speak() -> TXT {
     GIVE self.name + " barks!".

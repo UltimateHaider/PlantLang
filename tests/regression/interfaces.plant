@@ -8,13 +8,13 @@ INTERFACE Speakable {
 INTERFACE Named {
   name.
 }
-SPECIES Dog {
+SPC Dog {
   name: TXT
   ACTION speak() -> TXT {
     GIVE self.name + " barks!".
   }
 }
-SPECIES Cat {
+SPC Cat {
   name: TXT
   ACTION meow() -> TXT {
     GIVE self.name + " meows!".

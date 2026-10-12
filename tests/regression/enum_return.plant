@@ -5,8 +5,8 @@
 # (v0.48.11).
 ENUM Color { RED, GREEN, BLUE }.
 
-STRUCT Ball { weight: LON, color: Color }
-ACTION ffi_get_ball() -> STRUCT Ball.
+STR Ball { weight: LON, color: Color }
+ACTION ffi_get_ball() -> STR Ball.
 
 ACTION pick(n(LON)) -> Color,
   IF n IS 0, GIVE RED. /IF.

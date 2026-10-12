@@ -49,7 +49,7 @@ long ffi_parse_cfg(tx_t path) {
     return 7;
 }
 
-/* ── STRUCT interop: opaque tx_t handles around C structs ──────
+/* ── STR interop: opaque tx_t handles around C structs ──────
    The generated C emits typedefs (plant_Point, plant_Box_NUM, …)
    for the FFI side; the mock keeps its own layout twins so the
    test binary never sees duplicate typedef definitions. */
@@ -59,7 +59,7 @@ typedef struct { tx_t val; }      MockBox;
 typedef struct { tx_t first, second; } MockPair;
 typedef struct { tx_t box, tag; } MockWrap;
 
-/* non-generic STRUCT Point { x: LON, y: LON } */
+/* non-generic STR Point { x: LON, y: LON } */
 tx_t ffi_make_point(long x, long y) {
     MockPoint* p = (MockPoint*)malloc(sizeof(MockPoint));
     if (!p) return "";
@@ -73,7 +73,7 @@ tx_t ffi_point_sum(tx_t p) {
     return _from_long(mp->x + mp->y);
 }
 
-/* generic STRUCT Box[T] { val: T } — LON instantiation */
+/* generic STR Box[T] { val: T } — LON instantiation */
 tx_t ffi_make_box(tx_t v) {
     MockBox* b = (MockBox*)malloc(sizeof(MockBox));
     if (!b) return "";
@@ -93,7 +93,7 @@ tx_t ffi_box_read(tx_t b) {
     return mb->val;
 }
 
-/* generic STRUCT Pair[T, U] { first: T, second: U } */
+/* generic STR Pair[T, U] { first: T, second: U } */
 tx_t ffi_make_pair(tx_t a, tx_t b) {
     MockPair* p = (MockPair*)malloc(sizeof(MockPair));
     if (!p) return "";
@@ -107,7 +107,7 @@ tx_t ffi_pair_read(tx_t p) {
     return _cat(_cat(_S(mp->first), ":"), _S(mp->second));
 }
 
-/* nested generic STRUCT Wrap[T] { box: Box[T], tag: TXT } */
+/* nested generic STR Wrap[T] { box: Box[T], tag: TXT } */
 tx_t ffi_make_wrap(tx_t box, tx_t tag) {
     MockWrap* w = (MockWrap*)malloc(sizeof(MockWrap));
     if (!w) return "";
@@ -123,7 +123,7 @@ tx_t ffi_w_read(tx_t w) {
 }
 
 /* ── v0.48.4 FFI Optional Extensions ─────────────────────────────
-   By-value struct params, REF STRUCT pointers, STRUCT returns,
+   By-value struct params, REF STR pointers, STR returns,
    void*, CALLBACK lifecycle, variadic calls. The generated types
    header (-include) provides plant_Point & co + the prototypes,
    so these definitions only compile for tests that declare the
@@ -131,7 +131,7 @@ tx_t ffi_w_read(tx_t w) {
 
 #ifndef MOCK_FFI_EXT_H
 #define MOCK_FFI_EXT_H
-#ifdef PLANT_STRUCT_plant_Point
+#ifdef PLANT_STR_plant_Point
 
 tx_t ffi_point_sumv(plant_Point p) {
     return _from_long(p.x + p.y);
@@ -150,9 +150,9 @@ plant_Point ffi_get_point(void) {
     return p;
 }
 
-#endif /* PLANT_STRUCT_plant_Point */
+#endif /* PLANT_STR_plant_Point */
 
-#ifdef PLANT_STRUCT_plant_Ball
+#ifdef PLANT_STR_plant_Ball
 
 plant_Ball ffi_get_ball(void) {
     plant_Ball p;
@@ -162,9 +162,9 @@ plant_Ball ffi_get_ball(void) {
     return p;
 }
 
-#endif /* PLANT_STRUCT_plant_Ball */
+#endif /* PLANT_STR_plant_Ball */
 
-#ifdef PLANT_STRUCT_plant_Game
+#ifdef PLANT_STR_plant_Game
 
 plant_Game ffi_get_game(void) {
     plant_Game g;
@@ -174,23 +174,23 @@ plant_Game ffi_get_game(void) {
     return g;
 }
 
-#endif /* PLANT_STRUCT_plant_Game */
+#endif /* PLANT_STR_plant_Game */
 
-#ifdef PLANT_STRUCT_plant_WrapV
+#ifdef PLANT_STR_plant_WrapV
 
 tx_t ffi_wrap_sumv(plant_WrapV w) {
     return _from_long(w.p.x + w.p.y);
 }
 
-#endif /* PLANT_STRUCT_plant_WrapV */
+#endif /* PLANT_STR_plant_WrapV */
 
-#ifdef PLANT_STRUCT_plant_L4
+#ifdef PLANT_STR_plant_L4
 
 tx_t ffi_l4_v(plant_L4 v) {
     return _from_long(v.a.a.a.v);
 }
 
-#endif /* PLANT_STRUCT_plant_L4 */
+#endif /* PLANT_STR_plant_L4 */
 
 #ifdef PLANT_FFI_HAS_CALLBACKS
 

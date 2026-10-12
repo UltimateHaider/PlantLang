@@ -1,5 +1,5 @@
 # v0.49.37 - IMPLEMENTS clause parsing + method lifting
-SPECIES Dog IMPLEMENTS Speakable {
+SPC Dog IMPLEMENTS Speakable {
   name: TXT
   ACTION speak() -> TXT {
     GIVE self.name + " barks!".

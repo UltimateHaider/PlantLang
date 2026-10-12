@@ -1,6 +1,6 @@
 # v0.49.50 - Multi-interface IMPLEMENTS
 # Tests that a species can implement multiple interfaces.
-SPECIES Dog IMPLEMENTS A, B {
+SPC Dog IMPLEMENTS A, B {
   name: TXT
   ACTION make_sound() -> TXT {
     GIVE self.name + " makes sound!".

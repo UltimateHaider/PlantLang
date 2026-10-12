@@ -191,7 +191,9 @@ ACTION keyword_to_type(wrd(TXT)),
   IF wrd IS "INTERFACE", GIVE "INTERFACE". /IF.
   IF wrd IS "IMPLEMENTS", GIVE "IMPLEMENTS". /IF.
   # v0.49.28 - SPECIES/BLOOM object model.
+  # v0.52.3a — SPECIES renamed to SPC (both accepted during transition).
   IF wrd IS "SPECIES", GIVE "SPECIES". /IF.
+  IF wrd IS "SPC", GIVE "SPC". /IF.
   IF wrd IS "BLOOM", GIVE "BLOOM". /IF.
   # v0.49.23 — numerical analysis built-ins.
   IF wrd IS "LU", GIVE "LU". /IF.

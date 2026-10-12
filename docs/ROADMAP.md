@@ -257,7 +257,7 @@
 
 #### Type Mapper
 - MAP and DICT types registered as `i8*` (pointer to PlantMap)
-- No false-positive CodeWords violations for MAP, FOR...IN, WEATHER, SPECIES, LINK nodes
+- No false-positive CodeWords violations for MAP, FOR...IN, WEATHER, SPC, LINK nodes
 
 #### Test Coverage
 - `tests/v0.42.0_c_backend_parity.test.js` — 31 tests across all module areas
@@ -371,7 +371,7 @@ The previous roadmap targeted the Runtime Library (sort, strings, math FFI), com
 | **Universal REAP expressions** | `REAP x FROM SPLIT(str, delim)`, `REAP x FROM JOIN(arr, delim)`, `REAP x FROM parts[0]` work natively in interpreter and LLVM backend |
 | **Large-string stress test** | C helper `plnt_stress_test_split_join` creates 70KB string, splits/joins/verifies roundtrip |
 | **Test suite** | `test_phase21_runtime.js` — 20 tests: IR smoke tests, math FFI, SORT, FFI SPLIT/JOIN, native SPLIT/JOIN via REAP, 70KB stress test |
-| **Block-Depth Contract Law Enforcement** | Parser: `enforceDepthContract()` with `this.currentDepth` tracking; Typechecker: `validateDepthInvariants(ast)` second pass; Enforces ACTION/SPECIES at Depth 0, REAP/GIVE/CYCLE at Depth ≥ 1; 13 tests in `test_depth_contract.js` |
+| **Block-Depth Contract Law Enforcement** | Parser: `enforceDepthContract()` with `this.currentDepth` tracking; Typechecker: `validateDepthInvariants(ast)` second pass; Enforces ACTION/SPC at Depth 0, REAP/GIVE/CYCLE at Depth ≥ 1; 13 tests in `test_depth_contract.js` |
 
 ---
 
@@ -619,7 +619,7 @@ This release establishes the foundation for a second compilation pipeline: Plant
 
 | Phase | Focus | Target |
 |---|---|---|
-| **v0.29.0** | **SPECIES vtable dispatch, CHOICE/MATCH native, MAP get()** | **Q3 2026** |
+| **v0.29.0** | **SPC vtable dispatch, CHOICE/MATCH native, MAP get()** | **Q3 2026** |
 | **v0.30.0** | **Runtime library, Block-Depth Contract Law, compiler hardening** | **Q4 2026** |
 | **v0.31.0** | **Five-Mission Architecture, Boundary Handshake Matrix, MissionDispatcher, SMART routing** | **Q1 2027** |
 | v0.32.0 | Local Runtime & Isolation Layer (BumpAllocator, ARCHeap, ProcessPool, SafeChannel, MissionContext) | ✅ Q2 2027 |
@@ -632,7 +632,7 @@ This release establishes the foundation for a second compilation pipeline: Plant
 | ✅ **v0.39.5** | **Phase 1 LLVM IR Compiler — Primitives & Early SHOW** — C runtime helpers, LLVM codegen infrastructure, expression parser, differential test harness (39 tests) | ✅ Q1 2029 |
 | ✅ **v0.40.0** | **Geo-Aware Cycles & Dynamic Replica Rebalancing** — GeoTopologyManager, StreamCompactor, geo-affine placement, replica rebalancing on node churn | ✅ Q2 2029 |
 | ✅ **v0.41.0** | **Integrated Testing, Native Networking & CodeWords Governance** — CodeWordsChecker, TestRunner, POSIX socket helpers, plantc test subcommand | ✅ Q3 2029 |
-| ✅ **v0.42.0** | **C Backend Parity & Legacy Realignment** — PlantMap, PlantIterator, domain primitives, LLVM codegen for MAP/FOR...IN/WEATHER/SPECIES | ✅ Q4 2029 |
+| ✅ **v0.42.0** | **C Backend Parity & Legacy Realignment** — PlantMap, PlantIterator, domain primitives, LLVM codegen for MAP/FOR...IN/WEATHER/SPC | ✅ Q4 2029 |
 | ✅ **v0.43.0** | **Native File I/O, Constant Folding & Type Infrastructure** — plant_file_read/write/exists/delete, plant_string_split/trim/index_of, ASTConstantFolder pass (arithmetic/string/logical folding), ENUM declarations, TYPE aliases, CONST declarations, CodeWords file I/O directives | ✅ Q1 2030 |
 | ✅ **v0.44.0** | **Algebraic Safety Types, Exhaustive MATCH, String Interpolation, Ranges, Slicing & Destructuring** — Option/Result built-in types, ExhaustivenessChecker pass, string interpolation `"text {expr}"`, range `a..b` and slice `arr[x:y]` operators, `LET {x,y}=p` and `LET [h,t]=list` destructuring | ✅ Q2 2030 |
 | ✅ **v0.45.0** | **Self-Hosting Compiler Pipeline (Stage 0)** — Stage 0 compiler driver in PlantLang (main.plant), `get_cli_arg` FFI via interpreter.js, PLANT fs/strings for file I/O, end-to-end pipeline: source→tokens→AST→C output | ✅ Q3 2030 |
@@ -645,7 +645,7 @@ This release establishes the foundation for a second compilation pipeline: Plant
 
 *PlantLang v0.43.0: Native File I/O, Compile-Time Constant Folding & Type Infrastructure. File I/O primitives (plant_file_read/write/exists/delete, plant_string_split/trim/index_of), ASTConstantFolder pass (binary arithmetic, string concat, logical/comparison folding), ENUM declarations (auto-increment members), TYPE aliases (base type resolution), CONST declarations (immutable, foldable). 81 new tests. All green.*
 
-*PlantLang v0.42.0: C Backend Parity & Legacy Realignment. PlantMap (hash map), PlantIterator (traversal protocol), domain primitives (plant_sys_action, plant_env_set_weather, plant_entity_set_species), LLVM codegen (MAP, FOR...IN, WEATHER, SPECIES). 31 new tests. All green.*
+*PlantLang v0.42.0: C Backend Parity & Legacy Realignment. PlantMap (hash map), PlantIterator (traversal protocol), domain primitives (plant_sys_action, plant_env_set_weather, plant_entity_set_species), LLVM codegen (MAP, FOR...IN, WEATHER, SPC). 31 new tests. All green.*
 
 *PlantLang v0.41.0: Integrated Testing, Native Networking & CodeWords Governance. CodeWordsChecker (directive parser, AST security pass), TestRunner (SUITE/VERIFY, nested suites, exit code 1 on failure), POSIX socket C helpers (plant_net_harvest, plant_net_listen_open), LLVM codegen (HarvestStatement, ListenBranchStatement), plantc test subcommand. 69 new tests. All green.*
 

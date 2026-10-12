@@ -1,8 +1,8 @@
-# v0.48.13 — LON fields inside a generic STRUCT instantiation
+# v0.48.13 — LON fields inside a generic STR instantiation
 # (Box[LON]) round-trip through the FFI marshalling helpers with
 # the rty threading in place; numeric field values display via
 # concatenation.
-STRUCT Box[T] { val: T }.
+STR Box[T] { val: T }.
 
 ACTION ffi_make_box(v(TXT)) -> external.
 ACTION ffi_box_write(b(Box[LON]), v(LON)) -> external.

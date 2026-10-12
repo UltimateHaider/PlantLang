@@ -5,9 +5,9 @@
 # The typedefs plant_Box_NUM / plant_Pair_NUM_TX / plant_Wrap_NUM
 # must be emitted (checked via .grep) and phantom instantiations
 # (plant_Box_T, plant_Pair_NUM_NUM) must NOT appear.
-STRUCT Box[T] { val: T }
-STRUCT Pair[T, U] { first: T, second: U }
-STRUCT Wrap[T] { box: Box[T], tag: TXT }
+STR Box[T] { val: T }
+STR Pair[T, U] { first: T, second: U }
+STR Wrap[T] { box: Box[T], tag: TXT }
 
 ACTION ffi_make_box(v(TXT)) -> external.
 ACTION ffi_box_write(b(Box[LON]), v(LON)) -> external.

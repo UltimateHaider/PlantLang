@@ -50,7 +50,7 @@ PlantLang uses a **single opaque pointer** (`tx_t = void*`) as the universal run
 | `REF NUM` | `int*` | Pointer to fact |
 | `REF LST[T]` | `PlantArray**` | Pointer to list |
 | `REF TXT` | `tx_t*` | Pointer to text |
-| `REF STRUCT X` | `plant_X*` | Pointer to struct |
+| `REF STR X` | `plant_X*` | Pointer to struct |
 
 **Source:** `src/plantc/codegen_c.plant:5356-5361`
 
@@ -123,7 +123,7 @@ REAP keys FROM _map_keys, m.                 # list of keys
 REAP str FROM plant_map_to_string, m.         # string repr
 ```
 
-### 2.3 STRUCT (Record Type)
+### 2.3 STR (Record Type)
 
 **C Struct:** Generated per-type, e.g. `plant_Point`:
 ```c
@@ -135,7 +135,7 @@ typedef struct plant_Point {
 
 **Declaration:**
 ```plantlang
-STRUCT Point {
+STR Point {
     x: LON,
     y: LON
 }.
@@ -143,7 +143,7 @@ STRUCT Point {
 
 **Usage:**
 ```plantlang
-LET p (STRUCT Point) TO Point{3, 4}.
+LET p (STR Point) TO Point{3, 4}.
 REAP px FROM _map_get, p, "x".        # field access via map
 ```
 
@@ -171,11 +171,11 @@ SHOW Color:RED.                  # displays "RED"
 - `_to_enum(name, names_csv)` — name string to integer
 - Values >= 65536 are treated as already-converted name strings (idempotent)
 
-### 2.5 SPECIES (Class-like Type)
+### 2.5 SPC (Class-like Type)
 
 **Declaration:**
 ```plantlang
-SPECIES Animal {
+SPC Animal {
     name: TXT,
     age: LON
 }.
@@ -183,7 +183,7 @@ SPECIES Animal {
 
 **Usage:**
 ```plantlang
-LET dog (SPECIES Animal) TO BLOOM Animal("Rex", 5).
+LET dog (SPC Animal) TO BLOOM Animal("Rex", 5).
 dog:method_name().
 ```
 
@@ -354,12 +354,12 @@ TYPE NameMap = MAP.
 ### 4.5 Struct Declarations
 
 ```plantlang
-STRUCT Point {
+STR Point {
     x: LON,
     y: LON
 }.
 
-STRUCT Person {
+STR Person {
     name: TXT,
     age: LON
 }.
@@ -380,12 +380,12 @@ ENUM Status {
 ### 4.7 Species Declarations
 
 ```plantlang
-SPECIES Animal {
+SPC Animal {
     name: TXT,
     age: LON
 }.
 
-SPECIES Dog FROM Animal {
+SPC Dog FROM Animal {
     breed: TXT
 }.
 ```
@@ -487,7 +487,7 @@ The runtime identifies types via multiple heuristics:
 | LON | `atol()` succeeds on string content |
 | BOOL | String is `"TRUE"`, `"true"`, `"1"`, `"FALSE"`, `"false"`, `"0"` |
 | NULL | Pointer is `(tx_t)0` |
-| STRUCT | Magic prefix in struct name |
+| STR | Magic prefix in struct name |
 | JSON | `PlantJson` struct with `kind` field (0-5) |
 | OPTION/RESULT | `PlantTagged` struct with `tag` field (0-2) |
 | CLOSURE | Function pointer with context |
@@ -527,7 +527,7 @@ tx_t plant_analyze(tx_t v);   /* Returns: {type, size, keys} MAP */
 | Category | Count | Types |
 |---|---|---|
 | **Primitive** | 6 | LON, DBL, NUM, TXT, BOOL (via literals), NULL |
-| **Composite** | 8 | LST, MAP, STRUCT, ENUM, SPECIES, ACTION, CALLBACK, MATH |
+| **Composite** | 8 | LST, MAP, STR, ENUM, SPC, ACTION, CALLBACK, MATH |
 | **Special** | 5 | VOID, STORM, ANY, JSON, OPTION/RESULT |
 | **Reference** | 4 | REF LON, REF NUM, REF LST, REF TXT |
 | **Total** | **23** | |
@@ -537,7 +537,7 @@ tx_t plant_analyze(tx_t v);   /* Returns: {type, size, keys} MAP */
 | Category | Types | C Representation |
 |---|---|---|
 | **Primitive** | LON, DBL, NUM, TXT | `long`, `int`, `tx_t` (all stored as `tx_t` at runtime) |
-| **Composite** | LST, MAP, STRUCT, ENUM, SPECIES, MATH | `PlantArray*`, generated structs, map-backed objects, `PlantMath*` |
+| **Composite** | LST, MAP, STR, ENUM, SPC, MATH | `PlantArray*`, generated structs, map-backed objects, `PlantMath*` |
 | **Functional** | ACTION, CALLBACK | Function pointers with context |
 | **Special** | NULL, VOID, STORM, ANY, JSON, OPTION, RESULT | Null pointer, void, ARC objects, tagged unions |
 

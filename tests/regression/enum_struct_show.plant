@@ -3,10 +3,10 @@
 ENUM Color { RED, GREEN, BLUE }.
 ENUM State { IDLE, RUN, DONE }.
 
-STRUCT Ball { weight: LON, color: Color }
-STRUCT Game { state: State, color: Color }
-ACTION ffi_get_ball() -> STRUCT Ball.
-ACTION ffi_get_game() -> STRUCT Game.
+STR Ball { weight: LON, color: Color }
+STR Game { state: State, color: Color }
+ACTION ffi_get_ball() -> STR Ball.
+ACTION ffi_get_game() -> STR Game.
 
 ACTION peek(p(Game)),
   SHOW plant_map_get(p, "state").

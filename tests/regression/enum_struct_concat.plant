@@ -3,8 +3,8 @@
 # inside a closure that captures the struct instance (v0.48.10).
 ENUM Color { RED, GREEN, BLUE }.
 
-STRUCT Ball { weight: LON, color: Color }
-ACTION ffi_get_ball() -> STRUCT Ball.
+STR Ball { weight: LON, color: Color }
+ACTION ffi_get_ball() -> STR Ball.
 
 ACTION main(),
   REAP b FROM ffi_get_ball.

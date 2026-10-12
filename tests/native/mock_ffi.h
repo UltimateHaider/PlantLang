@@ -15,7 +15,7 @@ tx_t ffi_make_buf(long n);
 tx_t ffi_open_mock(long mode);
 long ffi_parse_cfg(tx_t path);
 
-/* STRUCT interop (v0.48.1 generics engine) */
+/* STR interop (v0.48.1 generics engine) */
 tx_t ffi_make_point(long x, long y);
 tx_t ffi_point_sum(tx_t p);
 tx_t ffi_make_box(tx_t v);

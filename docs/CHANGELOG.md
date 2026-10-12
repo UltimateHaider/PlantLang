@@ -1,9 +1,36 @@
+## v0.52.3a — Rename SPC + STR
+
+### Changed (BREAKING)
+- Renamed `SPECIES` → `SPC` (soft keyword).
+- Renamed `STRUCT` → `STR` (soft keyword).
+- Renamed `PLANT_STRUCT_` → `PLANT_STR_` (generated-header contract).
+- Both old keywords (`SPECIES`/`STRUCT`) still accepted during transition.
+- Docs and tests normalized to the new keywords.
+
+### Preserved
+- Internal names (`struct_decl`, `struct_val`, `struct_ref`, `plant_anon_struct_`).
+- No lexer change for `STR` (soft keyword).
+- All 129 existing tests pass.
+
+### Verified
+- Native: 129/129
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (553,173 B)
+- valgrind strict: PASS
+- Binary: 976,960 B.
+
+### Out of Scope
+- v0.52.3b: SPC comma SIGSEGV fix.
+- v0.52.3c: TD-009 (struct construction).
+- TD-031 (regression runner).
+
 ## v0.52.2 — Unknown Type Validation
 
 ### Added
 - `validate_types` AST pass (rejects unknown type names before codegen).
 - Whitelist: registry types + `TYPE` aliases + struct/union/enum/species names
-  + generic params + pseudo-forms (`REF`, `STRUCT X`, `ENUM X`, `ARRAY[T,N]`,
+  + generic params + pseudo-forms (`REF`, `STR X`, `ENUM X`, `ARRAY[T,N]`,
   `UNION`, `MATH`, `CALLBACK`, `VOID`, `void*`, `external`, `Result<T,E>`,
   `STRING`, `VEIN`).
 - 3 new `.invalid` tests: `unknown_type_create`, `unknown_type_param`,
@@ -980,7 +1007,7 @@ Source: `tests/perf/6d_bench_results.txt`
 ### Known Issues
 - TD-009 (new): Structs are fundamentally broken — `CREATE x TO
   Type(...)` emits an undefined call, `LIST_FREE(h.field)` emits
-  invalid C (`h . field`), and `SPECIES … /SPECIES` segfaults the
+  invalid C (`h . field`), and `SPC … /SPC` segfaults the
   compiler. Struct lifecycle tracking deferred to v0.52.0
   (Type System Audit). See docs/TECH_DEBT.md.
 - TD-010 (new): `plant_list_free` does not free multi-digit
@@ -1737,7 +1764,7 @@ SHOW @((2 + 3)*(4+5)).  # 45
 
 #### Native `UNION` Composite Type
 - **Lexer**: Registered `"union"` as keyword mapped to `"UNION"` type token.
-- **Parser**: `UNION Name { field: TYPE, ... }` declaration syntax, comma-separated fields (consistent with STRUCT).
+- **Parser**: `UNION Name { field: TYPE, ... }` declaration syntax, comma-separated fields (consistent with STR).
 - **Codegen**: `union_decl` nodes generate C `typedef union { ... } Name;` in the shared types block. `UNION` type maps to `void*` in generated C (opaque handle). Added runtime helpers `plant_union_create(size_t)` and `plant_union_free(void*)` for memory management.
 - **AST**: `union_decl` nodes properly excluded from all AST walk passes (16 top-level walks verified).
 
@@ -1789,12 +1816,12 @@ SHOW @((2 + 3)*(4+5)).  # 45
 - **Reference types**: `REF CHAR` maps to `char*` in generated C.
 
 #### Anonymous Structures
-- **Parser**: `STRUCT { x: NUM, y: NUM }` without a name now parses successfully.
+- **Parser**: `STR { x: NUM, y: NUM }` without a name now parses successfully.
 - **Codegen**: Automatically generates unique struct identifiers (`plant_anon_struct_0`, `plant_anon_struct_1`, ...) using an incremental counter for unnamed structs.
 - **Runtime**: Added `plant_anon_struct_create(size_t size)` for safe dynamic allocation of anonymous struct layouts.
 
 ### Type System Updates
-- **Complete type taxonomy**: NUM, SCL, FACT, TX, **CHAR** (new), LIST, MAP, STRUCT, ENUM, SPECIES, ACTION, CALLBACK, OPTION, RESULT, NULL, VOID, STORM, ANY, JSON, and reference types (REF NUM, REF FACT, REF CHAR, REF LIST, REF TX).
+- **Complete type taxonomy**: NUM, SCL, FACT, TX, **CHAR** (new), LIST, MAP, STR, ENUM, SPC, ACTION, CALLBACK, OPTION, RESULT, NULL, VOID, STORM, ANY, JSON, and reference types (REF NUM, REF FACT, REF CHAR, REF LIST, REF TX).
 - **C type mapping**: `CHAR` → `char`, `REF CHAR` → `char*` in `plant_ctype`.
 
 ---
@@ -1804,7 +1831,7 @@ SHOW @((2 + 3)*(4+5)).  # 45
 ### Stress Testing
 - **Stress test subsystem**: New `tests/regression/stress/` directory with 7 dedicated
   stress test fixtures, isolated from standard regression to prevent runtime overhead.
-- **Deep inheritance test** (`stress_deep_inheritance.plant`): 10-level SPECIES FROM chain
+- **Deep inheritance test** (`stress_deep_inheritance.plant`): 10-level SPC FROM chain
   with 50 methods per level, validating deep type hierarchies and method dispatch.
 - **Wide methods test** (`stress_wide_methods.plant`): 120 methods on a single entity,
   validating flat type scalability under heavy method density.
@@ -2865,7 +2892,7 @@ staged phases with self-hosting convergence checks after each phase.
   `src/plantc/lexer.plant` plus expression built-ins (PICK, FIND, COUNT_OF,
   SLICE, JOIN, FIRST, LAST, SUM, UPPER, LOWER, TRIM, REVERSE, ABS, ROUND,
   POW, CEIL, FLOOR, RANDOM, SIN, COS, SQRT, HAS, ANY, ALL), type
-  annotations (NUM, SCL, TX, FACT, LIST, MAP, STRUCT, ENUM, VEIN), strings
+  annotations (NUM, SCL, TX, FACT, LIST, MAP, STR, ENUM, VEIN), strings
   with `${...}` interpolation, `#` comments, numbers, and operators.
 - **`docs/BUILD.md`**: new "Binary Artifacts in Git" section documenting why
   `bin/Chloroplast`, `dist/Chloroplast`, and `build/plantc_v*` are tracked —
@@ -3124,7 +3151,7 @@ staged phases with self-hosting convergence checks after each phase.
   `{ "a": [1, 2], "b": { "x": n + 1 } }`, arithmetic value
   `"lit": 1 + 1`, empty `{}`, reads via `_map_get`, serialization via
   `plant_map_to_string` and `json_stringify`.
-- STRUCT/native suites re-verified against the renamed hash API.
+- STR/native suites re-verified against the renamed hash API.
 
 ### Documentation
 - `Language Tour.md`: Maps section documents the literal syntax,
@@ -5335,7 +5362,7 @@ table. Regression tests: `cat_var_digit`, `cat_var_digit_pair`,
   (`numeric_return`, `ffi.plant`, `struct_num`, `tests/generics/multi.plant`)
   are untouched.
 - **Parser records plain return types** — `ACTION max2[T](a(T), b(T)) -> T.`
-  now stores `"ret"` on the action_decl node (only `Result`/`STRUCT`/`ENUM`/
+  now stores `"ret"` on the action_decl node (only `Result`/`STR`/`ENUM`/
   `void*` returns were captured before; `-> T` and `-> NUM` were dropped),
   and template instantiations substitute it (`T`→`NUM`) via the existing
   `subst_type` machinery to drive the wrap.
@@ -5357,7 +5384,7 @@ table. Regression tests: `cat_var_digit`, `cat_var_digit_pair`,
 ### New Features
 - **ENUM across FFI boundaries** — external functions can now take and return
   enum values. `ACTION ffi_x() -> ENUM Color.` parses as an `external_decl`
-  (new parser rule mirroring the `-> STRUCT X.` convention), so the FFI
+  (new parser rule mirroring the `-> STR X.` convention), so the FFI
   extension machinery, signature table, and reap handling see the real
   enum-typed signature.
 - **`_to_enum` param marshalling** — every call to an external whose formal
@@ -5375,7 +5402,7 @@ table. Regression tests: `cat_var_digit`, `cat_var_digit_pair`,
 - **`PLANT_ENUM_<Name>` guard macro** — the generated types block emits
   `#define PLANT_ENUM_Color 1` next to the `typedef enum`, letting mock FFI
   libraries guard their enum functions the same way struct mocks use
-  `PLANT_STRUCT_plant_X`.
+  `PLANT_STR_plant_X`.
 
 ### Tests
 - `enum_ffi` — enum literals, enum-typed variables, enum-returning action
@@ -5400,7 +5427,7 @@ table. Regression tests: `cat_var_digit`, `cat_var_digit_pair`,
 - **`collect_enums` fast-skip** — new `reg_has_enum` pre-check: modules
   without ENUM declarations return an empty enum table immediately instead
   of walking every action body (and per-statement `subst_type` /
-  `find_ret` lookups). Modules with only STRUCT entries skip too.
+  `find_ret` lookups). Modules with only STR entries skip too.
 - **`subst_type` fast-path** — an empty substitution map returns the type
   string unchanged without token scanning.
 - **`_cl_scopes` type cache + primitive filtering** — create/let type
@@ -5412,9 +5439,9 @@ table. Regression tests: `cat_var_digit`, `cat_var_digit_pair`,
 ## v0.48.10 — 2026 (ENUM Structs)
 
 ### New Features
-- **ENUM in STRUCT fields** — enum field values inside STRUCT instances now
+- **ENUM in STR fields** — enum field values inside STR instances now
   display correctly through `SHOW` and string concatenation. `build_enum_registry`
-  emits `STRUCT.<Name>` entries (raw `name:type` field CSV) for every struct
+  emits `STR.<Name>` entries (raw `name:type` field CSV) for every struct
   declaration, and a new `add_struct_enum_keys` resolves the struct template
   (with generic arguments via `build_subst`/`parse_type_args`) and registers
   each enum-typed field read (`plant_map_get ( var , "field" )`) in the per-action
@@ -5427,7 +5454,7 @@ table. Regression tests: `cat_var_digit`, `cat_var_digit_pair`,
   shadow `ptype` and `_cl_emit_fn` build the closure's enum table from struct
   field reads inside the closure body.
 - **ENUM typedefs in types block** — enum typedefs are now emitted inside the
-  `/*__PLANT_TYPES_BEGIN__*/` types block (before `PLANT_STRUCT_` defines),
+  `/*__PLANT_TYPES_BEGIN__*/` types block (before `PLANT_STR_` defines),
   so FFI mock code and struct marshallers can reference enum members; the
   dedicated `enum_code` hoisting block was removed.
 
@@ -5499,7 +5526,7 @@ table. Regression tests: `cat_var_digit`, `cat_var_digit_pair`,
 ### New Features
 - **FFI-extension codegen** — `-> external` declarations now emit correct,
   compilable C for every signature shape: struct-by-value parameters
-  (`STRUCT X`) convert call-site maps via `plant_map_to_X`; `REF STRUCT`
+  (`STR X`) convert call-site maps via `plant_map_to_X`; `REF STR`
   params pass `plant_map_to_ref_X` (heap copy); struct-valued returns come
   back as maps (`plant_plant_X_to_map(...)`); `void*` params/returns pass
   through untouched; varargs externals (`..., ...`) forward `tx_t` args with
@@ -5710,7 +5737,7 @@ table. Regression tests: `cat_var_digit`, `cat_var_digit_pair`,
   generics with multiple instantiations, multi-type params + `LIST[U]`
   container params, nested instantiations + cache reuse, `REF T`
   pass-by-reference params; wired into `make test`
-- **Generic structs** — `STRUCT Name[T, U] { field: T, ... }` declares data
+- **Generic structs** — `STR Name[T, U] { field: T, ... }` declares data
   templates with type-parameter lists; the monomorphization engine emits
   concrete C typedefs (`plant_Box_NUM`, `plant_Pair_NUM_TX`) for every
   instantiation reachable from action parameters, `CREATE`/`LET` variable
@@ -5720,7 +5747,7 @@ table. Regression tests: `cat_var_digit`, `cat_var_digit_pair`,
 
 ### Verification
 - `make test` green — native suite **18/18** + generics suite **7/7**
-  (incl. `structs` — non-generic STRUCT + FFI round-trip, and `gstruct` —
+  (incl. `structs` — non-generic STR + FFI round-trip, and `gstruct` —
   generic `Box[T]`, multi-type `Pair[T, U]`, nested `Wrap[T]` with
   generated-C structural checks via `.grep` files)
 - Self-hosting convergence from a clean tree:
@@ -5738,7 +5765,7 @@ table. Regression tests: `cat_var_digit`, `cat_var_digit_pair`,
 
 ### Notes
 - Version bumped to v0.48.1 (CLI, package.json, Makefile tarball)
-- `STRUCT` supersedes the old `SHAPE` doc sketch in `tokens.plant`; struct
+- `STR` supersedes the old `SHAPE` doc sketch in `tokens.plant`; struct
   values are opaque `tx_t` at runtime — the emitted C typedefs
   (`plant_Point`, `plant_Box_NUM`, …) exist for the C FFI side to cast and
   read the concrete layout
@@ -6099,16 +6126,16 @@ table. Regression tests: `cat_var_digit`, `cat_var_digit_pair`,
   - `SpeciesDeclaration` → `@plant_entity_set_species`
 - **Type Mapper** (`src/codegen/llvm/llvm_type_mapper.js`):
   - `MAP` and `DICT` types registered as `i8*`
-- **CodeWords Governance** — verified no false-positive violations for MAP, FOR...IN, WEATHER, SPECIES, LINK nodes
+- **CodeWords Governance** — verified no false-positive violations for MAP, FOR...IN, WEATHER, SPC, LINK nodes
 
 ### Test Suite
 - New `tests/v0.42.0_c_backend_parity.test.js` — 31 tests covering:
   - PlantMap: create/set/get via IR emission, LINK statement translation, count verification
   - FOR...IN: array and map iteration IR labels
   - WEATHER: body/shelter/calm label emission, `@plant_env_set_weather` condition path
-  - SPECIES: `@plant_entity_set_species` call with species name constant
+  - SPC: `@plant_entity_set_species` call with species name constant
   - CodeWords: zero false-positive violations for all new node types
-  - Pipeline: end-to-end MAP + LINK + FOR...IN + WEATHER + SPECIES IR generation
+  - Pipeline: end-to-end MAP + LINK + FOR...IN + WEATHER + SPC IR generation
   - IR Declarations: all 7 forward declarations present
 - All 30+ test suites at 100% pass rate
 
@@ -6521,7 +6548,7 @@ table. Regression tests: `cat_var_digit`, `cat_var_digit_pair`,
   - Parser: `enforceDepthContract(nodeType, minDepth, maxDepth, token)` method with `this.currentDepth` tracking
   - Scope entry/exit: `currentDepth` increments on ACTION body and CYCLE block entry, decrements on exit (via `try/finally`)
   - Typechecker: `validateDepthInvariants(ast)` second-pass AST walker verifying depth invariants
-  - Enforces: ACTION/SPECIES restricted to Depth 0; REAP/GIVE/CYCLE restricted to Depth ≥ 1
+  - Enforces: ACTION/SPC restricted to Depth 0; REAP/GIVE/CYCLE restricted to Depth ≥ 1
   - DepthContractError: clear `SYNTAX_STORM` with `[DepthContractError]` prefix, expected range, and caret location
   - 13 new tests covering valid/invalid depth scenarios
 - **Universal REAP Expression Support** — `REAP x FROM SPLIT(str, delim)`, `REAP x FROM JOIN(arr, delim)`, `REAP x FROM parts[0]` now work natively in both interpreter and LLVM backend:
@@ -6560,7 +6587,7 @@ table. Regression tests: `cat_var_digit`, `cat_var_digit_pair`,
 ## v0.29.0 — 2026
 
 ### New Features
-- **SPECIES Vtable Dispatch (Phase 19)** — virtual method dispatch via polymorphic vtables in LLVM codegen:
+- **SPC Vtable Dispatch (Phase 19)** — virtual method dispatch via polymorphic vtables in LLVM codegen:
   - Vtable pointer (i8*) added as field 0 of every species LLVM struct
   - Method slots computed across the full parent chain (parent methods prefix, child overrides reuse slots)
   - Per-species `@species.Name.vtable = constant [N x i8*]` globals emitted with function pointers
@@ -6574,7 +6601,7 @@ table. Regression tests: `cat_var_digit`, `cat_var_digit_pair`,
   - MATCH statement: extract tag, icmp chain against variant indices, branch to clause body
   - Payload binding: extractvalue payload, store in arena, register in clause scope
   - MAP `get()` returns `Option<V>` (probes map, branches on found/not found, wraps result)
-- **SPECIES LLVM Bug Fixes**:
+- **SPC LLVM Bug Fixes**:
   - Typechecker stores `speciesName` in variable info for BLOOM instances, fixing method resolution
   - LLVM `genFnDef` registers both `self` and `__self` in scope for SET field access
   - `SelfExpression` and `BloomExpression` nodes handled in `compileAstExpr`
@@ -6618,8 +6645,8 @@ table. Regression tests: `cat_var_digit`, `cat_var_digit_pair`,
 ## v0.27.0 — 2026
 
 ### New Features
-- **SPECIES / BLOOM — Object-Oriented Foundations (Phase 17)** — class-based OOP with `{ }` body syntax:
-  - Syntax: `SPECIES Name { field: TYPE, ACTION method(params) { body } }` — `{ }` body blocks (new) alongside legacy `,`/`/SPECIES.` syntax
+- **SPC / BLOOM — Object-Oriented Foundations (Phase 17)** — class-based OOP with `{ }` body syntax:
+  - Syntax: `SPC Name { field: TYPE, ACTION method(params) { body } }` — `{ }` body blocks (new) alongside legacy `,`/`/SPC.` syntax
   - `FROM` / `PARENT` inheritance — parent fields prefixed in LLVM struct layout, methods accessible via bitcast
   - `BLOOM SpeciesName` expression usable in `CREATE x TO BLOOM SpeciesName.`
   - Colon-dispatch method calls: `REAP result FROM obj:method.`
@@ -6633,8 +6660,8 @@ table. Regression tests: `cat_var_digit`, `cat_var_digit_pair`,
   - Supports nested loops with `DEPTH`-aware parsing
   - `STOP_STORM` from `STOP IF` propagates correctly through `FOR` bodies
   - 19 new tests covering empty arrays, typed arrays, TX strings, MAPs, nested IF
-- **STRUCT Type (Phase 16)** — alternative struct declaration syntax with `field: TYPE`:
-  - Syntax: `STRUCT Person { name: TX, age: NUM }.` (alongside existing `SHAPE … field(TYPE)`)
+- **STR Type (Phase 16)** — alternative struct declaration syntax with `field: TYPE`:
+  - Syntax: `STR Person { name: TX, age: NUM }.` (alongside existing `SHAPE … field(TYPE)`)
   - Anonymous struct literals: `CREATE p(Person) TO { name: "Alice", age: 30 }.` in `CREATE` context
   - INCREASE/DECREASE support on struct fields: `INCREASE p.age BY 1.`
   - Full type-checker validation of struct fields and literal arity
@@ -6676,15 +6703,15 @@ table. Regression tests: `cat_var_digit`, `cat_var_digit_pair`,
 ### Test Suite
 - Added **Phase 14 — MAP Types** (`tests/test_phase14_maps.js`) — 17 tests covering empty map create, map literals, LINK/put semantics, has/get, overwrite, growth (10 entries), SHOW display, type-checker validation
 - Added **Phase 15 — FOR...IN** (`tests/test_phase15_for_in.js`) — 19 tests covering empty arrays, typed arrays, TX strings, MAPs, nested IF, STOP IF propagation
-- Added **Phase 16 — STRUCT** (`tests/test_phase16_structs.js`) — 16 tests covering declaration, nested structs, field access/mutation, type checking, LLVM codegen
-- Added **Phase 17 — SPECIES/BLOOM** (`tests/test_phase17_species.js`) — 10 tests covering `{ }` body syntax, BLOOM instantiation, method dispatch, inheritance, SELF mutation, type checking
+- Added **Phase 16 — STR** (`tests/test_phase16_structs.js`) — 16 tests covering declaration, nested structs, field access/mutation, type checking, LLVM codegen
+- Added **Phase 17 — SPC/BLOOM** (`tests/test_phase17_species.js`) — 10 tests covering `{ }` body syntax, BLOOM instantiation, method dispatch, inheritance, SELF mutation, type checking
 - LLVM backend expanded from 46 → **50 smoke tests** (4 new MAP tests: create+has, all-keys, growth, overwrite)
 - Total test suites expanded to **16 files, ~709 total assertions** — all green
 
 ### Documentation
 - All `.md` files bumped to v0.27.0
-- ROADMAP.md — FOR...IN, STRUCT, and SPECIES/BLOOM objectives marked complete
-- Language Tour.md — supported subset table now shows FOR...IN and SPECIES/BLOOM as ✅
+- ROADMAP.md — FOR...IN, STR, and SPC/BLOOM objectives marked complete
+- Language Tour.md — supported subset table now shows FOR...IN and SPC/BLOOM as ✅
 - TECHNICAL.md — updated test counts from ~634 → ~709, 13 → 16 test files
 
 ---
@@ -6822,7 +6849,7 @@ table. Regression tests: `cat_var_digit`, `cat_var_digit_pair`,
   - Proper SSA-form code generation (`alloca`/`load`/`store` per variable, exactly matching clang's own `-O0` output shape, which LLVM's `mem2reg` pass then promotes to true SSA registers)
   - Full expression compiler with correct operator precedence (`OR` → `AND` → `NOT` → comparison → additive → multiplicative → unary → atom), matching the interpreter's evaluation semantics exactly
   - NUM/SCL type promotion, string concatenation via runtime `malloc`/`strcpy`/`strcat`, `BETWEEN` conditions, boolean short-circuit-free `AND`/`OR`/`NOT`
-  - Same supported/unsupported subset as the C backend (CREATE/SET/INCREASE/DECREASE/SHOW/IF/ORIF/ELSE/CYCLE/SEASON) — unsupported constructs (LIST, MAP, ACTION, SPECIES, ...) fail with a clear compile-time error, never silently miscompiled
+  - Same supported/unsupported subset as the C backend (CREATE/SET/INCREASE/DECREASE/SHOW/IF/ORIF/ELSE/CYCLE/SEASON) — unsupported constructs (LIST, MAP, ACTION, SPC, ...) fail with a clear compile-time error, never silently miscompiled
 - **`chloroplast compile --backend llvm|c`** — auto-detects an installed LLVM toolchain (`llc`/`llc-14` through `llc-18`) and prefers it by default; falls back to the C backend automatically if no LLVM install is found
 - **`opt -O2` integration** — the generated IR is run through LLVM's real optimizer (mem2reg, GVN, loop optimizations, inlining) before `llc` lowers it to object code. Without this step, hand-emitted alloca-heavy IR only gets `llc`'s backend-level optimizations and misses most of what makes LLVM fast — with it, compiled PlantLang matches gcc's own optimizer on equivalent code (verified: a 50-million-iteration accumulation loop drops from 88.7s interpreted to 6ms compiled — a ~14,700× speedup)
 - **`tests/test_llvm_codegen.js`** — 27 parity tests (interpreted vs LLVM-compiled output must match exactly) covering arithmetic, SCL/NUM promotion, string concatenation, all comparison operators, BETWEEN, boolean logic, IF/ORIF/ELSE, CYCLE (with and without STEP), SEASON, nested loops, and unsupported-construct error handling
@@ -6884,7 +6911,7 @@ Every stage is implemented, tested, and documented.
   - `CYCLE var FROM lo TO hi [STEP k]` (numeric ranges)
   - `SEASON` (while loop)
   - Arithmetic (`+ - * / % **`) and comparisons (`IS`, `GREATER THAN`, `BETWEEN`, etc.) translated to native C operators
-  - Unsupported constructs (LIST, MAP, ACTION/REAP, SPECIES, WEATHER, HARVEST, LISTEN BRANCH, ...) are reported as clear compile-time errors naming the exact construct and line — never silently miscompiled
+  - Unsupported constructs (LIST, MAP, ACTION/REAP, SPC, WEATHER, HARVEST, LISTEN BRANCH, ...) are reported as clear compile-time errors naming the exact construct and line — never silently miscompiled
 - **`chloroplast compile`** — new CLI command:
   ```bash
   chloroplast compile file.plnt --run        # compile + execute immediately
@@ -6908,7 +6935,7 @@ Every stage is implemented, tested, and documented.
   - `ARITY_MISMATCH` — wrong number of arguments to an action
   - `UNDEFINED_ACTION` — calling an action that was never defined
   - `UNDEFINED_VAR` — using a variable that was never declared (warning)
-  - `UNDEFINED_SPECIES` — BLOOM of an undefined SPECIES (warning)
+  - `UNDEFINED_SPECIES` — BLOOM of an undefined SPC (warning)
   - `LOCK_VIOLATION` — attempt to SET a ROOT or locked variable
   - Errors inside WEATHER body are demoted to info (they're intentionally risky)
   - Two-pass architecture: declaration hoisting then full type checking
@@ -6974,7 +7001,7 @@ Every stage is implemented, tested, and documented.
 ## v0.5 — 2025
 
 ### New Features
-- **SPECIES / BLOOM / PARENT** — class-based OOP with inheritance
+- **SPC / BLOOM / PARENT** — class-based OOP with inheritance
 - **SELF** — instance self-reference in all contexts (read/write/INCREASE/PUT/REAP)
 - **FLOW** — action pipeline chaining
 - **MATCH / YIELD** — pattern matching with BETWEEN, range, ELSE

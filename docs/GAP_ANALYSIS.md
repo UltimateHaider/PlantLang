@@ -26,7 +26,7 @@ The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 
 | Runtime features | ~90 capabilities | ~70 capabilities | roughly balanced, different sets |
 | Network | HTTP client + server (HARVEST/LISTEN) | HARVEST client (v0.48.32, MAP-mode v0.48.34, formalized v0.49.0) + LISTEN server (v0.48.33) | low — no TLS (https: parses to port 443 but sends plaintext) |
 | Error handling | Storm exceptions (WEATHER/SHELTER, 12 storm types) | 13 kinds (v0.48.25: +STOP_STORM), STOP IF, plant_calm finalization, `storm()` factory (v0.48.38a), location backfill (v0.48.38b) | low |
-| Object model | SPECIES classes, BLOOM instantiation, SELF methods, inheritance | none | high |
+| Object model | SPC classes, BLOOM instantiation, SELF methods, inheritance | none | high |
 | Testing framework | none | VERIFY/SUITE (v0.49.53/54), 231/231 test suite (7 stress tests) | none — current exceeds legacy |
 
 **Key architectural differences that explain the gaps:**
@@ -35,7 +35,7 @@ The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 
 2. **Interpreted scope chain vs compiled C scopes.** The interpreter resolved variables through a runtime `Soil` scope chain with locks, pulses and storm-watching. Compiled code uses static C scopes; scope-dynamic features (legacy scope locks / EVAPORATE, PULSE watchers, `WHENEVER`, `ROOT`/`ROOT_SCOPE` globals) have no compilation target. (The v0.48.37e `LOCK var.` synchronization statement is a new value-keyed runtime Lock Table, distinct from the legacy per-variable scope lock.)
 3. **Host capabilities vs portable C runtime.** The interpreter leaned on Node.js (`fs`, `http`, `worker_threads`, `Atomics`, locale formatting, ANSI diagnostics). The C runtime re-implements only a thin slice (stdio via `runtime_bridge.c`, POSIX file ops, and — since v0.48.32 — POSIX sockets wired as HTTP: HARVEST client with MAP/JSON modes, LISTEN server with TIMEOUT/JSON responses). Worker-thread fan-out, TLS, locale-aware time formatting and terminal diagnostics were lost with Node.
 4. **Regex + AST dual pipeline vs single AST pipeline.** The interpreter had a legacy regex execution path with many one-off forms (`CONVERT`, `FLOW`, `MATCH … YIELD`, `NOTE`, `STEADY`) that were never migrated into its own AST path; those forms are effectively dead even in the legacy engine and were simply not carried over. (Exception: `PICK` was re-implemented as a typed built-in in v0.48.38h rather than ported from the regex path.)
-5. **Interpreter-added features post-v0.45 are intentionally dropped.** The prompt excludes intentionally deprecated features; `SPECIES`/`BLOOM`, VEIN file IO and the JS `Function()` escape hatch were explicitly superseded (the Language Tour marks `core/*.js` as "historical only").
+5. **Interpreter-added features post-v0.45 are intentionally dropped.** The prompt excludes intentionally deprecated features; `SPC`/`BLOOM`, VEIN file IO and the JS `Function()` escape hatch were explicitly superseded (the Language Tour marks `core/*.js` as "historical only").
 6. **Dependency Inversion Architecture (DIP).** Since v0.49.50, the compiler uses abstract interfaces (`IRuntime`, `IReport`, `ILexer`, `IParser`, `ICodegen`) with `void* context` pointers and function-pointer vtables, enabling modular testing and clean separation between the compiler frontend and runtime backend. Self-hosting convergence at 503,136 bytes (stable since v0.50.7).
 
 ---
@@ -63,7 +63,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 | `ACTION (self(Type)) method` receiver binding | S | M | no method model |
 | `ACTION … WITH MISSION <mode>.` | S | **S** | FAST/SAFE/SMART/PERSISTENT/BALANCED |
 | `ACTION` generics `<T>`, prio, `Result<T,E>` ret | M (legacy had none) | **S** | new in v0.48.1+ |
-| `SPECIES name {f: T}` + `BLOOM` | S | **P** | v0.49.28: map-backed records (fields default "", obj.field read + .put write); no VAR syntax (D); ACTION members + SELF shipped v0.49.29; FROM inheritance shipped v0.49.30; ACTION members + SELF v0.49.31; polymorphic dispatch v0.49.32; INTERFACE declarations + runtime conformance + compile-time validation v0.49.39; IMPLEMENTS clause parsing enabled v0.49.37 (compile-time validation D) |
+| `SPC name {f: T}` + `BLOOM` | S | **P** | v0.49.28: map-backed records (fields default "", obj.field read + .put write); no VAR syntax (D); ACTION members + SELF shipped v0.49.29; FROM inheritance shipped v0.49.30; ACTION members + SELF v0.49.31; polymorphic dispatch v0.49.32; INTERFACE declarations + runtime conformance + compile-time validation v0.49.39; IMPLEMENTS clause parsing enabled v0.49.37 (compile-time validation D) |
 
 ### v0.49.51 - OOM Resolution & Memory Safeguards
 - g_mallocs/g_frees: global allocation counters for memory auditing
@@ -82,8 +82,8 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 - **Weak symbols:** `PlantLexer_create`, `PlantCodegen_create`, `PlantParser_create` with `__attribute__((weak))` for graceful NULL in test programs
 - **CAS Subsystem v0.50.0–v0.50.7:** Symbolic math with auto-simplification, like-terms, distribution; GCD factoring, quadratic solver, advanced calculus (derivatives, integrals, limits); trig/log/pow/frac simplification; complex number arithmetic; series expansions (Maclaurin/Taylor); partial fraction decomposition; partial derivatives, gradient vectors (2D/3D), ODE solvers (linear, separable), ODE verification; `EVAL`/`SUBST` built-ins, `@` cast operator, MATH type interop; vector calculus (divergence, curl, Laplacian); Laplace & inverse Laplace transforms
 
-| `SPECIES name {f: T}` + `IMPLEMENTS iface` | S | **S** | v0.49.50: full IMPLEMENTS runtime + enhanced dedup |
-| `STRUCT` / `SHAPE` | S | **P** | STRUCT with typed fields only (map-backed); no SHAPE |
+| `SPC name {f: T}` + `IMPLEMENTS iface` | S | **S** | v0.49.50: full IMPLEMENTS runtime + enhanced dedup |
+| `STR` / `SHAPE` | S | **P** | STR with typed fields only (map-backed); no SHAPE |
 | `CHOICE Variant(TYPE)` + `Option`/`Result` | S | **P** | no CHOICE; `Option`/`Result`/`is_some` etc. exist only as runtime helpers |
 | `ENUM` | S | **S** | members as `NAME.MEMBER`, `_to_enum`/`_from_enum` |
 | `CONST`, `ROOT`, `ROOT_SCOPE` | S | **S** | v0.48.35 (block-scoped/global string constants; ROOT_SCOPE auto-elevates CONST to ROOT; values must be quoted literals) |
@@ -263,7 +263,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 - **Async engine**: contexts, tokens, `AWAIT/START/ASYNC IN/CANCEL/TRACE`, suspension, steal, work-stealing stats, timer heap.
 - **PERSISTENT data-integrity gate** (SAFE-taint, `plant_arc_persist` validation).
 - **Callbacks** (`plant_cb_*`), profiling (`plant_profile_*`), `plant_trace`, `plant_msleep`, worker heartbeat/pools (`plant_vec_init`), priority queue, task trees (`plant_task`, teardown).
-- Generics monomorphization, generic structs, varargs, `CALLBACK` FFI, `PLANT_STRUCT_/ENUM_/FFI_HAS_*` generated header contracts.
+- Generics monomorphization, generic structs, varargs, `CALLBACK` FFI, `PLANT_STR_/ENUM_/FFI_HAS_*` generated header contracts.
 
 ---
 
@@ -334,6 +334,6 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 9. **Legacy `N\` depth-prefixed syntax** — **resolved by removal**: the DEPTH token machinery was deleted in v0.48.38l, closing this item permanently; no drop-in compatibility is planned.
 
 **Intentionally out of scope (D)**
-- SPECIES/BLOOM object model, `SELF:`/method dispatch, `PLANT` library statements, PULSE/WHENEVER watchers, JS `Function()` escape hatch, locale-specific IO formatting.
+- SPC/BLOOM object model, `SELF:`/method dispatch, `PLANT` library statements, PULSE/WHENEVER watchers, JS `Function()` escape hatch, locale-specific IO formatting.
 
 *Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.50.7. As of v0.50.7 the legacy side exists only in git history — `core/`, `src/**/*.js`, `std/`, `service/`, `webrepl/`, and `benchmarks/` were removed from the working tree (commit `c17de62`).*

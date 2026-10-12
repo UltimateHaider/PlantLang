@@ -1,14 +1,14 @@
-# v0.49.30 - SPECIES inheritance (FROM / PARENT):
-#   SPECIES Child FROM Parent { extra: TYPE }
+# v0.49.30 - SPC inheritance (FROM / PARENT):
+#   SPC Child FROM Parent { extra: TYPE }
 # Fields merge (parent first, child overwrites), methods inherit via
 # bare-name dispatch, and child overrides replace parent impls.
-SPECIES Animal {
+SPC Animal {
   name: TXT
   ACTION speak() -> TXT {
     GIVE self.name + " makes a sound".
   }
 }
-SPECIES Dog FROM Animal {
+SPC Dog FROM Animal {
   breed: TXT
   ACTION fetch() -> TXT {
     GIVE self.name + " fetches!".

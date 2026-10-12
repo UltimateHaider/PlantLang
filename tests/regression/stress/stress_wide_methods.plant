@@ -1,6 +1,6 @@
-# stress_wide_methods — 100+ methods on a single SPECIES entity.
+# stress_wide_methods — 100+ methods on a single SPC entity.
 # Validates flat type scalability under heavy method density (v0.49.63).
-SPECIES MegaType {
+SPC MegaType {
   val: TXT
   ACTION m00() -> TXT { GIVE "m00". }
   ACTION m01() -> TXT { GIVE "m01". }

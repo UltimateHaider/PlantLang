@@ -2,7 +2,7 @@ INTERFACE Container[T] {
   get_item.
   set_item.
 }
-SPECIES Box[T] IMPLEMENTS Container[T] {
+SPC Box[T] IMPLEMENTS Container[T] {
   value: TXT
   ACTION get_item() -> TXT {
     GIVE self.value.

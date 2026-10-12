@@ -3769,12 +3769,13 @@ ACTION parse_action_decl(tokens(LST), pos(LON), rtab(LST)),
     REAP p5 FROM _second, ret_pair.
     # v0.48.4: FFI return types — external (default), Result<T,E>,
     # STRUCT X (by-value struct), void*
+    # v0.52.3a — STR is the new keyword; STRUCT still accepted.
     IF ret_lx IS "Result", SET ret TO "Result". /IF.
-    IF ret_lx IS "STRUCT",
+    IF ret_lx IS "STRUCT" OR ret_lx IS "STR",
       REAP rtv FROM collect_type_text, tokens, p5, ".", 0.
       REAP rtt FROM _first, rtv.
       REAP p5 FROM _second, rtv.
-      SET ret TO "STRUCT " + rtt.
+      SET ret TO "STR " + rtt.
     /IF.
     # v0.48.12: ENUM X — FFI boundary enums (raw member ints in C,
     # wrapped with _from_enum on the PlantLang side)
@@ -3814,7 +3815,7 @@ ACTION parse_action_decl(tokens(LST), pos(LON), rtab(LST)),
     # stored on the action_decl node so generic instantiations know
     # their substituted return type (drives _from_long wrapping of
     # numeric GIVEs). FFI marker keywords are never stored here.
-    IF ret IS "" AND ret_lx ISNT "external" AND ret_lx ISNT "Result" AND ret_lx ISNT "STRUCT" AND ret_lx ISNT "ENUM" AND ret_lx ISNT "void",
+    IF ret IS "" AND ret_lx ISNT "external" AND ret_lx ISNT "Result" AND ret_lx ISNT "STRUCT" AND ret_lx ISNT "STR" AND ret_lx ISNT "ENUM" AND ret_lx ISNT "void",
       SET ret TO ret_lx.
     /IF.
   /IF.
@@ -3857,7 +3858,7 @@ ACTION parse_action_decl(tokens(LST), pos(LON), rtab(LST)),
     IF after_lx IS ".",
       REAP dot_pair FROM plant_iLexer_consume_at, lexer, tokens, p5.
       REAP p5 FROM _second, dot_pair.
-      IF ret_lx IS "external" OR ret_lx IS "Result" OR ret_lx IS "STRUCT" OR ret_lx IS "ENUM" OR ret IS "void*",
+      IF ret_lx IS "external" OR ret_lx IS "Result" OR ret_lx IS "STRUCT" OR ret_lx IS "STR" OR ret_lx IS "ENUM" OR ret IS "void*",
         GIVE plant_list_make(2, plant_list_make(10, "type", "external_decl", "name", aname, "params", params, "ret", ret, "varargs", vararg), p5).
       /IF.
       GIVE plant_list_make(2, plant_list_make(16, "type", "action_decl", "name", aname, "generics", generics, "params", params, "body", plant_list_make(0), "prio", prio, "ret", ret, "mission_mode", mission_mode), p5).
@@ -3937,7 +3938,7 @@ ACTION parse_species_decl(tokens(LST), pos(LON)),
   REAP npair FROM plant_iLexer_consume_at, lexer, tokens, p.
   REAP nty FROM plant_iLexer_tok_type, lexer, npair[0].
   IF nty ISNT "IDENT",
-    CREATE serr(TXT) TO "SPECIES requires a name".
+    CREATE serr(TXT) TO "SPC requires a name".
     GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "msg", serr), p).
   /IF.
   REAP sname FROM plant_iLexer_tok_lex, lexer, npair[0].
@@ -4186,7 +4187,9 @@ ACTION parse_declaration(tokens(LST), pos(LON), clv(TXT), ctab(LST), rtab(LST), 
     REAP r FROM parse_interface_decl, tokens, pos.
     GIVE r.
   /IF.
-  IF lx IS "STRUCT",
+  # v0.48.1 - STRUCT name { field: TYPE, ... } (v0.50.0a anonymous form)
+  # v0.52.3a — STR is the new keyword; STRUCT still accepted.
+  IF lx IS "STRUCT" OR lx IS "STR",
     REAP r FROM parse_struct_decl, tokens, pos.
     GIVE r.
   /IF.
@@ -4206,7 +4209,8 @@ ACTION parse_declaration(tokens(LST), pos(LON), clv(TXT), ctab(LST), rtab(LST), 
     GIVE r.
   /IF.
   # v0.49.28 - SPECIES name { field: TYPE, ... }
-  IF lx IS "SPECIES",
+  # v0.52.3a — SPC is the new keyword; SPECIES still accepted.
+  IF lx IS "SPECIES" OR lx IS "SPC",
     REAP r FROM parse_species_decl, tokens, pos.
     GIVE r.
   /IF.

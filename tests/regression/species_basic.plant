@@ -1,13 +1,13 @@
-# v0.49.28 - SPECIES + BLOOM object model:
-#   SPECIES Name { field: TYPE ... }   (whitespace-separated fields)
+# v0.49.28 - SPC + BLOOM object model:
+#   SPC Name { field: TYPE ... }   (whitespace-separated fields)
 #   BLOOM Name AS var                  -> map-backed record; fields
 #   default to "" and are read/written via existing obj.field access
 #   and .put(...) method calls.
-SPECIES Person {
+SPC Person {
   name: TXT
   age: LON
 }
-SPECIES Empty { }
+SPC Empty { }
 ACTION main(),
   BLOOM Person AS p.
   SHOW "[" + p.name + "]".

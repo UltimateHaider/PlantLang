@@ -1,15 +1,15 @@
-STRUCT Point { x: LON, y: LON }
-STRUCT WrapV { p: STRUCT Point, tag: LON }
-STRUCT L4 { a: STRUCT L3 }
-STRUCT L3 { a: STRUCT L2 }
-STRUCT L2 { a: STRUCT L1 }
-STRUCT L1 { v: LON }
+STR Point { x: LON, y: LON }
+STR WrapV { p: STR Point, tag: LON }
+STR L4 { a: STR L3 }
+STR L3 { a: STR L2 }
+STR L2 { a: STR L1 }
+STR L1 { v: LON }
 
-ACTION ffi_point_sumv(p(STRUCT Point)) -> external.
-ACTION ffi_scale_ref(p(REF STRUCT Point), k(LON)) -> external.
-ACTION ffi_get_point() -> STRUCT Point.
-ACTION ffi_wrap_sumv(w(STRUCT WrapV)) -> external.
-ACTION ffi_l4_v(v(STRUCT L4)) -> external.
+ACTION ffi_point_sumv(p(STR Point)) -> external.
+ACTION ffi_scale_ref(p(REF STR Point), k(LON)) -> external.
+ACTION ffi_get_point() -> STR Point.
+ACTION ffi_wrap_sumv(w(STR WrapV)) -> external.
+ACTION ffi_l4_v(v(STR L4)) -> external.
 ACTION ffi_run_cb(cb(CALLBACK), ctx(LON), v(TXT)) -> external.
 ACTION ffi_buf_lenv(b(void*)) -> external.
 ACTION ffi_get_buf() -> void*.

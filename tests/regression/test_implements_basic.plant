@@ -1,7 +1,7 @@
 # v0.49.50 - Basic IMPLEMENTS clause
-# Tests that SPECIES with IMPLEMENTS clause is recognized and interface
+# Tests that SPC with IMPLEMENTS clause is recognized and interface
 # conformance can be checked at runtime.
-SPECIES Dog IMPLEMENTS Speakable {
+SPC Dog IMPLEMENTS Speakable {
   name: TXT
   ACTION speak() -> TXT {
     GIVE self.name + " barks!".

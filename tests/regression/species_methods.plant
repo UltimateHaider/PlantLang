@@ -1,8 +1,8 @@
-# v0.49.29 - SPECIES methods + SELF binding:
-#   ACTION members inside SPECIES lift to top-level functions whose
+# v0.49.29 - SPC methods + SELF binding:
+#   ACTION members inside SPC lift to top-level functions whose
 #   first parameter is the instance (self); SELF rewrites to self and
 #   obj.method(args) dispatches with the receiver prepended.
-SPECIES Person {
+SPC Person {
   name: TXT
   age: LON
 

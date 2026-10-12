@@ -1,12 +1,12 @@
 # v0.49.50 - Signature conflict detection
 # Tests that method signature mismatches are detected.
-SPECIES Animal {
+SPC Animal {
   ACTION make_sound() -> TXT {
     GIVE self.name + " makes sound!".
   }
 }
 # Child has incompatible signature (different return type context)
-SPECIES Dog FROM Animal {
+SPC Dog FROM Animal {
   ACTION make_sound() -> NUMBER {  # Different return type
     GIVE 42.
   }

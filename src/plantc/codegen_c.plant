@@ -2552,6 +2552,9 @@ ACTION add_struct_enum_keys(reg(LST), vtype(TXT), vname(TXT), res(LST)),
   IF rp0 IS "REF ", SET vty2 TO substring(vty2, 4, LEN(vty2)). /IF.
   REAP rp1 FROM substring, vty2, 0, 7.
   IF rp1 IS "STRUCT ", SET vty2 TO substring(vty2, 7, LEN(vty2)). /IF.
+  # v0.52.3a — STR is the new keyword; STRUCT still accepted.
+  REAP rp1b FROM substring, vty2, 0, 4.
+  IF rp1b IS "STR ", SET vty2 TO substring(vty2, 4, LEN(vty2)). /IF.
   REAP wbase2 FROM type_base, vty2.
   CREATE srlk(TXT) TO "STRUCT." + wbase2.
   REAP raw2 FROM _cl_map_get, reg, srlk.
@@ -7376,10 +7379,16 @@ ACTION ffi_param_kind(ptype(TXT)),
     REAP rest FROM substring, ptype, 4, LEN(ptype).
     REAP r0 FROM substring, rest, 0, 7.
     IF r0 IS "STRUCT ", GIVE "struct_ref". /IF.
+    # v0.52.3a — STR is the new keyword; STRUCT still accepted.
+    REAP r0b FROM substring, rest, 0, 4.
+    IF r0b IS "STR ", GIVE "struct_ref". /IF.
     GIVE "plain".
   /IF.
   REAP s0 FROM substring, ptype, 0, 7.
   IF s0 IS "STRUCT ", GIVE "struct_val". /IF.
+  # v0.52.3a — STR is the new keyword; STRUCT still accepted.
+  REAP s0b FROM substring, ptype, 0, 4.
+  IF s0b IS "STR ", GIVE "struct_val". /IF.
   IF str_eq(ptype, "void*") IS "1", GIVE "voidptr". /IF.
   IF str_eq(ptype, "CALLBACK") IS "1", GIVE "callback". /IF.
   GIVE "plain".
@@ -7397,6 +7406,11 @@ ACTION ffi_struct_name(typ(TXT)),
   IF s0 IS "STRUCT ",
     GIVE substring(typ, 7, LEN(typ)).
   /IF.
+  # v0.52.3a — STR is the new keyword; STRUCT still accepted.
+  REAP s0b FROM substring, typ, 0, 4.
+  IF s0b IS "STR ",
+    GIVE substring(typ, 4, LEN(typ)).
+  /IF.
   GIVE typ.
 /ACTION.
 
@@ -7410,6 +7424,11 @@ ACTION ffi_struct_cname(typ(TXT)),
   REAP s0 FROM substring, typ, 0, 7.
   IF s0 IS "STRUCT ",
     REAP typ FROM substring, typ, 7, LEN(typ).
+  /IF.
+  # v0.52.3a — STR is the new keyword; STRUCT still accepted.
+  REAP s0b FROM substring, typ, 0, 4.
+  IF s0b IS "STR ",
+    REAP typ FROM substring, typ, 4, LEN(typ).
   /IF.
   REAP b0 FROM base_of, typ.
   REAP bt0 FROM trim, b0.
@@ -7794,11 +7813,12 @@ ACTION ffi_emit_struct_helpers(cname(TXT), flds(LST)),
     REAP fs8 FROM is_struct_type, ft8.
     IF fs8 IS "1",
       REAP es8 FROM substring, ft8, 0, 7.
-      IF es8 IS "STRUCT ",
+      REAP es8b FROM substring, ft8, 0, 4.
+      IF es8 IS "STRUCT " OR es8b IS "STR ",
         REAP fcn8 FROM ffi_struct_cname, ft8.
         SET h1 TO h1 + "  r." + fn8 + " = plant_map_to_" + fcn8 + "_d(plant_map_get(m, \"" + fn8 + "\"), depth + 1);\n".
       /IF.
-      IF es8 ISNT "STRUCT ",
+      IF es8 ISNT "STRUCT " AND es8b ISNT "STR ",
         SET h1 TO h1 + "  r." + fn8 + " = plant_map_get(m, \"" + fn8 + "\");\n".
       /IF.
     /IF.
@@ -7832,11 +7852,12 @@ ACTION ffi_emit_struct_helpers(cname(TXT), flds(LST)),
     REAP fs7 FROM is_struct_type, ft7.
     IF fs7 IS "1",
       REAP es7 FROM substring, ft7, 0, 7.
-      IF es7 IS "STRUCT ",
+      REAP es7b FROM substring, ft7, 0, 4.
+      IF es7 IS "STRUCT " OR es7b IS "STR ",
         REAP fcn7 FROM ffi_struct_cname, ft7.
         SET h4 TO h4 + "  plant_map_hash_set(r, \"" + fn7 + "\", plant_" + fcn7 + "_to_map(v." + fn7 + "));\n".
       /IF.
-      IF es7 ISNT "STRUCT ",
+      IF es7 ISNT "STRUCT " AND es7b ISNT "STR ",
         SET h4 TO h4 + "  plant_map_hash_set(r, \"" + fn7 + "\", v." + fn7 + ");\n".
       /IF.
     /IF.
@@ -8266,10 +8287,11 @@ ACTION struct_typedef(tpl(LST), args(LST)),
         REAP ftype FROM _map_get, fel, "type".
         REAP fsub FROM subst_type, ftype, subst.
         REAP sp8 FROM substring, fsub, 0, 7.
-        IF sp8 IS "STRUCT ",
+        REAP sp8b FROM substring, fsub, 0, 4.
+        IF sp8 IS "STRUCT " OR sp8b IS "STR ",
             REAP ctype FROM ffi_ctype, fsub.
         /IF.
-        IF sp8 ISNT "STRUCT ",
+        IF sp8 ISNT "STRUCT " AND sp8b ISNT "STR ",
             # Non-STRUCT fields: explicit REF STRUCT → pointer layout; a
             # plain/generic struct reference (Box[NUM]) is an opaque tx_t
             # handle at runtime, so the typedef keeps the handle and the
@@ -8966,6 +8988,9 @@ ACTION _known_type(t(TXT), names(LST)),
   IF r0 IS "REF ", SET tt TO trim(substring(tt, 4, LEN(tt))). /IF.
   REAP s0 FROM substring, tt, 0, 7.
   IF s0 IS "STRUCT ", GIVE "1". /IF.
+  # v0.52.3a — STR is the new keyword; STRUCT still accepted.
+  REAP s0b FROM substring, tt, 0, 4.
+  IF s0b IS "STR ", GIVE "1". /IF.
   REAP e0 FROM substring, tt, 0, 5.
   IF e0 IS "ENUM ", GIVE "1". /IF.
   IF str_eq(tt, "void*") IS "1", GIVE "1". /IF.
@@ -9479,7 +9504,7 @@ ACTION generate_c(ast(LST)),
     SEASON i < COUNT ffi_torder,
         REAP node_el FROM plant_list_get, ffi_torder, i.
         REAP tscnX FROM _map_get, node_el, "scn".
-        SET struct_code TO struct_code + "#define PLANT_STRUCT_" + tscnX + " 1\n".
+        SET struct_code TO struct_code + "#define PLANT_STR_" + tscnX + " 1\n".
         REAP tstdef FROM _map_get, node_el, "stdef".
         SET struct_code TO struct_code + tstdef.
         SET i TO i + 1.

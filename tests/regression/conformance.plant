@@ -1,4 +1,4 @@
-SPECIES Dog IMPLEMENTS Speakable {
+SPC Dog IMPLEMENTS Speakable {
   name: TXT
   ACTION speak() -> TXT {
     GIVE self.name + " barks!".
@@ -7,7 +7,7 @@ SPECIES Dog IMPLEMENTS Speakable {
 INTERFACE Movable {
   move.
 }
-SPECIES Robot IMPLEMENTS Movable {
+SPC Robot IMPLEMENTS Movable {
   name: TXT
   ACTION speak() -> TXT {
     GIVE self.name + " beeps!".

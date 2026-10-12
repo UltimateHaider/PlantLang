@@ -6,7 +6,7 @@ INTERFACE Movable {
 }
 INTERFACE SpeakingMover FROM Vocal, Movable {
 }
-SPECIES Robot IMPLEMENTS SpeakingMover {
+SPC Robot IMPLEMENTS SpeakingMover {
   name: TXT
   ACTION speak() -> TXT {
     GIVE self.name + " beeps!".

@@ -1,7 +1,7 @@
-# v0.49.31 - SPECIES FROM + methods + SELF:
+# v0.49.31 - SPC FROM + methods + SELF:
 #   Dog FROM Animal inherits name field and speak() method.
 #   fetch() is a child-only method using self.field access.
-SPECIES Animal {
+SPC Animal {
   name: TXT
   ACTION speak() -> TXT {
     GIVE self.name + " makes a sound".
@@ -10,7 +10,7 @@ SPECIES Animal {
     GIVE "I am " + self.name.
   }
 }
-SPECIES Dog FROM Animal {
+SPC Dog FROM Animal {
   breed: TXT
   ACTION fetch() -> TXT {
     GIVE self.name + " the " + self.breed + " fetches!".

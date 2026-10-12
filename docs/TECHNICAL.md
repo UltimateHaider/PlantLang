@@ -226,7 +226,7 @@ Called at parse time for restricted statement types:
 | Statement | Call |
 |---|---|
 | `ACTION` declaration | `enforceDepthContract('ACTION', 0, 0, token)` — only allowed at Depth 0 |
-| `SPECIES` declaration | `enforceDepthContract('SPECIES', 0, 0, token)` — only allowed at Depth 0 |
+| `SPC` declaration | `enforceDepthContract('SPC', 0, 0, token)` — only allowed at Depth 0 |
 | `REAP` statement | `enforceDepthContract('REAP', 1, undefined, token)` — only allowed at Depth ≥ 1 |
 | `GIVE` statement | `enforceDepthContract('GIVE', 1, undefined, token)` — only allowed at Depth ≥ 1 |
 | `CYCLE` statement | `enforceDepthContract('CYCLE', 1, undefined, token)` — only allowed at Depth ≥ 1 |
@@ -290,7 +290,7 @@ DepthContractError produces a `SYNTAX_STORM` with the `[DepthContractError]` pre
 - REAP inside ACTION body (depth 1)
 - CYCLE inside ACTION body (depth 1)
 - GIVE inside ACTION body (depth 1)
-- SPECIES at depth 0
+- SPC at depth 0
 - REAP at depth 2 (nested CYCLE inside ACTION)
 - GIVE at depth 2
 
@@ -563,7 +563,7 @@ All nodes inherit from `AstNode` (`core/ast.js`) with `type`, `line`, `column`, 
 ### 9.1 Compile-Time Errors
 
 The LLVM backend produces structured `CodegenError` objects for:
-- Unsupported constructs (LST, MAP without explicit key/value type, SPECIES, etc.)
+- Unsupported constructs (LST, MAP without explicit key/value type, SPC, etc.)
 - Undeclared variable references
 - Contract Law violations (CREATE destination depth)
 - Type errors in operations
@@ -1160,11 +1160,11 @@ bytes 224-255: hash (SHA256 of this entry, 32 bytes)
 - `tests/test_phase13_choices_matching.js` — 64 tests for CHOICE/MATCH
 - `tests/test_phase14_maps.js` — 17 tests for MAP hash tables
 - `tests/test_phase15_for_in.js` — 19 tests for FOR...IN loops
-- `tests/test_phase16_structs.js` — 16 tests for STRUCT types
-- `tests/test_phase17_species.js` — 10 tests for SPECIES/BLOOM OOP
+- `tests/test_phase16_structs.js` — 16 tests for STR types
+- `tests/test_phase17_species.js` — 10 tests for SPC/BLOOM OOP
 - `tests/test_phase18_lists.js` — 15 tests for native LST operations (COUNT, FIRST, LAST, SUM)
 - `tests/test_phase21_runtime.js` — 20 tests for C runtime FFI: math, sort, string split/join (FFI and native via REAP), 70KB large-string stress test
-- `tests/test_depth_contract.js` — 13 tests for Block-Depth Contract Law Enforcement (valid: ACTION/SPECIES at depth 0, REAP/GIVE/CYCLE inside ACTION; invalid: REAP/CYCLE/GIVE at depth 0, nested ACTION, depth prefix mismatch)
+- `tests/test_depth_contract.js` — 13 tests for Block-Depth Contract Law Enforcement (valid: ACTION/SPC at depth 0, REAP/GIVE/CYCLE inside ACTION; invalid: REAP/CYCLE/GIVE at depth 0, nested ACTION, depth prefix mismatch)
 - `tests/matrix.test.js` — 28 tests for the 5x5 Boundary Handshake Matrix (all 25 transitions + error paths + context propagation)
 - `tests/dispatcher.test.js` — 47 tests for MissionStack, ScopedArena, MissionDispatcher, SMART routing, multi-hop call chains, memory isolation
 - `tests/runtime.test.js` — 70 tests for Local Runtime & Isolation Layer (BumpAllocator alignment/overflow/escalation, ARCHeap retain/release/cycle detection/GC.cycle, SafeChannel all 4 mechanisms, MissionContext diagnostics/metrics/tracing, ProcessPool heartbeat simulation)
@@ -2459,7 +2459,7 @@ Flags: `--code-words-enforce` (default), `--skip-code-words`.
 
 ## 25. C Backend Parity & Legacy Realignment (v0.42.0)
 
-The v0.42.0 release adds 100% execution parity between the JS Interpreter and the C Runtime / LLVM Emitter for the missing statements: `ACTION`, `WEATHER`, `SPECIES`, `MAP`, and `FOR...IN`.
+The v0.42.0 release adds 100% execution parity between the JS Interpreter and the C Runtime / LLVM Emitter for the missing statements: `ACTION`, `WEATHER`, `SPC`, `MAP`, and `FOR...IN`.
 
 ### 25.1 PlantMap — Open-Addressing Hash Map
 
@@ -2531,7 +2531,7 @@ typedef struct PlantIterator {
 | `plant_sys_action` | `void(const char* name, void* payload)` | Prints `[ACTION] <name> executed` to stdout |
 | `plant_env_set_weather` | `void(const char* type)` | Stores weather type in thread-local buffer; prints `[WEATHER] set to <type>` |
 | `plant_env_get_weather` | `const char*(void)` | Returns thread-local weather string, or `"clear"` if unset |
-| `plant_entity_set_species` | `void(void* entity, const char* name)` | Prints `[SPECIES] entity set to <name>` to stdout |
+| `plant_entity_set_species` | `void(void* entity, const char* name)` | Prints `[SPC] entity set to <name>` to stdout |
 
 `plant_env_set_weather` / `plant_env_get_weather` use `__thread` storage for thread safety.
 
@@ -2598,9 +2598,9 @@ The `NETWORK_NODES` set contains only `HarvestStatement` and `ListenBranchStatem
   - PlantMap: create/set/get IR verification (4 tests), LINK count (1), pipeline (1)
   - FOR...IN: array loop IR (1), map literal loop (1), empty array (1)
   - WEATHER: body/shelter/calm labels (3), condition path (1)
-  - SPECIES: entity_set_species call (2), with-parent IR (1)
+  - SPC: entity_set_species call (2), with-parent IR (1)
   - CodeWords: zero false-positives for new nodes (4)
-  - Pipeline integration: MAP+LINK+FOR...IN (1), WEATHER+nested MAP (1), SPECIES+MAP+LINK (1)
+  - Pipeline integration: MAP+LINK+FOR...IN (1), WEATHER+nested MAP (1), SPC+MAP+LINK (1)
   - IR declaration correctness: all 7 forward declarations (1)
   - Total: 31 tests, all green
 
@@ -3188,20 +3188,20 @@ REAP r FROM process_list[LON], 5, xs.   # call-site type arguments
   single-token + `REF`-special-case reading.
 - Invocations attach concrete type arguments to the action name in REAP
   statements; the same collector parses them (stopping at `]`).
-- **STRUCT declarations** use the same syntax style:
+- **STR declarations** use the same syntax style:
 
   ```plant
-  STRUCT Box[T] { val: T }
-  STRUCT Pair[T, U] { first: T, second: U }
-  STRUCT Wrap[T] { box: Box[T], tag: TXT }   # nested generic struct
+  STR Box[T] { val: T }
+  STR Pair[T, U] { first: T, second: U }
+  STR Wrap[T] { box: Box[T], tag: TXT }   # nested generic struct
 
   ACTION ffi_box_write(b(Box[LON]), v(LON)) -> external.
   ```
 
-  `parse_struct_decl` consumes `STRUCT`, the name, an optional `[T, U]`
+  `parse_struct_decl` consumes `STR`, the name, an optional `[T, U]`
   parameter list and a `{ name : type, ... }` field block (types again via
   `collect_type_text`, stopping at `}` or `,`); the AST node is
-  `("type","struct_decl","name",…,"generics",…,"fields",…)`. STRUCT
+  `("type","struct_decl","name",…,"generics",…,"fields",…)`. STR
   supersedes the older `SHAPE` doc sketch in `tokens.plant`.
 
 ### 31.2 Monomorphization Pipeline

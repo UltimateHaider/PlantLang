@@ -4,7 +4,7 @@ INTERFACE Speakable {
 INTERFACE Movable {
   move.
 }
-SPECIES Dog IMPLEMENTS Speakable, Movable {
+SPC Dog IMPLEMENTS Speakable, Movable {
   name: TXT
   ACTION speak() -> TXT {
     GIVE self.name + " barks!".

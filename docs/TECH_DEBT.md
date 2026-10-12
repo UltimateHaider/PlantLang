@@ -92,13 +92,13 @@
 - **Discovered by:** DeepSeek V4 Flash during v0.51.2c.2 Phase 2.
 
 ### Symptoms
-1. `STRUCT Holder { values: LIST }` + `CREATE h TO Holder(...)`:
+1. `STR Holder { values: LIST }` + `CREATE h TO Holder(...)`:
    - Emits `Holder(...)` (undefined function) → linker error.
    - Structs are represented as `tx_t` map handles, not stack structs.
 2. `LIST_FREE(h.values)`:
    - Emits `plant_list_free(h . values)` — invalid C.
    - Dot-access is not lowered inside free-call argument position.
-3. `SPECIES Holder: values: LIST. /SPECIES.`:
+3. `SPC Holder: values: LIST. /SPC.`:
    - Compiler SIGSEGV (exit 139, no output file).
 4. Map literals `{a: [1, 2]}`:
    - Keys need quotes (`{"a": ...}`).
@@ -122,7 +122,7 @@
   - Decide struct representation (stack C struct? map handle?).
   - Unify dot-access lowering across read/free positions.
   - Support `CREATE x TO StructType(...)`.
-  - Fix SPECIES parser crash.
+  - Fix SPC parser crash.
   - Support map literals.
 
 ### User Guidance
@@ -360,7 +360,7 @@ defining scope.
 - **Introduced:** v0.51.4 (Type Registry) — `plant_ctype` fell back to `tx_t` for any unrecognized type name.
 - **Impact:** `CREATE X (FOOBAR) TO 5.` compiled silently (`tx_t X = 5;`); typos surfaced only as later C errors (or not at all).
 - **Fixed:** `validate_types` AST pass (codegen_c.plant) invoked from `main.plant` before codegen; rejects unknown type names in CREATE/LET/GLOBAL var_types and ACTION/EXTERNAL param + return types.
-- **Whitelist:** registry types + TYPE aliases + struct/union/enum/species names + generic params + pseudo-forms (`REF`, `STRUCT X`, `ENUM X`, `ARRAY[T,N]`, `UNION`, `MATH`, `CALLBACK`, `VOID`, `void*`, `external`, `Result<T,E>`, `STRING`, `VEIN`).
+- **Whitelist:** registry types + TYPE aliases + struct/union/enum/species names + generic params + pseudo-forms (`REF`, `STR X`, `ENUM X`, `ARRAY[T,N]`, `UNION`, `MATH`, `CALLBACK`, `VOID`, `void*`, `external`, `Result<T,E>`, `STRING`, `VEIN`).
 - **Error:** `Error: unknown type 'FOOBAR'.` (exit 1).
 - **Incidental:** caught a latent `LIST`→`LST` typo in the self-hosting source.
 - **Related:** —

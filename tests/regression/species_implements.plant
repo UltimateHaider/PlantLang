@@ -1,7 +1,7 @@
 # v0.49.36 - interface conformance via runtime registration.
 # NOTE: IMPLEMENTS clause parsing is deferred; interfaces are registered
 # manually via plant_impl_iface and checked via plant_is_a.
-SPECIES Dog {
+SPC Dog {
   name: TXT
   ACTION speak() -> TXT {
     GIVE self.name + " barks!".

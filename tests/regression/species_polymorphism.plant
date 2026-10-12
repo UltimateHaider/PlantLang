@@ -2,7 +2,7 @@
 #   When both parent and child define a method with the same name,
 #   the child's implementation wins (last-definition-wins).
 #   Non-overridden methods are inherited from the parent.
-SPECIES Animal {
+SPC Animal {
   name: TXT
   ACTION speak() -> TXT {
     GIVE self.name + " makes a sound".
@@ -11,7 +11,7 @@ SPECIES Animal {
     GIVE "I am " + self.name.
   }
 }
-SPECIES Dog FROM Animal {
+SPC Dog FROM Animal {
   breed: TXT
   ACTION speak() -> TXT {
     GIVE self.name + " barks!".

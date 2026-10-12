@@ -1,8 +1,8 @@
-# struct_num — LON fields inside a STRUCT round-trip through the FFI
+# struct_num — LON fields inside a STR round-trip through the FFI
 # marshalling helpers; bare LON reads from the returned map display
 # correctly, including via concatenation.
-STRUCT Point { x: LON, y: LON }
-ACTION ffi_get_point() -> STRUCT Point.
+STR Point { x: LON, y: LON }
+ACTION ffi_get_point() -> STR Point.
 
 ACTION main()
   REAP g FROM ffi_get_point.
