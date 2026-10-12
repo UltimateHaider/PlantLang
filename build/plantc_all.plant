@@ -4087,7 +4087,7 @@ ACTION parse_harvest_stmt(tokens(LST), pos(LON)),
   CREATE timeout(TXT) TO "".
   CREATE map(TXT) TO "".
   CREATE json(TXT) TO "".
-  CREATE okws(LST) TO plant_list_make(7, "METHOD", "BODY", "HEADERS", "TIMEOUT", "MAP", "JSON", ".").
+  CREATE okws(LST) TO plant_list_make(8, "METHOD", "BODY", "HEADERS", "TIMEOUT", "MAP", "JSON", "JSN", ".").
   REAP rpair FROM collect_until_keyword, tokens, p4, okws.
   SET resp TO rpair[0].
   REAP p4 FROM _second, rpair.
@@ -4103,7 +4103,7 @@ ACTION parse_harvest_stmt(tokens(LST), pos(LON)),
       SET map TO "1".
       CONTINUE 0.
     /IF.
-    IF lx IS "JSON",
+    IF lx IS "JSON" OR lx IS "JSN",
       REAP dropj FROM plant_iLexer_consume_at, lexer, tokens, p4.
       REAP p4 FROM _second, dropj.
       SET json TO "1".
@@ -9434,11 +9434,29 @@ ACTION _handle_cast(e(TXT)),
   CREATE out(TXT) TO "".
   CREATE pos(LON) TO 0.
   CREATE elen(LON) TO LEN(e).
+  CREATE instr(LON) TO 0.
   SEASON pos < elen,
     REAP ch FROM char_at, e, pos.
+    # v0.52.3d — inside a string literal, copy verbatim (honoring \
+    # escapes) so a literal "@" is never treated as the cast operator.
+    IF instr IS 1,
+      SET out TO out + ch.
+      IF ch IS "\\",
+        IF pos + 1 < elen,
+          REAP nch FROM char_at, e, pos + 1.
+          SET out TO out + nch.
+          SET pos TO pos + 2.
+          CONTINUE 0.
+        /IF.
+      /IF.
+      IF ch IS "\"", SET instr TO 0. /IF.
+      SET pos TO pos + 1.
+      CONTINUE 0.
+    /IF.
+    IF ch IS "\"", SET instr TO 1. /IF.
     # v0.50.5 — @ cast operator; detect "@" via str_eq to avoid v1 bootstrap issues
     REAP is_at FROM str_eq, ch, "@".
-    IF is_at IS "1",
+    IF is_at IS "1" AND instr IS 0,
       # Find the start of the expression after @
       CREATE npos(LON) TO pos + 1.
       # Skip whitespace
@@ -9552,8 +9570,10 @@ ACTION _lst_binop(expr(TXT)),
     REAP ch FROM char_at, expr, i.
     IF str_eq(ch, "\"") IS "1", SET instr TO 1 - instr. /IF.
     IF instr IS 0,
-      IF str_eq(ch, "(") IS "1" OR str_eq(ch, "[") IS "1", SET depth TO depth + 1. /IF.
-      IF str_eq(ch, ")") IS "1" OR str_eq(ch, "]") IS "1", SET depth TO depth - 1. /IF.
+      # v0.52.3d — track {} too, so a "+" inside a map literal is not
+      # mistaken for a top-level list concat.
+      IF str_eq(ch, "(") IS "1" OR str_eq(ch, "[") IS "1" OR str_eq(ch, "{") IS "1", SET depth TO depth + 1. /IF.
+      IF str_eq(ch, ")") IS "1" OR str_eq(ch, "]") IS "1" OR str_eq(ch, "}") IS "1", SET depth TO depth - 1. /IF.
       IF depth IS 0 AND str_eq(ch, "+") IS "1",
         REAP c0 FROM char_at, expr, i - 1.
         REAP c1 FROM char_at, expr, i + 1.
@@ -9715,6 +9735,45 @@ ACTION _cmp_operand_ops(expr(TXT), evars(LST)),
     SET oi TO oi + 1.
   /SEASON.
   GIVE expr.
+/ACTION.
+
+# v0.52.3d — math_PI / math_E are zero-arg runtime functions; the
+# module:func substitution (math : PI → math_PI) drops the call
+# parens. Append "()" when they appear as complete tokens (not
+# followed by an identifier char, so math_EXP/math_ERF/math_ERFC/
+# math_EXP2/math_EXPM1 are untouched).
+ACTION _fix_math_consts(e(TXT)),
+  CREATE out(TXT) TO "".
+  CREATE i(LON) TO 0.
+  CREATE n(LON) TO LEN(e).
+  SEASON i < n,
+    REAP seg7 FROM substring, e, i, i + 7.
+    REAP m7 FROM str_eq, seg7, "math_PI".
+    IF m7 IS "1",
+      REAP nx7 FROM substring, e, i + 7, i + 8.
+      REAP id7 FROM _is_idch, nx7.
+      IF id7 IS "0" AND nx7 ISNT "(",
+        SET out TO out + "math_PI()".
+        SET i TO i + 7.
+        CONTINUE 0.
+      /IF.
+    /IF.
+    REAP seg6 FROM substring, e, i, i + 6.
+    REAP m6 FROM str_eq, seg6, "math_E".
+    IF m6 IS "1",
+      REAP nx6 FROM substring, e, i + 6, i + 7.
+      REAP id6 FROM _is_idch, nx6.
+      IF id6 IS "0" AND nx6 ISNT "(",
+        SET out TO out + "math_E()".
+        SET i TO i + 6.
+        CONTINUE 0.
+      /IF.
+    /IF.
+    REAP c FROM char_at, e, i.
+    SET out TO out + c.
+    SET i TO i + 1.
+  /SEASON.
+  GIVE out.
 /ACTION.
 
 ACTION translate_expr(expr(TXT), nums(LST), evars(LST), maths(LST)),
@@ -10045,6 +10104,8 @@ ACTION translate_expr(expr(TXT), nums(LST), evars(LST), maths(LST)),
     REAP e FROM plant_sanitize_bools, e.
     REAP e FROM strings:REPLACE, e, "NULL", "NULL".
     REAP e FROM strings:REPLACE, e, " : ", "_".
+    # v0.52.3d — restore call parens on zero-arg math constants.
+    REAP e FROM _fix_math_consts, e.
     REAP e FROM handle_brackets, e.
     # v0.50.5 — @ cast operator: @expr → plant_math_eval(expr)
     REAP e FROM _handle_cast, e.
@@ -15816,7 +15877,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.52.3c (pure native)".
+  SHOW "Chloroplast 0.52.3d (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

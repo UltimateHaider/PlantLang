@@ -1,3 +1,30 @@
+## v0.52.3d — Close TD-034 (Regression Suite Green)
+
+### Fixed
+- TD-034: regression suite **312/6 → 318/318**.
+  - `json_http`: `JSN` added to the harvest `okws` list (+ branch).
+  - `map_literal`: `_lst_binop` tracks `{}` depth.
+  - `math_extra`/`math_fix`/`math_full`: `math_PI()`/`math_E()` via `_fix_math_consts`.
+  - `string_ops`: `_handle_cast` is now string-aware (literal `@` no longer treated as a cast).
+  - `storm_factory`/`storm_shelter`: `.expected` regenerated.
+
+### Documented (new TD)
+- TD-035: storm_* `.expected` are line-number-brittle.
+
+### Verified
+- Native: 129/129
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (555,333 B)
+- valgrind strict: PASS
+- Binary: 977,000 B.
+
+### Out of Scope
+- TD-009 (struct construction) → v0.52.3e.
+- TD-033 (species registration).
+- TD-035 (line-agnostic fixtures).
+
 ## v0.52.3c — Fix TD-031 (Regression Runner)
 
 ### Fixed

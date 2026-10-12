@@ -374,16 +374,26 @@ defining scope.
 - **After:** 310 passed / 8 failed (TD-034 residuals); suite runtime ~2m12s.
 - **Related:** TD-029 (performance), TD-034.
 
-## TD-034: Regression suite residual failures (8) — OPEN
-- **Status:** OPEN
+## TD-034: Regression suite residual failures (8) — CLOSED
+- **Status:** ✅ CLOSED in v0.52.3d
 - **Introduced:** pre-v0.51 (long-standing; masked by TD-031).
-- **Impact:** MEDIUM — 8 tests fail after the TD-031 fix.
-- **Failures:**
-  - `json_http` (gcc): `HARVEST "…" AS r JSN.` emits `tx_t r JSN = …` (the `JSN` type in the `AS` clause is not stripped).
-  - `map_literal` (gcc): `plant_list_concat` called with too few arguments (arity mismatch).
-  - 6 output mismatches: `math_extra`, `math_fix`, `math_full`, `storm_factory`, `storm_shelter`, `string_ops` (e.g. trailing `#` dropped).
-- **Target fix:** v0.52.3d.
+- **Impact:** MEDIUM — 8 tests failed after the TD-031 fix.
+- **Fixed:**
+  - `json_http`: `JSN` added to the `parse_harvest_stmt` `okws` list + a `JSN` branch.
+  - `map_literal`: `_lst_binop` now tracks `{}` depth (a `+` inside a map literal was mistaken for a list concat).
+  - `math_extra`/`math_fix`/`math_full`: `math_PI`/`math_E` now emit `()` via `_fix_math_consts` (boundary-guarded).
+  - `string_ops`: `_handle_cast` is now string-aware (the real bug — a literal `@` inside a string was treated as the cast operator; not the trailing-`#` hypothesis).
+  - `storm_factory`/`storm_shelter`: `.expected` regenerated.
+- **Result:** Regression **318/318**.
 - **Related:** TD-031.
+
+## TD-035: storm_* .expected are line-number-brittle — OPEN
+- **Status:** OPEN
+- **Introduced:** pre-v0.52.3d.
+- **Impact:** LOW — `storm_factory`/`storm_shelter` `.expected` hardcode generated-C `__LINE__` values; any codegen prelude change breaks them (as happened here).
+- **Fix direction:** make the fixtures line-agnostic (normalize file/line in the runner or the test).
+- **Target fix:** v0.52.x.
+- **Related:** TD-034.
 
 ## TD-032: SPC field list SIGSEGV (comma + EOF) — CLOSED
 - **Status:** ✅ CLOSED in v0.52.3b

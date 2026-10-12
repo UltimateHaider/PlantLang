@@ -203,6 +203,7 @@ tx_t _lst_binop(tx_t expr);
 tx_t _cmp_binop(tx_t expr);
 tx_t _handle_cmp_ops(tx_t expr, PlantArray* evars);
 tx_t _cmp_operand_ops(tx_t expr, PlantArray* evars);
+tx_t _fix_math_consts(tx_t e);
 tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* maths);
 tx_t indent_str(long level);
 tx_t _gb_dump(PlantArray* bd);
@@ -5632,7 +5633,7 @@ tx_t parse_harvest_stmt(PlantArray* tokens, long pos) {
     tx_t timeout = "";
     tx_t map = "";
     tx_t json = "";
-    PlantArray* okws = plant_list_make ( 7 , "METHOD" , "BODY" , "HEADERS" , "TIMEOUT" , "MAP" , "JSON" , "." );
+    PlantArray* okws = plant_list_make ( 8 , "METHOD" , "BODY" , "HEADERS" , "TIMEOUT" , "MAP" , "JSON" , "JSN" , "." );
     rpair = collect_until_keyword(tokens, p4, okws);
     resp = plant_list_get(rpair ,  0 );
     p4 = _second(rpair);
@@ -5648,7 +5649,7 @@ tx_t parse_harvest_stmt(PlantArray* tokens, long pos) {
     map = "1";
                       continue;
     }
-    if (strcmp(lx,"JSON") == 0) {
+    if (strcmp(lx,"JSON") == 0 || strcmp(lx,"JSN") == 0) {
     dropj = plant_iLexer_consume_at(lexer, tokens, p4);
     p4 = _second(dropj);
     json = "1";
@@ -11454,6 +11455,7 @@ tx_t _swap_self(tx_t e) {
 }
 tx_t _handle_cast(tx_t e) {
   tx_t ch = "";
+  tx_t nch = "";
   tx_t is_at = "";
   tx_t wch = "";
   tx_t ech = "";
@@ -11464,10 +11466,30 @@ tx_t _handle_cast(tx_t e) {
     tx_t out = "";
     long pos = 0;
     long elen = strlen( e );
+    long instr = 0;
     while (pos < elen) {
     ch = char_at(e, pos);
+    if (instr == 1) {
+    out = _cat(out, ch);
+    if (strcmp(ch,"\\") == 0) {
+    if (pos + 1 < elen) {
+    nch = char_at(e, pos+1);
+    out = _cat(out, nch);
+    pos = pos+2;
+                                      continue;
+    }
+    }
+    if (strcmp(ch,"\"") == 0) {
+    instr = 0;
+    }
+    pos = pos+1;
+                      continue;
+    }
+    if (strcmp(ch,"\"") == 0) {
+    instr = 1;
+    }
     is_at = str_eq(ch, "@");
-    if (strcmp(is_at,"1") == 0) {
+    if (strcmp(is_at,"1") == 0 && instr == 0) {
     long npos = pos+1;
     while (npos < elen) {
     wch = char_at(e, npos);
@@ -11596,10 +11618,10 @@ tx_t _lst_binop(tx_t expr) {
     instr = 1 - instr;
     }
     if (instr == 0) {
-    if (strcmp(str_eq ( ch , "(" ),"1") == 0 || strcmp(str_eq ( ch , "[" ),"1") == 0) {
+    if (strcmp(str_eq ( ch , "(" ),"1") == 0 || strcmp(str_eq ( ch , "[" ),"1") == 0 || strcmp(str_eq ( ch , "{" ),"1") == 0) {
     depth = depth+1;
     }
-    if (strcmp(str_eq ( ch , ")" ),"1") == 0 || strcmp(str_eq ( ch , "]" ),"1") == 0) {
+    if (strcmp(str_eq ( ch , ")" ),"1") == 0 || strcmp(str_eq ( ch , "]" ),"1") == 0 || strcmp(str_eq ( ch , "}" ),"1") == 0) {
     depth = depth - 1;
     }
     if (depth == 0 && strcmp(str_eq ( ch , "+" ),"1") == 0) {
@@ -11807,6 +11829,48 @@ tx_t _cmp_operand_ops(tx_t expr, PlantArray* evars) {
     }
     return expr;
 }
+tx_t _fix_math_consts(tx_t e) {
+  tx_t seg7 = "";
+  tx_t m7 = "";
+  tx_t nx7 = "";
+  tx_t id7 = "";
+  tx_t seg6 = "";
+  tx_t m6 = "";
+  tx_t nx6 = "";
+  tx_t id6 = "";
+  tx_t c = "";
+    tx_t out = "";
+    long i = 0;
+    long n = strlen( e );
+    while (i < n) {
+    seg7 = substring(e, i, i+7);
+    m7 = str_eq(seg7, "math_PI");
+    if (strcmp(m7,"1") == 0) {
+    nx7 = substring(e, i+7, i+8);
+    id7 = _is_idch(nx7);
+    if (strcmp(id7,"0") == 0 && strcmp(nx7,"(") != 0) {
+    out = _cat(out, "math_PI()");
+    i = i+7;
+                              continue;
+    }
+    }
+    seg6 = substring(e, i, i+6);
+    m6 = str_eq(seg6, "math_E");
+    if (strcmp(m6,"1") == 0) {
+    nx6 = substring(e, i+6, i+7);
+    id6 = _is_idch(nx6);
+    if (strcmp(id6,"0") == 0 && strcmp(nx6,"(") != 0) {
+    out = _cat(out, "math_E()");
+    i = i+6;
+                              continue;
+    }
+    }
+    c = char_at(e, i);
+    out = _cat(out, c);
+    i = i+1;
+    }
+    return out;
+}
 tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* maths) {
   tx_t e0 = "";
   tx_t e1 = "";
@@ -12010,6 +12074,7 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* 
     e = plant_sanitize_bools(e);
     e = strings_REPLACE(e, "NULL", "NULL");
     e = strings_REPLACE(e, " : ", "_");
+    e = _fix_math_consts(e);
     e = handle_brackets(e);
     e = _handle_cast(e);
     if (( plant_array_length(maths) ) > 0) {
@@ -18032,7 +18097,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.52.3c (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.52.3d (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

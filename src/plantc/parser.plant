@@ -3377,7 +3377,7 @@ ACTION parse_harvest_stmt(tokens(LST), pos(LON)),
   CREATE timeout(TXT) TO "".
   CREATE map(TXT) TO "".
   CREATE json(TXT) TO "".
-  CREATE okws(LST) TO plant_list_make(7, "METHOD", "BODY", "HEADERS", "TIMEOUT", "MAP", "JSON", ".").
+  CREATE okws(LST) TO plant_list_make(8, "METHOD", "BODY", "HEADERS", "TIMEOUT", "MAP", "JSON", "JSN", ".").
   REAP rpair FROM collect_until_keyword, tokens, p4, okws.
   SET resp TO rpair[0].
   REAP p4 FROM _second, rpair.
@@ -3393,7 +3393,7 @@ ACTION parse_harvest_stmt(tokens(LST), pos(LON)),
       SET map TO "1".
       CONTINUE 0.
     /IF.
-    IF lx IS "JSON",
+    IF lx IS "JSON" OR lx IS "JSN",
       REAP dropj FROM plant_iLexer_consume_at, lexer, tokens, p4.
       REAP p4 FROM _second, dropj.
       SET json TO "1".
