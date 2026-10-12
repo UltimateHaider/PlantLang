@@ -1,3 +1,31 @@
+## v0.52.3c — Fix TD-031 (Regression Runner)
+
+### Fixed
+- TD-031: `run_regression_tests.sh` now links `build/libplant_test_runtime.a`
+  (like the native runner), with a `make test-runtime-lib` fallback.
+- Before: 304 gcc-stage link failures; after: **310 passed / 8 failed**.
+- `spc_comma` and `spc_unterminated` now gate the fix.
+
+### Performance
+- Regression suite: ~2m12s (was ~5–15 min).
+
+### Documented (new TD)
+- TD-034: regression suite residual failures (8).
+
+### Verified
+- Native: 129/129
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 310 passed / 8 failed (TD-034 residuals)
+- Self-hosting: converged (553,735 B)
+- valgrind strict: PASS
+- Binary: 976,960 B.
+
+### Out of Scope
+- TD-034 (8 residuals) → v0.52.3d.
+- TD-009 (struct construction).
+- TD-033 (species registration).
+
 ## v0.52.3b — SPECIES Comma SIGSEGV Fix
 
 ### Fixed

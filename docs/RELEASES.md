@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.52.3b
+# Auto-updated: 0.52.3c
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.52.3b | 976960 | 8963 | 448 | 109 | 322 | 5361 |
+| v0.52.3c | 976960 | 8963 | 448 | 109 | 322 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -47,6 +47,7 @@
 | v0.52.2 | 2026 | Unknown Type Validation | Released |
 | v0.52.3a | 2026 | Rename SPECIES → SPC + STRUCT → STR | Released |
 | v0.52.3b | 2026 | SPECIES Comma SIGSEGV Fix | Released |
+| v0.52.3c | 2026 | Fix TD-031 (Regression Runner) | Released |
 
 ## Growth Chart (ASCII)
 

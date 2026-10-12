@@ -365,14 +365,25 @@ defining scope.
 - **Incidental:** caught a latent `LIST`→`LST` typo in the self-hosting source.
 - **Related:** —
 
-## TD-031: Regression runner never links plant_memory.c — OPEN
-- **Status:** OPEN
+## TD-031: Regression runner never links plant_memory.c — CLOSED
+- **Status:** ✅ CLOSED in v0.52.3c
 - **Introduced:** pre-v0.51 (`tests/regression/run_regression_tests.sh` unchanged since v0.50.0f).
-- **Impact:** 302 gcc-stage link failures across the regression suite (compiler-independent). `.invalid` (compile-fail) tests still pass; compile-stage failures = 0.
-- **Cause:** the runner links `plant_runtime.c` (and friends) but not `runtime/c/plant_memory.c`, while `plant_runtime.c` references `plant_heapstr_alloc_copy` / `plant_heapstr_release` (defined only in `plant_memory.c`).
-- **Fix direction:** add `runtime/c/plant_memory.c` (and any other missing runtime units) to the regression runner's gcc line, or link the precompiled test-runtime archive.
-- **Target fix:** v0.52.x or v0.53.x.
-- **Related:** TD-029.
+- **Impact:** 304 gcc-stage link failures across the regression suite (compiler-independent).
+- **Cause:** the runner linked 7 runtime `.c` files but not `plant_memory.c` / `plant_tensor.c` / `plant_complex.c`, while `plant_runtime.c` references `plant_heapstr_alloc_copy` / `plant_heapstr_release` (defined only in `plant_memory.c`).
+- **Fixed:** `run_regression_tests.sh` now links `build/libplant_test_runtime.a` (the precompiled `TEST_RUNTIME_C` archive), like the native runner, with a `make test-runtime-lib` fallback.
+- **After:** 310 passed / 8 failed (TD-034 residuals); suite runtime ~2m12s.
+- **Related:** TD-029 (performance), TD-034.
+
+## TD-034: Regression suite residual failures (8) — OPEN
+- **Status:** OPEN
+- **Introduced:** pre-v0.51 (long-standing; masked by TD-031).
+- **Impact:** MEDIUM — 8 tests fail after the TD-031 fix.
+- **Failures:**
+  - `json_http` (gcc): `HARVEST "…" AS r JSN.` emits `tx_t r JSN = …` (the `JSN` type in the `AS` clause is not stripped).
+  - `map_literal` (gcc): `plant_list_concat` called with too few arguments (arity mismatch).
+  - 6 output mismatches: `math_extra`, `math_fix`, `math_full`, `storm_factory`, `storm_shelter`, `string_ops` (e.g. trailing `#` dropped).
+- **Target fix:** v0.52.3d.
+- **Related:** TD-031.
 
 ## TD-032: SPC field list SIGSEGV (comma + EOF) — CLOSED
 - **Status:** ✅ CLOSED in v0.52.3b

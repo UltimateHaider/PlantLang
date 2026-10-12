@@ -17,6 +17,11 @@ fi
 BUILD=${TMPDIR:-/tmp}/plantlang_regression_tests
 rm -rf "$BUILD"
 mkdir -p "$BUILD"
+# v0.52.3c — TD-031: link the precompiled test runtime (like the native
+# runner) so every runtime unit (memory/tensor/complex) is present.
+if [ ! -f "$ROOT/build/libplant_test_runtime.a" ]; then
+  make -s -C "$ROOT" test-runtime-lib || { echo "FAIL: runtime precompile"; exit 1; }
+fi
 # stale scratch files from the fs_append regression test (appends must
 # start from an empty target each run)
 rm -f /tmp/plantlang_fs_append_*.txt
@@ -67,11 +72,9 @@ for src in "$SUITE_DIR"/*.plant; do
        "$BUILD/$name.c" | sed '1d;$d' > "$types"
   if ! gcc -w -O0 -include "$ROOT/tests/native/mock_ffi.h" \
         -include "$types" -I "$ROOT/runtime/c" "$BUILD/$name.c" \
-        "$ROOT/runtime/c/plant_runtime.c" "$ROOT/runtime/c/plant_error.c" \
-        "$ROOT/runtime/c/plant_report.c" "$ROOT/runtime/c/plant_report_json.c" \
-        "$ROOT/runtime/c/plant_report_xml.c" "$ROOT/runtime/c/plant_report_html.c" \
-        "$ROOT/runtime/c/plant_math.c" \
-        "$ROOT/tests/native/mock_ffi.c" -lm -ldl -o "$BUILD/$name" \
+        "$ROOT/tests/native/mock_ffi.c" \
+        "$ROOT/build/libplant_test_runtime.a" \
+        -lm -ldl -o "$BUILD/$name" \
         >>"$BUILD/$name.compile.log" 2>&1; then
     echo "FAIL  $name (gcc)"; fail=$((fail+1)); continue
   fi
