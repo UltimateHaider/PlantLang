@@ -1,0 +1,11 @@
+# v0.52.3g — TD-033: species/interface registration must run even when
+# the program uses an explicit ACTION main() (previously the
+# plant_species_register prologue was only emitted on the implicit-main
+# path, so species fields never merged — Dog's inherited `name` was lost).
+SPC Animal { name: TXT }
+SPC Dog FROM Animal { breed: TXT }
+ACTION main() {
+  BLOOM Dog AS d.
+  SHOW COUNT d.
+  SHOW "species-register-ok".
+}

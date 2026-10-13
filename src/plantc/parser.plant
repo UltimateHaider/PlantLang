@@ -3971,24 +3971,22 @@ ACTION parse_species_decl(tokens(LST), pos(LON)),
     REAP p FROM _second, impl_c1.
     REAP impl_n1 FROM plant_iLexer_consume_at, lexer, tokens, p.
     REAP p FROM _second, impl_n1.
-    REAP cm1t FROM plant_iLexer_peek_at, lexer, tokens, p.
-    REAP cm1l FROM plant_iLexer_tok_lex, lexer, cm1t.
-    IF cm1l IS ",",
+    # v0.52.3g — TD-033: store the interface NAME (lexeme), not the raw
+    # token pair, and include the first entry (previously only 2nd/3rd
+    # names were stored, as un-decoded pairs → plant_impl_iface got junk).
+    REAP impl_name1 FROM plant_iLexer_tok_lex, lexer, impl_n1[0].
+    PUT impl_name1 INTO implifs.
+    SEASON TRUE,
+      REAP cm1t FROM plant_iLexer_peek_at, lexer, tokens, p.
+      REAP cm1l FROM plant_iLexer_tok_lex, lexer, cm1t.
+      IF cm1l ISNT ",", BREAK 0. /IF.
       REAP cc9a FROM plant_iLexer_consume_at, lexer, tokens, p.
       REAP p FROM _second, cc9a.
       REAP in9a FROM plant_iLexer_consume_at, lexer, tokens, p.
       REAP p FROM _second, in9a.
-      PUT in9a INTO implifs.
-      REAP cm2t FROM plant_iLexer_peek_at, lexer, tokens, p.
-      REAP cm2l FROM plant_iLexer_tok_lex, lexer, cm2t.
-      IF cm2l IS ",",
-        REAP cc9b FROM plant_iLexer_consume_at, lexer, tokens, p.
-        REAP p FROM _second, cc9b.
-        REAP in9b FROM plant_iLexer_consume_at, lexer, tokens, p.
-        REAP p FROM _second, in9b.
-        PUT in9b INTO implifs.
-      /IF.
-    /IF.
+      REAP inname9 FROM plant_iLexer_tok_lex, lexer, in9a[0].
+      PUT inname9 INTO implifs.
+    /SEASON.
   /IF.
   # v0.49.30 - optional FROM Parent clause
   CREATE parent(TXT) TO "".
@@ -4011,7 +4009,7 @@ ACTION parse_species_decl(tokens(LST), pos(LON)),
     # gracefully instead of walking off the token array.
     REAP is_eof_sp FROM plant_iLexer_is_eof_at, lexer, tokens, p.
     IF is_eof_sp,
-      GIVE plant_list_make(2, plant_list_make(12, "type", "species_decl", "name", sname, "type_params", stparams, "parent", parent, "fields", fields, "methods", methods), p).
+      GIVE plant_list_make(2, plant_list_make(14, "type", "species_decl", "name", sname, "type_params", stparams, "parent", parent, "fields", fields, "methods", methods, "implements", implifs), p).
     /IF.
     REAP tk FROM plant_iLexer_peek_at, lexer, tokens, p.
     REAP ty FROM plant_iLexer_tok_type, lexer, tk.
@@ -4083,7 +4081,7 @@ ACTION parse_species_decl(tokens(LST), pos(LON)),
       REAP p FROM _second, cc2.
     /IF.
   /SEASON.
-  GIVE plant_list_make(2, plant_list_make(12, "type", "species_decl", "name", sname, "type_params", stparams, "parent", parent, "fields", fields, "methods", methods), p).
+  GIVE plant_list_make(2, plant_list_make(14, "type", "species_decl", "name", sname, "type_params", stparams, "parent", parent, "fields", fields, "methods", methods, "implements", implifs), p).
 /ACTION.
 
 # parse_type_decl - TYPE alias = target. (v0.49.27)
@@ -4153,6 +4151,10 @@ ACTION parse_interface_decl(tokens(LST), pos(LON)),
       REAP pip FROM plant_iLexer_consume_at, lexer, tokens, p.
       REAP pin FROM plant_iLexer_tok_lex, lexer, pip[0].
       PUT pin INTO iparents.
+      # v0.52.3g — TD-033: advance p past the parent name (previously
+      # omitted, so the loop never consumed the comma and the interface
+      # body was mis-parsed as methods).
+      REAP p FROM _second, pip.
       REAP pctk FROM plant_iLexer_peek_at, lexer, tokens, p.
       REAP pclx FROM plant_iLexer_tok_lex, lexer, pctk.
       IF pclx IS ",",
@@ -4524,9 +4526,12 @@ ACTION parse_program(tokens(LST)),
           SET mi9 TO mi9 + 1.
         /SEASON.
       /IF.
-      IF is_sp ISNT "1",
-        PUT decl INTO nodes.
-      /IF.
+      # v0.52.3g — TD-033: keep the species_decl node itself (it was
+      # previously dropped after lifting its methods), so codegen's
+      # pass-0 can emit plant_species_register for it. generate_node
+      # returns "" for species_decl and the top-level statement loop
+      # excludes it, so this adds metadata only.
+      PUT decl INTO nodes.
     /IF.
   /SEASON.
 /ACTION.

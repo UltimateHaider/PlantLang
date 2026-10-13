@@ -7397,6 +7397,11 @@ ACTION generate_node(node, env(LST)),
         IF mmode IS "PERSISTENT", SET amode_exit TO "  plant_persist_exit();\n". /IF.
         CREATE maths_a(LST) TO collect_maths(bd, params, subst).
         REAP bcode FROM generate_body, bd, env_make(1, sigs, subst, clmap, actx, nums_a, stvars_a, evars_a, rty_a, amode_exit, "", maths_a, env_structs(env)).
+        # v0.52.3g — TD-033: explicit ACTION main() as the C entry point
+        # carries the species/interface registration prologue (set by
+        # generate_c when the int-main wrapper is not emitted).
+        REAP spinit2 FROM _map_get, node, "sp_init".
+        IF spinit2 > "", SET bcode TO spinit2 + bcode. /IF.
         # v0.49.53: scan body for verify_stmt nodes; wrap with
         # plant_verify_begin/end only for actions that contain VERIFY
         # assertions (test actions).
@@ -9438,9 +9443,11 @@ ACTION generate_c(ast(LST)),
             REAP sf7 FROM _map_get, node_el, "fields".
             REAP sp9 FROM _map_get, node_el, "parent".
             PUT plant_list_make(6, "name", sn7, "fields", sf7, "parent", sp9) INTO species.
-            CREATE regl(TXT) TO "_from_long(".
-            SET regl TO regl + COUNT sf7.
-            SET regl TO regl + ")".
+            # v0.52.3g — TD-033: build the fields list C expression
+            # plant_list_make(N, "f1", …). Previously this path was dead
+            # (species_decl was dropped by the parser) and produced
+            # malformed output when reached.
+            CREATE regl(TXT) TO "plant_list_make(" + _from_long(COUNT sf7).
             CREATE fj9(LON) TO 0.
             SEASON fj9 < COUNT sf7,
               REAP fe9 FROM plant_list_get, sf7, fj9.
@@ -9449,7 +9456,6 @@ ACTION generate_c(ast(LST)),
               SET fj9 TO fj9 + 1.
             /SEASON.
             SET regl TO regl + ")".
-            SET regl TO "plant_list_make(" + substring(regl, 11, LEN(regl)).
             SET sp_init_code TO sp_init_code + "  plant_species_register(\"" + sn7 + "\", " + regl + ", \"" + sp9 + "\");\n".
             # v0.49.34: register implemented interfaces
             REAP imps FROM _map_get, node_el, "implements".
@@ -10013,6 +10019,19 @@ ACTION generate_c(ast(LST)),
         /IF.
         SET gwi TO gwi + 3.
     /SEASON.
+    # v0.52.3g — TD-033: does any node force the int-main wrapper
+    # (has_stmt)? Pre-scan so the main action node can be told to carry
+    # the species-registration prologue when the wrapper is NOT emitted.
+    CREATE has_top_stmt(LON) TO 0.
+    SET i TO 0.
+    SEASON i < COUNT ast,
+        REAP hs_nd FROM plant_list_get, ast, i.
+        REAP hs_ty FROM _map_get, hs_nd, "type".
+        IF hs_ty ISNT "action_decl" AND hs_ty ISNT "enum_decl" AND hs_ty ISNT "external_decl" AND hs_ty ISNT "struct_decl" AND hs_ty ISNT "union_decl" AND hs_ty ISNT "import_stmt" AND hs_ty ISNT "type_decl" AND hs_ty ISNT "species_decl" AND hs_ty ISNT "interface_decl",
+            SET has_top_stmt TO 1.
+        /IF.
+        SET i TO i + 1.
+    /SEASON.
     SET i TO 0.
     SEASON i < COUNT ast,
         REAP node_el FROM plant_list_get, ast, i.
@@ -10023,6 +10042,14 @@ ACTION generate_c(ast(LST)),
                 REAP aname FROM _map_get, node_el, "name".
                 REAP asy4 FROM _map_get, node_el, "async".
                 CREATE node_el2(TXT) TO node_el.
+                # v0.52.3g — TD-033: when there is an explicit ACTION main()
+                # and the int-main wrapper will NOT be emitted (no top-level
+                # statements, no SAFE work), the user's main() is the C entry
+                # point; carry the species-registration prologue in its body
+                # so plant_species_register runs.
+                IF str_eq(aname, "main") IS "1" AND asy4 ISNT "1" AND has_plain_main IS "1" AND has_top_stmt IS 0 AND has_safe_work ISNT "1" AND sp_init_code > "",
+                    REAP node_el2 FROM map_add, node_el2, "sp_init", sp_init_code.
+                /IF.
                 IF str_eq(aname, "main") IS "1" AND drn_main IS 1 AND asy4 ISNT "1",
                     REAP node_el2 FROM map_add, node_el, "drain_after", "1".
                 /IF.

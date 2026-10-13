@@ -6382,14 +6382,12 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
   tx_t impl_lx = "";
   tx_t impl_c1 = "";
   tx_t impl_n1 = "";
+  tx_t impl_name1 = "";
   tx_t cm1t = "";
   tx_t cm1l = "";
   tx_t cc9a = "";
   tx_t in9a = "";
-  tx_t cm2t = "";
-  tx_t cm2l = "";
-  tx_t cc9b = "";
-  tx_t in9b = "";
+  tx_t inname9 = "";
   tx_t ftk = "";
   tx_t flx9 = "";
   tx_t fpair = "";
@@ -6466,23 +6464,20 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
     p = _second(impl_c1);
     impl_n1 = plant_iLexer_consume_at(lexer, tokens, p);
     p = _second(impl_n1);
+    impl_name1 = plant_iLexer_tok_lex(lexer, plant_list_get(impl_n1 ,  0 ));
+        implifs = plant_list_add(implifs, impl_name1);
+    while (1) {
     cm1t = plant_iLexer_peek_at(lexer, tokens, p);
     cm1l = plant_iLexer_tok_lex(lexer, cm1t);
-    if (strcmp(cm1l,",") == 0) {
+    if (strcmp(cm1l,",") != 0) {
+                              break;
+    }
     cc9a = plant_iLexer_consume_at(lexer, tokens, p);
     p = _second(cc9a);
     in9a = plant_iLexer_consume_at(lexer, tokens, p);
     p = _second(in9a);
-            implifs = plant_list_add(implifs, in9a);
-    cm2t = plant_iLexer_peek_at(lexer, tokens, p);
-    cm2l = plant_iLexer_tok_lex(lexer, cm2t);
-    if (strcmp(cm2l,",") == 0) {
-    cc9b = plant_iLexer_consume_at(lexer, tokens, p);
-    p = _second(cc9b);
-    in9b = plant_iLexer_consume_at(lexer, tokens, p);
-    p = _second(in9b);
-                implifs = plant_list_add(implifs, in9b);
-    }
+    inname9 = plant_iLexer_tok_lex(lexer, plant_list_get(in9a ,  0 ));
+            implifs = plant_list_add(implifs, inname9);
     }
     }
     tx_t parent = "";
@@ -6503,7 +6498,7 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
     while (1) {
     is_eof_sp = plant_iLexer_is_eof_at(lexer, tokens, p);
     if (is_eof_sp) {
-    return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "species_decl" , "name" , sname , "type_params" , stparams , "parent" , parent , "fields" , fields , "methods" , methods ) , p );
+    return plant_list_make ( 2 , plant_list_make ( 14 , "type" , "species_decl" , "name" , sname , "type_params" , stparams , "parent" , parent , "fields" , fields , "methods" , methods , "implements" , implifs ) , p );
     }
     tk = plant_iLexer_peek_at(lexer, tokens, p);
     ty = plant_iLexer_tok_type(lexer, tk);
@@ -6568,7 +6563,7 @@ tx_t parse_species_decl(PlantArray* tokens, long pos) {
     p = _second(cc2);
     }
     }
-    return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "species_decl" , "name" , sname , "type_params" , stparams , "parent" , parent , "fields" , fields , "methods" , methods ) , p );
+    return plant_list_make ( 2 , plant_list_make ( 14 , "type" , "species_decl" , "name" , sname , "type_params" , stparams , "parent" , parent , "fields" , fields , "methods" , methods , "implements" , implifs ) , p );
 }
 tx_t parse_type_decl(PlantArray* tokens, long pos) {
   tx_t lexer = "";
@@ -6679,6 +6674,7 @@ tx_t parse_interface_decl(PlantArray* tokens, long pos) {
     pip = plant_iLexer_consume_at(lexer, tokens, p);
     pin = plant_iLexer_tok_lex(lexer, plant_list_get(pip ,  0 ));
             iparents = plant_list_add(iparents, pin);
+    p = _second(pip);
     pctk = plant_iLexer_peek_at(lexer, tokens, p);
     pclx = plant_iLexer_tok_lex(lexer, pctk);
     if (strcmp(pclx,",") == 0) {
@@ -7060,9 +7056,7 @@ tx_t parse_program(PlantArray* tokens) {
     mi9 = mi9+1;
     }
     }
-    if (strcmp(is_sp,"1") != 0) {
-                nodes = plant_list_add(nodes, decl);
-    }
+            nodes = plant_list_add(nodes, decl);
     }
     }
   return parse_program;
@@ -13677,6 +13671,7 @@ tx_t generate_node(tx_t node, PlantArray* env) {
   tx_t pname = "";
   tx_t ptype = "";
   tx_t ctype = "";
+  tx_t spinit2 = "";
   tx_t vbnd = "";
   tx_t vbnd_ty = "";
   tx_t sp_ty = "";
@@ -14639,6 +14634,10 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     }
     PlantArray* maths_a = collect_maths ( bd , params , subst );
     bcode = generate_body(bd, env_make ( 1 , sigs , subst , clmap , actx , nums_a , stvars_a , evars_a , rty_a , amode_exit , "" , maths_a , env_structs ( env ) ));
+    spinit2 = _map_get(node, "sp_init");
+    if (strcmp(spinit2,"") > 0) {
+    bcode = _cat(spinit2, bcode);
+    }
     int has_verify = 0;
     long vbdi = 0;
     while (vbdi < plant_array_length(bd)) {
@@ -16791,6 +16790,8 @@ tx_t generate_c(PlantArray* ast) {
   tx_t gcv = "";
   tx_t gnum = "";
   tx_t gnf = "";
+  tx_t hs_nd = "";
+  tx_t hs_ty = "";
   tx_t asy4 = "";
   tx_t cmact = "";
   tx_t ns_code = "";
@@ -16880,9 +16881,7 @@ tx_t generate_c(PlantArray* ast) {
     sf7 = _map_get(node_el, "fields");
     sp9 = _map_get(node_el, "parent");
             species = plant_list_add(species, plant_list_make ( 6 , "name" , sn7 , "fields" , sf7 , "parent" , sp9 ));
-    tx_t regl = "_from_long(";
-    regl = regl+plant_array_length(sf7);
-    regl = _cat(regl, ")");
+    tx_t regl = _cat("plant_list_make(", _from_long ( plant_array_length(sf7) ));
     long fj9 = 0;
     while (fj9 < plant_array_length(sf7)) {
     fe9 = plant_list_get(sf7, fj9);
@@ -16891,7 +16890,6 @@ tx_t generate_c(PlantArray* ast) {
     fj9 = fj9+1;
     }
     regl = _cat(regl, ")");
-    regl = _cat("plant_list_make(", substring ( regl , 11 , strlen( regl ) ));
     sp_init_code = _cat(_cat4(_cat4(sp_init_code, "  plant_species_register(\"", sn7, "\", "), regl, ", \"", sp9), "\");\n");
     imps = _map_get(node_el, "implements");
     long ii9 = 0;
@@ -17446,6 +17444,16 @@ tx_t generate_c(PlantArray* ast) {
     }
     gwi = gwi+3;
     }
+    long has_top_stmt = 0;
+    i = 0;
+    while (i < plant_array_length(ast)) {
+    hs_nd = plant_list_get(ast, i);
+    hs_ty = _map_get(hs_nd, "type");
+    if (strcmp(hs_ty,"action_decl") != 0 && strcmp(hs_ty,"enum_decl") != 0 && strcmp(hs_ty,"external_decl") != 0 && strcmp(hs_ty,"struct_decl") != 0 && strcmp(hs_ty,"union_decl") != 0 && strcmp(hs_ty,"import_stmt") != 0 && strcmp(hs_ty,"type_decl") != 0 && strcmp(hs_ty,"species_decl") != 0 && strcmp(hs_ty,"interface_decl") != 0) {
+    has_top_stmt = 1;
+    }
+    i = i+1;
+    }
     i = 0;
     while (i < plant_array_length(ast)) {
     node_el = plant_list_get(ast, i);
@@ -17456,6 +17464,9 @@ tx_t generate_c(PlantArray* ast) {
     aname = _map_get(node_el, "name");
     asy4 = _map_get(node_el, "async");
     tx_t node_el2 = node_el;
+    if (strcmp(str_eq ( aname , "main" ),"1") == 0 && strcmp(asy4,"1") != 0 && strcmp(has_plain_main,"1") == 0 && has_top_stmt == 0 && strcmp(has_safe_work,"1") != 0 && strcmp(sp_init_code,"") > 0) {
+    node_el2 = map_add(node_el2, "sp_init", sp_init_code);
+    }
     if (strcmp(str_eq ( aname , "main" ),"1") == 0 && drn_main == 1 && strcmp(asy4,"1") != 0) {
     node_el2 = map_add(node_el, "drain_after", "1");
     }
@@ -18221,6 +18232,7 @@ int main(int argc, char **argv) {
   tx_t ifn999 = "";
   tx_t ifnm999 = "";
   tx_t feq999 = "";
+  tx_t reqmeths = "";
   tx_t reqmth = "";
   tx_t and99 = "";
   tx_t aty999 = "";
@@ -18249,7 +18261,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.52.3f (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.52.3g (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);
@@ -18304,7 +18316,7 @@ int main(int argc, char **argv) {
   sty99 = _map_get(snd99, "type");
   if (strcmp(sty99,"species_decl") == 0) {
   simp99 = _map_get(snd99, "implements");
-  if (strcmp(simp99,"") > 0) {
+  if (plant_array_length(simp99) > 0) {
   snm99 = _map_get(snd99, "name");
   long ii999 = 0;
   while (ii999 < plant_array_length(simp99)) {
@@ -18314,7 +18326,10 @@ int main(int argc, char **argv) {
   ifnm999 = plant_list_get(iface_names, mi999);
   feq999 = str_eq(ifn999, ifnm999);
   if (strcmp(feq999,"1") == 0) {
-  reqmth = plant_list_get(iface_meths, mi999);
+  reqmeths = plant_list_get(iface_meths, mi999);
+  long mm999 = 0;
+  while (mm999 < plant_array_length(reqmeths)) {
+  reqmth = plant_list_get(reqmeths, mm999);
   long fnd999 = 0;
   long ai999 = 0;
   while (ai999 < plant_array_length(body)) {
@@ -18332,6 +18347,8 @@ int main(int argc, char **argv) {
   if (fnd999 == 0) {
   plant_iReport_print(get_report(), _cat4(_cat4("Error: species '", snm99, "' does not implement method '", reqmth), "' from interface '", ifn999, "'"));
   return 1;
+  }
+  mm999 = mm999+1;
   }
   }
   mi999 = mi999+1;

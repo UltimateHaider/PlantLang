@@ -413,11 +413,15 @@ defining scope.
 - **After:** graceful termination; `SPC H { x: LON, y: LON }` compiles and runs.
 - **Related:** TD-009.
 
-## TD-033: Species fields default to "" with explicit ACTION main() — OPEN
-- **Status:** OPEN
+## TD-033: Species fields default to "" with explicit ACTION main() — CLOSED
+- **Status:** ✅ CLOSED in v0.52.3g
 - **Introduced:** pre-v0.52.3b (observed during v0.52.3b investigation).
 - **Impact:** MEDIUM — programs with an explicit `ACTION main()` never emit `plant_species_register(...)`, so species fields default to `""` at runtime (the map is only populated via `.put`).
-- **Cause:** `sp_init_code` (which carries `plant_species_register`) is only spliced into the implicit-main emission path (`codegen_c.plant:9933`), not the action-main path.
-- **Fix direction:** emit the species/interface registration prologue regardless of which main path is used.
-- **Target fix:** v0.52.x.
-- **Related:** TD-032.
+- **Cause:** deeper than first recorded: `parse_program` **dropped** every `species_decl` node (only its lifted methods survived), so `sp_init_code` was always empty — for *every* main path, not just the action-main path.
+- **Fixed (v0.52.3g):**
+  - `parse_program` keeps the `species_decl` node (metadata only).
+  - `parse_species_decl` now stores the `IMPLEMENTS` list as `"implements"`.
+  - Codegen's malformed `plant_list_make(...)` build (dead path) rewritten.
+  - Explicit `ACTION main()` carries the registration prologue when the
+    int-main wrapper is not emitted; the wrapper path is unchanged.
+- **Related:** TD-032, TD-009.

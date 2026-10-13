@@ -1,3 +1,47 @@
+## v0.52.3g — Close TD-033 (Species Registration)
+
+### Fixed
+- TD-033: species/interface registration (`plant_species_register`,
+  `plant_impl_iface`) now runs regardless of the main path.
+  - Root cause was deeper than the TD noted: `parse_program` **dropped**
+    every `species_decl` node after lifting its methods, so
+    `sp_init_code` was always empty.
+  - `parse_program` now keeps the `species_decl` node (metadata only;
+    `generate_node` returns `""` for it and the top-level statement loop
+    already excludes it).
+- `parse_species_decl` collected the `IMPLEMENTS` list into `implifs`
+  but never stored it in the node; the node now carries `"implements"`.
+- `parse_species_decl`'s `IMPLEMENTS` handler stored raw token pairs and
+  skipped the first name (`plant_impl_iface("Dog", "RALP")`); it now
+  stores decoded interface-name strings for every entry.
+- `parse_interface_decl`'s `FROM` clause never advanced past the first
+  parent name, so the interface body was mis-parsed as methods; fixed.
+- Compile-time interface conformance validation compared a method name
+  against the whole methods list, so it never enforced anything; it now
+  iterates the interface's method list and reports the first missing
+  method.
+- Codegen's species-registration loop built a malformed
+  `plant_list_make(...)` (dead path, never exercised before) — rewritten.
+- Explicit `ACTION main()` (no top-level statements, no SAFE work) is
+  the C entry point, so the registration prologue is injected into its
+  body; the implicit-main wrapper still emits it directly.
+
+### Added
+- 1 new test: `species_register`.
+
+### Verified
+- Native: 133/133 (was 132)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (560,556 B)
+- valgrind strict: PASS
+- Binary: 981,216 B.
+
+### Out of Scope
+- TD-009 method calls on struct values.
+- TD-035 (fixture brittleness).
+
 ## v0.52.3f — TD-009 Positional Struct Construction
 
 ### Fixed
