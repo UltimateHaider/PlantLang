@@ -14709,7 +14709,7 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     if (has_verify == 1) {
     bcode = _cat(bcode, "  plant_iRuntime_verify_end(get_runtime());\n");
     }
-    bcode = _cat4(bcode, "  return ", fnname, ";\n");
+    bcode = _cat(bcode, "  return \"\";\n");
     }
     }
     ccode = _cat4(ccode, dcode, bcode, "}\n");
@@ -18261,7 +18261,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.52.3g (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.52.3h (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

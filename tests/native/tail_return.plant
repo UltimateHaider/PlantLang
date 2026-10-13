@@ -1,0 +1,5 @@
+ACTION no_return()
+  SHOW "tail-test".
+/ACTION.
+
+no_return().

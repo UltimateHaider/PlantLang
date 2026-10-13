@@ -1,3 +1,21 @@
+## v0.52.3h — TD-037 (Tail Return)
+
+### Fixed
+- TD-037: non-GIVE tails emit `return "";` (was `return <fnname>;`).
+  - One-line fix at codegen_c.plant:7491.
+
+### Added
+- 1 new test: tail_return.
+
+### Verified
+- Native: 134/134 (was 133)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (560,251 B)
+- valgrind strict: PASS
+- Binary: 981,216 B (0% change).
+
 ## v0.52.3g — Close TD-033 (Species Registration)
 
 ### Fixed

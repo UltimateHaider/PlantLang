@@ -7488,7 +7488,7 @@ ACTION generate_node(node, env(LST)),
             /IF.
             IF last_ty ISNT "give_stmt",
                 IF has_verify IS TRUE, SET bcode TO bcode + "  plant_iRuntime_verify_end(get_runtime());\n". /IF.
-                SET bcode TO bcode + "  return " + fnname + ";\n".
+                SET bcode TO bcode + "  return \"\";\n".
             /IF.
         /IF.
         SET ccode TO ccode + dcode + bcode + "\}\n".

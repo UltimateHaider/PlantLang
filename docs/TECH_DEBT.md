@@ -425,3 +425,10 @@ defining scope.
   - Explicit `ACTION main()` carries the registration prologue when the
     int-main wrapper is not emitted; the wrapper path is unchanged.
 - **Related:** TD-032, TD-009.
+
+## TD-037: Tail return emits `return <fnname>;` — CLOSED
+- **Status:** ✅ CLOSED in v0.52.3h
+- **Fixed:** line 7491 → `return "";` (was `return <fnname>;`).
+- **Before:** non-GIVE tails emitted `return <fnname>;` (function
+  designator returned as tx_t).
+- **Related:** —
