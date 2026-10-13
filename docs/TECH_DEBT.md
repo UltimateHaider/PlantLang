@@ -85,7 +85,7 @@
   unfreed `T4`/`T5` tensors (test hygiene — see TD-014).
 
 ## TD-009: Structs are fundamentally broken — PARTIAL CLOSED
-- **Status:** 🟠 PARTIAL CLOSED in v0.52.3e
+- **Status:** 🟠 PARTIAL CLOSED in v0.52.3f
 - **Introduced:** pre-v0.51.1 (long-standing limitation)
 - **Impact:** HIGH — structs cannot be used reliably.
 - **Fixed (v0.52.3e):**
@@ -93,8 +93,10 @@
   - Named brace literal `X{k:v}` → `plant_map_set` chain (bare keys quoted).
   - `p.x` → `_map_get` (already worked for handles).
   - Scoped via `type_info` so registry scalars (BYT/UBT/SHR/USH/ULO) keep their C types.
+- **Fixed (v0.52.3f):**
+  - Positional `X(v1, v2, …)` construction → `plant_map_set` chain,
+    using the struct template field order (threaded via env slot 14).
 - **Remaining:**
-  - Positional `X(v1, v2, …)` construction → v0.52.3f.
   - Method calls on struct values.
 - **Related:** —
 

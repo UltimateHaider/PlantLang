@@ -1,0 +1,5 @@
+STR Point { x: LON, y: LON }
+CREATE p (STR Point) TO Point(3, 4).
+SHOW p.x.
+SHOW p.y.
+SHOW "str-pos-ok".

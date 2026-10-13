@@ -1,3 +1,37 @@
+## v0.52.3f — TD-009 Positional Struct Construction
+
+### Fixed
+- TD-009: positional `X(v1, v2, …)` construction → `plant_map_set` chain,
+  using the struct template's field order. Closes the last TD-009
+  construction item.
+
+### Added
+- Struct template table threaded through `env` (slot 14) so
+  `gen_create_stmt` can resolve field names at codegen time
+  (`env_structs` accessor; all `env_make` call sites updated).
+- Helpers `_split_top_commas` + `_try_pos_rewrite`. The map is built
+  directly (`plant_map_set(…, "field", value)`) — no `field : value`
+  text — because a runtime `" : "` literal is rewritten to `"_"` by
+  `translate_expr` when the compiler compiles itself.
+- 1 new test: `str_construct_pos`.
+
+### Remaining
+- TD-009: method calls on struct values.
+
+### Verified
+- Native: 132/132 (was 131)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (559,595 B)
+- valgrind strict: PASS
+- Binary: 981,216 B.
+
+### Out of Scope
+- TD-009 method calls.
+- TD-033 (species registration).
+- TD-035 (fixture brittleness).
+
 ## v0.52.3e — TD-009 Partial Fix (Struct Construction)
 
 ### Fixed

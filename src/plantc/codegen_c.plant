@@ -3981,7 +3981,7 @@ ACTION async_emit_step(name(TXT), phases(LST), vars(LST), sigs(LST), subst(LST),
         PUT ls INTO lead.
         SET lj TO lj + 1.
       /SEASON.
-      REAP lcode FROM generate_body, lead, env_make(1, sigs, subst, clmap, "a", nums_s, stvars, evars, "", "", "", plant_list_make(0)).
+      REAP lcode FROM generate_body, lead, env_make(1, sigs, subst, clmap, "a", nums_s, stvars, evars, "", "", "", plant_list_make(0), plant_list_make(0)).
       SET code TO code + lcode.
       CREATE aw_last(LON) TO nst - 1.
       REAP awnd FROM plant_list_get, phd, aw_last.
@@ -4013,7 +4013,7 @@ ACTION async_emit_step(name(TXT), phases(LST), vars(LST), sigs(LST), subst(LST),
       /IF.
     /IF.
     IF nxt IS nph,
-      REAP tcode FROM generate_body, phd, env_make(1, sigs, subst, clmap, "a", nums_s, stvars, evars, "", "", "", plant_list_make(0)).
+      REAP tcode FROM generate_body, phd, env_make(1, sigs, subst, clmap, "a", nums_s, stvars, evars, "", "", "", plant_list_make(0), plant_list_make(0)).
       SET code TO code + tcode.
     /IF.
     SET ph2 TO ph2 + 1.
@@ -4560,6 +4560,78 @@ ACTION _fix_math_consts(e(TXT)),
   GIVE out.
 /ACTION.
 
+# v0.52.3f — TD-009: split an argument list at top-level commas
+# (quote-, paren-, bracket-, brace-aware). Used for positional struct
+# construction X(v1, v2, …).
+ACTION _split_top_commas(inner(TXT)),
+    CREATE els(LST) TO plant_list_make(0).
+    CREATE cur(TXT) TO "".
+    CREATE dep(LON) TO 0.
+    CREATE ist(LON) TO 0.
+    CREATE ii(LON) TO 0.
+    CREATE ch(TXT) TO "".
+    SEASON ii < LEN(inner),
+        REAP ch FROM char_at, inner, ii.
+        IF ch IS "\"", SET ist TO 1 - ist. /IF.
+        CREATE is_split(LON) TO 0.
+        IF ist IS 0,
+            IF ch IS "[" OR ch IS "(" OR ch IS "{", SET dep TO dep + 1. /IF.
+            IF ch IS "]" OR ch IS ")" OR ch IS "}", SET dep TO dep - 1. /IF.
+            IF ch IS "," AND dep IS 0,
+                SET els TO plant_list_push(els, cur).
+                SET cur TO "".
+                SET is_split TO 1.
+            /IF.
+        /IF.
+        IF is_split IS 0,
+            SET cur TO cur + ch.
+        /IF.
+        SET ii TO ii + 1.
+    /SEASON.
+    SET els TO plant_list_push(els, cur).
+    GIVE els.
+/ACTION.
+
+# v0.52.3f — TD-009: lower a top-level positional struct construction
+# `IDENT ( v1 , v2 , … )` to a map chain, using the field order from
+# the struct template table. Values are encoded exactly like
+# map-literal elements (_enc_el). The map is built DIRECTLY (no
+# `field : value` text) because a runtime `" : "` literal would be
+# rewritten to "_" by translate_expr's blanket substitution when the
+# compiler compiles itself. Non-matching / arity-mismatched
+# expressions pass through untouched.
+ACTION _try_pos_rewrite(val(TXT), structs(LST), nums(LST), evars(LST)),
+    REAP lp FROM find_any, val, "(".
+    IF lp IS -1, GIVE val. /IF.
+    REAP idn FROM substring, val, 0, lp.
+    REAP idn FROM trim, idn.
+    IF LEN(idn) IS 0, GIVE val. /IF.
+    REAP bid FROM is_bare_id, idn.
+    IF bid ISNT "1", GIVE val. /IF.
+    REAP rpc FROM char_at, val, LEN(val) - 1.
+    IF rpc ISNT ")", GIVE val. /IF.
+    REAP tpl FROM find_struct, structs, idn.
+    IF COUNT tpl IS 0, GIVE val. /IF.
+    REAP flds FROM _map_get, tpl, "fields".
+    IF COUNT flds IS 0, GIVE val. /IF.
+    REAP inner FROM substring, val, lp + 1, LEN(val) - 1.
+    REAP inner FROM trim, inner.
+    REAP args FROM _split_top_commas, inner.
+    IF COUNT args ISNT COUNT flds, GIVE val. /IF.
+    CREATE acc(TXT) TO "plant_map_create()".
+    CREATE ai(LON) TO 0.
+    SEASON ai < COUNT flds,
+        REAP fe FROM plant_list_get, flds, ai.
+        REAP fnm FROM _map_get, fe, "name".
+        REAP av FROM plant_list_get, args, ai.
+        REAP av FROM trim, av.
+        REAP ven FROM _enc_el, av, nums, evars.
+        SET acc TO "plant_map_set(" + acc + ", \"" + fnm + "\", " + ven + ")".
+        SET ai TO ai + 1.
+    /SEASON.
+    GIVE acc.
+/ACTION.
+
 ACTION translate_expr(expr(TXT), nums(LST), evars(LST), maths(LST)),
     REAP expr FROM _swap_self, expr.
     CREATE e(TXT) TO expr.
@@ -5010,14 +5082,21 @@ ACTION env_freed(env(LST)),
   GIVE env_get(env, 13).
 /ACTION.
 
+# v0.52.3f — TD-009: struct-template table accessor (slot 14) so
+# gen_create_stmt can lower positional struct construction X(a, b).
+ACTION env_structs(env(LST)),
+  GIVE env_get(env, 14).
+/ACTION.
+
 # ──────────────────────────────────────────────────────────────
 #  env_make — create and populate an env in one call
 #  Takes numeric indent (pre-computed into isel string for slot 0
-#  and _from_long for slot 11) plus all 12 state params (v0.50.5: +maths).
+#  and _from_long for slot 11) plus all 13 state params (v0.50.5:
+#  +maths; v0.52.3f: +structs).
 # ──────────────────────────────────────────────────────────────
-ACTION env_make(indent_num(LON), sigs(LST), subst(LST), clmap(LST), actx(TXT), nums(LST), stvars(LST), evars(LST), rty(TXT), mexit(TXT), wexit(TXT), maths(LST)),
+ACTION env_make(indent_num(LON), sigs(LST), subst(LST), clmap(LST), actx(TXT), nums(LST), stvars(LST), evars(LST), rty(TXT), mexit(TXT), wexit(TXT), maths(LST), structs(LST)),
   REAP isel FROM indent_str, indent_num.
-  REAP env FROM plant_list_create(14).
+  REAP env FROM plant_list_create(15).
   REAP _ FROM env_set, env, 0, isel.
   REAP _ FROM env_set, env, 1, sigs.
   REAP _ FROM env_set, env, 2, subst.
@@ -5032,6 +5111,7 @@ ACTION env_make(indent_num(LON), sigs(LST), subst(LST), clmap(LST), actx(TXT), n
   REAP _ FROM env_set, env, 11, _from_long(indent_num).
   REAP _ FROM env_set, env, 12, maths.
   REAP _ FROM env_set, env, 13, plant_list_make(0).
+  REAP _ FROM env_set, env, 14, structs.
   GIVE env.
 /ACTION.
 
@@ -5146,7 +5226,7 @@ ACTION gen_show_stmt(node, nums(LST), evars(LST), isel(TXT)),
 #  gen_create_stmt — env-based CREATE handler
 #  Env slots: 0=indent(isel), 2=subst, 4=actx, 5=nums, 7=evars
 # ──────────────────────────────────────────────────────────────
-ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(TXT)),
+ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(TXT), structs(LST)),
   REAP target FROM _map_get, node, "target".
   REAP vtype FROM _map_get, node, "var_type".
   REAP vtype FROM subst_type, vtype, subst.
@@ -5185,6 +5265,9 @@ ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(
   IF val IS "",
       SET val TO "0".
   /IF.
+  # v0.52.3f — TD-009: positional struct construction X(v1, v2, …)
+  # lowers to a map chain using the struct template field order.
+  REAP val FROM _try_pos_rewrite, val, structs, nums, evars.
   # v0.51.11 — CMP target: lower a top-level binary op to complex math.
   IF vtype IS "CMP",
       REAP val FROM _cmp_binop, val.
@@ -6141,6 +6224,7 @@ ACTION generate_node(node, env(LST)),
     REAP isel0 FROM env_indent, env.
     REAP maths FROM env_maths, env.
     REAP freed FROM env_freed, env.
+    REAP structs FROM env_structs, env.
     IF clmap IS "",
         SET clmap TO plant_list_make(0).
     /IF.
@@ -6252,7 +6336,7 @@ ACTION generate_node(node, env(LST)),
     #    In async step phases the variable lives in the state struct,
     #    restored as a local at step entry → plain assignment, no decl.
     IF ntype IS "create_stmt",
-        REAP code FROM gen_create_stmt, node, subst, nums, evars, actx, isel0.
+        REAP code FROM gen_create_stmt, node, subst, nums, evars, actx, isel0, structs.
         GIVE code.
     /IF.
   
@@ -7312,7 +7396,7 @@ ACTION generate_node(node, env(LST)),
         IF mmode IS "SMART", SET amode_exit TO "  plant_smart_exit(\"" + aname + "\");\n". /IF.
         IF mmode IS "PERSISTENT", SET amode_exit TO "  plant_persist_exit();\n". /IF.
         CREATE maths_a(LST) TO collect_maths(bd, params, subst).
-        REAP bcode FROM generate_body, bd, env_make(1, sigs, subst, clmap, actx, nums_a, stvars_a, evars_a, rty_a, amode_exit, "", maths_a).
+        REAP bcode FROM generate_body, bd, env_make(1, sigs, subst, clmap, actx, nums_a, stvars_a, evars_a, rty_a, amode_exit, "", maths_a, env_structs(env)).
         # v0.49.53: scan body for verify_stmt nodes; wrap with
         # plant_verify_begin/end only for actions that contain VERIFY
         # assertions (test actions).
@@ -8605,7 +8689,7 @@ ACTION emit_inst(inst(TXT), templates(LST), sigs(LST), reg(LST)),
         SET di TO di + 1.
     /SEASON.
     CREATE maths_m(LST) TO collect_maths(bd, params, subst).
-    REAP bcode FROM generate_body, bd, env_make(1, sigs, subst, plant_list_make(0), "", nums_m, stvars_m, evars_m, rty_m, "", "", maths_m).
+    REAP bcode FROM generate_body, bd, env_make(1, sigs, subst, plant_list_make(0), "", nums_m, stvars_m, evars_m, rty_m, "", "", maths_m, plant_list_make(0)).
     IF (COUNT bd) IS 0,
         SET bcode TO "  return " + mname + ";\n".
     /IF.
@@ -9514,7 +9598,7 @@ ACTION generate_c(ast(LST)),
         REAP node_el FROM plant_list_get, ast, i.
         REAP ntype FROM _map_get, node_el, "type".
         IF ntype IS "enum_decl",
-            REAP nd_code FROM generate_node, node_el, env_make(0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "", "", "", plant_list_make(0)).
+            REAP nd_code FROM generate_node, node_el, env_make(0, sigs, esub, plant_list_make(0), "", plant_list_make(0), plant_list_make(0), eregs, "", "", "", plant_list_make(0), structs).
             SET struct_code TO struct_code + nd_code.
         /IF.
         SET i TO i + 1.
@@ -9948,7 +10032,7 @@ ACTION generate_c(ast(LST)),
                     /IF.
                 /IF.
                 REAP cmact FROM _cl_map_get, clmaps, aname.
-                REAP nd_code FROM generate_node, node_el2, env_make(0, sigs, esub, cmact, "", plant_list_make(0), plant_list_make(0), eregs, "", "", "", plant_list_make(0)).
+                REAP nd_code FROM generate_node, node_el2, env_make(0, sigs, esub, cmact, "", plant_list_make(0), plant_list_make(0), eregs, "", "", "", plant_list_make(0), structs).
                 SET decl_code TO decl_code + nd_code.
                 SET has_decl TO 1.
             /IF.
@@ -9967,7 +10051,7 @@ ACTION generate_c(ast(LST)),
         # v0.49.25: import_stmt nodes are loader-level no-ops and must
         # not flip has_stmt (which would force a duplicate CLI main).
         IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "union_decl" AND ntype ISNT "import_stmt" AND ntype ISNT "type_decl" AND ntype ISNT "species_decl" AND ntype ISNT "interface_decl",
-            REAP ns_code FROM generate_node, node_el, env_make(0, sigs, esub, plant_list_make(0), "", nums_top, plant_list_make(0), _evars_with_bols(ast, esub, eregs), "", "", "", plant_list_make(0)).
+            REAP ns_code FROM generate_node, node_el, env_make(0, sigs, esub, plant_list_make(0), "", nums_top, plant_list_make(0), _evars_with_bols(ast, esub, eregs), "", "", "", plant_list_make(0), structs).
             SET stmt_code TO stmt_code + ns_code.
             SET has_stmt TO 1.
         /IF.
@@ -10655,7 +10739,7 @@ ACTION _cl_emit_fn(cnode(LST), sigs(LST), subst(LST), reg(LST)),
             SET di6 TO di6 + 1.
         /SEASON.
         CREATE evars_c(LST) TO collect_enums(bb, cbpars2, subst, reg, sigs).
-        REAP bc3 FROM generate_body, bb, env_make(1, sigs, subst, cm2, "", nums_c, stvars_c, evars_c, "", "", "", plant_list_make(0)).
+        REAP bc3 FROM generate_body, bb, env_make(1, sigs, subst, cm2, "", nums_c, stvars_c, evars_c, "", "", "", plant_list_make(0), plant_list_make(0)).
         SET fnc TO fnc + bc3 + "".
     /IF.
     SET fnc TO fnc + "\}\n".
