@@ -41,6 +41,13 @@ fi
 pass=0
 fail=0
 
+# v0.52.7 — TD-035: normalize generated-C file/line metadata so the
+# storm fixtures are not coupled to codegen line numbers or TMPDIR.
+# (file path → <gen>; non-zero line/file_len numbers → <n>).
+norm() {
+  sed -E 's#file = [^,}]*\.c#file = <gen>#g; s#file_len=[1-9][0-9]*#file_len=<n>#g; s#line = [1-9][0-9]*#line = <n>#g; s#line=[1-9][0-9]*#line=<n>#g'
+}
+
 for src in "$SUITE_DIR"/*.plant; do
   name=$(basename "$src" .plant)
   [ -f "$SUITE_DIR/$name.expected" ] || continue
@@ -106,7 +113,14 @@ for src in "$SUITE_DIR"/*.plant; do
     continue
   fi
   awk 1 "$SUITE_DIR/$name.expected" > "$BUILD/$name.expected"
-  if "$BUILD/$name" 2>&1 | diff - "$BUILD/$name.expected" >/dev/null; then
+  # v0.52.7 — TD-035: storm_* outputs carry generated-C file/line metadata
+  # (codegen-line + TMPDIR sensitive); normalize before the diff.
+  if echo "$name" | grep -q '^storm_'; then
+    "$BUILD/$name" 2>&1 | norm > "$BUILD/$name.out"
+  else
+    "$BUILD/$name" > "$BUILD/$name.out" 2>&1
+  fi
+  if diff "$BUILD/$name.out" "$BUILD/$name.expected" >/dev/null; then
     echo "PASS  $name"; pass=$((pass+1))
   else
     echo "FAIL  $name (output)"; fail=$((fail+1))

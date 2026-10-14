@@ -400,12 +400,12 @@ defining scope.
 - **Result:** Regression **318/318**.
 - **Related:** TD-031.
 
-## TD-035: storm_* .expected are line-number-brittle — OPEN
-- **Status:** OPEN
-- **Introduced:** pre-v0.52.3d.
-- **Impact:** LOW — `storm_factory`/`storm_shelter` `.expected` hardcode generated-C `__LINE__` values; any codegen prelude change breaks them (as happened here).
-- **Fix direction:** make the fixtures line-agnostic (normalize file/line in the runner or the test).
-- **Target fix:** v0.52.x.
+## TD-035: storm_* .expected are line-number-brittle — CLOSED
+- **Status:** ✅ CLOSED in v0.52.7
+- **Fixed:** regression runner normalizes generated-C file/line metadata
+  (`norm()`; gated to `storm_*`), and the two `.expected` files use
+  placeholders (`<gen>`, `<n>`).
+- **Preserved:** non-empty / non-zero assertions (`[1-9][0-9]*`).
 - **Related:** TD-034.
 
 ## TD-032: SPC field list SIGSEGV (comma + EOF) — CLOSED

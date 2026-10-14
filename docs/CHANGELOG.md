@@ -1,3 +1,24 @@
+## v0.52.7 — TD-035 (Fixture Brittleness)
+
+### Fixed
+- TD-035: `storm_*` fixtures are no longer line-number-brittle.
+  - regression runner: `norm()` normalizes generated-C file/line
+    (gated to `storm_*`).
+  - `storm_factory.expected` / `storm_shelter.expected`: placeholders
+    (`<gen>`, `<n>`); `[1-9][0-9]*` keeps non-empty/non-zero assertions.
+
+### Verified
+- Native: 138/138
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318 (storm PASS)
+- Self-hosting: converged (564,260 B; compiler unchanged)
+- valgrind strict: PASS
+- Binary: 981296 B.
+
+### Notes
+- No compiler change (test-only). ZERO open TDs.
+
 ## v0.52.6 — TD-039 (STR X Return)
 
 ### Fixed

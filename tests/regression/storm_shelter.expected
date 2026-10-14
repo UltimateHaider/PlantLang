@@ -1,5 +1,5 @@
 caught=ARG_STORM
 msg=bad arg
-file_len=47
-line=21
+file_len=<n>
+line=<n>
 col_absent=

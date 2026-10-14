@@ -1,10 +1,10 @@
-made={type = ZERO_STORM, message = divide!, file = /tmp/plantlang_regression_tests/storm_factory.c, line = 17}
+made={type = ZERO_STORM, message = divide!, file = <gen>, line = <n>}
 col_absent=
-empty_msg={type = ARG_STORM, message = (unclassified storm), file = /tmp/plantlang_regression_tests/storm_factory.c, line = 20}
-no_type={type = ANY_STORM, message = no type, file = /tmp/plantlang_regression_tests/storm_factory.c, line = 22}
+empty_msg={type = ARG_STORM, message = (unclassified storm), file = <gen>, line = <n>}
+no_type={type = ANY_STORM, message = no type, file = <gen>, line = <n>}
 caught type=ARG_STORM
 caught msg=bad arg value
-ser={type = ARG_STORM, message = bad arg value, file = /tmp/plantlang_regression_tests/storm_factory.c, line = 28}
+ser={type = ARG_STORM, message = bad arg value, file = <gen>, line = <n>}
 outer type=CUSTOM
 outer msg=deep custom
 rapid type=RANGE_STORM
