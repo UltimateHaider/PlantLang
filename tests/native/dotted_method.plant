@@ -1,0 +1,9 @@
+STR Counter { value: LON }
+
+ACTION Counter.inc()
+  SHOW "inc".
+/ACTION.
+
+CREATE c (STR Counter) TO Counter{value: 0}.
+c.inc().
+SHOW "end".

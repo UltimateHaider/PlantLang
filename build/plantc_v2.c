@@ -1881,6 +1881,9 @@ tx_t collect_type_text(PlantArray* tokens, long start, tx_t stopc, long stopcomm
     tok = plant_iLexer_peek_at(lexer, tokens, p2);
     lx = plant_iLexer_tok_lex(lexer, tok);
     if (pdepth == 0 && bdepth == 0) {
+    if (strcmp(lx,"ACTION") == 0) {
+    return plant_list_make ( 2 , text , p2 );
+    }
     if (strcmp(_cat ( "" , lx ),_cat ( "" , stopc )) == 0) {
     return plant_list_make ( 2 , text , p2 );
     }
@@ -5814,6 +5817,17 @@ tx_t parse_struct_decl(PlantArray* tokens, long pos) {
   tx_t lx = "";
   tx_t rb = "";
   tx_t p5 = "";
+  tx_t act_pair = "";
+  tx_t anode = "";
+  tx_t anty = "";
+  tx_t amn = "";
+  tx_t onm2 = "";
+  tx_t aoldp = "";
+  tx_t apel = "";
+  tx_t ann2 = "";
+  tx_t atk = "";
+  tx_t aty = "";
+  tx_t arb = "";
   tx_t fn_pair = "";
   tx_t fname = "";
   tx_t col_pair = "";
@@ -5863,17 +5877,48 @@ tx_t parse_struct_decl(PlantArray* tokens, long pos) {
     lb = plant_iLexer_consume_at(lexer, tokens, p3);
     p4 = _second(lb);
     PlantArray* fields = plant_list_make ( 0 );
+    PlantArray* methods = plant_list_make ( 0 );
+    PlantArray* srtab = plant_list_make ( 0 );
     while (1) {
     is_eof_flag = plant_iLexer_is_eof_at(lexer, tokens, p4);
     if (is_eof_flag) {
-    return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "struct_decl" , "name" , sname , "generics" , generics , "fields" , fields ) , p4 );
+    return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "struct_decl" , "name" , sname , "generics" , generics , "fields" , fields , "methods" , methods ) , p4 );
     }
     tok = plant_iLexer_peek_at(lexer, tokens, p4);
     lx = plant_iLexer_tok_lex(lexer, tok);
     if (strcmp(lx,"}") == 0) {
     rb = plant_iLexer_consume_at(lexer, tokens, p4);
     p5 = _second(rb);
-    return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "struct_decl" , "name" , sname , "generics" , generics , "fields" , fields ) , p5 );
+    return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "struct_decl" , "name" , sname , "generics" , generics , "fields" , fields , "methods" , methods ) , p5 );
+    }
+    if (strcmp(lx,"ACTION") == 0) {
+    act_pair = parse_action_decl(tokens, p4, srtab);
+    anode = _first(act_pair);
+    p4 = _second(act_pair);
+    anty = _map_get(anode, "type");
+    if (strcmp(anty,"action_decl") == 0) {
+    amn = _map_get(anode, "name");
+    onm2 = _map_replace(anode, "name", amn);
+    aoldp = _map_get(onm2, "params");
+    PlantArray* anp = plant_list_make ( 0 );
+                anp = plant_list_add(anp, plant_list_make ( 4 , "name" , "self" , "type" , "TXT" ));
+    long aci = 0;
+    while (aci < plant_array_length(aoldp)) {
+    apel = plant_list_get(aoldp, aci);
+                    anp = plant_list_add(anp, apel);
+    aci = aci+1;
+    }
+    ann2 = _map_replace(onm2, "params", anp);
+                methods = plant_list_add(methods, ann2);
+    }
+    atk = plant_iLexer_peek_at(lexer, tokens, p4);
+    aty = plant_iLexer_tok_type(lexer, atk);
+    if (strcmp(aty,"RBRACE") == 0) {
+    arb = plant_iLexer_consume_at(lexer, tokens, p4);
+    p4 = _second(arb);
+                              break;
+    }
+                      continue;
     }
     fn_pair = plant_iLexer_consume_at(lexer, tokens, p4);
     fname = plant_iLexer_tok_lex(lexer, plant_list_get(fn_pair ,  0 ));
@@ -5893,7 +5938,7 @@ tx_t parse_struct_decl(PlantArray* tokens, long pos) {
     }
     p4 = p7;
     }
-  return parse_struct_decl;
+    return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "struct_decl" , "name" , sname , "generics" , generics , "fields" , fields , "methods" , methods ) , p4 );
 }
 tx_t parse_union_decl(PlantArray* tokens, long pos) {
   tx_t lexer = "";
@@ -5968,6 +6013,13 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
   tx_t name_pair = "";
   tx_t aname = "";
   tx_t p3 = "";
+  tx_t dtk = "";
+  tx_t dlx = "";
+  tx_t dtok = "";
+  tx_t dp = "";
+  tx_t mtok = "";
+  tx_t mp = "";
+  tx_t mlx = "";
   tx_t ga_tok = "";
   tx_t ga_lx = "";
   tx_t ga_lb = "";
@@ -6059,6 +6111,19 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
     name_pair = plant_iLexer_consume_at(lexer, tokens, p2);
     aname = plant_iLexer_tok_lex(lexer, plant_list_get(name_pair ,  0 ));
     p3 = _second(name_pair);
+    tx_t has_recv = "0";
+    dtk = plant_iLexer_peek_at(lexer, tokens, p3);
+    dlx = plant_iLexer_tok_lex(lexer, dtk);
+    if (strcmp(dlx,".") == 0) {
+    dtok = plant_iLexer_consume_at(lexer, tokens, p3);
+    dp = _second(dtok);
+    mtok = plant_iLexer_consume_at(lexer, tokens, dp);
+    mp = _second(mtok);
+    mlx = plant_iLexer_tok_lex(lexer, plant_list_get(mtok ,  0 ));
+    aname = mlx;
+    p3 = mp;
+    has_recv = "1";
+    }
     tx_t clv = "";
     tx_t prio = "1";
     tx_t mission_mode = "BALANCED";
@@ -6090,6 +6155,9 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
     lp = plant_iLexer_consume_at(lexer, tokens, p3);
     p4 = _second(lp);
     PlantArray* params = plant_list_make ( 0 );
+    if (strcmp(has_recv,"1") == 0) {
+        params = plant_list_add(params, plant_list_make ( 4 , "name" , "self" , "type" , "TXT" ));
+    }
     tx_t vararg = "0";
     while (1) {
     is_eof_flag = plant_iLexer_is_eof_at(lexer, tokens, p4);
@@ -7011,6 +7079,7 @@ tx_t parse_program(PlantArray* tokens) {
   tx_t plv = "";
   tx_t dsplice = "";
   tx_t is_sp = "";
+  tx_t is_str2 = "";
   tx_t ml = "";
   tx_t mn9 = "";
     lexer = get_lexer();
@@ -7047,7 +7116,8 @@ tx_t parse_program(PlantArray* tokens) {
     if (strcmp(decl,"") > 0) {
     dsplice = _map_get(decl, "type");
     is_sp = str_eq(dsplice, "species_decl");
-    if (strcmp(is_sp,"1") == 0) {
+    is_str2 = str_eq(dsplice, "struct_decl");
+    if (strcmp(is_sp,"1") == 0 || strcmp(is_str2,"1") == 0) {
     ml = _map_get(decl, "methods");
     long mi9 = 0;
     while (mi9 < plant_array_length(ml)) {
@@ -18261,7 +18331,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.52.3h (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.52.4 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

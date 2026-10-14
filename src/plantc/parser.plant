@@ -345,6 +345,11 @@ ACTION collect_type_text(tokens(LST), start(LON), stopc(TXT), stopcomma(LON)),
     REAP tok FROM plant_iLexer_peek_at, lexer, tokens, p2.
     REAP lx FROM plant_iLexer_tok_lex, lexer, tok.
     IF pdepth IS 0 AND bdepth IS 0,
+      # v0.52.4 — TD-009: stop at an embedded ACTION keyword so struct/
+      # union field type collection never swallows a struct method.
+      IF lx IS "ACTION",
+        GIVE plant_list_make(2, text, p2).
+      /IF.
       IF _cat("", lx) IS _cat("", stopc),
         GIVE plant_list_make(2, text, p2).
       /IF.
@@ -3541,17 +3546,52 @@ ACTION parse_struct_decl(tokens(LST), pos(LON)),
   REAP lb FROM plant_iLexer_consume_at, lexer, tokens, p3.
   REAP p4 FROM _second, lb.
   CREATE fields(LST) TO plant_list_make(0).
+  # v0.52.4 — TD-009: embedded struct methods (mirror parse_species_decl).
+  CREATE methods(LST) TO plant_list_make(0).
+  CREATE srtab(LST) TO plant_list_make(0).
   SEASON TRUE,
     REAP is_eof_flag FROM plant_iLexer_is_eof_at, lexer, tokens, p4.
     IF is_eof_flag,
-      GIVE plant_list_make(2, plant_list_make(8, "type", "struct_decl", "name", sname, "generics", generics, "fields", fields), p4).
+      GIVE plant_list_make(2, plant_list_make(10, "type", "struct_decl", "name", sname, "generics", generics, "fields", fields, "methods", methods), p4).
     /IF.
     REAP tok FROM plant_iLexer_peek_at, lexer, tokens, p4.
     REAP lx FROM plant_iLexer_tok_lex, lexer, tok.
     IF lx IS "}",
       REAP rb FROM plant_iLexer_consume_at, lexer, tokens, p4.
       REAP p5 FROM _second, rb.
-      GIVE plant_list_make(2, plant_list_make(8, "type", "struct_decl", "name", sname, "generics", generics, "fields", fields), p5).
+      GIVE plant_list_make(2, plant_list_make(10, "type", "struct_decl", "name", sname, "generics", generics, "fields", fields, "methods", methods), p5).
+    /IF.
+    # v0.52.4 — TD-009: lift embedded ACTION (struct method) under the
+    # bare name with an injected self (TXT) receiver, so receiver.m()
+    # dispatch (mfn = mname) resolves to method(receiver, …).
+    IF lx IS "ACTION",
+      REAP act_pair FROM parse_action_decl, tokens, p4, srtab.
+      REAP anode FROM _first, act_pair.
+      REAP p4 FROM _second, act_pair.
+      REAP anty FROM _map_get, anode, "type".
+      IF anty IS "action_decl",
+        REAP amn FROM _map_get, anode, "name".
+        REAP onm2 FROM _map_replace, anode, "name", amn.
+        REAP aoldp FROM _map_get, onm2, "params".
+        CREATE anp(LST) TO plant_list_make(0).
+        PUT plant_list_make(4, "name", "self", "type", "TXT") INTO anp.
+        CREATE aci(LON) TO 0.
+        SEASON aci < COUNT aoldp,
+          REAP apel FROM plant_list_get, aoldp, aci.
+          PUT apel INTO anp.
+          SET aci TO aci + 1.
+        /SEASON.
+        REAP ann2 FROM _map_replace, onm2, "params", anp.
+        PUT ann2 INTO methods.
+      /IF.
+      REAP atk FROM plant_iLexer_peek_at, lexer, tokens, p4.
+      REAP aty FROM plant_iLexer_tok_type, lexer, atk.
+      IF aty IS "RBRACE",
+        REAP arb FROM plant_iLexer_consume_at, lexer, tokens, p4.
+        REAP p4 FROM _second, arb.
+        BREAK 0.
+      /IF.
+      CONTINUE.
     /IF.
     REAP fn_pair FROM plant_iLexer_consume_at, lexer, tokens, p4.
     REAP fname FROM plant_iLexer_tok_lex, lexer, fn_pair[0].
@@ -3571,6 +3611,9 @@ ACTION parse_struct_decl(tokens(LST), pos(LON)),
     /IF.
     SET p4 TO p7.
   /SEASON.
+  # v0.52.4 — TD-009: BREAK path (embedded ACTION followed by "}") needs
+  # a trailing GIVE (mirror parse_species_decl).
+  GIVE plant_list_make(2, plant_list_make(10, "type", "struct_decl", "name", sname, "generics", generics, "fields", fields, "methods", methods), p4).
 /ACTION.
 
 # v0.50.0d — UNION declaration parsing.
@@ -3624,6 +3667,23 @@ ACTION parse_action_decl(tokens(LST), pos(LON), rtab(LST)),
   REAP name_pair FROM plant_iLexer_consume_at, lexer, tokens, p2.
   REAP aname FROM plant_iLexer_tok_lex, lexer, name_pair[0].
   REAP p3 FROM _second, name_pair.
+  # v0.52.4 — TD-036: dotted-decl ACTION Type.method(). Consume the
+  # ".method" and rewrite the action name to the bare method name,
+  # prepending a self (TXT) receiver param so receiver.method()
+  # dispatch resolves to method(receiver, …).
+  CREATE has_recv(TXT) TO "0".
+  REAP dtk FROM plant_iLexer_peek_at, lexer, tokens, p3.
+  REAP dlx FROM plant_iLexer_tok_lex, lexer, dtk.
+  IF dlx IS ".",
+    REAP dtok FROM plant_iLexer_consume_at, lexer, tokens, p3.
+    REAP dp FROM _second, dtok.
+    REAP mtok FROM plant_iLexer_consume_at, lexer, tokens, dp.
+    REAP mp FROM _second, mtok.
+    REAP mlx FROM plant_iLexer_tok_lex, lexer, mtok[0].
+    SET aname TO mlx.
+    SET p3 TO mp.
+    SET has_recv TO "1".
+  /IF.
   # v0.48.33: active LISTEN request variable for GIVE ... AS RESPONSE.
   CREATE clv(TXT) TO "".
   # async priority modifier (default NORMAL=1)
@@ -3660,6 +3720,10 @@ ACTION parse_action_decl(tokens(LST), pos(LON), rtab(LST)),
   REAP lp FROM plant_iLexer_consume_at, lexer, tokens, p3.
   REAP p4 FROM _second, lp.
   CREATE params(LST) TO plant_list_make(0).
+  # v0.52.4 — TD-036: prepend the receiver (self) for dotted methods.
+  IF has_recv IS "1",
+    PUT plant_list_make(4, "name", "self", "type", "TXT") INTO params.
+  /IF.
   CREATE vararg(TXT) TO "0".
   SEASON TRUE,
     REAP is_eof_flag FROM plant_iLexer_is_eof_at, lexer, tokens, p4.
@@ -4517,7 +4581,9 @@ ACTION parse_program(tokens(LST)),
     IF decl > "",
       REAP dsplice FROM _map_get, decl, "type".
       REAP is_sp FROM str_eq, dsplice, "species_decl".
-      IF is_sp IS "1",
+      # v0.52.4 — TD-009: struct methods are spliced too (mirror species).
+      REAP is_str2 FROM str_eq, dsplice, "struct_decl".
+      IF is_sp IS "1" OR is_str2 IS "1",
         REAP ml FROM _map_get, decl, "methods".
         CREATE mi9(LON) TO 0.
         SEASON mi9 < COUNT ml,

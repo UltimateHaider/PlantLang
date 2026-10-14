@@ -84,8 +84,8 @@
 - **Residual:** `tensor_basic` still leaks 128 B from its own
   unfreed `T4`/`T5` tensors (test hygiene — see TD-014).
 
-## TD-009: Structs are fundamentally broken — PARTIAL CLOSED
-- **Status:** 🟠 PARTIAL CLOSED in v0.52.3f
+## TD-009: Structs are fundamentally broken — CLOSED
+- **Status:** ✅ CLOSED in v0.52.4
 - **Introduced:** pre-v0.51.1 (long-standing limitation)
 - **Impact:** HIGH — structs cannot be used reliably.
 - **Fixed (v0.52.3e):**
@@ -96,9 +96,13 @@
 - **Fixed (v0.52.3f):**
   - Positional `X(v1, v2, …)` construction → `plant_map_set` chain,
     using the struct template field order (threaded via env slot 14).
-- **Remaining:**
-  - Method calls on struct values.
-- **Related:** —
+- **Fixed (v0.52.4):**
+  - Embedded struct methods `STR Type { ACTION m() {…} }` lifted to
+    `tx_t m(tx_t self, …)`.
+  - Dotted-decl `ACTION Type.method()` rewritten to a bare method name
+    with a `self` (TXT) receiver param.
+- **Remaining:** none.
+- **Related:** TD-036.
 
 ### Symptoms
 1. `STR Holder { values: LIST }` + `CREATE h TO Holder(...)`:
@@ -432,3 +436,18 @@ defining scope.
 - **Before:** non-GIVE tails emitted `return <fnname>;` (function
   designator returned as tx_t).
 - **Related:** —
+
+## TD-036: Dotted-decl `ACTION Type.method()` broken — CLOSED
+- **Status:** ✅ CLOSED in v0.52.4
+- **Fixed:** `parse_action_decl` consumes `.method`; rewrites to bare
+  method name with `self` (TXT) receiver param.
+- **Related:** TD-009.
+
+## TD-038: `STR X` param maps to C struct by value (FFI semantics) — OPEN
+- **Status:** OPEN
+- **Introduced:** pre-v0.52.4
+- **Impact:** LOW — a non-FFI ACTION with a `STR X` param gets the C
+  struct by value (`tx_t` call → compile error); methods use the plain
+  `(X)` receiver.
+- **Target fix:** v0.52.x.
+- **Related:** TD-009.

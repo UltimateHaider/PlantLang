@@ -1,0 +1,7 @@
+STR Counter {
+  value: LON
+  ACTION inc() { SHOW "inc". }
+}
+
+CREATE c (STR Counter) TO Counter{value: 0}.
+c.inc().

@@ -1,3 +1,34 @@
+## v0.52.4 — Struct Methods + Dotted-decl (TD-009 / TD-036)
+
+### Added
+- Embedded struct methods (`STR Type { ACTION m() {…} }`): lifted to
+  `tx_t m(tx_t self, …)`.
+- Dotted-decl `ACTION Type.method()`: rewritten to a bare method name
+  with a `self` (TXT) receiver param.
+- `collect_type_text`: depth-0 `ACTION` stop (so struct field type
+  collection doesn't swallow an embedded ACTION).
+- 2 new tests: `struct_method`, `dotted_method`.
+
+### Closed
+- TD-009: structs (fundamentally broken) — CLOSED.
+- TD-036: dotted-decl — CLOSED.
+
+### Documented (new TD)
+- TD-038: `STR X` param → C struct by value (FFI semantics).
+
+### Verified
+- Native: 136/136 (was 134)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (562,697 B)
+- valgrind strict: PASS
+- Binary: 981216 B.
+
+### Out of Scope
+- TD-035 (fixture brittleness).
+- TD-038 (STR X param).
+
 ## v0.52.3h — TD-037 (Tail Return)
 
 ### Fixed
