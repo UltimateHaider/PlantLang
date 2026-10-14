@@ -6064,6 +6064,14 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
   tx_t skip_pair = "";
   tx_t ret_pair = "";
   tx_t ret_lx = "";
+  tx_t rn_pair = "";
+  tx_t rn_lx = "";
+  tx_t gt_tok = "";
+  tx_t gt_lx = "";
+  tx_t gtl = "";
+  tx_t gtv = "";
+  tx_t gtt = "";
+  tx_t gtrb = "";
   tx_t rtv = "";
   tx_t rtt = "";
   tx_t vst = "";
@@ -6276,10 +6284,23 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
     ret = "Result";
     }
     if (strcmp(ret_lx,"STRUCT") == 0 || strcmp(ret_lx,"STR") == 0) {
-    rtv = collect_type_text(tokens, p5, ".", 0);
-    rtt = _first(rtv);
-    p5 = _second(rtv);
-    ret = _cat("STR ", rtt);
+    rn_pair = plant_iLexer_consume_at(lexer, tokens, p5);
+    rn_lx = plant_iLexer_tok_lex(lexer, plant_list_get(rn_pair ,  0 ));
+    p5 = _second(rn_pair);
+    tx_t rn_t = rn_lx;
+    gt_tok = plant_iLexer_peek_at(lexer, tokens, p5);
+    gt_lx = plant_iLexer_tok_lex(lexer, gt_tok);
+    if (strcmp(gt_lx,"[") == 0) {
+    gtl = plant_iLexer_consume_at(lexer, tokens, p5);
+    p5 = _second(gtl);
+    gtv = collect_type_text(tokens, p5, "]", 0);
+    gtt = _first(gtv);
+    p5 = _second(gtv);
+    gtrb = plant_iLexer_consume_at(lexer, tokens, p5);
+    p5 = _second(gtrb);
+    rn_t = _cat4(rn_t, "[", gtt, "]");
+    }
+    ret = _cat("STR ", rn_t);
     }
     if (strcmp(ret_lx,"ENUM") == 0) {
     rtv = collect_type_text(tokens, p5, ".", 0);
@@ -18359,7 +18380,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.52.5 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.52.6 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

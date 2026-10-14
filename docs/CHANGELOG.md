@@ -1,3 +1,28 @@
+## v0.52.6 — TD-039 (STR X Return)
+
+### Fixed
+- TD-039: non-FFI `-> STR X` (multi-token return) now parses.
+  - `parse_action_decl` `ret_lx IS "STRUCT"|"STR"`: bounded collection
+    (IDENT + optional `[...]` group) instead of the greedy
+    `collect_type_text(p5, ".", 0)`.
+- FFI (`external_decl`) `-> STR X.` unchanged (all FFI tests pass).
+
+### Added
+- 1 new test: `str_return_non_ffi`.
+
+### Verified
+- Native: 138/138 (was 137)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- FFI tests: PASS
+- Self-hosting: converged (564,260 B)
+- valgrind strict: PASS
+- Binary: 981296 B.
+
+### Out of Scope
+- TD-035 (fixture brittleness).
+
 ## v0.52.5 — TD-038 (STR X Param)
 
 ### Fixed

@@ -451,10 +451,10 @@ defining scope.
 - **Preserved:** FFI (`external_decl`) `STR X` → `struct_val` (all 6 FFI tests pass).
 - **Related:** TD-009.
 
-## TD-039: non-FFI `-> STR X` (multi-token return) mis-parses — OPEN
-- **Status:** OPEN
-- **Introduced:** pre-v0.52.5
-- **Impact:** LOW — `ACTION f() -> STR X` (multi-token) emits `tx_t .(...)`
-  (`-> Counter` / `-> TXT` / `-> LON` are fine).
-- **Target fix:** v0.52.x.
+## TD-039: non-FFI `-> STR X` (multi-token return) mis-parses — CLOSED
+- **Status:** ✅ CLOSED in v0.52.6
+- **Fixed:** `parse_action_decl`'s `ret_lx IS "STRUCT"|"STR"` branch now
+  uses bounded collection (IDENT + optional `[...]` group) instead of
+  the greedy `collect_type_text(p5, ".", 0)`.
+- **Preserved:** FFI (`external_decl`) `-> STR X.` unchanged.
 - **Related:** TD-038.

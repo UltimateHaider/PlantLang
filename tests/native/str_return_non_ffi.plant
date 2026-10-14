@@ -1,0 +1,10 @@
+STR Counter { value: LON }
+
+ACTION make() -> STR Counter
+  CREATE c (STR Counter) TO Counter{value: 42}.
+  GIVE c.
+/ACTION.
+
+REAP m FROM make().
+SHOW m.value.
+SHOW "end".
