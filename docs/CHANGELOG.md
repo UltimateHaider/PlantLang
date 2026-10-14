@@ -1,3 +1,31 @@
+## v0.52.5 — TD-038 (STR X Param)
+
+### Fixed
+- TD-038: non-FFI (action_decl) `STR X` param → `tx_t` (map handle).
+  - `action_param_ctype` (def + forward decl).
+  - `is_ffi_callee` gating (call-arg + return marshalling).
+- FFI (external_decl) `STR X` → `struct_val` unchanged.
+
+### Added
+- 1 new test: `str_param_non_ffi`.
+
+### Documented (new TD)
+- TD-039: non-FFI `-> STR X` (multi-token return) mis-parses.
+
+### Verified
+- Native: 137/137 (was 136)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- FFI tests: 6/6 PASS
+- Self-hosting: converged (563,593 B)
+- valgrind strict: PASS
+- Binary: 981296 B.
+
+### Out of Scope
+- TD-035 (fixture brittleness).
+- TD-039 (STR X return).
+
 ## v0.52.4 — Struct Methods + Dotted-decl (TD-009 / TD-036)
 
 ### Added

@@ -1,0 +1,8 @@
+STR Counter { value: LON }
+
+ACTION show(c (STR Counter))
+  SHOW c.value.
+/ACTION.
+
+CREATE c (STR Counter) TO Counter{value: 42}.
+show(c).

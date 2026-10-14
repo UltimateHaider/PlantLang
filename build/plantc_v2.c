@@ -257,6 +257,8 @@ tx_t collect_stvars_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_stvars(PlantArray* bd, PlantArray* params, PlantArray* subst);
 tx_t find_sig(PlantArray* sigs, tx_t name);
 tx_t ffi_ctype(tx_t ptype);
+tx_t action_param_ctype(tx_t ptype);
+tx_t is_ffi_callee(PlantArray* sigs, tx_t name);
 tx_t is_bare_id(tx_t e);
 tx_t expr_is_stringlike(tx_t e);
 tx_t stvar_kind(PlantArray* stvars, tx_t name);
@@ -10979,6 +10981,7 @@ tx_t async_argstr(PlantArray* args, PlantArray* sigs, tx_t act, PlantArray* nums
   tx_t fp_el = "";
   tx_t fp_ty = "";
   tx_t fp_kind = "";
+  tx_t ffi_callee = "";
   tx_t fpx = "";
   tx_t fpk2 = "";
   tx_t e0 = "";
@@ -11005,7 +11008,8 @@ tx_t async_argstr(PlantArray* args, PlantArray* sigs, tx_t act, PlantArray* nums
     fp_el = plant_list_get(fparams, ai);
     fp_ty = _map_get(fp_el, "type");
     fp_kind = ffi_param_kind(fp_ty);
-    if (strcmp(fp_kind,"struct_val") == 0) {
+    ffi_callee = is_ffi_callee(sigs, act);
+    if (strcmp(fp_kind,"struct_val") == 0 && strcmp(ffi_callee,"1") == 0) {
     fpx = is_bare_id(ael);
     fpk2 = stvar_kind(stvars, ael);
     if (strcmp(fpx,"1") == 0 && strcmp(fpk2,"") > 0) {
@@ -12875,6 +12879,7 @@ tx_t gen_reap_stmt(tx_t node, PlantArray* sigs, PlantArray* subst, PlantArray* c
   tx_t fp_el = "";
   tx_t sct2 = "";
   tx_t fk2 = "";
+  tx_t ffi_callee = "";
   tx_t fpx = "";
   tx_t fpk2 = "";
   tx_t e0 = "";
@@ -13005,7 +13010,8 @@ tx_t gen_reap_stmt(tx_t node, PlantArray* sigs, PlantArray* subst, PlantArray* c
     }
     }
     fk2 = ffi_param_kind(fp_ty);
-    if (strcmp(fk2,"struct_val") == 0) {
+    ffi_callee = is_ffi_callee(sigs, act);
+    if (strcmp(fk2,"struct_val") == 0 && strcmp(ffi_callee,"1") == 0) {
     fpx = is_bare_id(arg_el);
     fpk2 = stvar_kind(stvars, arg_el);
     if (strcmp(fpx,"1") == 0 && strcmp(fpk2,"struct_ref") == 0) {
@@ -13123,7 +13129,8 @@ tx_t gen_reap_stmt(tx_t node, PlantArray* sigs, PlantArray* subst, PlantArray* c
     }
     }
     tx_t ffi_pref = "";
-    if (strcmp(ffi_rtk,"struct_val") == 0) {
+    ffi_callee = is_ffi_callee(sigs, act);
+    if (strcmp(ffi_rtk,"struct_val") == 0 && strcmp(ffi_callee,"1") == 0) {
     rcnm = ffi_struct_cname(ffi_ret);
     ffi_pref = _cat3(ffi_pref, isel, "  plant_ffi_errno = 0;\n");
     if (strcmp(tgt,"_") == 0) {
@@ -13135,7 +13142,7 @@ tx_t gen_reap_stmt(tx_t node, PlantArray* sigs, PlantArray* subst, PlantArray* c
     }
     return _cat(_cat4(_cat4(_cat4(clpre, ffi_pref, isel, "  "), tgt, " = plant_", rcnm), "_to_map(", call_expr, ");\n"), clclears);
     }
-    if (strcmp(ffi_rtk,"struct_val") != 0) {
+    if (strcmp(ffi_rtk,"struct_val") != 0 || strcmp(ffi_callee,"0") == 0) {
     if (strcmp(ffi_rtk,"voidptr") == 0 || strcmp(ffi_rtk,"struct_ref") == 0) {
     ffi_pref = _cat3(ffi_pref, isel, "  plant_ffi_errno = 0;\n");
     }
@@ -14668,7 +14675,7 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     param_el = plant_list_get(params, pi);
     pname = _map_get(param_el, "name");
     ptype = _map_get(param_el, "type");
-    ctype = ffi_ctype(ptype);
+    ctype = action_param_ctype(ptype);
     if (pi > 0) {
     paramstr = _cat(paramstr, ", ");
     }
@@ -15182,6 +15189,27 @@ tx_t ffi_ctype(tx_t ptype) {
     return "plant_cb_t";
     }
     return plant_ctype ( ptype );
+}
+tx_t action_param_ctype(tx_t ptype) {
+  tx_t k = "";
+    k = ffi_param_kind(ptype);
+    if (strcmp(k,"struct_val") == 0) {
+    return "tx_t";
+    }
+    return ffi_ctype ( ptype );
+}
+tx_t is_ffi_callee(PlantArray* sigs, tx_t name) {
+  tx_t entry = "";
+  tx_t ntype = "";
+    entry = find_sig(sigs, name);
+    if (plant_array_length(entry) == 0) {
+    return "0";
+    }
+    ntype = _map_get(entry, "type");
+    if (strcmp(ntype,"external_decl") == 0) {
+    return "1";
+    }
+    return "0";
 }
 tx_t is_bare_id(tx_t e) {
   tx_t is_at2 = "";
@@ -17418,7 +17446,7 @@ tx_t generate_c(PlantArray* ast) {
     param_el = plant_list_get(params3, pi);
     pname = _map_get(param_el, "name");
     ptype = _map_get(param_el, "type");
-    ctype = ffi_ctype(ptype);
+    ctype = action_param_ctype(ptype);
     if (pi > 0) {
     paramstr = _cat(paramstr, ", ");
     }
@@ -18331,7 +18359,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.52.4 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.52.5 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

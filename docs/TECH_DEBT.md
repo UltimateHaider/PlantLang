@@ -443,11 +443,18 @@ defining scope.
   method name with `self` (TXT) receiver param.
 - **Related:** TD-009.
 
-## TD-038: `STR X` param maps to C struct by value (FFI semantics) — OPEN
-- **Status:** OPEN
-- **Introduced:** pre-v0.52.4
-- **Impact:** LOW — a non-FFI ACTION with a `STR X` param gets the C
-  struct by value (`tx_t` call → compile error); methods use the plain
-  `(X)` receiver.
-- **Target fix:** v0.52.x.
+## TD-038: `STR X` param maps to C struct by value (FFI semantics) — CLOSED
+- **Status:** ✅ CLOSED in v0.52.5
+- **Fixed:** non-FFI (`action_decl`) `STR X` param → `tx_t` (map handle).
+  - `action_param_ctype` (def + forward decl).
+  - `is_ffi_callee` gating (call-arg + return marshalling).
+- **Preserved:** FFI (`external_decl`) `STR X` → `struct_val` (all 6 FFI tests pass).
 - **Related:** TD-009.
+
+## TD-039: non-FFI `-> STR X` (multi-token return) mis-parses — OPEN
+- **Status:** OPEN
+- **Introduced:** pre-v0.52.5
+- **Impact:** LOW — `ACTION f() -> STR X` (multi-token) emits `tx_t .(...)`
+  (`-> Counter` / `-> TXT` / `-> LON` are fine).
+- **Target fix:** v0.52.x.
+- **Related:** TD-038.

@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.52.4
+# Auto-updated: 0.52.5
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.52.4 | 981216 | 8963 | 448 | 109 | 322 | 5361 |
+| v0.52.5 | 981296 | 8963 | 448 | 109 | 322 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -54,6 +54,7 @@
 | v0.52.3g | 2026 | Close TD-033 (Species Registration) | Released |
 | v0.52.3h | 2026 | TD-037 (Tail Return) | Released |
 | v0.52.4 | 2026 | Struct Methods + Dotted-decl | Released |
+| v0.52.5 | 2026 | TD-038 (STR X Param) | Released |
 
 ## Growth Chart (ASCII)
 
