@@ -1,3 +1,25 @@
+## v0.54.1 — TD-040 (CMP Hook Guard)
+
+### Fixed
+- TD-040: CMP SHOW hook now guards against string literals.
+  - Wraps only when `cval` is a bare CMP variable OR contains
+    `plant_complex_` (complex-math expression).
+  - Preserved: `SHOW Z`, `SHOW A + B`.
+  - Fixed: `SHOW "complex-z-ok"` (was: `plant_complex_to_str` of the
+    string → compile error).
+
+### Added
+- 1 new test: `cmp_show_string`.
+
+### Verified
+- Native: 143/143 (was 142)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (569,428 B)
+- valgrind strict: PASS
+- Binary: 985896 B.
+
 ## v0.54.0 — GEO (Geographic Data Type)
 
 ### Added

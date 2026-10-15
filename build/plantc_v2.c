@@ -12505,6 +12505,8 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
   tx_t cp1 = "";
   tx_t cp2 = "";
   tx_t cp3 = "";
+  tx_t cbid = "";
+  tx_t csplit = "";
   tx_t gd0 = "";
   tx_t gd1 = "";
   tx_t gd2 = "";
@@ -12553,8 +12555,19 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
     }
     }
     if (cmphit == 1) {
+    cbid = is_bare_id(cval);
+    tx_t cwrap = "0";
+    if (strcmp(cbid,"1") == 0) {
+    cwrap = "1";
+    }
+    csplit = strings_SPLIT(cval, "plant_complex_");
+    if (plant_array_length(csplit) > 1) {
+    cwrap = "1";
+    }
+    if (strcmp(cwrap,"1") == 0) {
     cval = _cat3("plant_complex_to_str(", cval, ")");
     isn2 = 2;
+    }
     }
     if (isn2 == 0) {
     gd0 = substring(cval, 0, 19);
@@ -18552,7 +18565,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.54.0 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.54.1 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

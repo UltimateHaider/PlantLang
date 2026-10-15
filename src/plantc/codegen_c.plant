@@ -5226,8 +5226,18 @@ ACTION gen_show_stmt(node, nums(LST), evars(LST), isel(TXT)),
       IF cp3 IS "plant_cmp_cabs(", SET cmphit TO 0. /IF.
   /IF.
   IF cmphit IS 1,
-      SET cval TO "plant_complex_to_str(" + cval + ")".
-      SET isn2 TO 2.
+      # v0.54.1 — TD-040: guard against string literals. Only wrap when
+      # cval is a bare CMP variable or a complex-math expression (not an
+      # unrelated expression whose text merely contains the var name).
+      REAP cbid FROM is_bare_id, cval.
+      CREATE cwrap(TXT) TO "0".
+      IF cbid IS "1", SET cwrap TO "1". /IF.
+      REAP csplit FROM strings:SPLIT, cval, "plant_complex_".
+      IF COUNT csplit > 1, SET cwrap TO "1". /IF.
+      IF cwrap IS "1",
+          SET cval TO "plant_complex_to_str(" + cval + ")".
+          SET isn2 TO 2.
+      /IF.
   /IF.
   # v0.54.0 — GEO display. Accessors/ops return double → _from_double;
   # a bare GEO variable → plant_geo_to_string; a GEO(...) literal →

@@ -459,11 +459,10 @@ defining scope.
 - **Preserved:** FFI (`external_decl`) `-> STR X.` unchanged.
 - **Related:** TD-038.
 
-## TD-040: GEO SHOW substring false-positive (CMP hook same issue) — OPEN
-- **Status:** OPEN
-- **Introduced:** v0.54.0 (GEO)
-- **Impact:** LOW — fixed in GEO (`is_bare_id` guard). The CMP hook
-  (`_expr_has_cmp`) has the same weakness (potential false positive
-  with short variable names appearing inside a SHOW string literal).
-- **Target fix:** v0.54.x (apply the guard to the CMP hook too).
+## TD-040: GEO SHOW substring (CMP hook same issue) — CLOSED
+- **Status:** ✅ CLOSED in v0.54.1
+- **Fixed:**
+  - GEO (v0.54.0): `is_bare_id` guard.
+  - CMP (v0.54.1): `is_bare_id` OR `plant_complex_` substring.
+- **Preserved:** CMP arithmetic (`SHOW A + B`).
 - **Related:** TD-025.
