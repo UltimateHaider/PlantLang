@@ -1,0 +1,5 @@
+CREATE l (GEO) TO GEO(51.5074, -0.1278, 11.0).
+SHOW GEO_LAT(l).
+SHOW GEO_LON(l).
+SHOW GEO_ELEV(l).
+SHOW "geo-basic-ok".

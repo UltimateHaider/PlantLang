@@ -3,6 +3,7 @@
 #include <plant_memory.h>
 #include <plant_math.h>
 #include <plant_complex.h>
+#include <plant_geo.h>
 
 /*__PLANT_TYPES_BEGIN__*/
 #ifndef PLANT_TYPES_INCLUDED
@@ -179,6 +180,8 @@ tx_t collect_chas_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_dbls_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t _expr_has_dbl(tx_t cval, PlantArray* evars);
 tx_t _expr_has_cmp(tx_t cval, PlantArray* evars);
+tx_t collect_geos_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
+tx_t _expr_has_geo(tx_t cval, PlantArray* evars);
 tx_t _evars_with_bols(PlantArray* bd, PlantArray* subst, PlantArray* base);
 tx_t collect_maths_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_maths(PlantArray* bd, PlantArray* params, PlantArray* subst);
@@ -581,6 +584,9 @@ tx_t is_keyword(tx_t wrd) {
     return 1;
     }
     if (strcmp(wrd,"TENSOR") == 0) {
+    return 1;
+    }
+    if (strcmp(wrd,"GEO") == 0) {
     return 1;
     }
     if (strcmp(wrd,"char") == 0) {
@@ -1002,6 +1008,9 @@ tx_t keyword_to_type(tx_t wrd) {
     }
     if (strcmp(wrd,"TENSOR") == 0) {
     return "TENSOR";
+    }
+    if (strcmp(wrd,"GEO") == 0) {
+    return "GEO";
     }
     if (strcmp(wrd,"char") == 0) {
     return "CHA";
@@ -10737,6 +10746,87 @@ tx_t _expr_has_cmp(tx_t cval, PlantArray* evars) {
     }
     return 0;
 }
+tx_t collect_geos_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
+  tx_t gib = "";
+  tx_t gibd = "";
+  tx_t gwret = "";
+  tx_t gwbd = "";
+  tx_t gwret2 = "";
+  tx_t gwbd2 = "";
+  tx_t gwret3 = "";
+  tx_t gmcl2 = "";
+  tx_t gmcb = "";
+  tx_t gwret4 = "";
+    long gwi = 0;
+    tx_t gwnd = "";
+    tx_t gwty = "";
+    tx_t gwtg = "";
+    tx_t gwvt = "";
+    tx_t gwbs = "";
+    tx_t gwbb = "";
+    while (gwi < plant_array_length(bd)) {
+    gwnd = plant_list_get(bd, gwi);
+    gwty = _map_get(gwnd, "type");
+    if (strcmp(gwty,"create_stmt") == 0 || strcmp(gwty,"let_stmt") == 0) {
+    gwtg = _map_get(gwnd, "target");
+    gwvt = _map_get(gwnd, "var_type");
+    gwbs = subst_type(gwvt, subst);
+    gwbb = type_base(gwbs);
+    if (strcmp(gwbb,"GEO") == 0) {
+                res = plant_list_add(res, _cat ( "__GEO__" , gwtg ));
+    }
+    }
+    if (strcmp(gwty,"if_stmt") == 0) {
+    gib = _if_bodies(gwnd);
+    long gii = 0;
+    while (gii < plant_array_length(gib)) {
+    gibd = plant_list_get(gib, gii);
+    gwret = collect_geos_walk(gibd, subst, res);
+    gii = gii+1;
+    }
+    }
+    if (strcmp(gwty,"season_stmt") == 0 || strcmp(gwty,"cycle_stmt") == 0) {
+    gwbd = _map_get(gwnd, "body");
+    gwret2 = collect_geos_walk(gwbd, subst, res);
+    }
+    if (strcmp(gwty,"suite_stmt") == 0) {
+    gwbd2 = _map_get(gwnd, "body");
+    gwret3 = collect_geos_walk(gwbd2, subst, res);
+    }
+    if (strcmp(gwty,"match_stmt") == 0) {
+    PlantArray* gmcl = _map_get ( gwnd , "clauses" );
+    long gmci = 0;
+    while (gmci < plant_array_length(gmcl)) {
+    gmcl2 = plant_list_get(gmcl, gmci);
+    gmcb = _map_get(gmcl2, "bodyStatements");
+    gwret4 = collect_geos_walk(gmcb, subst, res);
+    gmci = gmci+1;
+    }
+    }
+    gwi = gwi+1;
+    }
+    return res;
+}
+tx_t _expr_has_geo(tx_t cval, PlantArray* evars) {
+  tx_t pre2 = "";
+  tx_t nm2 = "";
+  tx_t sp2 = "";
+    long gi2 = 0;
+    tx_t ge2 = "";
+    while (gi2 < plant_array_length(evars)) {
+    ge2 = plant_list_get(evars, gi2);
+    pre2 = substring(ge2, 0, 7);
+    if (strcmp(pre2,"__GEO__") == 0) {
+    nm2 = substring(ge2, 7, strlen( ge2 ));
+    sp2 = strings_SPLIT(cval, nm2);
+    if (plant_array_length(sp2) > 1) {
+    return 1;
+    }
+    }
+    gi2 = gi2+1;
+    }
+    return 0;
+}
 tx_t _evars_with_bols(PlantArray* bd, PlantArray* subst, PlantArray* base) {
   tx_t bm = "";
   tx_t cf = "";
@@ -10746,6 +10836,8 @@ tx_t _evars_with_bols(PlantArray* bd, PlantArray* subst, PlantArray* base) {
   tx_t df = "";
   tx_t cml = "";
   tx_t clf = "";
+  tx_t gml = "";
+  tx_t glf = "";
     PlantArray* out = plant_list_make ( 0 );
     long bi = 0;
     tx_t be = "";
@@ -10797,6 +10889,17 @@ tx_t _evars_with_bols(PlantArray* bd, PlantArray* subst, PlantArray* base) {
             out = plant_list_add(out, cle);
     }
     cli = cli+1;
+    }
+    gml = collect_geos_walk(bd, subst, plant_list_make ( 0 ));
+    long gli = 0;
+    tx_t gle = "";
+    while (gli < plant_array_length(gml)) {
+    gle = plant_list_get(gml, gli);
+    glf = list_contains(out, gle);
+    if (glf == 0) {
+            out = plant_list_add(out, gle);
+    }
+    gli = gli+1;
     }
     return out;
 }
@@ -12174,6 +12277,12 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* 
     e = _handle_func_paren(e, "TENSOR_SHAPE", "plant_tensor_shape");
     e = _handle_func_paren(e, "TENSOR_NDIM", "plant_tensor_ndim");
     e = _handle_func_paren(e, "TENSOR_SIZE", "plant_tensor_size");
+    e = _handle_func_paren(e, "GEO", "plant_geo_create");
+    e = _handle_func_paren(e, "GEO_LAT", "plant_geo_lat");
+    e = _handle_func_paren(e, "GEO_LON", "plant_geo_lon");
+    e = _handle_func_paren(e, "GEO_ELEV", "plant_geo_elev");
+    e = _handle_func_paren(e, "GEO_DISTANCE", "plant_geo_distance");
+    e = _handle_func_paren(e, "GEO_BEARING", "plant_geo_bearing");
     e = _handle_func_paren2(e, "CMP", "plant_complex_make");
     e = _handle_func_paren(e, "CREAL", "plant_cmp_real");
     e = _handle_func_paren(e, "CIMAG", "plant_cmp_imag");
@@ -12273,6 +12382,7 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* 
     e = _handle_func(e, "SEAL", "plant_seal");
     e = _handle_func_paren(e, "LIST_FREE", "plant_list_free");
     e = _handle_func_paren(e, "TENSOR_FREE", "plant_tensor_free");
+    e = _handle_func_paren(e, "GEO_FREE", "plant_geo_free");
     e = _handle_func_paren(e, "FREE", "plant_free");
     e = _storm_inject(e);
     e = _handle_func(e, "TEST", "!");
@@ -12396,6 +12506,14 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
   tx_t cp1 = "";
   tx_t cp2 = "";
   tx_t cp3 = "";
+  tx_t gd0 = "";
+  tx_t gd1 = "";
+  tx_t gd2 = "";
+  tx_t gd3 = "";
+  tx_t gd4 = "";
+  tx_t gc0 = "";
+  tx_t gbid = "";
+  tx_t geohit = "";
   tx_t dblhit = "";
   tx_t bchk = "";
   tx_t cchk = "";
@@ -12438,6 +12556,58 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
     if (cmphit == 1) {
     cval = _cat3("plant_complex_to_str(", cval, ")");
     isn2 = 2;
+    }
+    if (isn2 == 0) {
+    gd0 = substring(cval, 0, 19);
+    if (strcmp(gd0,"plant_geo_distance(") == 0) {
+    cval = _cat3("_from_double(", cval, ")");
+    isn2 = 2;
+    }
+    }
+    if (isn2 == 0) {
+    gd1 = substring(cval, 0, 18);
+    if (strcmp(gd1,"plant_geo_bearing(") == 0) {
+    cval = _cat3("_from_double(", cval, ")");
+    isn2 = 2;
+    }
+    }
+    if (isn2 == 0) {
+    gd2 = substring(cval, 0, 14);
+    if (strcmp(gd2,"plant_geo_lat(") == 0) {
+    cval = _cat3("_from_double(", cval, ")");
+    isn2 = 2;
+    }
+    }
+    if (isn2 == 0) {
+    gd3 = substring(cval, 0, 14);
+    if (strcmp(gd3,"plant_geo_lon(") == 0) {
+    cval = _cat3("_from_double(", cval, ")");
+    isn2 = 2;
+    }
+    }
+    if (isn2 == 0) {
+    gd4 = substring(cval, 0, 15);
+    if (strcmp(gd4,"plant_geo_elev(") == 0) {
+    cval = _cat3("_from_double(", cval, ")");
+    isn2 = 2;
+    }
+    }
+    if (isn2 == 0) {
+    gc0 = substring(cval, 0, 17);
+    if (strcmp(gc0,"plant_geo_create(") == 0) {
+    cval = _cat3("plant_geo_to_string(", cval, ")");
+    isn2 = 2;
+    }
+    }
+    if (isn2 == 0) {
+    gbid = is_bare_id(cval);
+    if (strcmp(gbid,"1") == 0) {
+    geohit = _expr_has_geo(cval, evars);
+    if (geohit == 1) {
+    cval = _cat3("plant_geo_to_string(", cval, ")");
+    isn2 = 2;
+    }
+    }
     }
     dblhit = _expr_has_dbl(cval, evars);
     if (dblhit == 1) {
@@ -14399,6 +14569,9 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     }
     if (strcmp(ca2,"TENSOR_FREE") == 0) {
     ca2 = "plant_free";
+    }
+    if (strcmp(ca2,"GEO_FREE") == 0) {
+    ca2 = "plant_geo_free";
     }
     if (strcmp(ca2,"FREE") == 0) {
     ca2 = "plant_free";
@@ -16920,7 +17093,7 @@ tx_t generate_c(PlantArray* ast) {
   tx_t trg = "";
   tx_t rv2 = "";
   tx_t ct2 = "";
-    tx_t header = "#include <stdbool.h>\n#include <plant_compat.h>\n#include <plant_memory.h>\n#include <plant_math.h>\n#include <plant_complex.h>\n\n";
+    tx_t header = "#include <stdbool.h>\n#include <plant_compat.h>\n#include <plant_memory.h>\n#include <plant_math.h>\n#include <plant_complex.h>\n#include <plant_geo.h>\n\n";
     tx_t decl_code = "";
     tx_t stmt_code = "";
     long has_decl = 0;
@@ -18369,7 +18542,7 @@ int main(int argc, char **argv) {
   tx_t out_path = "";
   tx_t written = "";
   tx_t c_len = "";
-  TYPE_REGISTRY = plant_list_make(24, plant_list_make(5, "LON", "long", "1", "1", "scalar"), plant_list_make(5, "NUM", "int", "1", "1", "scalar"), plant_list_make(5, "UNU", "unsigned int", "1", "1", "scalar"), plant_list_make(5, "DBL", "double", "1", "1", "scalar"), plant_list_make(5, "FLT", "float", "1", "1", "scalar"), plant_list_make(5, "DCM", "long double", "1", "1", "scalar"), plant_list_make(5, "CHA", "char", "0", "1", "scalar"), plant_list_make(5, "VOI", "tx_t", "0", "1", "scalar"), plant_list_make(5, "BYT", "signed char", "1", "1", "scalar"), plant_list_make(5, "UBT", "unsigned char", "1", "1", "scalar"), plant_list_make(5, "SHR", "short", "1", "1", "scalar"), plant_list_make(5, "USH", "unsigned short", "1", "1", "scalar"), plant_list_make(5, "ULO", "unsigned long", "1", "1", "scalar"), plant_list_make(5, "CMP", "PlantComplex", "0", "1", "scalar"), plant_list_make(5, "BOL", "bool", "0", "1", "scalar"), plant_list_make(5, "TXT", "tx_t", "0", "1", "scalar"), plant_list_make(5, "LST", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "TPL", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "MAP", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "QUE", "PlantQueue*", "0", "1", "composite"), plant_list_make(5, "STK", "PlantStack*", "0", "1", "composite"), plant_list_make(5, "JSN", "PlantJson*", "0", "1", "composite"), plant_list_make(5, "TENSOR", "PlantTensor*", "0", "1", "composite"), plant_list_make(5, "SET", "PlantSet*", "0", "1", "composite"));
+  TYPE_REGISTRY = plant_list_make(25, plant_list_make(5, "LON", "long", "1", "1", "scalar"), plant_list_make(5, "NUM", "int", "1", "1", "scalar"), plant_list_make(5, "UNU", "unsigned int", "1", "1", "scalar"), plant_list_make(5, "DBL", "double", "1", "1", "scalar"), plant_list_make(5, "FLT", "float", "1", "1", "scalar"), plant_list_make(5, "DCM", "long double", "1", "1", "scalar"), plant_list_make(5, "CHA", "char", "0", "1", "scalar"), plant_list_make(5, "VOI", "tx_t", "0", "1", "scalar"), plant_list_make(5, "BYT", "signed char", "1", "1", "scalar"), plant_list_make(5, "UBT", "unsigned char", "1", "1", "scalar"), plant_list_make(5, "SHR", "short", "1", "1", "scalar"), plant_list_make(5, "USH", "unsigned short", "1", "1", "scalar"), plant_list_make(5, "ULO", "unsigned long", "1", "1", "scalar"), plant_list_make(5, "CMP", "PlantComplex", "0", "1", "scalar"), plant_list_make(5, "BOL", "bool", "0", "1", "scalar"), plant_list_make(5, "TXT", "tx_t", "0", "1", "scalar"), plant_list_make(5, "LST", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "TPL", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "MAP", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "QUE", "PlantQueue*", "0", "1", "composite"), plant_list_make(5, "STK", "PlantStack*", "0", "1", "composite"), plant_list_make(5, "JSN", "PlantJson*", "0", "1", "composite"), plant_list_make(5, "TENSOR", "PlantTensor*", "0", "1", "composite"), plant_list_make(5, "GEO", "PlantGeo*", "0", "1", "composite"), plant_list_make(5, "SET", "PlantSet*", "0", "1", "composite"));
   arg0 = get_cli_arg(0);
   if (strcmp(arg0,"-h") == 0 || strcmp(arg0,"--help") == 0) {
   plant_iReport_print(get_report(), "Chloroplast — Pure Native PlantLang compiler");
@@ -18380,7 +18553,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.52.7 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.54.0 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

@@ -1,3 +1,28 @@
+## v0.54.0 — GEO (Geographic Data Type)
+
+### Added
+- GEO type: geographic/geological data (location + elevation).
+  - C: `PlantGeo*` (native struct: `lat`, `lon`, `elev` as doubles).
+  - Runtime: `runtime/c/plant_geo.{c,h}` (`plant_geo_create/free/`
+    `lat/lon/elev/distance/bearing/to_string`).
+  - Registry: `["GEO","PlantGeo*","0","1","composite"]`.
+  - Codegen: `GEO(...)` constructor, `GEO_LAT/LON/ELEV/DISTANCE/BEARING`
+    accessors, `GEO_FREE`, `SHOW` → `plant_geo_to_string`.
+  - SHOW guard (`is_bare_id`) — prevents string-literal false positives.
+- 4 new tests: `geo_basic`, `geo_distance`, `geo_fields`, `geo_free`.
+
+### Documented (new TD)
+- TD-040: GEO SHOW substring false-positive (CMP hook has the same issue).
+
+### Verified
+- Native: 142/142 (was 138)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (569,126 B)
+- valgrind strict: PASS
+- Binary: 985896 B.
+
 ## v0.52.7 — TD-035 (Fixture Brittleness)
 
 ### Fixed

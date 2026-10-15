@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.52.7
+# Auto-updated: 0.54.0
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.52.7 | 981296 | 8963 | 448 | 109 | 322 | 5361 |
+| v0.54.0 | 985896 | 8963 | 448 | 109 | 322 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -57,6 +57,7 @@
 | v0.52.5 | 2026 | TD-038 (STR X Param) | Released |
 | v0.52.6 | 2026 | TD-039 (STR X Return) | Released |
 | v0.52.7 | 2026 | TD-035 (Fixture Brittleness) | Released |
+| v0.54.0 | 2026 | GEO (Geographic Data Type) | Released |
 
 ## Growth Chart (ASCII)
 

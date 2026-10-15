@@ -1,0 +1,5 @@
+CREATE l (GEO) TO GEO(51.5074, -0.1278, 11.0).
+CREATE p (GEO) TO GEO(48.8566, 2.3522, 35.0).
+SHOW GEO_DISTANCE(l, p).
+SHOW GEO_BEARING(l, p).
+SHOW "geo-distance-ok".

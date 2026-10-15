@@ -98,6 +98,8 @@ ACTION is_keyword(wrd(TXT)),
   IF wrd IS "LOCK", GIVE TRUE. /IF.
   # v0.51.1 — TENSOR native type.
   IF wrd IS "TENSOR", GIVE TRUE. /IF.
+  # v0.54.0 — GEO native type.
+  IF wrd IS "GEO", GIVE TRUE. /IF.
   # v0.50.0a — CHA single-character primitive.
   IF wrd IS "char", GIVE TRUE. /IF.
   # v0.50.0b — unsigned numeric primitives.
@@ -263,6 +265,8 @@ ACTION keyword_to_type(wrd(TXT)),
   IF wrd IS "LOCK", GIVE "LOCK". /IF.
   # v0.51.1 — TENSOR native type.
   IF wrd IS "TENSOR", GIVE "TENSOR". /IF.
+  # v0.54.0 — GEO native type.
+  IF wrd IS "GEO", GIVE "GEO". /IF.
   # v0.50.0a — CHA single-character primitive.
   IF wrd IS "char", GIVE "CHA". /IF.
   # v0.50.0b — unsigned numeric primitives.

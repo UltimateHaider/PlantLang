@@ -1,0 +1,5 @@
+CREATE g (GEO) TO GEO(40.7128, -74.0060, 10.0).
+SHOW GEO_LAT(g).
+SHOW GEO_LON(g).
+SHOW GEO_ELEV(g).
+SHOW "geo-fields-ok".
