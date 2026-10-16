@@ -1,3 +1,40 @@
+## v0.55.0 — Tensor Operations (Core)
+
+### Added
+- 12 tensor ops (named functions, `PlantTensor*`-based):
+  - Elementwise: `TENSOR_ADD/SUB/MUL/DIV`.
+  - Scalar: `TENSOR_SCALE`.
+  - Matmul: `TENSOR_MATMUL`.
+  - Shape: `TENSOR_TRANSPOSE`, `TENSOR_RESHAPE`.
+  - Reduce: `TENSOR_SUM/MEAN/MAX/MIN` (return `double`).
+- Runtime: `plant_tensor_{add,sub,mul,div,scale,matmul,transpose,reshape,sum,mean,max,min}`.
+- Codegen: 12 `_handle_func_paren` rewrites + SHOW double-wrap for reductions.
+- 14 new tests.
+
+### Fixed
+- Ordering: tensor mappers placed before the math-lib mappers
+  (`TENSOR_TRANSPOSE/SUM/MAX/MIN` were matching the math-lib
+  `TRANSPOSE/SUM/MAX/MIN` as substrings).
+
+### Documented (new TD)
+- TD-041: tensor intermediates leak (still-reachable, benign).
+
+### Verified
+- Native: 161/161 (was 147)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (575,068 B)
+- valgrind strict: PASS
+- Binary: 998800 B.
+
+### Out of Scope (v0.55.1+)
+- Broadcasting.
+- SLICE.
+- Activations (RELU, SIGMOID, TANH, SOFTMAX).
+- Intermediate-free lifecycle (TD-041).
+- TENSOR ↔ LIST interop.
+
 ## v0.54.2c — TD-015 Item 1 (Auto-Cleanup)
 
 ### Fixed (TD-015 complete)

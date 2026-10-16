@@ -51,4 +51,28 @@ struct PlantArray*  plant_tensor_shape(PlantTensor* t);
 int64_t             plant_tensor_ndim(PlantTensor* t);
 int64_t             plant_tensor_size(PlantTensor* t);
 
+/* v0.55.0 — Tensor Operations (core). */
+
+/* Elementwise (same-shape). Error tensor on mismatch. */
+PlantTensor* plant_tensor_add(PlantTensor* a, PlantTensor* b);
+PlantTensor* plant_tensor_sub(PlantTensor* a, PlantTensor* b);
+PlantTensor* plant_tensor_mul(PlantTensor* a, PlantTensor* b);
+PlantTensor* plant_tensor_div(PlantTensor* a, PlantTensor* b);
+
+/* Scalar multiplication. */
+PlantTensor* plant_tensor_scale(PlantTensor* a, double s);
+
+/* Matrix multiplication [m,n] x [n,p] -> [m,p]. */
+PlantTensor* plant_tensor_matmul(PlantTensor* a, PlantTensor* b);
+
+/* Shape ops. */
+PlantTensor* plant_tensor_transpose(PlantTensor* a);
+PlantTensor* plant_tensor_reshape(PlantTensor* a, struct PlantArray* shape);
+
+/* Reductions (scalar). */
+double plant_tensor_sum(PlantTensor* a);
+double plant_tensor_mean(PlantTensor* a);
+double plant_tensor_max(PlantTensor* a);
+double plant_tensor_min(PlantTensor* a);
+
 #endif /* PLANT_TENSOR_H */

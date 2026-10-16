@@ -12318,6 +12318,18 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* 
     e = _math_func_paren(e, "ASIN", "math_asin");
     e = _math_func_paren(e, "ACOS", "math_acos");
     e = _math_func_paren(e, "ATAN", "math_atan");
+    e = _handle_func_paren(e, "TENSOR_ADD", "plant_tensor_add");
+    e = _handle_func_paren(e, "TENSOR_SUB", "plant_tensor_sub");
+    e = _handle_func_paren(e, "TENSOR_MUL", "plant_tensor_mul");
+    e = _handle_func_paren(e, "TENSOR_DIV", "plant_tensor_div");
+    e = _handle_func_paren(e, "TENSOR_SCALE", "plant_tensor_scale");
+    e = _handle_func_paren(e, "TENSOR_MATMUL", "plant_tensor_matmul");
+    e = _handle_func_paren(e, "TENSOR_TRANSPOSE", "plant_tensor_transpose");
+    e = _handle_func_paren(e, "TENSOR_RESHAPE", "plant_tensor_reshape");
+    e = _handle_func_paren(e, "TENSOR_SUM", "plant_tensor_sum");
+    e = _handle_func_paren(e, "TENSOR_MEAN", "plant_tensor_mean");
+    e = _handle_func_paren(e, "TENSOR_MAX", "plant_tensor_max");
+    e = _handle_func_paren(e, "TENSOR_MIN", "plant_tensor_min");
     e = _math_func_paren(e, "VARIANCE", "plant_list_variance");
     e = _math_func_paren(e, "STDDEV", "plant_list_stddev");
     e = _math_func_paren(e, "PRODUCT", "plant_list_product");
@@ -12577,6 +12589,10 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
   tx_t gc0 = "";
   tx_t gbid = "";
   tx_t geohit = "";
+  tx_t ts_sp = "";
+  tx_t tm_sp = "";
+  tx_t tx_sp = "";
+  tx_t tn_sp = "";
   tx_t dblhit = "";
   tx_t bchk = "";
   tx_t cchk = "";
@@ -12681,6 +12697,16 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
     cval = _cat3("plant_geo_to_string(", cval, ")");
     isn2 = 2;
     }
+    }
+    }
+    if (isn2 == 0) {
+    ts_sp = strings_SPLIT(cval, "plant_tensor_sum(");
+    tm_sp = strings_SPLIT(cval, "plant_tensor_mean(");
+    tx_sp = strings_SPLIT(cval, "plant_tensor_max(");
+    tn_sp = strings_SPLIT(cval, "plant_tensor_min(");
+    if (plant_array_length(ts_sp) > 1 || plant_array_length(tm_sp) > 1 || plant_array_length(tx_sp) > 1 || plant_array_length(tn_sp) > 1) {
+    cval = _cat3("_from_double(", cval, ")");
+    isn2 = 2;
     }
     }
     dblhit = _expr_has_dbl(cval, evars);
@@ -18715,7 +18741,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.54.2c (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.55.0 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

@@ -4890,6 +4890,21 @@ ACTION translate_expr(expr(TXT), nums(LST), evars(LST), maths(LST)),
     # v0.49.19 — natural logarithm as a bare built-in: LOG(x) →
     # math_log(x). No shadow hazard (LOG10/LOG2/LOG1P needles require
     # the digit right after "LOG").
+    # v0.55.0 — tensor operations (core). MUST run before the math-lib
+    # TRANSPOSE/SUM/MAX/MIN mappers, which would otherwise rewrite the
+    # TENSOR_* name as a substring (e.g. TENSOR_TRANSPOSE → TENSOR_plant_transpose).
+    REAP e FROM _handle_func_paren, e, "TENSOR_ADD",       "plant_tensor_add".
+    REAP e FROM _handle_func_paren, e, "TENSOR_SUB",       "plant_tensor_sub".
+    REAP e FROM _handle_func_paren, e, "TENSOR_MUL",       "plant_tensor_mul".
+    REAP e FROM _handle_func_paren, e, "TENSOR_DIV",       "plant_tensor_div".
+    REAP e FROM _handle_func_paren, e, "TENSOR_SCALE",     "plant_tensor_scale".
+    REAP e FROM _handle_func_paren, e, "TENSOR_MATMUL",    "plant_tensor_matmul".
+    REAP e FROM _handle_func_paren, e, "TENSOR_TRANSPOSE", "plant_tensor_transpose".
+    REAP e FROM _handle_func_paren, e, "TENSOR_RESHAPE",   "plant_tensor_reshape".
+    REAP e FROM _handle_func_paren, e, "TENSOR_SUM",       "plant_tensor_sum".
+    REAP e FROM _handle_func_paren, e, "TENSOR_MEAN",      "plant_tensor_mean".
+    REAP e FROM _handle_func_paren, e, "TENSOR_MAX",       "plant_tensor_max".
+    REAP e FROM _handle_func_paren, e, "TENSOR_MIN",       "plant_tensor_min".
     # v0.49.21 — statistical aggregations (single list argument).
     REAP e FROM _math_func_paren, e, "VARIANCE", "plant_list_variance".
     REAP e FROM _math_func_paren, e, "STDDEV", "plant_list_stddev".
@@ -5333,6 +5348,17 @@ ACTION gen_show_stmt(node, nums(LST), evars(LST), isel(TXT)),
               SET cval TO "plant_geo_to_string(" + cval + ")".
               SET isn2 TO 2.
           /IF.
+      /IF.
+  /IF.
+  # v0.55.0 — tensor reductions return double; wrap for SHOW.
+  IF isn2 IS 0,
+      REAP ts_sp FROM strings:SPLIT, cval, "plant_tensor_sum(".
+      REAP tm_sp FROM strings:SPLIT, cval, "plant_tensor_mean(".
+      REAP tx_sp FROM strings:SPLIT, cval, "plant_tensor_max(".
+      REAP tn_sp FROM strings:SPLIT, cval, "plant_tensor_min(".
+      IF COUNT ts_sp > 1 OR COUNT tm_sp > 1 OR COUNT tx_sp > 1 OR COUNT tn_sp > 1,
+          SET cval TO "_from_double(" + cval + ")".
+          SET isn2 TO 2.
       /IF.
   /IF.
   # v0.51.22 — TD-022: DBL/FLT/DCM display uses _from_double (no truncation).

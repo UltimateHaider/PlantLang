@@ -464,3 +464,12 @@ defining scope.
   - CMP (v0.54.1): `is_bare_id` OR `plant_complex_` substring.
 - **Preserved:** CMP arithmetic (`SHOW A + B`).
 - **Related:** TD-025.
+
+## TD-041: Tensor intermediates leak — OPEN
+- **Status:** OPEN
+- **Introduced:** v0.55.0 (tensor ops)
+- **Impact:** LOW (still-reachable growth; benign)
+- **Symptom:** `TENSOR_ADD(TENSOR_MATMUL(a,b), c)` — the inner result is
+  never freed (each op returns a new ref-counted tensor).
+- **Fix direction:** v0.55.1+ (intermediate-free lifecycle).
+- **Related:** TD-017 (closure envs).

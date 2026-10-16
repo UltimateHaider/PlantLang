@@ -446,3 +446,162 @@ int64_t plant_tensor_size(PlantTensor* t) {
     if (!t) return 0;
     return t->size;
 }
+
+/* ══════════════════════════════════════════════════════════════
+   v0.55.0 — Tensor Operations (core)
+   Each op returns a NEW ref-counted PlantTensor (ref_count = 1).
+   Errors return an error tensor (magic intact, error_msg set).
+   ══════════════════════════════════════════════════════════════ */
+
+/* Elementwise helper: op 0=add, 1=sub, 2=mul, 3=div. */
+static PlantTensor* _pt_ew(PlantTensor* a, PlantTensor* b, int op) {
+    int64_t i;
+    PlantTensor* o;
+    if (!a || !b) return plant_tensor_create_error("tensor op: null operand");
+    if (plant_tensor_is_error(a)) return a;
+    if (plant_tensor_is_error(b)) return b;
+    if (a->ndim != b->ndim) return plant_tensor_create_error("tensor op: ndim mismatch");
+    for (i = 0; i < a->ndim; i++) {
+        if (a->shape[i] != b->shape[i])
+            return plant_tensor_create_error("tensor op: shape mismatch");
+    }
+    o = plant_tensor_create(a->ndim, a->shape);
+    if (plant_tensor_is_error(o)) return o;
+    for (i = 0; i < a->size; i++) {
+        double x = a->data[i], y = b->data[i];
+        switch (op) {
+            case 0: o->data[i] = x + y; break;
+            case 1: o->data[i] = x - y; break;
+            case 2: o->data[i] = x * y; break;
+            case 3: o->data[i] = (y != 0.0) ? (x / y) : 0.0; break;
+            default: o->data[i] = x; break;
+        }
+    }
+    return o;
+}
+
+PlantTensor* plant_tensor_add(PlantTensor* a, PlantTensor* b) { return _pt_ew(a, b, 0); }
+PlantTensor* plant_tensor_sub(PlantTensor* a, PlantTensor* b) { return _pt_ew(a, b, 1); }
+PlantTensor* plant_tensor_mul(PlantTensor* a, PlantTensor* b) { return _pt_ew(a, b, 2); }
+PlantTensor* plant_tensor_div(PlantTensor* a, PlantTensor* b) { return _pt_ew(a, b, 3); }
+
+PlantTensor* plant_tensor_scale(PlantTensor* a, double s) {
+    int64_t i;
+    PlantTensor* o;
+    if (!a) return plant_tensor_create_error("scale: null tensor");
+    if (plant_tensor_is_error(a)) return a;
+    o = plant_tensor_create(a->ndim, a->shape);
+    if (plant_tensor_is_error(o)) return o;
+    for (i = 0; i < a->size; i++) o->data[i] = a->data[i] * s;
+    return o;
+}
+
+PlantTensor* plant_tensor_matmul(PlantTensor* a, PlantTensor* b) {
+    int64_t i, j, k, m, n, p;
+    int64_t oshape[2];
+    PlantTensor* o;
+    if (!a || !b) return plant_tensor_create_error("matmul: null operand");
+    if (plant_tensor_is_error(a)) return a;
+    if (plant_tensor_is_error(b)) return b;
+    if (a->ndim != 2 || b->ndim != 2)
+        return plant_tensor_create_error("matmul: 2d tensors required");
+    if (a->shape[1] != b->shape[0])
+        return plant_tensor_create_error("matmul: inner dimension mismatch");
+    m = a->shape[0];
+    n = a->shape[1];
+    p = b->shape[1];
+    oshape[0] = m;
+    oshape[1] = p;
+    o = plant_tensor_create(2, oshape);
+    if (plant_tensor_is_error(o)) return o;
+    for (i = 0; i < m; i++) {
+        for (j = 0; j < p; j++) {
+            double sum = 0.0;
+            for (k = 0; k < n; k++) {
+                sum += a->data[i * n + k] * b->data[k * p + j];
+            }
+            o->data[i * p + j] = sum;
+        }
+    }
+    return o;
+}
+
+PlantTensor* plant_tensor_transpose(PlantTensor* a) {
+    int64_t i, j, m, n;
+    int64_t oshape[2];
+    PlantTensor* o;
+    if (!a) return plant_tensor_create_error("transpose: null tensor");
+    if (plant_tensor_is_error(a)) return a;
+    if (a->ndim != 2)
+        return plant_tensor_create_error("transpose: 2d tensor required");
+    m = a->shape[0];
+    n = a->shape[1];
+    oshape[0] = n;
+    oshape[1] = m;
+    o = plant_tensor_create(2, oshape);
+    if (plant_tensor_is_error(o)) return o;
+    for (i = 0; i < m; i++) {
+        for (j = 0; j < n; j++) {
+            o->data[j * m + i] = a->data[i * n + j];
+        }
+    }
+    return o;
+}
+
+PlantTensor* plant_tensor_reshape(PlantTensor* a, PlantArray* shape) {
+    int64_t nd, i, tot;
+    int64_t* ns;
+    PlantTensor* o;
+    if (!a || !shape) return plant_tensor_create_error("reshape: null argument");
+    if (plant_tensor_is_error(a)) return a;
+    nd = shape->count;
+    if (nd < 1) return plant_tensor_create_error("reshape: empty shape");
+    ns = (int64_t*)plant_malloc(sizeof(int64_t) * (size_t)nd);
+    if (!ns) return plant_tensor_create_error("reshape: allocation failed");
+    tot = 1;
+    for (i = 0; i < nd; i++) {
+        const char* sv = _S(plant_list_get(shape, i));
+        ns[i] = (int64_t)strtoll(sv ? sv : "0", NULL, 10);
+        tot *= ns[i];
+    }
+    if (tot != a->size) {
+        free(ns);
+        return plant_tensor_create_error("reshape: size mismatch");
+    }
+    o = plant_tensor_create(nd, ns);
+    free(ns);
+    if (plant_tensor_is_error(o)) return o;
+    memcpy(o->data, a->data, sizeof(double) * (size_t)a->size);
+    return o;
+}
+
+double plant_tensor_sum(PlantTensor* a) {
+    int64_t i;
+    double s = 0.0;
+    if (!a || plant_tensor_is_error(a)) return 0.0;
+    for (i = 0; i < a->size; i++) s += a->data[i];
+    return s;
+}
+
+double plant_tensor_mean(PlantTensor* a) {
+    if (!a || plant_tensor_is_error(a) || a->size == 0) return 0.0;
+    return plant_tensor_sum(a) / (double)a->size;
+}
+
+double plant_tensor_max(PlantTensor* a) {
+    int64_t i;
+    double m;
+    if (!a || plant_tensor_is_error(a) || a->size == 0) return 0.0;
+    m = a->data[0];
+    for (i = 1; i < a->size; i++) if (a->data[i] > m) m = a->data[i];
+    return m;
+}
+
+double plant_tensor_min(PlantTensor* a) {
+    int64_t i;
+    double m;
+    if (!a || plant_tensor_is_error(a) || a->size == 0) return 0.0;
+    m = a->data[0];
+    for (i = 1; i < a->size; i++) if (a->data[i] < m) m = a->data[i];
+    return m;
+}

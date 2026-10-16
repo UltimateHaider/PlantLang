@@ -1,0 +1,2 @@
+CREATE a (TENSOR) TO TENSOR([[1, 2], [3, 4]]).
+SHOW TENSOR_MAX(a).

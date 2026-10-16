@@ -1,0 +1,4 @@
+CREATE a (TENSOR) TO TENSOR([[1, 2, 3]]).
+CREATE b (TENSOR) TO TENSOR([[1, 2]]).
+CREATE c (TENSOR) TO TENSOR_MATMUL(a, b).
+SHOW "error-ok".
