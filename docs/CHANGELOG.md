@@ -1,3 +1,25 @@
+## v0.54.2b — TD-015 Item 4 (Cross-Scope Free)
+
+### Fixed (TD-015 partial)
+- Item 4: cross-scope free (double-free).
+  - `generate_body` merges inner-block frees upward.
+  - `call_stmt` skips duplicate explicit frees.
+  - top-level statements share one env (slot 13 tracks across
+    statements).
+- 1 new test: `g_cross_scope_free`.
+
+### Verified
+- Native: 146/146 (was 145)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (570,452 B)
+- valgrind strict: PASS
+- Binary: 990032 B.
+
+### Remaining (v0.54.2c)
+- Item 1: auto-cleanup.
+
 ## v0.54.2a — TD-015 Items 2 + 3 (GLOBAL in ACTION)
 
 ### Added

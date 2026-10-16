@@ -198,7 +198,9 @@ SHOW n.
   (test hygiene).
 
 ## TD-015: Global/cross-scope lifecycle tracking — PARTIAL CLOSED
-- **Status:** 🟠 PARTIAL CLOSED (v0.51.3b → v0.54.2a)
+- **Status:** 🟠 PARTIAL CLOSED (v0.51.3b → v0.54.2b)
+- **Resolved (v0.54.2b):**
+  - Item 4: cross-scope free (memory safety).
 - **Resolved (v0.54.2a):**
   - Item 2: GLOBAL in ACTION bodies (file-scope declaration emitted).
   - Item 3: numeric GLOBAL in ACTION-body `nums`.
@@ -210,7 +212,6 @@ SHOW n.
     supported list mutation (see TD-020 for the unsupported forms).
   - Init order documented (v0.51.3b).
 - **Remaining:**
-  - Item 4: cross-scope free (memory safety) → v0.54.2b.
   - Item 1: auto-cleanup → v0.54.2c.
 
 ### Related

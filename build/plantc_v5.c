@@ -13591,6 +13591,9 @@ tx_t generate_body(PlantArray* bd, PlantArray* env) {
   tx_t fvsave = "";
   tx_t _ = "";
   tx_t node_code = "";
+  tx_t fvinner = "";
+  tx_t fvn = "";
+  tx_t fvc = "";
     tx_t res = "";
     long i = 0;
     tx_t node_el = "";
@@ -13603,6 +13606,16 @@ tx_t generate_body(PlantArray* bd, PlantArray* env) {
     res = _cat(res, node_code);
     }
     i = i+1;
+    }
+    fvinner = env_get(env, 13);
+    long fvi = 0;
+    while (fvi < plant_array_length(fvinner)) {
+    fvn = plant_list_get(fvinner, fvi);
+    fvc = list_contains(fvsave, fvn);
+    if (fvc == 0) {
+            fvsave = plant_list_add(fvsave, fvn);
+    }
+    fvi = fvi+1;
     }
     env_set(env, 13, fvsave);
     return res;
@@ -14609,9 +14622,10 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     fargel = plant_list_get(fargs, 0);
     if (strcmp(fargel,"") > 0) {
     fin = list_contains(freed, fargel);
-    if (fin == 0) {
-                        freed = plant_list_add(freed, fargel);
+    if (fin == 1) {
+    return "";
     }
+                    freed = plant_list_add(freed, fargel);
     }
     }
     }
@@ -17782,6 +17796,7 @@ tx_t generate_c(PlantArray* ast) {
     i = i+1;
     }
     i = 0;
+    PlantArray* top_env = env_make ( 0 , sigs , esub , plant_list_make ( 0 ) , "" , nums_top , plant_list_make ( 0 ) , _evars_with_bols ( ast , esub , eregs ) , "" , "" , "" , plant_list_make ( 0 ) , structs );
     while (i < plant_array_length(ast)) {
     node_el = plant_list_get(ast, i);
     ntype = _map_get(node_el, "type");
@@ -17818,7 +17833,7 @@ tx_t generate_c(PlantArray* ast) {
     has_decl = 1;
     }
     if (strcmp(ntype,"action_decl") != 0 && strcmp(ntype,"enum_decl") != 0 && strcmp(ntype,"external_decl") != 0 && strcmp(ntype,"struct_decl") != 0 && strcmp(ntype,"union_decl") != 0 && strcmp(ntype,"import_stmt") != 0 && strcmp(ntype,"type_decl") != 0 && strcmp(ntype,"species_decl") != 0 && strcmp(ntype,"interface_decl") != 0) {
-    ns_code = generate_node(node_el, env_make ( 0 , sigs , esub , plant_list_make ( 0 ) , "" , nums_top , plant_list_make ( 0 ) , _evars_with_bols ( ast , esub , eregs ) , "" , "" , "" , plant_list_make ( 0 ) , structs ));
+    ns_code = generate_node(node_el, top_env);
     stmt_code = _cat(stmt_code, ns_code);
     has_stmt = 1;
     }
@@ -18589,7 +18604,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.54.2a (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.54.2b (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

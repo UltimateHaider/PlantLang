@@ -6182,6 +6182,17 @@ ACTION generate_body(bd(LST), env(LST)),
     /IF.
     SET i TO i + 1.
   /SEASON.
+  # v0.54.2b — Item 4: merge inner-block frees upward so a later free in
+  # the enclosing scope is suppressed (was: inner frees discarded →
+  # cross-scope double-free).
+  REAP fvinner FROM env_get, env, 13.
+  CREATE fvi(LON) TO 0.
+  SEASON fvi < COUNT fvinner,
+    REAP fvn FROM plant_list_get, fvinner, fvi.
+    REAP fvc FROM list_contains, fvsave, fvn.
+    IF fvc IS 0, PUT fvn INTO fvsave. /IF.
+    SET fvi TO fvi + 1.
+  /SEASON.
   REAP _ FROM env_set, env, 13, fvsave.
   GIVE res.
 /ACTION.
@@ -7111,13 +7122,15 @@ ACTION generate_node(node, env(LST)),
         # v0.51.16 — PUSH(lst, item) → plant_list_push(lst, item).
         IF ca2 IS "PUSH", SET ca2 TO "plant_list_push". /IF.
         # v0.51.2c.1 — record explicitly freed local vars (TD-006).
+        # v0.54.2b — Item 4: a duplicate explicit free is skipped.
         IF ca2orig IS "LIST_FREE" OR ca2orig IS "TENSOR_FREE" OR ca2orig IS "FREE",
             REAP fargs FROM _map_get, node, "args".
             IF COUNT fargs > 0,
                 REAP fargel FROM plant_list_get, fargs, 0.
                 IF fargel > "",
                     REAP fin FROM list_contains, freed, fargel.
-                    IF fin IS 0, PUT fargel INTO freed. /IF.
+                    IF fin IS 1, GIVE "". /IF.
+                    PUT fargel INTO freed.
                 /IF.
             /IF.
         /IF.
@@ -10221,6 +10234,10 @@ ACTION generate_c(ast(LST)),
         SET i TO i + 1.
     /SEASON.
     SET i TO 0.
+    # v0.54.2b — Item 4: one env shared by all top-level statements so
+    # the freed-variable tracker persists across them (avoids a
+    # top-level double-free; env slot 13 was previously reset per stmt).
+    CREATE top_env(LST) TO env_make(0, sigs, esub, plant_list_make(0), "", nums_top, plant_list_make(0), _evars_with_bols(ast, esub, eregs), "", "", "", plant_list_make(0), structs).
     SEASON i < COUNT ast,
         REAP node_el FROM plant_list_get, ast, i.
         REAP ntype FROM _map_get, node_el, "type".
@@ -10266,7 +10283,7 @@ ACTION generate_c(ast(LST)),
         # v0.49.25: import_stmt nodes are loader-level no-ops and must
         # not flip has_stmt (which would force a duplicate CLI main).
         IF ntype ISNT "action_decl" AND ntype ISNT "enum_decl" AND ntype ISNT "external_decl" AND ntype ISNT "struct_decl" AND ntype ISNT "union_decl" AND ntype ISNT "import_stmt" AND ntype ISNT "type_decl" AND ntype ISNT "species_decl" AND ntype ISNT "interface_decl",
-            REAP ns_code FROM generate_node, node_el, env_make(0, sigs, esub, plant_list_make(0), "", nums_top, plant_list_make(0), _evars_with_bols(ast, esub, eregs), "", "", "", plant_list_make(0), structs).
+            REAP ns_code FROM generate_node, node_el, top_env.
             SET stmt_code TO stmt_code + ns_code.
             SET has_stmt TO 1.
         /IF.

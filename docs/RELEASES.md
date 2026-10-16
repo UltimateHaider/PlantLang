@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.54.2a
+# Auto-updated: 0.54.2b
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.54.2a | 990032 | 8963 | 448 | 109 | 322 | 5361 |
+| v0.54.2b | 990032 | 8963 | 448 | 109 | 322 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -60,6 +60,7 @@
 | v0.54.0 | 2026 | GEO (Geographic Data Type) | Released |
 | v0.54.1 | 2026 | TD-040 (CMP Hook Guard) | Released |
 | v0.54.2a | 2026 | TD-015 Items 2+3 | Released |
+| v0.54.2b | 2026 | TD-015 Item 4 | Released |
 
 ## Growth Chart (ASCII)
 

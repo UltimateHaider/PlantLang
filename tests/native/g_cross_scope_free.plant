@@ -1,0 +1,8 @@
+CREATE L (LST) TO [1, 2, 3].
+
+IF 1 > 0,
+  LIST_FREE(L).
+/IF.
+
+LIST_FREE(L).
+SHOW "cross-scope-free-ok".
