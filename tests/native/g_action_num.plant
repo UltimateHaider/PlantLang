@@ -1,0 +1,8 @@
+ACTION outer()
+  GLOBAL g TO 7.
+  SHOW g.
+  SET g TO 42.
+  SHOW g.
+/ACTION.
+
+outer().

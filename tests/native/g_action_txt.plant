@@ -1,0 +1,6 @@
+ACTION outer()
+  GLOBAL msg TO "hello".
+  SHOW msg.
+/ACTION.
+
+outer().

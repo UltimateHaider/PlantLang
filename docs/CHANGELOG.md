@@ -1,3 +1,28 @@
+## v0.54.2a — TD-015 Items 2 + 3 (GLOBAL in ACTION)
+
+### Added
+- GLOBAL inside an ACTION body (file-scope declaration emitted).
+- Numeric GLOBAL in ACTION-body `nums` (numeric operations correct).
+- 2 new tests: `g_action_txt`, `g_action_num`.
+
+### Fixed (TD-015 partial)
+- Item 2: GLOBAL inside ACTION no longer triggers "undeclared
+  identifier".
+- Item 3: numeric GLOBAL inside ACTION displays via `_from_long`.
+
+### Verified
+- Native: 145/145 (was 143)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (570,076 B)
+- valgrind strict: PASS
+- Binary: 990032 B.
+
+### Remaining (v0.54.2b/c)
+- Item 4: cross-scope free (memory safety).
+- Item 1: auto-cleanup.
+
 ## v0.54.1 — TD-040 (CMP Hook Guard)
 
 ### Fixed

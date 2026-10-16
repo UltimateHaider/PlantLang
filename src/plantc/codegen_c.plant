@@ -46,6 +46,10 @@ GLOBAL TYPE_REGISTRY TO [
     ["SET",   "PlantSet*",     "0", "1", "composite"]
 ].
 
+# v0.54.2a — Item 3: names of numeric GLOBALs, so every ACTION body's
+# `nums` can include them (SHOW/arithmetic treat them numerically).
+GLOBAL NUM_GLOBALS TO [].
+
 # v0.51.4 — Registry lookup: returns the record for `name`, or empty list.
 ACTION type_info(name(TXT)),
     CREATE i(LON) TO 0.
@@ -3034,6 +3038,11 @@ ACTION collect_globals_walk(bd(LST), res(LST)),
         REAP grt FROM collect_globals_walk, gwbd, res.
         SET gwi TO gwi + 1.
       /SEASON.
+    /IF.
+    # v0.54.2a — Item 2: GLOBAL inside an ACTION body (file-scope decl).
+    IF gty IS "action_decl",
+      REAP gabd FROM _map_get, gnd, "body".
+      REAP grt FROM collect_globals_walk, gabd, res.
     /IF.
     SET gi TO gi + 1.
   /SEASON.
@@ -7521,6 +7530,14 @@ ACTION generate_node(node, env(LST)),
             SET pi TO pi + 1.
         /SEASON.
         CREATE nums_a(LST) TO collect_nums(bd, params, subst).
+        # v0.54.2a — Item 3: numeric globals are numeric inside ACTIONs.
+        CREATE ngi(LON) TO 0.
+        SEASON ngi < COUNT NUM_GLOBALS,
+            REAP ngv FROM plant_list_get, NUM_GLOBALS, ngi.
+            REAP ngc FROM list_contains, nums_a, ngv.
+            IF ngc IS 0, PUT ngv INTO nums_a. /IF.
+            SET ngi TO ngi + 1.
+        /SEASON.
         CREATE evars_a(LST) TO _evars_with_bols(bd, subst, collect_enums(bd, params, subst, evars, sigs)).
         CREATE ccode(TXT) TO "tx_t " + fnname + "(" + paramstr + ") \{\n".
         CREATE implicit(LST) TO collect_implicit(bd, params).
@@ -10184,6 +10201,9 @@ ACTION generate_c(ast(LST)),
         IF gnum IS 1,
             REAP gnf FROM list_contains, nums_top, gwn.
             IF gnf IS 0, PUT gwn INTO nums_top. /IF.
+            # v0.54.2a — Item 3: record numeric globals for action nums.
+            REAP ngf FROM list_contains, NUM_GLOBALS, gwn.
+            IF ngf IS 0, PUT gwn INTO NUM_GLOBALS. /IF.
         /IF.
         SET gwi TO gwi + 3.
     /SEASON.

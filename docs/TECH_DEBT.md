@@ -198,8 +198,11 @@ SHOW n.
   (test hygiene).
 
 ## TD-015: Global/cross-scope lifecycle tracking — PARTIAL CLOSED
-- **Status:** PARTIAL CLOSED in v0.51.3b
-- **Resolved:**
+- **Status:** 🟠 PARTIAL CLOSED (v0.51.3b → v0.54.2a)
+- **Resolved (v0.54.2a):**
+  - Item 2: GLOBAL in ACTION bodies (file-scope declaration emitted).
+  - Item 3: numeric GLOBAL in ACTION-body `nums`.
+- **Resolved (v0.51.3b):**
   - GLOBAL keyword (v0.51.3a).
   - GLOBAL in SUITE/IF/CYCLE (v0.51.3b).
   - GLOBAL_FREE (v0.51.3b).
@@ -207,14 +210,8 @@ SHOW n.
     supported list mutation (see TD-020 for the unsupported forms).
   - Init order documented (v0.51.3b).
 - **Remaining:**
-  - Auto-cleanup → v0.51.4.
-  - GLOBAL in nested functions → v0.51.4.
-  - ACTION-body numeric GLOBAL in `nums` (partial: a numeric global is
-    in the top-level `nums`, but not in an ACTION body's `nums`).
-  - **Nested-block cross-scope free** (original TD-015 finding): a
-    `LIST_FREE` inside an `IF`/loop body of an outer variable is not
-    visible to the enclosing scope → a later `FREE` double-frees.
-    Cause: `freed_vars` is block-scoped (v0.51.2c.1).
+  - Item 4: cross-scope free (memory safety) → v0.54.2b.
+  - Item 1: auto-cleanup → v0.54.2c.
 
 ### Related
 - TD-016 (STATIC variables).

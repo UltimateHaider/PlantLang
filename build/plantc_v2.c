@@ -321,6 +321,7 @@ tx_t _cl_param_str(PlantArray* params);
 tx_t _cl_emit_typedef(PlantArray* cnode);
 tx_t _cl_emit_fn(PlantArray* cnode, PlantArray* sigs, PlantArray* subst, PlantArray* reg);
 static tx_t TYPE_REGISTRY;
+static tx_t NUM_GLOBALS;
 
 
 tx_t is_keyword(tx_t wrd) {
@@ -10334,6 +10335,7 @@ tx_t collect_globals_walk(PlantArray* bd, PlantArray* res) {
   tx_t gmb = "";
   tx_t gwl = "";
   tx_t gwbd = "";
+  tx_t gabd = "";
     long gi = 0;
     tx_t gnd = "";
     tx_t gty = "";
@@ -10386,6 +10388,10 @@ tx_t collect_globals_walk(PlantArray* bd, PlantArray* res) {
     grt = collect_globals_walk(gwbd, res);
     gwi = gwi+1;
     }
+    }
+    if (strcmp(gty,"action_decl") == 0) {
+    gabd = _map_get(gnd, "body");
+    grt = collect_globals_walk(gabd, res);
     }
     gi = gi+1;
     }
@@ -13951,6 +13957,8 @@ tx_t generate_node(tx_t node, PlantArray* env) {
   tx_t pname = "";
   tx_t ptype = "";
   tx_t ctype = "";
+  tx_t ngv = "";
+  tx_t ngc = "";
   tx_t spinit2 = "";
   tx_t vbnd = "";
   tx_t vbnd_ty = "";
@@ -14889,6 +14897,15 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     pi = pi+1;
     }
     PlantArray* nums_a = collect_nums ( bd , params , subst );
+    long ngi = 0;
+    while (ngi < plant_array_length(NUM_GLOBALS)) {
+    ngv = plant_list_get(NUM_GLOBALS, ngi);
+    ngc = list_contains(nums_a, ngv);
+    if (ngc == 0) {
+                    nums_a = plant_list_add(nums_a, ngv);
+    }
+    ngi = ngi+1;
+    }
     PlantArray* evars_a = _evars_with_bols ( bd , subst , collect_enums ( bd , params , subst , evars , sigs ) );
     tx_t ccode = _cat(_cat4("tx_t ", fnname, "(", paramstr), ") {\n");
     PlantArray* implicit = collect_implicit ( bd , params );
@@ -17094,6 +17111,7 @@ tx_t generate_c(PlantArray* ast) {
   tx_t gcv = "";
   tx_t gnum = "";
   tx_t gnf = "";
+  tx_t ngf = "";
   tx_t hs_nd = "";
   tx_t hs_ty = "";
   tx_t asy4 = "";
@@ -17744,6 +17762,10 @@ tx_t generate_c(PlantArray* ast) {
     gnf = list_contains(nums_top, gwn);
     if (gnf == 0) {
                 nums_top = plant_list_add(nums_top, gwn);
+    }
+    ngf = list_contains(NUM_GLOBALS, gwn);
+    if (ngf == 0) {
+                NUM_GLOBALS = plant_list_add(NUM_GLOBALS, gwn);
     }
     }
     gwi = gwi+3;
@@ -18555,6 +18577,7 @@ int main(int argc, char **argv) {
   tx_t written = "";
   tx_t c_len = "";
   TYPE_REGISTRY = plant_list_make(25, plant_list_make(5, "LON", "long", "1", "1", "scalar"), plant_list_make(5, "NUM", "int", "1", "1", "scalar"), plant_list_make(5, "UNU", "unsigned int", "1", "1", "scalar"), plant_list_make(5, "DBL", "double", "1", "1", "scalar"), plant_list_make(5, "FLT", "float", "1", "1", "scalar"), plant_list_make(5, "DCM", "long double", "1", "1", "scalar"), plant_list_make(5, "CHA", "char", "0", "1", "scalar"), plant_list_make(5, "VOI", "tx_t", "0", "1", "scalar"), plant_list_make(5, "BYT", "signed char", "1", "1", "scalar"), plant_list_make(5, "UBT", "unsigned char", "1", "1", "scalar"), plant_list_make(5, "SHR", "short", "1", "1", "scalar"), plant_list_make(5, "USH", "unsigned short", "1", "1", "scalar"), plant_list_make(5, "ULO", "unsigned long", "1", "1", "scalar"), plant_list_make(5, "CMP", "PlantComplex", "0", "1", "scalar"), plant_list_make(5, "BOL", "bool", "0", "1", "scalar"), plant_list_make(5, "TXT", "tx_t", "0", "1", "scalar"), plant_list_make(5, "LST", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "TPL", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "MAP", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "QUE", "PlantQueue*", "0", "1", "composite"), plant_list_make(5, "STK", "PlantStack*", "0", "1", "composite"), plant_list_make(5, "JSN", "PlantJson*", "0", "1", "composite"), plant_list_make(5, "TENSOR", "PlantTensor*", "0", "1", "composite"), plant_list_make(5, "GEO", "PlantGeo*", "0", "1", "composite"), plant_list_make(5, "SET", "PlantSet*", "0", "1", "composite"));
+  NUM_GLOBALS = plant_list_make(0);
   arg0 = get_cli_arg(0);
   if (strcmp(arg0,"-h") == 0 || strcmp(arg0,"--help") == 0) {
   plant_iReport_print(get_report(), "Chloroplast — Pure Native PlantLang compiler");
@@ -18565,7 +18588,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.54.1 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.54.2a (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);
