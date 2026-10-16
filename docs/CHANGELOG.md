@@ -1,3 +1,26 @@
+## v0.54.2c — TD-015 Item 1 (Auto-Cleanup)
+
+### Fixed (TD-015 complete)
+- Item 1: auto-cleanup for composite globals.
+  - LST/TPL/MAP/TENSOR: `plant_free` at end of main.
+  - GEO: `plant_geo_free` at end of main.
+  - Skips explicitly-freed (`GLOBAL_FREE`).
+  - Numeric/TXT: no free (as before).
+  - QUE/STK/JSN/SET: deferred (type-specific).
+- 1 new test: `g_auto_cleanup`.
+
+### Closed
+- TD-015: Global/cross-scope lifecycle tracking — CLOSED.
+
+### Verified
+- Native: 147/147 (was 146)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (573,731 B)
+- valgrind strict: PASS (0 errors)
+- Binary: 990072 B.
+
 ## v0.54.2b — TD-015 Item 4 (Cross-Scope Free)
 
 ### Fixed (TD-015 partial)

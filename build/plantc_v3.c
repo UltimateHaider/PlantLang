@@ -171,6 +171,7 @@ tx_t enum_expr_of(PlantArray* evars, tx_t cval);
 tx_t list_contains(PlantArray* lst, tx_t x);
 tx_t collect_nums_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_globals_walk(PlantArray* bd, PlantArray* res);
+tx_t collect_gfreed_walk(PlantArray* bd, PlantArray* res);
 tx_t collect_nums(PlantArray* bd, PlantArray* params, PlantArray* subst);
 tx_t collect_cmps_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_cmps(PlantArray* bd, PlantArray* params, PlantArray* subst);
@@ -10398,6 +10399,61 @@ tx_t collect_globals_walk(PlantArray* bd, PlantArray* res) {
     }
     return res;
 }
+tx_t collect_gfreed_walk(PlantArray* bd, PlantArray* res) {
+  tx_t gfact = "";
+  tx_t gfargs = "";
+  tx_t gfarg0 = "";
+  tx_t gffound = "";
+  tx_t gfib = "";
+  tx_t gfbd = "";
+  tx_t gfr = "";
+  tx_t gfsb = "";
+  tx_t gfsub = "";
+  tx_t gfab = "";
+    long gfi2 = 0;
+    tx_t gfnd = "";
+    tx_t gfty = "";
+    while (gfi2 < plant_array_length(bd)) {
+    gfnd = plant_list_get(bd, gfi2);
+    gfty = _map_get(gfnd, "type");
+    if (strcmp(gfty,"call_stmt") == 0) {
+    gfact = _map_get(gfnd, "action");
+    if (strcmp(gfact,"GLOBAL_FREE") == 0) {
+    gfargs = _map_get(gfnd, "args");
+    if (plant_array_length(gfargs) > 0) {
+    gfarg0 = plant_list_get(gfargs, 0);
+    gffound = list_contains(res, gfarg0);
+    if (gffound == 0) {
+                        res = plant_list_add(res, gfarg0);
+    }
+    }
+    }
+    }
+    if (strcmp(gfty,"if_stmt") == 0) {
+    gfib = _if_bodies(gfnd);
+    long gfii = 0;
+    while (gfii < plant_array_length(gfib)) {
+    gfbd = plant_list_get(gfib, gfii);
+    gfr = collect_gfreed_walk(gfbd, res);
+    gfii = gfii+1;
+    }
+    }
+    if (strcmp(gfty,"season_stmt") == 0 || strcmp(gfty,"cycle_stmt") == 0) {
+    gfsb = _map_get(gfnd, "body");
+    gfr = collect_gfreed_walk(gfsb, res);
+    }
+    if (strcmp(gfty,"suite_stmt") == 0) {
+    gfsub = _map_get(gfnd, "body");
+    gfr = collect_gfreed_walk(gfsub, res);
+    }
+    if (strcmp(gfty,"action_decl") == 0) {
+    gfab = _map_get(gfnd, "body");
+    gfr = collect_gfreed_walk(gfab, res);
+    }
+    gfi2 = gfi2+1;
+    }
+    return res;
+}
 tx_t collect_nums(PlantArray* bd, PlantArray* params, PlantArray* subst) {
   tx_t ret = "";
     PlantArray* res = plant_list_make ( 0 );
@@ -17127,6 +17183,9 @@ tx_t generate_c(PlantArray* ast) {
   tx_t gnum = "";
   tx_t gnf = "";
   tx_t ngf = "";
+  tx_t glm = "";
+  tx_t gtm = "";
+  tx_t ggm = "";
   tx_t hs_nd = "";
   tx_t hs_ty = "";
   tx_t asy4 = "";
@@ -17134,6 +17193,10 @@ tx_t generate_c(PlantArray* ast) {
   tx_t ns_code = "";
   tx_t sae = "";
   tx_t san = "";
+  tx_t gfreed = "";
+  tx_t afn = "";
+  tx_t afk = "";
+  tx_t afskip = "";
   tx_t tal = "";
   tx_t trg = "";
   tx_t rv2 = "";
@@ -17759,6 +17822,7 @@ tx_t generate_c(PlantArray* ast) {
     PlantArray* nums_top = collect_nums ( ast , plant_list_make ( 0 ) , esub );
     tx_t glob_code = "";
     PlantArray* globals = collect_globals_walk ( ast , plant_list_make ( 0 ) );
+    PlantArray* glob_clean = plant_list_make ( 0 );
     long gwi = 0;
     while (gwi + 2 < plant_array_length(globals)) {
     gwn = plant_list_get(globals, gwi);
@@ -17781,6 +17845,37 @@ tx_t generate_c(PlantArray* ast) {
     ngf = list_contains(NUM_GLOBALS, gwn);
     if (ngf == 0) {
                 NUM_GLOBALS = plant_list_add(NUM_GLOBALS, gwn);
+    }
+    }
+    if (gnum == 0) {
+    tx_t gkind = "";
+    if (strcmp(gwv,"LST") == 0 || strcmp(gwv,"TPL") == 0 || strcmp(gwv,"MAP") == 0 || strcmp(gwv,"TENSOR") == 0) {
+    gkind = "free";
+    }
+    if (strcmp(gwv,"GEO") == 0) {
+    gkind = "geo";
+    }
+    if (strcmp(gkind,"") == 0) {
+    glm = strings_SPLIT(gcv, "plant_list_make(");
+    if (plant_array_length(glm) > 1) {
+    gkind = "free";
+    }
+    }
+    if (strcmp(gkind,"") == 0) {
+    gtm = strings_SPLIT(gcv, "plant_tensor_from_list(");
+    if (plant_array_length(gtm) > 1) {
+    gkind = "free";
+    }
+    }
+    if (strcmp(gkind,"") == 0) {
+    ggm = strings_SPLIT(gcv, "plant_geo_create(");
+    if (plant_array_length(ggm) > 1) {
+    gkind = "geo";
+    }
+    }
+    if (strcmp(gkind,"") > 0) {
+                glob_clean = plant_list_add(glob_clean, gwn);
+                glob_clean = plant_list_add(glob_clean, gkind);
     }
     }
     gwi = gwi+3;
@@ -17906,7 +18001,24 @@ tx_t generate_c(PlantArray* ast) {
     if (strcmp(has_plain_main,"1") == 0) {
     stmt_code = _cat(stmt_code, "  plant_main();\n");
     }
-    stmt_code = _cat(_cat4("int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n", sp_init_code, dcode, stmt_code), "  plant_async_drain();\n  return 0;\n}\n");
+    gfreed = collect_gfreed_walk(ast, plant_list_make ( 0 ));
+    tx_t auto_free = "";
+    long afi = 0;
+    while (afi + 1 < plant_array_length(glob_clean)) {
+    afn = plant_list_get(glob_clean, afi);
+    afk = plant_list_get(glob_clean, afi+1);
+    afskip = list_contains(gfreed, afn);
+    if (afskip == 0) {
+    if (strcmp(afk,"free") == 0) {
+    auto_free = _cat4(auto_free, "  plant_free((void*)", afn, ");\n");
+    }
+    if (strcmp(afk,"geo") == 0) {
+    auto_free = _cat4(auto_free, "  plant_geo_free(", afn, ");\n");
+    }
+    }
+    afi = afi+2;
+    }
+    stmt_code = _cat4(_cat4("int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n", sp_init_code, dcode, stmt_code), "  plant_async_drain();\n", auto_free, "  return 0;\n}\n");
     }
     tx_t td_code = "";
     i = 0;
@@ -18604,7 +18716,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.54.2b (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.54.2c (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);
@@ -18744,5 +18856,7 @@ int main(int argc, char **argv) {
   c_len = strings_LENGTH(c_code);
   plant_iReport_print(get_report(), _cat4("output: ", c_len, " bytes to ", out_path));
   plant_async_drain();
+  plant_free((void*)TYPE_REGISTRY);
+  plant_free((void*)NUM_GLOBALS);
   return 0;
 }

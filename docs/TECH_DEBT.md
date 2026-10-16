@@ -197,22 +197,22 @@ SHOW n.
 - **Fixed:** `tensor_basic` and `tensor_refcount` now free their tensors
   (test hygiene).
 
-## TD-015: Global/cross-scope lifecycle tracking — PARTIAL CLOSED
-- **Status:** 🟠 PARTIAL CLOSED (v0.51.3b → v0.54.2b)
+## TD-015: Global/cross-scope lifecycle tracking — CLOSED
+- **Status:** ✅ CLOSED in v0.54.2c
+- **Resolved (v0.54.2c):**
+  - Item 1: auto-cleanup (LST/TPL/MAP/TENSOR/GEO).
 - **Resolved (v0.54.2b):**
   - Item 4: cross-scope free (memory safety).
 - **Resolved (v0.54.2a):**
-  - Item 2: GLOBAL in ACTION bodies (file-scope declaration emitted).
+  - Item 2: GLOBAL in ACTION bodies.
   - Item 3: numeric GLOBAL in ACTION-body `nums`.
 - **Resolved (v0.51.3b):**
-  - GLOBAL keyword (v0.51.3a).
-  - GLOBAL in SUITE/IF/CYCLE (v0.51.3b).
-  - GLOBAL_FREE (v0.51.3b).
-  - GLOBAL list mutation via `PUT … INTO …` (v0.51.3b) — the only
-    supported list mutation (see TD-020 for the unsupported forms).
-  - Init order documented (v0.51.3b).
-- **Remaining:**
-  - Item 1: auto-cleanup → v0.54.2c.
+  - GLOBAL keyword, GLOBAL in SUITE/IF/CYCLE, GLOBAL_FREE,
+    list mutation, init order.
+- **Notes:**
+  - Auto-cleanup covers LST/TPL/MAP/TENSOR + GEO.
+  - QUE/STK/JSN/SET: deferred (type-specific).
+  - Numeric/TXT: no free (as before).
 
 ### Related
 - TD-016 (STATIC variables).
