@@ -12330,6 +12330,8 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* 
     e = _handle_func_paren(e, "TENSOR_MEAN", "plant_tensor_mean");
     e = _handle_func_paren(e, "TENSOR_MAX", "plant_tensor_max");
     e = _handle_func_paren(e, "TENSOR_MIN", "plant_tensor_min");
+    e = _handle_func_paren(e, "TENSOR_SLICE", "plant_tensor_slice");
+    e = _handle_func_paren(e, "TENSOR_AT", "plant_tensor_at");
     e = _math_func_paren(e, "VARIANCE", "plant_list_variance");
     e = _math_func_paren(e, "STDDEV", "plant_list_stddev");
     e = _math_func_paren(e, "PRODUCT", "plant_list_product");
@@ -12593,6 +12595,7 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
   tx_t tm_sp = "";
   tx_t tx_sp = "";
   tx_t tn_sp = "";
+  tx_t ta_sp = "";
   tx_t dblhit = "";
   tx_t bchk = "";
   tx_t cchk = "";
@@ -12705,6 +12708,13 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
     tx_sp = strings_SPLIT(cval, "plant_tensor_max(");
     tn_sp = strings_SPLIT(cval, "plant_tensor_min(");
     if (plant_array_length(ts_sp) > 1 || plant_array_length(tm_sp) > 1 || plant_array_length(tx_sp) > 1 || plant_array_length(tn_sp) > 1) {
+    cval = _cat3("_from_double(", cval, ")");
+    isn2 = 2;
+    }
+    }
+    if (isn2 == 0) {
+    ta_sp = strings_SPLIT(cval, "plant_tensor_at(");
+    if (plant_array_length(ta_sp) > 1) {
     cval = _cat3("_from_double(", cval, ")");
     isn2 = 2;
     }
@@ -18741,7 +18751,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.55.0 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.55.1 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

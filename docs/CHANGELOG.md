@@ -1,3 +1,28 @@
+## v0.55.1 — Tensor Ops Completion
+
+### Added
+- Broadcasting (NumPy-like) in `TENSOR_ADD/SUB/MUL/DIV`.
+  - `[3] + [2,3]` → `[2,3]`; `[2,1] + [2,3]` → `[2,3]`; `[1,3] + [2,3]` → `[2,3]`.
+- `TENSOR_SLICE(a, [[s0,e0],[s1,e1],…])` — multi-dim slice (half-open).
+- `TENSOR_AT(a, [i0,i1,…])` → `double` (element access).
+- Runtime: `plant_tensor_slice`, `plant_tensor_at`.
+- Codegen: `TENSOR_SLICE`/`TENSOR_AT` mappers (before `SLICE`); SHOW wrap for `TENSOR_AT`.
+- 8 new tests.
+
+### Verified
+- Native: 169/169 (was 161)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (575,406 B)
+- valgrind strict: PASS
+- Binary: 1003056 B.
+
+### Out of Scope
+- TD-041 (intermediate leak) → v0.56.0.
+- Activations (RELU/SIGMOID/TANH/SOFTMAX) → v0.55.2.
+- TENSOR ↔ LIST interop.
+
 ## v0.55.0 — Tensor Operations (Core)
 
 ### Added

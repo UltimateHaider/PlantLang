@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.55.0
+# Auto-updated: 0.55.1
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.55.0 | 998800 | 8963 | 607 | 109 | 322 | 5361 |
+| v0.55.1 | 1003056 | 8963 | 720 | 109 | 322 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -63,6 +63,7 @@
 | v0.54.2b | 2026 | TD-015 Item 4 | Released |
 | v0.54.2c | 2026 | TD-015 Item 1 (Auto-Cleanup) | Released |
 | v0.55.0 | 2026 | Tensor Operations (Core) | Released |
+| v0.55.1 | 2026 | Tensor Ops Completion | Released |
 
 ## Growth Chart (ASCII)
 

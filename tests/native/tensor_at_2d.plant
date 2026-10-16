@@ -1,0 +1,2 @@
+CREATE a (TENSOR) TO TENSOR([[1, 2, 3], [4, 5, 6]]).
+SHOW TENSOR_AT(a, [1, 2]).

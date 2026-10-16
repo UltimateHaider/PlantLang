@@ -75,4 +75,8 @@ double plant_tensor_mean(PlantTensor* a);
 double plant_tensor_max(PlantTensor* a);
 double plant_tensor_min(PlantTensor* a);
 
+/* v0.55.1 — tensor completion. */
+PlantTensor* plant_tensor_slice(PlantTensor* a, struct PlantArray* ranges);
+double       plant_tensor_at(PlantTensor* a, struct PlantArray* idx);
+
 #endif /* PLANT_TENSOR_H */

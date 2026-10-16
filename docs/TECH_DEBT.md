@@ -465,11 +465,11 @@ defining scope.
 - **Preserved:** CMP arithmetic (`SHOW A + B`).
 - **Related:** TD-025.
 
-## TD-041: Tensor intermediates leak — OPEN
+## TD-041: Tensor intermediates leak — OPEN (target v0.56.0)
 - **Status:** OPEN
 - **Introduced:** v0.55.0 (tensor ops)
 - **Impact:** LOW (still-reachable growth; benign)
 - **Symptom:** `TENSOR_ADD(TENSOR_MATMUL(a,b), c)` — the inner result is
   never freed (each op returns a new ref-counted tensor).
-- **Fix direction:** v0.55.1+ (intermediate-free lifecycle).
+- **Target fix:** v0.56.0 (with Autograd — needs temp tracking anyway).
 - **Related:** TD-017 (closure envs).

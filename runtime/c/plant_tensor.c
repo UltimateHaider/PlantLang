@@ -454,27 +454,66 @@ int64_t plant_tensor_size(PlantTensor* t) {
    ══════════════════════════════════════════════════════════════ */
 
 /* Elementwise helper: op 0=add, 1=sub, 2=mul, 3=div. */
-static PlantTensor* _pt_ew(PlantTensor* a, PlantTensor* b, int op) {
+/* v0.55.1 — NumPy-like broadcast shape. Returns 1 on success. */
+static int _pt_bcast_shape(PlantTensor* a, PlantTensor* b,
+                           int64_t* out_nd, int64_t* out_s) {
+    int64_t na = a->ndim, nb = b->ndim;
+    int64_t n = na > nb ? na : nb;
     int64_t i;
+    for (i = 0; i < n; i++) {
+        int64_t da = (i < n - na) ? 1 : a->shape[i - (n - na)];
+        int64_t db = (i < n - nb) ? 1 : b->shape[i - (n - nb)];
+        if (da != db && da != 1 && db != 1) return 0;
+        out_s[i] = da > db ? da : db;
+    }
+    *out_nd = n;
+    return 1;
+}
+
+/* v0.55.1 — row-major index of t at output coordinate oidx, with
+   broadcasting (a size-1 dim contributes index 0). */
+static int64_t _pt_bc_index(PlantTensor* t, const int64_t* oidx, int64_t out_nd) {
+    int64_t off = 0;
+    int64_t shift = out_nd - t->ndim;
+    int64_t i;
+    for (i = 0; i < t->ndim; i++) {
+        int64_t idx = oidx[i + shift];
+        if (t->shape[i] == 1) idx = 0;
+        off += idx * t->strides[i];
+    }
+    return off;
+}
+
+/* Elementwise helper (op: 0=add, 1=sub, 2=mul, 3=div) with broadcasting. */
+static PlantTensor* _pt_ew(PlantTensor* a, PlantTensor* b, int op) {
+    int64_t out_nd = 0;
+    int64_t out_s[16];
+    int64_t oidx[16];
+    int64_t i, d;
     PlantTensor* o;
     if (!a || !b) return plant_tensor_create_error("tensor op: null operand");
     if (plant_tensor_is_error(a)) return a;
     if (plant_tensor_is_error(b)) return b;
-    if (a->ndim != b->ndim) return plant_tensor_create_error("tensor op: ndim mismatch");
-    for (i = 0; i < a->ndim; i++) {
-        if (a->shape[i] != b->shape[i])
-            return plant_tensor_create_error("tensor op: shape mismatch");
-    }
-    o = plant_tensor_create(a->ndim, a->shape);
+    if (!_pt_bcast_shape(a, b, &out_nd, out_s))
+        return plant_tensor_create_error("tensor op: shape mismatch");
+    o = plant_tensor_create(out_nd, out_s);
     if (plant_tensor_is_error(o)) return o;
-    for (i = 0; i < a->size; i++) {
-        double x = a->data[i], y = b->data[i];
+    for (d = 0; d < out_nd; d++) oidx[d] = 0;
+    for (i = 0; i < o->size; i++) {
+        int64_t ia = _pt_bc_index(a, oidx, out_nd);
+        int64_t ib = _pt_bc_index(b, oidx, out_nd);
+        double x = a->data[ia], y = b->data[ib];
         switch (op) {
             case 0: o->data[i] = x + y; break;
             case 1: o->data[i] = x - y; break;
             case 2: o->data[i] = x * y; break;
             case 3: o->data[i] = (y != 0.0) ? (x / y) : 0.0; break;
             default: o->data[i] = x; break;
+        }
+        for (d = out_nd - 1; d >= 0; d--) {
+            oidx[d]++;
+            if (oidx[d] < out_s[d]) break;
+            oidx[d] = 0;
         }
     }
     return o;
@@ -604,4 +643,78 @@ double plant_tensor_min(PlantTensor* a) {
     m = a->data[0];
     for (i = 1; i < a->size; i++) if (a->data[i] < m) m = a->data[i];
     return m;
+}
+
+/* v0.55.1 — SLICE: ranges = [[s0,e0],[s1,e1],...] (half-open per dim). */
+PlantTensor* plant_tensor_slice(PlantTensor* a, PlantArray* ranges) {
+    int64_t nd, i, d;
+    int64_t* s0;
+    int64_t* e0;
+    int64_t* oshape;
+    int64_t idx[16];
+    PlantTensor* o;
+    if (!a || !ranges) return plant_tensor_create_error("slice: null argument");
+    if (plant_tensor_is_error(a)) return a;
+    nd = a->ndim;
+    if (ranges->count != nd)
+        return plant_tensor_create_error("slice: ndim mismatch");
+    s0 = (int64_t*)plant_malloc(sizeof(int64_t) * (size_t)nd);
+    e0 = (int64_t*)plant_malloc(sizeof(int64_t) * (size_t)nd);
+    oshape = (int64_t*)plant_malloc(sizeof(int64_t) * (size_t)nd);
+    if (!s0 || !e0 || !oshape) {
+        if (s0) free(s0);
+        if (e0) free(e0);
+        if (oshape) free(oshape);
+        return plant_tensor_create_error("slice: allocation failed");
+    }
+    for (i = 0; i < nd; i++) {
+        PlantArray* r = (PlantArray*)plant_list_get(ranges, i);
+        const char* sv;
+        const char* ev;
+        if (!r || r->magic != PLANT_ARRAY_MAGIC || r->count < 2) {
+            free(s0); free(e0); free(oshape);
+            return plant_tensor_create_error("slice: bad range entry");
+        }
+        sv = _S(plant_list_get(r, 0));
+        ev = _S(plant_list_get(r, 1));
+        s0[i] = (int64_t)strtoll(sv ? sv : "0", NULL, 10);
+        e0[i] = (int64_t)strtoll(ev ? ev : "0", NULL, 10);
+        if (s0[i] < 0 || e0[i] > a->shape[i] || s0[i] >= e0[i]) {
+            free(s0); free(e0); free(oshape);
+            return plant_tensor_create_error("slice: range invalid");
+        }
+        oshape[i] = e0[i] - s0[i];
+    }
+    o = plant_tensor_create(nd, oshape);
+    free(oshape);
+    if (plant_tensor_is_error(o)) { free(s0); free(e0); return o; }
+    for (d = 0; d < nd; d++) idx[d] = 0;
+    for (i = 0; i < o->size; i++) {
+        int64_t src = 0, dst = 0;
+        for (d = 0; d < nd; d++) src += (s0[d] + idx[d]) * a->strides[d];
+        for (d = 0; d < nd; d++) dst += idx[d] * o->strides[d];
+        o->data[dst] = a->data[src];
+        for (d = nd - 1; d >= 0; d--) {
+            idx[d]++;
+            if (idx[d] < o->shape[d]) break;
+            idx[d] = 0;
+        }
+    }
+    free(s0); free(e0);
+    return o;
+}
+
+/* v0.55.1 — TENSOR_AT(a, [i0, i1, ...]) → double (element access). */
+double plant_tensor_at(PlantTensor* a, PlantArray* idx) {
+    int64_t off = 0;
+    int64_t i;
+    if (!a || plant_tensor_is_error(a)) return 0.0;
+    if (!idx || idx->count != a->ndim) return 0.0;
+    for (i = 0; i < a->ndim; i++) {
+        const char* sv = _S(plant_list_get(idx, i));
+        int64_t k = (int64_t)strtoll(sv ? sv : "0", NULL, 10);
+        if (k < 0 || k >= a->shape[i]) return 0.0;
+        off += k * a->strides[i];
+    }
+    return a->data[off];
 }

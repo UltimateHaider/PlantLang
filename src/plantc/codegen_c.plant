@@ -4905,6 +4905,9 @@ ACTION translate_expr(expr(TXT), nums(LST), evars(LST), maths(LST)),
     REAP e FROM _handle_func_paren, e, "TENSOR_MEAN",      "plant_tensor_mean".
     REAP e FROM _handle_func_paren, e, "TENSOR_MAX",       "plant_tensor_max".
     REAP e FROM _handle_func_paren, e, "TENSOR_MIN",       "plant_tensor_min".
+    # v0.55.1 — tensor completion. MUST be before the SLICE mapper (5013).
+    REAP e FROM _handle_func_paren, e, "TENSOR_SLICE",     "plant_tensor_slice".
+    REAP e FROM _handle_func_paren, e, "TENSOR_AT",        "plant_tensor_at".
     # v0.49.21 — statistical aggregations (single list argument).
     REAP e FROM _math_func_paren, e, "VARIANCE", "plant_list_variance".
     REAP e FROM _math_func_paren, e, "STDDEV", "plant_list_stddev".
@@ -5357,6 +5360,14 @@ ACTION gen_show_stmt(node, nums(LST), evars(LST), isel(TXT)),
       REAP tx_sp FROM strings:SPLIT, cval, "plant_tensor_max(".
       REAP tn_sp FROM strings:SPLIT, cval, "plant_tensor_min(".
       IF COUNT ts_sp > 1 OR COUNT tm_sp > 1 OR COUNT tx_sp > 1 OR COUNT tn_sp > 1,
+          SET cval TO "_from_double(" + cval + ")".
+          SET isn2 TO 2.
+      /IF.
+  /IF.
+  # v0.55.1 — TENSOR_AT returns double; wrap for SHOW.
+  IF isn2 IS 0,
+      REAP ta_sp FROM strings:SPLIT, cval, "plant_tensor_at(".
+      IF COUNT ta_sp > 1,
           SET cval TO "_from_double(" + cval + ")".
           SET isn2 TO 2.
       /IF.
