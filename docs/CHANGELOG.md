@@ -1,3 +1,33 @@
+## v0.55.2 — Activations
+
+### Added
+- 4 activations (PlantTensor*):
+  - TENSOR_RELU(a) — max(0, x) elementwise.
+  - TENSOR_SIGMOID(a) — 1/(1+exp(-x)).
+  - TENSOR_TANH(a) — tanh(x).
+  - TENSOR_SOFTMAX(a, axis) — numerically stable (exp(x-max)/sum);
+    axis=1 (rows), axis=0 (columns), 1D → axis 0.
+- Runtime: plant_tensor_{relu,sigmoid,tanh,softmax}.
+- Codegen: 4 mappers (TENSOR_TANH before TANH at 5061 — ordering safe).
+- 7 new tests.
+
+### Fixed
+- plant_tensor.c: added `#include <math.h>` (tanh, exp).
+
+### Verified
+- Native: 176/176 (was 169)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (575,686 B)
+- valgrind strict: PASS
+- Binary: 1003232 B.
+
+### Out of Scope (v0.55.3+)
+- GELU, SWISH, MISH.
+- TD-041 (intermediate leak) → v0.56.0.
+- TENSOR ↔ LIST interop.
+
 ## v0.55.1 — Tensor Ops Completion
 
 ### Added

@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <math.h>   /* v0.55.2 — activations (tanh, exp) */
 
 /* ── Internal: free fields without freeing the struct ───────── */
 static void _tensor_free_fields(PlantTensor* t) {
@@ -717,4 +718,77 @@ double plant_tensor_at(PlantTensor* a, PlantArray* idx) {
         off += k * a->strides[i];
     }
     return a->data[off];
+}
+
+/* v0.55.2 — Activations. */
+
+PlantTensor* plant_tensor_relu(PlantTensor* a) {
+    if (!a || plant_tensor_is_error(a)) return plant_tensor_create_error("relu: invalid");
+    PlantTensor* o = plant_tensor_create(a->ndim, a->shape);
+    if (plant_tensor_is_error(o)) return o;
+    for (int64_t i = 0; i < a->size; i++) {
+        double x = a->data[i];
+        o->data[i] = (x > 0.0) ? x : 0.0;
+    }
+    return o;
+}
+
+PlantTensor* plant_tensor_sigmoid(PlantTensor* a) {
+    if (!a || plant_tensor_is_error(a)) return plant_tensor_create_error("sigmoid: invalid");
+    PlantTensor* o = plant_tensor_create(a->ndim, a->shape);
+    if (plant_tensor_is_error(o)) return o;
+    for (int64_t i = 0; i < a->size; i++) {
+        o->data[i] = 1.0 / (1.0 + exp(-a->data[i]));
+    }
+    return o;
+}
+
+PlantTensor* plant_tensor_tanh(PlantTensor* a) {
+    if (!a || plant_tensor_is_error(a)) return plant_tensor_create_error("tanh: invalid");
+    PlantTensor* o = plant_tensor_create(a->ndim, a->shape);
+    if (plant_tensor_is_error(o)) return o;
+    for (int64_t i = 0; i < a->size; i++) {
+        o->data[i] = tanh(a->data[i]);
+    }
+    return o;
+}
+
+/* v0.55.2 — SOFTMAX along axis (0=cols, 1=rows). 1D → axis 0. */
+PlantTensor* plant_tensor_softmax(PlantTensor* a, int axis) {
+    if (!a || plant_tensor_is_error(a)) return plant_tensor_create_error("softmax: invalid");
+    if (a->ndim < 1) return plant_tensor_create_error("softmax: ndim<1");
+    PlantTensor* o = plant_tensor_create(a->ndim, a->shape);
+    if (plant_tensor_is_error(o)) return o;
+    if (a->ndim == 1) {
+        double mx = a->data[0];
+        for (int64_t i = 1; i < a->size; i++) if (a->data[i] > mx) mx = a->data[i];
+        double s = 0.0;
+        for (int64_t i = 0; i < a->size; i++) { o->data[i] = exp(a->data[i] - mx); s += o->data[i]; }
+        for (int64_t i = 0; i < a->size; i++) o->data[i] /= s;
+        return o;
+    }
+    if (a->ndim != 2) return plant_tensor_create_error("softmax: only 1d/2d");
+    {
+        int64_t m = a->shape[0], n = a->shape[1];
+        if (axis == 1) {
+            /* rows: each row sums to 1 */
+            for (int64_t i = 0; i < m; i++) {
+                double mx = a->data[i*n];
+                for (int64_t j = 1; j < n; j++) if (a->data[i*n+j] > mx) mx = a->data[i*n+j];
+                double s = 0.0;
+                for (int64_t j = 0; j < n; j++) { double e = exp(a->data[i*n+j] - mx); o->data[i*n+j] = e; s += e; }
+                for (int64_t j = 0; j < n; j++) o->data[i*n+j] /= s;
+            }
+        } else {
+            /* columns: each col sums to 1 */
+            for (int64_t j = 0; j < n; j++) {
+                double mx = a->data[j];
+                for (int64_t i = 1; i < m; i++) if (a->data[i*n+j] > mx) mx = a->data[i*n+j];
+                double s = 0.0;
+                for (int64_t i = 0; i < m; i++) { double e = exp(a->data[i*n+j] - mx); o->data[i*n+j] = e; s += e; }
+                for (int64_t i = 0; i < m; i++) o->data[i*n+j] /= s;
+            }
+        }
+    }
+    return o;
 }

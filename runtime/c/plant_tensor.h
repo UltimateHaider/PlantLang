@@ -79,4 +79,10 @@ double plant_tensor_min(PlantTensor* a);
 PlantTensor* plant_tensor_slice(PlantTensor* a, struct PlantArray* ranges);
 double       plant_tensor_at(PlantTensor* a, struct PlantArray* idx);
 
+/* v0.55.2 — Activations. */
+PlantTensor* plant_tensor_relu(PlantTensor* a);
+PlantTensor* plant_tensor_sigmoid(PlantTensor* a);
+PlantTensor* plant_tensor_tanh(PlantTensor* a);
+PlantTensor* plant_tensor_softmax(PlantTensor* a, int axis);
+
 #endif /* PLANT_TENSOR_H */

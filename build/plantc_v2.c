@@ -12332,6 +12332,10 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* 
     e = _handle_func_paren(e, "TENSOR_MIN", "plant_tensor_min");
     e = _handle_func_paren(e, "TENSOR_SLICE", "plant_tensor_slice");
     e = _handle_func_paren(e, "TENSOR_AT", "plant_tensor_at");
+    e = _handle_func_paren(e, "TENSOR_RELU", "plant_tensor_relu");
+    e = _handle_func_paren(e, "TENSOR_SIGMOID", "plant_tensor_sigmoid");
+    e = _handle_func_paren(e, "TENSOR_TANH", "plant_tensor_tanh");
+    e = _handle_func_paren(e, "TENSOR_SOFTMAX", "plant_tensor_softmax");
     e = _math_func_paren(e, "VARIANCE", "plant_list_variance");
     e = _math_func_paren(e, "STDDEV", "plant_list_stddev");
     e = _math_func_paren(e, "PRODUCT", "plant_list_product");
@@ -18751,7 +18755,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.55.1 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.55.2 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);
