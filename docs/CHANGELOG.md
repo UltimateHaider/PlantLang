@@ -1,3 +1,39 @@
+## v0.56.0b-1 — Matmul + Core Activations Backward
+
+### Added
+- 6 new backward ops (autograd tape):
+  - matmul: dA[i][j] = Σ_l d[i][l]·B[j][l]; dB[j][l] = Σ_i A[i][j]·d[i][l].
+  - relu: d · (input > 0).
+  - sigmoid: d · out · (1−out).
+  - tanh: d · (1−out²).
+  - transpose: transpose(d).
+  - reshape: d (accumulate +=).
+- OP_MATMUL..OP_RESHAPE (8..13).
+- 6 hook sites in plant_tensor.c.
+- 8 new tests.
+
+### Verified
+- Native: 195/195 (was 187)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (576,203 B)
+- valgrind strict: PASS
+- Binary: 1012392 B.
+
+### Out of Scope (v0.56.0b-2)
+- Broadcasting-aware reduction.
+- gradient_broadcast test.
+
+### Out of Scope (v0.56.0c)
+- Modern activations backward (softmax/gelu/swish/mish).
+- TD-041 + TD-042.
+
+### Out of Scope (v0.57.0+)
+- Higher-order AD (retain_graph).
+- Nested GRAD.
+- w->grad field.
+
 ## v0.56.0a — Tape Core (Autograd Foundation)
 
 ### Added

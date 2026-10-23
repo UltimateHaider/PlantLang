@@ -598,6 +598,12 @@ PlantTensor* plant_tensor_matmul(PlantTensor* a, PlantTensor* b) {
             o->data[i * p + j] = sum;
         }
     }
+    /* v0.56.0b-1 — autograd hook (matmul). */
+    if (plant_tape_record_hook &&
+        (plant_tensor_requires_grad(a) || plant_tensor_requires_grad(b))) {
+        plant_tape_record_hook(8 /* OP_MATMUL */, a, b, 0.0, o);
+        o->requires_grad = 1;
+    }
     return o;
 }
 
@@ -619,6 +625,10 @@ PlantTensor* plant_tensor_transpose(PlantTensor* a) {
         for (j = 0; j < n; j++) {
             o->data[j * m + i] = a->data[i * n + j];
         }
+    }
+    if (plant_tape_record_hook && plant_tensor_requires_grad(a)) {
+        plant_tape_record_hook(12 /* OP_TRANSPOSE */, a, 0, 0.0, o);
+        o->requires_grad = 1;
     }
     return o;
 }
@@ -647,6 +657,10 @@ PlantTensor* plant_tensor_reshape(PlantTensor* a, PlantArray* shape) {
     free(ns);
     if (plant_tensor_is_error(o)) return o;
     memcpy(o->data, a->data, sizeof(double) * (size_t)a->size);
+    if (plant_tape_record_hook && plant_tensor_requires_grad(a)) {
+        plant_tape_record_hook(13 /* OP_RESHAPE */, a, 0, 0.0, o);
+        o->requires_grad = 1;
+    }
     return o;
 }
 
@@ -772,6 +786,10 @@ PlantTensor* plant_tensor_relu(PlantTensor* a) {
         double x = a->data[i];
         o->data[i] = (x > 0.0) ? x : 0.0;
     }
+    if (plant_tape_record_hook && plant_tensor_requires_grad(a)) {
+        plant_tape_record_hook(9 /* OP_RELU */, a, 0, 0.0, o);
+        o->requires_grad = 1;
+    }
     return o;
 }
 
@@ -782,6 +800,10 @@ PlantTensor* plant_tensor_sigmoid(PlantTensor* a) {
     for (int64_t i = 0; i < a->size; i++) {
         o->data[i] = 1.0 / (1.0 + exp(-a->data[i]));
     }
+    if (plant_tape_record_hook && plant_tensor_requires_grad(a)) {
+        plant_tape_record_hook(10 /* OP_SIGMOID */, a, 0, 0.0, o);
+        o->requires_grad = 1;
+    }
     return o;
 }
 
@@ -791,6 +813,10 @@ PlantTensor* plant_tensor_tanh(PlantTensor* a) {
     if (plant_tensor_is_error(o)) return o;
     for (int64_t i = 0; i < a->size; i++) {
         o->data[i] = tanh(a->data[i]);
+    }
+    if (plant_tape_record_hook && plant_tensor_requires_grad(a)) {
+        plant_tape_record_hook(11 /* OP_TANH */, a, 0, 0.0, o);
+        o->requires_grad = 1;
     }
     return o;
 }

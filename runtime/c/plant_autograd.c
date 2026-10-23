@@ -220,6 +220,67 @@ PlantTensor* plant_autograd_grad(PlantTensor* loss_t, double loss_d,
                 double inv = 1.0 / (double)da->size;
                 int64_t i;
                 for (i = 0; i < da->size; i++) da->data[i] += d->data[0] * inv;
+            } else if (n->op == OP_MATMUL) {
+                /* dA[i][j] = Sum_l d[i][l]*B[j][l];
+                   dB[j][l] = Sum_i A[i][j]*d[i][l] */
+                int64_t m = n->in0->shape[0];
+                int64_t k = n->in0->shape[1];
+                int64_t p = n->in1->shape[1];
+                PlantTensor* da = plant_tensor_requires_grad(n->in0)
+                                  ? grad_or_zero(n->in0) : 0;
+                PlantTensor* db = plant_tensor_requires_grad(n->in1)
+                                  ? grad_or_zero(n->in1) : 0;
+                int64_t i, j, l;
+                for (i = 0; i < m; i++) {
+                    for (j = 0; j < k; j++) {
+                        double sum = 0.0;
+                        for (l = 0; l < p; l++)
+                            sum += d->data[i * p + l] * n->in1->data[j * p + l];
+                        if (da) da->data[i * k + j] += sum;
+                    }
+                }
+                for (j = 0; j < k; j++) {
+                    for (l = 0; l < p; l++) {
+                        double sum = 0.0;
+                        for (i = 0; i < m; i++)
+                            sum += n->in0->data[i * k + j] * d->data[i * p + l];
+                        if (db) db->data[j * p + l] += sum;
+                    }
+                }
+            } else if (n->op == OP_RELU) {
+                PlantTensor* da = grad_or_zero(n->in0);
+                int64_t i;
+                for (i = 0; i < d->size; i++)
+                    da->data[i] += d->data[i] * (n->in0->data[i] > 0.0 ? 1.0 : 0.0);
+            } else if (n->op == OP_SIGMOID) {
+                PlantTensor* da = grad_or_zero(n->in0);
+                int64_t i;
+                for (i = 0; i < d->size; i++) {
+                    double s = n->out->data[i];
+                    da->data[i] += d->data[i] * s * (1.0 - s);
+                }
+            } else if (n->op == OP_TANH) {
+                PlantTensor* da = grad_or_zero(n->in0);
+                int64_t i;
+                for (i = 0; i < d->size; i++) {
+                    double t = n->out->data[i];
+                    da->data[i] += d->data[i] * (1.0 - t * t);
+                }
+            } else if (n->op == OP_TRANSPOSE) {
+                /* da[i][j] += d[j][i] */
+                PlantTensor* da = grad_or_zero(n->in0);
+                int64_t m = n->in0->shape[0];
+                int64_t nn = n->in0->shape[1];
+                int64_t i, j;
+                for (i = 0; i < m; i++)
+                    for (j = 0; j < nn; j++)
+                        da->data[i * nn + j] += d->data[j * m + i];
+            } else if (n->op == OP_RESHAPE) {
+                /* v0.56.0b-1 — ACCUMULATE (+=), not memcpy. */
+                PlantTensor* da = grad_or_zero(n->in0);
+                int64_t i;
+                for (i = 0; i < da->size; i++)
+                    da->data[i] += d->data[i];
             }
         }
         n = n->prev;
