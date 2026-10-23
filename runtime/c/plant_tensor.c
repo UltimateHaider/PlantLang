@@ -792,3 +792,42 @@ PlantTensor* plant_tensor_softmax(PlantTensor* a, int axis) {
     }
     return o;
 }
+
+/* v0.55.3 — Modern activations. */
+
+PlantTensor* plant_tensor_gelu(PlantTensor* a) {
+    if (!a || plant_tensor_is_error(a)) return plant_tensor_create_error("gelu: invalid");
+    PlantTensor* o = plant_tensor_create(a->ndim, a->shape);
+    if (plant_tensor_is_error(o)) return o;
+    const double SQRT_2_OVER_PI = 0.7978845608028654;
+    const double COEF = 0.044715;
+    for (int64_t i = 0; i < a->size; i++) {
+        double x = a->data[i];
+        double t = tanh(SQRT_2_OVER_PI * (x + COEF * x * x * x));
+        o->data[i] = 0.5 * x * (1.0 + t);
+    }
+    return o;
+}
+
+PlantTensor* plant_tensor_swish(PlantTensor* a) {
+    if (!a || plant_tensor_is_error(a)) return plant_tensor_create_error("swish: invalid");
+    PlantTensor* o = plant_tensor_create(a->ndim, a->shape);
+    if (plant_tensor_is_error(o)) return o;
+    for (int64_t i = 0; i < a->size; i++) {
+        double x = a->data[i];
+        o->data[i] = x / (1.0 + exp(-x));
+    }
+    return o;
+}
+
+PlantTensor* plant_tensor_mish(PlantTensor* a) {
+    if (!a || plant_tensor_is_error(a)) return plant_tensor_create_error("mish: invalid");
+    PlantTensor* o = plant_tensor_create(a->ndim, a->shape);
+    if (plant_tensor_is_error(o)) return o;
+    for (int64_t i = 0; i < a->size; i++) {
+        double x = a->data[i];
+        double sp = (x > 0.0 ? x : 0.0) + log1p(exp(-fabs(x)));
+        o->data[i] = x * tanh(sp);
+    }
+    return o;
+}

@@ -85,4 +85,9 @@ PlantTensor* plant_tensor_sigmoid(PlantTensor* a);
 PlantTensor* plant_tensor_tanh(PlantTensor* a);
 PlantTensor* plant_tensor_softmax(PlantTensor* a, int axis);
 
+/* v0.55.3 — Modern activations. */
+PlantTensor* plant_tensor_gelu(PlantTensor* a);
+PlantTensor* plant_tensor_swish(PlantTensor* a);
+PlantTensor* plant_tensor_mish(PlantTensor* a);
+
 #endif /* PLANT_TENSOR_H */

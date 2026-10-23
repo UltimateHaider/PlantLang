@@ -4913,6 +4913,10 @@ ACTION translate_expr(expr(TXT), nums(LST), evars(LST), maths(LST)),
     REAP e FROM _handle_func_paren, e, "TENSOR_SIGMOID",   "plant_tensor_sigmoid".
     REAP e FROM _handle_func_paren, e, "TENSOR_TANH",      "plant_tensor_tanh".
     REAP e FROM _handle_func_paren, e, "TENSOR_SOFTMAX",   "plant_tensor_softmax".
+    # v0.55.3 — modern activations.
+    REAP e FROM _handle_func_paren, e, "TENSOR_GELU",      "plant_tensor_gelu".
+    REAP e FROM _handle_func_paren, e, "TENSOR_SWISH",     "plant_tensor_swish".
+    REAP e FROM _handle_func_paren, e, "TENSOR_MISH",      "plant_tensor_mish".
     # v0.49.21 — statistical aggregations (single list argument).
     REAP e FROM _math_func_paren, e, "VARIANCE", "plant_list_variance".
     REAP e FROM _math_func_paren, e, "STDDEV", "plant_list_stddev".

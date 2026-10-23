@@ -1,3 +1,33 @@
+## v0.55.3 — Modern Activations
+
+### Added
+- 3 modern activations (PlantTensor*):
+  - TENSOR_GELU(a) — 0.5·x·(1+tanh(√(2/π)·(x+0.044715·x³)))
+    (tanh approximation, PyTorch-compatible).
+  - TENSOR_SWISH(a) — x/(1+exp(-x)) = x·σ(x) (SiLU, β=1).
+  - TENSOR_MISH(a) — x·tanh(softplus(x)) (numerically stable softplus).
+- Runtime: plant_tensor_{gelu,swish,mish}.
+- Codegen: 3 mappers (after TENSOR_SOFTMAX).
+- 3 new tests.
+
+### Verified
+- Native: 179/179 (was 176)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (575,889 B)
+- valgrind strict: PASS
+- Binary: 1003360 B.
+
+### Total Activations (7)
+- v0.55.2: RELU, SIGMOID, TANH, SOFTMAX
+- v0.55.3: GELU, SWISH, MISH
+
+### Out of Scope (v0.56.0+)
+- TD-041 (intermediate leak) → v0.56.0 (with Autograd).
+- ELU, SELU (optional).
+- TENSOR ↔ LIST interop.
+
 ## v0.55.2 — Activations
 
 ### Added
