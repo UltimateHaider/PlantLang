@@ -1,0 +1,4 @@
+CREATE a (TENSOR) TO TENSOR([1.0, 2.0, 3.0]).
+SHOW TENSOR_SUM(a).
+TENSOR_FREE(a).
+SHOW "sum-free-ok".

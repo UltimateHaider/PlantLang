@@ -465,24 +465,40 @@ defining scope.
 - **Preserved:** CMP arithmetic (`SHOW A + B`).
 - **Related:** TD-025.
 
-## TD-041: Tensor intermediates leak — OPEN (target v0.56.0c)
+## TD-041: Tensor intermediates leak — OPEN (target v0.57.0)
 - **Status:** OPEN
 - **Introduced:** v0.55.0 (tensor ops)
 - **Impact:** LOW (still-reachable growth; benign)
 - **Symptom:** `TENSOR_ADD(TENSOR_MATMUL(a,b), c)` — the inner result is
   never freed (each op returns a new ref-counted tensor).
-- **Target fix:** v0.56.0c (codegen free-pass for unnamed tensor-op results).
+- **Target fix:** v0.57.0 (ownership-transfer design: tape takes the
+  creation ref, codegen retains on assignment — see v0.56.0c investigation).
 - **Note:** The v0.56.0a tape retains/releases its own refs; the op
-  creation refs of unnamed intermediates still leak. v0.56.0c adds an
-  ownership/free pass.
+  creation refs of unnamed intermediates still leak. Deferred from
+  v0.56.0c because a codegen free-pass is HIGH risk.
 - **Related:** TD-017 (closure envs), TD-042.
 
-## TD-042: TENSOR([...]) literal input-list leak — OPEN
+## TD-042: TENSOR([...]) literal input-list leak — OPEN (deferred v0.57.0+)
 - **Status:** OPEN
 - **Introduced:** pre-v0.56.0a (discovered in v0.56.0a Phase 5 valgrind)
 - **Impact:** LOW (~50 B per literal; benign still-reachable)
 - **Symptom:** a plain `TENSOR([1.0, 2.0, 3.0])` + `TENSOR_FREE` leaks the
   `_from_double`/`plant_list_make` input-list blocks (~50 B), even with no
   tensor-op or autograd code.
-- **Target fix:** v0.56.0c (or v0.57.0)
-- **Related:** TD-041.
+- **Target fix:** v0.57.0+ (needs TD-008-safe detection; naive `_take` breaks SHOW).
+- **Note:** v0.56.0c attempted a literal-only fix (`plant_tensor_from_list_take`);
+  it was **reverted** because it bypassed `gen_show_stmt`'s TD-008 safe-path
+  (4 definite leaks in `tensor_basic`). The literal detector also only matched
+  single-`[` literals.
+- **Related:** TD-008, TD-041.
+
+## TD-043: SHOW `<double>` leaks `_from_double` string — OPEN
+- **Status:** OPEN
+- **Introduced:** pre-v0.56.0c (discovered in v0.56.0c Phase 4 valgrind)
+- **Impact:** LOW (~24 B per `SHOW <double>`; benign still-reachable)
+- **Symptom:** `SHOW 1.5 + 1.0` leaks 24 B (2 blocks) with **no tensor
+  involved** — the `_from_double(...)` heap string passed to
+  `plant_iReport_print` is never freed.
+- **Target fix:** v0.57.0+ (free the formatted string after print, or use a
+  stack buffer).
+- **Related:** TD-042, TD-003.

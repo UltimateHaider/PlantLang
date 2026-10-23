@@ -1,3 +1,43 @@
+## v0.56.0c — Modern Activations Backward
+
+### Added
+- 4 modern activation backwards:
+  - softmax (Jacobian per axis).
+  - gelu (tanh approx derivative).
+  - swish (s + x·s(1-s)).
+  - mish (t + x·(1-t²)·σ(x)).
+- OP_SOFTMAX..OP_MISH (14..17).
+- 5 hook sites in plant_tensor.c (softmax has 2 return paths).
+- 8 new tests (4 activations + 3 softmax variants + tensor_sum_free).
+
+### Attempted then reverted (TD-042)
+- plant_tensor_from_list_take literal-only fix (Phase 3).
+- Reason: bypassed TD-008 safe-path (4 leaks in tensor_basic). Reverted in Phase 4.
+- TD-042 remains OPEN.
+
+### Documented (new TD)
+- TD-043: SHOW <double> leaks _from_double string (pre-existing).
+
+### Autograd Complete (v0.56.0b-x + c)
+- Tape ops: 17 (elementwise + matmul + activations + shape + broadcast).
+- Neural Networks fully trainable (all activations).
+
+### Verified
+- Native: 207/207 (was 199)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (576,201 B)
+- valgrind strict: PASS
+- Binary: 1016712 B.
+
+### Out of Scope (v0.57.0)
+- TD-041 (intermediate leak; ownership-transfer).
+- TD-042 (literal detection; TD-008-safe).
+- TD-043 (SHOW <double> leak).
+- Higher-order AD (nested GRAD).
+- w->grad field.
+
 ## v0.56.0b-2 — Broadcasting Reduction
 
 ### Added

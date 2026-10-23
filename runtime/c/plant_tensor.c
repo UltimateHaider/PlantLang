@@ -855,6 +855,11 @@ PlantTensor* plant_tensor_softmax(PlantTensor* a, int axis) {
         double s = 0.0;
         for (int64_t i = 0; i < a->size; i++) { o->data[i] = exp(a->data[i] - mx); s += o->data[i]; }
         for (int64_t i = 0; i < a->size; i++) o->data[i] /= s;
+        /* v0.56.0c — autograd hook (softmax 1D; axis in scalar). */
+        if (plant_tape_record_hook && plant_tensor_requires_grad(a)) {
+            plant_tape_record_hook(14 /* OP_SOFTMAX */, a, 0, (double)axis, o);
+            o->requires_grad = 1;
+        }
         return o;
     }
     if (a->ndim != 2) return plant_tensor_create_error("softmax: only 1d/2d");
@@ -880,6 +885,11 @@ PlantTensor* plant_tensor_softmax(PlantTensor* a, int axis) {
             }
         }
     }
+    /* v0.56.0c — autograd hook (softmax 2D; axis in scalar). */
+    if (plant_tape_record_hook && plant_tensor_requires_grad(a)) {
+        plant_tape_record_hook(14 /* OP_SOFTMAX */, a, 0, (double)axis, o);
+        o->requires_grad = 1;
+    }
     return o;
 }
 
@@ -896,6 +906,10 @@ PlantTensor* plant_tensor_gelu(PlantTensor* a) {
         double t = tanh(SQRT_2_OVER_PI * (x + COEF * x * x * x));
         o->data[i] = 0.5 * x * (1.0 + t);
     }
+    if (plant_tape_record_hook && plant_tensor_requires_grad(a)) {
+        plant_tape_record_hook(15 /* OP_GELU */, a, 0, 0.0, o);
+        o->requires_grad = 1;
+    }
     return o;
 }
 
@@ -906,6 +920,10 @@ PlantTensor* plant_tensor_swish(PlantTensor* a) {
     for (int64_t i = 0; i < a->size; i++) {
         double x = a->data[i];
         o->data[i] = x / (1.0 + exp(-x));
+    }
+    if (plant_tape_record_hook && plant_tensor_requires_grad(a)) {
+        plant_tape_record_hook(16 /* OP_SWISH */, a, 0, 0.0, o);
+        o->requires_grad = 1;
     }
     return o;
 }
@@ -918,6 +936,10 @@ PlantTensor* plant_tensor_mish(PlantTensor* a) {
         double x = a->data[i];
         double sp = (x > 0.0 ? x : 0.0) + log1p(exp(-fabs(x)));
         o->data[i] = x * tanh(sp);
+    }
+    if (plant_tape_record_hook && plant_tensor_requires_grad(a)) {
+        plant_tape_record_hook(17 /* OP_MISH */, a, 0, 0.0, o);
+        o->requires_grad = 1;
     }
     return o;
 }

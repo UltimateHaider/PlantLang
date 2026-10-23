@@ -345,6 +345,76 @@ PlantTensor* plant_autograd_grad(PlantTensor* loss_t, double loss_d,
                 int64_t i;
                 for (i = 0; i < da->size; i++)
                     da->data[i] += d->data[i];
+            } else if (n->op == OP_SOFTMAX) {
+                /* v0.56.0c — softmax backward (per axis slice).
+                   dx_i = out_i * (d_i - Sum_j(out_j * d_j)) */
+                PlantTensor* da = grad_or_zero(n->in0);
+                int axis = (int)n->scalar;
+                if (n->out->ndim == 1) {
+                    double sum = 0.0;
+                    int64_t i;
+                    for (i = 0; i < d->size; i++) sum += n->out->data[i] * d->data[i];
+                    for (i = 0; i < d->size; i++)
+                        da->data[i] += n->out->data[i] * (d->data[i] - sum);
+                } else if (n->out->ndim == 2) {
+                    int64_t m = n->out->shape[0], p = n->out->shape[1];
+                    if (axis == 1) {
+                        int64_t i, j;
+                        for (i = 0; i < m; i++) {
+                            double sum = 0.0;
+                            for (j = 0; j < p; j++)
+                                sum += n->out->data[i*p+j] * d->data[i*p+j];
+                            for (j = 0; j < p; j++)
+                                da->data[i*p+j] += n->out->data[i*p+j] * (d->data[i*p+j] - sum);
+                        }
+                    } else {
+                        int64_t i, j;
+                        for (j = 0; j < p; j++) {
+                            double sum = 0.0;
+                            for (i = 0; i < m; i++)
+                                sum += n->out->data[i*p+j] * d->data[i*p+j];
+                            for (i = 0; i < m; i++)
+                                da->data[i*p+j] += n->out->data[i*p+j] * (d->data[i*p+j] - sum);
+                        }
+                    }
+                }
+            } else if (n->op == OP_GELU) {
+                /* v0.56.0c — gelu backward (tanh approx). */
+                const double K = 0.7978845608028654;
+                const double COEF = 0.044715;
+                PlantTensor* da = grad_or_zero(n->in0);
+                int64_t i;
+                for (i = 0; i < d->size; i++) {
+                    double x = n->in0->data[i];
+                    double u = K * (x + COEF * x * x * x);
+                    double t = tanh(u);
+                    double du = K * (1.0 + 3.0 * COEF * x * x);
+                    da->data[i] += d->data[i] *
+                        (0.5 * (1.0 + t) + 0.5 * x * (1.0 - t * t) * du);
+                }
+            } else if (n->op == OP_SWISH) {
+                /* v0.56.0c — swish backward. s = sigmoid(x);
+                   dx = d * (s + x*s*(1-s)). */
+                PlantTensor* da = grad_or_zero(n->in0);
+                int64_t i;
+                for (i = 0; i < d->size; i++) {
+                    double x = n->in0->data[i];
+                    double s = 1.0 / (1.0 + exp(-x));
+                    da->data[i] += d->data[i] * (s + x * s * (1.0 - s));
+                }
+            } else if (n->op == OP_MISH) {
+                /* v0.56.0c — mish backward.
+                   sp = softplus(x); t = tanh(sp); sp' = sigmoid(x);
+                   dx = d * (t + x*(1-t^2)*sp'). */
+                PlantTensor* da = grad_or_zero(n->in0);
+                int64_t i;
+                for (i = 0; i < d->size; i++) {
+                    double x = n->in0->data[i];
+                    double sp = (x > 0.0 ? x : 0.0) + log1p(exp(-fabs(x)));
+                    double t = tanh(sp);
+                    double sig = 1.0 / (1.0 + exp(-x));
+                    da->data[i] += d->data[i] * (t + x * (1.0 - t * t) * sig);
+                }
             }
         }
         n = n->prev;

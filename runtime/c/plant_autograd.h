@@ -29,6 +29,12 @@
 #define OP_TRANSPOSE 12
 #define OP_RESHAPE   13
 
+/* v0.56.0c — Modern activations. */
+#define OP_SOFTMAX   14
+#define OP_GELU      15
+#define OP_SWISH     16
+#define OP_MISH      17
+
 /* Init: register the tape hook with plant_tensor.c. */
 void plant_autograd_init(void);
 
