@@ -1,3 +1,46 @@
+## v0.56.0a — Tape Core (Autograd Foundation)
+
+### Added
+- Reverse-mode Autograd tape core.
+- plant_tensor_retain (missing primitive).
+- requires_grad field on PlantTensor.
+- plant_autograd.{c,h} (tape, backward, GRAD).
+- GRAD(loss, w) API + plant_grad(loss, w) convenience (2-arg).
+- Backward ops: add, sub, mul, div, scale, sum, mean.
+- 2 expression mappers (TENSOR_TRACK, GRAD).
+- TENSOR_TRACK(a). statement form (call_stmt path).
+- plant_autograd_init() in main; #include <plant_autograd.h>.
+- 8 new tests.
+
+### Fixed
+- Op-code bug: _pt_ew internal (0..3) → OP_ADD..OP_DIV (1..4)
+  (was recording MUL as OP_SUB).
+- Tape cleanup uses free() (not plant_free) for raw nodes.
+
+### Documented (new TD)
+- TD-042: TENSOR([...]) literal input-list leak (pre-existing).
+
+### Verified
+- Native: 187/187 (was 179)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (576,201 B)
+- valgrind strict: PASS (tape 0 bytes; user literals leak, TD-042)
+- Binary: 1008296 B.
+
+### Out of Scope (v0.56.0b/c)
+- Matmul, activations backward.
+- Broadcasting-aware reduction.
+- TENSOR_SUM_T (tensor reduction).
+- TD-041 (intermediate leak) → v0.56.0c.
+- TD-042 (input-list leak) → v0.56.0c.
+
+### Out of Scope (v0.57.0+)
+- Higher-order AD (retain_graph).
+- Nested GRAD.
+- w->grad field.
+
 ## v0.55.3 — Modern Activations
 
 ### Added

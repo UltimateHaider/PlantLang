@@ -1,0 +1,8 @@
+CREATE a (TENSOR) TO TENSOR([1.0, 2.0, 3.0]).
+TENSOR_TRACK(a).
+CREATE loss (DBL) TO TENSOR_SUM(a).
+CREATE da (TENSOR) TO GRAD(loss, a).
+SHOW da.
+TENSOR_FREE(da).
+TENSOR_FREE(a).
+SHOW "grad-free-ok".

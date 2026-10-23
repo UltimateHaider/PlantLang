@@ -465,11 +465,24 @@ defining scope.
 - **Preserved:** CMP arithmetic (`SHOW A + B`).
 - **Related:** TD-025.
 
-## TD-041: Tensor intermediates leak — OPEN (target v0.56.0)
+## TD-041: Tensor intermediates leak — OPEN (target v0.56.0c)
 - **Status:** OPEN
 - **Introduced:** v0.55.0 (tensor ops)
 - **Impact:** LOW (still-reachable growth; benign)
 - **Symptom:** `TENSOR_ADD(TENSOR_MATMUL(a,b), c)` — the inner result is
   never freed (each op returns a new ref-counted tensor).
-- **Target fix:** v0.56.0 (with Autograd — needs temp tracking anyway).
-- **Related:** TD-017 (closure envs).
+- **Target fix:** v0.56.0c (codegen free-pass for unnamed tensor-op results).
+- **Note:** The v0.56.0a tape retains/releases its own refs; the op
+  creation refs of unnamed intermediates still leak. v0.56.0c adds an
+  ownership/free pass.
+- **Related:** TD-017 (closure envs), TD-042.
+
+## TD-042: TENSOR([...]) literal input-list leak — OPEN
+- **Status:** OPEN
+- **Introduced:** pre-v0.56.0a (discovered in v0.56.0a Phase 5 valgrind)
+- **Impact:** LOW (~50 B per literal; benign still-reachable)
+- **Symptom:** a plain `TENSOR([1.0, 2.0, 3.0])` + `TENSOR_FREE` leaks the
+  `_from_double`/`plant_list_make` input-list blocks (~50 B), even with no
+  tensor-op or autograd code.
+- **Target fix:** v0.56.0c (or v0.57.0)
+- **Related:** TD-041.

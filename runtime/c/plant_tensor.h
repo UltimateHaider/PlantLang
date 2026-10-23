@@ -22,6 +22,7 @@ typedef struct PlantTensor {
     int64_t  size;       /* Total elements (product of shape) */
     int64_t  ref_count;  /* Reference count (starts at 1) */
     char*    error_msg;  /* NULL if no error */
+    int64_t  requires_grad;  /* v0.56.0a — autograd */
 } PlantTensor;
 
 /* Lifecycle */
@@ -89,5 +90,17 @@ PlantTensor* plant_tensor_softmax(PlantTensor* a, int axis);
 PlantTensor* plant_tensor_gelu(PlantTensor* a);
 PlantTensor* plant_tensor_swish(PlantTensor* a);
 PlantTensor* plant_tensor_mish(PlantTensor* a);
+
+/* v0.56.0a — Autograd primitives. */
+void         plant_tensor_retain(PlantTensor* t);
+int          plant_tensor_requires_grad(PlantTensor* t);
+void         plant_tensor_set_requires_grad(PlantTensor* t, int v);
+PlantTensor* plant_tensor_track(PlantTensor* t);
+
+/* v0.56.0a — tape hook (defined in plant_tensor.c, assigned by
+   plant_autograd.c). NULL disables recording. */
+extern void (*plant_tape_record_hook)(int op, PlantTensor* a,
+                                      PlantTensor* b, double s,
+                                      PlantTensor* out);
 
 #endif /* PLANT_TENSOR_H */

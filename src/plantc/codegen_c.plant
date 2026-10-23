@@ -4917,6 +4917,9 @@ ACTION translate_expr(expr(TXT), nums(LST), evars(LST), maths(LST)),
     REAP e FROM _handle_func_paren, e, "TENSOR_GELU",      "plant_tensor_gelu".
     REAP e FROM _handle_func_paren, e, "TENSOR_SWISH",     "plant_tensor_swish".
     REAP e FROM _handle_func_paren, e, "TENSOR_MISH",      "plant_tensor_mish".
+    # v0.56.0a — autograd.
+    REAP e FROM _handle_func_paren, e, "TENSOR_TRACK",     "plant_tensor_track".
+    REAP e FROM _handle_func_paren, e, "GRAD",             "plant_grad".
     # v0.49.21 — statistical aggregations (single list argument).
     REAP e FROM _math_func_paren, e, "VARIANCE", "plant_list_variance".
     REAP e FROM _math_func_paren, e, "STDDEV", "plant_list_stddev".
@@ -7213,6 +7216,8 @@ ACTION generate_node(node, env(LST)),
         IF ca2 IS "GLOBAL_FREE", SET ca2 TO "plant_free". /IF.
         # v0.51.16 — PUSH(lst, item) → plant_list_push(lst, item).
         IF ca2 IS "PUSH", SET ca2 TO "plant_list_push". /IF.
+        # v0.56.0a — TENSOR_TRACK(x) statement form → plant_tensor_track(x).
+        IF ca2 IS "TENSOR_TRACK", SET ca2 TO "plant_tensor_track". /IF.
         # v0.51.2c.1 — record explicitly freed local vars (TD-006).
         # v0.54.2b — Item 4: a duplicate explicit free is skipped.
         IF ca2orig IS "LIST_FREE" OR ca2orig IS "TENSOR_FREE" OR ca2orig IS "FREE",
@@ -9647,7 +9652,7 @@ ACTION validate_types(bd(LST)),
 /ACTION.
 
 ACTION generate_c(ast(LST)),
-    CREATE header(TXT) TO "#include <stdbool.h>\n#include <plant_compat.h>\n#include <plant_memory.h>\n#include <plant_math.h>\n#include <plant_complex.h>\n#include <plant_geo.h>\n\n".
+    CREATE header(TXT) TO "#include <stdbool.h>\n#include <plant_compat.h>\n#include <plant_memory.h>\n#include <plant_math.h>\n#include <plant_complex.h>\n#include <plant_geo.h>\n#include <plant_autograd.h>\n\n".
     CREATE decl_code(TXT) TO "".
     CREATE stmt_code(TXT) TO "".
     CREATE has_decl(LON) TO 0.
@@ -10497,7 +10502,7 @@ ACTION generate_c(ast(LST)),
             /IF.
             SET afi TO afi + 2.
         /SEASON.
-        SET stmt_code TO "int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n" + sp_init_code + dcode + stmt_code + "  plant_async_drain();\n" + auto_free + "  return 0;\n}\n".
+        SET stmt_code TO "int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n  plant_autograd_init();\n" + sp_init_code + dcode + stmt_code + "  plant_async_drain();\n" + auto_free + "  return 0;\n}\n".
     /IF.
     # v0.49.27 - C typedefs for TYPE aliases
     CREATE td_code(TXT) TO "".

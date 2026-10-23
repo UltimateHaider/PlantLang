@@ -14,7 +14,7 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.55.3
+VERSION    ?= 0.56.0a
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
@@ -35,7 +35,8 @@ TENSOR     := runtime/c/plant_tensor.c
 MEMORY     := runtime/c/plant_memory.c
 COMPLEX    := runtime/c/plant_complex.c
 GEO        := runtime/c/plant_geo.c
-RUNTIME_C  := $(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) $(REPORT_HTML) $(LEXER) $(PARSER) $(CODEGEN) $(MATH) $(TENSOR) $(MEMORY) $(COMPLEX) $(GEO)
+AUTOGRAD   := runtime/c/plant_autograd.c
+RUNTIME_C  := $(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) $(REPORT_HTML) $(LEXER) $(PARSER) $(CODEGEN) $(MATH) $(TENSOR) $(MEMORY) $(COMPLEX) $(GEO) $(AUTOGRAD)
 COMPAT     := runtime/c/plant_compat.h
 
 # v0.52.0 — Precompile the test-runtime subset once (link per test).
@@ -44,7 +45,7 @@ TEST_RUNTIME_C := runtime/c/plant_runtime.c runtime/c/plant_error.c \
                   runtime/c/plant_report_xml.c runtime/c/plant_report_html.c \
                   runtime/c/plant_math.c runtime/c/plant_tensor.c \
                   runtime/c/plant_memory.c runtime/c/plant_complex.c \
-                  runtime/c/plant_geo.c
+                  runtime/c/plant_geo.c runtime/c/plant_autograd.c
 TEST_RUNTIME_OBJS := $(addprefix build/trt/, $(notdir $(TEST_RUNTIME_C:.c=.o)))
 TEST_RUNTIME_LIB  := build/libplant_test_runtime.a
 
@@ -212,7 +213,7 @@ dist: all self test ## Build versioned tarball + unpack/build/test validation
 		release/plantlang-$(VERSION)/ 2>/dev/null || cp Makefile README.md LICENSE.txt CHANGELOG.md release/plantlang-$(VERSION)/
 	@cp src/plantc/lexer.plant src/plantc/parser.plant src/plantc/codegen_c.plant src/plantc/main.plant \
 		release/plantlang-$(VERSION)/src/plantc/
-	@cp $(RUNTIME_C) $(COMPAT) runtime/c/plant_runtime.h runtime/c/plant_report.h runtime/c/plant_lexer.h runtime/c/plant_parser.h runtime/c/plant_codegen.h runtime/c/plant_types.h release/plantlang-$(VERSION)/runtime/c/
+	@cp $(RUNTIME_C) $(COMPAT) runtime/c/plant_autograd.h runtime/c/plant_runtime.h runtime/c/plant_report.h runtime/c/plant_lexer.h runtime/c/plant_parser.h runtime/c/plant_codegen.h runtime/c/plant_types.h release/plantlang-$(VERSION)/runtime/c/
 	@cp tests/native/*.plant tests/native/*.expected tests/native/*.c tests/native/*.h tests/native/run_native_tests.sh \
 		release/plantlang-$(VERSION)/tests/native/
 	@mkdir -p release/plantlang-$(VERSION)/tests/generics
@@ -237,7 +238,7 @@ dist: all self test ## Build versioned tarball + unpack/build/test validation
 install: all ## Install to $(PREFIX) (default ~/.local)
 	@mkdir -p $(PREFIX)/bin $(PREFIX)/include/plantlang
 	@cp $(NATIVE_BIN) $(PREFIX)/bin/Chloroplast
-	@cp $(COMPAT) $(RUNTIME_C) $(PREFIX)/include/plantlang/
+	@cp $(COMPAT) $(RUNTIME_C) runtime/c/plant_autograd.h $(PREFIX)/include/plantlang/
 	@echo "== installed: $(PREFIX)/bin/Chloroplast =="
 	@$(PREFIX)/bin/Chloroplast --version
 
@@ -357,7 +358,7 @@ valgrind-check: $(NATIVE_BIN) ## Run valgrind on compiled tensor memory tests (r
 		./bin/Chloroplast tests/native/$$test.plant /tmp/vg_$$test.c 2>/dev/null; \
 		$(CC) $(CFLAGS) $(TEST_CFLAGS) $(CPPFLAGS) /tmp/vg_$$test.c \
 			$(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) \
-			$(REPORT_HTML) $(MATH) $(TENSOR) tests/native/mock_ffi.c \
+			$(REPORT_HTML) $(MATH) $(TENSOR) $(AUTOGRAD) tests/native/mock_ffi.c \
 			-lm -ldl -o /tmp/vg_$$test 2>/dev/null; \
 		valgrind --leak-check=full \
 			--errors-for-leak-kinds=definite \
@@ -389,7 +390,7 @@ valgrind-check-tensor: $(NATIVE_BIN) ## Run strict valgrind on tensor tests
 		./bin/Chloroplast tests/native/$$test.plant /tmp/vg_$$test.c 2>/dev/null; \
 		$(CC) $(CFLAGS) $(TEST_CFLAGS) $(CPPFLAGS) /tmp/vg_$$test.c \
 			$(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) \
-			$(REPORT_HTML) $(MATH) $(TENSOR) $(MEMORY) tests/native/mock_ffi.c \
+			$(REPORT_HTML) $(MATH) $(TENSOR) $(MEMORY) $(AUTOGRAD) tests/native/mock_ffi.c \
 			-lm -ldl -o /tmp/vg_$$test 2>/dev/null; \
 		valgrind --leak-check=full \
 			--error-exitcode=1 \
@@ -417,7 +418,7 @@ valgrind-check-tensor-soft: $(NATIVE_BIN) ## Report tensor leaks without failing
 		./bin/Chloroplast tests/native/$$test.plant /tmp/vgs_$$test.c 2>/dev/null; \
 		$(CC) $(CFLAGS) $(TEST_CFLAGS) $(CPPFLAGS) /tmp/vgs_$$test.c \
 			$(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) \
-			$(REPORT_HTML) $(MATH) $(TENSOR) $(MEMORY) tests/native/mock_ffi.c \
+			$(REPORT_HTML) $(MATH) $(TENSOR) $(MEMORY) $(AUTOGRAD) tests/native/mock_ffi.c \
 			-lm -ldl -o /tmp/vgs_$$test 2>/dev/null; \
 		valgrind --leak-check=full \
 			--errors-for-leak-kinds=definite \
@@ -1012,6 +1013,25 @@ verify-v0.51.23: check-no-raw-malloc check-expected-files \
 	@echo "[6/6] Update RELEASES..."  && make update-growth && make check-releases-updated
 	@echo "========================================================"
 	@echo "  v0.51.23 VERIFIED"
+	@echo "========================================================"
+
+# ── verify-v0.56.0a: comprehensive release gate ───────────────
+verify-v0.56.0a: check-no-raw-malloc check-expected-files \
+                check-changelog-numbers check-ffi-safety \
+                check-dispatcher-only
+	@echo "========================================================"
+	@echo "  v0.56.0a VERIFICATION GATE"
+	@echo "========================================================"
+	@echo "[1/6] Native tests..."     && sh tests/native/run_native_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[2/6] Generics..."         && sh tests/generics/run_generics_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[3/6] Closures..."         && sh tests/closures/run_closures_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[4/6] Self-hosting..."     && make self || exit 1
+	@cmp -s build/plantc_v3 bin/Chloroplast || \
+		{ echo "STOP: Self-hosting failed"; exit 1; }
+	@echo "[5/6] valgrind strict..."  && $(MAKE) valgrind-check-tensor || exit 1
+	@echo "[6/6] Update RELEASES..."  && make update-growth && make check-releases-updated
+	@echo "========================================================"
+	@echo "  v0.56.0a VERIFIED"
 	@echo "========================================================"
 
 # ── verify-v0.55.3: comprehensive release gate ────────────────

@@ -28,7 +28,7 @@ fi
 
 out=$("$PLANTC" --version 2>&1)
 rc=$?
-  if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '0.55.3'; then
+  if [ "$rc" -eq 0 ] && printf '%s' "$out" | grep -q '0.56.0a'; then
   echo "PASS  cli --version"; pass=$((pass+1))
 else
   echo "FAIL  cli --version"; fail=$((fail+1))
@@ -94,6 +94,7 @@ if gcc -w -O0 -I "$ROOT/runtime/c" "$DIR/tx_types.c" \
     "$ROOT/runtime/c/plant_math.c" "$ROOT/runtime/c/plant_tensor.c" \
     "$ROOT/runtime/c/plant_memory.c" \
         "$ROOT/runtime/c/plant_complex.c" \
+    "$ROOT/runtime/c/plant_autograd.c" \
     "$ROOT/tests/native/mock_ffi.c" \
     -lm -ldl -o "$BUILD/tx_types" \
       >"$BUILD/tx_types.compile.log" 2>&1 \

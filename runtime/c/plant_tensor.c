@@ -61,6 +61,7 @@ PlantTensor* plant_tensor_create_error(const char* msg) {
     t->size = 0;
     t->ref_count = 1;
     t->error_msg = NULL;
+    t->requires_grad = 0;
     if (msg) {
         size_t len = strlen(msg);
         t->error_msg = (char*)plant_malloc(len + 1);
@@ -114,6 +115,7 @@ PlantTensor* plant_tensor_create(int64_t ndim, const int64_t* shape) {
     t->ref_count = 1;
     t->magic = PLANT_TENSOR_MAGIC;
     t->error_msg = NULL;
+    t->requires_grad = 0;
 
     for (i = 0; i < ndim; i++) t->shape[i] = shape[i];
     _tensor_compute_strides(ndim, shape, t->strides);
@@ -131,6 +133,25 @@ void plant_tensor_free(PlantTensor* t) {
     free(t);
 }
 
+/* v0.56.0a — Autograd primitives. */
+void plant_tensor_retain(PlantTensor* t) {
+    if (t) t->ref_count++;
+}
+int plant_tensor_requires_grad(PlantTensor* t) {
+    return t ? (int)t->requires_grad : 0;
+}
+void plant_tensor_set_requires_grad(PlantTensor* t, int v) {
+    if (t) t->requires_grad = (v != 0);
+}
+PlantTensor* plant_tensor_track(PlantTensor* t) {
+    if (t) t->requires_grad = 1;
+    return t;
+}
+
+/* v0.56.0a — tape hook (assigned by plant_autograd.c). */
+void (*plant_tape_record_hook)(int op, PlantTensor* a, PlantTensor* b,
+                               double s, PlantTensor* out) = 0;
+
 /* ── plant_tensor_deep_copy ─────────────────────────────────── */
 PlantTensor* plant_tensor_deep_copy(const PlantTensor* src) {
     PlantTensor* t;
@@ -146,6 +167,7 @@ PlantTensor* plant_tensor_deep_copy(const PlantTensor* src) {
     t->ref_count = 1;
     t->magic = PLANT_TENSOR_MAGIC;
     t->error_msg = NULL;
+    t->requires_grad = src->requires_grad;
 
     t->shape = (int64_t*)plant_malloc((size_t)src->ndim * sizeof(int64_t));
     if (!t->shape) {
@@ -517,6 +539,15 @@ static PlantTensor* _pt_ew(PlantTensor* a, PlantTensor* b, int op) {
             oidx[d] = 0;
         }
     }
+    /* v0.56.0a — autograd hook (exact-shape only). */
+    if (plant_tape_record_hook &&
+        (plant_tensor_requires_grad(a) || plant_tensor_requires_grad(b)) &&
+        a->size == b->size && a->size == o->size) {
+        /* Internal _pt_ew codes are 0..3; tape codes OP_ADD..OP_DIV are
+           1..4, so shift by one (v0.56.0a). */
+        plant_tape_record_hook(op + 1, a, b, 0.0, o);
+        o->requires_grad = 1;
+    }
     return o;
 }
 
@@ -533,6 +564,10 @@ PlantTensor* plant_tensor_scale(PlantTensor* a, double s) {
     o = plant_tensor_create(a->ndim, a->shape);
     if (plant_tensor_is_error(o)) return o;
     for (i = 0; i < a->size; i++) o->data[i] = a->data[i] * s;
+    if (plant_tape_record_hook && plant_tensor_requires_grad(a)) {
+        plant_tape_record_hook(5 /* OP_SCALE */, a, 0, s, o);
+        o->requires_grad = 1;
+    }
     return o;
 }
 
@@ -620,12 +655,19 @@ double plant_tensor_sum(PlantTensor* a) {
     double s = 0.0;
     if (!a || plant_tensor_is_error(a)) return 0.0;
     for (i = 0; i < a->size; i++) s += a->data[i];
+    if (plant_tape_record_hook && plant_tensor_requires_grad(a))
+        plant_tape_record_hook(6 /* OP_SUM */, a, 0, 0.0, 0);
     return s;
 }
 
 double plant_tensor_mean(PlantTensor* a) {
+    int64_t i;
+    double s = 0.0;
     if (!a || plant_tensor_is_error(a) || a->size == 0) return 0.0;
-    return plant_tensor_sum(a) / (double)a->size;
+    for (i = 0; i < a->size; i++) s += a->data[i];
+    if (plant_tape_record_hook && plant_tensor_requires_grad(a))
+        plant_tape_record_hook(7 /* OP_MEAN */, a, 0, 0.0, 0);
+    return s / (double)a->size;
 }
 
 double plant_tensor_max(PlantTensor* a) {
