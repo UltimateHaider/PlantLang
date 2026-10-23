@@ -1,3 +1,33 @@
+## v0.56.0b-2 — Broadcasting Reduction
+
+### Added
+- Broadcasting-aware gradient reduction (OP_ADD/SUB/MUL/DIV).
+- Exported helpers: plant_tensor_bc_index, plant_tensor_bcast_reduce.
+- 4 new tests (1d, row, col, mul).
+
+### Verified
+- Native: 199/199 (was 195)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (576,203 B)
+- valgrind strict: PASS
+- Binary: 1012616 B.
+
+### Autograd Complete (v0.56.0b-x)
+- Tape ops: 13 (elementwise + matmul + activations + shape).
+- Broadcasting reduction.
+- Neural Networks fully trainable.
+
+### Out of Scope (v0.56.0c)
+- Modern activations backward (softmax/gelu/swish/mish).
+- TD-041 + TD-042.
+
+### Out of Scope (v0.57.0+)
+- Higher-order AD.
+- Nested GRAD.
+- w->grad field.
+
 ## v0.56.0b-1 — Matmul + Core Activations Backward
 
 ### Added

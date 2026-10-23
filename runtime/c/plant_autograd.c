@@ -95,6 +95,90 @@ static void grad_free_all(void) {
     plant_grad_map = 0;
 }
 
+/* ── v0.56.0b-2 — Broadcast-aware accumulation helpers ──────── */
+
+/* target += sign * reduce(d, target-shape). */
+static void ag_acc_reduced(PlantTensor* target, const PlantTensor* d,
+                           double sign) {
+    PlantTensor* r;
+    int64_t i;
+    if (!target) return;
+    r = plant_tensor_bcast_reduce(d, target);
+    if (plant_tensor_is_error(r)) { plant_tensor_free(r); return; }
+    for (i = 0; i < r->size; i++) target->data[i] += sign * r->data[i];
+    plant_tensor_free(r);
+}
+
+/* target += reduce(d ⊙ broadcast(u), target-shape). */
+static void ag_acc_reduced_mul(PlantTensor* target, const PlantTensor* d,
+                               const PlantTensor* u) {
+    PlantTensor* full;
+    int64_t oidx[16], i, dd;
+    if (!target) return;
+    full = plant_tensor_create(d->ndim, d->shape);
+    if (plant_tensor_is_error(full)) { plant_tensor_free(full); return; }
+    for (dd = 0; dd < d->ndim; dd++) oidx[dd] = 0;
+    for (i = 0; i < d->size; i++) {
+        int64_t ui = plant_tensor_bc_index((PlantTensor*)u, oidx, d->ndim);
+        full->data[i] = d->data[i] * u->data[ui];
+        for (dd = d->ndim - 1; dd >= 0; dd--) {
+            oidx[dd]++;
+            if (oidx[dd] < d->shape[dd]) break;
+            oidx[dd] = 0;
+        }
+    }
+    ag_acc_reduced(target, full, 1.0);
+    plant_tensor_free(full);
+}
+
+/* target += reduce(d / broadcast(u), target-shape)   (for da). */
+static void ag_acc_reduced_div_a(PlantTensor* target, const PlantTensor* d,
+                                 const PlantTensor* u) {
+    PlantTensor* full;
+    int64_t oidx[16], i, dd;
+    if (!target) return;
+    full = plant_tensor_create(d->ndim, d->shape);
+    if (plant_tensor_is_error(full)) { plant_tensor_free(full); return; }
+    for (dd = 0; dd < d->ndim; dd++) oidx[dd] = 0;
+    for (i = 0; i < d->size; i++) {
+        int64_t ui = plant_tensor_bc_index((PlantTensor*)u, oidx, d->ndim);
+        double bb = u->data[ui];
+        full->data[i] = (bb != 0.0) ? (d->data[i] / bb) : 0.0;
+        for (dd = d->ndim - 1; dd >= 0; dd--) {
+            oidx[dd]++;
+            if (oidx[dd] < d->shape[dd]) break;
+            oidx[dd] = 0;
+        }
+    }
+    ag_acc_reduced(target, full, 1.0);
+    plant_tensor_free(full);
+}
+
+/* target += reduce(-d*a/b², target-shape)   (for db). */
+static void ag_acc_reduced_div_b(PlantTensor* target, const PlantTensor* d,
+                                 const PlantTensor* a, const PlantTensor* b) {
+    PlantTensor* full;
+    int64_t oidx[16], i, dd;
+    if (!target) return;
+    full = plant_tensor_create(d->ndim, d->shape);
+    if (plant_tensor_is_error(full)) { plant_tensor_free(full); return; }
+    for (dd = 0; dd < d->ndim; dd++) oidx[dd] = 0;
+    for (i = 0; i < d->size; i++) {
+        int64_t ai = plant_tensor_bc_index((PlantTensor*)a, oidx, d->ndim);
+        int64_t bi = plant_tensor_bc_index((PlantTensor*)b, oidx, d->ndim);
+        double bb = b->data[bi];
+        full->data[i] = (bb != 0.0)
+            ? (-d->data[i] * a->data[ai] / (bb * bb)) : 0.0;
+        for (dd = d->ndim - 1; dd >= 0; dd--) {
+            oidx[dd]++;
+            if (oidx[dd] < d->shape[dd]) break;
+            oidx[dd] = 0;
+        }
+    }
+    ag_acc_reduced(target, full, 1.0);
+    plant_tensor_free(full);
+}
+
 /* ── Init ───────────────────────────────────────────────────── */
 void plant_autograd_init(void) {
     plant_tape_record_hook = plant_tape_record;
@@ -175,38 +259,18 @@ PlantTensor* plant_autograd_grad(PlantTensor* loss_t, double loss_d,
         PlantTensor* d = n->out ? grad_get(n->out) : 0;
         if (d) {
             if (n->op == OP_ADD) {
-                PlantTensor* da = grad_or_zero(n->in0);
-                PlantTensor* db = n->in1 ? grad_or_zero(n->in1) : 0;
-                int64_t i;
-                for (i = 0; i < d->size; i++) {
-                    da->data[i] += d->data[i];
-                    if (db) db->data[i] += d->data[i];
-                }
+                /* v0.56.0b-2 — broadcasting-aware reduce. */
+                ag_acc_reduced(grad_or_zero(n->in0), d, +1.0);
+                if (n->in1) ag_acc_reduced(grad_or_zero(n->in1), d, +1.0);
             } else if (n->op == OP_SUB) {
-                PlantTensor* da = grad_or_zero(n->in0);
-                PlantTensor* db = n->in1 ? grad_or_zero(n->in1) : 0;
-                int64_t i;
-                for (i = 0; i < d->size; i++) {
-                    da->data[i] += d->data[i];
-                    if (db) db->data[i] -= d->data[i];
-                }
+                ag_acc_reduced(grad_or_zero(n->in0), d, +1.0);
+                if (n->in1) ag_acc_reduced(grad_or_zero(n->in1), d, -1.0);
             } else if (n->op == OP_MUL) {
-                PlantTensor* da = grad_or_zero(n->in0);
-                PlantTensor* db = grad_or_zero(n->in1);
-                int64_t i;
-                for (i = 0; i < d->size; i++) {
-                    da->data[i] += d->data[i] * n->in1->data[i];
-                    db->data[i] += d->data[i] * n->in0->data[i];
-                }
+                ag_acc_reduced_mul(grad_or_zero(n->in0), d, n->in1);
+                ag_acc_reduced_mul(grad_or_zero(n->in1), d, n->in0);
             } else if (n->op == OP_DIV) {
-                PlantTensor* da = grad_or_zero(n->in0);
-                PlantTensor* db = grad_or_zero(n->in1);
-                int64_t i;
-                for (i = 0; i < d->size; i++) {
-                    double b = n->in1->data[i];
-                    da->data[i] += d->data[i] / b;
-                    db->data[i] -= d->data[i] * n->in0->data[i] / (b * b);
-                }
+                ag_acc_reduced_div_a(grad_or_zero(n->in0), d, n->in1);
+                ag_acc_reduced_div_b(grad_or_zero(n->in1), d, n->in0, n->in1);
             } else if (n->op == OP_SCALE) {
                 PlantTensor* da = grad_or_zero(n->in0);
                 int64_t i;

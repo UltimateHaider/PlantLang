@@ -103,4 +103,10 @@ extern void (*plant_tape_record_hook)(int op, PlantTensor* a,
                                       PlantTensor* b, double s,
                                       PlantTensor* out);
 
+/* v0.56.0b-2 — Broadcast helpers (exported). */
+int64_t      plant_tensor_bc_index(PlantTensor* t, const int64_t* oidx,
+                                   int64_t out_nd);
+PlantTensor* plant_tensor_bcast_reduce(const PlantTensor* d,
+                                       const PlantTensor* t);
+
 #endif /* PLANT_TENSOR_H */

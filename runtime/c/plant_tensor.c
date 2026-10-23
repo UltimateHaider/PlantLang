@@ -494,8 +494,9 @@ static int _pt_bcast_shape(PlantTensor* a, PlantTensor* b,
 }
 
 /* v0.55.1 — row-major index of t at output coordinate oidx, with
-   broadcasting (a size-1 dim contributes index 0). */
-static int64_t _pt_bc_index(PlantTensor* t, const int64_t* oidx, int64_t out_nd) {
+   broadcasting (a size-1 dim contributes index 0).
+   v0.56.0b-2 — exported for autograd broadcast reduction. */
+int64_t plant_tensor_bc_index(PlantTensor* t, const int64_t* oidx, int64_t out_nd) {
     int64_t off = 0;
     int64_t shift = out_nd - t->ndim;
     int64_t i;
@@ -523,8 +524,8 @@ static PlantTensor* _pt_ew(PlantTensor* a, PlantTensor* b, int op) {
     if (plant_tensor_is_error(o)) return o;
     for (d = 0; d < out_nd; d++) oidx[d] = 0;
     for (i = 0; i < o->size; i++) {
-        int64_t ia = _pt_bc_index(a, oidx, out_nd);
-        int64_t ib = _pt_bc_index(b, oidx, out_nd);
+        int64_t ia = plant_tensor_bc_index(a, oidx, out_nd);
+        int64_t ib = plant_tensor_bc_index(b, oidx, out_nd);
         double x = a->data[ia], y = b->data[ib];
         switch (op) {
             case 0: o->data[i] = x + y; break;
@@ -539,10 +540,10 @@ static PlantTensor* _pt_ew(PlantTensor* a, PlantTensor* b, int op) {
             oidx[d] = 0;
         }
     }
-    /* v0.56.0a — autograd hook (exact-shape only). */
+    /* v0.56.0a — autograd hook.
+       v0.56.0b-2 — record broadcast ops too (backward reduces the grad). */
     if (plant_tape_record_hook &&
-        (plant_tensor_requires_grad(a) || plant_tensor_requires_grad(b)) &&
-        a->size == b->size && a->size == o->size) {
+        (plant_tensor_requires_grad(a) || plant_tensor_requires_grad(b))) {
         /* Internal _pt_ew codes are 0..3; tape codes OP_ADD..OP_DIV are
            1..4, so shift by one (v0.56.0a). */
         plant_tape_record_hook(op + 1, a, b, 0.0, o);
@@ -774,6 +775,27 @@ double plant_tensor_at(PlantTensor* a, PlantArray* idx) {
         off += k * a->strides[i];
     }
     return a->data[off];
+}
+
+/* v0.56.0b-2 — Sum d (output shape) down to target's broadcast shape. */
+PlantTensor* plant_tensor_bcast_reduce(const PlantTensor* d,
+                                       const PlantTensor* t) {
+    int64_t oidx[16], i, dd;
+    PlantTensor* r;
+    if (!d || !t) return plant_tensor_create_error("bcast_reduce: null");
+    r = plant_tensor_create(t->ndim, t->shape);
+    if (plant_tensor_is_error(r)) return r;
+    for (dd = 0; dd < d->ndim; dd++) oidx[dd] = 0;
+    for (i = 0; i < d->size; i++) {
+        int64_t ti = plant_tensor_bc_index((PlantTensor*)t, oidx, d->ndim);
+        r->data[ti] += d->data[i];
+        for (dd = d->ndim - 1; dd >= 0; dd--) {
+            oidx[dd]++;
+            if (oidx[dd] < d->shape[dd]) break;
+            oidx[dd] = 0;
+        }
+    }
+    return r;
 }
 
 /* v0.55.2 — Activations. */

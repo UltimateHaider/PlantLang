@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.56.0b-1
+# Auto-updated: 0.56.0b-2
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.56.0b-1 | 1012392 | 8963 | 901 | 109 | 322 | 5361 |
+| v0.56.0b-2 | 1012616 | 8963 | 923 | 109 | 322 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -68,6 +68,7 @@
 | v0.55.3 | 2026 | Modern Activations | Released |
 | v0.56.0a | 2026 | Tape Core (Autograd Foundation) | Released |
 | v0.56.0b-1 | 2026 | Matmul + Core Activations Backward | Released |
+| v0.56.0b-2 | 2026 | Broadcasting Reduction | Released |
 
 ## Growth Chart (ASCII)
 
