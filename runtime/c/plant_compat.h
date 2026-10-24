@@ -90,8 +90,20 @@ static long plant_rw_arg_long(tx_t v) { if (!v) return 0; if ((uintptr_t)v < 409
 static tx_t _from_long(long n) { return _from_digit(n); }
 /* v0.49.6 — decimal literals: [1.5, 2.7] emit _from_double(...).
    %g prints integral doubles without the trailing dot (1.0 → "1"),
-   so the number string round-trips through _to_long/atol too. */
-static tx_t _from_double(double d) { char buf[64]; snprintf(buf, 64, "%.10g", d); return (tx_t)plant_heapstr_alloc_copy(buf); }
+   so the number string round-trips through _to_long/atol too.
+   v0.57.0a — TD-043: static rotating buffer (no leak). The 64-byte
+   zeroed header prefix makes plant_heapstr_release safely no-op
+   (magic mismatch), avoiding an OOB read + free of static storage. */
+#define _PLANT_DBL_SLOTS   64
+#define _PLANT_DBL_HDRPAD  64
+static char _plant_dbl_store[_PLANT_DBL_SLOTS][_PLANT_DBL_HDRPAD + 64];
+static int  _plant_dbl_idx = 0;
+static tx_t _from_double(double d) {
+    char* p = _plant_dbl_store[_plant_dbl_idx] + _PLANT_DBL_HDRPAD;
+    _plant_dbl_idx = (_plant_dbl_idx + 1) % _PLANT_DBL_SLOTS;
+    snprintf(p, 64, "%.10g", d);
+    return (tx_t)p;
+}
 /* v0.48.5 — FFI numeric results: C functions returning `long` hand
    raw integer bits back in tx_t. On this runtime intptr_t == void*,
    so the conversion is identical to _from_long; this single choke

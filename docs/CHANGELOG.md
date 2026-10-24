@@ -1,3 +1,30 @@
+## v0.57.0a — TD-043 (SHOW double leak)
+
+### Fixed
+- TD-043: SHOW <double> no longer leaks _from_double string.
+  - _from_double now uses a 64-slot static rotating buffer (like
+    _from_long for 0-9).
+  - 64-byte zeroed header prefix per slot: makes plant_heapstr_release
+    safely no-op (magic mismatch), avoiding OOB read + free of static.
+  - ~24 B per SHOW double closed.
+
+### Verified
+- Native: 207/207
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (576,201 B)
+- valgrind strict: PASS (0 bytes definitely lost, 0 errors)
+- Binary: 1017320 B (+0.06%).
+
+### Documented limit
+- Single decimal list literal up to 64 distinct doubles (current max: 6).
+
+### Out of Scope (v0.57.0b/c/d)
+- TD-042 (literal detection).
+- TD-041 (intermediate leak).
+- Higher-order AD.
+
 ## v0.56.0c — Modern Activations Backward
 
 ### Added

@@ -492,13 +492,11 @@ defining scope.
   single-`[` literals.
 - **Related:** TD-008, TD-041.
 
-## TD-043: SHOW `<double>` leaks `_from_double` string — OPEN
-- **Status:** OPEN
+## TD-043: SHOW `<double>` leaks `_from_double` string — CLOSED
+- **Status:** ✅ CLOSED in v0.57.0a
 - **Introduced:** pre-v0.56.0c (discovered in v0.56.0c Phase 4 valgrind)
-- **Impact:** LOW (~24 B per `SHOW <double>`; benign still-reachable)
-- **Symptom:** `SHOW 1.5 + 1.0` leaks 24 B (2 blocks) with **no tensor
-  involved** — the `_from_double(...)` heap string passed to
-  `plant_iReport_print` is never freed.
-- **Target fix:** v0.57.0+ (free the formatted string after print, or use a
-  stack buffer).
+- **Fixed:** `_from_double` uses a 64-slot static rotating buffer with a
+  64-byte zeroed header prefix (safe with `plant_heapstr_release`, which
+  no-ops on magic mismatch).
+- **Impact:** ~24 B per `SHOW <double>` closed.
 - **Related:** TD-042, TD-003.
