@@ -1,3 +1,26 @@
+## v0.57.2 — TD-045 WONTFIX (documented + empirical)
+
+### Documented (WONTFIX)
+- TD-045: SET x TO <new tensor> overwrites old x without freeing.
+  - WONTFIX (empirical proof): A-lite (SET free-before-overwrite +
+    retain-on-alias) is NOT sound — the pre-existing CREATE-alias
+    hazard (CREATE d TO c, no retain, 13 invalid-free errors) turns
+    the leak into a use-after-free.
+  - Sound fix requires the complete ownership model (CREATE + SET +
+    containers + PUSH + GIVE + 2 runtime guards) = v0.58.0 ownership
+    epic (TD-045/046/047 together).
+  - Workaround: declaration-only initial, or TENSOR_FREE(x) before
+    overwriting; do not alias tensor variables.
+
+### Verified
+- Native: 221/221 (unchanged)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (585,063 B)
+- valgrind strict: PASS
+- Binary: 1025600 B (unchanged)
+
 ## v0.57.1 — TD-044 (GIVE + map/array escapes)
 
 ### Fixed

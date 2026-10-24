@@ -525,15 +525,29 @@ defining scope.
 - **Target:** v0.58.0+ (ownership/lifetime epic).
 - **Related:** TD-044, TD-046.
 
-## TD-045: `SET x TO <new tensor>` overwrites old x without freeing — OPEN
-- **Status:** OPEN
+## TD-045: `SET x TO <new tensor>` overwrites old x without freeing — WONTFIX
+- **Status:** 🔶 WONTFIX (documented workaround; v0.57.2)
 - **Introduced:** pre-v0.57.0c (discovered during TD-041 Phase 2)
-- **Impact:** LOW (one tensor leak per SET-overwrite)
+- **Impact:** LOW (one tensor leak per SET-overwrite; bounded ~72 B)
 - **Symptom:** `SET c TO TENSOR_ADD(...)` on an initialized tensor leaks
-  either the old or new value (the v0.54.2b freed-list dedup skips the
-  later `TENSOR_FREE`).
-- **Target:** v0.58.0+ (ownership/lifetime epic)
-- **Related:** TD-041, TD-044.
+  the old value (72 B).
+- **WONTFIX rationale (empirical):**
+  A-lite (free-before-overwrite + retain-on-alias, SET only) is **not
+  sound**. The pre-existing aliasing hazard was confirmed:
+  `CREATE d (TENSOR) TO c.` emits `PlantTensor* d = c;` (no retain), and
+  `TENSOR_FREE(d); TENSOR_FREE(c);` yields **13 invalid-free errors**.
+  Adding free-before-overwrite would turn the leak into a
+  **use-after-free** (`d` dangles after `SET c TO …`). The sound fix
+  requires the complete ownership model (CREATE + SET + containers +
+  PUSH + GIVE + 2 runtime magic-guards) — the v0.58.0 ownership epic.
+  Priority: no corruption over no leak (v0.56.0c lesson).
+- **Workaround:**
+  - Declaration-only initial: `CREATE c (TENSOR) TO TENSOR_ADD(a,b).`
+    (no old value to leak).
+  - OR: `TENSOR_FREE(c).` before overwriting.
+  - Do **not** alias tensor variables (`CREATE d TO c` is broken today).
+- **Related:** TD-044, TD-046, TD-047.
+- **Future:** Bundled into the ownership/lifetime epic (v0.58.0+).
 
 ## TD-042: TENSOR([...]) literal input-list leak — CLOSED
 - **Status:** ✅ CLOSED in v0.57.0b
