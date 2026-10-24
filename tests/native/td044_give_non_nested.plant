@@ -1,0 +1,11 @@
+ACTION make(A (TENSOR), B (TENSOR)) -> TENSOR
+  GIVE TENSOR_ADD(A, B).
+/ACTION.
+CREATE a (TENSOR) TO TENSOR([1.0, 2.0]).
+CREATE b (TENSOR) TO TENSOR([3.0, 4.0]).
+CREATE c (TENSOR) TO make(a, b).
+SHOW c.
+TENSOR_FREE(c).
+TENSOR_FREE(a).
+TENSOR_FREE(b).
+SHOW "td044-give-non-nested-ok".

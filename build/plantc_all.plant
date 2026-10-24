@@ -11202,6 +11202,28 @@ ACTION gen_set_stmt(node, nums(LST), evars(LST), isel(TXT)),
   IF sidx > "",
       REAP cidx FROM translate_expr, sidx, nums, evars, plant_list_make(0).
       REAP cidx FROM _handle_cat, cidx, nums, evars.
+      # v0.57.1 — TD-044: hoist nested tensor-op in map/array element.
+      CREATE mtemps(LST) TO plant_list_make(0).
+      CREATE mlines(LST) TO plant_list_make(0).
+      REAP mres FROM _hoist_tensor_rhs, cval, "m", isel, mtemps, mlines.
+      REAP mfinal FROM plant_list_get, mres, 0.
+      IF COUNT mtemps > 0,
+          CREATE mpre(TXT) TO "".
+          CREATE mi(LON) TO 0.
+          SEASON mi < COUNT mlines,
+              REAP ml FROM plant_list_get, mlines, mi.
+              SET mpre TO mpre + ml.
+              SET mi TO mi + 1.
+          /SEASON.
+          CREATE mfrees(TXT) TO "".
+          SET mi TO 0.
+          SEASON mi < COUNT mtemps,
+              REAP mt FROM plant_list_get, mtemps, mi.
+              SET mfrees TO mfrees + isel + "    plant_tensor_free(" + mt + ");\n".
+              SET mi TO mi + 1.
+          /SEASON.
+          GIVE isel + "  {\n" + mpre + isel + "    plant_list_set(" + target + ", " + cidx + ", " + mfinal + ");\n" + mfrees + isel + "  }\n".
+      /IF.
       REAP isnv FROM expr_is_numeric, cval, nums.
       IF isnv IS 1,
           SET cval TO "_from_long(" + cval + ")".
@@ -11265,6 +11287,31 @@ ACTION gen_give_stmt(node, nums(LST), evars(LST), rty(TXT), actx(TXT), mexit(TXT
   /IF.
   IF mexit > "",
       GIVE isel + mexit + "  return " + cval + ";\n".
+  /IF.
+  # v0.57.1 — TD-044: hoist nested tensor-op in GIVE (default form only;
+  # the async/mexit forms above already returned).
+  IF rty IS "TENSOR",
+      CREATE gtemps(LST) TO plant_list_make(0).
+      CREATE glines(LST) TO plant_list_make(0).
+      REAP gres FROM _hoist_tensor_rhs, cval, "g", isel, gtemps, glines.
+      REAP gfinal FROM plant_list_get, gres, 0.
+      IF COUNT gtemps > 0,
+          CREATE gpre(TXT) TO "".
+          CREATE gi(LON) TO 0.
+          SEASON gi < COUNT glines,
+              REAP gl FROM plant_list_get, glines, gi.
+              SET gpre TO gpre + gl.
+              SET gi TO gi + 1.
+          /SEASON.
+          CREATE gfrees(TXT) TO "".
+          SET gi TO 0.
+          SEASON gi < COUNT gtemps,
+              REAP gt FROM plant_list_get, gtemps, gi.
+              SET gfrees TO gfrees + isel + "    plant_tensor_free(" + gt + ");\n".
+              SET gi TO gi + 1.
+          /SEASON.
+          GIVE isel + "  {\n" + gpre + isel + "    PlantTensor* _r = " + gfinal + ";\n" + gfrees + isel + "    return _r;\n" + isel + "  }\n".
+      /IF.
   /IF.
   GIVE isel + "  return " + cval + ";\n".
 /ACTION.
@@ -16654,7 +16701,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.57.0c (pure native)".
+  SHOW "Chloroplast 0.57.1 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

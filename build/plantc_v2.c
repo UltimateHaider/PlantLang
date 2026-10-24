@@ -13267,6 +13267,10 @@ tx_t gen_set_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
   tx_t cval = "";
   tx_t sidx = "";
   tx_t cidx = "";
+  tx_t mres = "";
+  tx_t mfinal = "";
+  tx_t ml = "";
+  tx_t mt = "";
   tx_t isnv = "";
   tx_t sres = "";
   tx_t sfinal = "";
@@ -13280,6 +13284,27 @@ tx_t gen_set_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
     if (strcmp(sidx,"") > 0) {
     cidx = translate_expr(sidx, nums, evars, plant_list_make ( 0 ));
     cidx = _handle_cat(cidx, nums, evars);
+    PlantArray* mtemps = plant_list_make ( 0 );
+    PlantArray* mlines = plant_list_make ( 0 );
+    mres = _hoist_tensor_rhs(cval, "m", isel, mtemps, mlines);
+    mfinal = plant_list_get(mres, 0);
+    if (plant_array_length(mtemps) > 0) {
+    tx_t mpre = "";
+    long mi = 0;
+    while (mi < plant_array_length(mlines)) {
+    ml = plant_list_get(mlines, mi);
+    mpre = _cat(mpre, ml);
+    mi = mi+1;
+    }
+    tx_t mfrees = "";
+    mi = 0;
+    while (mi < plant_array_length(mtemps)) {
+    mt = plant_list_get(mtemps, mi);
+    mfrees = _cat(_cat4(mfrees, isel, "    plant_tensor_free(", mt), ");\n");
+    mi = mi+1;
+    }
+    return _cat(_cat4(_cat4(_cat4(_cat4(isel, "  {\n", mpre, isel), "    plant_list_set(", target, ", "), cidx, ", ", mfinal), ");\n", mfrees, isel), "  }\n");
+    }
     isnv = expr_is_numeric(cval, nums);
     if (isnv == 1) {
     cval = _cat3("_from_long(", cval, ")");
@@ -13315,6 +13340,10 @@ tx_t gen_give_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t rty, tx_
   tx_t isn3 = "";
   tx_t snm3 = "";
   tx_t in3 = "";
+  tx_t gres = "";
+  tx_t gfinal = "";
+  tx_t gl = "";
+  tx_t gt = "";
     val = _map_get(node, "value");
     cval = translate_expr(val, nums, evars, plant_list_make ( 0 ));
     cval = _handle_cat(cval, nums, evars);
@@ -13342,6 +13371,29 @@ tx_t gen_give_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t rty, tx_
     }
     if (strcmp(mexit,"") > 0) {
     return _cat(_cat4(isel, mexit, "  return ", cval), ";\n");
+    }
+    if (strcmp(rty,"TENSOR") == 0) {
+    PlantArray* gtemps = plant_list_make ( 0 );
+    PlantArray* glines = plant_list_make ( 0 );
+    gres = _hoist_tensor_rhs(cval, "g", isel, gtemps, glines);
+    gfinal = plant_list_get(gres, 0);
+    if (plant_array_length(gtemps) > 0) {
+    tx_t gpre = "";
+    long gi = 0;
+    while (gi < plant_array_length(glines)) {
+    gl = plant_list_get(glines, gi);
+    gpre = _cat(gpre, gl);
+    gi = gi+1;
+    }
+    tx_t gfrees = "";
+    gi = 0;
+    while (gi < plant_array_length(gtemps)) {
+    gt = plant_list_get(gtemps, gi);
+    gfrees = _cat(_cat4(gfrees, isel, "    plant_tensor_free(", gt), ");\n");
+    gi = gi+1;
+    }
+    return _cat3(_cat4(_cat4(_cat4(isel, "  {\n", gpre, isel), "    PlantTensor* _r = ", gfinal, ";\n"), gfrees, isel, "    return _r;\n"), isel, "  }\n");
+    }
     }
     return _cat4(isel, "  return ", cval, ";\n");
 }
@@ -19004,7 +19056,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.57.0c (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.57.1 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

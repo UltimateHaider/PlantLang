@@ -478,18 +478,52 @@ defining scope.
   registry is unsound because of escapes.)
 - **Related:** TD-042, TD-044, TD-045.
 
-## TD-044: Tensor intermediates leak on escape paths — OPEN
-- **Status:** OPEN
+## TD-044: Tensor intermediates leak on escape paths — CLOSED (GIVE + map/array)
+- **Status:** ✅ CLOSED in v0.57.1 (GIVE default form + map/array element)
 - **Introduced:** v0.57.0c (discovered during the TD-041 investigation)
-- **Impact:** LOW (per-escape intermediate leak; escapes are rare)
-- **Symptom:** `GIVE TENSOR_MUL(a,b)` (via ACTION call), `PUSH(L, TENSOR_MUL(a,b))`,
-  closure capture, FFI stores → intermediate leaks.
-- **Reason:** Needs escape analysis (or closure lifecycle, TD-017).
-- **Workaround:** Name the intermediate
-  (`CREATE t (TENSOR) TO TENSOR_MUL(a,b).` then use `t`), or free the
-  container (`LIST_FREE` frees pushed tensors).
-- **Target:** v0.58.0+ (escape-analysis epic) or accept & document.
-- **Related:** TD-017, TD-041.
+- **Fixed:** Nested tensor-op expressions in:
+  - `GIVE` (ACTION return, default form only; not async/`mexit`).
+  - `SET M[k] TO …` / `SET L[k] TO …` (map/array element).
+  Both hoisted via `_hoist_tensor_rhs` + freed after escape.
+- **NOT covered:** `PUSH` (via `gen_reap_stmt` — HIGH risk) → TD-046.
+- **NOT covered:** closures (TD-017), FFI stores → TD-046.
+- **Related:** TD-017, TD-041, TD-045, TD-046, TD-047.
+
+## TD-046: Tensor intermediates leak on PUSH/closures/FFI — OPEN
+- **Status:** OPEN
+- **Introduced:** v0.57.1 (discovered during the TD-044 investigation)
+- **Impact:** LOW (rare)
+- **Symptom:**
+  - `PUSH(L, <nested tensor-op>)` — routes through `gen_reap_stmt`
+    (HIGH-risk emitter: closures, generics, SAFE, FFI).
+  - Closure capture of a nested tensor-op expression (TD-017).
+  - FFI stores the tensor pointer (unknowable).
+  - `GIVE <caller tensor>` aliasing (double-free hazard; observed Phase 4).
+- **Reason:** PUSH via `call_stmt`/`gen_reap_stmt` is HIGH risk; closures
+  need TD-017 lifecycle; FFI ownership unknowable; `GIVE A` aliasing is a
+  pre-existing ownership issue.
+- **Workaround:** Name the intermediate before PUSH/capture/FFI; return a
+  **fresh** tensor (`TENSOR_ADD(...)`) rather than a caller pointer.
+- **Target:** v0.58.0+ (dedicated release for PUSH + closures + FFI).
+- **Related:** TD-017, TD-044, TD-047.
+
+## TD-047: MAP value ownership + return-aliasing — OPEN
+- **Status:** OPEN
+- **Introduced:** pre-v0.57.1 (discovered during the TD-044 investigation)
+- **Impact:** LOW–MED (per map store; per aliased return)
+- **Symptom:**
+  - `SET M["k"] TO a` followed by `LIST_FREE(M)` leaks the stored tensor
+    (72 B). `plant_list_free` does not release tensor values stored via map
+    keys, and `MAP_FREE` does not exist.
+  - `GIVE <caller tensor>` returns an aliased pointer; caller and callee
+    both own it → double-free risk (observed in the Phase-4
+    `td044_give_non_nested` deviation).
+- **Reason:** Map/struct value ownership is not managed; `GIVE` does not
+  retain on return.
+- **Workaround:** Use LST arrays for tensor storage in tests; return fresh
+  tensors from ACTIONs (not caller pointers).
+- **Target:** v0.58.0+ (ownership/lifetime epic).
+- **Related:** TD-044, TD-046.
 
 ## TD-045: `SET x TO <new tensor>` overwrites old x without freeing — OPEN
 - **Status:** OPEN

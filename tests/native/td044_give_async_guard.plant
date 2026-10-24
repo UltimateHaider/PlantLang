@@ -1,0 +1,4 @@
+ACTION f(A (TENSOR)) -> TENSOR
+  GIVE TENSOR_MUL(A, A).
+/ACTION.
+SHOW "td044-give-async-guard-ok".

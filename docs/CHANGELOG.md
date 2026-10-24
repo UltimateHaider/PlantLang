@@ -1,3 +1,37 @@
+## v0.57.1 — TD-044 (GIVE + map/array escapes)
+
+### Fixed
+- TD-044 (language-owned): nested tensor-op expressions in GIVE
+  (default form) and SET M[k]/L[k] TO ... are hoisted and freed
+  after escape.
+- Reuses _hoist_tensor_rhs (fail-safe, 16-op allow-list).
+- GIVE: capture _r, free temps, return _r (owned by caller).
+- Map/array: free only non-final temps.
+
+### Added
+- 6 new tests: td044_{give_nested, give_3_level, give_non_nested,
+  array_nested, array_non_nested, give_async_guard}.
+
+### Documented (new TDs)
+- TD-046: PUSH/closures/FFI escapes (PUSH via gen_reap_stmt; blocked);
+  includes GIVE-A aliasing (double-free hazard).
+- TD-047: MAP value ownership + return-aliasing (pre-existing).
+
+### Verified
+- Native: 221/221 (was 215)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (585,063 B)
+- valgrind strict: PASS (nested GIVE/array 0 leaks)
+- Binary: 1025600 B (unchanged, within 5%)
+
+### Out of Scope (v0.57.2+)
+- Higher-order AD.
+- TD-045 (SET-overwrite, pre-existing).
+- TD-046 (PUSH/closures/FFI).
+- TD-047 (MAP value ownership / return-aliasing).
+
 ## v0.57.0c — TD-041 (intermediate leak, narrow Option A)
 
 ### Fixed

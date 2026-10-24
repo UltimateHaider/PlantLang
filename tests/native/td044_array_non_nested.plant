@@ -1,0 +1,5 @@
+CREATE L (LST) TO [0.0, 0.0].
+CREATE a (TENSOR) TO TENSOR([1.0, 2.0]).
+SET L[0] TO a.
+LIST_FREE(L).
+SHOW "td044-array-non-nested-ok".
