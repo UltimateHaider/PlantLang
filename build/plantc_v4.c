@@ -115,6 +115,8 @@ tx_t type_is_numeric(tx_t name);
 tx_t type_is_prim(tx_t name);
 tx_t _substr(tx_t str, long start, long end);
 tx_t _handle_func(tx_t expr, tx_t kw, tx_t cfn);
+tx_t _tensor_alloc_op(tx_t name);
+tx_t _hoist_tensor_rhs(tx_t expr, tx_t path, tx_t isel, PlantArray* temps, PlantArray* lines);
 tx_t _handle_func_paren(tx_t expr, tx_t kw, tx_t cfn);
 tx_t _handle_func_paren2(tx_t expr, tx_t kw, tx_t cfn);
 tx_t _handle_func_paren3(tx_t expr, tx_t kw, tx_t cfn);
@@ -7242,6 +7244,175 @@ tx_t _handle_func(tx_t expr, tx_t kw, tx_t cfn) {
     }
     return res;
 }
+tx_t _tensor_alloc_op(tx_t name) {
+    if (strcmp(name,"plant_tensor_add") == 0) {
+    return "1";
+    }
+    if (strcmp(name,"plant_tensor_sub") == 0) {
+    return "1";
+    }
+    if (strcmp(name,"plant_tensor_mul") == 0) {
+    return "1";
+    }
+    if (strcmp(name,"plant_tensor_div") == 0) {
+    return "1";
+    }
+    if (strcmp(name,"plant_tensor_scale") == 0) {
+    return "1";
+    }
+    if (strcmp(name,"plant_tensor_matmul") == 0) {
+    return "1";
+    }
+    if (strcmp(name,"plant_tensor_transpose") == 0) {
+    return "1";
+    }
+    if (strcmp(name,"plant_tensor_reshape") == 0) {
+    return "1";
+    }
+    if (strcmp(name,"plant_tensor_slice") == 0) {
+    return "1";
+    }
+    if (strcmp(name,"plant_tensor_relu") == 0) {
+    return "1";
+    }
+    if (strcmp(name,"plant_tensor_sigmoid") == 0) {
+    return "1";
+    }
+    if (strcmp(name,"plant_tensor_tanh") == 0) {
+    return "1";
+    }
+    if (strcmp(name,"plant_tensor_softmax") == 0) {
+    return "1";
+    }
+    if (strcmp(name,"plant_tensor_gelu") == 0) {
+    return "1";
+    }
+    if (strcmp(name,"plant_tensor_swish") == 0) {
+    return "1";
+    }
+    if (strcmp(name,"plant_tensor_mish") == 0) {
+    return "1";
+    }
+    return "0";
+}
+tx_t _hoist_tensor_rhs(tx_t expr, tx_t path, tx_t isel, PlantArray* temps, PlantArray* lines) {
+  tx_t t = "";
+  tx_t op = "";
+  tx_t name0 = "";
+  tx_t name = "";
+  tx_t isop = "";
+  tx_t cc = "";
+  tx_t inner = "";
+  tx_t ac = "";
+  tx_t seg0 = "";
+  tx_t seg = "";
+  tx_t lseg0 = "";
+  tx_t lseg = "";
+  tx_t a = "";
+  tx_t sub = "";
+  tx_t subexpr = "";
+  tx_t subis = "";
+  tx_t ja = "";
+    t = plant_trim(expr);
+    op = find_any(t, "(");
+    if (op == - 1) {
+    return plant_list_make ( 2 , t , "0" );
+    }
+    name0 = substring(t, 0, op);
+    name = plant_trim(name0);
+    isop = _tensor_alloc_op(name);
+    if (strcmp(isop,"1") != 0) {
+    return plant_list_make ( 2 , t , "0" );
+    }
+    long dep = 0;
+    long close_pos = - 1;
+    long ci = 0;
+    while (ci < strlen( t )) {
+    cc = char_at(t, ci);
+    if (strcmp(cc,"(") == 0) {
+    dep = dep+1;
+    }
+    if (strcmp(cc,")") == 0) {
+    dep = dep - 1;
+    if (dep == 0) {
+    close_pos = ci;
+                              break;
+    }
+    }
+    ci = ci+1;
+    }
+    if (close_pos == - 1) {
+    return plant_list_make ( 2 , t , "0" );
+    }
+    inner = substring(t, op+1, close_pos);
+    PlantArray* args = plant_list_make ( 0 );
+    long startp = 0;
+    long ad = 0;
+    long ai = 0;
+    while (ai < strlen( inner )) {
+    ac = char_at(inner, ai);
+    if (strcmp(ac,"(") == 0 || strcmp(ac,"[") == 0) {
+    ad = ad+1;
+    }
+    if (strcmp(ac,")") == 0 || strcmp(ac,"]") == 0) {
+    ad = ad - 1;
+    }
+    if (ad == 0 && strcmp(ac,",") == 0) {
+    seg0 = substring(inner, startp, ai);
+    seg = plant_trim(seg0);
+    args = plant_list_push ( args , seg );
+    startp = ai+1;
+    }
+    ai = ai+1;
+    }
+    lseg0 = substring(inner, startp, strlen( inner ));
+    lseg = plant_trim(lseg0);
+    args = plant_list_push ( args , lseg );
+    PlantArray* newargs = plant_list_make ( 0 );
+    long k = 0;
+    while (k < plant_array_length(args)) {
+    a = plant_list_get(args, k);
+    tx_t sfx = "x";
+    if (k == 0) {
+    sfx = "a";
+    }
+    if (k == 1) {
+    sfx = "b";
+    }
+    if (k == 2) {
+    sfx = "c";
+    }
+    tx_t subpath = _cat(path, sfx);
+    sub = _hoist_tensor_rhs(a, subpath, isel, temps, lines);
+    subexpr = plant_list_get(sub, 0);
+    subis = plant_list_get(sub, 1);
+    if (strcmp(subis,"1") == 0) {
+    tx_t tn = _cat3("_h", path, sfx);
+    tx_t tline = _cat3(_cat4(isel, "    PlantTensor* ", tn, " = "), subexpr, ";\n");
+    lines = plant_list_push ( lines , tline );
+    temps = plant_list_push ( temps , tn );
+    newargs = plant_list_push ( newargs , tn );
+    }
+    if (strcmp(subis,"1") != 0) {
+    newargs = plant_list_push ( newargs , subexpr );
+    }
+    k = k+1;
+    }
+    tx_t joined = "";
+    long ji = 0;
+    while (ji < plant_array_length(newargs)) {
+    ja = plant_list_get(newargs, ji);
+    if (ji == 0) {
+    joined = ja;
+    }
+    if (ji > 0) {
+    joined = _cat3(joined, ", ", ja);
+    }
+    ji = ji+1;
+    }
+    tx_t rebuilt = _cat4(name, "(", joined, ")");
+    return plant_list_make ( 2 , rebuilt , "1" );
+}
 tx_t _handle_func_paren(tx_t expr, tx_t kw, tx_t cfn) {
   tx_t parts = "";
   tx_t p0 = "";
@@ -12843,6 +13014,10 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
   tx_t tt_inner0 = "";
   tx_t tt_inner = "";
   tx_t tt_mk = "";
+  tx_t hres = "";
+  tx_t hfinal = "";
+  tx_t hl = "";
+  tx_t ht = "";
   tx_t vst3 = "";
   tx_t iut3 = "";
   tx_t tt0 = "";
@@ -13040,6 +13215,30 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     }
     }
     }
+    PlantArray* htemps = plant_list_make ( 0 );
+    PlantArray* hlines = plant_list_make ( 0 );
+    hres = _hoist_tensor_rhs(cval, "0", isel, htemps, hlines);
+    hfinal = plant_list_get(hres, 0);
+    if (plant_array_length(htemps) > 0) {
+    tx_t hpre = "";
+    long hi = 0;
+    while (hi < plant_array_length(hlines)) {
+    hl = plant_list_get(hlines, hi);
+    hpre = _cat(hpre, hl);
+    hi = hi+1;
+    }
+    tx_t hfrees = "";
+    hi = 0;
+    while (hi < plant_array_length(htemps)) {
+    ht = plant_list_get(htemps, hi);
+    hfrees = _cat(_cat4(hfrees, isel, "    plant_tensor_free(", ht), ");\n");
+    hi = hi+1;
+    }
+    if (strcmp(actx,"a") == 0) {
+    return _cat4(_cat4(_cat4(_cat4(_cat4(isel, "  ", target, ";\n"), isel, "  {\n", hpre), isel, "    ", target), " = ", hfinal, ";\n"), hfrees, isel, "  }\n");
+    }
+    return _cat3(_cat4(_cat4(_cat4(_cat4(_cat4(isel, "  ", vct2, " "), target, ";\n", isel), "  {\n", hpre, isel), "    ", target, " = "), hfinal, ";\n", hfrees), isel, "  }\n");
+    }
     if (strcmp(actx,"a") == 0) {
     return _cat3(_cat4(isel, "  ", target, " = "), cval, ";\n");
     }
@@ -13071,6 +13270,10 @@ tx_t gen_set_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
   tx_t sidx = "";
   tx_t cidx = "";
   tx_t isnv = "";
+  tx_t sres = "";
+  tx_t sfinal = "";
+  tx_t sl = "";
+  tx_t st = "";
     target = _map_get(node, "target");
     val = _map_get(node, "value");
     cval = translate_expr(val, nums, evars, plant_list_make ( 0 ));
@@ -13084,6 +13287,27 @@ tx_t gen_set_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
     cval = _cat3("_from_long(", cval, ")");
     }
     return _cat(_cat4(_cat4(isel, "  plant_list_set(", target, ", "), cidx, ", ", cval), ");\n");
+    }
+    PlantArray* stemps = plant_list_make ( 0 );
+    PlantArray* slines = plant_list_make ( 0 );
+    sres = _hoist_tensor_rhs(cval, "0", isel, stemps, slines);
+    sfinal = plant_list_get(sres, 0);
+    if (plant_array_length(stemps) > 0) {
+    tx_t spre = "";
+    long si = 0;
+    while (si < plant_array_length(slines)) {
+    sl = plant_list_get(slines, si);
+    spre = _cat(spre, sl);
+    si = si+1;
+    }
+    tx_t sfrees = "";
+    si = 0;
+    while (si < plant_array_length(stemps)) {
+    st = plant_list_get(stemps, si);
+    sfrees = _cat(_cat4(sfrees, isel, "    plant_tensor_free(", st), ");\n");
+    si = si+1;
+    }
+    return _cat3(_cat4(_cat4(_cat4(isel, "  {\n", spre, isel), "    ", target, " = "), sfinal, ";\n", sfrees), isel, "  }\n");
     }
     return _cat3(_cat4(isel, "  ", target, " = "), cval, ";\n");
 }
@@ -18783,7 +19007,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.57.0b (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.57.0c (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

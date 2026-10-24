@@ -125,6 +125,116 @@ ACTION _handle_func(expr(TXT), kw(TXT), cfn(TXT)),
 /ACTION.
 
 # ──────────────────────────────────────────────────────────────
+#  v0.57.0c — TD-041 helpers: hoist nested tensor-op calls in a
+#  self-contained CREATE/SET RHS so intermediates are freed.
+#  FAIL-SAFE: anything unrecognised is returned unchanged (caller
+#  then emits the status-quo code; leak, never corruption).
+# ──────────────────────────────────────────────────────────────
+
+# _tensor_alloc_op — 1 iff `name` is a PlantTensor*-returning op.
+ACTION _tensor_alloc_op(name(TXT)),
+    IF name IS "plant_tensor_add", GIVE "1". /IF.
+    IF name IS "plant_tensor_sub", GIVE "1". /IF.
+    IF name IS "plant_tensor_mul", GIVE "1". /IF.
+    IF name IS "plant_tensor_div", GIVE "1". /IF.
+    IF name IS "plant_tensor_scale", GIVE "1". /IF.
+    IF name IS "plant_tensor_matmul", GIVE "1". /IF.
+    IF name IS "plant_tensor_transpose", GIVE "1". /IF.
+    IF name IS "plant_tensor_reshape", GIVE "1". /IF.
+    IF name IS "plant_tensor_slice", GIVE "1". /IF.
+    IF name IS "plant_tensor_relu", GIVE "1". /IF.
+    IF name IS "plant_tensor_sigmoid", GIVE "1". /IF.
+    IF name IS "plant_tensor_tanh", GIVE "1". /IF.
+    IF name IS "plant_tensor_softmax", GIVE "1". /IF.
+    IF name IS "plant_tensor_gelu", GIVE "1". /IF.
+    IF name IS "plant_tensor_swish", GIVE "1". /IF.
+    IF name IS "plant_tensor_mish", GIVE "1". /IF.
+    GIVE "0".
+/ACTION.
+
+# _hoist_tensor_rhs — returns [rebuilt_expr, is_alloc_call].
+# Appends temp names to `temps` and prelude lines to `lines`.
+ACTION _hoist_tensor_rhs(expr(TXT), path(TXT), isel(TXT), temps(LST), lines(LST)),
+    REAP t FROM plant_trim, expr.
+    REAP op FROM find_any, t, "(".
+    IF op IS -1, GIVE plant_list_make(2, t, "0"). /IF.
+    REAP name0 FROM substring, t, 0, op.
+    REAP name FROM plant_trim, name0.
+    REAP isop FROM _tensor_alloc_op, name.
+    IF isop ISNT "1", GIVE plant_list_make(2, t, "0"). /IF.
+    # Match the close-paren for the first '('.
+    CREATE dep(LON) TO 0.
+    CREATE close_pos(LON) TO -1.
+    CREATE ci(LON) TO 0.
+    SEASON ci < LEN(t),
+        REAP cc FROM char_at, t, ci.
+        IF cc IS "(", SET dep TO dep + 1. /IF.
+        IF cc IS ")",
+            SET dep TO dep - 1.
+            IF dep IS 0, SET close_pos TO ci. BREAK 0. /IF.
+        /IF.
+        SET ci TO ci + 1.
+    /SEASON.
+    IF close_pos IS -1, GIVE plant_list_make(2, t, "0"). /IF.
+    REAP inner FROM substring, t, op + 1, close_pos.
+    # Split top-level args on commas (depth-aware over ()/[]).
+    CREATE args(LST) TO plant_list_make(0).
+    CREATE startp(LON) TO 0.
+    CREATE ad(LON) TO 0.
+    CREATE ai(LON) TO 0.
+    SEASON ai < LEN(inner),
+        REAP ac FROM char_at, inner, ai.
+        IF ac IS "(" OR ac IS "[", SET ad TO ad + 1. /IF.
+        IF ac IS ")" OR ac IS "]", SET ad TO ad - 1. /IF.
+        IF ad IS 0 AND ac IS ",",
+            REAP seg0 FROM substring, inner, startp, ai.
+            REAP seg FROM plant_trim, seg0.
+            SET args TO plant_list_push(args, seg).
+            SET startp TO ai + 1.
+        /IF.
+        SET ai TO ai + 1.
+    /SEASON.
+    REAP lseg0 FROM substring, inner, startp, LEN(inner).
+    REAP lseg FROM plant_trim, lseg0.
+    SET args TO plant_list_push(args, lseg).
+    # Recurse into each arg.
+    CREATE newargs(LST) TO plant_list_make(0).
+    CREATE k(LON) TO 0.
+    SEASON k < COUNT args,
+        REAP a FROM plant_list_get, args, k.
+        CREATE sfx(TXT) TO "x".
+        IF k IS 0, SET sfx TO "a". /IF.
+        IF k IS 1, SET sfx TO "b". /IF.
+        IF k IS 2, SET sfx TO "c". /IF.
+        CREATE subpath(TXT) TO path + sfx.
+        REAP sub FROM _hoist_tensor_rhs, a, subpath, isel, temps, lines.        REAP subexpr FROM plant_list_get, sub, 0.
+        REAP subis FROM plant_list_get, sub, 1.
+        IF subis IS "1",
+            CREATE tn(TXT) TO "_h" + path + sfx.
+            CREATE tline(TXT) TO isel + "    PlantTensor* " + tn + " = " + subexpr + ";\n".
+            SET lines TO plant_list_push(lines, tline).
+            SET temps TO plant_list_push(temps, tn).
+            SET newargs TO plant_list_push(newargs, tn).
+        /IF.
+        IF subis ISNT "1",
+            SET newargs TO plant_list_push(newargs, subexpr).
+        /IF.
+        SET k TO k + 1.
+    /SEASON.
+    # Rebuild.
+    CREATE joined(TXT) TO "".
+    CREATE ji(LON) TO 0.
+    SEASON ji < COUNT newargs,
+        REAP ja FROM plant_list_get, newargs, ji.
+        IF ji IS 0, SET joined TO ja. /IF.
+        IF ji > 0, SET joined TO joined + ", " + ja. /IF.
+        SET ji TO ji + 1.
+    /SEASON.
+    CREATE rebuilt(TXT) TO name + "(" + joined + ")".
+    GIVE plant_list_make(2, rebuilt, "1").
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
 #  _handle_func_paren — translate "LEN(expr)" -> "strlen(expr)"
 # ──────────────────────────────────────────────────────────────
 ACTION _handle_func_paren(expr(TXT), kw(TXT), cfn(TXT)),
@@ -5693,6 +5803,31 @@ ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(
                   /IF.
               /IF.
           /IF.
+          # v0.57.0c — TD-041: hoist nested tensor-op calls (self-contained RHS).
+          CREATE htemps(LST) TO plant_list_make(0).
+          CREATE hlines(LST) TO plant_list_make(0).
+          REAP hres FROM _hoist_tensor_rhs, cval, "0", isel, htemps, hlines.
+          REAP hfinal FROM plant_list_get, hres, 0.
+          IF COUNT htemps > 0,
+              CREATE hpre(TXT) TO "".
+              CREATE hi(LON) TO 0.
+              SEASON hi < COUNT hlines,
+                  REAP hl FROM plant_list_get, hlines, hi.
+                  SET hpre TO hpre + hl.
+                  SET hi TO hi + 1.
+              /SEASON.
+              CREATE hfrees(TXT) TO "".
+              SET hi TO 0.
+              SEASON hi < COUNT htemps,
+                  REAP ht FROM plant_list_get, htemps, hi.
+                  SET hfrees TO hfrees + isel + "    plant_tensor_free(" + ht + ");\n".
+                  SET hi TO hi + 1.
+              /SEASON.
+              IF actx IS "a",
+                  GIVE isel + "  " + target + ";\n" + isel + "  {\n" + hpre + isel + "    " + target + " = " + hfinal + ";\n" + hfrees + isel + "  }\n".
+              /IF.
+              GIVE isel + "  " + vct2 + " " + target + ";\n" + isel + "  {\n" + hpre + isel + "    " + target + " = " + hfinal + ";\n" + hfrees + isel + "  }\n".
+          /IF.
           IF actx IS "a",
               GIVE isel + "  " + target + " = " + cval + ";\n".
           /IF.
@@ -5739,6 +5874,28 @@ ACTION gen_set_stmt(node, nums(LST), evars(LST), isel(TXT)),
           SET cval TO "_from_long(" + cval + ")".
       /IF.
       GIVE isel + "  plant_list_set(" + target + ", " + cidx + ", " + cval + ");\n".
+  /IF.
+  # v0.57.0c — TD-041: hoist nested tensor-op calls (self-contained RHS).
+  CREATE stemps(LST) TO plant_list_make(0).
+  CREATE slines(LST) TO plant_list_make(0).
+  REAP sres FROM _hoist_tensor_rhs, cval, "0", isel, stemps, slines.
+  REAP sfinal FROM plant_list_get, sres, 0.
+  IF COUNT stemps > 0,
+      CREATE spre(TXT) TO "".
+      CREATE si(LON) TO 0.
+      SEASON si < COUNT slines,
+          REAP sl FROM plant_list_get, slines, si.
+          SET spre TO spre + sl.
+          SET si TO si + 1.
+      /SEASON.
+      CREATE sfrees(TXT) TO "".
+      SET si TO 0.
+      SEASON si < COUNT stemps,
+          REAP st FROM plant_list_get, stemps, si.
+          SET sfrees TO sfrees + isel + "    plant_tensor_free(" + st + ");\n".
+          SET si TO si + 1.
+      /SEASON.
+      GIVE isel + "  {\n" + spre + isel + "    " + target + " = " + sfinal + ";\n" + sfrees + isel + "  }\n".
   /IF.
   GIVE isel + "  " + target + " = " + cval + ";\n".
 /ACTION.

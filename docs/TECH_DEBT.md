@@ -465,18 +465,41 @@ defining scope.
 - **Preserved:** CMP arithmetic (`SHOW A + B`).
 - **Related:** TD-025.
 
-## TD-041: Tensor intermediates leak — OPEN (target v0.57.0)
-- **Status:** OPEN
+## TD-041: Tensor intermediates leak — CLOSED (common cases)
+- **Status:** ✅ CLOSED in v0.57.0c (common cases)
 - **Introduced:** v0.55.0 (tensor ops)
-- **Impact:** LOW (still-reachable growth; benign)
-- **Symptom:** `TENSOR_ADD(TENSOR_MATMUL(a,b), c)` — the inner result is
-  never freed (each op returns a new ref-counted tensor).
-- **Target fix:** v0.57.0 (ownership-transfer design: tape takes the
-  creation ref, codegen retains on assignment — see v0.56.0c investigation).
-- **Note:** The v0.56.0a tape retains/releases its own refs; the op
-  creation refs of unnamed intermediates still leak. Deferred from
-  v0.56.0c because a codegen free-pass is HIGH risk.
-- **Related:** TD-017 (closure envs), TD-042.
+- **Fixed:** Nested tensor-op calls in a self-contained `CREATE`/`SET`
+  RHS are hoisted to temps and freed after assignment.
+- **Coverage:** `CREATE c (TENSOR) TO TENSOR_ADD(TENSOR_MUL(a,b), b)`
+  and similar (≤3+ levels, matmul).
+- **NOT covered:** Escapes (`GIVE`, `PUSH`, map/struct, closures, FFI) → TD-044.
+- **Approach:** Narrow Option A — fail-safe recursive hoist with an
+  allow-list of 16 `PlantTensor*`-returning ops. (Not Option E — a temp
+  registry is unsound because of escapes.)
+- **Related:** TD-042, TD-044, TD-045.
+
+## TD-044: Tensor intermediates leak on escape paths — OPEN
+- **Status:** OPEN
+- **Introduced:** v0.57.0c (discovered during the TD-041 investigation)
+- **Impact:** LOW (per-escape intermediate leak; escapes are rare)
+- **Symptom:** `GIVE TENSOR_MUL(a,b)` (via ACTION call), `PUSH(L, TENSOR_MUL(a,b))`,
+  closure capture, FFI stores → intermediate leaks.
+- **Reason:** Needs escape analysis (or closure lifecycle, TD-017).
+- **Workaround:** Name the intermediate
+  (`CREATE t (TENSOR) TO TENSOR_MUL(a,b).` then use `t`), or free the
+  container (`LIST_FREE` frees pushed tensors).
+- **Target:** v0.58.0+ (escape-analysis epic) or accept & document.
+- **Related:** TD-017, TD-041.
+
+## TD-045: `SET x TO <new tensor>` overwrites old x without freeing — OPEN
+- **Status:** OPEN
+- **Introduced:** pre-v0.57.0c (discovered during TD-041 Phase 2)
+- **Impact:** LOW (one tensor leak per SET-overwrite)
+- **Symptom:** `SET c TO TENSOR_ADD(...)` on an initialized tensor leaks
+  either the old or new value (the v0.54.2b freed-list dedup skips the
+  later `TENSOR_FREE`).
+- **Target:** v0.58.0+ (ownership/lifetime epic)
+- **Related:** TD-041, TD-044.
 
 ## TD-042: TENSOR([...]) literal input-list leak — CLOSED
 - **Status:** ✅ CLOSED in v0.57.0b

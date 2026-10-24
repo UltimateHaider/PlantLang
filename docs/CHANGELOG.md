@@ -1,3 +1,36 @@
+## v0.57.0c — TD-041 (intermediate leak, narrow Option A)
+
+### Fixed
+- TD-041 (common cases): nested tensor-op calls in a self-contained
+  CREATE/SET RHS are hoisted to temps and freed after assignment.
+- Coverage: `CREATE c (TENSOR) TO TENSOR_ADD(TENSOR_MUL(a,b), b)`
+  and similar (≤3+ levels, matmul).
+- Approach: narrow Option A — fail-safe recursive hoist with an
+  allow-list of 16 PlantTensor*-returning ops.
+- NOT Option E (temp registry — not sound due to escapes).
+
+### Added
+- 6 new tests: td041_nested_{add_mul, 3_level, set, matmul,
+  escape_give, escape_push}.
+
+### Documented (new TDs)
+- TD-044: tensor intermediates leak on escape paths (GIVE, PUSH,
+  map/struct, closures, FFI).
+- TD-045: SET x TO <new tensor> overwrites old x without freeing
+  (pre-existing; discovered during TD-041 Phase 2).
+
+### Verified
+- Native: 215/215 (was 209)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (583,307 B)
+- valgrind strict: PASS (nested cases 0 leaks; TD-044/045 documented)
+- Binary: 1025600 B.
+
+### Out of Scope (v0.57.0d)
+- Higher-order AD.
+
 ## v0.57.0b — TD-042 (CREATE literal-list free)
 
 ### Fixed
