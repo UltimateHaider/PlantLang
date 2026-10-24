@@ -12836,12 +12836,14 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
   tx_t vb2 = "";
   tx_t vrk2 = "";
   tx_t vct2 = "";
-  tx_t vst3 = "";
-  tx_t iut3 = "";
-  tx_t tt0 = "";
+  tx_t tt_sp = "";
+  tx_t tt_rest = "";
   tx_t tt_inner0 = "";
   tx_t tt_inner = "";
   tx_t tt_mk = "";
+  tx_t vst3 = "";
+  tx_t iut3 = "";
+  tx_t tt0 = "";
     target = _map_get(node, "target");
     vtype = _map_get(node, "var_type");
     vtype = subst_type(vtype, subst);
@@ -13021,6 +13023,21 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     }
     if (plant_array_length(vrk2) > 0) {
     vct2 = ffi_ctype(vtype);
+    if (strcmp(vct2,"PlantTensor*") == 0) {
+    tt_sp = strings_SPLIT(cval, "plant_tensor_from_list(");
+    if (plant_array_length(tt_sp) > 1) {
+    tt_rest = plant_list_get(tt_sp, 1);
+    tt_inner0 = substring(tt_rest, 0, strlen( tt_rest ) - 1);
+    tt_inner = trim(tt_inner0);
+    tt_mk = substring(tt_inner, 0, 16);
+    if (strcmp(tt_mk,"plant_list_make(") == 0) {
+    if (strcmp(actx,"a") == 0) {
+    return _cat4(_cat4(_cat4(isel, "  ", target, ";\n"), isel, "  { tx_t __cti = ", tt_inner), "; ", target, " = plant_tensor_from_list(__cti); plant_list_free((PlantArray*)__cti); }\n");
+    }
+    return _cat3(_cat4(_cat4(_cat4(isel, "  ", vct2, " "), target, ";\n", isel), "  { tx_t __cti = ", tt_inner, "; "), target, " = plant_tensor_from_list(__cti); plant_list_free((PlantArray*)__cti); }\n");
+    }
+    }
+    }
     if (strcmp(actx,"a") == 0) {
     return _cat3(_cat4(isel, "  ", target, " = "), cval, ";\n");
     }
@@ -18763,7 +18780,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.57.0a (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.57.0b (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

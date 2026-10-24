@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.57.0a
+# Auto-updated: 0.57.0b
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.57.0a | 1017320 | 8963 | 945 | 109 | 322 | 5361 |
+| v0.57.0b | 1021416 | 8963 | 945 | 109 | 322 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -71,6 +71,7 @@
 | v0.56.0b-2 | 2026 | Broadcasting Reduction | Released |
 | v0.56.0c | 2026 | Modern Activations Backward | Released |
 | v0.57.0a | 2026 | TD-043 (SHOW double leak) | Released |
+| v0.57.0b | 2026 | TD-042 (CREATE literal-list free) | Released |
 
 ## Growth Chart (ASCII)
 

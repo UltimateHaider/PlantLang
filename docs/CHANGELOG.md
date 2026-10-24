@@ -1,3 +1,29 @@
+## v0.57.0b — TD-042 (CREATE literal-list free)
+
+### Fixed
+- TD-042: `CREATE a (TENSOR) TO TENSOR([...])`. now frees the input
+  list (mirrors the proven SHOW TD-008 safe block; Approach E —
+  no `_take`, no runtime changes).
+- 85 CREATE sites (61 files) covered.
+- `TENSOR(<var>)` stays on the plain path (guarded to literals;
+  caller keeps ownership).
+
+### Added
+- 2 new tests: td042_create_literal, td042_tensor_var.
+
+### Verified
+- Native: 209/209 (was 207)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (577,060 B)
+- valgrind strict: PASS (0 bytes; SHOW and CREATE both leak-free)
+- Binary: 1021416 B.
+
+### Out of Scope (v0.57.0c/d)
+- TD-041 (intermediate leak).
+- Higher-order AD.
+
 ## v0.57.0a — TD-043 (SHOW double leak)
 
 ### Fixed

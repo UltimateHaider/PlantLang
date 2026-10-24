@@ -478,18 +478,16 @@ defining scope.
   v0.56.0c because a codegen free-pass is HIGH risk.
 - **Related:** TD-017 (closure envs), TD-042.
 
-## TD-042: TENSOR([...]) literal input-list leak — OPEN (deferred v0.57.0+)
-- **Status:** OPEN
+## TD-042: TENSOR([...]) literal input-list leak — CLOSED
+- **Status:** ✅ CLOSED in v0.57.0b
 - **Introduced:** pre-v0.56.0a (discovered in v0.56.0a Phase 5 valgrind)
-- **Impact:** LOW (~50 B per literal; benign still-reachable)
-- **Symptom:** a plain `TENSOR([1.0, 2.0, 3.0])` + `TENSOR_FREE` leaks the
-  `_from_double`/`plant_list_make` input-list blocks (~50 B), even with no
-  tensor-op or autograd code.
-- **Target fix:** v0.57.0+ (needs TD-008-safe detection; naive `_take` breaks SHOW).
-- **Note:** v0.56.0c attempted a literal-only fix (`plant_tensor_from_list_take`);
-  it was **reverted** because it bypassed `gen_show_stmt`'s TD-008 safe-path
-  (4 definite leaks in `tensor_basic`). The literal detector also only matched
-  single-`[` literals.
+- **Fixed:** `CREATE (TENSOR) TO TENSOR([...])` now frees the input list
+  (mirrors SHOW's TD-008 safe block).
+- **Approach:** E — fix the `gen_create_stmt` emission directly; **no**
+  `plant_tensor_from_list_take` (the v0.56.0c `_take` attempt bypassed
+  TD-008 and was reverted).
+- **Coverage:** 85 CREATE sites (61 files); `TENSOR(<var>)` is guarded
+  (arg is not `plant_list_make(`) and keeps caller ownership.
 - **Related:** TD-008, TD-041.
 
 ## TD-043: SHOW `<double>` leaks `_from_double` string — CLOSED
