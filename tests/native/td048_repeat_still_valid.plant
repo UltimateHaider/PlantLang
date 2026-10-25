@@ -1,0 +1,18 @@
+# TD-048: repeated first-order (different vars) still works
+CREATE a (TENSOR) TO TENSOR([1.0, 2.0]).
+CREATE b (TENSOR) TO TENSOR([3.0, 4.0]).
+TENSOR_TRACK(a).
+TENSOR_TRACK(b).
+CREATE s (TENSOR) TO TENSOR_ADD(a, b).
+CREATE loss (DBL) TO TENSOR_SUM(s).
+CREATE da (TENSOR) TO GRAD(loss, a, 1).
+SHOW da.
+CREATE db (TENSOR) TO GRAD(loss, b, 1).
+SHOW db.
+TAPE_CLEAR().
+TENSOR_FREE(a).
+TENSOR_FREE(b).
+TENSOR_FREE(s).
+TENSOR_FREE(da).
+TENSOR_FREE(db).
+SHOW "td048-repeat-ok".

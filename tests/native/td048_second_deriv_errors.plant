@@ -1,0 +1,13 @@
+# TD-048: second derivative -> explicit error (no silent [2,4])
+CREATE x (TENSOR) TO TENSOR([1.0, 2.0]).
+TENSOR_TRACK(x).
+CREATE s (TENSOR) TO TENSOR_MUL(x, x).
+CREATE loss (DBL) TO TENSOR_SUM(s).
+CREATE dx (TENSOR) TO GRAD(loss, x, 1).
+CREATE ddx (TENSOR) TO GRAD(TENSOR_SUM(dx), x, 1).
+SHOW "td048-error-ok".
+TAPE_CLEAR().
+TENSOR_FREE(dx).
+TENSOR_FREE(ddx).
+TENSOR_FREE(s).
+TENSOR_FREE(x).

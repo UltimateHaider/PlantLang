@@ -244,7 +244,19 @@ PlantTensor* plant_autograd_grad(PlantTensor* loss_t, double loss_d,
     } else {
         root = plant_tape_head->out;
         if (!root) return plant_tensor_create_error("grad: null root");
-        (void)loss_d;
+        /* v0.57.4 — TD-048 hotfix: detect a second-derivative attempt.
+           When retain=1 and the head is a reduction, the supplied loss
+           must match head->scalar (both come from the same reduction →
+           bit-identical). A mismatch means the "loss" is built from a
+           previous gradient (silently-wrong); return a clean error. */
+        if (retain
+            && (plant_tape_head->op == OP_SUM || plant_tape_head->op == OP_MEAN)
+            && loss_d != plant_tape_head->scalar) {
+            plant_tape_clear();
+            grad_free_all();
+            return plant_tensor_create_error(
+                "grad: loss does not match retained tape (second derivatives unsupported)");
+        }
     }
 
     {

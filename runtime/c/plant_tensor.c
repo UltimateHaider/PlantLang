@@ -671,7 +671,7 @@ double plant_tensor_sum(PlantTensor* a) {
     if (!a || plant_tensor_is_error(a)) return 0.0;
     for (i = 0; i < a->size; i++) s += a->data[i];
     if (plant_tape_record_hook && plant_tensor_requires_grad(a))
-        plant_tape_record_hook(6 /* OP_SUM */, a, 0, 0.0, 0);
+        plant_tape_record_hook(6 /* OP_SUM */, a, 0, s, 0);
     return s;
 }
 
@@ -681,7 +681,7 @@ double plant_tensor_mean(PlantTensor* a) {
     if (!a || plant_tensor_is_error(a) || a->size == 0) return 0.0;
     for (i = 0; i < a->size; i++) s += a->data[i];
     if (plant_tape_record_hook && plant_tensor_requires_grad(a))
-        plant_tape_record_hook(7 /* OP_MEAN */, a, 0, 0.0, 0);
+        plant_tape_record_hook(7 /* OP_MEAN */, a, 0, s / (double)a->size, 0);
     return s / (double)a->size;
 }
 

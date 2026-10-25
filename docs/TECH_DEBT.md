@@ -525,12 +525,23 @@ defining scope.
 - **Target:** v0.58.0+ (ownership/lifetime epic).
 - **Related:** TD-044, TD-046.
 
-## TD-048: True higher-order AD unsupported — OPEN
-- **Status:** OPEN
+## TD-048: True higher-order AD unsupported — OPEN (hardened v0.57.4)
+- **Status:** OPEN (hardened; explicit error)
 - **Introduced:** v0.57.3 (investigation confirmed the backward is non-differentiable)
+- **Hardened:** v0.57.4 (silent-wrong → clean error)
 - **Impact:** MED (PINNs, MAML, Hessians unavailable)
 
-### ⚠️ CRITICAL HAZARD: SILENT-WRONG-ANSWER
+### Interim hardening (v0.57.4)
+- Attempting a second derivative (`GRAD(GRAD(loss, x, 1), x, 1)`) now
+  returns an explicit error:
+  `grad: loss does not match retained tape (second derivatives unsupported)`.
+- Mechanism: `loss_d` vs `head->scalar` comparison (bit-identical, no epsilon).
+- Repeated first-order still works.
+- **No silent-wrong-answer.**
+- `grad_second_derivative_unsupported` regression-locks the explicit-error
+  behaviour.
+
+### ⚠️ CRITICAL HAZARD: SILENT-WRONG-ANSWER (historical, v0.57.3)
 - **The hazard:** with `retain=1`, `GRAD(TENSOR_SUM(dx), x, 1)` does
   **not** error. The retained tape is non-empty, so it re-seeds the tape
   head and **silently re-returns the first derivative** (`ddx == dx`),

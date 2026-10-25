@@ -1,18 +1,15 @@
-# Second derivatives are NOT computed (TD-048): the backward pass is not
-# taped, so dx is detached. With retain=1 the second GRAD re-seeds the
-# retained tape head and silently re-returns the first derivative (ddx == dx),
-# NOT d2(x^2)/dx2 = 2. Documented behaviour, regression-locked.
+# v0.57.4 — TD-048 hotfix: second derivative -> explicit error (was silent)
 CREATE x (TENSOR) TO TENSOR([1.0, 2.0]).
 TENSOR_TRACK(x).
 CREATE s (TENSOR) TO TENSOR_MUL(x, x).
 CREATE loss (DBL) TO TENSOR_SUM(s).
 CREATE dx (TENSOR) TO GRAD(loss, x, 1).
-CREATE ddx (TENSOR) TO GRAD(TENSOR_SUM(dx), x, 1).
 SHOW dx.
+CREATE ddx (TENSOR) TO GRAD(TENSOR_SUM(dx), x, 1).
 SHOW ddx.
-SHOW "ddx-unsupported".
+TAPE_CLEAR().
 TENSOR_FREE(dx).
 TENSOR_FREE(ddx).
 TENSOR_FREE(s).
 TENSOR_FREE(x).
-TAPE_CLEAR().
+SHOW "second-deriv-error-ok".

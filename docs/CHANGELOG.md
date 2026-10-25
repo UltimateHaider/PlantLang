@@ -1,3 +1,34 @@
+## v0.57.4 — TD-048 interim hardening (silent → explicit error)
+
+### Fixed
+- TD-048 silent-wrong-answer: attempting a second derivative
+  (GRAD(TENSOR_SUM(dx), x, 1) with retain=1) now returns an explicit
+  error ("grad: loss does not match retained tape (second derivatives
+  unsupported)") instead of silently re-returning the first derivative.
+- Mechanism: plant_tensor_{sum,mean} now pass the actual reduction
+  value into the tape hook; plant_autograd_grad compares loss_d to
+  head->scalar when retain=1 and head is SUM/MEAN.
+- Repeated first-order (retain + 2 GRADs on different vars) unchanged.
+- Default (retain=0) unchanged (gated on retain).
+
+### Added
+- 2 new tests: td048_second_deriv_errors, td048_repeat_still_valid.
+- Updated: grad_second_derivative_unsupported (now asserts explicit error).
+
+### Verified
+- Native: 228/228 (was 226)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (586,847 B)
+- valgrind strict: PASS
+- Binary: 1025736 B.
+
+### Out of Scope (v0.58.0+)
+- True higher-order AD (differentiable backward epic, TD-048).
+- TD-046 (PUSH/closures/FFI).
+- TD-047 (MAP value ownership / return-aliasing).
+
 ## v0.57.3 — retain_graph + TAPE_CLEAR (repeated first-order)
 
 ### Added
