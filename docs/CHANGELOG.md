@@ -1,3 +1,45 @@
+## v0.58.3 — TD-050 (TENSOR literal inside ACTION body)
+
+### Fixed
+- TD-050: `GIVE <float literal>` in an ACTION body was mis-lowered by
+  `_lower_dots` (`5.0` → `_map_get(5, "0")`). Guard added in
+  `_lower_dots`: skip the `.` rewrite when the gathered base starts with
+  a digit (float literal). `GIVE TENSOR([5.0, 6.0])` and
+  `GIVE [5.0, 6.0]` now work correctly. Field access (`x.y`, `x1.5`)
+  and the `GIVE 0.` terminator are preserved.
+
+### Added
+- 4 new tests: `td050_give_tensor_float`, `td050_give_list_float`,
+  `td050_give_field_regression`, `td050_give_terminator`.
+
+### Documented (new TDs)
+- TD-051 broadened: bare float literal not lowered to `_from_double`
+  (affects `SHOW 5.0` **and** `GIVE 5.0`). Was SHOW-only. Target: v0.58.4.
+- TD-052 NEW: ACTION `-> DBL` emits `tx_t` return signature (zero corpus
+  usage).
+- TD-053 NEW: `SHOW <MAP>` segfaults (report path assumes array magic).
+- TD-054 NEW: `CREATE x (LON) TO <action call>` stores `tx_t` pointer as
+  long (pre-existing).
+- TD-055 NEW: ACTION bodies cannot see globals (no capture).
+
+### Verified
+- Native: 242/242 (was 238)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (592,283 B)
+- valgrind strict: PASS (4.1/4.2 documented TD-046 family; 4.3/4.4 clean)
+- Binary: 1,025,504 bytes.
+
+### Out of Scope (v0.58.4+)
+- TD-051 (bare float `_from_double`).
+- TD-052 (ACTION `-> DBL`).
+- TD-053 (SHOW MAP segfault).
+- TD-054 (ACTION call pointer as long).
+- TD-055 (ACTION global capture).
+- TD-046 (PUSH nested, v0.58.1b).
+- TD-048 (true higher-order AD, v0.59.0+).
+
 ## v0.58.2 — TD-049 (SHOW <numeric> leak)
 
 ### Fixed

@@ -523,32 +523,89 @@ defining scope.
   inside the compiler.
 - **Related:** TD-043 (sibling for doubles).
 
-## TD-051: `SHOW <bare float literal>` mis-lowers — OPEN
+## TD-051: Bare float literal not lowered to `_from_double` — OPEN
 
 - **Status:** OPEN
 - **Introduced:** pre-v0.58.2 (discovered during v0.58.2 Phase 1)
-- **Impact:** MED (blocks `SHOW <bare float literal>`)
-- **Symptom:** `SHOW 1.5` emits `plant_iReport_print(r, 1.5)` — a raw
-  `double` passed as `const char*` → gcc type error.
-- **Workaround:** use `SHOW x + 0.0` or `SHOW <DBL var>` (not a bare
-  literal).
-- **Reason:** the `expr_is_numeric`/`_from_double` wrap does not apply to
-  a bare decimal literal in `gen_show_stmt`.
-- **Target:** v0.58.3 (with TD-050).
+- **Broadened:** v0.58.3 (was SHOW-only; now shown to affect GIVE too)
+- **Impact:** MED (`SHOW 5.0` and `GIVE 5.0` fail)
+- **Symptom:**
+  - `SHOW 5.0` → `plant_iReport_print(r, 5.0)` — raw `double` as
+    `const char*` → gcc type error.
+  - `GIVE 5.0` in an ACTION → `return 5.0;` (raw double, wrong type for
+    the `tx_t` return; `_lower_dots` no longer mis-lowers it, see TD-050).
+- **Reason:** `expr_is_numeric("5.0") != 1` → no `_from_double` wrap.
+- **Workaround:** `SHOW x + 0.0`, or use a DBL variable.
+- **Target:** v0.58.4.
+- **Related:** TD-049 (SHOW long, closed).
+
+## TD-050: `TENSOR([...])` / float literal inside `GIVE` mis-parses — CLOSED
+
+- **Status:** ✅ CLOSED in v0.58.3
+- **Introduced:** pre-v0.58.1 (discovered during v0.58.1 Phase 2)
+- **Impact:** MED (blocked TENSOR/list literals with floats in ACTIONs)
+- **Symptom:** `GIVE TENSOR([5.0, 6.0])` emitted
+  `plant_list_make(2, 5_map_get(5, "0"), ...)`.
+- **Root cause:** `_lower_dots` (parser.plant, **GIVE-only** textual
+  rewrite) converted `BASE.IDENT` → `_map_get(BASE,"IDENT")` whenever the
+  chars adjacent to the dot were identifier chars — digits included. The
+  lexer already emits `5.0` as a single NUMBER token, so the trigger was
+  the textual pass, not the lexer or the ACTION context.
+- **Fixed:** guard in `_lower_dots` — skip the rewrite when the gathered
+  base **starts with a digit** (float literal). +12 lines, parser only.
+- **Preserved:** `x.y` / `x1.5` field access, and the `GIVE 0.` terminator.
+- **Tests:** `td050_give_tensor_float`, `td050_give_list_float`,
+  `td050_give_field_regression`, `td050_give_terminator`.
+- **Related:** TD-046 (GIVE literal ownership), TD-051 (bare float wrap).
+
+## TD-052: ACTION `-> DBL` emits `tx_t` return signature — OPEN
+
+- **Status:** OPEN
+- **Introduced:** pre-v0.58.3 (discovered during v0.58.3 Phase 2)
+- **Impact:** LOW (zero corpus usage; all actions return TENSOR/STR/R/LON)
+- **Symptom:** `ACTION f() -> DBL` emits `tx_t f()` instead of
+  `double f()`. Returning a double (`return 5.0;`) then breaks at compile
+  time (incompatible types).
+- **Workaround:** use `LON` (with `_from_long`) or `TENSOR`/`STR`;
+  `DBL` returns are unsupported.
+- **Target:** v0.58.4+ (low priority)
 - **Related:** none.
 
-## TD-050: `TENSOR([...])` literal inside an ACTION body fails — OPEN
+## TD-053: `SHOW <MAP>` segfaults — OPEN
+
 - **Status:** OPEN
-- **Introduced:** pre-v0.58.1 (discovered during v0.58.1 Phase 2)
-- **Impact:** MED (blocks TENSOR literals inside ACTIONs)
-- **Symptom:** `GIVE TENSOR([5.0, 6.0])` inside an ACTION body emits
-  `5_map_get(5, "0")` — the parser reads `5.0` as field access in that
-  context (works at top level).
-- **Reason:** parser/pre-mapper treats `5.0` as a number-then-dot pattern
-  inside ACTION bodies.
-- **Workaround:** use `TENSOR_MUL(param, param)`, or `CREATE` the tensor at
-  top level and pass it in.
-- **Target:** v0.58.2 (MED risk; parser fix)
+- **Introduced:** pre-v0.58.3 (discovered during v0.58.3 Phase 3)
+- **Impact:** LOW–MED (`SHOW` of a MAP crashes)
+- **Symptom:** `SHOW m` on a MAP segfaults. `plant_iReport_print`'s array
+  path requires `PLANT_ARRAY_MAGIC`; a pair-list MAP fails that check and
+  falls through to `rp->print(context, message)` → `puts` on a non-string
+  pointer.
+- **Workaround:** `SHOW m["k"]` (print one value).
+- **Target:** v0.58.4+
+- **Related:** none.
+
+## TD-054: `CREATE x (LON) TO <action call>` stores pointer as long — OPEN
+
+- **Status:** OPEN
+- **Introduced:** pre-v0.58.3 (discovered during v0.58.3 Phase 3)
+- **Impact:** LOW (pre-existing; only coincidentally correct when the
+  callee returns a number disguised as a pointer)
+- **Symptom:** `CREATE v (LON) TO f()` emits `long v = f();` instead of
+  `long v = _to_long(f());` — the `tx_t` pointer is stored as a long.
+- **Workaround:** `CREATE v (LON) TO _to_long(f())`.
+- **Target:** v0.58.4+
+- **Related:** none.
+
+## TD-055: ACTION bodies cannot see globals (no capture) — OPEN
+
+- **Status:** OPEN
+- **Introduced:** pre-v0.58.3 (discovered during v0.58.3 Phase 3)
+- **Impact:** LOW–MED (globals inaccessible inside ACTIONs)
+- **Symptom:** a global variable referenced inside an ACTION body emits a
+  C reference to an undeclared name (e.g. `'m' undeclared`) — globals are
+  not captured into ACTION bodies.
+- **Workaround:** pass globals as parameters.
+- **Target:** v0.58.4+ (or a broader scope/globals epic)
 - **Related:** none.
 
 ## TD-047: MAP value ownership — CLOSED (misdiagnosis, v0.58.0)

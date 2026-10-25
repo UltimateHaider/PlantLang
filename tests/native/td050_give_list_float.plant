@@ -1,0 +1,7 @@
+ACTION f() -> LST
+  GIVE [5.0, 6.0].
+/ACTION.
+CREATE L (LST) TO f().
+SHOW L.
+LIST_FREE(L).
+SHOW "td050-list-ok".

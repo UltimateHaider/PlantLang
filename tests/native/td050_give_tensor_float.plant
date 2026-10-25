@@ -1,0 +1,7 @@
+ACTION f() -> TENSOR
+  GIVE TENSOR([5.0, 6.0]).
+/ACTION.
+CREATE t (TENSOR) TO f().
+SHOW t.
+TENSOR_FREE(t).
+SHOW "td050-tensor-ok".
