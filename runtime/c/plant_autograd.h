@@ -43,11 +43,16 @@ void plant_tape_record(int op, PlantTensor* a, PlantTensor* b,
                        double s, PlantTensor* out);
 void plant_tape_clear(void);
 
-/* Core GRAD (4-arg). */
+/* Core GRAD (4-arg + v0.57.3 retain flag). */
 PlantTensor* plant_autograd_grad(PlantTensor* loss_t, double loss_d,
-                                 PlantTensor* w, int use_tensor);
+                                 PlantTensor* w, int use_tensor, int retain);
 
 /* Convenience GRAD (2-arg; mapper target). */
 PlantTensor* plant_grad(double loss_d, PlantTensor* w);
+
+/* v0.57.3 — 3-arg GRAD with explicit retain_graph flag. */
+PlantTensor* plant_grad_retain(double loss_d, PlantTensor* w, int retain);
+/* v0.57.3 — TAPE_CLEAR(): explicit tape cleanup (idempotent). */
+void plant_tape_clear_public(void);
 
 #endif /* PLANT_AUTOGRAD_H */

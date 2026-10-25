@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.57.2
+# Auto-updated: 0.57.3
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.57.2 | 1025600 | 8963 | 945 | 109 | 322 | 5361 |
+| v0.57.3 | 1025736 | 8963 | 945 | 109 | 322 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -75,6 +75,7 @@
 | v0.57.0c | 2026 | TD-041 (intermediate leak, narrow A) | Released |
 | v0.57.1 | 2026 | TD-044 (GIVE + map/array) | Released |
 | v0.57.2 | 2026 | TD-045 WONTFIX (documented) | Released |
+| v0.57.3 | 2026 | retain_graph + TAPE_CLEAR | Released |
 
 ## Growth Chart (ASCII)
 

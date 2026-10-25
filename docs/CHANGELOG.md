@@ -1,3 +1,44 @@
+## v0.57.3 — retain_graph + TAPE_CLEAR (repeated first-order)
+
+### Added
+- retain_graph flag: GRAD(loss, w, 1) keeps the tape for repeated
+  first-order GRADs (no re-forward).
+- TAPE_CLEAR() public function (explicit tape cleanup; idempotent).
+- 5 new tests: grad_repeat_a_b, grad_retain_then_clear,
+  grad_default_still_clears, grad_second_derivative_unsupported,
+  tape_clear_double.
+
+### ⚠️ CRITICAL WARNING (silent-wrong-answer)
+- True higher-order AD is NOT supported.
+- GRAD(GRAD(loss, x, 1), x, 1) — with retain=1 — does NOT error.
+  The retained tape is non-empty, so it re-seeds the tape head and
+  SILENTLY re-returns the FIRST derivative (ddx == dx), not the
+  second (d²x²/dx² = [2,2]). No error, no crash — silently wrong.
+- Workaround: none yet (differentiable backward epic, TD-048).
+- The grad_second_derivative_unsupported test regression-locks this
+  documented behaviour (SHOWs dx=[2,4] and ddx=[2,4] with a comment).
+
+### NOT supported (documented, TD-048)
+- True higher-order AD (second derivatives): the backward pass is
+  implemented with raw loops (not taped ops); dx is detached
+  (requires_grad=0). A differentiable backward rewrite is required
+  → deferred to v0.59.0+ epic (TD-048).
+- w->grad field: side-table retained (avoids TD-045/047 ownership).
+
+### Verified
+- Native: 226/226 (was 221)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (586,847 B)
+- valgrind strict: PASS
+- Binary: 1025736 B.
+
+### Out of Scope (v0.58.0+)
+- True higher-order AD (differentiable backward epic, TD-048).
+- TD-046 (PUSH/closures/FFI).
+- TD-047 (MAP value ownership / return-aliasing).
+
 ## v0.57.2 — TD-045 WONTFIX (documented + empirical)
 
 ### Documented (WONTFIX)

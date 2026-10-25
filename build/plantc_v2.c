@@ -115,6 +115,7 @@ tx_t _substr(tx_t str, long start, long end);
 tx_t _handle_func(tx_t expr, tx_t kw, tx_t cfn);
 tx_t _tensor_alloc_op(tx_t name);
 tx_t _hoist_tensor_rhs(tx_t expr, tx_t path, tx_t isel, PlantArray* temps, PlantArray* lines);
+tx_t _grad_retain_rewrite(tx_t expr);
 tx_t _handle_func_paren(tx_t expr, tx_t kw, tx_t cfn);
 tx_t _handle_func_paren2(tx_t expr, tx_t kw, tx_t cfn);
 tx_t _handle_func_paren3(tx_t expr, tx_t kw, tx_t cfn);
@@ -7411,6 +7412,74 @@ tx_t _hoist_tensor_rhs(tx_t expr, tx_t path, tx_t isel, PlantArray* temps, Plant
     tx_t rebuilt = _cat4(name, "(", joined, ")");
     return plant_list_make ( 2 , rebuilt , "1" );
 }
+tx_t _grad_retain_rewrite(tx_t expr) {
+  tx_t parts = "";
+  tx_t head0 = "";
+  tx_t head = "";
+  tx_t rest = "";
+  tx_t op = "";
+  tx_t cc = "";
+  tx_t inner = "";
+  tx_t ac = "";
+  tx_t tail = "";
+    parts = strings_SPLIT(expr, "GRAD");
+    if (plant_array_length(parts) != 2) {
+    return expr;
+    }
+    head0 = plant_list_get(parts, 0);
+    head = plant_trim(head0);
+    if (strcmp(head,"") != 0) {
+    return expr;
+    }
+    rest = plant_list_get(parts, 1);
+    op = find_any(rest, "(");
+    if (op == - 1) {
+    return expr;
+    }
+    long dep = 0;
+    long close_pos = - 1;
+    long ci = 0;
+    while (ci < strlen( rest )) {
+    cc = char_at(rest, ci);
+    if (strcmp(cc,"(") == 0) {
+    dep = dep+1;
+    }
+    if (strcmp(cc,")") == 0) {
+    dep = dep - 1;
+    if (dep == 0) {
+    close_pos = ci;
+                              break;
+    }
+    }
+    ci = ci+1;
+    }
+    if (close_pos == - 1) {
+    return expr;
+    }
+    inner = substring(rest, op+1, close_pos);
+    long cd = 0;
+    long commas = 0;
+    long ai = 0;
+    while (ai < strlen( inner )) {
+    ac = char_at(inner, ai);
+    if (strcmp(ac,"(") == 0 || strcmp(ac,"[") == 0) {
+    cd = cd+1;
+    }
+    if (strcmp(ac,")") == 0 || strcmp(ac,"]") == 0) {
+    cd = cd - 1;
+    }
+    if (cd == 0 && strcmp(ac,",") == 0) {
+    commas = commas+1;
+    }
+    ai = ai+1;
+    }
+    if (commas == 2) {
+    tail = substring(rest, close_pos+1, strlen( rest ));
+    tx_t rebuilt = _cat3("plant_grad_retain(", inner, ")");
+    return _cat(rebuilt, tail);
+    }
+    return expr;
+}
 tx_t _handle_func_paren(tx_t expr, tx_t kw, tx_t cfn) {
   tx_t parts = "";
   tx_t p0 = "";
@@ -12511,7 +12580,9 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* 
     e = _handle_func_paren(e, "TENSOR_SWISH", "plant_tensor_swish");
     e = _handle_func_paren(e, "TENSOR_MISH", "plant_tensor_mish");
     e = _handle_func_paren(e, "TENSOR_TRACK", "plant_tensor_track");
+    e = _grad_retain_rewrite(e);
     e = _handle_func_paren(e, "GRAD", "plant_grad");
+    e = _handle_func_paren(e, "TAPE_CLEAR", "plant_tape_clear_public");
     e = _math_func_paren(e, "VARIANCE", "plant_list_variance");
     e = _math_func_paren(e, "STDDEV", "plant_list_stddev");
     e = _math_func_paren(e, "PRODUCT", "plant_list_product");
@@ -15011,6 +15082,9 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     }
     if (strcmp(ca2,"TENSOR_TRACK") == 0) {
     ca2 = "plant_tensor_track";
+    }
+    if (strcmp(ca2orig,"TAPE_CLEAR") == 0) {
+    return _cat(isel0, "  plant_tape_clear_public();\n");
     }
     if (strcmp(ca2orig,"LIST_FREE") == 0 || strcmp(ca2orig,"TENSOR_FREE") == 0 || strcmp(ca2orig,"FREE") == 0) {
     fargs = _map_get(node, "args");
@@ -19056,7 +19130,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.57.2 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.57.3 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

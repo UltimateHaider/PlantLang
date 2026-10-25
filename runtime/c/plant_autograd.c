@@ -227,7 +227,7 @@ void plant_tape_clear(void) {
 
 /* ── Backward ───────────────────────────────────────────────── */
 PlantTensor* plant_autograd_grad(PlantTensor* loss_t, double loss_d,
-                                 PlantTensor* w, int use_tensor) {
+                                 PlantTensor* w, int use_tensor, int retain) {
     PlantTensor* result;
     PlantTensor* root;
     TapeNode* n;
@@ -431,12 +431,26 @@ PlantTensor* plant_autograd_grad(PlantTensor* loss_t, double loss_d,
         memcpy(result->data, g->data, sizeof(double) * (size_t)g->size);
     }
 
-    plant_tape_clear();
+    /* v0.57.3 — retain_graph: keep the tape when retain != 0.
+       The grad side-table is always reset so the next GRAD re-seeds. */
+    if (!retain) {
+        plant_tape_clear();
+    }
     grad_free_all();
     return result;
 }
 
 /* ── Convenience GRAD (2-arg; mapper target) ────────────────── */
 PlantTensor* plant_grad(double loss_d, PlantTensor* w) {
-    return plant_autograd_grad(0, loss_d, w, 0);
+    return plant_autograd_grad(0, loss_d, w, 0, 0);  /* retain = 0 */
+}
+
+/* v0.57.3 — 3-arg GRAD with explicit retain_graph flag. */
+PlantTensor* plant_grad_retain(double loss_d, PlantTensor* w, int retain) {
+    return plant_autograd_grad(0, loss_d, w, 0, retain);
+}
+
+/* v0.57.3 — TAPE_CLEAR(): explicit tape cleanup (idempotent). */
+void plant_tape_clear_public(void) {
+    plant_tape_clear();
 }

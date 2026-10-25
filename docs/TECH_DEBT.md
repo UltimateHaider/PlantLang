@@ -525,6 +525,46 @@ defining scope.
 - **Target:** v0.58.0+ (ownership/lifetime epic).
 - **Related:** TD-044, TD-046.
 
+## TD-048: True higher-order AD unsupported — OPEN
+- **Status:** OPEN
+- **Introduced:** v0.57.3 (investigation confirmed the backward is non-differentiable)
+- **Impact:** MED (PINNs, MAML, Hessians unavailable)
+
+### ⚠️ CRITICAL HAZARD: SILENT-WRONG-ANSWER
+- **The hazard:** with `retain=1`, `GRAD(TENSOR_SUM(dx), x, 1)` does
+  **not** error. The retained tape is non-empty, so it re-seeds the tape
+  head and **silently re-returns the first derivative** (`ddx == dx`),
+  not the second derivative (`d²(x²)/dx² = [2, 2]`).
+- **No error, no crash — silently wrong.** This is the worst failure mode.
+- **Detection:** none today.
+- **Workaround:** do not attempt second derivatives with `retain=1`; there
+  is no correct path until the differentiable-backward epic.
+- **Regression-locked by:** the `grad_second_derivative_unsupported` test
+  (SHOWs `dx=[2,4]` and `ddx=[2,4]` with an explanatory comment).
+
+### Root cause
+- Backward uses raw loops + `plant_tensor_create` (no tape hooks).
+- `dx` is detached (`requires_grad=0`, no tape node).
+- The tape records only the forward pass.
+- With `retain=1`, the retained forward tape is re-seeded (head reused) and
+  backward replays the same first-order computation.
+
+### Fix direction
+- Rewrite the backward with taped ops + `requires_grad` on grads +
+  double-backward rules per op (matmul, softmax Jacobian, …).
+- 2× tape size, ~2–3 weeks, HIGH risk.
+- Alternative: forward-mode dual numbers (separate implementation).
+
+### Interim hardening (recommended follow-up)
+- Runtime guard: when `retain=1` and the root is the retained tape head
+  (i.e. the tape was already consumed by a retain GRAD), raise an explicit
+  error ("second derivatives unsupported") instead of silently returning
+  the first derivative → converts silent-wrong-answer into a clean error.
+- Candidate for a v0.57.4 hotfix.
+
+- **Related:** TD-046 (PUSH/closures/FFI), TD-047 (MAP value ownership).
+- **Target:** v0.59.0+ (differentiable backward or forward-mode epic).
+
 ## TD-045: `SET x TO <new tensor>` overwrites old x without freeing — WONTFIX
 - **Status:** 🔶 WONTFIX (documented workaround; v0.57.2)
 - **Introduced:** pre-v0.57.0c (discovered during TD-041 Phase 2)
