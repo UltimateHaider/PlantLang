@@ -12951,6 +12951,8 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
   tx_t ts_i0 = "";
   tx_t ts_inner = "";
   tx_t ts_mk = "";
+  tx_t _fl_sp = "";
+  tx_t _fd_sp = "";
     val = _map_get(node, "value");
     cval = translate_expr(val, nums, evars, plant_list_make ( 0 ));
     cval = _handle_cat(cval, nums, evars);
@@ -13129,6 +13131,11 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
     }
     return _cat4(isel, "  { char* __str = ", cval, "; plant_iReport_print(get_report(), __str); free(__str); }\n");
     }
+    }
+    _fl_sp = strings_SPLIT(cval, "_from_long(");
+    _fd_sp = strings_SPLIT(cval, "_from_double(");
+    if (plant_array_length(_fl_sp) > 1 || plant_array_length(_fd_sp) > 1) {
+    return _cat(_cat4(_cat4(isel, "  { tx_t __show = ", cval, ";\n"), isel, "    plant_iReport_print(get_report(), __show);\n", isel), "    plant_heapstr_release((void*)__show); }\n");
     }
     return _cat4(isel, "  plant_iReport_print(get_report(), ", cval, ");\n");
 }
@@ -19278,7 +19285,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.58.1 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.58.2 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

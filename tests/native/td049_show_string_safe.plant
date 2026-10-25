@@ -1,0 +1,3 @@
+SHOW "hello world".
+SHOW "another string".
+SHOW "td049-show-string-ok".

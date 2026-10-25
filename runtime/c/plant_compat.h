@@ -86,7 +86,30 @@ static long plant_rw_arg_long(tx_t v) { if (!v) return 0; if ((uintptr_t)v < 409
  /* v0.51.2d.1 — TD-010: heap-tagged numeric strings (owned, freeable). */
  char* plant_heapstr_alloc_copy(const char* s);
  int plant_heapstr_release(void* p);
- static tx_t _from_digit(long n) { static const char* _dg[10] = {"0","1","2","3","4","5","6","7","8","9"}; if (n >= 0 && n <= 9) return (tx_t)_dg[n]; char buf[64]; snprintf(buf,64,"%ld",n); return (tx_t)plant_heapstr_alloc_copy(buf); }
+ /* v0.58.2 — TD-049: prefixed 0-9 table (p-8 safe, no rotation, stable).
+    Multi-digit stays heap (freed at SHOW via gen_show_stmt). */
+#define _PLANT_DIGIT_HDRPAD 64
+static char _plant_digit_store[10][_PLANT_DIGIT_HDRPAD + 8];
+static int  _plant_digit_init = 0;
+static void _plant_digit_init_once(void) {
+    int d;
+    if (_plant_digit_init) return;
+    for (d = 0; d < 10; d++) {
+        char* p = _plant_digit_store[d] + _PLANT_DIGIT_HDRPAD;
+        p[0] = (char)('0' + d);
+        p[1] = '\0';
+    }
+    _plant_digit_init = 1;
+}
+static tx_t _from_digit(long n) {
+    char buf[64];
+    if (n >= 0 && n <= 9) {
+        _plant_digit_init_once();
+        return (tx_t)(_plant_digit_store[n] + _PLANT_DIGIT_HDRPAD);
+    }
+    snprintf(buf, 64, "%ld", n);
+    return (tx_t)plant_heapstr_alloc_copy(buf);
+}
 static tx_t _from_long(long n) { return _from_digit(n); }
 /* v0.49.6 — decimal literals: [1.5, 2.7] emit _from_double(...).
    %g prints integral doubles without the trailing dot (1.0 → "1"),

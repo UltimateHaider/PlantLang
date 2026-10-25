@@ -5702,6 +5702,16 @@ ACTION gen_show_stmt(node, nums(LST), evars(LST), isel(TXT)),
           GIVE isel + "  { char* __str = " + cval + "; plant_iReport_print(get_report(), __str); free(__str); }\n".
       /IF.
   /IF.
+  # v0.58.2 — TD-049: numeric SHOW release (Design A).
+  # If cval is a single _from_long(...)/_from_double(...) wrap, print via a
+  # temp and release it (magic-checked; static prefixed buffers no-op).
+  REAP _fl_sp FROM strings:SPLIT, cval, "_from_long(".
+  REAP _fd_sp FROM strings:SPLIT, cval, "_from_double(".
+  IF COUNT _fl_sp > 1 OR COUNT _fd_sp > 1,
+      GIVE isel + "  { tx_t __show = " + cval + ";\n"
+          + isel + "    plant_iReport_print(get_report(), __show);\n"
+          + isel + "    plant_heapstr_release((void*)__show); }\n".
+  /IF.
   GIVE isel + "  plant_iReport_print(get_report(), " + cval + ");\n".
 /ACTION.
 

@@ -1,0 +1,4 @@
+SHOW 5000.
+SHOW 12345.
+SHOW 999999.
+SHOW "td049-show-long-ok".

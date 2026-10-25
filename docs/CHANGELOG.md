@@ -1,3 +1,43 @@
+## v0.58.2 — TD-049 (SHOW <numeric> leak)
+
+### Fixed
+- TD-049: `SHOW <multi-digit long>` no longer leaks the `_from_long`
+  heap string. Mechanism: `gen_show_stmt` wraps numeric SHOW in a temp
+  + `plant_heapstr_release` (after `plant_iReport_print`); release is
+  magic-checked, so it is safe on prefixed static and non-tagged
+  pointers.
+- `_from_digit` 0-9 now uses a prefixed 10-slot static table
+  (`p-8` safe, no rotation, stable pointers).
+
+### Added
+- 3 new tests: `td049_show_long`, `td049_show_digit`,
+  `td049_show_string_safe`.
+
+### Documented (new TD)
+- TD-051: `SHOW <bare float literal>` (e.g. `SHOW 1.5`) emits a raw
+  `double` as `const char*` → gcc type error. Pre-existing.
+  Target: v0.58.3.
+
+### Previously (v0.58.2a)
+- v0.58.2a (rotating `_from_long`) was UNSOUND → compiler corruption
+  (STOP #2 + #5, fully reverted). The type-aware display-choke fix in
+  this release is sound.
+
+### Verified
+- Native: 238/238 (was 235)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (592,013 B)
+- valgrind strict: PASS
+- Binary: 1,025,504 bytes.
+
+### Out of Scope (v0.58.3+)
+- TD-050 (TENSOR literal inside ACTION).
+- TD-051 (SHOW bare float literal).
+- TD-046 (PUSH nested, v0.58.1b).
+- TD-048 (true higher-order AD, v0.59.0+).
+
 ## v0.58.1 — SET bare-var (type-aware)
 
 ### Added

@@ -504,17 +504,38 @@ defining scope.
 - **Target:** v0.58.1b (dedicated; HIGH risk for PUSH).
 - **Related:** TD-017, TD-044, TD-047.
 
-## TD-049: `SHOW <multi-digit long>` leaks `_from_long` heap string — OPEN
-- **Status:** OPEN
+## TD-049: `SHOW <multi-digit long>` leaks `_from_long` heap string — CLOSED
+
+- **Status:** ✅ CLOSED in v0.58.2
 - **Introduced:** pre-v0.58.1 (discovered during v0.58.1 Phase 1)
 - **Impact:** LOW (~13 B per `SHOW <long>`; same class as TD-043)
-- **Symptom:** `SHOW 5000` → 13 B definitely lost.
+- **Symptom:** `SHOW 5000` → 13 B definitely lost (42 B for 3 SHOWs).
 - **Reason:** `plant_iReport_print` does not free the multi-digit
   `_from_long` heap string (only 0–9 are static).
-- **Fix direction:** the same 64-slot static rotating buffer + 64-byte
-  header-prefix treatment used for `_from_double` in TD-043.
-- **Target:** v0.58.2 (LOW risk; separate)
-- **Related:** TD-043.
+- **Fixed:** `gen_show_stmt` wraps numeric `SHOW` in
+  `{ tx_t __show = <num>; print(__show); plant_heapstr_release(__show); }`.
+  Release is magic-checked, so it is safe on prefixed static and
+  non-tagged pointers.
+- **Precondition:** `_from_digit` 0–9 now uses a prefixed 10-slot static
+  table (`p-8` safe, no rotation, stable pointers).
+- **Rejected:** v0.58.2a made `_from_long` a rotating buffer → UNSOUND
+  (compiler corruption; reverted). `_from_long` values are long-lived
+  inside the compiler.
+- **Related:** TD-043 (sibling for doubles).
+
+## TD-051: `SHOW <bare float literal>` mis-lowers — OPEN
+
+- **Status:** OPEN
+- **Introduced:** pre-v0.58.2 (discovered during v0.58.2 Phase 1)
+- **Impact:** MED (blocks `SHOW <bare float literal>`)
+- **Symptom:** `SHOW 1.5` emits `plant_iReport_print(r, 1.5)` — a raw
+  `double` passed as `const char*` → gcc type error.
+- **Workaround:** use `SHOW x + 0.0` or `SHOW <DBL var>` (not a bare
+  literal).
+- **Reason:** the `expr_is_numeric`/`_from_double` wrap does not apply to
+  a bare decimal literal in `gen_show_stmt`.
+- **Target:** v0.58.3 (with TD-050).
+- **Related:** none.
 
 ## TD-050: `TENSOR([...])` literal inside an ACTION body fails — OPEN
 - **Status:** OPEN
