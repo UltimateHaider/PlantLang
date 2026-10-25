@@ -1,0 +1,6 @@
+ACTION f(Y (DBL)) -> DBL
+  GIVE Y.
+/ACTION.
+CREATE x (DBL) TO f(1.5).
+SHOW x.
+SHOW "td057-give-dbl-param-ok".

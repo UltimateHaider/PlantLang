@@ -11132,7 +11132,7 @@ ACTION gen_show_stmt(node, nums(LST), evars(LST), isel(TXT)),
 #  gen_create_stmt — env-based CREATE handler
 #  Env slots: 0=indent(isel), 2=subst, 4=actx, 5=nums, 7=evars
 # ──────────────────────────────────────────────────────────────
-ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(TXT), structs(LST)),
+ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(TXT), structs(LST), sigs(LST)),
   REAP target FROM _map_get, node, "target".
   REAP vtype FROM _map_get, node, "var_type".
   REAP vtype FROM subst_type, vtype, subst.
@@ -11278,6 +11278,11 @@ ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(
       IF fc IS "\"",
           GIVE isel + "  double " + target + " = plant_scl_create(" + cval + ");\n".
       /IF.
+      # v0.58.5 — TD-052: ACTION call already yields tx_t text.
+      REAP dac2 FROM is_action_call, cval, sigs, "DBL".
+      IF dac2 IS "1",
+          GIVE isel + "  double " + target + " = plant_scl_create(" + cval + ");\n".
+      /IF.
       GIVE isel + "  double " + target + " = plant_scl_create(_from_double(" + cval + "));\n".
   /IF.
   # v0.51.10 — single-precision float.
@@ -11286,12 +11291,20 @@ ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(
       IF ff1 IS "\"",
           GIVE isel + "  float " + target + " = plant_scl_create(" + cval + ");\n".
       /IF.
+      REAP fac2 FROM is_action_call, cval, sigs, "FLT".
+      IF fac2 IS "1",
+          GIVE isel + "  float " + target + " = plant_scl_create(" + cval + ");\n".
+      /IF.
       GIVE isel + "  float " + target + " = plant_scl_create(_from_double(" + cval + "));\n".
   /IF.
   # v0.51.10 — extended-precision long double.
   IF vtype IS "DCM",
       REAP fd1 FROM char_at, cval, 0.
       IF fd1 IS "\"",
+          GIVE isel + "  long double " + target + " = plant_scl_create(" + cval + ");\n".
+      /IF.
+      REAP dmc2 FROM is_action_call, cval, sigs, "DCM".
+      IF dmc2 IS "1",
           GIVE isel + "  long double " + target + " = plant_scl_create(" + cval + ");\n".
       /IF.
       GIVE isel + "  long double " + target + " = plant_scl_create(_from_double(" + cval + "));\n".
@@ -11500,7 +11513,7 @@ ACTION gen_set_stmt(node, nums(LST), evars(LST), tensors(LST), isel(TXT)),
 #  gen_give_stmt — env-based GIVE handler
 #  Env slots: 0=indent(isel), 4=actx, 5=nums, 7=evars, 8=rty, 9=mexit
 # ──────────────────────────────────────────────────────────────
-ACTION gen_give_stmt(node, nums(LST), evars(LST), rty(TXT), actx(TXT), mexit(TXT), isel(TXT)),
+ACTION gen_give_stmt(node, nums(LST), evars(LST), rty(TXT), actx(TXT), mexit(TXT), isel(TXT), sigs(LST)),
   REAP val FROM _map_get, node, "value".
   REAP cval FROM translate_expr, val, nums, evars, plant_list_make(0).
   REAP cval FROM _handle_cat, cval, nums, evars.
@@ -11509,6 +11522,21 @@ ACTION gen_give_stmt(node, nums(LST), evars(LST), rty(TXT), actx(TXT), mexit(TXT
       REAP snm3 FROM enum_expr_of, evars, cval.
       IF snm3 ISNT "",
           SET cval TO "_from_enum(" + cval + ", \"" + snm3 + "\")".
+      /IF.
+  /IF.
+  # v0.58.5 — TD-057: a DBL/FLT/DCM action must GIVE text, never a raw
+  # double (gcc type error) and never _from_long (silent truncation).
+  # ACTION calls already return tx_t, so they pass through unchanged.
+  IF rty IS "DBL" OR rty IS "FLT" OR rty IS "DCM",
+      REAP gdt FROM trim, cval.
+      REAP gd0 FROM char_at, gdt, 0.
+      REAP gdpre FROM substring, gdt, 0, 6.
+      IF gd0 ISNT "\"" AND gdpre ISNT "_from_",
+          REAP gdac FROM is_action_call, gdt, sigs, "".
+          IF gdac IS "0",
+              SET cval TO "_from_double(" + cval + ")".
+              SET isn3 TO 2.
+          /IF.
       /IF.
   /IF.
   # v0.58.4 — TD-051: float literal in GIVE → _from_double (tx_t returns).
@@ -12428,7 +12456,7 @@ ACTION generate_node(node, env(LST)),
     #    In async step phases the variable lives in the state struct,
     #    restored as a local at step entry → plain assignment, no decl.
     IF ntype IS "create_stmt",
-        REAP code FROM gen_create_stmt, node, subst, nums, evars, actx, isel0, structs.
+        REAP code FROM gen_create_stmt, node, subst, nums, evars, actx, isel0, structs, sigs.
         GIVE code.
     /IF.
   
@@ -12623,6 +12651,11 @@ ACTION generate_node(node, env(LST)),
             IF fc2 IS "\"",
                 GIVE isel + "  double " + target + " = plant_scl_create(" + cval + ");\n".
             /IF.
+            # v0.58.5 — TD-052: ACTION call already yields tx_t text.
+            REAP dac3 FROM is_action_call, cval, sigs, "DBL".
+            IF dac3 IS "1",
+                GIVE isel + "  double " + target + " = plant_scl_create(" + cval + ");\n".
+            /IF.
             GIVE isel + "  double " + target + " = plant_scl_create(_from_double(" + cval + "));\n".
         /IF.
         # v0.51.10 — single-precision float (LET).
@@ -12631,12 +12664,20 @@ ACTION generate_node(node, env(LST)),
             IF ff2 IS "\"",
                 GIVE isel + "  float " + target + " = plant_scl_create(" + cval + ");\n".
             /IF.
+            REAP fac3 FROM is_action_call, cval, sigs, "FLT".
+            IF fac3 IS "1",
+                GIVE isel + "  float " + target + " = plant_scl_create(" + cval + ");\n".
+            /IF.
             GIVE isel + "  float " + target + " = plant_scl_create(_from_double(" + cval + "));\n".
         /IF.
         # v0.51.10 — extended-precision long double (LET).
         IF vtype IS "DCM",
             REAP fd2 FROM char_at, cval, 0.
             IF fd2 IS "\"",
+                GIVE isel + "  long double " + target + " = plant_scl_create(" + cval + ");\n".
+            /IF.
+            REAP dmc3 FROM is_action_call, cval, sigs, "DCM".
+            IF dmc3 IS "1",
                 GIVE isel + "  long double " + target + " = plant_scl_create(" + cval + ");\n".
             /IF.
             GIVE isel + "  long double " + target + " = plant_scl_create(_from_double(" + cval + "));\n".
@@ -12696,7 +12737,7 @@ ACTION generate_node(node, env(LST)),
     #    (v0.48.13); implicit-return actions keep the raw-bit
     #    convention so existing callers are unaffected.
     IF ntype IS "give_stmt",
-        REAP code FROM gen_give_stmt, node, nums, evars, rty, actx, mexit, isel0.
+        REAP code FROM gen_give_stmt, node, nums, evars, rty, actx, mexit, isel0, sigs.
         GIVE code.
     /IF.
   
@@ -13923,6 +13964,45 @@ ACTION find_sig(sigs(LST), name(TXT)),
     SET fi TO fi + 1.
   /SEASON.
   GIVE found.
+/ACTION.
+
+# v0.58.5 — is_action_call — "1" when cval is a bare call to a
+# PlantLang ACTION (whose emitted C return type is always tx_t).
+# Externs (external_decl), builtins and compound expressions → "0",
+# so their real C return type is assumed by the caller.
+ACTION is_action_call(cval(TXT), sigs(LST), want(TXT)),
+  REAP iac_t FROM trim, cval.
+  CREATE iac_n(LON) TO LEN(iac_t).
+  IF iac_n IS 0, GIVE "0". /IF.
+  REAP iac_last FROM char_at, iac_t, iac_n - 1.
+  IF iac_last ISNT ")", GIVE "0". /IF.
+  CREATE iac_i(LON) TO 0.
+  CREATE iac_name(TXT) TO "".
+  SEASON iac_i < iac_n,
+    REAP iac_c FROM char_at, iac_t, iac_i.
+    REAP iac_id FROM find_any, iac_c, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_".
+    IF iac_id IS -1, BREAK 0. /IF.
+    SET iac_name TO iac_name + iac_c.
+    SET iac_i TO iac_i + 1.
+  /SEASON.
+  IF iac_name IS "", GIVE "0". /IF.
+  SEASON iac_i < iac_n,
+    REAP iac_sp FROM char_at, iac_t, iac_i.
+    IF iac_sp ISNT " ", BREAK 0. /IF.
+    SET iac_i TO iac_i + 1.
+  /SEASON.
+  REAP iac_nx FROM char_at, iac_t, iac_i.
+  IF iac_nx ISNT "(", GIVE "0". /IF.
+  REAP iac_sig FROM find_sig, sigs, iac_name.
+  IF COUNT iac_sig IS 0, GIVE "0". /IF.
+  REAP iac_ty FROM _map_get, iac_sig, "type".
+  IF iac_ty ISNT "action_decl", GIVE "0". /IF.
+  # When want is non-empty, the action's declared return must match:
+  # only then is its GIVE wrapped to text by this compiler.
+  IF want IS "", GIVE "1". /IF.
+  REAP iac_rt FROM _map_get, iac_sig, "ret".
+  IF iac_rt IS want, GIVE "1". /IF.
+  GIVE "0".
 /ACTION.
 
 # ffi_ctype — C type for an FFI param/return type
@@ -16992,7 +17072,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.58.4 (pure native)".
+  SHOW "Chloroplast 0.58.5 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

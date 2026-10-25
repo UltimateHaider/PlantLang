@@ -1,0 +1,5 @@
+CREATE p (TENSOR) TO TENSOR([1.0, 2.0]).
+CREATE loss (DBL) TO TENSOR_SUM(p).
+SHOW loss.
+TENSOR_FREE(p).
+SHOW "td052-create-tensor-sum-ok".

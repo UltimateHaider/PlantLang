@@ -1,3 +1,49 @@
+## v0.58.5 — TD-052 + TD-057 (ACTION coercion + GIVE DBL)
+
+### Fixed
+- TD-052: CREATE/LET with a DBL/FLT/DCM target and an ACTION-call RHS
+  now emits `plant_scl_create(<cval>)` directly (no `_from_double(tx_t)`).
+  Real-double extern calls (`TENSOR_SUM`) are unchanged.
+- TD-057: `GIVE <DBL value>` (DBL param, `TENSOR_SUM`, etc.) now emits
+  `_from_double` (was `_from_long` → silent truncation `1.5` → `"1"`).
+  Guards: string literals, `_from_` prefix, action calls.
+- Mechanism: new `is_action_call(cval, sigs, want)` helper (sig `type`
+  `action_decl` + optional `ret` match).
+
+### Attempted & reverted
+- LON/NUM CREATE `_to_long`: **unsound** — implicit-return actions and
+  `GIVE M.k` return raw long bits, not text → the compiler crashed
+  (`_to_long(0x1)`) on 6 async regression tests. TD-054 remains OPEN
+  with the root cause precisely documented.
+
+### Added
+- 4 new tests: `td052_create_dbl_action`, `td057_give_dbl_param`,
+  `td057_give_double_extern`, `td052_create_dbl_tensor_sum_regression`.
+
+### Documented (new TD)
+- TD-058: `_expr_has_dbl` is a plain substring scan over `evars` markers
+  (not string-literal aware). A string label containing a DBL var's name
+  (e.g. `"extern"` with `x (DBL)`) is wrapped as `_from_double("...")`.
+  Pre-existing (no corpus case). Target: v0.58.6+.
+
+### Verified
+- Native: 251/251 (was 247)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (598,064 B)
+- valgrind strict: PASS
+- Binary: 1,029,680 bytes.
+
+### Out of Scope (v0.58.6+)
+- TD-053 (SHOW MAP segfault).
+- TD-054 (ACTION call pointer as long; root cause documented).
+- TD-055 (ACTION global capture).
+- TD-056 (`_lower_dots` quote toggle).
+- TD-058 (`_expr_has_dbl` substring scan).
+- TD-046 (PUSH nested, v0.58.1b).
+- TD-048 (true higher-order AD, v0.59.0+).
+
 ## v0.58.4 — TD-051 (bare float _from_double)
 
 ### Fixed

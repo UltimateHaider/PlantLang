@@ -1,0 +1,6 @@
+ACTION f() -> DBL
+  GIVE 5.0.
+/ACTION.
+CREATE x (DBL) TO f().
+SHOW x.
+SHOW "td052-create-dbl-ok".

@@ -1,0 +1,8 @@
+CREATE p (TENSOR) TO TENSOR([1.0, 2.0]).
+ACTION f(P (TENSOR)) -> DBL
+  GIVE TENSOR_SUM(P).
+/ACTION.
+CREATE x (DBL) TO f(p).
+SHOW x.
+TENSOR_FREE(p).
+SHOW "td057-give-double-call-ok".

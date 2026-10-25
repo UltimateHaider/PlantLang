@@ -565,18 +565,23 @@ defining scope.
   `td050_give_field_regression`, `td050_give_terminator`.
 - **Related:** TD-046 (GIVE literal ownership), TD-051 (bare float wrap).
 
-## TD-052: ACTION `-> DBL` emits `tx_t` return signature — OPEN
+## TD-052: CREATE/LET numeric coercion from `tx_t` action calls — CLOSED
 
-- **Status:** OPEN
-- **Introduced:** pre-v0.58.3 (discovered during v0.58.3 Phase 2)
-- **Impact:** LOW (zero corpus usage; all actions return TENSOR/STR/R/LON)
-- **Symptom:** `ACTION f() -> DBL` emits `tx_t f()` instead of
-  `double f()`. Returning a double (`return 5.0;`) then breaks at compile
-  time (incompatible types).
-- **Workaround:** use `LON` (with `_from_long`) or `TENSOR`/`STR`;
-  `DBL` returns are unsupported.
-- **Target:** v0.58.4+ (low priority)
-- **Related:** none.
+- **Status:** ✅ CLOSED in v0.58.5
+- **Introduced:** pre-v0.58.3 (re-scoped during v0.58.5 Phase 1)
+- **Premise correction:** **every** ACTION emits `tx_t f(...)` — the
+  uniform text ABI (`rty` is never used for the C signature). The
+  original title "`ACTION -> DBL` emits `tx_t`" was a misdiagnosis;
+  `-> LON` behaves identically.
+- **Real symptom:** `CREATE x (DBL) TO f()` emitted
+  `plant_scl_create(_from_double(f ( )))` — `_from_double` received a
+  `tx_t` → gcc type error.
+- **Fixed:** CREATE/LET with a **DBL/FLT/DCM** target and an
+  **action-call** RHS emit `plant_scl_create(<cval>)` directly.
+  Detection: new `is_action_call(cval, sigs, want)` (sig `type ==
+  "action_decl"` and, when `want` is non-empty, `ret == want`).
+  Real-double extern calls (`TENSOR_SUM`, 34 corpus tests) unchanged.
+- **Related:** TD-054 (LON half, still open), TD-057.
 
 ## TD-053: `SHOW <MAP>` segfaults — OPEN
 
@@ -593,15 +598,27 @@ defining scope.
 
 ## TD-054: `CREATE x (LON) TO <action call>` stores pointer as long — OPEN
 
-- **Status:** OPEN
+- **Status:** OPEN (root cause documented in v0.58.5)
 - **Introduced:** pre-v0.58.3 (discovered during v0.58.3 Phase 3)
 - **Impact:** LOW (pre-existing; only coincidentally correct when the
   callee returns a number disguised as a pointer)
 - **Symptom:** `CREATE v (LON) TO f()` emits `long v = f();` instead of
   `long v = _to_long(f());` — the `tx_t` pointer is stored as a long.
-- **Workaround:** `CREATE v (LON) TO _to_long(f())`.
-- **Target:** v0.58.4+
-- **Related:** none.
+- **Blocker (measured in v0.58.5):** adding `_to_long(f())` is **unsound**
+  because action returns are not consistently text:
+  - **implicit-return** actions (no `->`) return raw long bits (e.g.
+    `async_reachable` returns `found` as a raw `long`);
+  - `-> LON` actions whose `GIVE` is a lookup (`GIVE M.k`) return
+    `_to_long(...)` — raw long, not text.
+  Attempting the caller-side coercion made the compiler crash
+  (`_to_long(0x1)`) on 6 async regression tests.
+- **Fix direction:** make `-> LON` return text **consistently** first —
+  i.e. wrap the `gen_give_stmt` `is_lookup_prefix` branch in
+  `_from_long(...)` — then re-apply the caller-side `_to_long`.
+- **Workaround:** `CREATE v (LON) TO _to_long(f())` for text-returning
+  actions only.
+- **Target:** v0.58.6+
+- **Related:** TD-052.
 
 ## TD-055: ACTION bodies cannot see globals (no capture) — OPEN
 
@@ -614,6 +631,20 @@ defining scope.
 - **Workaround:** pass globals as parameters.
 - **Target:** v0.58.4+ (or a broader scope/globals epic)
 - **Related:** none.
+
+## TD-057: `GIVE <DBL value>` silent truncation / type error — CLOSED
+
+- **Status:** ✅ CLOSED in v0.58.5
+- **Introduced:** pre-v0.58.5 (discovered during v0.58.5 Phase 1)
+- **Symptom:**
+  - `GIVE Y` (DBL param) → `_from_long(Y)` → **silent truncation**
+    (1.5 → `"1"`).
+  - `GIVE TENSOR_SUM(P)` → `return plant_tensor_sum(P);` → raw double
+    from a `tx_t` function → gcc type error.
+- **Fixed:** `gen_give_stmt` wraps `_from_double` when the action's `rty`
+  is DBL/FLT/DCM, unless the value is a string literal, already starts
+  with `_from_`, or is a call to any action (`tx_t`).
+- **Related:** TD-052.
 
 ## TD-056: `_lower_dots` quote-toggle flaw — OPEN
 
@@ -629,6 +660,20 @@ defining scope.
 - **Workaround:** none known today (no corpus case exercises it).
 - **Target:** v0.58.5+ (parser fix; mirror the `hfl_opened` pattern)
 - **Related:** TD-051.
+
+## TD-058: `_expr_has_dbl` substring scan (not string-literal aware) — OPEN
+
+- **Status:** OPEN
+- **Introduced:** pre-v0.58.5 (discovered during v0.58.5 Phase 3)
+- **Impact:** LOW (no corpus case today)
+- **Symptom:** a string label containing a DBL variable's name gets
+  wrapped as `_from_double("...")` → gcc type error.
+  Example: `CREATE x (DBL) TO 1.5.` + `SHOW "extern".` →
+  `_from_double("extern")` (the `x` in "e**x**tern" matched).
+- **Reason:** `_expr_has_dbl` is a plain substring scan over `evars`
+  markers (`__DBL__<name>` → `SPLIT cval <name>`); no quote-awareness.
+- **Target:** v0.58.6+ (codegen; mirror `has_float_lit`'s quote guard)
+- **Related:** TD-051 (`has_float_lit` has the correct quote-aware toggle).
 
 ## TD-047: MAP value ownership — CLOSED (misdiagnosis, v0.58.0)
 - **Status:** ✅ CLOSED (misdiagnosis, v0.58.0)
