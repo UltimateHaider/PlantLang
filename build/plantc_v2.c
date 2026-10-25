@@ -184,6 +184,7 @@ tx_t collect_bols_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_chas_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_dbls_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t _expr_has_dbl(tx_t cval, PlantArray* evars);
+tx_t has_float_lit(tx_t e);
 tx_t _expr_has_cmp(tx_t cval, PlantArray* evars);
 tx_t collect_geos_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t _expr_has_geo(tx_t cval, PlantArray* evars);
@@ -11122,6 +11123,85 @@ tx_t _expr_has_dbl(tx_t cval, PlantArray* evars) {
     }
     return 0;
 }
+tx_t has_float_lit(tx_t e) {
+  tx_t hfl_c = "";
+  tx_t hfl_p = "";
+  tx_t hfl_x = "";
+  tx_t hfl_bc = "";
+  tx_t hfl_cb = "";
+    long hfl_i = 0;
+    long hfl_n = strlen( e );
+    tx_t hfl_q = "";
+    while (hfl_i < hfl_n) {
+    hfl_c = char_at(e, hfl_i);
+    tx_t hfl_opened = "0";
+    if (strcmp(hfl_q,"") == 0) {
+    if (strcmp(hfl_c,"\"") == 0) {
+    hfl_q = "\"";
+    hfl_opened = "1";
+    }
+    if (strcmp(hfl_c,"'") == 0) {
+    hfl_q = "'";
+    hfl_opened = "1";
+    }
+    }
+    if (strcmp(hfl_opened,"0") == 0 && strcmp(hfl_q,"") != 0) {
+    if (strcmp(hfl_c, hfl_q) == 0) {
+    hfl_q = "";
+    }
+    hfl_i = hfl_i+1;
+                      continue;
+    }
+    if (strcmp(hfl_opened,"1") == 0) {
+    hfl_i = hfl_i+1;
+                      continue;
+    }
+    if (strcmp(hfl_c,".") == 0 && hfl_i > 0 && hfl_i + 1 < hfl_n) {
+    hfl_p = char_at(e, hfl_i - 1);
+    hfl_x = char_at(e, hfl_i+1);
+    tx_t hfl_pd = "0";
+    tx_t hfl_xd = "0";
+    if (strcmp(hfl_p,"0") >= 0 && strcmp(hfl_p,"9") <= 0) {
+    hfl_pd = "1";
+    }
+    if (strcmp(hfl_x,"0") >= 0 && strcmp(hfl_x,"9") <= 0) {
+    hfl_xd = "1";
+    }
+    if (strcmp(hfl_pd,"1") == 0 && strcmp(hfl_xd,"1") == 0) {
+    long hfl_b = hfl_i;
+    while (hfl_b > 0) {
+    hfl_bc = char_at(e, hfl_b - 1);
+    tx_t hfl_bd = "0";
+    if (strcmp(hfl_bc,"0") >= 0 && strcmp(hfl_bc,"9") <= 0) {
+    hfl_bd = "1";
+    }
+    if (strcmp(hfl_bd,"0") == 0) {
+                                              break;
+    }
+    hfl_b = hfl_b - 1;
+    }
+    tx_t hfl_ok = "1";
+    if (hfl_b > 0) {
+    hfl_cb = char_at(e, hfl_b - 1);
+    if (strcmp(hfl_cb,"a") >= 0 && strcmp(hfl_cb,"z") <= 0) {
+    hfl_ok = "0";
+    }
+    if (strcmp(hfl_cb,"A") >= 0 && strcmp(hfl_cb,"Z") <= 0) {
+    hfl_ok = "0";
+    }
+    if (strcmp(hfl_cb,"_") == 0) {
+    hfl_ok = "0";
+    }
+    }
+    if (strcmp(hfl_ok,"1") == 0) {
+    return "1";
+    }
+    }
+    }
+    hfl_i = hfl_i+1;
+    }
+    return "0";
+}
 tx_t _expr_has_cmp(tx_t cval, PlantArray* evars) {
   tx_t pre = "";
   tx_t nm = "";
@@ -12947,6 +13027,8 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
   tx_t tn_sp = "";
   tx_t ta_sp = "";
   tx_t dblhit = "";
+  tx_t fl_sp = "";
+  tx_t flhit = "";
   tx_t bchk = "";
   tx_t cchk = "";
   tx_t snm2 = "";
@@ -13075,6 +13157,16 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
     if (dblhit == 1) {
     cval = _cat3("_from_double(", cval, ")");
     isn2 = 2;
+    }
+    if (dblhit == 0) {
+    fl_sp = strings_SPLIT(cval, "_from_double(");
+    if (plant_array_length(fl_sp) == 1) {
+    flhit = has_float_lit(cval);
+    if (strcmp(flhit,"1") == 0) {
+    cval = _cat3("_from_double(", cval, ")");
+    isn2 = 2;
+    }
+    }
     }
     if (isn2 == 0) {
     if (is_identifier ( cval ) == 1) {
@@ -13538,6 +13630,8 @@ tx_t gen_give_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t rty, tx_
   tx_t cval = "";
   tx_t isn3 = "";
   tx_t snm3 = "";
+  tx_t fg_sp = "";
+  tx_t fghit = "";
   tx_t in3 = "";
   tx_t gres = "";
   tx_t gfinal = "";
@@ -13552,6 +13646,16 @@ tx_t gen_give_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t rty, tx_
     snm3 = enum_expr_of(evars, cval);
     if (strcmp(snm3,"") != 0) {
     cval = _cat(_cat4("_from_enum(", cval, ", \"", snm3), "\")");
+    }
+    }
+    if (isn3 == 0) {
+    fg_sp = strings_SPLIT(cval, "_from_double(");
+    if (plant_array_length(fg_sp) == 1) {
+    fghit = has_float_lit(cval);
+    if (strcmp(fghit,"1") == 0) {
+    cval = _cat3("_from_double(", cval, ")");
+    isn3 = 2;
+    }
     }
     }
     if (isn3 == 1 && strcmp(rty,"") != 0) {
@@ -19296,7 +19400,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.58.3 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.58.4 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

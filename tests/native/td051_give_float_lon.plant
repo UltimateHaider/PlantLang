@@ -1,0 +1,6 @@
+ACTION f() -> LON
+  GIVE 5.0.
+/ACTION.
+CREATE v (LON) TO _to_long(f()).
+SHOW v.
+SHOW "td051-give-float-lon-ok".

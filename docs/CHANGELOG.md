@@ -1,3 +1,51 @@
+## v0.58.4 — TD-051 (bare float _from_double)
+
+### Fixed
+- TD-051: bare float literals in SHOW and GIVE are now lowered to
+  `_from_double` (was: raw `double` → gcc type error).
+  - `SHOW 5.0`, `SHOW 5.0 + 1.0`, `SHOW -5.0` all work.
+  - `GIVE 5.0` in an ACTION now emits `_from_double(5.0)` (generator
+    fixed; see TD-052 for the `-> DBL` return-type issue).
+  - String literals (`"5.0"`) are **not** wrapped (false-positive guard).
+  - Already-wrapped values (`TENSOR_SUM`/`TENSOR_AT`) are **not**
+    double-wrapped.
+- Mechanism: new `has_float_lit` helper (quote-aware, base-char check)
+  + guarded wraps in `gen_show_stmt` (after TD-022) and `gen_give_stmt`
+  (after `isn3`).
+
+### Added
+- 5 new tests: `td051_show_float`, `td051_show_float_expr`,
+  `td051_show_negative`, `td051_show_string_safe`,
+  `td051_give_float_lon`.
+
+### Documented (new TD)
+- TD-056: `_lower_dots` (parser.plant) has the same latent quote-toggle
+  flaw (set on open, immediately cleared) that `has_float_lit` had.
+  Behavior unaffected today but latent. Target: v0.58.5+.
+
+### Coupled (TD-052 note)
+- The GIVE `_from_double` wrap works because every ACTION returns
+  `tx_t` today. Once TD-052 makes `-> DBL` emit `double f()`, this GIVE
+  wrap must be dropped (return the raw double). Deferred.
+
+### Verified
+- Native: 247/247 (was 242)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (594,826 B)
+- valgrind strict: PASS
+- Binary: 1,029,640 bytes.
+
+### Out of Scope (v0.58.5+)
+- TD-052 (ACTION `-> DBL`).
+- TD-053 (SHOW MAP segfault).
+- TD-054 (ACTION call pointer as long).
+- TD-055 (ACTION global capture).
+- TD-056 (`_lower_dots` quote toggle).
+- TD-046 (PUSH nested, v0.58.1b).
+- TD-048 (true higher-order AD, v0.59.0+).
+
 ## v0.58.3 — TD-050 (TENSOR literal inside ACTION body)
 
 ### Fixed

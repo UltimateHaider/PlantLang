@@ -523,21 +523,28 @@ defining scope.
   inside the compiler.
 - **Related:** TD-043 (sibling for doubles).
 
-## TD-051: Bare float literal not lowered to `_from_double` — OPEN
+## TD-051: Bare float literal not `_from_double`-wrapped — CLOSED
 
-- **Status:** OPEN
+- **Status:** ✅ CLOSED in v0.58.4
 - **Introduced:** pre-v0.58.2 (discovered during v0.58.2 Phase 1)
-- **Broadened:** v0.58.3 (was SHOW-only; now shown to affect GIVE too)
-- **Impact:** MED (`SHOW 5.0` and `GIVE 5.0` fail)
-- **Symptom:**
-  - `SHOW 5.0` → `plant_iReport_print(r, 5.0)` — raw `double` as
-    `const char*` → gcc type error.
-  - `GIVE 5.0` in an ACTION → `return 5.0;` (raw double, wrong type for
-    the `tx_t` return; `_lower_dots` no longer mis-lowers it, see TD-050).
-- **Reason:** `expr_is_numeric("5.0") != 1` → no `_from_double` wrap.
-- **Workaround:** `SHOW x + 0.0`, or use a DBL variable.
-- **Target:** v0.58.4.
-- **Related:** TD-049 (SHOW long, closed).
+- **Broadened:** v0.58.3 (was SHOW-only; shown to affect GIVE too)
+- **Fixed:** new `has_float_lit` helper (quote-aware, base-char checked)
+  plus guarded wraps in `gen_show_stmt` (after the TD-022 `_expr_has_dbl`
+  site) and `gen_give_stmt` (after `isn3`). String literals (`"5.0"`)
+  and already-wrapped values (`TENSOR_SUM`/`TENSOR_AT`, detected via
+  `COUNT … "_from_double("`) are never wrapped.
+- **Now works:** `SHOW 5.0`, `SHOW 5.0 + 1.0`, `SHOW -5.0`, `GIVE 5.0`.
+- **Bug found during the fix:** the first quote toggle reset on the
+  opening quote (string contents scanned as code) — caught by the
+  compiler's own `SHOW "Chloroplast X …"` build; fixed with an explicit
+  `hfl_opened` flag.
+- **Coupling (TD-052):** the GIVE wrap works only because every ACTION
+  returns `tx_t` today; when `-> DBL` emits `double f()`, the GIVE wrap
+  must be removed.
+- **Tests:** `td051_show_float`, `td051_show_float_expr`,
+  `td051_show_negative`, `td051_show_string_safe`,
+  `td051_give_float_lon`.
+- **Related:** TD-049, TD-052, TD-056.
 
 ## TD-050: `TENSOR([...])` / float literal inside `GIVE` mis-parses — CLOSED
 
@@ -607,6 +614,21 @@ defining scope.
 - **Workaround:** pass globals as parameters.
 - **Target:** v0.58.4+ (or a broader scope/globals epic)
 - **Related:** none.
+
+## TD-056: `_lower_dots` quote-toggle flaw — OPEN
+
+- **Status:** OPEN
+- **Introduced:** pre-v0.58.4 (discovered during v0.58.4 Phase 3)
+- **Impact:** LOW (latent; no current corpus regression)
+- **Symptom:** `_lower_dots` (parser.plant) uses a quote-toggle that
+  resets on the **opening** quote (set then immediately compared equal →
+  cleared), so string contents are effectively scanned as code. A `.`
+  inside a string literal could be mis-treated as field access.
+- **Note:** the analogous codegen-side helper (`has_float_lit`) had the
+  same defect; v0.58.4 fixed it with an explicit `hfl_opened` flag.
+- **Workaround:** none known today (no corpus case exercises it).
+- **Target:** v0.58.5+ (parser fix; mirror the `hfl_opened` pattern)
+- **Related:** TD-051.
 
 ## TD-047: MAP value ownership — CLOSED (misdiagnosis, v0.58.0)
 - **Status:** ✅ CLOSED (misdiagnosis, v0.58.0)
