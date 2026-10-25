@@ -489,24 +489,46 @@ defining scope.
 - **NOT covered:** closures (TD-017), FFI stores → TD-046.
 - **Related:** TD-017, TD-041, TD-045, TD-046, TD-047.
 
-## TD-046: Remaining ownership gaps — OPEN (v0.58.1)
-- **Status:** OPEN (narrowed after v0.58.0)
+## TD-046: PUSH nested intermediates leak — OPEN (v0.58.1b)
+- **Status:** OPEN (narrowed after v0.58.1)
 - **Introduced:** v0.57.1 (discovered during the TD-044 investigation)
-- **Scope narrowed:** v0.58.0 now owns `CREATE <bare var>`, `GIVE <bare var>`,
-  `SET <fresh op>`, `SET <nested>` (hoist), and SET-overwrite. **Remaining:**
-  - **`SET x TO <bare tensor var y>`** — `gen_set_stmt` has **no type
-    information**, so the target cannot be proven to be a tensor. Applying
-    the bare-var SET rule caused `free_if_tensor(-1)` crashes in the
-    compiler (it rewrote `SET close_pos TO ci`). Aliasing (`SET d TO c`) is
-    therefore still double-free-prone.
+- **Scope narrowed:** v0.58.0 owned `CREATE <bare var>`, `GIVE <bare var>`,
+  `SET <fresh op>`, `SET <nested>` (hoist), and SET-overwrite. v0.58.1 fixed
+  **`SET x TO <bare tensor var y>`** via the type-exact `collect_tensors`
+  gate. **Remaining:**
   - **`PUSH(L, <nested tensor-op>)`** — routes through `gen_reap_stmt`
     (249 lines; HIGH risk: closures, generics, SAFE, FFI).
   - Closures (TD-017) and FFI stores remain unknowable.
-- **Workaround:** Name the intermediate; do not alias tensor variables via
-  `SET`; return a **fresh** tensor (`TENSOR_ADD(...)`) rather than a caller
-  pointer.
-- **Target:** v0.58.1 (dedicated; HIGH risk for PUSH).
+- **Workaround:** Name the intermediate; free the container
+  (`LIST_FREE` frees pushed tensors).
+- **Target:** v0.58.1b (dedicated; HIGH risk for PUSH).
 - **Related:** TD-017, TD-044, TD-047.
+
+## TD-049: `SHOW <multi-digit long>` leaks `_from_long` heap string — OPEN
+- **Status:** OPEN
+- **Introduced:** pre-v0.58.1 (discovered during v0.58.1 Phase 1)
+- **Impact:** LOW (~13 B per `SHOW <long>`; same class as TD-043)
+- **Symptom:** `SHOW 5000` → 13 B definitely lost.
+- **Reason:** `plant_iReport_print` does not free the multi-digit
+  `_from_long` heap string (only 0–9 are static).
+- **Fix direction:** the same 64-slot static rotating buffer + 64-byte
+  header-prefix treatment used for `_from_double` in TD-043.
+- **Target:** v0.58.2 (LOW risk; separate)
+- **Related:** TD-043.
+
+## TD-050: `TENSOR([...])` literal inside an ACTION body fails — OPEN
+- **Status:** OPEN
+- **Introduced:** pre-v0.58.1 (discovered during v0.58.1 Phase 2)
+- **Impact:** MED (blocks TENSOR literals inside ACTIONs)
+- **Symptom:** `GIVE TENSOR([5.0, 6.0])` inside an ACTION body emits
+  `5_map_get(5, "0")` — the parser reads `5.0` as field access in that
+  context (works at top level).
+- **Reason:** parser/pre-mapper treats `5.0` as a number-then-dot pattern
+  inside ACTION bodies.
+- **Workaround:** use `TENSOR_MUL(param, param)`, or `CREATE` the tensor at
+  top level and pass it in.
+- **Target:** v0.58.2 (MED risk; parser fix)
+- **Related:** none.
 
 ## TD-047: MAP value ownership — CLOSED (misdiagnosis, v0.58.0)
 - **Status:** ✅ CLOSED (misdiagnosis, v0.58.0)

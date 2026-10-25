@@ -1,3 +1,46 @@
+## v0.58.1 — SET bare-var (type-aware)
+
+### Added
+- collect_tensors pass (type-exact name-set: `type_base == "TENSOR"`;
+  REAP via `find_sig` ret + allow-list for GRAD/TENSOR_*).
+- env_tensors slot (slot 15 of 16); `generate_body` inherits the outer
+  set, adds this body's names, and restores on exit.
+- Top-level: `top_env` slot 15 seeded (top-level statements bypass
+  `generate_body`).
+- SET x TO <bare tensor var y> → { retain_if_tensor(y); free_if_tensor(x); x = y; }
+  (type-aware gate; safe aliasing fix).
+- 3 new tests: own_set_bare_var, own_set_reap_tensor, own_set_self.
+
+### Fixed (TD-046 narrowed)
+- SET bare-var aliasing (double-free) → now safe (retain + free + assign).
+- TD-046 narrowed to PUSH nested only (v0.58.1b).
+
+### Previously (v0.58.1a)
+- v0.58.1a (nums heuristic + runtime helper) was UNSOUND → compiler
+  segfault (STOP #8, reverted to v0.58.0). The type-aware fix (this
+  release) is sound.
+
+### Documented (new TDs)
+- TD-049: SHOW <multi-digit long> leaks _from_long heap string
+  (13 B for 5000; same class as TD-043). Target: v0.58.2.
+- TD-050: TENSOR([...]) literal inside an ACTION body fails (parser
+  reads 5.0 as 5_map_get). Target: v0.58.2.
+
+### Verified
+- Native: 235/235 (was 232)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (591,606 B)
+- valgrind strict: PASS
+- Binary: 1030096 B.
+
+### Out of Scope (v0.58.1b+)
+- PUSH nested (TD-046, gen_reap_stmt).
+- TD-049 (SHOW long).
+- TD-050 (TENSOR literal inside ACTION).
+- TD-048 (true higher-order AD, v0.59.0+).
+
 ## v0.58.0 — Ownership (CREATE + SET-fresh + SET-hoist + GIVE)
 
 ### Added

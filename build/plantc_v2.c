@@ -175,6 +175,8 @@ tx_t collect_nums_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_globals_walk(PlantArray* bd, PlantArray* res);
 tx_t collect_gfreed_walk(PlantArray* bd, PlantArray* res);
 tx_t collect_nums(PlantArray* bd, PlantArray* params, PlantArray* subst);
+tx_t collect_tensors_walk(PlantArray* bd, PlantArray* subst, PlantArray* sigs, PlantArray* res);
+tx_t collect_tensors(PlantArray* bd, PlantArray* sigs, PlantArray* subst, PlantArray* res);
 tx_t collect_cmps_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_cmps(PlantArray* bd, PlantArray* params, PlantArray* subst);
 tx_t _evars_with_cmps(PlantArray* bd, PlantArray* params, PlantArray* subst, PlantArray* base);
@@ -232,10 +234,11 @@ tx_t env_indent_num(PlantArray* env);
 tx_t env_maths(PlantArray* env);
 tx_t env_freed(PlantArray* env);
 tx_t env_structs(PlantArray* env);
+tx_t env_tensors(PlantArray* env);
 tx_t env_make(long indent_num, PlantArray* sigs, PlantArray* subst, PlantArray* clmap, tx_t actx, PlantArray* nums, PlantArray* stvars, PlantArray* evars, tx_t rty, tx_t mexit, tx_t wexit, PlantArray* maths, PlantArray* structs);
 tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel);
 tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray* evars, tx_t actx, tx_t isel, PlantArray* structs);
-tx_t gen_set_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel);
+tx_t gen_set_stmt(tx_t node, PlantArray* nums, PlantArray* evars, PlantArray* tensors, tx_t isel);
 tx_t gen_give_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t rty, tx_t actx, tx_t mexit, tx_t isel);
 tx_t gen_if_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel, long indent_num, PlantArray* env);
 tx_t gen_reap_stmt(tx_t node, PlantArray* sigs, PlantArray* subst, PlantArray* clmap, PlantArray* nums, PlantArray* stvars, PlantArray* evars, tx_t isel);
@@ -10717,6 +10720,86 @@ tx_t collect_nums(PlantArray* bd, PlantArray* params, PlantArray* subst) {
     ret = collect_nums_walk(bd, subst, res);
     return res;
 }
+tx_t collect_tensors_walk(PlantArray* bd, PlantArray* subst, PlantArray* sigs, PlantArray* res) {
+  tx_t tf1 = "";
+  tx_t tval = "";
+  tx_t tpfx = "";
+  tx_t tf2 = "";
+  tx_t tact = "";
+  tx_t tpf = "";
+  tx_t tsig = "";
+  tx_t tret = "";
+  tx_t tretb = "";
+  tx_t tf3 = "";
+    long ti = 0;
+    tx_t tnd = "";
+    tx_t tty = "";
+    tx_t ttg = "";
+    tx_t tvt = "";
+    tx_t tbs = "";
+    tx_t tbb = "";
+    while (ti < plant_array_length(bd)) {
+    tnd = plant_list_get(bd, ti);
+    tty = _map_get(tnd, "type");
+    if (strcmp(tty,"create_stmt") == 0 || strcmp(tty,"let_stmt") == 0) {
+    ttg = _map_get(tnd, "target");
+    tvt = _map_get(tnd, "var_type");
+    tbs = subst_type(tvt, subst);
+    tbb = type_base(tbs);
+    if (strcmp(tbb,"TENSOR") == 0) {
+    tf1 = list_contains(res, ttg);
+    if (tf1 == 0) {
+                    res = plant_list_add(res, ttg);
+    }
+    }
+    if (strcmp(tbb,"") == 0) {
+    tval = _map_get(tnd, "value");
+    tpfx = substring(tval, 0, 7);
+    if (strcmp(tpfx,"plant_tensor_from_list(") == 0) {
+    tf2 = list_contains(res, ttg);
+    if (tf2 == 0) {
+                        res = plant_list_add(res, ttg);
+    }
+    }
+    }
+    }
+    if (strcmp(tty,"reap_stmt") == 0) {
+    ttg = _map_get(tnd, "target");
+    tact = _map_get(tnd, "action");
+    tx_t tis_t = "0";
+    if (strcmp(tact,"GRAD") == 0) {
+    tis_t = "1";
+    }
+    tpf = substring(tact, 0, 13);
+    if (strcmp(tpf,"TENSOR_") == 0) {
+    tis_t = "1";
+    }
+    if (strcmp(tis_t,"0") == 0) {
+    tsig = find_sig(sigs, tact);
+    if (plant_array_length(tsig) > 0) {
+    tret = _map_get(tsig, "ret");
+    tretb = type_base(tret);
+    if (strcmp(tretb,"TENSOR") == 0) {
+    tis_t = "1";
+    }
+    }
+    }
+    if (strcmp(tis_t,"1") == 0) {
+    tf3 = list_contains(res, ttg);
+    if (tf3 == 0) {
+                    res = plant_list_add(res, ttg);
+    }
+    }
+    }
+    ti = ti+1;
+    }
+  return collect_tensors_walk;
+}
+tx_t collect_tensors(PlantArray* bd, PlantArray* sigs, PlantArray* subst, PlantArray* res) {
+  tx_t _ = "";
+    collect_tensors_walk(bd, subst, sigs, res);
+    return res;
+}
 tx_t collect_cmps_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
   tx_t cib2 = "";
   tx_t cibd5 = "";
@@ -12801,12 +12884,15 @@ tx_t env_freed(PlantArray* env) {
 tx_t env_structs(PlantArray* env) {
     return env_get ( env , 14 );
 }
+tx_t env_tensors(PlantArray* env) {
+    return env_get ( env , 15 );
+}
 tx_t env_make(long indent_num, PlantArray* sigs, PlantArray* subst, PlantArray* clmap, tx_t actx, PlantArray* nums, PlantArray* stvars, PlantArray* evars, tx_t rty, tx_t mexit, tx_t wexit, PlantArray* maths, PlantArray* structs) {
   tx_t isel = "";
   tx_t env = "";
   tx_t _ = "";
     isel = indent_str(indent_num);
-    env = plant_list_create(15);
+    env = plant_list_create(16);
     env_set(env, 0, isel);
     env_set(env, 1, sigs);
     env_set(env, 2, subst);
@@ -12822,6 +12908,7 @@ tx_t env_make(long indent_num, PlantArray* sigs, PlantArray* subst, PlantArray* 
     env_set(env, 12, maths);
     env_set(env, 13, plant_list_make ( 0 ));
     env_set(env, 14, structs);
+    env_set(env, 15, plant_list_make ( 0 ));
     return env;
 }
 tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
@@ -13343,7 +13430,7 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     }
   return gen_create_stmt;
 }
-tx_t gen_set_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
+tx_t gen_set_stmt(tx_t node, PlantArray* nums, PlantArray* evars, PlantArray* tensors, tx_t isel) {
   tx_t target = "";
   tx_t val = "";
   tx_t cval = "";
@@ -13359,6 +13446,8 @@ tx_t gen_set_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
   tx_t sl = "";
   tx_t st = "";
   tx_t _stp = "";
+  tx_t _cv_t = "";
+  tx_t _tg_t = "";
     target = _map_get(node, "target");
     val = _map_get(node, "value");
     cval = translate_expr(val, nums, evars, plant_list_make ( 0 ));
@@ -13418,6 +13507,11 @@ tx_t gen_set_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
     _stp = substring(cval, 0, 13);
     if (strcmp(_stp,"plant_tensor_") == 0) {
     return _cat3(_cat4(_cat4(_cat4(isel, "  { PlantTensor* _on = ", cval, ";\n"), isel, "    plant_tensor_free_if_tensor(", target), ");\n", isel, "    "), target, " = _on; }\n");
+    }
+    _cv_t = list_contains(tensors, cval);
+    _tg_t = list_contains(tensors, target);
+    if (_cv_t == 1 && _tg_t == 1) {
+    return _cat(_cat4(_cat4(_cat4(_cat4(isel, "  { plant_tensor_retain_if_tensor(", cval, ");\n"), isel, "    plant_tensor_free_if_tensor(", target), ");\n", isel, "    "), target, " = ", cval), "; }\n");
     }
     return _cat3(_cat4(isel, "  ", target, " = "), cval, ";\n");
 }
@@ -14077,6 +14171,8 @@ tx_t gen_throw_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
 tx_t generate_body(PlantArray* bd, PlantArray* env) {
   tx_t fvsave = "";
   tx_t _ = "";
+  tx_t tvsave = "";
+  tx_t tvn = "";
   tx_t node_code = "";
   tx_t fvinner = "";
   tx_t fvn = "";
@@ -14086,6 +14182,16 @@ tx_t generate_body(PlantArray* bd, PlantArray* env) {
     tx_t node_el = "";
     fvsave = env_get(env, 13);
     env_set(env, 13, plant_list_make ( 0 ));
+    tvsave = env_get(env, 15);
+    PlantArray* tnew = plant_list_make ( 0 );
+    long tvi = 0;
+    while (tvi < plant_array_length(tvsave)) {
+    tvn = plant_list_get(tvsave, tvi);
+        tnew = plant_list_add(tnew, tvn);
+    tvi = tvi+1;
+    }
+    collect_tensors(bd, env_sigs ( env ), env_subst ( env ), tnew);
+    env_set(env, 15, tnew);
     while (i < plant_array_length(bd)) {
     node_el = plant_list_get(bd, i);
     node_code = generate_node(node_el, env);
@@ -14105,6 +14211,7 @@ tx_t generate_body(PlantArray* bd, PlantArray* env) {
     fvi = fvi+1;
     }
     env_set(env, 13, fvsave);
+    env_set(env, 15, tvsave);
     return res;
 }
 tx_t _is_digit(tx_t c) {
@@ -14582,7 +14689,7 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     return code;
     }
     if (strcmp(ntype,"set_stmt") == 0) {
-    code = gen_set_stmt(node, nums, evars, isel0);
+    code = gen_set_stmt(node, nums, evars, env_tensors ( env ), isel0);
     return code;
     }
     if (strcmp(ntype,"increase_stmt") == 0 || strcmp(ntype,"decrease_stmt") == 0) {
@@ -17641,6 +17748,7 @@ tx_t generate_c(PlantArray* ast) {
   tx_t ggm = "";
   tx_t hs_nd = "";
   tx_t hs_ty = "";
+  tx_t _ = "";
   tx_t asy4 = "";
   tx_t cmact = "";
   tx_t ns_code = "";
@@ -18345,6 +18453,7 @@ tx_t generate_c(PlantArray* ast) {
     }
     i = 0;
     PlantArray* top_env = env_make ( 0 , sigs , esub , plant_list_make ( 0 ) , "" , nums_top , plant_list_make ( 0 ) , _evars_with_bols ( ast , esub , eregs ) , "" , "" , "" , plant_list_make ( 0 ) , structs );
+    env_set(top_env, 15, collect_tensors ( ast , sigs , esub , plant_list_make ( 0 ) ));
     while (i < plant_array_length(ast)) {
     node_el = plant_list_get(ast, i);
     ntype = _map_get(node_el, "type");
@@ -19169,7 +19278,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.58.0 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.58.1 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

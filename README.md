@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/Zero_GC-💚-brightgreen?style=flat-square" alt="Zero GC"/>
   <img src="https://img.shields.io/badge/No_VM-⚡-orange?style=flat-square" alt="No VM"/>
   <img src="https://img.shields.io/badge/License-MIT-ff69b4?style=flat-square" alt="License MIT"/>
-  <img src="https://img.shields.io/badge/Version-0.51.0b-9cf?style=flat-square" alt="Version 0.51.0b"/>
+  <img src="https://img.shields.io/badge/Version-0.58.1-9cf?style=flat-square" alt="Version 0.58.1"/>
 </p>
 
 <p align="center">
@@ -127,6 +127,16 @@ IF age GREATER THAN OR EQUAL 18,
 - Series expansions, partial fractions
 - Complex number arithmetic
 
+### 🧠 **Tensors & Autograd** (v0.55.0+)
+- N-dimensional double tensors (`TENSOR([[...]])`) with broadcasting
+- 14 tensor ops (add/sub/mul/div/scale/matmul/transpose/reshape/
+  slice/at/sum/mean/max/min) + 7 activations (RELU/SIGMOID/TANH/
+  SOFTMAX/GELU/SWISH/MISH)
+- Reverse-mode autograd: `TENSOR_TRACK(x)` + `GRAD(loss, x)` with a
+  tape (17 differentiable ops), repeated first-order via
+  `GRAD(loss, x, 1)` + `TAPE_CLEAR()`
+- Reference-counted ownership (`TENSOR_FREE`, retain-on-alias)
+
 </td>
 </tr>
 </table>
@@ -172,7 +182,7 @@ gcc -w -I runtime/c out.c runtime/c/plant_runtime.c -lm -o hello
 
 ```bash
 ./bin/Chloroplast --help     # usage + options
-./bin/Chloroplast --version  # Chloroplast 0.50.7 (pure native)
+./bin/Chloroplast --version  # Chloroplast 0.58.1 (pure native)
 ```
 
 ---
@@ -224,6 +234,13 @@ SHOW MATH_LAPLACIAN("x^2 + y^2 + z^2").                 # 6
 SHOW MATH_LAPLACE("EXP(a*t)", "t", "s").                 # 1/(s-a)
 SHOW MATH_DIVERGENCE("x^2, y^2, z^2").                   # ((2*x)+(2*y))+(2*z)
 
+# Tensors & reverse-mode autograd
+CREATE x (TENSOR) TO TENSOR([1.0, 2.0, 3.0]).
+TENSOR_TRACK(x).
+CREATE loss (DBL) TO TENSOR_SUM(TENSOR_MUL(x, x)).
+CREATE dx (TENSOR) TO GRAD(loss, x).
+SHOW dx.                                                 # [2, 4, 6]
+
 ACTION main,
   START fetch, "https://api.example.com".
   AWAIT sleep, 50.
@@ -259,6 +276,12 @@ runtime/c/            native runtime
   plant_runtime.h     runtime declarations
   plant_compat.h      FFI bridge
   plant_math.c        CAS engine (symbolic math, transforms)
+  plant_complex.c     complex-number arithmetic
+  plant_tensor.c      N-d tensors (row-major, ref-counted)
+  plant_autograd.c    reverse-mode tape + GRAD
+  plant_geo.c         geographic coordinates
+  plant_memory.c      allocation, dispatcher, list/tensor free
+  plant_error.c       error/report plumbing
 tests/                test suites
   regression/         `.plant` + `.expected`
   native/             integration tests
@@ -276,11 +299,11 @@ make all && make self && make test
 
 ```text
 ✅ Self-hosting converged (v3 ≡ v4 ≡ v5)
-✅ Regression: 317/317
-✅ Native: 25/25
+✅ Native: 235/235
 ✅ Generics: 7/7
 ✅ Closures: 6/6
-✅ Version: 0.50.7
+✅ Regression: 318/318
+✅ Version: 0.58.1
 ```
 
 ---
@@ -291,7 +314,7 @@ make all && make self && make test
 |----------|-------------|
 | **[Language Tour.md](Language%20Tour.md)** | Complete ground-up syntax & mechanics guide |
 | **[TECHNICAL.md](TECHNICAL.md)** | Deep technical architecture, codegen, memory model |
-| **[CHANGELOG.md](CHANGELOG.md)** | Full version history through v0.50.7 |
+| **[CHANGELOG.md](CHANGELOG.md)** | Full version history through v0.58.1 |
 | **[ROADMAP.md](ROADMAP.md)** | Completed milestones + future plans |
 | **[docs/BUILD.md](docs/BUILD.md)** | Build system reference: targets, packaging, install |
 
@@ -325,8 +348,8 @@ make all && make self && make test
   <img src="https://img.shields.io/badge/Zero_GC-💚-brightgreen?style=for-the-badge" alt="Zero GC"/>
   <img src="https://img.shields.io/badge/No_VM-⚡-orange?style=for-the-badge" alt="No VM"/>
   <img src="https://img.shields.io/badge/License-MIT-ff69b4?style=for-the-badge" alt="License MIT"/>
-  <img src="https://img.shields.io/badge/Version-0.50.7-9cf?style=for-the-badge" alt="Version 0.50.7"/>
-  <img src="https://img.shields.io/badge/Tests-317/317-4CAF50?style=for-the-badge" alt="Tests 317/317"/>
+  <img src="https://img.shields.io/badge/Version-0.58.1-9cf?style=for-the-badge" alt="Version 0.58.1"/>
+  <img src="https://img.shields.io/badge/Tests-235/235-4CAF50?style=for-the-badge" alt="Tests 235/235"/>
   <img src="https://img.shields.io/badge/Self_Hosted-🔄-brightgreen?style=for-the-badge" alt="Self-Hosted"/>
   <img src="https://img.shields.io/badge/PRs-Welcome-ff69b4?style=for-the-badge" alt="PRs Welcome"/>
   <img src="https://img.shields.io/badge/Made_with-❤️-red?style=for-the-badge" alt="Made with Love"/>

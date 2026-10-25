@@ -1,0 +1,11 @@
+# TD-050 workaround: use a TENSOR_MUL parameter, not TENSOR([...]) inside an ACTION.
+CREATE p5 (TENSOR) TO TENSOR([1.0, 2.0]).
+ACTION sq_t(X (TENSOR)) -> TENSOR
+  GIVE TENSOR_MUL(X, X).
+/ACTION.
+CREATE T2 (TENSOR) TO sq_t(p5).
+SET p5 TO T2.
+SHOW p5.
+TENSOR_FREE(p5).
+TENSOR_FREE(T2).
+SHOW "own-set-reap-ok".

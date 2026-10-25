@@ -8615,6 +8615,74 @@ ACTION collect_nums(bd(LST), params(LST), subst(LST)),
 /ACTION.
 
 # ──────────────────────────────────────────────────────────────
+#  v0.58.1 — collect_tensors_walk / collect_tensors
+#  Type-EXACT set of TENSOR variable names (no name heuristics):
+#    - CREATE/LET x (TENSOR) TO ...   (type_base == "TENSOR")
+#    - CREATE x TO TENSOR([...])      (untyped, literal TENSOR ctor)
+#    - REAP x FROM action(...)        (sigs[action].ret base == "TENSOR"
+#                                      or action in GRAD / TENSOR_*)
+#  Accumulates into `res`; recurses into IF/SEASON/CYCLE/MATCH/SUITE/
+#  WEATHER bodies. Used to gate SET x TO y (retain-on-alias).
+# ──────────────────────────────────────────────────────────────
+ACTION collect_tensors_walk(bd(LST), subst(LST), sigs(LST), res(LST)),
+  CREATE ti(LON) TO 0.
+  CREATE tnd(TXT) TO "".
+  CREATE tty(TXT) TO "".
+  CREATE ttg(TXT) TO "".
+  CREATE tvt(TXT) TO "".
+  CREATE tbs(TXT) TO "".
+  CREATE tbb(TXT) TO "".
+  SEASON ti < COUNT bd,
+    REAP tnd FROM plant_list_get, bd, ti.
+    REAP tty FROM _map_get, tnd, "type".
+    IF tty IS "create_stmt" OR tty IS "let_stmt",
+      REAP ttg FROM _map_get, tnd, "target".
+      REAP tvt FROM _map_get, tnd, "var_type".
+      REAP tbs FROM subst_type, tvt, subst.
+      REAP tbb FROM type_base, tbs.
+      IF tbb IS "TENSOR",
+        REAP tf1 FROM list_contains, res, ttg.
+        IF tf1 IS 0, PUT ttg INTO res. /IF.
+      /IF.
+      IF tbb IS "",
+        REAP tval FROM _map_get, tnd, "value".
+        REAP tpfx FROM substring, tval, 0, 7.
+        IF tpfx IS "TENSOR(",
+          REAP tf2 FROM list_contains, res, ttg.
+          IF tf2 IS 0, PUT ttg INTO res. /IF.
+        /IF.
+      /IF.
+    /IF.
+    IF tty IS "reap_stmt",
+      REAP ttg FROM _map_get, tnd, "target".
+      REAP tact FROM _map_get, tnd, "action".
+      CREATE tis_t(TXT) TO "0".
+      IF tact IS "GRAD", SET tis_t TO "1". /IF.
+      REAP tpf FROM substring, tact, 0, 13.
+      IF tpf IS "TENSOR_", SET tis_t TO "1". /IF.
+      IF tis_t IS "0",
+        REAP tsig FROM find_sig, sigs, tact.
+        IF COUNT tsig > 0,
+          REAP tret FROM _map_get, tsig, "ret".
+          REAP tretb FROM type_base, tret.
+          IF tretb IS "TENSOR", SET tis_t TO "1". /IF.
+        /IF.
+      /IF.
+      IF tis_t IS "1",
+        REAP tf3 FROM list_contains, res, ttg.
+        IF tf3 IS 0, PUT ttg INTO res. /IF.
+      /IF.
+    /IF.
+    SET ti TO ti + 1.
+  /SEASON.
+/ACTION.
+
+ACTION collect_tensors(bd(LST), sigs(LST), subst(LST), res(LST)),
+  REAP _ FROM collect_tensors_walk, bd, subst, sigs, res.
+  GIVE res.
+/ACTION.
+
+# ──────────────────────────────────────────────────────────────
 #  v0.51.11 — collect_cmps_walk / collect_cmps
 #  Add names of CMP CREATE/LET targets in bd (recursing into
 #  IF/SEASON/CYCLE/MATCH/SUITE bodies). Used to lower CMP
@@ -10759,6 +10827,11 @@ ACTION env_structs(env(LST)),
   GIVE env_get(env, 14).
 /ACTION.
 
+# v0.58.1 — TENSOR variable names (type-exact; slot 15).
+ACTION env_tensors(env(LST)),
+  GIVE env_get(env, 15).
+/ACTION.
+
 # ──────────────────────────────────────────────────────────────
 #  env_make — create and populate an env in one call
 #  Takes numeric indent (pre-computed into isel string for slot 0
@@ -10767,7 +10840,7 @@ ACTION env_structs(env(LST)),
 # ──────────────────────────────────────────────────────────────
 ACTION env_make(indent_num(LON), sigs(LST), subst(LST), clmap(LST), actx(TXT), nums(LST), stvars(LST), evars(LST), rty(TXT), mexit(TXT), wexit(TXT), maths(LST), structs(LST)),
   REAP isel FROM indent_str, indent_num.
-  REAP env FROM plant_list_create(15).
+  REAP env FROM plant_list_create(16).
   REAP _ FROM env_set, env, 0, isel.
   REAP _ FROM env_set, env, 1, sigs.
   REAP _ FROM env_set, env, 2, subst.
@@ -10783,6 +10856,8 @@ ACTION env_make(indent_num(LON), sigs(LST), subst(LST), clmap(LST), actx(TXT), n
   REAP _ FROM env_set, env, 12, maths.
   REAP _ FROM env_set, env, 13, plant_list_make(0).
   REAP _ FROM env_set, env, 14, structs.
+  # v0.58.1 — type-exact set of TENSOR variable names (slot 15).
+  REAP _ FROM env_set, env, 15, plant_list_make(0).
   GIVE env.
 /ACTION.
 
@@ -11253,7 +11328,7 @@ ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(
 #  gen_set_stmt — env-based SET handler
 #  Env slots: 0=indent(isel), 5=nums, 7=evars
 # ──────────────────────────────────────────────────────────────
-ACTION gen_set_stmt(node, nums(LST), evars(LST), isel(TXT)),
+ACTION gen_set_stmt(node, nums(LST), evars(LST), tensors(LST), isel(TXT)),
   REAP target FROM _map_get, node, "target".
   REAP val FROM _map_get, node, "value".
   REAP cval FROM translate_expr, val, nums, evars, plant_list_make(0).
@@ -11320,6 +11395,13 @@ ACTION gen_set_stmt(node, nums(LST), evars(LST), isel(TXT)),
   REAP _stp FROM substring, cval, 0, 13.
   IF _stp IS "plant_tensor_",
       GIVE isel + "  { PlantTensor* _on = " + cval + ";\n" + isel + "    plant_tensor_free_if_tensor(" + target + ");\n" + isel + "    " + target + " = _on; }\n".
+  /IF.
+  # v0.58.1 — SET x TO y where BOTH are TENSOR variables (type-exact set):
+  # retain-on-alias + free old. Numeric/other vars never reach this path.
+  REAP _cv_t FROM list_contains, tensors, cval.
+  REAP _tg_t FROM list_contains, tensors, target.
+  IF _cv_t IS 1 AND _tg_t IS 1,
+      GIVE isel + "  { plant_tensor_retain_if_tensor(" + cval + ");\n" + isel + "    plant_tensor_free_if_tensor(" + target + ");\n" + isel + "    " + target + " = " + cval + "; }\n".
   /IF.
   GIVE isel + "  " + target + " = " + cval + ";\n".
 /ACTION.
@@ -11901,6 +11983,18 @@ ACTION generate_body(bd(LST), env(LST)),
   # v0.51.2c.1 — block-scope the freed-variable tracker (TD-006).
   REAP fvsave FROM env_get, env, 13.
   REAP _ FROM env_set, env, 13, plant_list_make(0).
+  # v0.58.1 — TENSOR-name set: inherit outer names, add this body's,
+  # then restore on exit (block-scoped; type-exact).
+  REAP tvsave FROM env_get, env, 15.
+  CREATE tnew(LST) TO plant_list_make(0).
+  CREATE tvi(LON) TO 0.
+  SEASON tvi < COUNT tvsave,
+    REAP tvn FROM plant_list_get, tvsave, tvi.
+    PUT tvn INTO tnew.
+    SET tvi TO tvi + 1.
+  /SEASON.
+  REAP _ FROM collect_tensors, bd, env_sigs(env), env_subst(env), tnew.
+  REAP _ FROM env_set, env, 15, tnew.
   SEASON i < COUNT bd,
     REAP node_el FROM plant_list_get, bd, i.
     REAP node_code FROM generate_node, node_el, env.
@@ -11921,6 +12015,8 @@ ACTION generate_body(bd(LST), env(LST)),
     SET fvi TO fvi + 1.
   /SEASON.
   REAP _ FROM env_set, env, 13, fvsave.
+  # v0.58.1 — restore the inherited TENSOR-name set.
+  REAP _ FROM env_set, env, 15, tvsave.
   GIVE res.
 /ACTION.
 
@@ -12236,7 +12332,7 @@ ACTION generate_node(node, env(LST)),
   
     # ── set_stmt: SET target TO val. → target = val; ──────────
     IF ntype IS "set_stmt",
-        REAP code FROM gen_set_stmt, node, nums, evars, isel0.
+        REAP code FROM gen_set_stmt, node, nums, evars, env_tensors(env), isel0.
         GIVE code.
     /IF.
   
@@ -16006,6 +16102,9 @@ ACTION generate_c(ast(LST)),
     # the freed-variable tracker persists across them (avoids a
     # top-level double-free; env slot 13 was previously reset per stmt).
     CREATE top_env(LST) TO env_make(0, sigs, esub, plant_list_make(0), "", nums_top, plant_list_make(0), _evars_with_bols(ast, esub, eregs), "", "", "", plant_list_make(0), structs).
+    # v0.58.1 — top-level TENSOR-name set (top-level statements go through
+    # generate_node, not generate_body).
+    REAP _ FROM env_set, top_env, 15, collect_tensors(ast, sigs, esub, plant_list_make(0)).
     SEASON i < COUNT ast,
         REAP node_el FROM plant_list_get, ast, i.
         REAP ntype FROM _map_get, node_el, "type".
@@ -16791,7 +16890,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.58.0 (pure native)".
+  SHOW "Chloroplast 0.58.1 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.58.0
+# Auto-updated: 0.58.1
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.58.0 | 1025880 | 8963 | 963 | 109 | 322 | 5361 |
+| v0.58.1 | 1030096 | 8963 | 963 | 109 | 322 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -78,6 +78,7 @@
 | v0.57.3 | 2026 | retain_graph + TAPE_CLEAR | Released |
 | v0.57.4 | 2026 | TD-048 interim hardening | Released |
 | v0.58.0 | 2026 | Ownership (CREATE + SET-fresh + SET-hoist + GIVE) | Released |
+| v0.58.1 | 2026 | SET bare-var (type-aware) | Released |
 
 ## Growth Chart (ASCII)
 
