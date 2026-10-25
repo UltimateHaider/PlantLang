@@ -1,0 +1,7 @@
+# TD-054: implicit-return actions keep the raw-bit convention.
+ACTION f()
+  GIVE 42.
+/ACTION.
+CREATE v (LON) TO f().
+SHOW v.
+SHOW "td054-implicit-return-ok".

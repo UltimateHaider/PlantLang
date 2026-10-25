@@ -1,3 +1,55 @@
+## v0.58.7 — TD-054 (ACTION → LON) + TD-059 (misdiagnosis)
+
+### Fixed
+- TD-054: explicit `-> LON` actions now return **text** for lookup
+  GIVEs (was raw long bits → caller `_to_long(f(m))` → `strtol(pointer)`
+  → segfault). Two gated changes in `codegen_c.plant`:
+  - Part 1 (callee): `rty IS "LON"` + lookup → `_from_long(_to_long(...))`.
+  - Part 2 (caller): CREATE/LET `LON` + `is_action_call(cval, sigs, "LON")`
+    → `_to_long(cval)`.
+  Both are narrowly gated (`rty == "LON"` / `ret == "LON"`) so
+  implicit-return actions (`rty == ""`) keep the raw-bit convention →
+  **async suite 6/6 green**.
+
+### Closed as misdiagnosis (TD-059)
+- TD-059 was a misdiagnosis: `STR` is the **FFI struct keyword**
+  (`STR Point { x: LON, y: LON }`, `ACTION f() -> STR Point`); the string
+  type is `TXT`. `ACTION f() -> STR` without a struct name is malformed —
+  the parser consumes `GIVE` as the type name, swallowing the body →
+  default `return "";`.
+- Filed **TD-060**: `parse_action_decl` should diagnose `-> STR` without a
+  struct name instead of silently dropping the body (silent-wrong, invalid
+  input, LOW impact).
+
+### Added
+- 3 new tests: `td054_give_lon_lookup`, `td054_create_lon_action`,
+  `td054_implicit_return_unchanged`.
+
+### Documented (existing behavior)
+- Pre-existing action-return ownership gap: `tx_t` text is unowned (never
+  released by the caller). Multi-digit `-> LON` returns leak the
+  `_from_long` heap string (~11 B); 0–9 use the static `_from_digit` path
+  (0 B). Not introduced by this fix.
+
+### Documented (new TD)
+- TD-060: parser should reject `-> STR` without a struct name. Target:
+  v0.58.8+.
+
+### Verified
+- Native: 258/258 (was 255)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318 (includes all async)
+- Self-hosting: converged (599,595 B)
+- valgrind strict: PASS
+- Binary: 1,033,816 bytes.
+
+### Out of Scope (v0.58.8+)
+- TD-055 (ACTION global capture, HIGH).
+- TD-060 (parser: diagnose `-> STR` without struct name).
+- TD-046 (PUSH nested, v0.58.9).
+- TD-048 (true higher-order AD, v0.59.0+).
+
 ## v0.58.6 — TD-053 (misdiagnosis) + TD-056 + TD-058
 
 ### Fixed

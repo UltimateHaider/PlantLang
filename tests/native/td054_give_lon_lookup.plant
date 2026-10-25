@@ -1,0 +1,9 @@
+# TD-054: explicit -> LON action returning a lookup must yield text.
+CREATE m (MAP) TO {"k": 42}.
+ACTION f(M (MAP)) -> LON
+  GIVE M.k.
+/ACTION.
+CREATE v (LON) TO f(m).
+SHOW v.
+LIST_FREE(m).
+SHOW "td054-give-lon-ok".

@@ -600,29 +600,29 @@ defining scope.
 - **Tests:** `td053_show_map_ok`, `td053_show_uninit_map_null`.
 - **Related:** TD-054.
 
-## TD-054: `CREATE x (LON) TO <action call>` stores pointer as long — OPEN
+## TD-054: `-> LON` raw-long return / pointer-as-long — CLOSED
 
-- **Status:** OPEN (root cause documented in v0.58.5)
+- **Status:** ✅ CLOSED in v0.58.7
 - **Introduced:** pre-v0.58.3 (discovered during v0.58.3 Phase 3)
-- **Impact:** LOW (pre-existing; only coincidentally correct when the
-  callee returns a number disguised as a pointer)
-- **Symptom:** `CREATE v (LON) TO f()` emits `long v = f();` instead of
-  `long v = _to_long(f());` — the `tx_t` pointer is stored as a long.
-- **Blocker (measured in v0.58.5):** adding `_to_long(f())` is **unsound**
-  because action returns are not consistently text:
-  - **implicit-return** actions (no `->`) return raw long bits (e.g.
-    `async_reachable` returns `found` as a raw `long`);
-  - `-> LON` actions whose `GIVE` is a lookup (`GIVE M.k`) return
-    `_to_long(...)` — raw long, not text.
-  Attempting the caller-side coercion made the compiler crash
-  (`_to_long(0x1)`) on 6 async regression tests.
-- **Fix direction:** make `-> LON` return text **consistently** first —
-  i.e. wrap the `gen_give_stmt` `is_lookup_prefix` branch in
-  `_from_long(...)` — then re-apply the caller-side `_to_long`.
-- **Workaround:** `CREATE v (LON) TO _to_long(f())` for text-returning
-  actions only.
-- **Target:** v0.58.6+
-- **Related:** TD-052.
+- **Symptom:** `ACTION f(...) -> LON` + `GIVE M.k` emitted
+  `return _to_long(...)` (raw long bits) and callers emitted
+  `long v = f();` — `_to_long(f())` later → `strtol(0x2A)` → SIGSEGV.
+- **Fixed (2 gated changes in `codegen_c.plant`):**
+  1. **callee** (`gen_give_stmt`): `rty IS "LON"` + lookup →
+     `_from_long(_to_long(<cval>))` (text).
+  2. **caller** (CREATE/LET `LON`):
+     `is_action_call(cval, sigs, "LON")` → `_to_long(<cval>)`.
+  Both gates require an **explicit** `-> LON` (`rty == "LON"` /
+  `ret == "LON"`), so **implicit-return** actions (`rty == ""`) keep the
+  documented raw-bit convention — the async suite stays 6/6 green.
+- **Leak-for-correctness trade:** multi-digit `-> LON` returns leak the
+  `_from_long` heap string (~11 B) — a **pre-existing** action-return
+  ownership gap (`tx_t` text is never released by the caller; the same
+  leak exists for the literal form `GIVE 42`). 0–9 use the static
+  `_from_digit` path (0 B).
+- **Tests:** `td054_give_lon_lookup`, `td054_create_lon_action`,
+  `td054_implicit_return_unchanged`.
+- **Related:** TD-059 (misdiagnosis → TD-060).
 
 ## TD-055: ACTION bodies cannot see globals (no capture) — OPEN
 
@@ -674,20 +674,39 @@ defining scope.
 - **Test:** `td058_show_string_with_dbl_name`.
 - **Related:** TD-051.
 
-## TD-059: ACTION `-> STR` + `GIVE <string>` drops value — OPEN
+## TD-059: ACTION `-> STR` drops string — CLOSED (misdiagnosis)
+
+- **Status:** ✅ CLOSED in v0.58.7 (misdiagnosis; mirror TD-053/TD-047)
+- **Reality:** `STR` is the **FFI struct keyword**
+  (`STR Point { x: LON, y: LON }`, `ACTION f() -> STR Point`). The
+  **string** type is `TXT`. `ACTION f() -> STR` **without a struct name**
+  is malformed: the parser consumes `GIVE` as the struct name and
+  swallows the body → the generator emits its default `return "";`.
+- **Evidence:** with two body statements the body survives
+  (`SHOW "inside". GIVE "a".` → `return "a";`); with a single `GIVE`
+  the body is eaten. `STR` is not in the type registry (0 occurrences in
+  `codegen_c.plant`).
+- **Actual defect:** the parser should **diagnose** malformed `-> STR`
+  instead of silently swallowing the body → filed as **TD-060**.
+- **Workaround:** use `-> TXT` for string returns.
+- **Related:** TD-060.
+
+## TD-060: `parse_action_decl` should reject `-> STR` without a struct name — OPEN
 
 - **Status:** OPEN
-- **Introduced:** pre-v0.58.6 (also observed in v0.58.4 Phase 3)
-- **Impact:** LOW (0 corpus cases; `-> STR` as a return annotation is rare)
-- **Symptom:** `ACTION f() -> STR` + `GIVE "a.b.c".` emits `return "";`
-  — the string value is dropped. Reproduced with `"a.b"` and `"a.b.c"`.
-  `-> TXT` and `-> LST` are unaffected.
-- **Note:** `STR` is **not** a valid variable type (`CREATE s (STR)` →
-  `Error: unknown type 'STR'`; use `TXT`), but it parses as a return
-  annotation.
-- **Workaround:** use `-> TXT` for string returns.
-- **Target:** v0.58.7+
-- **Related:** none.
+- **Introduced:** pre-v0.58.7 (discovered during v0.58.7 Phase 1)
+- **Impact:** LOW (invalid code only — but **silent-wrong**)
+- **Symptom:** `ACTION f() -> STR` + `GIVE "a.b.c".` → the parser consumes
+  `GIVE` as the struct name, silently swallowing the body → the generator
+  emits its default `return "";` (2-space indent).
+- **Reason:** in `parse_action_decl` (`parser.plant`), `ret_lx IS "STR"`
+  enters the by-value-struct return-type path (`parser.plant:3860`) which
+  requires a following struct name; there is no diagnostic when it is
+  missing.
+- **Fix direction:** reject `-> STR` with no following struct name via an
+  explicit parse error (do not consume body tokens as a type name).
+- **Target:** v0.58.8+
+- **Related:** TD-059 (misdiagnosis).
 
 ## TD-047: MAP value ownership — CLOSED (misdiagnosis, v0.58.0)
 - **Status:** ✅ CLOSED (misdiagnosis, v0.58.0)

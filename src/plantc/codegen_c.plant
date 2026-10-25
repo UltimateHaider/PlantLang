@@ -5935,6 +5935,13 @@ ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(
       IF isnc2 IS 0 AND is_lookup_prefix(cval) IS "1",
           SET cval TO "_to_long(" + cval + ")".
       /IF.
+      # v0.58.7 — TD-054 part 2 (caller): explicit -> LON actions now
+      # return text, so coerce. ret=="LON" excludes implicit-return
+      # actions (which keep raw long bits).
+      REAP lac4 FROM is_action_call, cval, sigs, "LON".
+      IF lac4 IS "1",
+          SET cval TO "_to_long(" + cval + ")".
+      /IF.
       GIVE isel + "  long " + target + " = " + cval + ";\n".
   /IF.
   IF vtype IS "NUM",
@@ -6241,6 +6248,14 @@ ACTION gen_give_stmt(node, nums(LST), evars(LST), rty(TXT), actx(TXT), mexit(TXT
       IF in3 IS 1,
           SET cval TO "_from_long(" + cval + ")".
       /IF.
+  /IF.
+  # v0.58.7 — TD-054 part 1 (callee): an explicit -> LON action must
+  # return TEXT for lookup GIVEs, not raw long bits. Gated to rty=="LON"
+  # so implicit-return actions (rty=="") keep the documented raw-bit
+  # convention (async_reachable & friends).
+  IF isn3 IS 0 AND rty IS "LON" AND snm3 IS "" AND is_lookup_prefix(cval) IS "1",
+      SET cval TO "_from_long(_to_long(" + cval + "))".
+      SET isn3 TO 2.
   /IF.
   IF isn3 IS 0 AND rty ISNT "",
       REAP in3 FROM is_numeric_type, rty.
@@ -7314,6 +7329,11 @@ ACTION generate_node(node, env(LST)),
             GIVE isel + "  " + target + " = " + cval + ";\n".
         /IF.
         IF vtype IS "LON",
+            # v0.58.7 — TD-054 part 2 (caller LET): -> LON action → _to_long.
+            REAP lac5 FROM is_action_call, cval, sigs, "LON".
+            IF lac5 IS "1",
+                GIVE isel + "  long " + target + " = _to_long(" + cval + ");\n".
+            /IF.
             GIVE isel + "  long " + target + " = " + cval + ";\n".
         /IF.
         # v0.50.0a — CHA single-character primitive.
