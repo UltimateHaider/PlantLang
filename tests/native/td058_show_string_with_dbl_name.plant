@@ -1,0 +1,5 @@
+CREATE x (DBL) TO 1.5.
+SHOW "extern".
+SHOW "x".
+SHOW x.
+SHOW "td058-show-dbl-name-ok".

@@ -240,6 +240,14 @@ void plant_report_interface_free(IReport* rp) {
 
 void plant_iReport_print(IReport* rp, const char* message) {
     if (!rp || !rp->print) return;
+    /* v0.58.6 — TD-053 hardening: low-pointer guard. The array/tensor
+       probes below dereference message as a PlantArray header; a raw
+       numeric or other non-pointer value would crash. Print a marker
+       instead of faulting. */
+    if (!message || (uintptr_t)message < 4096) {
+        rp->print(rp->context, "<null>");
+        return;
+    }
     /* v0.51.0: detect PlantArray (nested list/map) and serialize */
     if (message) {
         PlantArray* p = (PlantArray*)message;

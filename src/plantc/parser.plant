@@ -1138,12 +1138,22 @@ ACTION _lower_dots(e(TXT)),
   CREATE q(TXT) TO "".
   SEASON i < n,
     REAP ch FROM char_at, e, i.
+    # v0.58.6 — TD-056: quote state machine. The old toggle reset on the
+    # opening quote (set then compared equal -> cleared), so string
+    # contents were scanned as code. ld_op marks the opening char.
+    CREATE ld_op(TXT) TO "0".
     IF q IS "",
-      IF ch IS "\"" OR ch IS "'", SET q TO ch. /IF.
+      IF ch IS "\"", SET q TO "\"". SET ld_op TO "1". /IF.
+      IF ch IS "'", SET q TO "'". SET ld_op TO "1". /IF.
     /IF.
-    IF q ISNT "",
+    IF ld_op IS "0" AND q ISNT "",
       SET out TO out + ch.
       IF ch IS q, SET q TO "". /IF.
+      SET i TO i + 1.
+      CONTINUE.
+    /IF.
+    IF ld_op IS "1",
+      SET out TO out + ch.
       SET i TO i + 1.
       CONTINUE.
     /IF.

@@ -3625,7 +3625,37 @@ ACTION collect_dbls_walk(bd(LST), subst(LST), res(LST)),
 /ACTION.
 
 # v0.51.22 — _expr_has_dbl: 1 if cval references any "__DBL__"-marked var.
+# v0.58.6 — TD-058: remove quoted string regions from e so a DBL
+# variable name appearing inside a string literal is never matched.
+ACTION _strip_quoted(e(TXT)),
+  CREATE sq_i(LON) TO 0.
+  CREATE sq_n(LON) TO LEN(e).
+  CREATE sq_q(TXT) TO "".
+  CREATE sq_out(TXT) TO "".
+  SEASON sq_i < sq_n,
+    REAP sq_c FROM char_at, e, sq_i.
+    CREATE sq_op(TXT) TO "0".
+    IF sq_q IS "",
+      IF sq_c IS "\"", SET sq_q TO "\"". SET sq_op TO "1". /IF.
+      IF sq_c IS "'", SET sq_q TO "'". SET sq_op TO "1". /IF.
+    /IF.
+    IF sq_op IS "1",
+      SET sq_i TO sq_i + 1.
+      CONTINUE.
+    /IF.
+    IF sq_q ISNT "",
+      IF sq_c IS sq_q, SET sq_q TO "". /IF.
+      SET sq_i TO sq_i + 1.
+      CONTINUE.
+    /IF.
+    SET sq_out TO sq_out + sq_c.
+    SET sq_i TO sq_i + 1.
+  /SEASON.
+  GIVE sq_out.
+/ACTION.
+
 ACTION _expr_has_dbl(cval(TXT), evars(LST)),
+  REAP hd_e FROM _strip_quoted, cval.
   CREATE i(LON) TO 0.
   CREATE e(TXT) TO "".
   SEASON i < COUNT evars,
@@ -3633,7 +3663,7 @@ ACTION _expr_has_dbl(cval(TXT), evars(LST)),
     REAP pre FROM substring, e, 0, 7.
     IF pre IS "__DBL__",
       REAP nm FROM substring, e, 7, LEN(e).
-      REAP sp FROM strings:SPLIT, cval, nm.
+      REAP sp FROM strings:SPLIT, hd_e, nm.
       IF COUNT sp > 1, GIVE 1. /IF.
     /IF.
     SET i TO i + 1.

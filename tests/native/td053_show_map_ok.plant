@@ -1,0 +1,4 @@
+CREATE m (MAP) TO {"k": 42, "j": 99}.
+SHOW m.
+LIST_FREE(m).
+SHOW "td053-show-map-ok".

@@ -583,18 +583,22 @@ defining scope.
   Real-double extern calls (`TENSOR_SUM`, 34 corpus tests) unchanged.
 - **Related:** TD-054 (LON half, still open), TD-057.
 
-## TD-053: `SHOW <MAP>` segfaults — OPEN
+## TD-053: `SHOW <MAP>` segfaults — CLOSED (misdiagnosis)
 
-- **Status:** OPEN
-- **Introduced:** pre-v0.58.3 (discovered during v0.58.3 Phase 3)
-- **Impact:** LOW–MED (`SHOW` of a MAP crashes)
-- **Symptom:** `SHOW m` on a MAP segfaults. `plant_iReport_print`'s array
-  path requires `PLANT_ARRAY_MAGIC`; a pair-list MAP fails that check and
-  falls through to `rp->print(context, message)` → `puts` on a non-string
-  pointer.
-- **Workaround:** `SHOW m["k"]` (print one value).
-- **Target:** v0.58.4+
-- **Related:** none.
+- **Status:** ✅ CLOSED in v0.58.6 (misdiagnosis; mirror TD-047 precedent)
+- **Reality:** `SHOW <MAP>` **works** — prints `{k = 42, j = 99}`.
+  A MAP is a `PlantArray` with `kind = 1` (`plant_map_create` →
+  `plant_list_create(8)`), so it hits the existing array path, and
+  `plant_to_string` already has a map branch (`plant_runtime.c:3013`).
+- **The earlier "crash":** it was **TD-054** — the probe also contained
+  `_to_long(f(m))`, where `f` (`-> LON`, `GIVE M.k`) returns raw long
+  bits → `strtol(0x2A)` → SIGSEGV. Output loss was stdio block-buffering.
+- **Optional hardening (landed):** low-pointer guard in
+  `plant_iReport_print` (`(uintptr_t)message < 4096` → `"<null>"`).
+  Defensive; no output change for valid inputs. An *uninitialized* MAP
+  is NULL and now prints `<null>` instead of silently skipping.
+- **Tests:** `td053_show_map_ok`, `td053_show_uninit_map_null`.
+- **Related:** TD-054.
 
 ## TD-054: `CREATE x (LON) TO <action call>` stores pointer as long — OPEN
 
@@ -646,34 +650,44 @@ defining scope.
   with `_from_`, or is a call to any action (`tx_t`).
 - **Related:** TD-052.
 
-## TD-056: `_lower_dots` quote-toggle flaw — OPEN
+## TD-056: `_lower_dots` quote-toggle flaw — CLOSED
 
-- **Status:** OPEN
+- **Status:** ✅ CLOSED in v0.58.6
 - **Introduced:** pre-v0.58.4 (discovered during v0.58.4 Phase 3)
-- **Impact:** LOW (latent; no current corpus regression)
-- **Symptom:** `_lower_dots` (parser.plant) uses a quote-toggle that
-  resets on the **opening** quote (set then immediately compared equal →
-  cleared), so string contents are effectively scanned as code. A `.`
-  inside a string literal could be mis-treated as field access.
-- **Note:** the analogous codegen-side helper (`has_float_lit`) had the
-  same defect; v0.58.4 fixed it with an explicit `hfl_opened` flag.
-- **Workaround:** none known today (no corpus case exercises it).
-- **Target:** v0.58.5+ (parser fix; mirror the `hfl_opened` pattern)
+- **Fixed:** explicit `ld_op` opening-quote flag (mirror `has_float_lit`'s
+  `hfl_opened`). Quoted regions are copied verbatim and never scanned for
+  dots, so `GIVE "a.b.c"` now yields `return "a.b.c";`.
+- **Preserved:** `x.y` / `x1.5` field lowering and the `GIVE 0.`
+  terminator.
+- **Test:** `td056_give_dotted_string`.
 - **Related:** TD-051.
 
-## TD-058: `_expr_has_dbl` substring scan (not string-literal aware) — OPEN
+## TD-058: `_expr_has_dbl` substring scan (not string-literal aware) — CLOSED
+
+- **Status:** ✅ CLOSED in v0.58.6
+- **Introduced:** pre-v0.58.5 (discovered during v0.58.5 Phase 3)
+- **Fixed:** new `_strip_quoted(e)` helper (quote state machine) removes
+  quoted regions; `_expr_has_dbl` splits on the stripped text instead of
+  the raw `cval`.
+- **Now:** `SHOW "extern"` / `SHOW "x"` with `x (DBL)` stay plain strings
+  (no `_from_double` wrap); `SHOW x` still wraps → `1.5`.
+- **Test:** `td058_show_string_with_dbl_name`.
+- **Related:** TD-051.
+
+## TD-059: ACTION `-> STR` + `GIVE <string>` drops value — OPEN
 
 - **Status:** OPEN
-- **Introduced:** pre-v0.58.5 (discovered during v0.58.5 Phase 3)
-- **Impact:** LOW (no corpus case today)
-- **Symptom:** a string label containing a DBL variable's name gets
-  wrapped as `_from_double("...")` → gcc type error.
-  Example: `CREATE x (DBL) TO 1.5.` + `SHOW "extern".` →
-  `_from_double("extern")` (the `x` in "e**x**tern" matched).
-- **Reason:** `_expr_has_dbl` is a plain substring scan over `evars`
-  markers (`__DBL__<name>` → `SPLIT cval <name>`); no quote-awareness.
-- **Target:** v0.58.6+ (codegen; mirror `has_float_lit`'s quote guard)
-- **Related:** TD-051 (`has_float_lit` has the correct quote-aware toggle).
+- **Introduced:** pre-v0.58.6 (also observed in v0.58.4 Phase 3)
+- **Impact:** LOW (0 corpus cases; `-> STR` as a return annotation is rare)
+- **Symptom:** `ACTION f() -> STR` + `GIVE "a.b.c".` emits `return "";`
+  — the string value is dropped. Reproduced with `"a.b"` and `"a.b.c"`.
+  `-> TXT` and `-> LST` are unaffected.
+- **Note:** `STR` is **not** a valid variable type (`CREATE s (STR)` →
+  `Error: unknown type 'STR'`; use `TXT`), but it parses as a return
+  annotation.
+- **Workaround:** use `-> TXT` for string returns.
+- **Target:** v0.58.7+
+- **Related:** none.
 
 ## TD-047: MAP value ownership — CLOSED (misdiagnosis, v0.58.0)
 - **Status:** ✅ CLOSED (misdiagnosis, v0.58.0)

@@ -183,6 +183,7 @@ tx_t _evars_with_cmps(PlantArray* bd, PlantArray* params, PlantArray* subst, Pla
 tx_t collect_bols_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_chas_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
 tx_t collect_dbls_walk(PlantArray* bd, PlantArray* subst, PlantArray* res);
+tx_t _strip_quoted(tx_t e);
 tx_t _expr_has_dbl(tx_t cval, PlantArray* evars);
 tx_t has_float_lit(tx_t e);
 tx_t _expr_has_cmp(tx_t cval, PlantArray* evars);
@@ -2965,16 +2966,27 @@ tx_t _lower_dots(tx_t e) {
     tx_t q = "";
     while (i < n) {
     ch = char_at(e, i);
+    tx_t ld_op = "0";
     if (strcmp(q,"") == 0) {
-    if (strcmp(ch,"\"") == 0 || strcmp(ch,"'") == 0) {
-    q = ch;
+    if (strcmp(ch,"\"") == 0) {
+    q = "\"";
+    ld_op = "1";
+    }
+    if (strcmp(ch,"'") == 0) {
+    q = "'";
+    ld_op = "1";
     }
     }
-    if (strcmp(q,"") != 0) {
+    if (strcmp(ld_op,"0") == 0 && strcmp(q,"") != 0) {
     out = _cat(out, ch);
     if (strcmp(ch, q) == 0) {
     q = "";
     }
+    i = i+1;
+                      continue;
+    }
+    if (strcmp(ld_op,"1") == 0) {
+    out = _cat(out, ch);
     i = i+1;
                       continue;
     }
@@ -11104,10 +11116,47 @@ tx_t collect_dbls_walk(PlantArray* bd, PlantArray* subst, PlantArray* res) {
     }
     return res;
 }
+tx_t _strip_quoted(tx_t e) {
+  tx_t sq_c = "";
+    long sq_i = 0;
+    long sq_n = strlen( e );
+    tx_t sq_q = "";
+    tx_t sq_out = "";
+    while (sq_i < sq_n) {
+    sq_c = char_at(e, sq_i);
+    tx_t sq_op = "0";
+    if (strcmp(sq_q,"") == 0) {
+    if (strcmp(sq_c,"\"") == 0) {
+    sq_q = "\"";
+    sq_op = "1";
+    }
+    if (strcmp(sq_c,"'") == 0) {
+    sq_q = "'";
+    sq_op = "1";
+    }
+    }
+    if (strcmp(sq_op,"1") == 0) {
+    sq_i = sq_i+1;
+                      continue;
+    }
+    if (strcmp(sq_q,"") != 0) {
+    if (strcmp(sq_c, sq_q) == 0) {
+    sq_q = "";
+    }
+    sq_i = sq_i+1;
+                      continue;
+    }
+    sq_out = _cat(sq_out, sq_c);
+    sq_i = sq_i+1;
+    }
+    return sq_out;
+}
 tx_t _expr_has_dbl(tx_t cval, PlantArray* evars) {
+  tx_t hd_e = "";
   tx_t pre = "";
   tx_t nm = "";
   tx_t sp = "";
+    hd_e = _strip_quoted(cval);
     long i = 0;
     tx_t e = "";
     while (i < plant_array_length(evars)) {
@@ -11115,7 +11164,7 @@ tx_t _expr_has_dbl(tx_t cval, PlantArray* evars) {
     pre = substring(e, 0, 7);
     if (strcmp(pre,"__DBL__") == 0) {
     nm = substring(e, 7, strlen( e ));
-    sp = strings_SPLIT(cval, nm);
+    sp = strings_SPLIT(hd_e, nm);
     if (plant_array_length(sp) > 1) {
     return 1;
     }
@@ -19508,7 +19557,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.58.5 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.58.6 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

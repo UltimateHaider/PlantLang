@@ -1,3 +1,50 @@
+## v0.58.6 — TD-053 (misdiagnosis) + TD-056 + TD-058
+
+### Fixed
+- TD-056: `_lower_dots` quote-toggle flaw (parser.plant). The old toggle
+  reset on the **opening** quote → string contents were scanned as code
+  (dots in `GIVE "a.b.c"` treated as field access). Fixed with an
+  explicit `ld_op` opening-quote flag (mirror `has_float_lit`).
+- TD-058: `_expr_has_dbl` substring scan (codegen_c.plant). A string
+  label containing a DBL variable's name (e.g. `"extern"` with
+  `x (DBL)`) was wrapped as `_from_double("...")`. Fixed via a new
+  `_strip_quoted` helper (quote state machine); `_expr_has_dbl` splits
+  on the stripped text.
+
+### Hardened (TD-053 → CLOSED as misdiagnosis)
+- TD-053 was a **misdiagnosis**: `SHOW <MAP>` works (the existing array
+  path; a MAP is `PlantArray` with `kind = 1`, and `plant_to_string`
+  handles it). The earlier crash was **TD-054** (`_to_long(f(m))`).
+- Hardening: `plant_iReport_print` now has a low-pointer guard
+  (`(uintptr_t)message < 4096` → `"<null>"`). Defensive; no output
+  change for valid inputs (an uninitialized MAP is NULL and now prints
+  `"<null>"` instead of silently skipping).
+
+### Added
+- 4 new tests: `td053_show_map_ok`, `td053_show_uninit_map_null`,
+  `td056_give_dotted_string`, `td058_show_string_with_dbl_name`.
+
+### Documented (new TD)
+- TD-059: `ACTION -> STR` + `GIVE <string>` emits `return "";` (the
+  string value is dropped). Pre-existing (no corpus case). Target:
+  v0.58.7+.
+
+### Verified
+- Native: 255/255 (was 251)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (599,076 B)
+- valgrind strict: PASS
+- Binary: 1,029,720 bytes.
+
+### Out of Scope (v0.58.7+)
+- TD-054 (ACTION call pointer as long, MED).
+- TD-055 (ACTION global capture, HIGH).
+- TD-059 (ACTION `-> STR` drops string).
+- TD-046 (PUSH nested, v0.58.8).
+- TD-048 (true higher-order AD, v0.59.0+).
+
 ## v0.58.5 — TD-052 + TD-057 (ACTION coercion + GIVE DBL)
 
 ### Fixed
