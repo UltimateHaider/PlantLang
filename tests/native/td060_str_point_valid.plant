@@ -1,0 +1,6 @@
+STR Point { x: LON, y: LON }.
+ACTION f() -> STR Point
+  CREATE p (STR Point) TO Point{x: 1, y: 2}.
+  GIVE p.
+/ACTION.
+SHOW "td060-str-point-ok".

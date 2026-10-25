@@ -3858,26 +3858,36 @@ ACTION parse_action_decl(tokens(LST), pos(LON), rtab(LST)),
     # v0.52.3a — STR is the new keyword; STRUCT still accepted.
     IF ret_lx IS "Result", SET ret TO "Result". /IF.
     IF ret_lx IS "STRUCT" OR ret_lx IS "STR",
-      # v0.52.6 — TD-039: bounded struct-name collection (IDENT + optional
-      # [...] group). Avoids the greedy collect_type_text(p5, ".", 0) that
-      # swallowed a non-FFI action's body (no trailing . to stop).
-      REAP rn_pair FROM plant_iLexer_consume_at, lexer, tokens, p5.
-      REAP rn_lx FROM plant_iLexer_tok_lex, lexer, rn_pair[0].
-      REAP p5 FROM _second, rn_pair.
-      CREATE rn_t(TXT) TO rn_lx.
-      REAP gt_tok FROM plant_iLexer_peek_at, lexer, tokens, p5.
-      REAP gt_lx FROM plant_iLexer_tok_lex, lexer, gt_tok.
-      IF gt_lx IS "[",
-        REAP gtl FROM plant_iLexer_consume_at, lexer, tokens, p5.
-        REAP p5 FROM _second, gtl.
-        REAP gtv FROM collect_type_text, tokens, p5, "]", 0.
-        REAP gtt FROM _first, gtv.
-        REAP p5 FROM _second, gtv.
-        REAP gtrb FROM plant_iLexer_consume_at, lexer, tokens, p5.
-        REAP p5 FROM _second, gtrb.
-        SET rn_t TO rn_t + "[" + gtt + "]".
+      # v0.58.8 — TD-060 part 1: the token after STR/STRUCT must be a real
+      # IDENT (the struct name). Never consume a statement keyword as a
+      # type name — that silently swallowed the ACTION body, leaving the
+      # generator's default `return "";`. Report via the type validator.
+      REAP rn_ptok FROM plant_iLexer_peek_at, lexer, tokens, p5.
+      REAP rn_pty FROM plant_iLexer_tok_type, lexer, rn_ptok.
+      IF rn_pty ISNT "IDENT",
+        SET ret TO "STR".
+      ELSE,
+        # v0.52.6 — TD-039: bounded struct-name collection (IDENT + optional
+        # [...] group). Avoids the greedy collect_type_text(p5, ".", 0) that
+        # swallowed a non-FFI action's body (no trailing . to stop).
+        REAP rn_pair FROM plant_iLexer_consume_at, lexer, tokens, p5.
+        REAP rn_lx FROM plant_iLexer_tok_lex, lexer, rn_pair[0].
+        REAP p5 FROM _second, rn_pair.
+        CREATE rn_t(TXT) TO rn_lx.
+        REAP gt_tok FROM plant_iLexer_peek_at, lexer, tokens, p5.
+        REAP gt_lx FROM plant_iLexer_tok_lex, lexer, gt_tok.
+        IF gt_lx IS "[",
+          REAP gtl FROM plant_iLexer_consume_at, lexer, tokens, p5.
+          REAP p5 FROM _second, gtl.
+          REAP gtv FROM collect_type_text, tokens, p5, "]", 0.
+          REAP gtt FROM _first, gtv.
+          REAP p5 FROM _second, gtv.
+          REAP gtrb FROM plant_iLexer_consume_at, lexer, tokens, p5.
+          REAP p5 FROM _second, gtrb.
+          SET rn_t TO rn_t + "[" + gtt + "]".
+        /IF.
+        SET ret TO "STR " + rn_t.
       /IF.
-      SET ret TO "STR " + rn_t.
     /IF.
     # v0.48.12: ENUM X — FFI boundary enums (raw member ints in C,
     # wrapped with _from_enum on the PlantLang side)

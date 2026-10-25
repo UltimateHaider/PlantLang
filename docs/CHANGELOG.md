@@ -1,3 +1,49 @@
+## v0.58.8 — TD-060 (parser: diagnose `-> STR`)
+
+### Fixed
+- TD-060: `ACTION f() -> STR` without a struct name is now **diagnosed**
+  (was: the parser consumed `GIVE`/`SHOW` as the struct name → silently
+  swallowed the body → default `return "";`). Two changes:
+  - Part 1 (parser, `parse_action_decl`): peek the next token type; if it
+    is not `"IDENT"`, set `ret = "STR"` and do **not** consume (the body
+    parses normally).
+  - Part 2 (validator, `_known_type`): the `"STR "` branch now requires
+    the base name (before `[`) to be declared (`list_contains names`).
+  Both reuse the existing `unknown type '<rt>'` error (TD-030 style).
+
+### Error path (manual verify, not gated)
+- `ACTION f() -> STR`          → `Error: unknown type 'STR'.`          rc=1
+- `ACTION f() -> STR Nonsense` → `Error: unknown type 'STR Nonsense'.` rc=1
+- `ACTION f() -> STR Point` (declared) → compiles (unchanged)
+- `ACTION f() -> TXT` (string) → unchanged
+
+### Added
+- 2 new tests: `td060_str_point_valid`, `td060_txt_unchanged`.
+
+### Documented (new TD)
+- TD-061: `SET <obj>.<field> TO <expr>` mis-lowers (`p = x TO 1;`).
+  Pre-existing (no corpus case for dot-field-set). Target: v0.58.9+.
+
+### Verified
+- Native: 260/260 (was 258)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (600,188 B)
+- valgrind strict: PASS
+- Binary: 1,037,912 bytes.
+
+### Convention note
+- `tests/native/` has no expected-error support. TD-060 error assertions
+  (if desired as gated tests) belong in `tests/regression/` (supported:
+  the runner greps the compile log for each `.expected` line).
+
+### Out of Scope (v0.58.9+)
+- TD-055 (ACTION global capture, HIGH).
+- TD-061 (`SET obj.field` mis-lower).
+- TD-046 (PUSH nested, v0.58.10).
+- TD-048 (true higher-order AD, v0.59.0+).
+
 ## v0.58.7 — TD-054 (ACTION → LON) + TD-059 (misdiagnosis)
 
 ### Fixed

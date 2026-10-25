@@ -10115,7 +10115,22 @@ ACTION _known_type(t(TXT), names(LST)),
   IF s0 IS "STRUCT ", GIVE "1". /IF.
   # v0.52.3a — STR is the new keyword; STRUCT still accepted.
   REAP s0b FROM substring, tt, 0, 4.
-  IF s0b IS "STR ", GIVE "1". /IF.
+  IF s0b IS "STR ",
+    # v0.58.8 — TD-060 part 2: the struct name must be a declared type.
+    # Previously every "STR <anything>" was accepted, so malformed return
+    # types (including the parser's body-swallow fallback) passed silently.
+    REAP s_rest FROM substring, tt, 4, LEN(tt).
+    REAP s_br FROM find_any, s_rest, "[".
+    CREATE s_bn(TXT) TO s_rest.
+    IF s_br ISNT -1,
+      REAP s_cut FROM substring, s_rest, 0, s_br.
+      SET s_bn TO s_cut.
+    /IF.
+    REAP s_bn FROM trim, s_bn.
+    REAP s_ok FROM list_contains, names, s_bn.
+    IF s_ok IS 1, GIVE "1". /IF.
+    GIVE "0".
+  /IF.
   REAP e0 FROM substring, tt, 0, 5.
   IF e0 IS "ENUM ", GIVE "1". /IF.
   IF str_eq(tt, "void*") IS "1", GIVE "1". /IF.

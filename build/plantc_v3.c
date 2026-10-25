@@ -6108,6 +6108,8 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
   tx_t skip_pair = "";
   tx_t ret_pair = "";
   tx_t ret_lx = "";
+  tx_t rn_ptok = "";
+  tx_t rn_pty = "";
   tx_t rn_pair = "";
   tx_t rn_lx = "";
   tx_t gt_tok = "";
@@ -6328,6 +6330,11 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
     ret = "Result";
     }
     if (strcmp(ret_lx,"STRUCT") == 0 || strcmp(ret_lx,"STR") == 0) {
+    rn_ptok = plant_iLexer_peek_at(lexer, tokens, p5);
+    rn_pty = plant_iLexer_tok_type(lexer, rn_ptok);
+    if (strcmp(rn_pty,"IDENT") != 0) {
+    ret = "STR";
+    } else {
     rn_pair = plant_iLexer_consume_at(lexer, tokens, p5);
     rn_lx = plant_iLexer_tok_lex(lexer, plant_list_get(rn_pair ,  0 ));
     p5 = _second(rn_pair);
@@ -6345,6 +6352,7 @@ tx_t parse_action_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
     rn_t = _cat4(rn_t, "[", gtt, "]");
     }
     ret = _cat("STR ", rn_t);
+    }
     }
     if (strcmp(ret_lx,"ENUM") == 0) {
     rtv = collect_type_text(tokens, p5, ".", 0);
@@ -17728,6 +17736,10 @@ tx_t _known_type(tx_t t, PlantArray* names) {
   tx_t r0 = "";
   tx_t s0 = "";
   tx_t s0b = "";
+  tx_t s_rest = "";
+  tx_t s_br = "";
+  tx_t s_cut = "";
+  tx_t s_ok = "";
   tx_t e0 = "";
   tx_t lt = "";
   tx_t base = "";
@@ -17747,7 +17759,19 @@ tx_t _known_type(tx_t t, PlantArray* names) {
     }
     s0b = substring(tt, 0, 4);
     if (strcmp(s0b,"STR ") == 0) {
+    s_rest = substring(tt, 4, strlen( tt ));
+    s_br = find_any(s_rest, "[");
+    tx_t s_bn = s_rest;
+    if (s_br != - 1) {
+    s_cut = substring(s_rest, 0, s_br);
+    s_bn = s_cut;
+    }
+    s_bn = trim(s_bn);
+    s_ok = list_contains(names, s_bn);
+    if (s_ok == 1) {
     return "1";
+    }
+    return "0";
     }
     e0 = substring(tt, 0, 5);
     if (strcmp(e0,"ENUM ") == 0) {
@@ -19574,7 +19598,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.58.7 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.58.8 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

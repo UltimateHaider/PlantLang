@@ -691,22 +691,47 @@ defining scope.
 - **Workaround:** use `-> TXT` for string returns.
 - **Related:** TD-060.
 
-## TD-060: `parse_action_decl` should reject `-> STR` without a struct name — OPEN
+## TD-060: `parse_action_decl` should reject `-> STR` without struct name — CLOSED
+
+- **Status:** ✅ CLOSED in v0.58.8
+- **Introduced:** pre-v0.58.7 (discovered during v0.58.7 Phase 1)
+- **Fixed (2 parts):**
+  1. **Parser** (`parse_action_decl`): peek the next token **type**; if it
+     is not `"IDENT"` the return is set to `"STR"` and the token is **not
+     consumed** — the ACTION body now parses normally instead of being
+     swallowed.
+  2. **Validator** (`_known_type`): the `"STR "` branch now requires the
+     base name (before `[`) to be a **declared** type
+     (`list_contains names base`). Previously every `STR <anything>` was
+     accepted.
+- **Error channel:** the existing `unknown type '<rt>'` path
+  (`validate_types_walk` → `main.plant`), TD-030 style; no codegen
+  happens on failure.
+- **Verified:**
+  - `-> STR` → `Error: unknown type 'STR'.` (rc=1), was silent.
+  - `-> STR Nonsense` → `Error: unknown type 'STR Nonsense'.` (rc=1).
+  - `-> STR Point` (declared) → compiles, unchanged.
+  - `-> TXT` → unchanged.
+- **Tests:** `td060_str_point_valid`, `td060_txt_unchanged`.
+- **Convention note:** `tests/native/` has no expected-error support; the
+  `tests/regression/` runner does (it greps the compile log for each
+  `.expected` line), so gated error assertions belong there.
+- **Related:** TD-059 (misdiagnosis — the original report).
+
+## TD-061: `SET <obj>.<field> TO <expr>` mis-lowers — OPEN
 
 - **Status:** OPEN
-- **Introduced:** pre-v0.58.7 (discovered during v0.58.7 Phase 1)
-- **Impact:** LOW (invalid code only — but **silent-wrong**)
-- **Symptom:** `ACTION f() -> STR` + `GIVE "a.b.c".` → the parser consumes
-  `GIVE` as the struct name, silently swallowing the body → the generator
-  emits its default `return "";` (2-space indent).
-- **Reason:** in `parse_action_decl` (`parser.plant`), `ret_lx IS "STR"`
-  enters the by-value-struct return-type path (`parser.plant:3860`) which
-  requires a following struct name; there is no diagnostic when it is
-  missing.
-- **Fix direction:** reject `-> STR` with no following struct name via an
-  explicit parse error (do not consume body tokens as a type name).
-- **Target:** v0.58.8+
-- **Related:** TD-059 (misdiagnosis).
+- **Introduced:** pre-v0.58.8 (discovered during v0.58.8 Phase 3)
+- **Impact:** LOW (no corpus case; dot-field-set is rare)
+- **Symptom:** `SET p.x TO 1.` emits `p = x TO 1;` (gcc: `'x' undeclared`).
+  Struct field **reads** (`p.x`) and the bracket form work; only the
+  **dot-field-set** mis-lowers — same family as the earlier `SET m.k`
+  observation.
+- **Workaround:** use a struct literal
+  (`CREATE p (STR Point) TO Point{x: 1, y: 2}.`), or bracket-set where
+  applicable.
+- **Target:** v0.58.9+
+- **Related:** none yet (distinct codegen gap).
 
 ## TD-047: MAP value ownership — CLOSED (misdiagnosis, v0.58.0)
 - **Status:** ✅ CLOSED (misdiagnosis, v0.58.0)

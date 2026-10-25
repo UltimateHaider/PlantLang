@@ -1,0 +1,6 @@
+ACTION f() -> TXT
+  GIVE "a.b.c".
+/ACTION.
+CREATE s (TXT) TO f().
+SHOW s.
+SHOW "td060-txt-ok".
