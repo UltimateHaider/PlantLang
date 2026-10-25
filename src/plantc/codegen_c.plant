@@ -5879,6 +5879,16 @@ ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(
               /IF.
               GIVE isel + "  " + vct2 + " " + target + ";\n" + isel + "  {\n" + hpre + isel + "    " + target + " = " + hfinal + ";\n" + hfrees + isel + "  }\n".
           /IF.
+          # v0.58.0 — ownership: retain if RHS is a bare tensor var.
+          IF vct2 IS "PlantTensor*",
+              REAP _oct FROM is_bare_tensor_id, cval.
+              IF _oct IS "1",
+                  IF actx IS "a",
+                      GIVE isel + "  plant_tensor_retain_if_tensor(" + cval + ");\n" + isel + "  " + target + " = " + cval + ";\n".
+                  /IF.
+                  GIVE isel + "  plant_tensor_retain_if_tensor(" + cval + ");\n" + isel + "  " + vct2 + " " + target + " = " + cval + ";\n".
+              /IF.
+          /IF.
           IF actx IS "a",
               GIVE isel + "  " + target + " = " + cval + ";\n".
           /IF.
@@ -5968,7 +5978,15 @@ ACTION gen_set_stmt(node, nums(LST), evars(LST), isel(TXT)),
           SET sfrees TO sfrees + isel + "    plant_tensor_free(" + st + ");\n".
           SET si TO si + 1.
       /SEASON.
-      GIVE isel + "  {\n" + spre + isel + "    " + target + " = " + sfinal + ";\n" + sfrees + isel + "  }\n".
+      GIVE isel + "  {\n" + spre + isel + "    plant_tensor_free_if_tensor(" + target + ");\n" + isel + "    " + target + " = " + sfinal + ";\n" + sfrees + isel + "  }\n".
+  /IF.
+  # v0.58.0 — ownership: fresh tensor-op RHS (evaluate, free old, assign).
+  # NOTE: only applied when the RHS is provably a PlantTensor* expression;
+  # a bare-identifier RHS has no type info here (the target may be a
+  # numeric variable), so it is left unchanged (TD-046).
+  REAP _stp FROM substring, cval, 0, 13.
+  IF _stp IS "plant_tensor_",
+      GIVE isel + "  { PlantTensor* _on = " + cval + ";\n" + isel + "    plant_tensor_free_if_tensor(" + target + ");\n" + isel + "    " + target + " = _on; }\n".
   /IF.
   GIVE isel + "  " + target + " = " + cval + ";\n".
 /ACTION.
@@ -6029,6 +6047,14 @@ ACTION gen_give_stmt(node, nums(LST), evars(LST), rty(TXT), actx(TXT), mexit(TXT
               SET gi TO gi + 1.
           /SEASON.
           GIVE isel + "  {\n" + gpre + isel + "    PlantTensor* _r = " + gfinal + ";\n" + gfrees + isel + "    return _r;\n" + isel + "  }\n".
+      /IF.
+  /IF.
+  # v0.58.0 — ownership: retain a bare tensor var returned by GIVE
+  # (default form only; async/mexit already returned above).
+  IF rty IS "TENSOR",
+      REAP _gbt FROM is_bare_tensor_id, cval.
+      IF _gbt IS "1",
+          GIVE isel + "  plant_tensor_retain_if_tensor(" + cval + ");\n" + isel + "  return " + cval + ";\n".
       /IF.
   /IF.
   GIVE isel + "  return " + cval + ";\n".
@@ -8434,6 +8460,17 @@ ACTION expr_is_stringlike(e(TXT)),
   REAP s1 FROM substring, e, 0, 11.
   IF s1 IS "_from_long(", GIVE "1". /IF.
   GIVE "0".
+/ACTION.
+
+# v0.58.0 — stricter bare-tensor-identifier: bare-id AND no '.' AND non-empty.
+# Fail-safe: anything unusual → "0" (caller keeps current emission).
+ACTION is_bare_tensor_id(e(TXT)),
+  REAP base FROM is_bare_id, e.
+  IF base ISNT "1", GIVE "0". /IF.
+  REAP dots FROM strings:SPLIT, e, ".".
+  IF COUNT dots > 1, GIVE "0". /IF.
+  IF LEN(e) IS 0, GIVE "0". /IF.
+  GIVE "1".
 /ACTION.
 
 # stvar_kind — flat [name, kind, …] lookup: struct-var kind

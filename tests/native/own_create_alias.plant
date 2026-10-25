@@ -1,0 +1,5 @@
+CREATE c (TENSOR) TO TENSOR([1.0, 2.0]).
+CREATE d (TENSOR) TO c.
+TENSOR_FREE(d).
+TENSOR_FREE(c).
+SHOW "own-create-alias-ok".

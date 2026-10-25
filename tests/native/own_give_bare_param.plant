@@ -1,0 +1,8 @@
+CREATE c (TENSOR) TO TENSOR([1.0, 2.0]).
+ACTION f(X (TENSOR)) -> TENSOR
+  GIVE X.
+/ACTION.
+CREATE d (TENSOR) TO f(c).
+TENSOR_FREE(d).
+TENSOR_FREE(c).
+SHOW "own-give-bare-ok".

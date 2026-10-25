@@ -269,6 +269,7 @@ tx_t action_param_ctype(tx_t ptype);
 tx_t is_ffi_callee(PlantArray* sigs, tx_t name);
 tx_t is_bare_id(tx_t e);
 tx_t expr_is_stringlike(tx_t e);
+tx_t is_bare_tensor_id(tx_t e);
 tx_t stvar_kind(PlantArray* stvars, tx_t name);
 tx_t collect_cb_uses(PlantArray* bd, PlantArray* sigs, PlantArray* acc);
 tx_t ffi_ret_ctype(tx_t ret);
@@ -13089,6 +13090,7 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
   tx_t hfinal = "";
   tx_t hl = "";
   tx_t ht = "";
+  tx_t _oct = "";
   tx_t vst3 = "";
   tx_t iut3 = "";
   tx_t tt0 = "";
@@ -13310,6 +13312,15 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     }
     return _cat3(_cat4(_cat4(_cat4(_cat4(_cat4(isel, "  ", vct2, " "), target, ";\n", isel), "  {\n", hpre, isel), "    ", target, " = "), hfinal, ";\n", hfrees), isel, "  }\n");
     }
+    if (strcmp(vct2,"PlantTensor*") == 0) {
+    _oct = is_bare_tensor_id(cval);
+    if (strcmp(_oct,"1") == 0) {
+    if (strcmp(actx,"a") == 0) {
+    return _cat4(_cat4(_cat4(isel, "  plant_tensor_retain_if_tensor(", cval, ");\n"), isel, "  ", target), " = ", cval, ";\n");
+    }
+    return _cat3(_cat4(_cat4(_cat4(isel, "  plant_tensor_retain_if_tensor(", cval, ");\n"), isel, "  ", vct2), " ", target, " = "), cval, ";\n");
+    }
+    }
     if (strcmp(actx,"a") == 0) {
     return _cat3(_cat4(isel, "  ", target, " = "), cval, ";\n");
     }
@@ -13349,6 +13360,7 @@ tx_t gen_set_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
   tx_t sfinal = "";
   tx_t sl = "";
   tx_t st = "";
+  tx_t _stp = "";
     target = _map_get(node, "target");
     val = _map_get(node, "value");
     cval = translate_expr(val, nums, evars, plant_list_make ( 0 ));
@@ -13403,7 +13415,11 @@ tx_t gen_set_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
     sfrees = _cat(_cat4(sfrees, isel, "    plant_tensor_free(", st), ");\n");
     si = si+1;
     }
-    return _cat3(_cat4(_cat4(_cat4(isel, "  {\n", spre, isel), "    ", target, " = "), sfinal, ";\n", sfrees), isel, "  }\n");
+    return _cat4(_cat4(_cat4(_cat4(_cat4(isel, "  {\n", spre, isel), "    plant_tensor_free_if_tensor(", target, ");\n"), isel, "    ", target), " = ", sfinal, ";\n"), sfrees, isel, "  }\n");
+    }
+    _stp = substring(cval, 0, 13);
+    if (strcmp(_stp,"plant_tensor_") == 0) {
+    return _cat3(_cat4(_cat4(_cat4(isel, "  { PlantTensor* _on = ", cval, ";\n"), isel, "    plant_tensor_free_if_tensor(", target), ");\n", isel, "    "), target, " = _on; }\n");
     }
     return _cat3(_cat4(isel, "  ", target, " = "), cval, ";\n");
 }
@@ -13417,6 +13433,7 @@ tx_t gen_give_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t rty, tx_
   tx_t gfinal = "";
   tx_t gl = "";
   tx_t gt = "";
+  tx_t _gbt = "";
     val = _map_get(node, "value");
     cval = translate_expr(val, nums, evars, plant_list_make ( 0 ));
     cval = _handle_cat(cval, nums, evars);
@@ -13466,6 +13483,12 @@ tx_t gen_give_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t rty, tx_
     gi = gi+1;
     }
     return _cat3(_cat4(_cat4(_cat4(isel, "  {\n", gpre, isel), "    PlantTensor* _r = ", gfinal, ";\n"), gfrees, isel, "    return _r;\n"), isel, "  }\n");
+    }
+    }
+    if (strcmp(rty,"TENSOR") == 0) {
+    _gbt = is_bare_tensor_id(cval);
+    if (strcmp(_gbt,"1") == 0) {
+    return _cat(_cat4(_cat4(isel, "  plant_tensor_retain_if_tensor(", cval, ");\n"), isel, "  return ", cval), ";\n");
     }
     }
     return _cat4(isel, "  return ", cval, ";\n");
@@ -15955,6 +15978,22 @@ tx_t expr_is_stringlike(tx_t e) {
     return "1";
     }
     return "0";
+}
+tx_t is_bare_tensor_id(tx_t e) {
+  tx_t base = "";
+  tx_t dots = "";
+    base = is_bare_id(e);
+    if (strcmp(base,"1") != 0) {
+    return "0";
+    }
+    dots = strings_SPLIT(e, ".");
+    if (plant_array_length(dots) > 1) {
+    return "0";
+    }
+    if (strlen( e ) == 0) {
+    return "0";
+    }
+    return "1";
 }
 tx_t stvar_kind(PlantArray* stvars, tx_t name) {
   tx_t sv1 = "";
@@ -19133,7 +19172,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.57.4 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.58.0 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

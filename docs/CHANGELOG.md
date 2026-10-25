@@ -1,3 +1,52 @@
+## v0.58.0 — Ownership (CREATE + SET-fresh + SET-hoist + GIVE)
+
+### Added
+- plant_tensor_retain_if_tensor + plant_tensor_free_if_tensor
+  (magic-checked, hardened against non-canonical addresses;
+  no type inference).
+- CREATE x TO <bare tensor var y> → retain_if_tensor(y); x = y
+  (gated on vct2 IS "PlantTensor*").
+- SET x TO <fresh plant_tensor_* op> → { _on = <op>; free_if_tensor(x); x = _on; }
+  (TD-045 CLOSED for fresh-op).
+- SET x TO <nested plant_tensor_* expr> (hoist path) → free_if_tensor(x)
+  before assignment (TD-045 CLOSED for hoist).
+- GIVE <bare tensor var y> (default form) → retain_if_tensor(y); return y.
+- is_bare_tensor_id (stricter bare-identifier, rejects .).
+- 4 new tests: own_create_alias, own_set_fresh_op, own_set_hoist,
+  own_give_bare_param.
+
+### Fixed (TD-045 → CLOSED)
+- TD-045 SET-overwrite (fresh-op + hoist): SET x TO <expr> now frees
+  the old value in BOTH the plain and hoist paths.
+- Previously WONTFIX in v0.57.2 (aliasing hazard). Now safe because
+  CREATE/GIVE retain-on-alias.
+
+### Corrected (TD-047 → CLOSED, misdiagnosis)
+- TD-047 MAP: the earlier "72 B leak" was the caller's un-freed tensor.
+  LIST_FREE(M) does not free map values (alias-only by design).
+  TENSOR_FREE(a) + LIST_FREE(M) = 0 leaks, no double free.
+  No fix needed — TD-047 CLOSED (misdiagnosis).
+
+### Deferred (TD-046 → v0.58.1)
+- SET x TO <bare tensor var y> aliasing (type-blind gen_set_stmt).
+- PUSH nested intermediates (gen_reap_stmt, 249 lines, HIGH risk).
+- Documented in TD-046; narrowed to these two remaining cases.
+
+### Verified
+- Native: 232/232 (was 228)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (588,253 B)
+- valgrind strict: PASS (CREATE alias + SET fresh + SET hoist + GIVE
+  bare all 0-leak)
+- Binary: 1025880 B.
+
+### Out of Scope (v0.58.1+)
+- SET bare-var aliasing (TD-046).
+- PUSH nested (TD-046, gen_reap_stmt).
+- TD-048 (true higher-order AD, v0.59.0+).
+
 ## v0.57.4 — TD-048 interim hardening (silent → explicit error)
 
 ### Fixed

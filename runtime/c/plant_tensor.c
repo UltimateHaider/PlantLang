@@ -798,6 +798,24 @@ PlantTensor* plant_tensor_bcast_reduce(const PlantTensor* d,
     return r;
 }
 
+/* v0.58.0 — Magic-checked helpers (no type inference; safe on
+   non-tensor pointers and small-int-as-pointer values). */
+void plant_tensor_retain_if_tensor(void* p) {
+    uintptr_t u = (uintptr_t)p;
+    if (u < 4096) return;
+    if (u > (uintptr_t)0x00007FFFFFFFFFFFULL) return;  /* -1 / non-canonical */
+    if (*(uint64_t*)p != PLANT_TENSOR_MAGIC) return;
+    plant_tensor_retain((PlantTensor*)p);
+}
+
+void plant_tensor_free_if_tensor(void* p) {
+    uintptr_t u = (uintptr_t)p;
+    if (u < 4096) return;
+    if (u > (uintptr_t)0x00007FFFFFFFFFFFULL) return;  /* -1 / non-canonical */
+    if (*(uint64_t*)p != PLANT_TENSOR_MAGIC) return;
+    plant_tensor_free((PlantTensor*)p);
+}
+
 /* v0.55.2 — Activations. */
 
 PlantTensor* plant_tensor_relu(PlantTensor* a) {

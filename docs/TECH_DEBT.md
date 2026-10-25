@@ -489,40 +489,33 @@ defining scope.
 - **NOT covered:** closures (TD-017), FFI stores → TD-046.
 - **Related:** TD-017, TD-041, TD-045, TD-046, TD-047.
 
-## TD-046: Tensor intermediates leak on PUSH/closures/FFI — OPEN
-- **Status:** OPEN
+## TD-046: Remaining ownership gaps — OPEN (v0.58.1)
+- **Status:** OPEN (narrowed after v0.58.0)
 - **Introduced:** v0.57.1 (discovered during the TD-044 investigation)
-- **Impact:** LOW (rare)
-- **Symptom:**
-  - `PUSH(L, <nested tensor-op>)` — routes through `gen_reap_stmt`
-    (HIGH-risk emitter: closures, generics, SAFE, FFI).
-  - Closure capture of a nested tensor-op expression (TD-017).
-  - FFI stores the tensor pointer (unknowable).
-  - `GIVE <caller tensor>` aliasing (double-free hazard; observed Phase 4).
-- **Reason:** PUSH via `call_stmt`/`gen_reap_stmt` is HIGH risk; closures
-  need TD-017 lifecycle; FFI ownership unknowable; `GIVE A` aliasing is a
-  pre-existing ownership issue.
-- **Workaround:** Name the intermediate before PUSH/capture/FFI; return a
-  **fresh** tensor (`TENSOR_ADD(...)`) rather than a caller pointer.
-- **Target:** v0.58.0+ (dedicated release for PUSH + closures + FFI).
+- **Scope narrowed:** v0.58.0 now owns `CREATE <bare var>`, `GIVE <bare var>`,
+  `SET <fresh op>`, `SET <nested>` (hoist), and SET-overwrite. **Remaining:**
+  - **`SET x TO <bare tensor var y>`** — `gen_set_stmt` has **no type
+    information**, so the target cannot be proven to be a tensor. Applying
+    the bare-var SET rule caused `free_if_tensor(-1)` crashes in the
+    compiler (it rewrote `SET close_pos TO ci`). Aliasing (`SET d TO c`) is
+    therefore still double-free-prone.
+  - **`PUSH(L, <nested tensor-op>)`** — routes through `gen_reap_stmt`
+    (249 lines; HIGH risk: closures, generics, SAFE, FFI).
+  - Closures (TD-017) and FFI stores remain unknowable.
+- **Workaround:** Name the intermediate; do not alias tensor variables via
+  `SET`; return a **fresh** tensor (`TENSOR_ADD(...)`) rather than a caller
+  pointer.
+- **Target:** v0.58.1 (dedicated; HIGH risk for PUSH).
 - **Related:** TD-017, TD-044, TD-047.
 
-## TD-047: MAP value ownership + return-aliasing — OPEN
-- **Status:** OPEN
+## TD-047: MAP value ownership — CLOSED (misdiagnosis, v0.58.0)
+- **Status:** ✅ CLOSED (misdiagnosis, v0.58.0)
 - **Introduced:** pre-v0.57.1 (discovered during the TD-044 investigation)
-- **Impact:** LOW–MED (per map store; per aliased return)
-- **Symptom:**
-  - `SET M["k"] TO a` followed by `LIST_FREE(M)` leaks the stored tensor
-    (72 B). `plant_list_free` does not release tensor values stored via map
-    keys, and `MAP_FREE` does not exist.
-  - `GIVE <caller tensor>` returns an aliased pointer; caller and callee
-    both own it → double-free risk (observed in the Phase-4
-    `td044_give_non_nested` deviation).
-- **Reason:** Map/struct value ownership is not managed; `GIVE` does not
-  retain on return.
-- **Workaround:** Use LST arrays for tensor storage in tests; return fresh
-  tensors from ACTIONs (not caller pointers).
-- **Target:** v0.58.0+ (ownership/lifetime epic).
+- **Original claim:** `SET M["k"] TO a` + `LIST_FREE(M)` leaks 72 B.
+- **Correction (empirical):** the 72 B was the caller's **un-freed `a`**.
+  `LIST_FREE(M)` does not free map values (alias-only by design);
+  `TENSOR_FREE(a) + LIST_FREE(M)` = 0 leaks, no double free. **No fix needed.**
+- **Return-aliasing half:** fixed in v0.58.0 by `GIVE <bare var>` retain.
 - **Related:** TD-044, TD-046.
 
 ## TD-048: True higher-order AD unsupported — OPEN (hardened v0.57.4)
@@ -576,29 +569,18 @@ defining scope.
 - **Related:** TD-046 (PUSH/closures/FFI), TD-047 (MAP value ownership).
 - **Target:** v0.59.0+ (differentiable backward or forward-mode epic).
 
-## TD-045: `SET x TO <new tensor>` overwrites old x without freeing — WONTFIX
-- **Status:** 🔶 WONTFIX (documented workaround; v0.57.2)
+## TD-045: `SET x TO <new tensor>` overwrites old x without freeing — CLOSED
+- **Status:** ✅ CLOSED in v0.58.0
 - **Introduced:** pre-v0.57.0c (discovered during TD-041 Phase 2)
-- **Impact:** LOW (one tensor leak per SET-overwrite; bounded ~72 B)
-- **Symptom:** `SET c TO TENSOR_ADD(...)` on an initialized tensor leaks
-  the old value (72 B).
-- **WONTFIX rationale (empirical):**
-  A-lite (free-before-overwrite + retain-on-alias, SET only) is **not
-  sound**. The pre-existing aliasing hazard was confirmed:
-  `CREATE d (TENSOR) TO c.` emits `PlantTensor* d = c;` (no retain), and
-  `TENSOR_FREE(d); TENSOR_FREE(c);` yields **13 invalid-free errors**.
-  Adding free-before-overwrite would turn the leak into a
-  **use-after-free** (`d` dangles after `SET c TO …`). The sound fix
-  requires the complete ownership model (CREATE + SET + containers +
-  PUSH + GIVE + 2 runtime magic-guards) — the v0.58.0 ownership epic.
-  Priority: no corruption over no leak (v0.56.0c lesson).
-- **Workaround:**
-  - Declaration-only initial: `CREATE c (TENSOR) TO TENSOR_ADD(a,b).`
-    (no old value to leak).
-  - OR: `TENSOR_FREE(c).` before overwriting.
-  - Do **not** alias tensor variables (`CREATE d TO c` is broken today).
+- **Previously:** 🔶 WONTFIX in v0.57.2 (aliasing hazard made
+  free-before-overwrite unsafe).
+- **Fixed:** `SET x TO <tensor expr>` now frees the old `x` in **both** the
+  plain path and the TD-041 hoist path. This is safe now that
+  `CREATE <bare var>` and `GIVE <bare var>` retain on alias
+  (`plant_tensor_retain_if_tensor`).
+- **Coverage:** fresh `plant_tensor_*` RHS and nested (hoist) RHS.
+  `SET x TO <bare tensor var>` remains unowned → TD-046.
 - **Related:** TD-044, TD-046, TD-047.
-- **Future:** Bundled into the ownership/lifetime epic (v0.58.0+).
 
 ## TD-042: TENSOR([...]) literal input-list leak — CLOSED
 - **Status:** ✅ CLOSED in v0.57.0b

@@ -109,4 +109,8 @@ int64_t      plant_tensor_bc_index(PlantTensor* t, const int64_t* oidx,
 PlantTensor* plant_tensor_bcast_reduce(const PlantTensor* d,
                                        const PlantTensor* t);
 
+/* v0.58.0 — Magic-checked retain/free (ownership epic). */
+void plant_tensor_retain_if_tensor(void* p);
+void plant_tensor_free_if_tensor(void* p);
+
 #endif /* PLANT_TENSOR_H */
