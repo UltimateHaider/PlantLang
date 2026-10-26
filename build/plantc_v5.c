@@ -3159,6 +3159,15 @@ tx_t parse_set_stmt(PlantArray* tokens, long pos) {
   tx_t poc = "";
   tx_t cb = "";
   tx_t pcb = "";
+  tx_t dfpk = "";
+  tx_t dflx = "";
+  tx_t dfpp = "";
+  tx_t dfppd = "";
+  tx_t dfnpk = "";
+  tx_t dfnpty = "";
+  tx_t dfnp = "";
+  tx_t dfnnm = "";
+  tx_t dfnpd = "";
   tx_t eq = "";
   tx_t p4 = "";
   tx_t vpair = "";
@@ -3170,6 +3179,7 @@ tx_t parse_set_stmt(PlantArray* tokens, long pos) {
     id_name = plant_iLexer_tok_lex(lexer, plant_list_get(id_pair ,  0 ));
     p3 = _second(id_pair);
     tx_t sidx = "";
+    tx_t sfield = "";
     long p3f = p3;
     pk = plant_iLexer_peek_at(lexer, tokens, p3);
     pklex = plant_iLexer_tok_lex(lexer, pk);
@@ -3184,12 +3194,29 @@ tx_t parse_set_stmt(PlantArray* tokens, long pos) {
     pcb = _second(cb);
     p3f = pcb;
     }
+    if (strcmp(sidx,"") == 0) {
+    dfpk = plant_iLexer_peek_at(lexer, tokens, p3f);
+    dflx = plant_iLexer_tok_lex(lexer, dfpk);
+    if (strcmp(dflx,".") == 0) {
+    dfpp = plant_iLexer_consume_at(lexer, tokens, p3f);
+    dfppd = _second(dfpp);
+    dfnpk = plant_iLexer_peek_at(lexer, tokens, dfppd);
+    dfnpty = plant_iLexer_tok_type(lexer, dfnpk);
+    if (strcmp(dfnpty,"IDENT") == 0) {
+    dfnp = plant_iLexer_consume_at(lexer, tokens, dfppd);
+    dfnnm = plant_iLexer_tok_lex(lexer, plant_list_get(dfnp ,  0 ));
+    dfnpd = _second(dfnp);
+    sfield = dfnnm;
+    p3f = dfnpd;
+    }
+    }
+    }
     eq = plant_iLexer_consume_at(lexer, tokens, p3f);
     p4 = _second(eq);
     vpair = collect_value(tokens, p4);
     tx_t expr = plant_list_get(vpair ,  0 );
     p5 = _second(vpair);
-    return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "set_stmt" , "target" , id_name , "index" , sidx , "value" , expr ) , p5 );
+    return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "set_stmt" , "target" , id_name , "index" , sidx , "field" , sfield , "value" , expr ) , p5 );
 }
 tx_t parse_incdec_stmt(PlantArray* tokens, long pos, tx_t op) {
   tx_t lexer = "";
@@ -13624,6 +13651,8 @@ tx_t gen_set_stmt(tx_t node, PlantArray* nums, PlantArray* evars, PlantArray* te
   tx_t target = "";
   tx_t val = "";
   tx_t cval = "";
+  tx_t sfield_ast = "";
+  tx_t isnf = "";
   tx_t sidx = "";
   tx_t cidx = "";
   tx_t mres = "";
@@ -13642,6 +13671,14 @@ tx_t gen_set_stmt(tx_t node, PlantArray* nums, PlantArray* evars, PlantArray* te
     val = _map_get(node, "value");
     cval = translate_expr(val, nums, evars, plant_list_make ( 0 ));
     cval = _handle_cat(cval, nums, evars);
+    sfield_ast = _map_get(node, "field");
+    if (strcmp(sfield_ast,"") > 0) {
+    isnf = expr_is_numeric(cval, nums);
+    if (isnf == 1) {
+    cval = _cat3("_from_long(", cval, ")");
+    }
+    return _cat4(_cat4(_cat4(isel, "  ", target, " = plant_map_set("), target, ", \"", sfield_ast), "\", ", cval, ");\n");
+    }
     sidx = _map_get(node, "index");
     if (strcmp(sidx,"") > 0) {
     cidx = translate_expr(sidx, nums, evars, plant_list_make ( 0 ));
@@ -19598,7 +19635,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.58.8 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.58.9 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

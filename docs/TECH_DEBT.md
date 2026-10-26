@@ -718,20 +718,67 @@ defining scope.
   `.expected` line), so gated error assertions belong there.
 - **Related:** TD-059 (misdiagnosis — the original report).
 
-## TD-061: `SET <obj>.<field> TO <expr>` mis-lowers — OPEN
+## TD-061: `SET <obj>.<field> TO <expr>` mis-lowers — CLOSED
+
+- **Status:** ✅ CLOSED in v0.58.9
+- **Introduced:** pre-v0.58.8 (discovered during v0.58.8 Phase 3)
+- **Symptom:** `SET p.x TO 1.` emitted `p = x TO 1;` (gcc: `'x'
+  undeclared`) — `parse_set_stmt` consumed the `.` as the assignment
+  operator (it never validates that token) and collected `x TO 1` as the
+  value.
+- **Fixed (2 parts):**
+  1. **Parser** (`parse_set_stmt`): new AST key `"field"` (bare name) when
+     `.` + `IDENT` follows the target, guarded by `sidx == ""` (no clash
+     with `[index]`). A non-IDENT after `.` falls through unchanged.
+  2. **Codegen** (`gen_set_stmt`): new branch **before** the index branch →
+     `<id> = plant_map_set(<id>, "field", <value>);` (upsert).
+- **Numeric wrap:** mirrors the index path (`isnf IS 1 → _from_long`).
+- **Value-side reads:** `SET p.x TO p.x + 5` already lowers via the
+  existing value path (`_map_get(p, "x") + 5`).
+- **Known gaps:**
+  - TD-041/044 tensor-RHS hoisting is not applied on field writes
+    (0 corpus cases).
+  - **FFI by-value structs** (`STR X` declared for `external` FFI) are real
+    C structs, not map-backed; their field access (read *or* write) needs a
+    separate path. The fix is consistent with the existing (map-backed)
+    field **read** lowering.
+- **Tests:** `td061_set_obj_field`, `td061_set_obj_field_expr`.
+- **Related:** TD-062 (validate assignment operator), TD-063 (bracket map
+  element set silent no-op).
+
+## TD-062: `parse_set_stmt` should validate the assignment operator — OPEN
 
 - **Status:** OPEN
-- **Introduced:** pre-v0.58.8 (discovered during v0.58.8 Phase 3)
-- **Impact:** LOW (no corpus case; dot-field-set is rare)
-- **Symptom:** `SET p.x TO 1.` emits `p = x TO 1;` (gcc: `'x' undeclared`).
-  Struct field **reads** (`p.x`) and the bracket form work; only the
-  **dot-field-set** mis-lowers — same family as the earlier `SET m.k`
-  observation.
-- **Workaround:** use a struct literal
-  (`CREATE p (STR Point) TO Point{x: 1, y: 2}.`), or bracket-set where
-  applicable.
-- **Target:** v0.58.9+
-- **Related:** none yet (distinct codegen gap).
+- **Introduced:** pre-v0.58.9 (discovered during v0.58.9 Phase 1)
+- **Impact:** LOW (invalid code only; the TD-061 symptom is now fixed)
+- **Symptom:** `parse_set_stmt` blindly consumes **any** token as the
+  assignment operator (`REAP eq FROM plant_iLexer_consume_at, …`), which is
+  why `.` was silently swallowed. A future malformed `SET` could mis-parse
+  the same way.
+- **Fix direction:** require `TO` (or `=`) explicitly; emit a clear error
+  otherwise.
+- **Target:** v0.58.10+
+- **Related:** TD-061.
+
+## TD-063: `SET M["k"] TO <value>` silently does nothing — OPEN
+
+- **Status:** OPEN
+- **Introduced:** pre-v0.58.9 (discovered during v0.58.9 Phase 2)
+- **Impact:** MED (silent no-op on a basic map operation)
+- **Symptom:** `SET M["k"] TO 42.` emits
+  `plant_list_set(M, "k", _from_long(42));` → **no-op**. `plant_list_set`
+  takes an `int64_t` index, so the string key is converted to an integer
+  (its pointer address) → always out of range → silent early return.
+  `SHOW M["k"]` then prints the old/empty value with no error.
+- **Reason:** `plant_list_set` is index-only. Map element writes need
+  `plant_map_set` (the same API used by struct literals and by reads).
+- **Fix direction:** `gen_set_stmt` should emit
+  `plant_map_set(M, "k", v)` for string-key (bracket) writes — mirroring
+  the TD-061 field-write path (possibly keyed on the target's declared
+  type MAP vs LST).
+- **Target:** v0.58.10+
+- **Related:** TD-061 (used the same `plant_map_set` lowering for dotted
+  fields).
 
 ## TD-047: MAP value ownership — CLOSED (misdiagnosis, v0.58.0)
 - **Status:** ✅ CLOSED (misdiagnosis, v0.58.0)

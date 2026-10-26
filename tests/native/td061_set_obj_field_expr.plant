@@ -1,0 +1,8 @@
+# TD-061: SET <obj>.<field> TO <expr> (numeric wrap, value-side read).
+STR Point { x: LON, y: LON }.
+CREATE p (STR Point) TO Point{x: 1, y: 2}.
+SET p.x TO 5 + 10.
+SET p.y TO p.x + 5.
+SHOW p.
+LIST_FREE(p).
+SHOW "td061-set-obj-field-expr-ok".

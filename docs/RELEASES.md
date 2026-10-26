@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.58.8
+# Auto-updated: 0.58.9
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.58.8 | 1037912 | 8963 | 963 | 109 | 330 | 5361 |
+| v0.58.9 | 1037912 | 8963 | 963 | 109 | 330 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -86,6 +86,7 @@
 | v0.58.6 | 2026 | TD-053 (misdiagnosis) + TD-056 + TD-058 | Released |
 | v0.58.7 | 2026 | TD-054 (ACTION LON) + TD-059 (misdiagnosis) | Released |
 | v0.58.8 | 2026 | TD-060 (parser diagnose -> STR) | Released |
+| v0.58.9 | 2026 | TD-061 (SET obj.field) | Released |
 
 ## Growth Chart (ASCII)
 

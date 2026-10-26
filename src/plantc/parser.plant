@@ -1295,6 +1295,8 @@ ACTION parse_set_stmt(tokens(LST), pos(LON)),
   REAP p3 FROM _second, id_pair.
   # v0.51.16 — optional [index] for list index assignment.
   CREATE sidx(TXT) TO "".
+  # v0.58.9 — TD-061: optional .field target (map-backed struct field).
+  CREATE sfield(TXT) TO "".
   CREATE p3f(LON) TO p3.
   REAP pk FROM plant_iLexer_peek_at, lexer, tokens, p3.
   REAP pklex FROM plant_iLexer_tok_lex, lexer, pk.
@@ -1309,12 +1311,33 @@ ACTION parse_set_stmt(tokens(LST), pos(LON)),
     REAP pcb FROM _second, cb.
     SET p3f TO pcb.
   /IF.
+  # v0.58.9 — TD-061 part 1: SET <id>.<field> TO v → map-backed field
+  # write. Records the field name in the AST; the codegen emits
+  # `<id> = plant_map_set(<id>, "field", <value>)` (upsert). Only when no
+  # [index] was taken; a non-IDENT after "." falls through unchanged.
+  IF sidx IS "",
+    REAP dfpk FROM plant_iLexer_peek_at, lexer, tokens, p3f.
+    REAP dflx FROM plant_iLexer_tok_lex, lexer, dfpk.
+    IF dflx IS ".",
+      REAP dfpp FROM plant_iLexer_consume_at, lexer, tokens, p3f.
+      REAP dfppd FROM _second, dfpp.
+      REAP dfnpk FROM plant_iLexer_peek_at, lexer, tokens, dfppd.
+      REAP dfnpty FROM plant_iLexer_tok_type, lexer, dfnpk.
+      IF dfnpty IS "IDENT",
+        REAP dfnp FROM plant_iLexer_consume_at, lexer, tokens, dfppd.
+        REAP dfnnm FROM plant_iLexer_tok_lex, lexer, dfnp[0].
+        REAP dfnpd FROM _second, dfnp.
+        SET sfield TO dfnnm.
+        SET p3f TO dfnpd.
+      /IF.
+    /IF.
+  /IF.
   REAP eq FROM plant_iLexer_consume_at, lexer, tokens, p3f.
   REAP p4 FROM _second, eq.
   REAP vpair FROM collect_value, tokens, p4.
   CREATE expr TO vpair[0].
   REAP p5 FROM _second, vpair.
-  GIVE plant_list_make(2, plant_list_make(8, "type", "set_stmt", "target", id_name, "index", sidx, "value", expr), p5).
+  GIVE plant_list_make(2, plant_list_make(10, "type", "set_stmt", "target", id_name, "index", sidx, "field", sfield, "value", expr), p5).
 /ACTION.
 
 #── INCREASE / DECREASE ─────────────────────────────────────────

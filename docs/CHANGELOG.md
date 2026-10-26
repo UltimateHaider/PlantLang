@@ -1,3 +1,52 @@
+## v0.58.9 — TD-061 (SET obj.field)
+
+### Fixed
+- TD-061: `SET <obj>.<field> TO <value>` now lowers correctly
+  (map-backed struct field write). Previously the parser consumed `.` as
+  the assignment operator → `p = x TO 99;` (gcc error). Two changes:
+  - Parser (`parse_set_stmt`): new AST key `"field"` (bare field name),
+    set when `.` + `IDENT` follows the target (guarded by `sidx == ""`).
+  - Codegen (`gen_set_stmt`): new branch **before** the index branch →
+    `target = plant_map_set(target, "field", <wrapped>)`. Numeric
+    wrapping mirrors the index path (`isnf IS 1 → _from_long`).
+- Value-side dotted reads (`p.x + 5`) already lower correctly via the
+  existing value path (`_map_get`).
+
+### Known gaps (documented)
+- TD-041/044 tensor-RHS hoisting is not applied on field writes
+  (documented gap, 0 corpus cases).
+- FFI by-value structs (`STR X` declared for `external` FFI) are real C
+  structs, not map-backed; field access (read/write) needs a separate
+  path. The fix is consistent with the existing (map-backed) read path.
+
+### Added
+- 2 new tests: `td061_set_obj_field`, `td061_set_obj_field_expr`.
+
+### Documented (new TDs)
+- TD-062: `parse_set_stmt` should validate the assignment operator
+  (`TO`/`=`). It blindly consumes any token as `=` — the reason `.` was
+  silently swallowed in TD-061.
+- TD-063: `SET M["k"] TO <value>` silently does nothing
+  (`plant_list_set` takes `int64_t`; the string key becomes a pointer
+  address → out of range → no-op). Bracket map element set has never
+  worked.
+
+### Verified
+- Native: 262/262 (was 260)
+- Generics: 7/7
+- Closures: 6/6
+- Regression: 318/318
+- Self-hosting: converged (601,360 B)
+- valgrind strict: PASS
+- Binary: 1,037,912 bytes.
+
+### Out of Scope (v0.58.10+)
+- TD-055 (ACTION global capture, HIGH).
+- TD-062 (validate assignment operator).
+- TD-063 (`SET M["k"]` silent no-op).
+- TD-046 (PUSH nested, v0.58.11).
+- TD-048 (true higher-order AD, v0.59.0+).
+
 ## v0.58.8 — TD-060 (parser: diagnose `-> STR`)
 
 ### Fixed

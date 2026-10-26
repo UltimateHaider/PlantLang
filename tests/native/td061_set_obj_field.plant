@@ -1,0 +1,7 @@
+# TD-061: SET <obj>.<field> TO <value> (map-backed struct).
+STR Point { x: LON, y: LON }.
+CREATE p (STR Point) TO Point{x: 1, y: 2}.
+SET p.x TO 99.
+SHOW p.
+LIST_FREE(p).
+SHOW "td061-set-obj-field-ok".
