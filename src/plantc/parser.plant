@@ -1297,6 +1297,8 @@ ACTION parse_set_stmt(tokens(LST), pos(LON)),
   CREATE sidx(TXT) TO "".
   # v0.58.9 — TD-061: optional .field target (map-backed struct field).
   CREATE sfield(TXT) TO "".
+  # v0.58.10 — TD-062: marks a non-TO/non-'=' assignment operator.
+  CREATE badop(TXT) TO "".
   CREATE p3f(LON) TO p3.
   REAP pk FROM plant_iLexer_peek_at, lexer, tokens, p3.
   REAP pklex FROM plant_iLexer_tok_lex, lexer, pk.
@@ -1333,11 +1335,19 @@ ACTION parse_set_stmt(tokens(LST), pos(LON)),
     /IF.
   /IF.
   REAP eq FROM plant_iLexer_consume_at, lexer, tokens, p3f.
+  # v0.58.10 — TD-062: the assignment operator must be TO or '='.
+  # The token is still consumed so parsing continues; the type validator
+  # turns badop into a clear error (the parser has no error channel).
+  REAP eqlx FROM plant_iLexer_tok_lex, lexer, eq[0].
+  REAP eqty FROM plant_iLexer_tok_type, lexer, eq[0].
+  IF eqty ISNT "TO" AND eqlx ISNT "=",
+    SET badop TO "1".
+  /IF.
   REAP p4 FROM _second, eq.
   REAP vpair FROM collect_value, tokens, p4.
   CREATE expr TO vpair[0].
   REAP p5 FROM _second, vpair.
-  GIVE plant_list_make(2, plant_list_make(10, "type", "set_stmt", "target", id_name, "index", sidx, "field", sfield, "value", expr), p5).
+  GIVE plant_list_make(2, plant_list_make(12, "type", "set_stmt", "target", id_name, "index", sidx, "field", sfield, "value", expr, "badop", badop), p5).
 /ACTION.
 
 #── INCREASE / DECREASE ─────────────────────────────────────────

@@ -6146,6 +6146,21 @@ ACTION gen_set_stmt(node, nums(LST), evars(LST), tensors(LST), isel(TXT)),
   IF sidx > "",
       REAP cidx FROM translate_expr, sidx, nums, evars, plant_list_make(0).
       REAP cidx FROM _handle_cat, cidx, nums, evars.
+      # v0.58.10 — TD-063: a STRING bracket key is a MAP write.
+      # plant_list_set is index-only (int64_t), so a string key was
+      # converted to a pointer address → out of range → silent no-op.
+      # Map upserts go through plant_map_set (same API as struct
+      # literals and the TD-061 dotted-field path). Numeric indices keep
+      # the plant_list_set path below. TD-041/044 hoisting is not applied
+      # to map writes (same documented gap as TD-061).
+      REAP ik0 FROM char_at, cidx, 0.
+      IF ik0 IS "\"",
+          REAP isnm FROM expr_is_numeric, cval, nums.
+          IF isnm IS 1,
+              SET cval TO "_from_long(" + cval + ")".
+          /IF.
+          GIVE isel + "  " + target + " = plant_map_set(" + target + ", " + cidx + ", " + cval + ");\n".
+      /IF.
       # v0.57.1 — TD-044: hoist nested tensor-op in map/array element.
       CREATE mtemps(LST) TO plant_list_make(0).
       CREATE mlines(LST) TO plant_list_make(0).
@@ -10238,6 +10253,14 @@ ACTION validate_types_walk(bd(LST), names(LST)),
       REAP vt FROM _map_get, nd, "var_type".
       REAP k FROM _known_type, vt, names.
       IF k IS "0", GIVE "unknown type '" + vt + "'". /IF.
+    /IF.
+    # v0.58.10 — TD-062: SET target with a non-TO/non-'=' operator.
+    IF ty IS "set_stmt",
+      REAP badop_v FROM _map_get, nd, "badop".
+      IF badop_v > "",
+        REAP tg_v FROM _map_get, nd, "target".
+        GIVE "SET '" + tg_v + "': expected 'TO' or '=' after the target".
+      /IF.
     /IF.
     IF ty IS "action_decl" OR ty IS "external_decl",
       REAP ps FROM _map_get, nd, "params".

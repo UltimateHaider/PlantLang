@@ -2011,6 +2011,8 @@ ACTION parse_set_stmt(tokens(LST), pos(LON)),
   CREATE sidx(TXT) TO "".
   # v0.58.9 — TD-061: optional .field target (map-backed struct field).
   CREATE sfield(TXT) TO "".
+  # v0.58.10 — TD-062: marks a non-TO/non-'=' assignment operator.
+  CREATE badop(TXT) TO "".
   CREATE p3f(LON) TO p3.
   REAP pk FROM plant_iLexer_peek_at, lexer, tokens, p3.
   REAP pklex FROM plant_iLexer_tok_lex, lexer, pk.
@@ -2047,11 +2049,19 @@ ACTION parse_set_stmt(tokens(LST), pos(LON)),
     /IF.
   /IF.
   REAP eq FROM plant_iLexer_consume_at, lexer, tokens, p3f.
+  # v0.58.10 — TD-062: the assignment operator must be TO or '='.
+  # The token is still consumed so parsing continues; the type validator
+  # turns badop into a clear error (the parser has no error channel).
+  REAP eqlx FROM plant_iLexer_tok_lex, lexer, eq[0].
+  REAP eqty FROM plant_iLexer_tok_type, lexer, eq[0].
+  IF eqty ISNT "TO" AND eqlx ISNT "=",
+    SET badop TO "1".
+  /IF.
   REAP p4 FROM _second, eq.
   REAP vpair FROM collect_value, tokens, p4.
   CREATE expr TO vpair[0].
   REAP p5 FROM _second, vpair.
-  GIVE plant_list_make(2, plant_list_make(10, "type", "set_stmt", "target", id_name, "index", sidx, "field", sfield, "value", expr), p5).
+  GIVE plant_list_make(2, plant_list_make(12, "type", "set_stmt", "target", id_name, "index", sidx, "field", sfield, "value", expr, "badop", badop), p5).
 /ACTION.
 
 #── INCREASE / DECREASE ─────────────────────────────────────────
@@ -11534,6 +11544,21 @@ ACTION gen_set_stmt(node, nums(LST), evars(LST), tensors(LST), isel(TXT)),
   IF sidx > "",
       REAP cidx FROM translate_expr, sidx, nums, evars, plant_list_make(0).
       REAP cidx FROM _handle_cat, cidx, nums, evars.
+      # v0.58.10 — TD-063: a STRING bracket key is a MAP write.
+      # plant_list_set is index-only (int64_t), so a string key was
+      # converted to a pointer address → out of range → silent no-op.
+      # Map upserts go through plant_map_set (same API as struct
+      # literals and the TD-061 dotted-field path). Numeric indices keep
+      # the plant_list_set path below. TD-041/044 hoisting is not applied
+      # to map writes (same documented gap as TD-061).
+      REAP ik0 FROM char_at, cidx, 0.
+      IF ik0 IS "\"",
+          REAP isnm FROM expr_is_numeric, cval, nums.
+          IF isnm IS 1,
+              SET cval TO "_from_long(" + cval + ")".
+          /IF.
+          GIVE isel + "  " + target + " = plant_map_set(" + target + ", " + cidx + ", " + cval + ");\n".
+      /IF.
       # v0.57.1 — TD-044: hoist nested tensor-op in map/array element.
       CREATE mtemps(LST) TO plant_list_make(0).
       CREATE mlines(LST) TO plant_list_make(0).
@@ -15627,6 +15652,14 @@ ACTION validate_types_walk(bd(LST), names(LST)),
       REAP k FROM _known_type, vt, names.
       IF k IS "0", GIVE "unknown type '" + vt + "'". /IF.
     /IF.
+    # v0.58.10 — TD-062: SET target with a non-TO/non-'=' operator.
+    IF ty IS "set_stmt",
+      REAP badop_v FROM _map_get, nd, "badop".
+      IF badop_v > "",
+        REAP tg_v FROM _map_get, nd, "target".
+        GIVE "SET '" + tg_v + "': expected 'TO' or '=' after the target".
+      /IF.
+    /IF.
     IF ty IS "action_decl" OR ty IS "external_decl",
       REAP ps FROM _map_get, nd, "params".
       CREATE pi(LON) TO 0.
@@ -17193,7 +17226,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.58.9 (pure native)".
+  SHOW "Chloroplast 0.58.10 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

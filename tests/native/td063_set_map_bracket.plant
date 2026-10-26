@@ -1,0 +1,6 @@
+# TD-063: SET M["key"] TO value (map upsert, not numeric index).
+CREATE M (MAP) TO {"k": 1}.
+SET M["k"] TO 42.
+SHOW M.k.
+LIST_FREE(M).
+SHOW "td063-set-map-ok".

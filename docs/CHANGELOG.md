@@ -1,3 +1,46 @@
+## v0.58.10 — TD-062 (validate assignment) + TD-063 (SET M["k"])
+
+### Fixed
+- TD-062: `SET x <badop> value.` now reports an explicit error
+  (`Error: SET 'x': expected 'TO' or '=' after the target.`). Previously
+  the parser blindly consumed any token as the assignment operator
+  (silent accept: `SET x BLAH 42.` → `x = 42;`). Two changes:
+  - Parser (`parse_set_stmt`): `badop` marker when the operator token
+    type is neither `"TO"` nor `"="`.
+  - Validator (`validate_types_walk`): new `set_stmt` case → clear error.
+- TD-063: `SET M["k"] TO <value>.` now lowers correctly (map-key
+  upsert). Previously `plant_list_set` (index-only) silently no-op'd
+  (string → int64 as a pointer address → out of range). Mechanism:
+  - Codegen (`gen_set_stmt` index branch): if `cidx` starts with `"`
+    (string literal key), emit `plant_map_set` (mirroring TD-061's
+    numeric wrap). Numeric list indices (`SET L[0]`) unchanged.
+
+### Documented (new TD)
+- TD-064: `M["k"]` **read** (bracket) is silently broken — lowers to
+  `plant_list_get` (index-only) → empty. Same family as TD-063's write
+  side (now fixed for writes only). Dot reads (`M.k` → `_map_get`) work.
+  Target: v0.58.11+.
+
+### Added
+- 2 native tests: `td063_set_map_bracket`, `td062_set_eq_operator`.
+- 1 regression error test: `td062_set_badop` (`.invalid` + `.expected`)
+  — the first negative test in that suite.
+
+### Verified
+- Native: 264/264 (was 262)
+- Regression: 319/319 (was 318)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (602,248 B)
+- valgrind strict: PASS
+- Binary: 1,037,912 bytes.
+
+### Out of Scope (v0.58.11+)
+- TD-055 (ACTION global capture, HIGH).
+- TD-064 (bracket map read).
+- TD-046 (PUSH nested, v0.58.12).
+- TD-048 (true higher-order AD, v0.59.0+).
+
 ## v0.58.9 — TD-061 (SET obj.field)
 
 ### Fixed

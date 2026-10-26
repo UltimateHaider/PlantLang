@@ -1,0 +1,5 @@
+# TD-062: '=' is an accepted assignment operator (alongside TO).
+CREATE x (LON) TO 1.
+SET x = 42.
+SHOW x.
+SHOW "td062-set-eq-ok".

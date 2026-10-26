@@ -746,39 +746,68 @@ defining scope.
 - **Related:** TD-062 (validate assignment operator), TD-063 (bracket map
   element set silent no-op).
 
-## TD-062: `parse_set_stmt` should validate the assignment operator — OPEN
+## TD-062: `parse_set_stmt` should validate the assignment operator — CLOSED
 
-- **Status:** OPEN
+- **Status:** ✅ CLOSED in v0.58.10
 - **Introduced:** pre-v0.58.9 (discovered during v0.58.9 Phase 1)
-- **Impact:** LOW (invalid code only; the TD-061 symptom is now fixed)
-- **Symptom:** `parse_set_stmt` blindly consumes **any** token as the
-  assignment operator (`REAP eq FROM plant_iLexer_consume_at, …`), which is
-  why `.` was silently swallowed. A future malformed `SET` could mis-parse
-  the same way.
-- **Fix direction:** require `TO` (or `=`) explicitly; emit a clear error
-  otherwise.
-- **Target:** v0.58.10+
+- **Symptom:** `parse_set_stmt` blindly consumed **any** token as the
+  assignment operator (the reason `.` was silently swallowed in TD-061;
+  also `SET x BLAH 42` silently compiled to `x = 42;` and `SET x 42`
+  emitted invalid C `x = ;`).
+- **Fixed (2 parts):**
+  1. **Parser** (`parse_set_stmt`): `badop` marker when the operator
+     token type is neither `"TO"` nor `"="` (still consumes the token so
+     parsing continues — the parser has no error channel).
+  2. **Validator** (`validate_types_walk`): new `set_stmt` case →
+     `SET '<target>': expected 'TO' or '=' after the target`.
+- **Verified:**
+  - `SET x TO 42` / `SET x = 42` → work.
+  - `SET x BLAH 42` / `SET x + 42` / `SET x 42` →
+    `Error: SET 'x': expected 'TO' or '=' after the target.` (rc=1).
+- **First regression error test:** `td062_set_badop` (`.invalid` +
+  `.expected`).
 - **Related:** TD-061.
 
-## TD-063: `SET M["k"] TO <value>` silently does nothing — OPEN
+## TD-063: `SET M["k"] TO <value>` silently no-ops — CLOSED
+
+- **Status:** ✅ CLOSED in v0.58.10
+- **Introduced:** pre-v0.58.9 (discovered during v0.58.9 Phase 2)
+- **Symptom:** `SET M["k"] TO 42.` emitted
+  `plant_list_set(M, "k", _from_long(42));` → **no-op** (`plant_list_set`
+  takes an `int64_t`, so the string key became a pointer address → out of
+  range → silent early return).
+- **Fixed:** `gen_set_stmt`'s index branch — if `cidx` starts with `"`
+  (a string literal key), emit
+  `target = plant_map_set(target, "key", <wrapped>);` (mirroring the
+  TD-061 numeric wrap). Numeric indices (`SET L[0]`) keep
+  `plant_list_set` and the TD-044 hoisting path unchanged.
+- **Verified (write side):** `SET M["k"] TO 42` → `SHOW M` = `{k = 42}`,
+  `SHOW M.k` = `42`; `SET M["k"] TO 5 + 10` → `{k = 15}`.
+- **Limitations:** variable keys (`SET M[k]`) stay on the list path
+  (statically ambiguous); map writes skip TD-044 tensor-RHS hoisting
+  (same documented gap as TD-061); `SET L["0"]` (nonsense) would upsert
+  and set `kind = 1`.
+- **Not covered:** the **read** side (`M["k"]`) — TD-064.
+- **Tests:** `td063_set_map_bracket`.
+- **Related:** TD-061, TD-064.
+
+## TD-064: `M["k"]` map bracket read is silently broken — OPEN
 
 - **Status:** OPEN
-- **Introduced:** pre-v0.58.9 (discovered during v0.58.9 Phase 2)
-- **Impact:** MED (silent no-op on a basic map operation)
-- **Symptom:** `SET M["k"] TO 42.` emits
-  `plant_list_set(M, "k", _from_long(42));` → **no-op**. `plant_list_set`
-  takes an `int64_t` index, so the string key is converted to an integer
-  (its pointer address) → always out of range → silent early return.
-  `SHOW M["k"]` then prints the old/empty value with no error.
-- **Reason:** `plant_list_set` is index-only. Map element writes need
-  `plant_map_set` (the same API used by struct literals and by reads).
-- **Fix direction:** `gen_set_stmt` should emit
-  `plant_map_set(M, "k", v)` for string-key (bracket) writes — mirroring
-  the TD-061 field-write path (possibly keyed on the target's declared
-  type MAP vs LST).
-- **Target:** v0.58.10+
-- **Related:** TD-061 (used the same `plant_map_set` lowering for dotted
-  fields).
+- **Introduced:** pre-v0.58.10 (discovered during v0.58.10 Phase 2)
+- **Impact:** MED (silent no-op on a basic map read)
+- **Symptom:** `SHOW M["k"]` lowers to `plant_list_get(M, "k")`
+  (index-only) → the string key becomes an integer (pointer address) →
+  out of range → prints empty, no error. Dot reads (`M.k` →
+  `_map_get(M, "k")`) work.
+- **Reason:** same index-only `plant_list_get` as TD-063's write side,
+  but on the read path. The write side is fixed (`plant_map_set`); reads
+  still use `plant_list_get`.
+- **Fix direction:** wherever a `["string"]` read is lowered, emit
+  `_map_get(M, "k")` when the index is a string literal (mirror the
+  TD-063 discriminator).
+- **Target:** v0.58.11+
+- **Related:** TD-063 (write side, closed), TD-061.
 
 ## TD-047: MAP value ownership — CLOSED (misdiagnosis, v0.58.0)
 - **Status:** ✅ CLOSED (misdiagnosis, v0.58.0)

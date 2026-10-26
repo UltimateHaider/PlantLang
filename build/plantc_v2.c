@@ -3167,6 +3167,8 @@ tx_t parse_set_stmt(PlantArray* tokens, long pos) {
   tx_t dfnnm = "";
   tx_t dfnpd = "";
   tx_t eq = "";
+  tx_t eqlx = "";
+  tx_t eqty = "";
   tx_t p4 = "";
   tx_t vpair = "";
   tx_t p5 = "";
@@ -3178,6 +3180,7 @@ tx_t parse_set_stmt(PlantArray* tokens, long pos) {
     p3 = _second(id_pair);
     tx_t sidx = "";
     tx_t sfield = "";
+    tx_t badop = "";
     long p3f = p3;
     pk = plant_iLexer_peek_at(lexer, tokens, p3);
     pklex = plant_iLexer_tok_lex(lexer, pk);
@@ -3210,11 +3213,16 @@ tx_t parse_set_stmt(PlantArray* tokens, long pos) {
     }
     }
     eq = plant_iLexer_consume_at(lexer, tokens, p3f);
+    eqlx = plant_iLexer_tok_lex(lexer, plant_list_get(eq ,  0 ));
+    eqty = plant_iLexer_tok_type(lexer, plant_list_get(eq ,  0 ));
+    if (strcmp(eqty,"TO") != 0 && strcmp(eqlx,"=") != 0) {
+    badop = "1";
+    }
     p4 = _second(eq);
     vpair = collect_value(tokens, p4);
     tx_t expr = plant_list_get(vpair ,  0 );
     p5 = _second(vpair);
-    return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "set_stmt" , "target" , id_name , "index" , sidx , "field" , sfield , "value" , expr ) , p5 );
+    return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "set_stmt" , "target" , id_name , "index" , sidx , "field" , sfield , "value" , expr , "badop" , badop ) , p5 );
 }
 tx_t parse_incdec_stmt(PlantArray* tokens, long pos, tx_t op) {
   tx_t lexer = "";
@@ -13653,6 +13661,8 @@ tx_t gen_set_stmt(tx_t node, PlantArray* nums, PlantArray* evars, PlantArray* te
   tx_t isnf = "";
   tx_t sidx = "";
   tx_t cidx = "";
+  tx_t ik0 = "";
+  tx_t isnm = "";
   tx_t mres = "";
   tx_t mfinal = "";
   tx_t ml = "";
@@ -13681,6 +13691,14 @@ tx_t gen_set_stmt(tx_t node, PlantArray* nums, PlantArray* evars, PlantArray* te
     if (strcmp(sidx,"") > 0) {
     cidx = translate_expr(sidx, nums, evars, plant_list_make ( 0 ));
     cidx = _handle_cat(cidx, nums, evars);
+    ik0 = char_at(cidx, 0);
+    if (strcmp(ik0,"\"") == 0) {
+    isnm = expr_is_numeric(cval, nums);
+    if (isnm == 1) {
+    cval = _cat3("_from_long(", cval, ")");
+    }
+    return _cat4(_cat4(_cat4(isel, "  ", target, " = plant_map_set("), target, ", ", cidx), ", ", cval, ");\n");
+    }
     PlantArray* mtemps = plant_list_make ( 0 );
     PlantArray* mlines = plant_list_make ( 0 );
     mres = _hoist_tensor_rhs(cval, "m", isel, mtemps, mlines);
@@ -17914,6 +17932,8 @@ tx_t _collect_type_names(PlantArray* bd, PlantArray* names) {
 tx_t validate_types_walk(PlantArray* bd, PlantArray* names) {
   tx_t vt = "";
   tx_t k = "";
+  tx_t badop_v = "";
+  tx_t tg_v = "";
   tx_t ps = "";
   tx_t pe = "";
   tx_t pt = "";
@@ -17940,6 +17960,13 @@ tx_t validate_types_walk(PlantArray* bd, PlantArray* names) {
     k = _known_type(vt, names);
     if (strcmp(k,"0") == 0) {
     return _cat3("unknown type '", vt, "'");
+    }
+    }
+    if (strcmp(ty,"set_stmt") == 0) {
+    badop_v = _map_get(nd, "badop");
+    if (strcmp(badop_v,"") > 0) {
+    tg_v = _map_get(nd, "target");
+    return _cat3("SET '", tg_v, "': expected 'TO' or '=' after the target");
     }
     }
     if (strcmp(ty,"action_decl") == 0 || strcmp(ty,"external_decl") == 0) {
@@ -19632,7 +19659,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.58.9 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.58.10 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

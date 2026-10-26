@@ -1,0 +1,3 @@
+CREATE x (LON) TO 1.
+SET x BLAH 42.
+SHOW "should-not-reach".
