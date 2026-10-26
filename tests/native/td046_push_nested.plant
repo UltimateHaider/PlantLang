@@ -1,0 +1,10 @@
+# TD-046: PUSH nested tensor-op (inner temps hoisted + freed).
+CREATE L (LST) TO [].
+CREATE a (TENSOR) TO TENSOR([1.0, 2.0]).
+CREATE b (TENSOR) TO TENSOR([3.0, 4.0]).
+PUSH(L, TENSOR_ADD(TENSOR_MUL(a, b), b)).
+SHOW COUNT(L).
+LIST_FREE(L).
+TENSOR_FREE(a).
+TENSOR_FREE(b).
+SHOW "td046-push-nested-ok".

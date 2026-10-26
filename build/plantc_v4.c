@@ -14793,6 +14793,15 @@ tx_t generate_node(tx_t node, PlantArray* env) {
   tx_t tctx = "";
   tx_t ec2 = "";
   tx_t ca2 = "";
+  tx_t pu_args = "";
+  tx_t pu_val0 = "";
+  tx_t pu_val = "";
+  tx_t pu_res = "";
+  tx_t pu_final = "";
+  tx_t pu_lst0 = "";
+  tx_t pu_lst = "";
+  tx_t pu_l = "";
+  tx_t pu_t = "";
   tx_t fargs = "";
   tx_t fargel = "";
   tx_t fin = "";
@@ -15506,6 +15515,40 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     }
     if (strcmp(ca2,"PUSH") == 0) {
     ca2 = "plant_list_push";
+    }
+    if (strcmp(ca2orig,"PUSH") == 0) {
+    pu_args = _map_get(node, "args");
+    if (plant_array_length(pu_args) == 2) {
+    pu_val0 = plant_list_get(pu_args, 1);
+    pu_val0 = _swap_self(pu_val0);
+    pu_val = translate_expr(pu_val0, nums, evars, maths);
+    pu_val = _handle_cat(pu_val, nums, evars);
+    PlantArray* pu_temps = plant_list_make ( 0 );
+    PlantArray* pu_lines = plant_list_make ( 0 );
+    pu_res = _hoist_tensor_rhs(pu_val, "push", isel0, pu_temps, pu_lines);
+    pu_final = plant_list_get(pu_res, 0);
+    if (plant_array_length(pu_temps) > 0) {
+    pu_lst0 = plant_list_get(pu_args, 0);
+    pu_lst0 = _swap_self(pu_lst0);
+    pu_lst = translate_expr(pu_lst0, nums, evars, maths);
+    pu_lst = _handle_cat(pu_lst, nums, evars);
+    tx_t pu_pre = "";
+    long pu_i = 0;
+    while (pu_i < plant_array_length(pu_lines)) {
+    pu_l = plant_list_get(pu_lines, pu_i);
+    pu_pre = _cat(pu_pre, pu_l);
+    pu_i = pu_i+1;
+    }
+    tx_t pu_frees = "";
+    pu_i = 0;
+    while (pu_i < plant_array_length(pu_temps)) {
+    pu_t = plant_list_get(pu_temps, pu_i);
+    pu_frees = _cat(_cat4(pu_frees, isel0, "    plant_tensor_free(", pu_t), ");\n");
+    pu_i = pu_i+1;
+    }
+    return _cat3(_cat4(_cat4(_cat4(isel0, "  {\n", pu_pre, isel0), "    plant_list_push(", pu_lst, ", "), pu_final, ");\n", pu_frees), isel0, "  }\n");
+    }
+    }
     }
     if (strcmp(ca2,"TENSOR_TRACK") == 0) {
     ca2 = "plant_tensor_track";
@@ -19662,7 +19705,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.58.11 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.58.12 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

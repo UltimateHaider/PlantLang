@@ -1,0 +1,8 @@
+# TD-046 regression: PUSH single-op unchanged (no temps; L owns).
+CREATE L (LST) TO [].
+CREATE a (TENSOR) TO TENSOR([1.0, 2.0]).
+PUSH(L, TENSOR_MUL(a, a)).
+SHOW COUNT(L).
+LIST_FREE(L).
+TENSOR_FREE(a).
+SHOW "td046-push-single-ok".

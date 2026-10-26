@@ -1,3 +1,43 @@
+## v0.58.12 — TD-046 (PUSH nested) + Zero Bugs milestone
+
+### Fixed
+- TD-046: `PUSH(L, <nested tensor-op>)` no longer leaks the inner
+  intermediates. Previously `plant_list_push(L, plant_tensor_add(
+  plant_tensor_mul(a,b), b))` leaked the inner `plant_tensor_mul`
+  (~72 B). Mechanism:
+  - `call_stmt` PUSH interception (`codegen_c.plant`, +40 lines): when
+    `_hoist_tensor_rhs` finds a nested alloc op, hoist it to a temp and
+    free it **after** the push.
+  - **Fail-safe**: if no nested alloc op (single-op, bare var, numeric,
+    closures/SAFE/FFI), fall through to the existing `reap_stmt` path
+    unchanged. `gen_reap_stmt` is untouched.
+  - Outer tensor ownership preserved (`LIST_FREE` releases it).
+- Bonus: 3-level nesting is also hoisted + freed (0 B).
+
+### Milestone: Zero Bugs
+- With TD-046 CLOSED, the language has **0 known bugs open**:
+  - 0 silent-wrong (P1) ✅
+  - 0 crash (P2) ✅
+  - 0 leak (P3) ✅
+- Remaining open TDs are **features** (TD-048 higher-order AD, TD-055
+  ACTION globals), both scheduled after v0.59.0 (Neural Layers).
+
+### Added
+- 2 new tests: `td046_push_nested`, `td046_push_single_unchanged`.
+
+### Verified
+- Native: 269/269 (was 267)
+- Regression: 319/319
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (603,779 B)
+- valgrind strict: PASS
+- Binary: 1,042,008 bytes.
+
+### Out of Scope (v0.59.0+)
+- TD-048 (higher-order AD, P4, feature) — after Neural Layers.
+- TD-055 (ACTION globals, P4, feature) — after Neural Layers.
+
 ## v0.58.11 — TD-064 (M["k"] bracket map read)
 
 ### Fixed

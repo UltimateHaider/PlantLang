@@ -1,5 +1,9 @@
 # Technical Debt Register — PlantLang Chloroplast
 
+> **Status (v0.58.12): 0 known bugs open** — 0 silent-wrong, 0 crash,
+> 0 leak. Open items are features (TD-048, TD-055) plus DEFERRED
+> TD-016/TD-017.
+
 ## TD-001: PlantArray never freed
 - **Status**: CLOSED (v0.51.2a)
 - **Introduced**: v0.0.1 (always existed)
@@ -489,20 +493,31 @@ defining scope.
 - **NOT covered:** closures (TD-017), FFI stores → TD-046.
 - **Related:** TD-017, TD-041, TD-045, TD-046, TD-047.
 
-## TD-046: PUSH nested intermediates leak — OPEN (v0.58.1b)
-- **Status:** OPEN (narrowed after v0.58.1)
+## TD-046: PUSH nested intermediates leak — CLOSED
+
+- **Status:** ✅ CLOSED in v0.58.12
 - **Introduced:** v0.57.1 (discovered during the TD-044 investigation)
-- **Scope narrowed:** v0.58.0 owned `CREATE <bare var>`, `GIVE <bare var>`,
-  `SET <fresh op>`, `SET <nested>` (hoist), and SET-overwrite. v0.58.1 fixed
-  **`SET x TO <bare tensor var y>`** via the type-exact `collect_tensors`
-  gate. **Remaining:**
-  - **`PUSH(L, <nested tensor-op>)`** — routes through `gen_reap_stmt`
-    (249 lines; HIGH risk: closures, generics, SAFE, FFI).
-  - Closures (TD-017) and FFI stores remain unknowable.
-- **Workaround:** Name the intermediate; free the container
-  (`LIST_FREE` frees pushed tensors).
-- **Target:** v0.58.1b (dedicated; HIGH risk for PUSH).
-- **Related:** TD-017, TD-044, TD-047.
+- **Symptom:** `PUSH(L, TENSOR_ADD(TENSOR_MUL(a, b), b))` emitted
+  `plant_list_push(L, plant_tensor_add( plant_tensor_mul(a, b), b))` —
+  the inner `plant_tensor_mul` result leaked (**72 B / 1 block**). The
+  pushed *outer* tensor is owned by the list (`LIST_FREE` releases it), so
+  only nested intermediates leaked (single op / bare var = 0 B).
+- **Fixed:** a **fail-safe** interception in `generate_node`'s `call_stmt`
+  branch (`codegen_c.plant`, +40 lines):
+  - Translate the PUSH value, run `_hoist_tensor_rhs` (the proven
+    v0.57.0c hoister) and, **only when it produces temps**, emit
+    `{ PlantTensor* _h… = …; plant_list_push(L, <outer>); plant_tensor_free(_h…); }`.
+  - Otherwise **fall through** to the existing `reap_stmt` delegation
+    unchanged (single-op, bare var, numeric, closures/SAFE/FFI).
+  - `gen_reap_stmt` (the 249-line HIGH-risk emitter) is **untouched**.
+  - The outer tensor is never freed here — ownership stays with the list.
+  - 3-level nesting works (multiple temps hoisted + freed).
+- **Milestone:** with TD-046 closed there are **0 known bugs open**
+  (0 silent-wrong, 0 crash, 0 leak). Remaining open TDs are **features**
+  (TD-048, TD-055) and 2 DEFERRED items (TD-016, TD-017).
+- **Tests:** `td046_push_nested`, `td046_push_single_unchanged`.
+- **Related:** TD-041 (intermediate leak, closed), TD-044 (GIVE, closed),
+  TD-017 (deferred).
 
 ## TD-049: `SHOW <multi-digit long>` leaks `_from_long` heap string — CLOSED
 

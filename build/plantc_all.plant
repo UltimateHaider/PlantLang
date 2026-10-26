@@ -13218,6 +13218,46 @@ ACTION generate_node(node, env(LST)),
         IF ca2 IS "GLOBAL_FREE", SET ca2 TO "plant_free". /IF.
         # v0.51.16 — PUSH(lst, item) → plant_list_push(lst, item).
         IF ca2 IS "PUSH", SET ca2 TO "plant_list_push". /IF.
+        # v0.58.12 — TD-046: PUSH(list, <nested tensor-op>) leaked the
+        # inner intermediates (only the pushed outer tensor is owned by
+        # the list). FAIL-SAFE: intercept only when _hoist_tensor_rhs
+        # actually finds a nested alloc op; otherwise fall through to the
+        # proven reap_stmt delegation unchanged. The outer result is NOT
+        # freed here — the list owns it (LIST_FREE releases it).
+        IF ca2orig IS "PUSH",
+            REAP pu_args FROM _map_get, node, "args".
+            IF COUNT pu_args IS 2,
+                REAP pu_val0 FROM plant_list_get, pu_args, 1.
+                REAP pu_val0 FROM _swap_self, pu_val0.
+                REAP pu_val FROM translate_expr, pu_val0, nums, evars, maths.
+                REAP pu_val FROM _handle_cat, pu_val, nums, evars.
+                CREATE pu_temps(LST) TO plant_list_make(0).
+                CREATE pu_lines(LST) TO plant_list_make(0).
+                REAP pu_res FROM _hoist_tensor_rhs, pu_val, "push", isel0, pu_temps, pu_lines.
+                REAP pu_final FROM plant_list_get, pu_res, 0.
+                IF COUNT pu_temps > 0,
+                    REAP pu_lst0 FROM plant_list_get, pu_args, 0.
+                    REAP pu_lst0 FROM _swap_self, pu_lst0.
+                    REAP pu_lst FROM translate_expr, pu_lst0, nums, evars, maths.
+                    REAP pu_lst FROM _handle_cat, pu_lst, nums, evars.
+                    CREATE pu_pre(TXT) TO "".
+                    CREATE pu_i(LON) TO 0.
+                    SEASON pu_i < COUNT pu_lines,
+                        REAP pu_l FROM plant_list_get, pu_lines, pu_i.
+                        SET pu_pre TO pu_pre + pu_l.
+                        SET pu_i TO pu_i + 1.
+                    /SEASON.
+                    CREATE pu_frees(TXT) TO "".
+                    SET pu_i TO 0.
+                    SEASON pu_i < COUNT pu_temps,
+                        REAP pu_t FROM plant_list_get, pu_temps, pu_i.
+                        SET pu_frees TO pu_frees + isel0 + "    plant_tensor_free(" + pu_t + ");\n".
+                        SET pu_i TO pu_i + 1.
+                    /SEASON.
+                    GIVE isel0 + "  {\n" + pu_pre + isel0 + "    plant_list_push(" + pu_lst + ", " + pu_final + ");\n" + pu_frees + isel0 + "  }\n".
+                /IF.
+            /IF.
+        /IF.
         # v0.56.0a — TENSOR_TRACK(x) statement form → plant_tensor_track(x).
         IF ca2 IS "TENSOR_TRACK", SET ca2 TO "plant_tensor_track". /IF.
         # v0.57.3 — TAPE_CLEAR() statement form.
@@ -17226,7 +17266,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.58.11 (pure native)".
+  SHOW "Chloroplast 0.58.12 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.
