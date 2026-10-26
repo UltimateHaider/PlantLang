@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.58.10
+# Auto-updated: 0.58.11
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.58.10 | 1037912 | 8963 | 963 | 109 | 330 | 5361 |
+| v0.58.11 | 1037912 | 8963 | 963 | 109 | 330 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -88,6 +88,7 @@
 | v0.58.8 | 2026 | TD-060 (parser diagnose -> STR) | Released |
 | v0.58.9 | 2026 | TD-061 (SET obj.field) | Released |
 | v0.58.10 | 2026 | TD-062 (validate assignment) + TD-063 (SET M["k"]) | Released |
+| v0.58.11 | 2026 | TD-064 (M["k"] bracket map read) | Released |
 
 ## Growth Chart (ASCII)
 

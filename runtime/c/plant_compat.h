@@ -336,7 +336,15 @@ static tx_t handle_brackets(tx_t expr) {
     char *out = buf;
     size_t pre = (size_t)(bs - cur);
     memcpy(out, cur, pre); out += pre;
-    memcpy(out, "plant_list_get(", 15); out += 15;
+    /* v0.58.11 — TD-064: a STRING-literal index is a MAP read. Emit
+       _map_get(base, key) instead of plant_list_get (index-only, which
+       silently returns "" for a string key). Numeric indices and the
+       multi-pass chaining are unchanged. */
+    const char *ik = p + 1;
+    while (*ik == ' ' || *ik == '\t') ik++;
+    int strkey = (*ik == '"' || *ik == '\'');
+    if (strkey) { memcpy(out, "_map_get(", 9); out += 9; }
+    else { memcpy(out, "plant_list_get(", 15); out += 15; }
     memcpy(out, bs, (size_t)(p - bs)); out += (size_t)(p - bs);
     memcpy(out, ", ", 2); out += 2;
     const char *ip = p + 1;

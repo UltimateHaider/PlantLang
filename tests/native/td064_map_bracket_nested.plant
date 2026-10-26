@@ -1,0 +1,5 @@
+# TD-064 P2 fix: nested map read (was SIGSEGV).
+CREATE M (MAP) TO {"a": {"b": 42}}.
+SHOW M["a"]["b"].
+LIST_FREE(M).
+SHOW "td064-nested-ok".

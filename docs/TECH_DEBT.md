@@ -791,23 +791,29 @@ defining scope.
 - **Tests:** `td063_set_map_bracket`.
 - **Related:** TD-061, TD-064.
 
-## TD-064: `M["k"]` map bracket read is silently broken — OPEN
+## TD-064: `M["k"]` map bracket read silently broken — CLOSED
 
-- **Status:** OPEN
+- **Status:** ✅ CLOSED in v0.58.11
 - **Introduced:** pre-v0.58.10 (discovered during v0.58.10 Phase 2)
-- **Impact:** MED (silent no-op on a basic map read)
-- **Symptom:** `SHOW M["k"]` lowers to `plant_list_get(M, "k")`
-  (index-only) → the string key becomes an integer (pointer address) →
-  out of range → prints empty, no error. Dot reads (`M.k` →
-  `_map_get(M, "k")`) work.
-- **Reason:** same index-only `plant_list_get` as TD-063's write side,
-  but on the read path. The write side is fixed (`plant_map_set`); reads
-  still use `plant_list_get`.
-- **Fix direction:** wherever a `["string"]` read is lowered, emit
-  `_map_get(M, "k")` when the index is a string literal (mirror the
-  TD-063 discriminator).
-- **Target:** v0.58.11+
-- **Related:** TD-063 (write side, closed), TD-061.
+- **Severity:** was **P1** (silent-wrong empty string) for single-key
+  reads and **P2** (SIGSEGV) for nested reads (`M["a"]["b"]` because the
+  inner `plant_list_get` returned `""` and the outer one dereferenced it).
+- **Fixed:** `handle_brackets` (`runtime/c/plant_compat.h:315`, the static
+  C helper invoked from `translate_expr` after `_list_literal`) now emits
+  `_map_get(base, key)` when the index text starts with `"` or `'`
+  (string literal) instead of `plant_list_get(base, idx)`. ~8 lines.
+  Mirrors the TD-063 write side (`plant_map_set` for string-key bracket
+  writes, v0.58.10).
+- **Preserved:**
+  - Numeric list indices (`L[0]` → `plant_list_get`) — unchanged.
+  - List literals (`["…"]`) are transformed by `_list_literal` **before**
+    `handle_brackets` → untouched (bootstrap inert).
+  - Multi-pass chaining; call-result indexing (`f(x)["k"]`) works.
+- **Bonus:** `M["k"] + 1` now coerces numerically (`43`) instead of
+  concatenating an empty string with `1`.
+- **Tests:** `td064_map_bracket_read`, `td064_map_bracket_nested`,
+  `td064_list_numeric_unchanged`.
+- **Related:** TD-063 (write side, closed v0.58.10).
 
 ## TD-047: MAP value ownership — CLOSED (misdiagnosis, v0.58.0)
 - **Status:** ✅ CLOSED (misdiagnosis, v0.58.0)

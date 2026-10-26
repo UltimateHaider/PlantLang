@@ -1,3 +1,39 @@
+## v0.58.11 — TD-064 (M["k"] bracket map read)
+
+### Fixed
+- TD-064: `M["k"]` (bracket map read) now lowers correctly to
+  `_map_get`. Previously it lowered to `plant_list_get` (index-only) →
+  silent empty string (P1), and nested `M["a"]["b"]` → SIGSEGV (P2).
+  Mechanism:
+  - `handle_brackets` (`runtime/c/plant_compat.h:315`, C helper): if the
+    index text (after `[`) starts with `"` or `'`, emit `_map_get(`
+    instead of `plant_list_get(`. ~8 lines. Mirrors the TD-063 write side
+    (`plant_map_set` for string-key bracket writes, v0.58.10).
+  - Numeric indices unchanged (`L[0]` → `plant_list_get`).
+  - List literals (`[…]`) are transformed by `_list_literal` before
+    `handle_brackets` → untouched (bootstrap inert).
+- Bonus: `M["k"] + 1` now coerces numerically (`43`) instead of
+  concatenating an empty string.
+
+### Added
+- 3 new tests: `td064_map_bracket_read`, `td064_map_bracket_nested`,
+  `td064_list_numeric_unchanged`.
+
+### Verified
+- Native: 267/267 (was 264)
+- Regression: 319/319
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (602,249 B)
+- valgrind strict: PASS
+- Binary: 1,037,912 bytes.
+
+### Out of Scope (v0.58.12+)
+- TD-046 (PUSH nested, P3, HIGH risk).
+- TD-048 (higher-order AD, P4, feature).
+- TD-055 (ACTION globals, P4, feature).
+- TD-048 / TD-055 scheduled after Neural Layers (v0.59.0).
+
 ## v0.58.10 — TD-062 (validate assignment) + TD-063 (SET M["k"])
 
 ### Fixed

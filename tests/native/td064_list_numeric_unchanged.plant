@@ -1,0 +1,6 @@
+# TD-064 regression: numeric L[0] unchanged.
+CREATE L (LST) TO [1, 2, 3].
+SHOW L[0].
+SHOW L[1].
+LIST_FREE(L).
+SHOW "td064-list-numeric-ok".

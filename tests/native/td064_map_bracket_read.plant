@@ -1,0 +1,5 @@
+# TD-064: bracket map read (P1 silent-wrong fix).
+CREATE M (MAP) TO {"k": 42}.
+SHOW M["k"].
+LIST_FREE(M).
+SHOW "td064-map-bracket-ok".
