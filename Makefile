@@ -14,7 +14,7 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.58.12
+VERSION    ?= 0.60.0a
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
@@ -36,7 +36,8 @@ MEMORY     := runtime/c/plant_memory.c
 COMPLEX    := runtime/c/plant_complex.c
 GEO        := runtime/c/plant_geo.c
 AUTOGRAD   := runtime/c/plant_autograd.c
-RUNTIME_C  := $(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) $(REPORT_HTML) $(LEXER) $(PARSER) $(CODEGEN) $(MATH) $(TENSOR) $(MEMORY) $(COMPLEX) $(GEO) $(AUTOGRAD)
+AD2        := runtime/c/plant_ad2.c
+RUNTIME_C  := $(RUNTIME) $(ERROR) $(REPORT) $(REPORT_JSON) $(REPORT_XML) $(REPORT_HTML) $(LEXER) $(PARSER) $(CODEGEN) $(MATH) $(TENSOR) $(MEMORY) $(COMPLEX) $(GEO) $(AUTOGRAD) $(AD2)
 COMPAT     := runtime/c/plant_compat.h
 
 # v0.52.0 — Precompile the test-runtime subset once (link per test).
@@ -45,7 +46,8 @@ TEST_RUNTIME_C := runtime/c/plant_runtime.c runtime/c/plant_error.c \
                   runtime/c/plant_report_xml.c runtime/c/plant_report_html.c \
                   runtime/c/plant_math.c runtime/c/plant_tensor.c \
                   runtime/c/plant_memory.c runtime/c/plant_complex.c \
-                  runtime/c/plant_geo.c runtime/c/plant_autograd.c
+                  runtime/c/plant_geo.c runtime/c/plant_autograd.c \
+                  runtime/c/plant_ad2.c
 TEST_RUNTIME_OBJS := $(addprefix build/trt/, $(notdir $(TEST_RUNTIME_C:.c=.o)))
 TEST_RUNTIME_LIB  := build/libplant_test_runtime.a
 
@@ -1016,6 +1018,25 @@ verify-v0.51.23: check-no-raw-malloc check-expected-files \
 	@echo "========================================================"
 
 # ── verify-v0.58.1: comprehensive release gate ──────────────
+# ── verify-v0.60.0a: comprehensive release gate ──────────────
+verify-v0.60.0a: check-no-raw-malloc check-expected-files \
+                check-changelog-numbers check-ffi-safety \
+                check-dispatcher-only
+	@echo "========================================================"
+	@echo "  v0.60.0a VERIFICATION GATE"
+	@echo "========================================================"
+	@echo "[1/6] Native tests..."     && sh tests/native/run_native_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[2/6] Generics..."         && sh tests/generics/run_generics_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[3/6] Closures..."         && sh tests/closures/run_closures_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[4/6] Self-hosting..."     && make self || exit 1
+	@cmp -s build/plantc_v3 bin/Chloroplast || \
+		{ echo "STOP: Self-hosting failed"; exit 1; }
+	@echo "[5/6] valgrind strict..."  && $(MAKE) valgrind-check-tensor || exit 1
+	@echo "[6/6] Update RELEASES..."  && make update-growth && make check-releases-updated
+	@echo "========================================================"
+	@echo "  v0.60.0a VERIFIED"
+	@echo "========================================================"
+
 # ── verify-v0.58.12: comprehensive release gate ──────────────
 verify-v0.58.12: check-no-raw-malloc check-expected-files \
                 check-changelog-numbers check-ffi-safety \

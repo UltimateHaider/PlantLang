@@ -1,0 +1,14 @@
+# TD-048: d2/dx2(x^3) = 6x.
+CREATE x (TENSOR) TO TENSOR([1.0, 2.0]).
+TENSOR_TRACK(x).
+CREATE s (TENSOR) TO TENSOR_MUL(TENSOR_MUL(x, x), x).
+CREATE loss (DBL) TO TENSOR_SUM(s).
+CREATE dx (TENSOR) TO GRAD_HO(loss, x).
+CREATE ddx (TENSOR) TO GRAD_HO(TENSOR_SUM(dx), x).
+SHOW ddx.
+TAPE_CLEAR().
+TENSOR_FREE(ddx).
+TENSOR_FREE(dx).
+TENSOR_FREE(s).
+TENSOR_FREE(x).
+SHOW "td048-adv2-second-cube-ok".

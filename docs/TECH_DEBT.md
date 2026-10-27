@@ -1,8 +1,8 @@
 # Technical Debt Register — PlantLang Chloroplast
 
-> **Status (v0.58.12): 0 known bugs open** — 0 silent-wrong, 0 crash,
-> 0 leak. Open items are features (TD-048, TD-055) plus DEFERRED
-> TD-016/TD-017.
+> **Status (v0.60.0a): 0 known bugs open** — 0 silent-wrong, 0 crash,
+> 0 leak. TD-048 is PARTIAL (ADv2 0a: 1st/2nd order); TD-055 is a
+> feature; TD-016/TD-017 remain DEFERRED.
 
 ## TD-001: PlantArray never freed
 - **Status**: CLOSED (v0.51.2a)
@@ -840,56 +840,64 @@ defining scope.
 - **Return-aliasing half:** fixed in v0.58.0 by `GIVE <bare var>` retain.
 - **Related:** TD-044, TD-046.
 
-## TD-048: True higher-order AD unsupported — OPEN (hardened v0.57.4)
-- **Status:** OPEN (hardened; explicit error)
-- **Introduced:** v0.57.3 (investigation confirmed the backward is non-differentiable)
-- **Hardened:** v0.57.4 (silent-wrong → clean error)
-- **Impact:** MED (PINNs, MAML, Hessians unavailable)
+## TD-048: Higher-order AD (differentiable backward) — PARTIAL (0a)
 
-### Interim hardening (v0.57.4)
-- Attempting a second derivative (`GRAD(GRAD(loss, x, 1), x, 1)`) now
-  returns an explicit error:
-  `grad: loss does not match retained tape (second derivatives unsupported)`.
-- Mechanism: `loss_d` vs `head->scalar` comparison (bit-identical, no epsilon).
-- Repeated first-order still works.
-- **No silent-wrong-answer.**
-- `grad_second_derivative_unsupported` regression-locks the explicit-error
-  behaviour.
+- **Status:** PARTIAL — v0.60.0a ships the ADv2 skeleton + verified 1st/2nd
+  order; 3rd order and the remaining ops are deferred to 0b/0c.
+- **Introduced:** v0.57.3 (first-order backward is non-differentiable);
+  hardened v0.57.4 (explicit error instead of silent-wrong).
 
-### ⚠️ CRITICAL HAZARD: SILENT-WRONG-ANSWER (historical, v0.57.3)
-- **The hazard:** with `retain=1`, `GRAD(TENSOR_SUM(dx), x, 1)` does
-  **not** error. The retained tape is non-empty, so it re-seeds the tape
-  head and **silently re-returns the first derivative** (`ddx == dx`),
-  not the second derivative (`d²(x²)/dx² = [2, 2]`).
-- **No error, no crash — silently wrong.** This is the worst failure mode.
-- **Detection:** none today.
-- **Workaround:** do not attempt second derivatives with `retain=1`; there
-  is no correct path until the differentiable-backward epic.
-- **Regression-locked by:** the `grad_second_derivative_unsupported` test
-  (SHOWs `dx=[2,4]` and `ddx=[2,4]` with an explanatory comment).
+### Fixed in v0.60.0a (ADv2 isolated module)
+- New `runtime/c/plant_ad2.{c,h}` (~390 lines): **chained** tape hook
+  (`plant_tape_record_hook`), own tape (`A2Node`) + LIFO **frame stack**
+  (`A2Frame`), and a **taped backward** whose gradients are tracked.
+- `GRAD_HO(loss, w)` → `plant_ad2_grad`; `plant_ad2_init()` is emitted
+  **only** for programs that use `GRAD_HO` (zero overhead otherwise).
+- `TAPE_CLEAR` → `plant_tape_clear_both()` (clears both engines).
+- `plant_autograd.c` and `plant_tensor.c` are **untouched** — the old
+  engine remains the fallback and is regression-locked.
+- Supported ops (0a): ADD SUB MUL(same-shape) SCALE SUM MEAN TRANSPOSE
+  RESHAPE + local `A2_BCAST`/`A2_AXIS_SUM`. Anything else returns an
+  **explicit error** (never silent-wrong).
 
-### Root cause
-- Backward uses raw loops + `plant_tensor_create` (no tape hooks).
-- `dx` is detached (`requires_grad=0`, no tape node).
-- The tape records only the forward pass.
-- With `retain=1`, the retained forward tape is re-seeded (head reused) and
-  backward replays the same first-order computation.
+### Verified matrix
+| Expression | 1st (GRAD_HO) | 2nd (nested GRAD_HO) |
+|---|---|---|
+| `sum(x*x)` | `2x` | `2` |
+| `sum(x*x*x)` | `3x²` | `6x` |
+| `sum(x)` | `1` | `0` |
 
-### Fix direction
-- Rewrite the backward with taped ops + `requires_grad` on grads +
-  double-backward rules per op (matmul, softmax Jacobian, …).
-- 2× tape size, ~2–3 weeks, HIGH risk.
-- Alternative: forward-mode dual numbers (separate implementation).
+### Bugs found & fixed during 0a
+1. `plant_free` is the **magic dispatcher** (no-op on raw nodes) → leaked
+   every `A2Node`/`A2Frame`/`A2Grad`. Fixed with `free()`.
+2. **Frame traversal**: the backward only walked the top frame, dropping
+   paths through forward tensors (x³ 2nd gave `4x`). Now every older frame
+   is traversed → `6x`.
+3. Missing `#include "plant_malloc.h"`.
 
-### Interim hardening (recommended follow-up)
-- Runtime guard: when `retain=1` and the root is the retained tape head
-  (i.e. the tape was already consumed by a retain GRAD), raise an explicit
-  error ("second derivatives unsupported") instead of silently returning
-  the first derivative → converts silent-wrong-answer into a clean error.
-- Candidate for a v0.57.4 hotfix.
+### Deferred (0b/0c/d)
+- **3rd order**: `d³/dx³(x³)` returns `[4,4]` instead of `[6,6]` —
+  re-traversing frames ≥2 double-counts paths already encoded by the
+  level-k−1 backward. Needs a per-frame "already expanded" marker (or a
+  single-DAG model).
+- MID ops: DIV, MATMUL, RELU/SIGMOID/TANH/GELU/SWISH/MISH.
+- HARD ops: softmax Jacobian, broadcast MUL/DIV.
+- Integration polish + broader tests.
 
-- **Related:** TD-046 (PUSH/closures/FFI), TD-047 (MAP value ownership).
-- **Target:** v0.59.0+ (differentiable backward or forward-mode epic).
+- **Tests:** `td048_adv2_square`, `td048_adv2_square_at_3`,
+  `td048_adv2_second`, `td048_adv2_cube`, `td048_adv2_second_cube`,
+  `td048_adv2_grad_regression`.
+- **Related:** TD-055 (feature, deferred).
+
+## TD-047: MAP value ownership — CLOSED (misdiagnosis, v0.58.0)
+- **Status:** ✅ CLOSED (misdiagnosis, v0.58.0)
+- **Introduced:** pre-v0.57.1 (discovered during the TD-044 investigation)
+- **Original claim:** `SET M["k"] TO a` + `LIST_FREE(M)` leaks 72 B.
+- **Correction (empirical):** the 72 B was the caller's **un-freed `a`**.
+  `LIST_FREE(M)` does not free map values (alias-only by design);
+  `TENSOR_FREE(a) + LIST_FREE(M)` = 0 leaks, no double free. **No fix needed.**
+- **Return-aliasing half:** fixed in v0.58.0 by `GIVE <bare var>` retain.
+- **Related:** TD-044, TD-046.
 
 ## TD-045: `SET x TO <new tensor>` overwrites old x without freeing — CLOSED
 - **Status:** ✅ CLOSED in v0.58.0

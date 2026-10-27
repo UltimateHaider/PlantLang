@@ -1,3 +1,48 @@
+## v0.60.0a — ADv2 (Skeleton) — TD-048 PARTIAL
+
+### Added
+- **ADv2**: isolated reverse-mode AD module (`plant_ad2.{c,h}`, ~390 lines).
+  - Chained hook (`plant_tape_record_hook`) — the first-order `GRAD`
+    engine is untouched.
+  - Own tape (`A2Node`) + LIFO **frame stack** (`A2Frame`).
+  - `GRAD_HO(loss, w)` → `plant_ad2_grad`.
+  - Conditional `plant_ad2_init()` — emitted only for `GRAD_HO` programs.
+- `TAPE_CLEAR` → `plant_tape_clear_both()` (clears both engines).
+- 6 new tests: `td048_adv2_{square,square_at_3,second,cube,second_cube,grad_regression}`.
+
+### Supported (verified)
+- First-order via ADv2: `x²` → `2x`, `x³` → `3x²`, `sum(x)` → `1`.
+- **Second-order**: `x²` → `2`, `x³` → `6x`, `sum(x)` → `0`.
+- `GRAD` (old engine) unchanged.
+
+### Known limitation (deferred to 0b)
+- Third-order `d³/dx³(x³)` → `[4,4]` (should be `[6,6]`). Re-traversing
+  frames ≥2 double-counts paths already encoded by the level-k−1 backward.
+  Needs a per-frame "already expanded" marker / single-DAG model.
+
+### Bugs fixed during implementation
+- `plant_free` is the magic dispatcher (no-op on raw nodes) → leaks;
+  switched to `free()` for `A2Node`/`A2Frame`/`A2Grad`.
+- **Frame traversal**: only the top frame was backpropagated, dropping
+  paths through forward tensors — corrected `x³`'s second derivative
+  from `[4,8]` to `[6,12]`.
+- Missing `#include "plant_malloc.h"`.
+
+### Verified
+- Native: 275/275 (was 269)
+- Regression: 319/319
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (604,209 B)
+- valgrind strict: PASS
+- Binary: 1,065,584 bytes.
+
+### Out of Scope (v0.60.0b/c/d)
+- Third-order (single-DAG model).
+- MID ops (DIV, MATMUL, activations).
+- HARD ops (softmax Jacobian, broadcast MUL/DIV).
+- Integration + docs.
+
 ## v0.58.12 — TD-046 (PUSH nested) + Zero Bugs milestone
 
 ### Fixed

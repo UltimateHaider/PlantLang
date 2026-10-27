@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.58.12
+# Auto-updated: 0.60.0a
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.58.12 | 1042008 | 8963 | 963 | 109 | 330 | 5361 |
+| v0.60.0a | 1065592 | 8963 | 963 | 109 | 330 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -90,6 +90,7 @@
 | v0.58.10 | 2026 | TD-062 (validate assignment) + TD-063 (SET M["k"]) | Released |
 | v0.58.11 | 2026 | TD-064 (M["k"] bracket map read) | Released |
 | v0.58.12 | 2026 | TD-046 (PUSH nested) + Zero Bugs | Released |
+| v0.60.0a | 2026 | ADv2 Skeleton (TD-048 partial) | Released |
 
 ## Growth Chart (ASCII)
 

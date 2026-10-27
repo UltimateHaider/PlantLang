@@ -1,0 +1,12 @@
+# TD-048: GRAD_HO(x^2) = 2x (first-order via ADv2).
+CREATE x (TENSOR) TO TENSOR([1.0, 2.0, 3.0]).
+TENSOR_TRACK(x).
+CREATE s (TENSOR) TO TENSOR_MUL(x, x).
+CREATE loss (DBL) TO TENSOR_SUM(s).
+CREATE dx (TENSOR) TO GRAD_HO(loss, x).
+SHOW dx.
+TAPE_CLEAR().
+TENSOR_FREE(dx).
+TENSOR_FREE(s).
+TENSOR_FREE(x).
+SHOW "td048-adv2-square-ok".

@@ -12848,9 +12848,10 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* 
     e = _handle_func_paren(e, "TENSOR_SWISH", "plant_tensor_swish");
     e = _handle_func_paren(e, "TENSOR_MISH", "plant_tensor_mish");
     e = _handle_func_paren(e, "TENSOR_TRACK", "plant_tensor_track");
+    e = _handle_func_paren(e, "GRAD_HO", "plant_ad2_grad");
     e = _grad_retain_rewrite(e);
     e = _handle_func_paren(e, "GRAD", "plant_grad");
-    e = _handle_func_paren(e, "TAPE_CLEAR", "plant_tape_clear_public");
+    e = _handle_func_paren(e, "TAPE_CLEAR", "plant_tape_clear_both");
     e = _math_func_paren(e, "VARIANCE", "plant_list_variance");
     e = _math_func_paren(e, "STDDEV", "plant_list_stddev");
     e = _math_func_paren(e, "PRODUCT", "plant_list_product");
@@ -15552,7 +15553,7 @@ tx_t generate_node(tx_t node, PlantArray* env) {
     ca2 = "plant_tensor_track";
     }
     if (strcmp(ca2orig,"TAPE_CLEAR") == 0) {
-    return _cat(isel0, "  plant_tape_clear_public();\n");
+    return _cat(isel0, "  plant_tape_clear_both();\n");
     }
     if (strcmp(ca2orig,"LIST_FREE") == 0 || strcmp(ca2orig,"TENSOR_FREE") == 0 || strcmp(ca2orig,"FREE") == 0) {
     fargs = _map_get(node, "args");
@@ -18182,11 +18183,13 @@ tx_t generate_c(PlantArray* ast) {
   tx_t afn = "";
   tx_t afk = "";
   tx_t afskip = "";
+  tx_t ad2_sp = "";
+  tx_t ad2_dc = "";
   tx_t tal = "";
   tx_t trg = "";
   tx_t rv2 = "";
   tx_t ct2 = "";
-    tx_t header = "#include <stdbool.h>\n#include <plant_compat.h>\n#include <plant_memory.h>\n#include <plant_math.h>\n#include <plant_complex.h>\n#include <plant_geo.h>\n#include <plant_autograd.h>\n\n";
+    tx_t header = "#include <stdbool.h>\n#include <plant_compat.h>\n#include <plant_memory.h>\n#include <plant_math.h>\n#include <plant_complex.h>\n#include <plant_geo.h>\n#include <plant_autograd.h>\n#include <plant_ad2.h>\n\n";
     tx_t decl_code = "";
     tx_t stmt_code = "";
     long has_decl = 0;
@@ -19004,7 +19007,13 @@ tx_t generate_c(PlantArray* ast) {
     }
     afi = afi+2;
     }
-    stmt_code = _cat4(_cat4("int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n  plant_autograd_init();\n", sp_init_code, dcode, stmt_code), "  plant_async_drain();\n", auto_free, "  return 0;\n}\n");
+    tx_t ad2_init_code = "";
+    ad2_sp = strings_SPLIT(stmt_code, "plant_ad2_grad");
+    ad2_dc = strings_SPLIT(dcode, "plant_ad2_grad");
+    if (plant_array_length(ad2_sp) > 1 || plant_array_length(ad2_dc) > 1) {
+    ad2_init_code = "  plant_ad2_init();\n";
+    }
+    stmt_code = _cat(_cat4(_cat4("int main(int argc, char **argv) {\n  plant_init_cli(argc, argv);\n  plant_autograd_init();\n", ad2_init_code, sp_init_code, dcode), stmt_code, "  plant_async_drain();\n", auto_free), "  return 0;\n}\n");
     }
     tx_t td_code = "";
     i = 0;
@@ -19702,7 +19711,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.58.12 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.60.0a (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);
