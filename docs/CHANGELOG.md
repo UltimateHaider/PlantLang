@@ -1,3 +1,40 @@
+## v0.61.1 — Activations integration + TD-066 fix
+
+### Added
+- `docs/ACTIVATIONS_RECIPE.md` (new): activation table (7 ops, formulas,
+  1st/2nd derivatives), DENSE+activation patterns, softmax axis rules,
+  backward guidance, second-order notes (TD-065 bias broadcast), common
+  mistakes.
+- `docs/DENSE_TRAINING_RECIPE.md` (updated): §4 rewritten — `retain = 1`
+  replaced by one-gradient-per-forward (the pre-fix TD-066 workaround).
+- 7 integration tests: `act_forward_all` (all 7 forward), `dense_sigmoid`,
+  `dense_tanh`, `dense_gelu`, `dense_softmax`, `nn_mlp_backward_2layer`
+  (dW1 + dW2), `act_second_order` (TD-065 regression in an NN context).
+
+### Fixed (TD-066)
+- **TD-066** — `GRAD(loss, w, 1)` (retain) failed with
+  `grad: loss does not match retained tape` for most real losses.
+  - Root cause: a DBL loss is materialised via `_from_double` (`%g`, 6
+    significant digits), so `loss_d` never matched `tape->scalar`
+    bit-exactly and the v0.57.4 bit-exact guard fired.
+  - Fix: relative-tolerance comparison (`_loss_matches`: `fabs(a-b) <=
+    1e-9 * max(1, |a|, |b|)`). Still catches the silent-wrong case,
+    which differs by a whole value, not 1e-9.
+  - Verified: retain works for real losses; silent-wrong still caught;
+    nested `GRAD` still errors (v0.57.4).
+  - Bonus: two or more gradients from one forward now work.
+- ADv2 untouched (still single-gradient-per-forward by design).
+
+### Verified
+- Native: **305/305** (was 298, +7). Regression: 319/319.
+- Generics: 7/7. Closures: 6/6.
+- Self-hosting: converged (604,363 B), byte-identical.
+- valgrind strict: PASS. Binary: 1,070,160 B (+0.008% vs v0.61.0a).
+
+### Out of Scope
+- CONV2D (v0.61.0c), BatchNorm + LayerNorm (v0.61.0d), Dropout + full NN
+  example (v0.61.0e).
+
 ## v0.61.0a — DENSE primitive + TD-065 (ADv2 broadcast-ADD)
 
 ### Added

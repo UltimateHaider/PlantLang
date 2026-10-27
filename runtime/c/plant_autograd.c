@@ -13,6 +13,18 @@
 #include "plant_memory.h"
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
+
+/* v0.61.1 — TD-066: relative-tolerance loss comparison (was bit-exact). */
+/* _from_double uses %g (6 significant digits), so a DBL loss round-trips
+   through a string and never matches the tape scalar bit-exactly.  1e-9
+   relative still catches the silent-wrong case, which differs by a whole
+   value (the loss is built from a previous gradient). */
+static int _loss_matches(double a, double b) {
+    double diff = fabs(a - b);
+    double scale = fmax(1.0, fmax(fabs(a), fabs(b)));
+    return diff <= 1e-9 * scale;
+}
 
 /* ── Tape ───────────────────────────────────────────────────── */
 typedef struct TapeNode {
@@ -246,12 +258,13 @@ PlantTensor* plant_autograd_grad(PlantTensor* loss_t, double loss_d,
         if (!root) return plant_tensor_create_error("grad: null root");
         /* v0.57.4 — TD-048 hotfix: detect a second-derivative attempt.
            When retain=1 and the head is a reduction, the supplied loss
-           must match head->scalar (both come from the same reduction →
-           bit-identical). A mismatch means the "loss" is built from a
-           previous gradient (silently-wrong); return a clean error. */
+           must match head->scalar (same reduction). A mismatch means the
+           "loss" is built from a previous gradient (silently-wrong);
+           return a clean error.  v0.61.1 (TD-066): compare with a relative
+           tolerance because the DBL loss round-trips through %g. */
         if (retain
             && (plant_tape_head->op == OP_SUM || plant_tape_head->op == OP_MEAN)
-            && loss_d != plant_tape_head->scalar) {
+            && !_loss_matches(loss_d, plant_tape_head->scalar)) {
             plant_tape_clear();
             grad_free_all();
             return plant_tensor_create_error(

@@ -40,16 +40,26 @@ TENSOR_FREE(d2).
 TENSOR_FREE(d).
 ```
 
-## 4. Backward (1st order) — one `GRAD` per parameter, `retain`
+## 4. Backward (1st order) — **one gradient per forward**
 
 ```plant
-CREATE dW (TENSOR) TO GRAD(loss, W, 1).
-CREATE db (TENSOR) TO GRAD(loss, b, 1).
-TAPE_CLEAR().
+CREATE dW (TENSOR) TO GRAD(loss, W).
 ```
 
-`retain = 1` keeps the tape alive for the second `GRAD`; repeated first-order
-gradients are supported (regression-locked by `grad_*` tests).
+`GRAD(loss, w)` (2-arg) runs one backward and clears the tape. For a second
+gradient, rebuild the forward pass and run another `GRAD`:
+
+```plant
+CREATE db (TENSOR) TO GRAD(loss, b).      # pass 1
+TAPE_CLEAR().
+# … rebuild h/y/loss with the same inputs …
+CREATE dW (TENSOR) TO GRAD(loss2, W).     # pass 2
+```
+
+> ⚠️ **`retain = 1` is currently unreliable with a DBL loss** — the v0.57.4
+> guard compares the loss **bit-exactly** against a `%g`-rounded value, so
+> `GRAD(loss, w, 1)` usually errors with
+> `grad: loss does not match retained tape`. Tracked as **TD-066**.
 
 For a second-order pass use `GRAD_HO` (one gradient per forward):
 

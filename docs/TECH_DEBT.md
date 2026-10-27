@@ -1,8 +1,8 @@
 # Technical Debt Register — PlantLang Chloroplast
 
-> **Status (v0.61.0a): 0 known bugs open** — 0 silent-wrong, 0 crash,
-> 0 leak. TD-048 CLOSED (1st/2nd order; 3rd by design). TD-065 CLOSED
-> (ADv2 broadcast-ADD). TD-055 is a feature; TD-016/TD-017 remain
+> **Status (v0.61.1): 0 known bugs open** — 0 silent-wrong, 0 crash, 0 leak.
+> TD-048 CLOSED (1st/2nd order; 3rd by design). TD-065 CLOSED. TD-066
+> CLOSED (retain precision). TD-055 is a feature; TD-016/TD-017 remain
 > DEFERRED.
 
 ## TD-001: PlantArray never freed
@@ -830,6 +830,27 @@ defining scope.
 - **Tests:** `td064_map_bracket_read`, `td064_map_bracket_nested`,
   `td064_list_numeric_unchanged`.
 - **Related:** TD-063 (write side, closed v0.58.10).
+
+## TD-066: `GRAD(loss, w, 1)` (retain) fails on `%g`-rounded losses — CLOSED
+
+- **Status:** ✅ CLOSED in v0.61.1
+- **Introduced:** v0.57.4 (the hardening guard), discovered in v0.61.1.
+- **Symptom:** building `loss` as a DBL (`CREATE loss (DBL) TO
+  TENSOR_SUM(...)`) rounds the value through `_from_double` (`%g`), so
+  `loss_d` no longer equals `plant_tape_head->scalar` bit-exactly and the
+  v0.57.4 guard fired:
+  `grad: loss does not match retained tape (second derivatives unsupported)`.
+- **Root cause:** bit-exact comparison against a value that round-trips
+  through a 6-significant-digit string.
+- **Fix (v0.61.1):** relative-tolerance comparison —
+  `_loss_matches(a, b) = fabs(a-b) <= 1e-9 * max(1, |a|, |b|)`.
+  The silent-wrong case differs by a whole value, so it is still caught.
+- **Verified:** retain works for real losses; silent-wrong still caught;
+  nested `GRAD` still errors (v0.57.4); two+ gradients from one forward
+  now work.
+- **Workaround (if needed):** one `GRAD` per forward, or `GRAD_HO`
+  (single-gradient-per-forward by design).
+- **Related:** TD-048 (ADv2 precision model).
 
 ## TD-065: ADv2 broadcast-ADD not reduce-aware — CLOSED
 
