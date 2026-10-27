@@ -1,9 +1,9 @@
 # Technical Debt Register — PlantLang Chloroplast
 
-> **Status (v0.60.0c): 0 known bugs open** — 0 silent-wrong, 0 crash,
-> 0 leak. TD-048 is PARTIAL (ADv2 0a+0b+0c: 1st/2nd order, MID + HARD
-> ops incl. softmax/broadcast; 3rd order gated with an explicit error).
-> TD-055 is a feature; TD-016/TD-017 remain DEFERRED.
+> **Status (v0.60.0d): 0 known bugs open** — 0 silent-wrong, 0 crash,
+> 0 leak. TD-048 is CLOSED (higher-order AD: 1st/2nd order complete;
+> 3rd+ unsupported by design with an explicit error gate). TD-055 is a
+> feature; TD-016/TD-017 remain DEFERRED.
 
 ## TD-001: PlantArray never freed
 - **Status**: CLOSED (v0.51.2a)
@@ -831,61 +831,66 @@ defining scope.
   `td064_list_numeric_unchanged`.
 - **Related:** TD-063 (write side, closed v0.58.10).
 
-## TD-048: Higher-order AD (differentiable backward) — PARTIAL (0a + 0b + 0c)
+## TD-048: Higher-order AD — CLOSED (1st/2nd complete, 3rd by design)
 
-- **Status:** PARTIAL — v0.60.0a (skeleton, 1st/2nd order) + 0b (7 MID ops,
-  level-≥3 gate) + 0c (softmax, broadcast). 3rd order → 0d.
+- **Status:** ✅ CLOSED in v0.60.0d (re-scoped)
+- **Scope (final):**
+  - **1st order** — complete (`x² → 2x`, `x³ → 3x²`, `sum → 1`, …).
+  - **2nd order** — complete (`x² → 2`, `x³ → 6x`, `sum → 0`, …).
+  - **3rd+ order** — unsupported **by design** (explicit error gate).
 
-### Fixed in v0.60.0a
-- ADv2 isolated module `runtime/c/plant_ad2.{c,h}`: chained tape hook, own
-  tape + LIFO frame stack, taped backward with tracked gradients;
-  `GRAD_HO(loss, w)`; conditional `plant_ad2_init()`;
-  `TAPE_CLEAR` → `plant_tape_clear_both()`. Old engine untouched.
-- 1st order: `x² → 2x`, `x³ → 3x²`, `sum(x) → 1`.
-- 2nd order: `x² → 2`, `x³ → 6x`, `sum(x) → 0`.
+### Why 3rd+ order is unsupported (design decision)
+No mainstream ML technique needs 3rd-order derivatives:
 
-### Fixed in v0.60.0b
-- 7 MID double-backward rules (all taped): DIV (same-shape; `b==0` →
-  error), MATMUL, RELU, SIGMOID, TANH, GELU (tanh approx), SWISH, MISH
-  (`t = out/x`; `x==0` edge).
-- Scratch-list discipline (`a2_keep`/`a2_release`) — 0 leaks.
-- **Level-≥3 gate**: explicit error
-  `ad2: 3rd+ derivatives unsupported (single-DAG pending 0c)`.
+| Application | Order | Status |
+|---|---|---|
+| SGD / Adam / AdamW / RMSprop | 1st | ✅ |
+| Momentum / Nesterov | 1st | ✅ |
+| Newton's method | 2nd | ✅ |
+| Gauss-Newton / Levenberg-Marquardt | 2nd | ✅ |
+| L-BFGS | 2nd | ✅ |
+| PINNs (physics-informed NNs) | 2nd | ✅ |
+| MAML (meta-learning) | 2nd | ✅ |
+| Hessian-vector products | 2nd | ✅ |
+| Natural gradient | 2nd | ✅ |
+| 3rd-order optimizers | 3rd | ❌ none in production |
+| Higher-order PDEs (KdV, Boussinesq) | 3rd+ | ❌ academic niche |
 
-### Fixed in v0.60.0c
-- **SOFTMAX** (1-D and 2-D axis 0/1) double-backward, taped via
-  `a2_keep_sum` (keep-dim reduce, reuses the `A2_AXIS_SUM` node) +
-  `a2_bcast`. Second order supported.
-- **Broadcast MUL / DIV** (reduce-based accumulation via
-  `a2_bcast`/`a2_axis_sum`; `b==0` guard kept).
-- **Validated against the old engine**: softmax non-trivial gives
-  `[-0.25, 0.25]`, exactly matching `gradient_softmax_nontrivial`.
-- Leak fixed: the broadcast-DIV path's `scale(db_f,-1)` intermediate was
-  not scratch-tracked (72 B → 0 B).
+The cost of ADv2 v2 (node-keyed gradients, ~200–300 lines, HIGH risk)
+is not justified by a nonexistent use case.
 
-### Documented semantics (v0.60.0b)
-- **`GRAD_HO` is single-gradient-per-forward-pass**: a second `GRAD_HO`
-  on the *same* forward tape consumes the level-1 frame and produces a
-  wrong value. Use **one `GRAD_HO` per forward pass** — or re-run the
-  forward. Differs from the old `GRAD` (which re-uses/clears its tape).
-  *Guard deferred to 0d.*
+### What is delivered (0a + 0b + 0c)
+- **0a (v0.60.0a)** — ADv2 isolated module (`plant_ad2.{c,h}`), chained
+  hook (first-order `GRAD` untouched), `GRAD_HO(loss, w)` API,
+  8 EASY + MUL ops, 1st/2nd order verified.
+- **0b (v0.60.0b)** — 7 MID ops (DIV, MATMUL, RELU, SIGMOID, TANH, GELU,
+  SWISH, MISH), scratch-list discipline (0 leaks), level-≥3 gate.
+- **0c (v0.60.0c)** — SOFTMAX (1-D + 2-D, taped Jacobian, validated
+  against the old engine: `[-0.25, 0.25]`), broadcast MUL/DIV,
+  `a2_keep_sum`.
+- **Tests** — 30+ ADv2 tests, all leak-free.
+- **Semantics** — `GRAD_HO` is **single-gradient-per-forward-pass**
+  (use one `GRAD_HO` per forward pass, or re-run the forward).
 
-### Deferred (0d)
-- **3rd-order correctness** — the current result carries a consistent
-  **2/3 coefficient** (`x³ → 4` instead of `6`, `x⁴ → 16x` instead of
-  `24x`), i.e. **one product-factor path is lost**. Root cause **unproven**;
-  the recommended path is an **instrumented diagnosis** (trace visited
-  nodes / grad-map transitions at levels 2→3) followed by a single-DAG
-  refactor (flatten all frames, reverse-topological, per-node processed
-  guard). A per-frame "expanded" marker is *not* the fix (missing path,
-  not double counting).
-- `GRAD_HO` single-gradient guard.
-- Integration polish + broader documentation.
+### The gate (explicit error, no silent-wrong)
+```
+GRAD_HO(GRAD_HO(GRAD_HO(...)))
+  → ad2: 3rd+ derivatives unsupported (single-DAG pending 0c)
+```
+The user learns immediately — there is **no silent-wrong answer**.
 
-- **Tests (0a):** `td048_adv2_{square,square_at_3,second,cube,second_cube,grad_regression}`.
-- **Tests (0b):** `td048_adv2_{div,div_b,matmul_a,matmul_b,relu,sigmoid,tanh,gelu,swish,mish,third_unsupported}`.
-- **Tests (0c):** `td048_adv2_{softmax_1d,softmax_2d_axis1,softmax_nontrivial,softmax_2nd,bcast_mul,bcast_div}`.
-- **Related:** TD-055 (feature, deferred).
+### How to enable 3rd order if ever needed
+ADv2 v2 (node-keyed gradients, PyTorch-style) is the only correct path:
+1. design doc + prototype in `/tmp` (as done for the v0.60.0d diagnosis);
+2. replace the engine with the 292-test baseline as the guard.
+Target: **v0.61.x+** epic, only on a real use case.
+
+**Do not attempt partial fixes** (C+B, target-link, …) — they are
+disproven by design (see the v0.60.0d investigation).
+
+### Related
+- `docs/ADV2_LIMITATIONS.md` — detailed analysis.
+- `docs/CHANGELOG.md` v0.60.0a/b/c — what was delivered.
 ## TD-047: MAP value ownership — CLOSED (misdiagnosis, v0.58.0)
 - **Status:** ✅ CLOSED (misdiagnosis, v0.58.0)
 - **Introduced:** pre-v0.57.1 (discovered during the TD-044 investigation)

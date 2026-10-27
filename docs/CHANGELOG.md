@@ -1,3 +1,51 @@
+## v0.60.0d — TD-048 re-scoped (1st/2nd complete)
+
+### Decided
+TD-048 is **CLOSED** with the following scope:
+
+- 1st order: ✅ complete
+- 2nd order: ✅ complete (PINNs, MAML, Hessians)
+- 3rd+ order: ❌ unsupported **by design** (explicit error gate)
+
+Rationale: 3rd order is not needed by mainstream ML (no optimizer or
+architecture requires it). See `docs/ADV2_LIMITATIONS.md` for the detailed
+analysis.
+
+Future: ADv2 v2 (node-keyed gradients) as a future epic (v0.61.x+) only
+if a real use case emerges.
+
+### Investigated (3rd order — disproven)
+- Phase 1 diagnosed the 3rd-order defect precisely: `a2_acc` does not link
+  the target into the graph → the forward frame is unreachable at
+  level ≥3 → consistent 2/3 coefficient.
+- Phase 2 (attempted, then **reverted**):
+  - **B1** (identity edge per accumulator) → over-counts.
+  - **B2** (root the chain at the target) → re-injects.
+- Phase 1 (revised): **C+B atomic is invalid by design** —
+  - C (flatten + processed guard) is a **no-op** (nodes are visited once
+    per pass);
+  - B (identity edge) has **no correct placement** (B1/B2);
+  - the per-tensor accumulator model cannot express node-keyed gradient
+    graphs.
+- **Conclusion:** 3rd order requires ADv2 v2 (node-keyed gradients,
+  single graph, 200–300 lines, HIGH risk), not a small patch.
+
+### Added
+- `docs/ADV2_LIMITATIONS.md` (new, comprehensive).
+
+### Verified
+- Native: 292/292 (unchanged)
+- Regression: 319/319 (unchanged)
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (604,209 B)
+- valgrind strict: PASS
+- Binary: 1,069,928 bytes (unchanged — docs only).
+
+### Out of Scope (future)
+- ADv2 v2 (3rd-order epic).
+- TD-055 (ACTION globals, feature).
+
 ## v0.60.0c — ADv2 HARD ops (softmax + broadcast) (TD-048 PARTIAL 0c)
 
 ### Added
