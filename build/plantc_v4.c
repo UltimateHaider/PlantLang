@@ -19715,7 +19715,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.60.0b (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.60.0c (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

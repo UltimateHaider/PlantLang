@@ -223,6 +223,41 @@ static PlantTensor* a2_axis_sum(PlantTensor* d, PlantTensor* like) {
     return o;
 }
 
+/* v0.60.0c — keep-dim reduction along a softmax axis. Emits an
+   A2_AXIS_SUM node whose adjoint (a2_bcast with in0 as the target shape)
+   is exactly the broadcast needed for higher-order derivatives. */
+static PlantTensor* a2_keep_sum(PlantTensor* d, int axis) {
+    PlantTensor* o;
+    int64_t shp[A2_MAXDIM];
+    int64_t m, n, i, j;
+    if (!d) return plant_tensor_create_error("ad2: keep_sum null");
+    if (d->ndim == 1) {
+        shp[0] = 1;
+        o = plant_tensor_create(1, shp);
+        if (!o || plant_tensor_is_error(o)) return o;
+        o->data[0] = 0.0;
+        for (i = 0; i < d->size; i++) o->data[0] += d->data[i];
+        a2_emit(A2_AXIS_SUM, d, 0, 0.0, o, 0);
+        return o;
+    }
+    if (d->ndim != 2) return plant_tensor_create_error("ad2: keep_sum ndim");
+    m = d->shape[0]; n = d->shape[1];
+    if (axis == 1) { shp[0] = m; shp[1] = 1; }
+    else           { shp[0] = 1; shp[1] = n; }
+    o = plant_tensor_create(2, shp);
+    if (!o || plant_tensor_is_error(o)) return o;
+    for (i = 0; i < o->size; i++) o->data[i] = 0.0;
+    if (axis == 1) {
+        for (i = 0; i < m; i++)
+            for (j = 0; j < n; j++) o->data[i] += d->data[i * n + j];
+    } else {
+        for (j = 0; j < n; j++)
+            for (i = 0; i < m; i++) o->data[j] += d->data[i * n + j];
+    }
+    a2_emit(A2_AXIS_SUM, d, 0, 0.0, o, 0);
+    return o;
+}
+
 static PlantTensor* a2_reshape_like(PlantTensor* d, PlantTensor* like) {
     PlantArray* sh;
     PlantTensor* r;
@@ -291,11 +326,22 @@ static PlantTensor* a2_backprop_nodes(A2Frame* f) {
                 if (n->in1) a2_acc(n->in1, plant_tensor_scale(d, -1.0));
                 break;
             case OP_MUL:
-                if (!n->in0 || !n->in1 || n->in0->size != n->in1->size) {
-                    return plant_tensor_create_error("ad2: broadcast mul unsupported (0c)");
+                if (!n->in0 || !n->in1)
+                    return plant_tensor_create_error("ad2: mul null operand");
+                if (n->in0->size == n->in1->size) {
+                    a2_acc(n->in0, plant_tensor_mul(d, n->in1));
+                    a2_acc(n->in1, plant_tensor_mul(d, n->in0));
+                } else {
+                    /* v0.60.0c — broadcast MUL: reduce the full-shape
+                       contribution back onto each operand's shape. */
+                    PlantTensor* bb = a2_k(a2_bcast(n->in1, d));
+                    PlantTensor* ba = a2_k(a2_bcast(n->in0, d));
+                    PlantTensor* da_f = a2_k(plant_tensor_mul(d, bb));
+                    PlantTensor* db_f = a2_k(plant_tensor_mul(d, ba));
+                    a2_acc(n->in0, a2_axis_sum(da_f, n->in0));
+                    a2_acc(n->in1, a2_axis_sum(db_f, n->in1));
+                    a2_release();
                 }
-                a2_acc(n->in0, plant_tensor_mul(d, n->in1));
-                a2_acc(n->in1, plant_tensor_mul(d, n->in0));
                 break;
             case OP_SCALE:
                 a2_acc(n->in0, plant_tensor_scale(d, n->scalar));
@@ -318,18 +364,31 @@ static PlantTensor* a2_backprop_nodes(A2Frame* f) {
                 PlantTensor* t1;
                 PlantTensor* t2;
                 PlantTensor* t3;
-                if (!n->in0 || !n->in1 || n->in0->size != n->in1->size)
-                    return plant_tensor_create_error("ad2: broadcast div unsupported (0c)");
+                if (!n->in0 || !n->in1)
+                    return plant_tensor_create_error("ad2: div null operand");
                 if (a2_has_zero(n->in1))
                     return plant_tensor_create_error("ad2: division by zero in backward");
-                /* da = d / b */
-                a2_acc(n->in0, plant_tensor_div(d, n->in1));
-                /* db = -(d * a) / (b * b) */
-                t1 = a2_k(plant_tensor_mul(d, n->in0));
-                t2 = a2_k(plant_tensor_mul(n->in1, n->in1));
-                t3 = a2_k(plant_tensor_div(t1, t2));
-                a2_acc(n->in1, plant_tensor_scale(t3, -1.0));
-                a2_release();
+                if (n->in0->size == n->in1->size) {
+                    /* da = d / b */
+                    a2_acc(n->in0, plant_tensor_div(d, n->in1));
+                    /* db = -(d * a) / (b * b) */
+                    t1 = a2_k(plant_tensor_mul(d, n->in0));
+                    t2 = a2_k(plant_tensor_mul(n->in1, n->in1));
+                    t3 = a2_k(plant_tensor_div(t1, t2));
+                    a2_acc(n->in1, plant_tensor_scale(t3, -1.0));
+                    a2_release();
+                } else {
+                    /* v0.60.0c — broadcast DIV. */
+                    PlantTensor* bb = a2_k(a2_bcast(n->in1, d));
+                    PlantTensor* ba = a2_k(a2_bcast(n->in0, d));
+                    PlantTensor* da_f = a2_k(plant_tensor_div(d, bb));
+                    PlantTensor* num = a2_k(plant_tensor_mul(d, ba));
+                    PlantTensor* bb2 = a2_k(plant_tensor_mul(bb, bb));
+                    PlantTensor* db_f = a2_k(plant_tensor_div(num, bb2));
+                    a2_acc(n->in0, a2_axis_sum(da_f, n->in0));
+                    a2_acc(n->in1, a2_axis_sum(a2_k(plant_tensor_scale(db_f, -1.0)), n->in1));
+                    a2_release();
+                }
                 break;
             }
             case OP_MATMUL: {
@@ -365,6 +424,24 @@ static PlantTensor* a2_backprop_nodes(A2Frame* f) {
                 PlantTensor* sq = a2_k(plant_tensor_mul(n->out, n->out));
                 PlantTensor* om = a2_k(plant_tensor_sub(one, sq));
                 a2_acc(n->in0, plant_tensor_mul(d, om));
+                a2_release();
+                break;
+            }
+            case OP_SOFTMAX: {
+                /* v0.60.0c — softmax double-backward.
+                   dx_i = out_i * (d_i - sum_j(out_j * d_j))  (per axis) */
+                int axis = (int)n->scalar;
+                PlantTensor* od;
+                PlantTensor* sod;
+                PlantTensor* bc;
+                PlantTensor* dm;
+                if (!n->out || n->out->ndim < 1 || n->out->ndim > 2)
+                    return plant_tensor_create_error("ad2: softmax ndim unsupported");
+                od = a2_k(plant_tensor_mul(n->out, d));
+                sod = a2_k(a2_keep_sum(od, axis));
+                bc = a2_k(a2_bcast(sod, n->out));
+                dm = a2_k(plant_tensor_sub(d, bc));
+                a2_acc(n->in0, plant_tensor_mul(n->out, dm));
                 a2_release();
                 break;
             }

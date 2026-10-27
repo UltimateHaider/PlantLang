@@ -1,9 +1,9 @@
 # Technical Debt Register — PlantLang Chloroplast
 
-> **Status (v0.60.0b): 0 known bugs open** — 0 silent-wrong, 0 crash,
-> 0 leak. TD-048 is PARTIAL (ADv2 0a+0b: 1st/2nd order + 8 MID ops;
-> 3rd order gated with an explicit error). TD-055 is a feature;
-> TD-016/TD-017 remain DEFERRED.
+> **Status (v0.60.0c): 0 known bugs open** — 0 silent-wrong, 0 crash,
+> 0 leak. TD-048 is PARTIAL (ADv2 0a+0b+0c: 1st/2nd order, MID + HARD
+> ops incl. softmax/broadcast; 3rd order gated with an explicit error).
+> TD-055 is a feature; TD-016/TD-017 remain DEFERRED.
 
 ## TD-001: PlantArray never freed
 - **Status**: CLOSED (v0.51.2a)
@@ -831,54 +831,60 @@ defining scope.
   `td064_list_numeric_unchanged`.
 - **Related:** TD-063 (write side, closed v0.58.10).
 
-## TD-048: Higher-order AD (differentiable backward) — PARTIAL (0a + 0b)
+## TD-048: Higher-order AD (differentiable backward) — PARTIAL (0a + 0b + 0c)
 
-- **Status:** PARTIAL — v0.60.0a (skeleton, 1st/2nd order) + v0.60.0b
-  (8 MID ops, level-≥3 gate). HARD ops and true 3rd order → 0c.
+- **Status:** PARTIAL — v0.60.0a (skeleton, 1st/2nd order) + 0b (7 MID ops,
+  level-≥3 gate) + 0c (softmax, broadcast). 3rd order → 0d.
 
 ### Fixed in v0.60.0a
-- New `runtime/c/plant_ad2.{c,h}`: **chained** tape hook, own tape
-  (`A2Node`) + LIFO frame stack (`A2Frame`), taped backward with tracked
-  gradients; `GRAD_HO(loss, w)`; conditional `plant_ad2_init()`;
-  `TAPE_CLEAR` → `plant_tape_clear_both()`.
-- `plant_autograd.c` / `plant_tensor.c` untouched (old engine = fallback).
+- ADv2 isolated module `runtime/c/plant_ad2.{c,h}`: chained tape hook, own
+  tape + LIFO frame stack, taped backward with tracked gradients;
+  `GRAD_HO(loss, w)`; conditional `plant_ad2_init()`;
+  `TAPE_CLEAR` → `plant_tape_clear_both()`. Old engine untouched.
 - 1st order: `x² → 2x`, `x³ → 3x²`, `sum(x) → 1`.
 - 2nd order: `x² → 2`, `x³ → 6x`, `sum(x) → 0`.
 
 ### Fixed in v0.60.0b
-- **8 MID double-backward rules** (all taped): DIV (same-shape; `b==0` →
-  explicit error), MATMUL (transpose-based), RELU (mask), SIGMOID/TANH
-  (out-based), GELU (tanh-approx, mirrors the old engine), SWISH
-  (sigmoid-based), MISH (`t = out/x`; `x==0` documented edge).
-- **Scratch-list discipline** (`a2_keep`/`a2_release`) — eliminated the
-  MID intermediate leaks (0 B on every MID test).
-- **Level-≥3 gate**: `GRAD_HO` at frame level ≥2 now returns
-  `ad2: 3rd+ derivatives unsupported (single-DAG pending 0c)` instead of
-  a silently wrong number.
+- 7 MID double-backward rules (all taped): DIV (same-shape; `b==0` →
+  error), MATMUL, RELU, SIGMOID, TANH, GELU (tanh approx), SWISH, MISH
+  (`t = out/x`; `x==0` edge).
+- Scratch-list discipline (`a2_keep`/`a2_release`) — 0 leaks.
+- **Level-≥3 gate**: explicit error
+  `ad2: 3rd+ derivatives unsupported (single-DAG pending 0c)`.
+
+### Fixed in v0.60.0c
+- **SOFTMAX** (1-D and 2-D axis 0/1) double-backward, taped via
+  `a2_keep_sum` (keep-dim reduce, reuses the `A2_AXIS_SUM` node) +
+  `a2_bcast`. Second order supported.
+- **Broadcast MUL / DIV** (reduce-based accumulation via
+  `a2_bcast`/`a2_axis_sum`; `b==0` guard kept).
+- **Validated against the old engine**: softmax non-trivial gives
+  `[-0.25, 0.25]`, exactly matching `gradient_softmax_nontrivial`.
+- Leak fixed: the broadcast-DIV path's `scale(db_f,-1)` intermediate was
+  not scratch-tracked (72 B → 0 B).
 
 ### Documented semantics (v0.60.0b)
 - **`GRAD_HO` is single-gradient-per-forward-pass**: a second `GRAD_HO`
   on the *same* forward tape consumes the level-1 frame and produces a
-  wrong value (observed while probing `∂/∂a` and `∂/∂b` together). Use
-  **one `GRAD_HO` per forward pass** — or re-run the forward. This differs
-  from the old `GRAD`, which re-uses/clears its tape.
-  *Guard deferred to 0c.*
-
-### Deferred (0c)
-- **3rd-order correctness** — the current result carries a consistent
-  **2/3 coefficient** (`x³ → 4` instead of `6`, `x⁴ → 16x` instead of
-  `24x`), i.e. **one product-factor path is lost**. Needs a single-DAG
-  model (flatten all frames into one reverse-topological graph with a
-  per-node "processed" guard). A per-frame "expanded" marker is *not* the
-  fix (the defect is a missing path, not double counting).
-- **HARD ops**: softmax Jacobian, broadcast MUL/DIV.
-- `GRAD_HO` single-gradient guard.
+  wrong value. Use **one `GRAD_HO` per forward pass** — or re-run the
+  forward. Differs from the old `GRAD` (which re-uses/clears its tape).
+  *Guard deferred to 0d.*
 
 ### Deferred (0d)
+- **3rd-order correctness** — the current result carries a consistent
+  **2/3 coefficient** (`x³ → 4` instead of `6`, `x⁴ → 16x` instead of
+  `24x`), i.e. **one product-factor path is lost**. Root cause **unproven**;
+  the recommended path is an **instrumented diagnosis** (trace visited
+  nodes / grad-map transitions at levels 2→3) followed by a single-DAG
+  refactor (flatten all frames, reverse-topological, per-node processed
+  guard). A per-frame "expanded" marker is *not* the fix (missing path,
+  not double counting).
+- `GRAD_HO` single-gradient guard.
 - Integration polish + broader documentation.
 
 - **Tests (0a):** `td048_adv2_{square,square_at_3,second,cube,second_cube,grad_regression}`.
 - **Tests (0b):** `td048_adv2_{div,div_b,matmul_a,matmul_b,relu,sigmoid,tanh,gelu,swish,mish,third_unsupported}`.
+- **Tests (0c):** `td048_adv2_{softmax_1d,softmax_2d_axis1,softmax_nontrivial,softmax_2nd,bcast_mul,bcast_div}`.
 - **Related:** TD-055 (feature, deferred).
 ## TD-047: MAP value ownership — CLOSED (misdiagnosis, v0.58.0)
 - **Status:** ✅ CLOSED (misdiagnosis, v0.58.0)

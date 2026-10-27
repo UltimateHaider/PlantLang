@@ -1,0 +1,16 @@
+# TD-048: softmax weighted (matches old engine: [-0.25, 0.25]).
+CREATE a (TENSOR) TO TENSOR([0.0, 0.0]).
+TENSOR_TRACK(a).
+CREATE s (TENSOR) TO TENSOR_SOFTMAX(a, 0).
+CREATE w (TENSOR) TO TENSOR([1.0, 2.0]).
+CREATE m (TENSOR) TO TENSOR_MUL(s, w).
+CREATE loss (DBL) TO TENSOR_SUM(m).
+CREATE da (TENSOR) TO GRAD_HO(loss, a).
+SHOW da.
+TAPE_CLEAR().
+TENSOR_FREE(da).
+TENSOR_FREE(m).
+TENSOR_FREE(w).
+TENSOR_FREE(s).
+TENSOR_FREE(a).
+SHOW "td048-adv2-softmax-nontrivial-ok".

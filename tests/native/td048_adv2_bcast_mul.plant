@@ -1,0 +1,14 @@
+# TD-048: broadcast MUL (a [2,2] * b [2]) w.r.t. a.
+CREATE a (TENSOR) TO TENSOR([[1.0, 2.0], [3.0, 4.0]]).
+CREATE b (TENSOR) TO TENSOR([5.0, 6.0]).
+TENSOR_TRACK(a).
+CREATE c (TENSOR) TO TENSOR_MUL(a, b).
+CREATE loss (DBL) TO TENSOR_SUM(c).
+CREATE da (TENSOR) TO GRAD_HO(loss, a).
+SHOW da.
+TAPE_CLEAR().
+TENSOR_FREE(da).
+TENSOR_FREE(c).
+TENSOR_FREE(a).
+TENSOR_FREE(b).
+SHOW "td048-adv2-bcast-mul-ok".

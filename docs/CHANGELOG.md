@@ -1,3 +1,41 @@
+## v0.60.0c — ADv2 HARD ops (softmax + broadcast) (TD-048 PARTIAL 0c)
+
+### Added
+- ADv2 HARD double-backward rules (taped → second order supported):
+  - **SOFTMAX** (1-D and 2-D axis 0/1; taped Jacobian-vector via
+    `a2_keep_sum` + `a2_bcast`)
+  - **broadcast MUL** (reduce-based accumulation)
+  - **broadcast DIV** (quotient rule + reduce; `b==0` guard kept)
+- `a2_keep_sum` helper (keep-dim reduce; reuses the `A2_AXIS_SUM` node, so
+  no new op codes were needed).
+- 6 new tests (softmax 1-D / 2-D / non-trivial / 2nd order, bcast_mul,
+  bcast_div).
+
+### Fixed (during implementation)
+- The broadcast-DIV path leaked 72 B (`scale(db_f,-1)` intermediate was
+  not scratch-tracked) → now `a2_k(...)` → **0 B**.
+
+### Validated
+- **Softmax non-trivial: `[-0.25, 0.25]` — exact match with the old
+  engine's `gradient_softmax_nontrivial` reference** (Jacobian correct).
+- Softmax second order: `[0, 0, 0]`.
+- Broadcast MUL / DIV: verified against old-engine values.
+
+### Verified
+- Native: 292/292 (was 286)
+- Regression: 319/319
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (604,209 B)
+- valgrind strict: PASS
+- Binary: 1,069,928 bytes.
+
+### Out of Scope (v0.60.0d)
+- 3rd-order correctness (single-DAG refactor; needs an instrumented
+  diagnosis first — root cause unproven).
+- `GRAD_HO` single-gradient guard.
+- Integration + docs.
+
 ## v0.60.0b — ADv2 MID ops + level-≥3 gate (TD-048 PARTIAL 0b)
 
 ### Added
