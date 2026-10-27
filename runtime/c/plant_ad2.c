@@ -236,6 +236,40 @@ static PlantTensor* a2_reshape_like(PlantTensor* d, PlantTensor* like) {
     return r;
 }
 
+/* Untracked constant tensor (for 1-eps expressions / masks). */
+static PlantTensor* a2_const_like(PlantTensor* t, double v) {
+    PlantTensor* o = plant_tensor_create(t->ndim, t->shape);
+    int64_t i;
+    if (!o || plant_tensor_is_error(o)) return o;
+    for (i = 0; i < o->size; i++) o->data[i] = v;
+    return o;
+}
+
+/* 1 when any element is exactly zero (division guards). */
+static int a2_has_zero(PlantTensor* t) {
+    int64_t i;
+    if (!t) return 0;
+    for (i = 0; i < t->size; i++) if (t->data[i] == 0.0) return 1;
+    return 0;
+}
+
+/* Scratch list: intermediates created by a MID backward rule. Every
+   entry is released at the end of the rule (the tape holds its own
+   retain on whatever was recorded). */
+static PlantTensor* a2_keep[96];
+static int a2_nkeep = 0;
+
+static PlantTensor* a2_k(PlantTensor* t) {
+    if (t && a2_nkeep < 96) a2_keep[a2_nkeep++] = t;
+    return t;
+}
+
+static void a2_release(void) {
+    int i;
+    for (i = 0; i < a2_nkeep; i++) plant_tensor_free(a2_keep[i]);
+    a2_nkeep = 0;
+}
+
 /* ── Backward for one frame's nodes (taped) ─────────────────── */
 /* Returns NULL on success, an error tensor on failure. The gradient map
    is shared across ALL frames of the current level (v0.60.0a fix: a
@@ -279,6 +313,111 @@ static PlantTensor* a2_backprop_nodes(A2Frame* f) {
             case OP_RESHAPE:
                 a2_acc(n->in0, a2_reshape_like(d, n->in0));
                 break;
+            /* ── v0.60.0b — MID ops (taped double-backward) ────── */
+            case OP_DIV: {
+                PlantTensor* t1;
+                PlantTensor* t2;
+                PlantTensor* t3;
+                if (!n->in0 || !n->in1 || n->in0->size != n->in1->size)
+                    return plant_tensor_create_error("ad2: broadcast div unsupported (0c)");
+                if (a2_has_zero(n->in1))
+                    return plant_tensor_create_error("ad2: division by zero in backward");
+                /* da = d / b */
+                a2_acc(n->in0, plant_tensor_div(d, n->in1));
+                /* db = -(d * a) / (b * b) */
+                t1 = a2_k(plant_tensor_mul(d, n->in0));
+                t2 = a2_k(plant_tensor_mul(n->in1, n->in1));
+                t3 = a2_k(plant_tensor_div(t1, t2));
+                a2_acc(n->in1, plant_tensor_scale(t3, -1.0));
+                a2_release();
+                break;
+            }
+            case OP_MATMUL: {
+                PlantTensor* tb = a2_k(plant_tensor_transpose(n->in1));
+                PlantTensor* ta = a2_k(plant_tensor_transpose(n->in0));
+                PlantTensor* da_c = plant_tensor_matmul(d, tb);
+                PlantTensor* db_c = plant_tensor_matmul(ta, d);
+                a2_acc(n->in0, da_c);
+                a2_acc(n->in1, db_c);
+                a2_release();
+                break;
+            }
+            case OP_RELU: {
+                PlantTensor* mask = a2_const_like(n->in0, 0.0);
+                int64_t k;
+                if (!mask || plant_tensor_is_error(mask)) return mask;
+                for (k = 0; k < mask->size; k++)
+                    mask->data[k] = (n->in0->data[k] > 0.0) ? 1.0 : 0.0;
+                a2_acc(n->in0, plant_tensor_mul(d, mask));
+                plant_tensor_free(mask);
+                break;
+            }
+            case OP_SIGMOID: {
+                PlantTensor* one = a2_k(a2_const_like(n->out, 1.0));
+                PlantTensor* om = a2_k(plant_tensor_sub(one, n->out));
+                PlantTensor* prod = a2_k(plant_tensor_mul(n->out, om));
+                a2_acc(n->in0, plant_tensor_mul(d, prod));
+                a2_release();
+                break;
+            }
+            case OP_TANH: {
+                PlantTensor* one = a2_k(a2_const_like(n->out, 1.0));
+                PlantTensor* sq = a2_k(plant_tensor_mul(n->out, n->out));
+                PlantTensor* om = a2_k(plant_tensor_sub(one, sq));
+                a2_acc(n->in0, plant_tensor_mul(d, om));
+                a2_release();
+                break;
+            }
+            case OP_SWISH: {
+                PlantTensor* sg = a2_k(plant_tensor_sigmoid(n->in0));
+                PlantTensor* one = a2_k(a2_const_like(sg, 1.0));
+                PlantTensor* om = a2_k(plant_tensor_sub(one, sg));
+                PlantTensor* inner = a2_k(plant_tensor_mul(sg, om));
+                PlantTensor* term = a2_k(plant_tensor_mul(n->in0, inner));
+                PlantTensor* sum = a2_k(plant_tensor_add(sg, term));
+                a2_acc(n->in0, plant_tensor_mul(d, sum));
+                a2_release();
+                break;
+            }
+            case OP_GELU: {
+                const double GK = 0.7978845608028654;
+                const double GC = 0.044715;
+                PlantTensor* sq = a2_k(plant_tensor_mul(n->in0, n->in0));
+                PlantTensor* cu = a2_k(plant_tensor_mul(sq, n->in0));
+                PlantTensor* sc = a2_k(plant_tensor_scale(cu, GC));
+                PlantTensor* ad = a2_k(plant_tensor_add(n->in0, sc));
+                PlantTensor* u = a2_k(plant_tensor_scale(ad, GK));
+                PlantTensor* th = a2_k(plant_tensor_tanh(u));
+                PlantTensor* one = a2_k(a2_const_like(th, 1.0));
+                PlantTensor* s3 = a2_k(plant_tensor_scale(sq, 3.0 * GC));
+                PlantTensor* a1 = a2_k(plant_tensor_add(one, s3));
+                PlantTensor* du = a2_k(plant_tensor_scale(a1, GK));
+                PlantTensor* t1 = a2_k(plant_tensor_add(one, th));
+                PlantTensor* h1 = a2_k(plant_tensor_scale(t1, 0.5));
+                PlantTensor* th2 = a2_k(plant_tensor_mul(th, th));
+                PlantTensor* om = a2_k(plant_tensor_sub(one, th2));
+                PlantTensor* od = a2_k(plant_tensor_mul(om, du));
+                PlantTensor* ha = a2_k(plant_tensor_scale(n->in0, 0.5));
+                PlantTensor* t2 = a2_k(plant_tensor_mul(ha, od));
+                PlantTensor* g = a2_k(plant_tensor_add(h1, t2));
+                a2_acc(n->in0, plant_tensor_mul(d, g));
+                a2_release();
+                break;
+            }
+            case OP_MISH: {
+                /* t = tanh(softplus(x)) = out / x  (exact for x != 0) */
+                PlantTensor* t = a2_k(plant_tensor_div(n->out, n->in0));
+                PlantTensor* sg = a2_k(plant_tensor_sigmoid(n->in0));
+                PlantTensor* t2 = a2_k(plant_tensor_mul(t, t));
+                PlantTensor* one = a2_k(a2_const_like(t, 1.0));
+                PlantTensor* om = a2_k(plant_tensor_sub(one, t2));
+                PlantTensor* os = a2_k(plant_tensor_mul(om, sg));
+                PlantTensor* term = a2_k(plant_tensor_mul(n->in0, os));
+                PlantTensor* sum = a2_k(plant_tensor_add(t, term));
+                a2_acc(n->in0, plant_tensor_mul(d, sum));
+                a2_release();
+                break;
+            }
             case A2_BCAST:
                 a2_acc(n->in0, a2_axis_sum(d, n->in0));
                 break;
@@ -308,6 +447,15 @@ PlantTensor* plant_ad2_grad(double loss_d, PlantTensor* w) {
     if (!saved_hook) return plant_tensor_create_error("ad2: not initialized");
     if (!w->requires_grad) return plant_tensor_create_error("ad2: w requires_grad=0");
     if (!frame_top) return plant_tensor_create_error("ad2: not initialized");
+
+    /* v0.60.0b — gate level >= 3. The single-DAG refactor that makes the
+       third derivative correct is deferred to 0c; failing loudly is much
+       better than returning a wrong number (the 0a pass under-counted
+       triple-product paths, e.g. x^3 -> 4 instead of 6). */
+    if (frame_top->level >= 2) {
+        return plant_tensor_create_error(
+            "ad2: 3rd+ derivatives unsupported (single-DAG pending 0c)");
+    }
 
     f = frame_top;
     if (!f->head) return plant_tensor_create_error("ad2: empty tape");

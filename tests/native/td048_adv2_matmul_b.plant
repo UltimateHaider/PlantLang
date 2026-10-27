@@ -1,0 +1,14 @@
+# TD-048: GRAD_HO(TENSOR_MATMUL) w.r.t. b = a^T * d.
+CREATE a (TENSOR) TO TENSOR([[1.0, 2.0], [3.0, 4.0]]).
+CREATE b (TENSOR) TO TENSOR([[5.0, 6.0], [7.0, 8.0]]).
+TENSOR_TRACK(b).
+CREATE c (TENSOR) TO TENSOR_MATMUL(a, b).
+CREATE loss (DBL) TO TENSOR_SUM(c).
+CREATE db (TENSOR) TO GRAD_HO(loss, b).
+SHOW db.
+TAPE_CLEAR().
+TENSOR_FREE(db).
+TENSOR_FREE(c).
+TENSOR_FREE(a).
+TENSOR_FREE(b).
+SHOW "td048-adv2-matmul-b-ok".

@@ -1,8 +1,9 @@
 # Technical Debt Register — PlantLang Chloroplast
 
-> **Status (v0.60.0a): 0 known bugs open** — 0 silent-wrong, 0 crash,
-> 0 leak. TD-048 is PARTIAL (ADv2 0a: 1st/2nd order); TD-055 is a
-> feature; TD-016/TD-017 remain DEFERRED.
+> **Status (v0.60.0b): 0 known bugs open** — 0 silent-wrong, 0 crash,
+> 0 leak. TD-048 is PARTIAL (ADv2 0a+0b: 1st/2nd order + 8 MID ops;
+> 3rd order gated with an explicit error). TD-055 is a feature;
+> TD-016/TD-017 remain DEFERRED.
 
 ## TD-001: PlantArray never freed
 - **Status**: CLOSED (v0.51.2a)
@@ -830,65 +831,55 @@ defining scope.
   `td064_list_numeric_unchanged`.
 - **Related:** TD-063 (write side, closed v0.58.10).
 
-## TD-047: MAP value ownership — CLOSED (misdiagnosis, v0.58.0)
-- **Status:** ✅ CLOSED (misdiagnosis, v0.58.0)
-- **Introduced:** pre-v0.57.1 (discovered during the TD-044 investigation)
-- **Original claim:** `SET M["k"] TO a` + `LIST_FREE(M)` leaks 72 B.
-- **Correction (empirical):** the 72 B was the caller's **un-freed `a`**.
-  `LIST_FREE(M)` does not free map values (alias-only by design);
-  `TENSOR_FREE(a) + LIST_FREE(M)` = 0 leaks, no double free. **No fix needed.**
-- **Return-aliasing half:** fixed in v0.58.0 by `GIVE <bare var>` retain.
-- **Related:** TD-044, TD-046.
+## TD-048: Higher-order AD (differentiable backward) — PARTIAL (0a + 0b)
 
-## TD-048: Higher-order AD (differentiable backward) — PARTIAL (0a)
+- **Status:** PARTIAL — v0.60.0a (skeleton, 1st/2nd order) + v0.60.0b
+  (8 MID ops, level-≥3 gate). HARD ops and true 3rd order → 0c.
 
-- **Status:** PARTIAL — v0.60.0a ships the ADv2 skeleton + verified 1st/2nd
-  order; 3rd order and the remaining ops are deferred to 0b/0c.
-- **Introduced:** v0.57.3 (first-order backward is non-differentiable);
-  hardened v0.57.4 (explicit error instead of silent-wrong).
+### Fixed in v0.60.0a
+- New `runtime/c/plant_ad2.{c,h}`: **chained** tape hook, own tape
+  (`A2Node`) + LIFO frame stack (`A2Frame`), taped backward with tracked
+  gradients; `GRAD_HO(loss, w)`; conditional `plant_ad2_init()`;
+  `TAPE_CLEAR` → `plant_tape_clear_both()`.
+- `plant_autograd.c` / `plant_tensor.c` untouched (old engine = fallback).
+- 1st order: `x² → 2x`, `x³ → 3x²`, `sum(x) → 1`.
+- 2nd order: `x² → 2`, `x³ → 6x`, `sum(x) → 0`.
 
-### Fixed in v0.60.0a (ADv2 isolated module)
-- New `runtime/c/plant_ad2.{c,h}` (~390 lines): **chained** tape hook
-  (`plant_tape_record_hook`), own tape (`A2Node`) + LIFO **frame stack**
-  (`A2Frame`), and a **taped backward** whose gradients are tracked.
-- `GRAD_HO(loss, w)` → `plant_ad2_grad`; `plant_ad2_init()` is emitted
-  **only** for programs that use `GRAD_HO` (zero overhead otherwise).
-- `TAPE_CLEAR` → `plant_tape_clear_both()` (clears both engines).
-- `plant_autograd.c` and `plant_tensor.c` are **untouched** — the old
-  engine remains the fallback and is regression-locked.
-- Supported ops (0a): ADD SUB MUL(same-shape) SCALE SUM MEAN TRANSPOSE
-  RESHAPE + local `A2_BCAST`/`A2_AXIS_SUM`. Anything else returns an
-  **explicit error** (never silent-wrong).
+### Fixed in v0.60.0b
+- **8 MID double-backward rules** (all taped): DIV (same-shape; `b==0` →
+  explicit error), MATMUL (transpose-based), RELU (mask), SIGMOID/TANH
+  (out-based), GELU (tanh-approx, mirrors the old engine), SWISH
+  (sigmoid-based), MISH (`t = out/x`; `x==0` documented edge).
+- **Scratch-list discipline** (`a2_keep`/`a2_release`) — eliminated the
+  MID intermediate leaks (0 B on every MID test).
+- **Level-≥3 gate**: `GRAD_HO` at frame level ≥2 now returns
+  `ad2: 3rd+ derivatives unsupported (single-DAG pending 0c)` instead of
+  a silently wrong number.
 
-### Verified matrix
-| Expression | 1st (GRAD_HO) | 2nd (nested GRAD_HO) |
-|---|---|---|
-| `sum(x*x)` | `2x` | `2` |
-| `sum(x*x*x)` | `3x²` | `6x` |
-| `sum(x)` | `1` | `0` |
+### Documented semantics (v0.60.0b)
+- **`GRAD_HO` is single-gradient-per-forward-pass**: a second `GRAD_HO`
+  on the *same* forward tape consumes the level-1 frame and produces a
+  wrong value (observed while probing `∂/∂a` and `∂/∂b` together). Use
+  **one `GRAD_HO` per forward pass** — or re-run the forward. This differs
+  from the old `GRAD`, which re-uses/clears its tape.
+  *Guard deferred to 0c.*
 
-### Bugs found & fixed during 0a
-1. `plant_free` is the **magic dispatcher** (no-op on raw nodes) → leaked
-   every `A2Node`/`A2Frame`/`A2Grad`. Fixed with `free()`.
-2. **Frame traversal**: the backward only walked the top frame, dropping
-   paths through forward tensors (x³ 2nd gave `4x`). Now every older frame
-   is traversed → `6x`.
-3. Missing `#include "plant_malloc.h"`.
+### Deferred (0c)
+- **3rd-order correctness** — the current result carries a consistent
+  **2/3 coefficient** (`x³ → 4` instead of `6`, `x⁴ → 16x` instead of
+  `24x`), i.e. **one product-factor path is lost**. Needs a single-DAG
+  model (flatten all frames into one reverse-topological graph with a
+  per-node "processed" guard). A per-frame "expanded" marker is *not* the
+  fix (the defect is a missing path, not double counting).
+- **HARD ops**: softmax Jacobian, broadcast MUL/DIV.
+- `GRAD_HO` single-gradient guard.
 
-### Deferred (0b/0c/d)
-- **3rd order**: `d³/dx³(x³)` returns `[4,4]` instead of `[6,6]` —
-  re-traversing frames ≥2 double-counts paths already encoded by the
-  level-k−1 backward. Needs a per-frame "already expanded" marker (or a
-  single-DAG model).
-- MID ops: DIV, MATMUL, RELU/SIGMOID/TANH/GELU/SWISH/MISH.
-- HARD ops: softmax Jacobian, broadcast MUL/DIV.
-- Integration polish + broader tests.
+### Deferred (0d)
+- Integration polish + broader documentation.
 
-- **Tests:** `td048_adv2_square`, `td048_adv2_square_at_3`,
-  `td048_adv2_second`, `td048_adv2_cube`, `td048_adv2_second_cube`,
-  `td048_adv2_grad_regression`.
+- **Tests (0a):** `td048_adv2_{square,square_at_3,second,cube,second_cube,grad_regression}`.
+- **Tests (0b):** `td048_adv2_{div,div_b,matmul_a,matmul_b,relu,sigmoid,tanh,gelu,swish,mish,third_unsupported}`.
 - **Related:** TD-055 (feature, deferred).
-
 ## TD-047: MAP value ownership — CLOSED (misdiagnosis, v0.58.0)
 - **Status:** ✅ CLOSED (misdiagnosis, v0.58.0)
 - **Introduced:** pre-v0.57.1 (discovered during the TD-044 investigation)

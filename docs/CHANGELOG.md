@@ -1,3 +1,46 @@
+## v0.60.0b — ADv2 MID ops + level-≥3 gate (TD-048 PARTIAL 0b)
+
+### Added
+- ADv2 MID ops (8 double-backward rules, all **taped**):
+  - `DIV` (same-shape; `b==0` → explicit error)
+  - `MATMUL` (transpose-based)
+  - `RELU` (mask)
+  - `SIGMOID` / `TANH` (out-based)
+  - `GELU` (tanh approximation — mirrors the old engine)
+  - `SWISH` (sigmoid-based)
+  - `MISH` (`t = out/x`; `x==0` documented edge)
+- Scratch-list discipline (`a2_keep`/`a2_release`) → **0 leaks** on all
+  MID ops.
+- **Level-≥3 gate**: explicit error
+  `ad2: 3rd+ derivatives unsupported (single-DAG pending 0c)` — removes
+  the silent-wrong result at level ≥3.
+- 11 new tests (10 MID — split per single-gradient-per-forward — + 1 gate).
+
+### Documented (semantics)
+- `GRAD_HO` is **single-gradient-per-forward-pass**: a second `GRAD_HO` on
+  the same forward tape consumes the level-1 frame and yields a wrong
+  value. Use one `GRAD_HO` per forward pass (or re-run the forward).
+  Differs from the old `GRAD` (which re-uses/clears its tape). Guard
+  deferred to 0c.
+
+### Fixed (during implementation)
+- MID intermediate leaks (scratch-list `a2_keep`/`a2_release`).
+
+### Verified
+- Native: 286/286 (was 275)
+- Regression: 319/319
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (604,209 B)
+- valgrind strict: PASS
+- Binary: 1,065,792 bytes.
+
+### Out of Scope (v0.60.0c/d)
+- 3rd-order correctness (single-DAG refactor).
+- HARD ops (softmax Jacobian, broadcast MUL/DIV).
+- `GRAD_HO` single-gradient guard.
+- Integration + docs.
+
 ## v0.60.0a — ADv2 (Skeleton) — TD-048 PARTIAL
 
 ### Added
