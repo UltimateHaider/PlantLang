@@ -1,9 +1,9 @@
 # Technical Debt Register — PlantLang Chloroplast
 
-> **Status (v0.60.0d): 0 known bugs open** — 0 silent-wrong, 0 crash,
-> 0 leak. TD-048 is CLOSED (higher-order AD: 1st/2nd order complete;
-> 3rd+ unsupported by design with an explicit error gate). TD-055 is a
-> feature; TD-016/TD-017 remain DEFERRED.
+> **Status (v0.61.0a): 0 known bugs open** — 0 silent-wrong, 0 crash,
+> 0 leak. TD-048 CLOSED (1st/2nd order; 3rd by design). TD-065 CLOSED
+> (ADv2 broadcast-ADD). TD-055 is a feature; TD-016/TD-017 remain
+> DEFERRED.
 
 ## TD-001: PlantArray never freed
 - **Status**: CLOSED (v0.51.2a)
@@ -830,6 +830,29 @@ defining scope.
 - **Tests:** `td064_map_bracket_read`, `td064_map_bracket_nested`,
   `td064_list_numeric_unchanged`.
 - **Related:** TD-063 (write side, closed v0.58.10).
+
+## TD-065: ADv2 broadcast-ADD not reduce-aware — CLOSED
+
+- **Status:** ✅ CLOSED in v0.61.0a
+- **Introduced:** pre-v0.61.0a (discovered during the DENSE design
+  investigation; the DENSE bias `[n]` broadcast into `[m,n]`).
+- **Symptom:** ADv2's `OP_ADD` / `OP_SUB` did
+  `a2_acc(in0, deep_copy(d))` with **no reduction** — a broadcast bias got
+  an `[m,n]` gradient pushed into an `[n]` tensor → wrong value or shape
+  error in a second-order pass.
+- **Fix:** always reduce onto each operand's **shape**:
+  `a2_acc(n->in0, a2_axis_sum(d, n->in0))` (and the same for `in1`).
+  - **2 extra bugs found while fixing it:**
+    - **size equality is insufficient** — `[1,1] + [1]` has equal size but
+      different shape (exactly the single-sample DENSE bias case);
+    - the same-shape path must also reduce → fixed the aliased
+      `add(b, b)` second derivative (`[8]`, was `[0]`).
+- **Verified:**
+  - `d²(Σy²)/db²` through the DENSE bias: `d1 = [3]`, `d2 = [2]` (was `[0]`).
+  - `add(b,b)` second derivative: `[8]` (was `[0]`).
+  - All 292 baseline tests unchanged.
+- **Tests:** `dense_backward_b`, plus the ADv2 suite (unchanged).
+- **Related:** DENSE primitive (v0.61.0a).
 
 ## TD-048: Higher-order AD — CLOSED (1st/2nd complete, 3rd by design)
 

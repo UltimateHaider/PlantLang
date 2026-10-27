@@ -961,3 +961,42 @@ PlantTensor* plant_tensor_mish(PlantTensor* a) {
     }
     return o;
 }
+
+/* ── v0.61.0a — NN primitives (DENSE) ───────────────────────── */
+PlantTensor* plant_tensor_random_uniform(int64_t ndim, const int64_t* shape,
+                                         double lo, double hi) {
+    PlantTensor* t;
+    int64_t i;
+    double range;
+    if (ndim < 1 || ndim > 16 || !shape)
+        return plant_tensor_create_error("rand: bad shape");
+    t = plant_tensor_create(ndim, shape);
+    if (!t || plant_tensor_is_error(t)) return t;
+    range = hi - lo;
+    for (i = 0; i < t->size; i++)
+        t->data[i] = lo + range * ((double)rand() / ((double)RAND_MAX + 1.0));
+    return t;
+}
+
+PlantTensor* plant_tensor_rand_uniform(PlantArray* dims, double lo, double hi) {
+    int64_t nd, i, shp[16];
+    if (!dims) return plant_tensor_create_error("rand: null dims");
+    nd = dims->count;
+    if (nd < 1 || nd > 16) return plant_tensor_create_error("rand: bad dims");
+    for (i = 0; i < nd; i++) {
+        const char* sv = _S(plant_list_get(dims, i));
+        shp[i] = (int64_t)strtoll(sv ? sv : "0", NULL, 10);
+    }
+    return plant_tensor_random_uniform(nd, shp, lo, hi);
+}
+
+PlantTensor* plant_dense_forward(PlantTensor* x, PlantTensor* w, PlantTensor* b) {
+    PlantTensor* xw;
+    PlantTensor* y;
+    if (!x || !w || !b) return plant_tensor_create_error("dense_forward: null argument");
+    xw = plant_tensor_matmul(x, w);
+    if (!xw || plant_tensor_is_error(xw)) return xw;
+    y = plant_tensor_add(xw, b);
+    plant_tensor_free(xw);          /* local intermediate (tape keeps its own ref) */
+    return y;
+}

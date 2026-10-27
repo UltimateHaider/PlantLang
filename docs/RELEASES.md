@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.60.0d
+# Auto-updated: 0.61.0a
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.60.0d | 1069928 | 8963 | 963 | 109 | 330 | 5361 |
+| v0.61.0a | 1070072 | 8963 | 1002 | 109 | 330 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -94,6 +94,7 @@
 | v0.60.0b | 2026 | ADv2 MID ops + 3rd gate (TD-048 partial 0b) | Released |
 | v0.60.0c | 2026 | ADv2 HARD ops (softmax + broadcast) (TD-048 partial 0c) | Released |
 | v0.60.0d | 2026 | TD-048 re-scoped (1st/2nd complete) | Released |
+| v0.61.0a | 2026 | DENSE primitive + TD-065 (ADv2 broadcast-ADD) | Released |
 
 ## Growth Chart (ASCII)
 

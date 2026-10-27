@@ -95,6 +95,12 @@ PlantTensor* plant_tensor_mish(PlantTensor* a);
 void         plant_tensor_retain(PlantTensor* t);
 int          plant_tensor_requires_grad(PlantTensor* t);
 void         plant_tensor_set_requires_grad(PlantTensor* t, int v);
+/* v0.61.0a — NN primitives (DENSE). */
+PlantTensor* plant_tensor_random_uniform(int64_t ndim, const int64_t* shape,
+                                         double lo, double hi);
+PlantTensor* plant_tensor_rand_uniform(struct PlantArray* dims, double lo, double hi);
+PlantTensor* plant_dense_forward(PlantTensor* x, PlantTensor* w, PlantTensor* b);
+
 PlantTensor* plant_tensor_track(PlantTensor* t);
 
 /* v0.56.0a — tape hook (defined in plant_tensor.c, assigned by

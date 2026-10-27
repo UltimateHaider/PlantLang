@@ -318,12 +318,25 @@ static PlantTensor* a2_backprop_nodes(A2Frame* f) {
         if (plant_tensor_is_error(d)) continue;
         switch (n->op) {
             case OP_ADD:
-                a2_acc(n->in0, plant_tensor_deep_copy(d));
-                if (n->in1) a2_acc(n->in1, plant_tensor_deep_copy(d));
+                if (!n->in0 || !n->in1)
+                    return plant_tensor_create_error("ad2: add null operand");
+                /* v0.61.0a — TD-065: ALWAYS reduce the incoming gradient onto
+                   each operand's SHAPE (not size). This covers DENSE's bias
+                   broadcast ([m,n] + [n]) and the [1,1] + [1] corner where the
+                   sizes match but the shapes do not. For identical shapes
+                   a2_axis_sum is a plain copy. */
+                a2_acc(n->in0, a2_axis_sum(d, n->in0));
+                a2_acc(n->in1, a2_axis_sum(d, n->in1));
                 break;
             case OP_SUB:
-                a2_acc(n->in0, plant_tensor_deep_copy(d));
-                if (n->in1) a2_acc(n->in1, plant_tensor_scale(d, -1.0));
+                if (!n->in0 || !n->in1)
+                    return plant_tensor_create_error("ad2: sub null operand");
+                {
+                    PlantTensor* neg = a2_k(plant_tensor_scale(d, -1.0));
+                    a2_acc(n->in0, a2_axis_sum(d, n->in0));
+                    a2_acc(n->in1, a2_axis_sum(neg, n->in1));
+                    a2_release();
+                }
                 break;
             case OP_MUL:
                 if (!n->in0 || !n->in1)

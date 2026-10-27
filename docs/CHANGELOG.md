@@ -1,3 +1,57 @@
+## v0.61.0a — DENSE primitive + TD-065 (ADv2 broadcast-ADD)
+
+### Added
+- **DENSE primitive** (`plant_dense_forward(x, w, b)`):
+  - `y = matmul(x, w) + b` (broadcast bias).
+  - Reuses the existing matmul + add ops; frees its internal `xw`
+    (no leak).
+  - Codegen: `DENSE_FORWARD(x, w, b)` mapper.
+- **`plant_tensor_random_uniform`**: weight init (uniform `[lo, hi)`).
+  - `plant_tensor_rand_uniform(dims, lo, hi)`: list-based wrapper
+    (mapper-friendly, mirrors `reshape`).
+  - Codegen: `TENSOR_RAND_UNIFORM([dims], lo, hi)` mapper.
+
+### Fixed (TD-065: ADv2 broadcast-ADD)
+- **TD-065 CLOSED**: ADv2's `OP_ADD` / `OP_SUB` now reduce gradients to each
+  operand's **shape** (not size).
+  - Previously, same-size-but-different-shape operands (e.g. `[1,1] + [1]`,
+    exactly the DENSE bias case for a single-sample batch) got wrong
+    gradients.
+  - Now: `a2_axis_sum(d, in0)` / `a2_axis_sum(d, in1)` — always
+    shape-driven, even for same-shape operands (which also fixed a second
+    aliased-add case: `add(b,b)` second derivative `[8]`, was `[0]`).
+  - Two extra bug fixes discovered during implementation:
+    - size equality is insufficient (must be shape-driven);
+    - the same-shape path must also reduce (aliased-add fix).
+
+### Added (docs)
+- `docs/NN_LIMITATIONS.md` (new): 2-D only, bias broadcast, init ranges,
+  TD-041 intermediate rule, RNG/seeding, matmul limits, backward orders,
+  `GRAD_HO` semantics.
+- `docs/DENSE_TRAINING_RECIPE.md` (new): forward, init, track, loss (named
+  intermediates), 1st/2nd-order backward, SGD step, teardown, rules.
+
+### Added (tests)
+- 6 tests: `dense_forward`, `dense_backward_w`, `dense_backward_b`,
+  `dense_backward_x`, `dense_relu_stack`, `dense_sgd_step`.
+- All 0 B (TAPE_CLEAR + named intermediates).
+
+### Verified
+- Native: 298/298 (was 292, +6)
+- Regression: 319/319
+- Generics: 7/7
+- Closures: 6/6
+- Self-hosting: converged (604,363 B)
+- valgrind strict: PASS
+- Binary: 1,070,072 bytes (+144)
+
+### Out of Scope (v0.61.0b+)
+- Activations integration (v0.61.0b).
+- CONV2D (v0.61.0c).
+- BatchNorm + LayerNorm (v0.61.0d).
+- Dropout + full NN example (v0.61.0e).
+- RNG seeding (v0.62.0+).
+
 ## v0.60.0d — TD-048 re-scoped (1st/2nd complete)
 
 ### Decided

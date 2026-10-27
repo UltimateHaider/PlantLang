@@ -5230,6 +5230,9 @@ ACTION translate_expr(expr(TXT), nums(LST), evars(LST), maths(LST)),
     REAP e FROM _handle_func_paren, e, "TENSOR_MISH",      "plant_tensor_mish".
     # v0.56.0a — autograd.
     REAP e FROM _handle_func_paren, e, "TENSOR_TRACK",     "plant_tensor_track".
+    # v0.61.0a — NN primitives (DENSE + random init).
+    REAP e FROM _handle_func_paren, e, "TENSOR_RAND_UNIFORM", "plant_tensor_rand_uniform".
+    REAP e FROM _handle_func_paren, e, "DENSE_FORWARD",   "plant_dense_forward".
     # v0.60.0a — ADv2: GRAD_HO(loss, w) → plant_ad2_grad (higher-order).
     # MUST run before the GRAD rewrites (GRAD_HO contains "GRAD").
     REAP e FROM _handle_func_paren, e, "GRAD_HO",          "plant_ad2_grad".

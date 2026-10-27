@@ -1,0 +1,18 @@
+# DENSE backward: db = sum over batch of 2y.
+CREATE X (TENSOR) TO TENSOR([[1.0, 2.0], [3.0, 4.0]]).
+CREATE W (TENSOR) TO TENSOR([[0.5], [0.5]]).
+CREATE b (TENSOR) TO TENSOR([0.0]).
+TENSOR_TRACK(b).
+CREATE y (TENSOR) TO DENSE_FORWARD(X, W, b).
+CREATE y2 (TENSOR) TO TENSOR_MUL(y, y).
+CREATE loss (DBL) TO TENSOR_SUM(y2).
+CREATE db (TENSOR) TO GRAD(loss, b, 1).
+SHOW db.
+TAPE_CLEAR().
+TENSOR_FREE(db).
+TENSOR_FREE(y2).
+TENSOR_FREE(y).
+TENSOR_FREE(b).
+TENSOR_FREE(W).
+TENSOR_FREE(X).
+SHOW "dense-backward-b-ok".

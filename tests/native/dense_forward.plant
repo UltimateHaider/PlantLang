@@ -1,0 +1,11 @@
+# DENSE forward: y = matmul(x, w) + b (broadcast bias).
+CREATE X (TENSOR) TO TENSOR([[1.0, 2.0], [3.0, 4.0]]).
+CREATE W (TENSOR) TO TENSOR([[0.5, 0.5], [0.5, 0.5]]).
+CREATE b (TENSOR) TO TENSOR([0.1, 0.2]).
+CREATE y (TENSOR) TO DENSE_FORWARD(X, W, b).
+SHOW y.
+TENSOR_FREE(y).
+TENSOR_FREE(b).
+TENSOR_FREE(W).
+TENSOR_FREE(X).
+SHOW "dense-forward-ok".

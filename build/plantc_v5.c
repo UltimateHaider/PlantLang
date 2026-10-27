@@ -12851,6 +12851,8 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* 
     e = _handle_func_paren(e, "TENSOR_SWISH", "plant_tensor_swish");
     e = _handle_func_paren(e, "TENSOR_MISH", "plant_tensor_mish");
     e = _handle_func_paren(e, "TENSOR_TRACK", "plant_tensor_track");
+    e = _handle_func_paren(e, "TENSOR_RAND_UNIFORM", "plant_tensor_rand_uniform");
+    e = _handle_func_paren(e, "DENSE_FORWARD", "plant_dense_forward");
     e = _handle_func_paren(e, "GRAD_HO", "plant_ad2_grad");
     e = _grad_retain_rewrite(e);
     e = _handle_func_paren(e, "GRAD", "plant_grad");
@@ -19715,7 +19717,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.60.0d (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.61.0a (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);
