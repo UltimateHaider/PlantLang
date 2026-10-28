@@ -158,6 +158,14 @@ void (*plant_tape_record_conv_hook)(PlantTensor* x, PlantTensor* k,
                                     PlantTensor* b, int64_t stride,
                                     int64_t pad, PlantTensor* out) = 0;
 
+/* v0.61.3 — norm tape hooks. */
+void (*plant_tape_record_batchnorm_hook)(PlantTensor* x, PlantTensor* g,
+                                         PlantTensor* b, double eps,
+                                         PlantTensor* out) = 0;
+void (*plant_tape_record_layernorm_hook)(PlantTensor* x, PlantTensor* g,
+                                         PlantTensor* b, double eps,
+                                         PlantTensor* out) = 0;
+
 /* ── plant_tensor_deep_copy ─────────────────────────────────── */
 PlantTensor* plant_tensor_deep_copy(const PlantTensor* src) {
     PlantTensor* t;
@@ -703,6 +711,101 @@ PlantTensor* plant_tensor_reshape_n(PlantTensor* a, int nd, ...) {
         o->requires_grad = 1;
     }
     return o;
+}
+
+/* v0.61.3 — BatchNorm forward (direct loops, biased variance).
+   4-D [N,C,H,W] → per-channel over (N,H,W); 2-D [N,F] → per-feature.
+   Statistics are recomputed identically by the backward rule. */
+PlantTensor* plant_batchnorm_forward(PlantTensor* x, PlantTensor* gamma,
+                                     PlantTensor* beta, double eps) {
+    int64_t n, c, h, w, i;
+    int64_t N, C, M, H, W;
+    double sum, sq, mean, var, inv, g, b;
+    PlantTensor* y;
+    if (!x || !gamma || !beta)
+        return plant_tensor_create_error("batchnorm: null argument");
+    if (plant_tensor_is_error(x)) return x;
+    if (plant_tensor_is_error(gamma)) return gamma;
+    if (plant_tensor_is_error(beta)) return beta;
+    if (x->ndim != 2 && x->ndim != 4)
+        return plant_tensor_create_error("batchnorm: ndim must be 2 or 4");
+    N = x->shape[0];
+    C = x->shape[1];
+    H = (x->ndim == 4) ? x->shape[2] : 1;
+    W = (x->ndim == 4) ? x->shape[3] : 1;
+    M = N * H * W;
+    if (gamma->size != C || beta->size != C)
+        return plant_tensor_create_error("batchnorm: gamma/beta must be [C]");
+    y = plant_tensor_create(x->ndim, x->shape);
+    if (plant_tensor_is_error(y)) return y;
+    for (c = 0; c < C; c++) {
+        sum = 0.0; sq = 0.0;
+        for (n = 0; n < N; n++)
+          for (h = 0; h < H; h++)
+            for (w = 0; w < W; w++) {
+                double v = x->data[((n * C + c) * H + h) * W + w];
+                sum += v; sq += v * v;
+            }
+        mean = sum / (double)M;
+        var = sq / (double)M - mean * mean;
+        inv = 1.0 / sqrt(var + eps);
+        g = gamma->data[c];
+        b = beta->data[c];
+        for (n = 0; n < N; n++)
+          for (h = 0; h < H; h++)
+            for (w = 0; w < W; w++) {
+                i = ((n * C + c) * H + h) * W + w;
+                y->data[i] = g * ((x->data[i] - mean) * inv) + b;
+            }
+    }
+    if (plant_tape_record_batchnorm_hook &&
+        (plant_tensor_requires_grad(x) || plant_tensor_requires_grad(gamma) ||
+         plant_tensor_requires_grad(beta))) {
+        plant_tape_record_batchnorm_hook(x, gamma, beta, eps, y);
+        y->requires_grad = 1;
+    }
+    return y;
+}
+
+/* v0.61.3 — LayerNorm forward (last axis, any ndim). */
+PlantTensor* plant_layernorm_forward(PlantTensor* x, PlantTensor* gamma,
+                                     PlantTensor* beta, double eps) {
+    int64_t F, f, r, rows;
+    double sum, sq, mean, var, inv;
+    PlantTensor* y;
+    if (!x || !gamma || !beta)
+        return plant_tensor_create_error("layernorm: null argument");
+    if (plant_tensor_is_error(x)) return x;
+    if (plant_tensor_is_error(gamma)) return gamma;
+    if (plant_tensor_is_error(beta)) return beta;
+    if (x->ndim < 1)
+        return plant_tensor_create_error("layernorm: ndim < 1");
+    F = x->shape[x->ndim - 1];
+    if (gamma->size != F || beta->size != F)
+        return plant_tensor_create_error("layernorm: gamma/beta must be [F]");
+    rows = x->size / F;
+    y = plant_tensor_create(x->ndim, x->shape);
+    if (plant_tensor_is_error(y)) return y;
+    for (r = 0; r < rows; r++) {
+        sum = 0.0; sq = 0.0;
+        for (f = 0; f < F; f++) {
+            double v = x->data[r * F + f];
+            sum += v; sq += v * v;
+        }
+        mean = sum / (double)F;
+        var = sq / (double)F - mean * mean;
+        inv = 1.0 / sqrt(var + eps);
+        for (f = 0; f < F; f++)
+            y->data[r * F + f] = gamma->data[f] *
+                                 ((x->data[r * F + f] - mean) * inv) + beta->data[f];
+    }
+    if (plant_tape_record_layernorm_hook &&
+        (plant_tensor_requires_grad(x) || plant_tensor_requires_grad(gamma) ||
+         plant_tensor_requires_grad(beta))) {
+        plant_tape_record_layernorm_hook(x, gamma, beta, eps, y);
+        y->requires_grad = 1;
+    }
+    return y;
 }
 
 /* v0.61.2 — TD-067: legacy list-form reshape; frees the literal list. */

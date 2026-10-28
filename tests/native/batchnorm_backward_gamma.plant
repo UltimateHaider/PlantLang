@@ -1,0 +1,20 @@
+# BatchNorm backward: dgamma = sum(dy * xhat).
+CREATE X (TENSOR) TO TENSOR([[1.0], [2.0], [3.0], [4.0]]).
+CREATE g (TENSOR) TO TENSOR([1.0]).
+CREATE b (TENSOR) TO TENSOR([0.0]).
+CREATE M (TENSOR) TO TENSOR([[1.0], [0.0], [0.0], [0.0]]).
+TENSOR_TRACK(g).
+CREATE y (TENSOR) TO BATCHNORM_FORWARD(X, g, b, 0.00001).
+CREATE ym (TENSOR) TO TENSOR_MUL(y, M).
+CREATE loss (DBL) TO TENSOR_SUM(ym).
+CREATE dg (TENSOR) TO GRAD(loss, g, 1).
+SHOW dg.
+TAPE_CLEAR().
+TENSOR_FREE(dg).
+TENSOR_FREE(ym).
+TENSOR_FREE(y).
+TENSOR_FREE(M).
+TENSOR_FREE(b).
+TENSOR_FREE(g).
+TENSOR_FREE(X).
+SHOW "batchnorm-backward-gamma-ok".

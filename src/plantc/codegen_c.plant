@@ -5238,6 +5238,9 @@ ACTION translate_expr(expr(TXT), nums(LST), evars(LST), maths(LST)),
     REAP e FROM _handle_func_paren, e, "DENSE_FORWARD",   "plant_dense_forward".
     # v0.61.2 — CONV2D (taped OP_CONV2D; use GRAD, not GRAD_HO).
     REAP e FROM _handle_func_paren, e, "CONV2D_FORWARD",  "plant_conv2d_forward".
+    # v0.61.3 — normalisation layers (taped; use GRAD, not GRAD_HO).
+    REAP e FROM _handle_func_paren, e, "BATCHNORM_FORWARD", "plant_batchnorm_forward".
+    REAP e FROM _handle_func_paren, e, "LAYERNORM_FORWARD", "plant_layernorm_forward".
     # v0.60.0a — ADv2: GRAD_HO(loss, w) → plant_ad2_grad (higher-order).
     # MUST run before the GRAD rewrites (GRAD_HO contains "GRAD").
     REAP e FROM _handle_func_paren, e, "GRAD_HO",          "plant_ad2_grad".

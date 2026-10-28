@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.61.2
+# Auto-updated: 0.61.3
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.61.2 | 1074584 | 8963 | 1110 | 109 | 330 | 5361 |
+| v0.61.3 | 1083304 | 8963 | 1213 | 109 | 330 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -97,6 +97,7 @@
 | v0.61.0a | 2026 | DENSE primitive + TD-065 (ADv2 broadcast-ADD) | Released |
 | v0.61.1 | 2026 | Activations integration + TD-066 fix | Released |
 | v0.61.2 | 2026 | CONV2D + TD-067 fix | Released |
+| v0.61.3 | 2026 | BatchNorm + LayerNorm | Released |
 
 ## Growth Chart (ASCII)
 

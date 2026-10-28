@@ -38,6 +38,10 @@
 /* v0.61.2 — CONV2D. */
 #define OP_CONV2D   18
 
+/* v0.61.3 — normalisation layers. */
+#define OP_BATCHNORM 19
+#define OP_LAYERNORM 20
+
 /* Init: register the tape hook with plant_tensor.c. */
 void plant_autograd_init(void);
 
@@ -48,6 +52,12 @@ void plant_tape_record(int op, PlantTensor* a, PlantTensor* b,
 /* v0.61.2 — CONV2D recorder (x, k, optional bias, stride, pad). */
 void plant_tape_record_conv(PlantTensor* x, PlantTensor* k, PlantTensor* b,
                             int64_t stride, int64_t pad, PlantTensor* out);
+
+/* v0.61.3 — norm recorders (x, gamma, beta, eps). */
+void plant_tape_record_batchnorm(PlantTensor* x, PlantTensor* g, PlantTensor* b,
+                                 double eps, PlantTensor* out);
+void plant_tape_record_layernorm(PlantTensor* x, PlantTensor* g, PlantTensor* b,
+                                 double eps, PlantTensor* out);
 void plant_tape_clear(void);
 
 /* Core GRAD (4-arg + v0.57.3 retain flag). */

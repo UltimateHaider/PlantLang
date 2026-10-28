@@ -1,9 +1,9 @@
 # Technical Debt Register — PlantLang Chloroplast
 
-> **Status (v0.61.2): 0 known bugs open** — 0 silent-wrong, 0 crash, 0 leak.
-> TD-048 CLOSED (1st/2nd order; 3rd by design). TD-065 CLOSED. TD-066
-> CLOSED (retain precision). TD-067 CLOSED (reshape literal leak).
-> TD-055 is a feature; TD-016/TD-017 remain DEFERRED.
+> **Status (v0.61.3): 0 known bugs open** — 0 silent-wrong, 0 crash, 0 leak.
+> TD-048 CLOSED (1st/2nd order; 3rd by design). TD-065/066/067 CLOSED.
+> TD-068 OPEN (utility: axis/`sqrt` primitives). TD-055 is a feature;
+> TD-016/TD-017 remain DEFERRED.
 
 ## TD-001: PlantArray never freed
 - **Status**: CLOSED (v0.51.2a)
@@ -830,6 +830,21 @@ defining scope.
 - **Tests:** `td064_map_bracket_read`, `td064_map_bracket_nested`,
   `td064_list_numeric_unchanged`.
 - **Related:** TD-063 (write side, closed v0.58.10).
+
+## TD-068: no axis-reduction / `sqrt` tensor primitives — OPEN (utility)
+
+- **Status:** OPEN (utility request, **not a bug**)
+- **Introduced:** identified during the v0.61.3 investigation.
+- **Impact:** LOW — nothing is broken; BatchNorm/LayerNorm use direct loops.
+- **Symptom:** there is no `mean_axis`/`var_axis`/`sqrt`/`rsqrt` at tensor
+  level (reductions are full-tensor only; `softmax` is the only axis-aware
+  op, 1-D/2-D). Composing normalization by hand in Plant code is therefore
+  impossible without new primitives.
+- **Fix direction:** add `plant_tensor_sum_axis`/`mean_axis`/`var_axis` and
+  `sqrt`/`rsqrt` tensor ops plus tape rules (~50–80 lines), reusable by
+  user code.
+- **Target:** v0.62.0+ (utility).
+- **Related:** BatchNorm/LayerNorm (v0.61.3), softmax axis support.
 
 ## TD-067: `TENSOR_RESHAPE(x, [..])` leaks the inline list — CLOSED
 

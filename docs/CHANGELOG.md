@@ -1,4 +1,45 @@
-## v0.61.2 — CONV2D + TD-067 fix
+## v0.61.3 — BatchNorm + LayerNorm
+
+### Added
+- **BatchNorm** — `BATCHNORM_FORWARD(X, γ, β, eps)`
+  - 4-D `[N,C,H,W]` (per-channel over `N·H·W`) or 2-D `[N,F]` (per-feature).
+  - Forward: direct loops, no heap temporaries; biased variance.
+  - Backward via `GRAD`: `dX`, `dγ`, `dβ` (compact stable `dx` form).
+  - **Batch statistics only** — no running stats / momentum.
+- **LayerNorm** — `LAYERNORM_FORWARD(X, γ, β, eps)`
+  - Last axis, any ndim; `γ`/`β` = `[F]`.
+  - Backward via `GRAD`: `dX`, `dγ`, `dβ`.
+- `_tape_push` helper (single node-recording path for ops with 3 inputs).
+- `docs/NORM_RECIPE.md` (new): BN/LN forward + backward, CNN and
+  transformer stacking, limitations, numerics.
+- 8 new tests: `batchnorm_forward`, `batchnorm_backward_x`,
+  `batchnorm_backward_gamma`, `batchnorm_backward_beta`,
+  `batchnorm_2d_layout`, `layernorm_forward`, `layernorm_backward_x`,
+  `layernorm_backward_gamma_beta`.
+
+### Fixed (critical catch)
+- **ADv2 silent-wrong**: the norm hooks were not overridden by the ADv2
+  engine, so `GRAD_HO` over BatchNorm/LayerNorm returned **zeros** with no
+  error (the gradient silently stopped). Now `plant_ad2_record_batchnorm` /
+  `plant_ad2_record_layernorm` record a node and the backward reports
+  `ad2: BatchNorm/LayerNorm unsupported (use GRAD)`. Verified live.
+
+### Documented limitation
+- No running statistics for BatchNorm (v0.62.0+ candidate).
+
+### Verified
+- Native: **320/320** (was 312, +8). Regression: 319/319.
+- Generics: 7/7. Closures: 6/6.
+- Self-hosting: converged (604,679 B), byte-identical.
+- valgrind strict: PASS. Binary: 1,083,304 B (+0.81% vs v0.61.2,
+  +1.24% vs v0.61.0a).
+
+### Out of Scope
+- Dropout + full NN example (v0.61.0e).
+- Running statistics / momentum (v0.62.0+).
+- TD-068 axis-reduction / `sqrt` tensor primitives (v0.62.0+ utility).
+
+
 
 ### Added
 - **CONV2D primitive** — `CONV2D_FORWARD(X, K, b, stride, pad)`, NCHW

@@ -1,0 +1,11 @@
+# BatchNorm forward (4-D NCHW, C=1): per-channel normalize.
+CREATE X (TENSOR) TO TENSOR([[[[1.0, 2.0], [3.0, 4.0]]]]).
+CREATE g (TENSOR) TO TENSOR([1.0]).
+CREATE b (TENSOR) TO TENSOR([0.0]).
+CREATE y (TENSOR) TO BATCHNORM_FORWARD(X, g, b, 0.00001).
+SHOW y.
+TENSOR_FREE(y).
+TENSOR_FREE(b).
+TENSOR_FREE(g).
+TENSOR_FREE(X).
+SHOW "batchnorm-forward-ok".

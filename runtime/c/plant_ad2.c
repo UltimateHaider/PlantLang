@@ -31,6 +31,10 @@
 static void (*saved_hook)(int, PlantTensor*, PlantTensor*, double, PlantTensor*) = 0;
 static void (*saved_conv_hook)(PlantTensor*, PlantTensor*, PlantTensor*,
                                int64_t, int64_t, PlantTensor*) = 0;
+static void (*saved_bn_hook)(PlantTensor*, PlantTensor*, PlantTensor*,
+                             double, PlantTensor*) = 0;
+static void (*saved_ln_hook)(PlantTensor*, PlantTensor*, PlantTensor*,
+                             double, PlantTensor*) = 0;
 static A2Frame* frame_top = 0;
 
 /* Per-pass gradient map (accumulator per tensor). Map owns its ref. */
@@ -119,12 +123,35 @@ static void plant_ad2_record_conv(PlantTensor* x, PlantTensor* k,
     a2_emit(OP_CONV2D, x, k, 0.0, out, 0);
 }
 
+/* v0.61.3 — norm layers: forward to the first-order recorder, then record
+   a node so GRAD_HO reports a clean "unsupported" error instead of
+   silently stopping the gradient. */
+static void plant_ad2_record_batchnorm(PlantTensor* x, PlantTensor* g,
+                                       PlantTensor* b, double eps,
+                                       PlantTensor* out) {
+    if (saved_bn_hook) saved_bn_hook(x, g, b, eps, out);
+    if (!frame_top || frame_top->frozen) return;
+    a2_emit(OP_BATCHNORM, x, g, 0.0, out, 0);
+}
+
+static void plant_ad2_record_layernorm(PlantTensor* x, PlantTensor* g,
+                                       PlantTensor* b, double eps,
+                                       PlantTensor* out) {
+    if (saved_ln_hook) saved_ln_hook(x, g, b, eps, out);
+    if (!frame_top || frame_top->frozen) return;
+    a2_emit(OP_LAYERNORM, x, g, 0.0, out, 0);
+}
+
 void plant_ad2_init(void) {
     if (saved_hook) return;               /* idempotent */
     saved_hook = plant_tape_record_hook;
     plant_tape_record_hook = plant_ad2_record;
     saved_conv_hook = plant_tape_record_conv_hook;
     plant_tape_record_conv_hook = plant_ad2_record_conv;
+    saved_bn_hook = plant_tape_record_batchnorm_hook;
+    plant_tape_record_batchnorm_hook = plant_ad2_record_batchnorm;
+    saved_ln_hook = plant_tape_record_layernorm_hook;
+    plant_tape_record_layernorm_hook = plant_ad2_record_layernorm;
     if (!frame_top) a2_push_frame(0, 0);  /* forward frame */
 }
 
@@ -526,6 +553,10 @@ static PlantTensor* a2_backprop_nodes(A2Frame* f) {
             case OP_CONV2D:
                 return plant_tensor_create_error(
                     "ad2: CONV2D unsupported (use GRAD)");
+            case OP_BATCHNORM:
+            case OP_LAYERNORM:
+                return plant_tensor_create_error(
+                    "ad2: BatchNorm/LayerNorm unsupported (use GRAD)");
             case A2_BCAST:
                 a2_acc(n->in0, a2_axis_sum(d, n->in0));
                 break;

@@ -195,9 +195,37 @@ static void ag_acc_reduced_div_b(PlantTensor* target, const PlantTensor* d,
 }
 
 /* ── Init ───────────────────────────────────────────────────── */
+static void _tape_push(int op, PlantTensor* a, PlantTensor* b, PlantTensor* c,
+                       double s, PlantTensor* out) {
+    TapeNode* n = (TapeNode*)plant_malloc(sizeof(TapeNode));
+    if (!n) return;
+    n->op = op;
+    n->in0 = a;
+    n->in1 = b;
+    n->scalar = s;
+    n->out = out;
+    n->in2 = c;
+    n->p0 = 0;
+    n->p1 = 0;
+    n->prev = plant_tape_head;
+    plant_tape_head = n;
+}
+
 void plant_autograd_init(void) {
     plant_tape_record_hook = plant_tape_record;
-    plant_tape_record_conv_hook = plant_tape_record_conv;  /* v0.61.2 */
+    plant_tape_record_conv_hook = plant_tape_record_conv;      /* v0.61.2 */
+    plant_tape_record_batchnorm_hook = plant_tape_record_batchnorm;  /* v0.61.3 */
+    plant_tape_record_layernorm_hook = plant_tape_record_layernorm;  /* v0.61.3 */
+}
+
+/* v0.61.3 — norm recorders (bias rides in in2, eps in scalar). */
+void plant_tape_record_batchnorm(PlantTensor* x, PlantTensor* g, PlantTensor* b,
+                                 double eps, PlantTensor* out) {
+    _tape_push(OP_BATCHNORM, x, g, b, eps, out);
+}
+void plant_tape_record_layernorm(PlantTensor* x, PlantTensor* g, PlantTensor* b,
+                                 double eps, PlantTensor* out) {
+    _tape_push(OP_LAYERNORM, x, g, b, eps, out);
 }
 
 /* v0.61.2 — CONV2D tape node (bias + stride/pad live outside the
@@ -334,6 +362,97 @@ PlantTensor* plant_autograd_grad(PlantTensor* loss_t, double loss_d,
                 double inv = 1.0 / (double)da->size;
                 int64_t i;
                 for (i = 0; i < da->size; i++) da->data[i] += d->data[0] * inv;
+            } else if (n->op == OP_BATCHNORM) {
+                /* v0.61.3 — BatchNorm backward (compact stable form).
+                   dhat = dy*gamma;
+                   dx = inv/M * (M*dhat - sum(dhat) - xhat*sum(dhat*xhat))
+                   dgamma_c = sum(dy*xhat); dbeta_c = sum(dy). */
+                int64_t N = n->in0->shape[0], C = n->in0->shape[1];
+                int64_t H = (n->in0->ndim == 4) ? n->in0->shape[2] : 1;
+                int64_t W = (n->in0->ndim == 4) ? n->in0->shape[3] : 1;
+                int64_t M = N * H * W;
+                int64_t c, nn, hh, ww, idx;
+                PlantTensor* gx = (n->in0 && plant_tensor_requires_grad(n->in0))
+                                  ? grad_or_zero(n->in0) : 0;
+                PlantTensor* gg = (n->in1 && plant_tensor_requires_grad(n->in1))
+                                  ? grad_or_zero(n->in1) : 0;
+                PlantTensor* gb = (n->in2 && plant_tensor_requires_grad(n->in2))
+                                  ? grad_or_zero(n->in2) : 0;
+                for (c = 0; c < C; c++) {
+                    double sum = 0.0, sq = 0.0, mean, var, inv;
+                    double sdh = 0.0, sdx = 0.0, dg = 0.0, dbv = 0.0;
+                    for (nn = 0; nn < N; nn++)
+                      for (hh = 0; hh < H; hh++)
+                        for (ww = 0; ww < W; ww++) {
+                            double v = n->in0->data[((nn * C + c) * H + hh) * W + ww];
+                            sum += v; sq += v * v;
+                        }
+                    mean = sum / (double)M;
+                    var = sq / (double)M - mean * mean;
+                    inv = 1.0 / sqrt(var + n->scalar);
+                    for (nn = 0; nn < N; nn++)
+                      for (hh = 0; hh < H; hh++)
+                        for (ww = 0; ww < W; ww++) {
+                            idx = ((nn * C + c) * H + hh) * W + ww;
+                            double xhat = (n->in0->data[idx] - mean) * inv;
+                            double dhat = d->data[idx] * n->in1->data[c];
+                            sdh += dhat;
+                            sdx += dhat * xhat;
+                            dg += d->data[idx] * xhat;
+                            dbv += d->data[idx];
+                        }
+                    for (nn = 0; nn < N; nn++)
+                      for (hh = 0; hh < H; hh++)
+                        for (ww = 0; ww < W; ww++) {
+                            idx = ((nn * C + c) * H + hh) * W + ww;
+                            double xhat = (n->in0->data[idx] - mean) * inv;
+                            double dhat = d->data[idx] * n->in1->data[c];
+                            if (gx)
+                                gx->data[idx] += inv / (double)M *
+                                    ((double)M * dhat - sdh - xhat * sdx);
+                        }
+                    if (gg) gg->data[c] += dg;
+                    if (gb) gb->data[c] += dbv;
+                }
+            } else if (n->op == OP_LAYERNORM) {
+                /* v0.61.3 — LayerNorm backward (last axis, per row). */
+                int64_t F = n->in0->shape[n->in0->ndim - 1];
+                int64_t rows = n->in0->size / F;
+                int64_t r, f, idx;
+                PlantTensor* gx = (n->in0 && plant_tensor_requires_grad(n->in0))
+                                  ? grad_or_zero(n->in0) : 0;
+                PlantTensor* gg = (n->in1 && plant_tensor_requires_grad(n->in1))
+                                  ? grad_or_zero(n->in1) : 0;
+                PlantTensor* gb = (n->in2 && plant_tensor_requires_grad(n->in2))
+                                  ? grad_or_zero(n->in2) : 0;
+                for (r = 0; r < rows; r++) {
+                    double sum = 0.0, sq = 0.0, mean, var, inv;
+                    double sdh = 0.0, sdx = 0.0;
+                    for (f = 0; f < F; f++) {
+                        double v = n->in0->data[r * F + f];
+                        sum += v; sq += v * v;
+                    }
+                    mean = sum / (double)F;
+                    var = sq / (double)F - mean * mean;
+                    inv = 1.0 / sqrt(var + n->scalar);
+                    for (f = 0; f < F; f++) {
+                        idx = r * F + f;
+                        double xhat = (n->in0->data[idx] - mean) * inv;
+                        double dhat = d->data[idx] * n->in1->data[f];
+                        sdh += dhat;
+                        sdx += dhat * xhat;
+                        if (gg) gg->data[f] += d->data[idx] * xhat;
+                        if (gb) gb->data[f] += d->data[idx];
+                    }
+                    for (f = 0; f < F; f++) {
+                        idx = r * F + f;
+                        double xhat = (n->in0->data[idx] - mean) * inv;
+                        double dhat = d->data[idx] * n->in1->data[f];
+                        if (gx)
+                            gx->data[idx] += inv / (double)F *
+                                ((double)F * dhat - sdh - xhat * sdx);
+                    }
+                }
             } else if (n->op == OP_CONV2D) {
                 /* v0.61.2 — CONV2D backward (dX, dK, db) by direct loops.
                    out[n,co,oh,ow] = b[co] + sum_{ci,ki,kj} x[n,ci,ih,iw]*k[co,ci,ki,kj]

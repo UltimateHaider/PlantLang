@@ -81,6 +81,13 @@ PlantTensor* plant_tensor_reshape_and_free(PlantTensor* a, struct PlantArray* sh
 PlantTensor* plant_conv2d_forward(PlantTensor* x, PlantTensor* k,
                                   PlantTensor* b, int64_t stride, int64_t pad);
 
+/* v0.61.3 — BatchNorm: per-channel (4-D NCHW) or per-feature (2-D). */
+PlantTensor* plant_batchnorm_forward(PlantTensor* x, PlantTensor* gamma,
+                                     PlantTensor* beta, double eps);
+/* v0.61.3 — LayerNorm: last axis, any ndim. */
+PlantTensor* plant_layernorm_forward(PlantTensor* x, PlantTensor* gamma,
+                                     PlantTensor* beta, double eps);
+
 /* Reductions (scalar). */
 double plant_tensor_sum(PlantTensor* a);
 double plant_tensor_mean(PlantTensor* a);
@@ -123,6 +130,14 @@ extern void (*plant_tape_record_hook)(int op, PlantTensor* a,
 extern void (*plant_tape_record_conv_hook)(PlantTensor* x, PlantTensor* k,
                                            PlantTensor* b, int64_t stride,
                                            int64_t pad, PlantTensor* out);
+
+/* v0.61.3 — norm tape hooks (set by the autograd engines). */
+extern void (*plant_tape_record_batchnorm_hook)(PlantTensor* x, PlantTensor* g,
+                                                PlantTensor* b, double eps,
+                                                PlantTensor* out);
+extern void (*plant_tape_record_layernorm_hook)(PlantTensor* x, PlantTensor* g,
+                                                PlantTensor* b, double eps,
+                                                PlantTensor* out);
 
 /* v0.56.0b-2 — Broadcast helpers (exported). */
 int64_t      plant_tensor_bc_index(PlantTensor* t, const int64_t* oidx,
