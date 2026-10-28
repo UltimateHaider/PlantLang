@@ -14,6 +14,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>   /* v0.55.2 — activations (tanh, exp) */
+#include <stdarg.h> /* v0.61.2 — TD-067 variadic reshape */
 
 /* ── Internal: free fields without freeing the struct ───────── */
 static void _tensor_free_fields(PlantTensor* t) {
@@ -151,6 +152,11 @@ PlantTensor* plant_tensor_track(PlantTensor* t) {
 /* v0.56.0a — tape hook (assigned by plant_autograd.c). */
 void (*plant_tape_record_hook)(int op, PlantTensor* a, PlantTensor* b,
                                double s, PlantTensor* out) = 0;
+
+/* v0.61.2 — CONV2D tape hook (assigned by plant_autograd.c / plant_ad2.c). */
+void (*plant_tape_record_conv_hook)(PlantTensor* x, PlantTensor* k,
+                                    PlantTensor* b, int64_t stride,
+                                    int64_t pad, PlantTensor* out) = 0;
 
 /* ── plant_tensor_deep_copy ─────────────────────────────────── */
 PlantTensor* plant_tensor_deep_copy(const PlantTensor* src) {
@@ -660,6 +666,108 @@ PlantTensor* plant_tensor_reshape(PlantTensor* a, PlantArray* shape) {
     memcpy(o->data, a->data, sizeof(double) * (size_t)a->size);
     if (plant_tape_record_hook && plant_tensor_requires_grad(a)) {
         plant_tape_record_hook(13 /* OP_RESHAPE */, a, 0, 0.0, o);
+        o->requires_grad = 1;
+    }
+    return o;
+}
+
+/* v0.61.2 — TD-067: variadic reshape (no list literal → no leak). */
+PlantTensor* plant_tensor_reshape_n(PlantTensor* a, int nd, ...) {
+    int64_t shape[16];
+    int64_t i, tot;
+    va_list ap;
+    PlantTensor* o;
+    if (!a) return plant_tensor_create_error("reshape: null tensor");
+    if (plant_tensor_is_error(a)) return a;
+    if (nd < 1 || nd > 16)
+        return plant_tensor_create_error("reshape: nd out of range");
+    va_start(ap, nd);
+    tot = 1;
+    for (i = 0; i < nd; i++) {
+        int d = va_arg(ap, int);
+        if (d < 1) {
+            va_end(ap);
+            return plant_tensor_create_error(
+                "reshape: shape requires all dimensions > 0");
+        }
+        shape[i] = (int64_t)d;
+        tot *= shape[i];
+    }
+    va_end(ap);
+    if (tot != a->size) return plant_tensor_create_error("reshape: size mismatch");
+    o = plant_tensor_create(nd, shape);
+    if (plant_tensor_is_error(o)) return o;
+    memcpy(o->data, a->data, sizeof(double) * (size_t)a->size);
+    if (plant_tape_record_hook && plant_tensor_requires_grad(a)) {
+        plant_tape_record_hook(13 /* OP_RESHAPE */, a, 0, 0.0, o);
+        o->requires_grad = 1;
+    }
+    return o;
+}
+
+/* v0.61.2 — TD-067: legacy list-form reshape; frees the literal list. */
+PlantTensor* plant_tensor_reshape_and_free(PlantTensor* a, PlantArray* shape) {
+    PlantTensor* o = plant_tensor_reshape(a, shape);
+    if (shape) plant_list_free(shape);
+    return o;
+}
+
+/* v0.61.2 — CONV2D forward (NCHW, single stride/pad, optional bias).
+   Direct loops (no im2col temp); recorded as one tape node for the
+   dX/dK/db backward. */
+PlantTensor* plant_conv2d_forward(PlantTensor* x, PlantTensor* k,
+                                  PlantTensor* b, int64_t stride, int64_t pad) {
+    int64_t n, c, h, w, co, kh, kw, hout, wout;
+    int64_t i, j, oh, ow, ci, ki, kj;
+    int64_t oshape[4];
+    PlantTensor* o;
+    if (!x || !k) return plant_tensor_create_error("conv2d: null operand");
+    if (plant_tensor_is_error(x)) return x;
+    if (plant_tensor_is_error(k)) return k;
+    if (b && plant_tensor_is_error(b)) return b;
+    if (x->ndim != 4 || k->ndim != 4)
+        return plant_tensor_create_error("conv2d: 4d tensors required");
+    if (stride < 1 || pad < 0)
+        return plant_tensor_create_error("conv2d: invalid stride/pad");
+    n = x->shape[0]; c = x->shape[1]; h = x->shape[2]; w = x->shape[3];
+    co = k->shape[0]; kh = k->shape[2]; kw = k->shape[3];
+    if (k->shape[1] != c)
+        return plant_tensor_create_error("conv2d: channel mismatch");
+    if (b && (b->ndim != 1 || b->shape[0] != co))
+        return plant_tensor_create_error("conv2d: bias must be [c_out]");
+    hout = (h + 2 * pad - kh) / stride + 1;
+    wout = (w + 2 * pad - kw) / stride + 1;
+    if (hout < 1 || wout < 1)
+        return plant_tensor_create_error("conv2d: kernel larger than input");
+    oshape[0] = n; oshape[1] = co; oshape[2] = hout; oshape[3] = wout;
+    o = plant_tensor_create(4, oshape);
+    if (plant_tensor_is_error(o)) return o;
+    for (i = 0; i < n; i++) {
+        for (j = 0; j < co; j++) {
+            for (oh = 0; oh < hout; oh++) {
+                for (ow = 0; ow < wout; ow++) {
+                    double acc = b ? b->data[j] : 0.0;
+                    for (ci = 0; ci < c; ci++) {
+                        for (ki = 0; ki < kh; ki++) {
+                            int64_t ih = oh * stride - pad + ki;
+                            if (ih < 0 || ih >= h) continue;
+                            for (kj = 0; kj < kw; kj++) {
+                                int64_t iw = ow * stride - pad + kj;
+                                if (iw < 0 || iw >= w) continue;
+                                acc += x->data[((i * c + ci) * h + ih) * w + iw]
+                                     * k->data[((j * c + ci) * kh + ki) * kw + kj];
+                            }
+                        }
+                    }
+                    o->data[((i * co + j) * hout + oh) * wout + ow] = acc;
+                }
+            }
+        }
+    }
+    if (plant_tape_record_conv_hook &&
+        (plant_tensor_requires_grad(x) || plant_tensor_requires_grad(k) ||
+         (b && plant_tensor_requires_grad(b)))) {
+        plant_tape_record_conv_hook(x, k, b, stride, pad, o);
         o->requires_grad = 1;
     }
     return o;

@@ -69,6 +69,17 @@ PlantTensor* plant_tensor_matmul(PlantTensor* a, PlantTensor* b);
 /* Shape ops. */
 PlantTensor* plant_tensor_transpose(PlantTensor* a);
 PlantTensor* plant_tensor_reshape(PlantTensor* a, struct PlantArray* shape);
+/* v0.61.2 — TD-067: variadic reshape (no list literal → no leak). */
+PlantTensor* plant_tensor_reshape_n(PlantTensor* a, int nd, ...);
+
+/* v0.61.2 — TD-067: legacy TENSOR_RESHAPE(a, [..]) target. Codegen always
+   passes a fresh list literal, so this owns and frees it. Never pass a
+   shared list variable to TENSOR_RESHAPE. */
+PlantTensor* plant_tensor_reshape_and_free(PlantTensor* a, struct PlantArray* shape);
+
+/* v0.61.2 — CONV2D (NCHW, stride/pad single value). b may be NULL. */
+PlantTensor* plant_conv2d_forward(PlantTensor* x, PlantTensor* k,
+                                  PlantTensor* b, int64_t stride, int64_t pad);
 
 /* Reductions (scalar). */
 double plant_tensor_sum(PlantTensor* a);
@@ -108,6 +119,10 @@ PlantTensor* plant_tensor_track(PlantTensor* t);
 extern void (*plant_tape_record_hook)(int op, PlantTensor* a,
                                       PlantTensor* b, double s,
                                       PlantTensor* out);
+/* v0.61.2 — CONV2D tape hook (set by the autograd engines). */
+extern void (*plant_tape_record_conv_hook)(PlantTensor* x, PlantTensor* k,
+                                           PlantTensor* b, int64_t stride,
+                                           int64_t pad, PlantTensor* out);
 
 /* v0.56.0b-2 — Broadcast helpers (exported). */
 int64_t      plant_tensor_bc_index(PlantTensor* t, const int64_t* oidx,

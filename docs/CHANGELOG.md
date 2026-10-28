@@ -1,3 +1,43 @@
+## v0.61.2 — CONV2D + TD-067 fix
+
+### Added
+- **CONV2D primitive** — `CONV2D_FORWARD(X, K, b, stride, pad)`, NCHW
+  `[N, C_in, H, W]` × `[C_out, C_in, KH, KW]` → `[N, C_out, H_out, W_out]`.
+  - Forward: direct nested loops (no im2col buffer; flat memory).
+  - Backward via `GRAD`: `dX` (scatter-add), `dK` (accumulate), `db` (sum
+    per channel) — all automatic, recorded as one `OP_CONV2D` tape node.
+  - Validates shapes (`k->shape[1] == C_in`, `b = [C_out]`), `stride ≥ 1`,
+    `pad ≥ 0`.
+- **`TENSOR_RESHAPE_N(a, nd, d1, …)`** (variadic) — no list allocation.
+- **`plant_tensor_reshape_and_free`** — legacy `TENSOR_RESHAPE(a, [..])`
+  path now frees the literal list.
+- `docs/CONV2D_RECIPE.md` (new): shapes, forward/backward, CNN stacking,
+  stride/padding, limitations, TD-067 note, memory.
+- 7 new tests: `conv2d_forward`, `conv2d_backward_x`, `conv2d_backward_k`,
+  `conv2d_backward_b`, `conv2d_relu_stack`, `conv2d_dense_stack`,
+  `reshape_literal_free`.
+
+### Fixed
+- **TD-067** — `TENSOR_RESHAPE(a, [4])` leaked 40 B (list) + 8 B (buffer)
+  per call (pre-existing since v0.56.0d, never tested with an inline
+  literal). Both paths are now 0 B.
+- **Test hygiene** — `tensor_reshape` / `gradient_reshape` leaked 144 / 408 B
+  of tensors (missing `TENSOR_FREE`); outputs unchanged, now 0 B.
+
+### Documented limitation
+- ADv2: `GRAD_HO` over CONV2D → `ad2: CONV2D unsupported (use GRAD)`
+  (explicit error, no silent-wrong).
+
+### Verified
+- Native: **312/312** (was 305, +7). Regression: 319/319.
+- Generics: 7/7. Closures: 6/6.
+- Self-hosting: converged (604,521 B), byte-identical.
+- valgrind strict: PASS. Binary: 1,074,584 B (+0.42% vs v0.61.0a).
+
+### Out of Scope
+- BatchNorm + LayerNorm (v0.61.0d), Dropout + full NN example (v0.61.0e).
+- Dilation, groups, 1-D/3-D conv, pooling, ADv2 CONV2D (v0.62.0+).
+
 ## v0.61.1 — Activations integration + TD-066 fix
 
 ### Added

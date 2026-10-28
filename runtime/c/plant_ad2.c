@@ -29,6 +29,8 @@
 
 /* ── Engine state ───────────────────────────────────────────── */
 static void (*saved_hook)(int, PlantTensor*, PlantTensor*, double, PlantTensor*) = 0;
+static void (*saved_conv_hook)(PlantTensor*, PlantTensor*, PlantTensor*,
+                               int64_t, int64_t, PlantTensor*) = 0;
 static A2Frame* frame_top = 0;
 
 /* Per-pass gradient map (accumulator per tensor). Map owns its ref. */
@@ -106,10 +108,23 @@ static void a2_push_frame(int level, int frozen) {
     frame_top = f;
 }
 
+/* v0.61.2 — CONV2D: forward to the first-order recorder, and record a
+   node so GRAD_HO reports a clean "unsupported" error instead of silently
+   computing a wrong gradient. */
+static void plant_ad2_record_conv(PlantTensor* x, PlantTensor* k,
+                                  PlantTensor* b, int64_t stride, int64_t pad,
+                                  PlantTensor* out) {
+    if (saved_conv_hook) saved_conv_hook(x, k, b, stride, pad, out);
+    if (!frame_top || frame_top->frozen) return;
+    a2_emit(OP_CONV2D, x, k, 0.0, out, 0);
+}
+
 void plant_ad2_init(void) {
     if (saved_hook) return;               /* idempotent */
     saved_hook = plant_tape_record_hook;
     plant_tape_record_hook = plant_ad2_record;
+    saved_conv_hook = plant_tape_record_conv_hook;
+    plant_tape_record_conv_hook = plant_ad2_record_conv;
     if (!frame_top) a2_push_frame(0, 0);  /* forward frame */
 }
 
@@ -508,6 +523,9 @@ static PlantTensor* a2_backprop_nodes(A2Frame* f) {
                 a2_release();
                 break;
             }
+            case OP_CONV2D:
+                return plant_tensor_create_error(
+                    "ad2: CONV2D unsupported (use GRAD)");
             case A2_BCAST:
                 a2_acc(n->in0, a2_axis_sum(d, n->in0));
                 break;

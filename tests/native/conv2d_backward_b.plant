@@ -1,0 +1,18 @@
+# CONV2D backward: db (bias broadcast through the conv node).
+CREATE X (TENSOR) TO TENSOR([[[[1.0, 2.0], [3.0, 4.0]]]]).
+CREATE K (TENSOR) TO TENSOR([[[[1.0]]]]).
+CREATE b (TENSOR) TO TENSOR([0.0]).
+TENSOR_TRACK(b).
+CREATE y (TENSOR) TO CONV2D_FORWARD(X, K, b, 1, 0).
+CREATE y2 (TENSOR) TO TENSOR_MUL(y, y).
+CREATE loss (DBL) TO TENSOR_SUM(y2).
+CREATE db (TENSOR) TO GRAD(loss, b, 1).
+SHOW db.
+TAPE_CLEAR().
+TENSOR_FREE(db).
+TENSOR_FREE(y2).
+TENSOR_FREE(y).
+TENSOR_FREE(b).
+TENSOR_FREE(K).
+TENSOR_FREE(X).
+SHOW "conv2d-backward-b-ok".

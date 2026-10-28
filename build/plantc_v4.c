@@ -12836,7 +12836,8 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* 
     e = _handle_func_paren(e, "TENSOR_SCALE", "plant_tensor_scale");
     e = _handle_func_paren(e, "TENSOR_MATMUL", "plant_tensor_matmul");
     e = _handle_func_paren(e, "TENSOR_TRANSPOSE", "plant_tensor_transpose");
-    e = _handle_func_paren(e, "TENSOR_RESHAPE", "plant_tensor_reshape");
+    e = _handle_func_paren(e, "TENSOR_RESHAPE_N", "plant_tensor_reshape_n");
+    e = _handle_func_paren(e, "TENSOR_RESHAPE", "plant_tensor_reshape_and_free");
     e = _handle_func_paren(e, "TENSOR_SUM", "plant_tensor_sum");
     e = _handle_func_paren(e, "TENSOR_MEAN", "plant_tensor_mean");
     e = _handle_func_paren(e, "TENSOR_MAX", "plant_tensor_max");
@@ -12853,6 +12854,7 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* 
     e = _handle_func_paren(e, "TENSOR_TRACK", "plant_tensor_track");
     e = _handle_func_paren(e, "TENSOR_RAND_UNIFORM", "plant_tensor_rand_uniform");
     e = _handle_func_paren(e, "DENSE_FORWARD", "plant_dense_forward");
+    e = _handle_func_paren(e, "CONV2D_FORWARD", "plant_conv2d_forward");
     e = _handle_func_paren(e, "GRAD_HO", "plant_ad2_grad");
     e = _grad_retain_rewrite(e);
     e = _handle_func_paren(e, "GRAD", "plant_grad");
@@ -19717,7 +19719,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.61.1 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.61.2 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

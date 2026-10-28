@@ -34,6 +34,9 @@ typedef struct TapeNode {
     double       scalar;
     PlantTensor* out;
     struct TapeNode* prev;
+    /* v0.61.2 — CONV2D: optional bias input + stride/pad params. */
+    PlantTensor* in2;
+    int64_t      p0, p1;
 } TapeNode;
 
 static TapeNode* plant_tape_head = 0;
@@ -194,6 +197,25 @@ static void ag_acc_reduced_div_b(PlantTensor* target, const PlantTensor* d,
 /* ── Init ───────────────────────────────────────────────────── */
 void plant_autograd_init(void) {
     plant_tape_record_hook = plant_tape_record;
+    plant_tape_record_conv_hook = plant_tape_record_conv;  /* v0.61.2 */
+}
+
+/* v0.61.2 — CONV2D tape node (bias + stride/pad live outside the
+   generic hook signature). */
+void plant_tape_record_conv(PlantTensor* x, PlantTensor* k, PlantTensor* b,
+                            int64_t stride, int64_t pad, PlantTensor* out) {
+    TapeNode* n = (TapeNode*)plant_malloc(sizeof(TapeNode));
+    if (!n) return;
+    n->op = OP_CONV2D;
+    n->in0 = x;
+    n->in1 = k;
+    n->scalar = 0.0;
+    n->out = out;
+    n->in2 = b;
+    n->p0 = stride;
+    n->p1 = pad;
+    n->prev = plant_tape_head;
+    plant_tape_head = n;
 }
 
 /* ── Record ─────────────────────────────────────────────────── */
@@ -215,6 +237,9 @@ void plant_tape_record(int op, PlantTensor* a, PlantTensor* b,
     n->in1 = b;
     n->scalar = s;
     n->out = out;
+    n->in2 = 0;
+    n->p0 = 0;
+    n->p1 = 0;
     n->prev = plant_tape_head;
     plant_tape_head = n;
     if (a) plant_tensor_retain(a);
@@ -309,6 +334,46 @@ PlantTensor* plant_autograd_grad(PlantTensor* loss_t, double loss_d,
                 double inv = 1.0 / (double)da->size;
                 int64_t i;
                 for (i = 0; i < da->size; i++) da->data[i] += d->data[0] * inv;
+            } else if (n->op == OP_CONV2D) {
+                /* v0.61.2 — CONV2D backward (dX, dK, db) by direct loops.
+                   out[n,co,oh,ow] = b[co] + sum_{ci,ki,kj} x[n,ci,ih,iw]*k[co,ci,ki,kj]
+                   with ih = oh*stride - pad + ki, iw = ow*stride - pad + kj. */
+                PlantTensor* gx = (n->in0 && plant_tensor_requires_grad(n->in0))
+                                  ? grad_or_zero(n->in0) : 0;
+                PlantTensor* gk = (n->in1 && plant_tensor_requires_grad(n->in1))
+                                  ? grad_or_zero(n->in1) : 0;
+                PlantTensor* gb = (n->in2 && plant_tensor_requires_grad(n->in2))
+                                  ? grad_or_zero(n->in2) : 0;
+                int64_t nn = d->shape[0], co = d->shape[1];
+                int64_t ho = d->shape[2], wo = d->shape[3];
+                int64_t cin = n->in0->shape[1];
+                int64_t hh = n->in0->shape[2], ww = n->in0->shape[3];
+                int64_t khh = n->in1->shape[2], kww = n->in1->shape[3];
+                int64_t sh = n->p0, pd = n->p1;
+                int64_t i, j, oh, ow, ci, ki, kj;
+                for (i = 0; i < nn; i++)
+                  for (j = 0; j < co; j++)
+                    for (oh = 0; oh < ho; oh++)
+                      for (ow = 0; ow < wo; ow++) {
+                        double g = d->data[((i * co + j) * ho + oh) * wo + ow];
+                        if (g == 0.0) continue;
+                        if (gb) gb->data[j] += g;
+                        for (ci = 0; ci < cin; ci++)
+                          for (ki = 0; ki < khh; ki++) {
+                            int64_t ih = oh * sh - pd + ki;
+                            if (ih < 0 || ih >= hh) continue;
+                            for (kj = 0; kj < kww; kj++) {
+                                int64_t iw = ow * sh - pd + kj;
+                                if (iw < 0 || iw >= ww) continue;
+                                if (gk)
+                                    gk->data[((j * cin + ci) * khh + ki) * kww + kj] +=
+                                        g * n->in0->data[((i * cin + ci) * hh + ih) * ww + iw];
+                                if (gx)
+                                    gx->data[((i * cin + ci) * hh + ih) * ww + iw] +=
+                                        g * n->in1->data[((j * cin + ci) * khh + ki) * kww + kj];
+                            }
+                          }
+                      }
             } else if (n->op == OP_MATMUL) {
                 /* dA[i][j] = Sum_l d[i][l]*B[j][l];
                    dB[j][l] = Sum_i A[i][j]*d[i][l] */

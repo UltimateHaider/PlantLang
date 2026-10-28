@@ -35,12 +35,19 @@
 #define OP_SWISH     16
 #define OP_MISH      17
 
+/* v0.61.2 — CONV2D. */
+#define OP_CONV2D   18
+
 /* Init: register the tape hook with plant_tensor.c. */
 void plant_autograd_init(void);
 
 /* Tape management (called internally by hooked ops). */
 void plant_tape_record(int op, PlantTensor* a, PlantTensor* b,
                        double s, PlantTensor* out);
+
+/* v0.61.2 — CONV2D recorder (x, k, optional bias, stride, pad). */
+void plant_tape_record_conv(PlantTensor* x, PlantTensor* k, PlantTensor* b,
+                            int64_t stride, int64_t pad, PlantTensor* out);
 void plant_tape_clear(void);
 
 /* Core GRAD (4-arg + v0.57.3 retain flag). */

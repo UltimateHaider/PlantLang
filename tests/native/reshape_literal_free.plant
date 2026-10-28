@@ -1,0 +1,7 @@
+# TD-067 regression: variadic reshape allocates no list.
+CREATE x (TENSOR) TO TENSOR([1.0, 2.0, 3.0, 4.0]).
+CREATE r (TENSOR) TO TENSOR_RESHAPE_N(x, 2, 2, 2).
+SHOW r.
+TENSOR_FREE(r).
+TENSOR_FREE(x).
+SHOW "reshape-literal-free-ok".

@@ -1,9 +1,9 @@
 # Technical Debt Register — PlantLang Chloroplast
 
-> **Status (v0.61.1): 0 known bugs open** — 0 silent-wrong, 0 crash, 0 leak.
+> **Status (v0.61.2): 0 known bugs open** — 0 silent-wrong, 0 crash, 0 leak.
 > TD-048 CLOSED (1st/2nd order; 3rd by design). TD-065 CLOSED. TD-066
-> CLOSED (retain precision). TD-055 is a feature; TD-016/TD-017 remain
-> DEFERRED.
+> CLOSED (retain precision). TD-067 CLOSED (reshape literal leak).
+> TD-055 is a feature; TD-016/TD-017 remain DEFERRED.
 
 ## TD-001: PlantArray never freed
 - **Status**: CLOSED (v0.51.2a)
@@ -830,6 +830,24 @@ defining scope.
 - **Tests:** `td064_map_bracket_read`, `td064_map_bracket_nested`,
   `td064_list_numeric_unchanged`.
 - **Related:** TD-063 (write side, closed v0.58.10).
+
+## TD-067: `TENSOR_RESHAPE(x, [..])` leaks the inline list — CLOSED
+
+- **Status:** ✅ CLOSED in v0.61.2
+- **Symptom:** `TENSOR_RESHAPE(a, [2, 2])` compiled to
+  `plant_tensor_reshape(a, plant_list_make(2, _from_long(2), _from_long(2)))`
+  with no `plant_list_free` → **40 B (+8 B indirect) leaked per call**,
+  autograd or not. Found during the v0.61.2 CONV2D investigation.
+- **Root cause:** the mapper passed a freshly-built literal list that
+  nobody owned.
+- **Fix:** two leak-free paths —
+  1. `TENSOR_RESHAPE_N(a, nd, d1, …)` → `plant_tensor_reshape_n`
+     (variadic; allocates no list);
+  2. the legacy `TENSOR_RESHAPE(a, [...])` mapper now targets
+     `plant_tensor_reshape_and_free`, which frees the literal list after
+     reshaping. Never pass a shared list variable to `TENSOR_RESHAPE`.
+- **Verified:** `reshape_literal_free` + `tensor_reshape` +
+  `gradient_reshape` all 0 B definitely lost.
 
 ## TD-066: `GRAD(loss, w, 1)` (retain) fails on `%g`-rounded losses — CLOSED
 
