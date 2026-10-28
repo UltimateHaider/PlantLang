@@ -1,9 +1,9 @@
 # Technical Debt Register — PlantLang Chloroplast
 
-> **Status (v0.61.3): 0 known bugs open** — 0 silent-wrong, 0 crash, 0 leak.
-> TD-048 CLOSED (1st/2nd order; 3rd by design). TD-065/066/067 CLOSED.
-> TD-068 OPEN (utility: axis/`sqrt` primitives). TD-055 is a feature;
-> TD-016/TD-017 remain DEFERRED.
+> **Status (v0.61.4): 0 known bugs open** — 0 silent-wrong, 0 crash, 0 leak.
+> TD-048 CLOSED (1st/2nd order; 3rd by design). TD-065/066/067/070 CLOSED.
+> TD-068/TD-069 OPEN (utilities). TD-055 is a feature; TD-016/TD-017 remain
+> DEFERRED.
 
 ## TD-001: PlantArray never freed
 - **Status**: CLOSED (v0.51.2a)
@@ -830,6 +830,35 @@ defining scope.
 - **Tests:** `td064_map_bracket_read`, `td064_map_bracket_nested`,
   `td064_list_numeric_unchanged`.
 - **Related:** TD-063 (write side, closed v0.58.10).
+
+## TD-070: `TAPE_CLEAR()` frees user tensors (BN/LN/dropout/conv) — CLOSED
+
+- **Status:** ✅ CLOSED in v0.61.4
+- **Introduced:** v0.61.2 (CONV2D recorder), extended v0.61.3 (norms).
+- **Symptom:** after a forward that used CONV2D / BatchNorm / LayerNorm /
+  Dropout, `TAPE_CLEAR()` freed tensors that were still in use. A second
+  forward pass then read freed memory → silent corruption
+  (`malloc_consolidate(): invalid chunk size`, valgrind `Invalid read` of a
+  block freed by `plant_tape_clear`).
+- **Root cause:** `plant_tape_record` retains its tensors (`plant_tensor_retain`),
+  but `_tape_push` (BN/LN/dropout) and `plant_tape_record_conv` did not —
+  while `plant_tape_clear` frees `in0/in1/in2/out`. Asymmetric ownership.
+- **Fix:** `_tape_hold()` (retain) on every recorded tensor in `_tape_push`
+  and the conv recorder, plus releasing `in2` in `clear()`.
+- **Verified:** full suite + 8 new tests, 0 B; valgrind clean.
+- **Related:** TD-066 (multi-gradient), TD-041 (intermediate ownership).
+
+## TD-069: no `log`/`exp`/`abs` tensor primitives — OPEN (utility)
+
+- **Status:** OPEN (utility request, **not a bug**)
+- **Introduced:** identified during the v0.61.4 investigation.
+- **Impact:** LOW — `MSE on softmax` works as a loss; cross-entropy needs `log`.
+- **Symptom:** no `plant_tensor_log`/`exp`/`abs`; cross-entropy
+  (`-Σ t·log(p)`) cannot be expressed at tensor level.
+- **Fix direction:** add `log`/`exp`/`abs` elementwise tensor ops + tape
+  rules (~40–60 lines) and a `CROSS_ENTROPY` helper.
+- **Target:** v0.62.1+ (utility).
+- **Related:** TD-068 (axis/`sqrt` utilities).
 
 ## TD-068: no axis-reduction / `sqrt` tensor primitives — OPEN (utility)
 

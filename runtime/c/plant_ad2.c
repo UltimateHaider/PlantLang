@@ -35,6 +35,7 @@ static void (*saved_bn_hook)(PlantTensor*, PlantTensor*, PlantTensor*,
                              double, PlantTensor*) = 0;
 static void (*saved_ln_hook)(PlantTensor*, PlantTensor*, PlantTensor*,
                              double, PlantTensor*) = 0;
+static void (*saved_do_hook)(PlantTensor*, double, int64_t, PlantTensor*) = 0;
 static A2Frame* frame_top = 0;
 
 /* Per-pass gradient map (accumulator per tensor). Map owns its ref. */
@@ -142,6 +143,15 @@ static void plant_ad2_record_layernorm(PlantTensor* x, PlantTensor* g,
     a2_emit(OP_LAYERNORM, x, g, 0.0, out, 0);
 }
 
+/* v0.61.4 — dropout: forward to the first-order recorder, then record a
+   node so GRAD_HO errors instead of silently stopping the gradient. */
+static void plant_ad2_record_dropout(PlantTensor* x, double p, int64_t seed,
+                                     PlantTensor* out) {
+    if (saved_do_hook) saved_do_hook(x, p, seed, out);
+    if (!frame_top || frame_top->frozen) return;
+    a2_emit(OP_DROPOUT, x, 0, 0.0, out, 0);
+}
+
 void plant_ad2_init(void) {
     if (saved_hook) return;               /* idempotent */
     saved_hook = plant_tape_record_hook;
@@ -152,6 +162,8 @@ void plant_ad2_init(void) {
     plant_tape_record_batchnorm_hook = plant_ad2_record_batchnorm;
     saved_ln_hook = plant_tape_record_layernorm_hook;
     plant_tape_record_layernorm_hook = plant_ad2_record_layernorm;
+    saved_do_hook = plant_tape_record_dropout_hook;
+    plant_tape_record_dropout_hook = plant_ad2_record_dropout;
     if (!frame_top) a2_push_frame(0, 0);  /* forward frame */
 }
 
@@ -557,6 +569,9 @@ static PlantTensor* a2_backprop_nodes(A2Frame* f) {
             case OP_LAYERNORM:
                 return plant_tensor_create_error(
                     "ad2: BatchNorm/LayerNorm unsupported (use GRAD)");
+            case OP_DROPOUT:
+                return plant_tensor_create_error(
+                    "ad2: Dropout unsupported (use GRAD)");
             case A2_BCAST:
                 a2_acc(n->in0, a2_axis_sum(d, n->in0));
                 break;

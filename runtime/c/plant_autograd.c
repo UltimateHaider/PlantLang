@@ -41,6 +41,14 @@ typedef struct TapeNode {
 
 static TapeNode* plant_tape_head = 0;
 
+/* v0.61.4 — TD-070: the tape takes its OWN reference on every tensor it
+   records (and plant_tape_clear releases it). Previously clear() freed
+   user-owned inputs/outputs outright → use-after-free when a tensor was
+   used again after TAPE_CLEAR. */
+static void _tape_hold(PlantTensor* t) {
+    if (t) plant_tensor_retain(t);
+}
+
 /* ── Pseudo-tensors (scalar-root reductions) ─────────────────── */
 typedef struct PseudoEntry {
     PlantTensor* t;
@@ -209,6 +217,10 @@ static void _tape_push(int op, PlantTensor* a, PlantTensor* b, PlantTensor* c,
     n->p1 = 0;
     n->prev = plant_tape_head;
     plant_tape_head = n;
+    _tape_hold(a);
+    _tape_hold(b);
+    _tape_hold(c);
+    _tape_hold(out);
 }
 
 void plant_autograd_init(void) {
@@ -216,6 +228,7 @@ void plant_autograd_init(void) {
     plant_tape_record_conv_hook = plant_tape_record_conv;      /* v0.61.2 */
     plant_tape_record_batchnorm_hook = plant_tape_record_batchnorm;  /* v0.61.3 */
     plant_tape_record_layernorm_hook = plant_tape_record_layernorm;  /* v0.61.3 */
+    plant_tape_record_dropout_hook = plant_tape_record_dropout;      /* v0.61.4 */
 }
 
 /* v0.61.3 — norm recorders (bias rides in in2, eps in scalar). */
@@ -226,6 +239,13 @@ void plant_tape_record_batchnorm(PlantTensor* x, PlantTensor* g, PlantTensor* b,
 void plant_tape_record_layernorm(PlantTensor* x, PlantTensor* g, PlantTensor* b,
                                  double eps, PlantTensor* out) {
     _tape_push(OP_LAYERNORM, x, g, b, eps, out);
+}
+
+/* v0.61.4 — dropout: p in scalar, seed in p0 (mask is replayed). */
+void plant_tape_record_dropout(PlantTensor* x, double p, int64_t seed,
+                               PlantTensor* out) {
+    _tape_push(OP_DROPOUT, x, 0, 0, p, out);
+    if (plant_tape_head) plant_tape_head->p0 = seed;
 }
 
 /* v0.61.2 — CONV2D tape node (bias + stride/pad live outside the
@@ -244,6 +264,10 @@ void plant_tape_record_conv(PlantTensor* x, PlantTensor* k, PlantTensor* b,
     n->p1 = pad;
     n->prev = plant_tape_head;
     plant_tape_head = n;
+    _tape_hold(x);
+    _tape_hold(k);
+    _tape_hold(b);
+    _tape_hold(out);
 }
 
 /* ── Record ─────────────────────────────────────────────────── */
@@ -282,6 +306,7 @@ void plant_tape_clear(void) {
         TapeNode* prev = n->prev;
         if (n->in0) plant_tensor_free(n->in0);
         if (n->in1) plant_tensor_free(n->in1);
+        if (n->in2) plant_tensor_free(n->in2);   /* v0.61.4 — TD-070 */
         if (n->out) plant_tensor_free(n->out);
         free(n);
         n = prev;
@@ -362,6 +387,24 @@ PlantTensor* plant_autograd_grad(PlantTensor* loss_t, double loss_d,
                 double inv = 1.0 / (double)da->size;
                 int64_t i;
                 for (i = 0; i < da->size; i++) da->data[i] += d->data[0] * inv;
+            } else if (n->op == OP_DROPOUT) {
+                /* v0.61.4 — dropout backward: replay the mask stream
+                   (same seed/order as forward) → dx = dy * mask. */
+                PlantTensor* gx = (n->in0 && plant_tensor_requires_grad(n->in0))
+                                  ? grad_or_zero(n->in0) : 0;
+                if (gx) {
+                    int64_t i;
+                    if (n->scalar <= 0.0) {
+                        for (i = 0; i < d->size; i++) gx->data[i] += d->data[i];
+                    } else {
+                        uint64_t st = plant_dropout_state(n->p0);
+                        double scale = 1.0 / (1.0 - n->scalar);
+                        for (i = 0; i < d->size; i++) {
+                            double u = plant_dropout_uniform(&st);
+                            if (u >= n->scalar) gx->data[i] += d->data[i] * scale;
+                        }
+                    }
+                }
             } else if (n->op == OP_BATCHNORM) {
                 /* v0.61.3 — BatchNorm backward (compact stable form).
                    dhat = dy*gamma;

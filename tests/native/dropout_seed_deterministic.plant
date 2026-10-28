@@ -1,0 +1,13 @@
+# Same seed -> identical mask; different seed -> different mask.
+CREATE x (TENSOR) TO TENSOR([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]).
+CREATE y1 (TENSOR) TO DROPOUT_FORWARD(x, 0.5, 1).
+CREATE y2 (TENSOR) TO DROPOUT_FORWARD(x, 0.5, 1).
+CREATE y3 (TENSOR) TO DROPOUT_FORWARD(x, 0.5, 2).
+SHOW y1.
+SHOW y2.
+SHOW y3.
+TENSOR_FREE(y3).
+TENSOR_FREE(y2).
+TENSOR_FREE(y1).
+TENSOR_FREE(x).
+SHOW "dropout-seed-ok".

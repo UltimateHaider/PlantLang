@@ -42,6 +42,9 @@
 #define OP_BATCHNORM 19
 #define OP_LAYERNORM 20
 
+/* v0.61.4 — dropout. */
+#define OP_DROPOUT 21
+
 /* Init: register the tape hook with plant_tensor.c. */
 void plant_autograd_init(void);
 
@@ -58,6 +61,10 @@ void plant_tape_record_batchnorm(PlantTensor* x, PlantTensor* g, PlantTensor* b,
                                  double eps, PlantTensor* out);
 void plant_tape_record_layernorm(PlantTensor* x, PlantTensor* g, PlantTensor* b,
                                  double eps, PlantTensor* out);
+
+/* v0.61.4 — dropout recorder (p, seed). */
+void plant_tape_record_dropout(PlantTensor* x, double p, int64_t seed,
+                               PlantTensor* out);
 void plant_tape_clear(void);
 
 /* Core GRAD (4-arg + v0.57.3 retain flag). */

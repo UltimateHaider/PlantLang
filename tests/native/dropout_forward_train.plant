@@ -1,0 +1,7 @@
+# Dropout forward (train, p=0.5, seed=1): kept values scaled by 2.
+CREATE x (TENSOR) TO TENSOR([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]).
+CREATE y (TENSOR) TO DROPOUT_FORWARD(x, 0.5, 1).
+SHOW y.
+TENSOR_FREE(y).
+TENSOR_FREE(x).
+SHOW "dropout-forward-train-ok".

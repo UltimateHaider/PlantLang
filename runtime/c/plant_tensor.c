@@ -165,6 +165,8 @@ void (*plant_tape_record_batchnorm_hook)(PlantTensor* x, PlantTensor* g,
 void (*plant_tape_record_layernorm_hook)(PlantTensor* x, PlantTensor* g,
                                          PlantTensor* b, double eps,
                                          PlantTensor* out) = 0;
+void (*plant_tape_record_dropout_hook)(PlantTensor* x, double p, int64_t seed,
+                                       PlantTensor* out) = 0;
 
 /* ── plant_tensor_deep_copy ─────────────────────────────────── */
 PlantTensor* plant_tensor_deep_copy(const PlantTensor* src) {
@@ -803,6 +805,52 @@ PlantTensor* plant_layernorm_forward(PlantTensor* x, PlantTensor* gamma,
         (plant_tensor_requires_grad(x) || plant_tensor_requires_grad(gamma) ||
          plant_tensor_requires_grad(beta))) {
         plant_tape_record_layernorm_hook(x, gamma, beta, eps, y);
+        y->requires_grad = 1;
+    }
+    return y;
+}
+
+/* v0.61.4 — Dropout PRNG: local xorshift64* (no global state, fully
+   reproducible from the seed). The backward rule replays the same stream,
+   so the mask never has to be stored. */
+uint64_t plant_dropout_state(int64_t seed) {
+    uint64_t s = (uint64_t)seed * 0x9E3779B97F4A7C15ULL;
+    return s ? s : 0x9E3779B97F4A7C15ULL;
+}
+
+double plant_dropout_uniform(uint64_t* st) {
+    uint64_t x = *st;
+    x ^= x >> 12;
+    x ^= x << 25;
+    x ^= x >> 27;
+    *st = x;
+    return (double)((x * 0x2545F4914F6CDD1DULL) >> 11) * (1.0 / 9007199254740992.0);
+}
+
+/* v0.61.4 — Dropout forward. p in [0,1); p == 0 is eval (identity copy). */
+PlantTensor* plant_dropout_forward(PlantTensor* x, double p, int64_t seed) {
+    PlantTensor* y;
+    int64_t i;
+    uint64_t st;
+    double scale;
+    if (!x) return plant_tensor_create_error("dropout: null tensor");
+    if (plant_tensor_is_error(x)) return x;
+    if (p < 0.0 || p >= 1.0)
+        return plant_tensor_create_error("dropout: p must be in [0,1)");
+    y = plant_tensor_create(x->ndim, x->shape);
+    if (plant_tensor_is_error(y)) return y;
+    if (p <= 0.0) {
+        memcpy(y->data, x->data, sizeof(double) * (size_t)x->size);
+    } else {
+        st = plant_dropout_state(seed);
+        scale = 1.0 / (1.0 - p);
+        for (i = 0; i < x->size; i++) {
+            double u = plant_dropout_uniform(&st);
+            y->data[i] = (u >= p) ? x->data[i] * scale : 0.0;
+        }
+    }
+    if (plant_tape_record_dropout_hook && plant_tensor_requires_grad(x)) {
+        plant_tape_record_dropout_hook(x, p, seed, y);
         y->requires_grad = 1;
     }
     return y;

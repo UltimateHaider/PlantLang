@@ -1,4 +1,44 @@
-## v0.61.3 — BatchNorm + LayerNorm
+## v0.61.4 — Dropout + Full NN example
+
+### Added
+- **Dropout** — `DROPOUT_FORWARD(x, p, seed)`
+  - Deterministic: explicit seed + **local xorshift64\*** PRNG (no global
+    RNG state).
+  - `p = 0` is eval mode (identity copy); `0 ≤ p < 1`.
+  - Backward via `GRAD`: the mask is **replayed** from `(p, seed)` —
+    nothing is stored.
+- `docs/DROPOUT_RECIPE.md` (new) and `docs/NN_EXAMPLE.md` (new: MLP + CNN
+  training-step patterns, rules of thumb).
+- 8 new tests: `dropout_forward_train`, `dropout_forward_eval`,
+  `dropout_backward`, `dropout_seed_deterministic`, `nn_mlp_forward`,
+  `nn_mlp_train_step`, `nn_cnn_forward`, `nn_end_to_end`.
+
+### Fixed (TD-070 — critical)
+- `TAPE_CLEAR()` freed tensors still in use: `plant_tape_record` retained
+  its tensors, but the newer recorders (`_tape_push` → BN/LN/dropout and
+  `plant_tape_record_conv`) did not, while `plant_tape_clear` frees
+  `in0/in1/in2/out`.
+  - Symptom: heap corruption on a second forward pass after `TAPE_CLEAR()`
+    (`malloc_consolidate(): invalid chunk size`; valgrind `Invalid read`
+    of a block freed by `plant_tape_clear`).
+  - Fix: `_tape_hold()` on every recorded tensor in `_tape_push` and the
+    conv recorder, plus `in2` release in `clear()`.
+  - Pre-existing since v0.61.2 (CONV2D); surfaced by the NN example.
+
+### Documented limitation
+- ADv2: `ad2: Dropout unsupported (use GRAD)`.
+
+### Verified
+- Native: **328/328** (was 320, +8). Regression: 319/319.
+- Generics: 7/7. Closures: 6/6.
+- Self-hosting: converged (604,754 B), byte-identical.
+- valgrind strict: PASS. Binary: 1,083,664 B (+0.03% vs v0.61.3).
+
+### Out of Scope
+- TD-069 (tensor `log`/`exp`/`abs` → cross-entropy), TD-055 (ACTION globals).
+- Optimizers (Adam/AdamW), data loading, seeded weight init.
+
+
 
 ### Added
 - **BatchNorm** — `BATCHNORM_FORWARD(X, γ, β, eps)`

@@ -1,0 +1,7 @@
+# Dropout forward (eval, p=0): identity.
+CREATE x (TENSOR) TO TENSOR([1.0, 2.0, 3.0, 4.0]).
+CREATE y (TENSOR) TO DROPOUT_FORWARD(x, 0.0, 1).
+SHOW y.
+TENSOR_FREE(y).
+TENSOR_FREE(x).
+SHOW "dropout-forward-eval-ok".

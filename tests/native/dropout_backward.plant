@@ -1,0 +1,14 @@
+# Dropout backward: dx = dy * mask (mask replayed from the seed).
+CREATE x (TENSOR) TO TENSOR([1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]).
+TENSOR_TRACK(x).
+CREATE y (TENSOR) TO DROPOUT_FORWARD(x, 0.5, 1).
+CREATE y2 (TENSOR) TO TENSOR_MUL(y, y).
+CREATE loss (DBL) TO TENSOR_SUM(y2).
+CREATE dx (TENSOR) TO GRAD(loss, x, 1).
+SHOW dx.
+TAPE_CLEAR().
+TENSOR_FREE(dx).
+TENSOR_FREE(y2).
+TENSOR_FREE(y).
+TENSOR_FREE(x).
+SHOW "dropout-backward-ok".

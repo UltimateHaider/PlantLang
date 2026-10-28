@@ -88,6 +88,12 @@ PlantTensor* plant_batchnorm_forward(PlantTensor* x, PlantTensor* gamma,
 PlantTensor* plant_layernorm_forward(PlantTensor* x, PlantTensor* gamma,
                                      PlantTensor* beta, double eps);
 
+/* v0.61.4 — Dropout (deterministic local PRNG; p = 0 is eval/identity). */
+PlantTensor* plant_dropout_forward(PlantTensor* x, double p, int64_t seed);
+/* Shared PRNG helpers (forward and backward must stay in lock-step). */
+uint64_t plant_dropout_state(int64_t seed);
+double   plant_dropout_uniform(uint64_t* st);
+
 /* Reductions (scalar). */
 double plant_tensor_sum(PlantTensor* a);
 double plant_tensor_mean(PlantTensor* a);
@@ -138,6 +144,8 @@ extern void (*plant_tape_record_batchnorm_hook)(PlantTensor* x, PlantTensor* g,
 extern void (*plant_tape_record_layernorm_hook)(PlantTensor* x, PlantTensor* g,
                                                 PlantTensor* b, double eps,
                                                 PlantTensor* out);
+extern void (*plant_tape_record_dropout_hook)(PlantTensor* x, double p,
+                                              int64_t seed, PlantTensor* out);
 
 /* v0.56.0b-2 — Broadcast helpers (exported). */
 int64_t      plant_tensor_bc_index(PlantTensor* t, const int64_t* oidx,
