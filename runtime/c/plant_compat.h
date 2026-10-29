@@ -73,6 +73,15 @@ static tx_t _cat(tx_t a, tx_t b) { const char* sa=_S(a), *sb=_S(b); if(!sa) sa="
 static tx_t _cat3(tx_t a, tx_t b, tx_t c) { const char* sa=_S(a), *sb=_S(b), *sc=_S(c); if(!sa) sa=""; if(!sb) sb=""; if(!sc) sc=""; size_t al=strlen(sa), bl=strlen(sb), cl=strlen(sc); size_t tot=al+bl+cl+1; char *r=plant_str_slab_alloc(tot); if(!r)r=malloc(tot); if(r){memcpy(r,sa,al);memcpy(r+al,sb,bl);memcpy(r+al+bl,sc,cl+1);g_bal_bytes+=(long)tot;} return r?r:a; }
 static tx_t _cat4(tx_t a, tx_t b, tx_t c, tx_t d) { const char* sa=_S(a), *sb=_S(b), *sc=_S(c), *sd=_S(d); if(!sa) sa=""; if(!sb) sb=""; if(!sc) sc=""; if(!sd) sd=""; size_t al=strlen(sa), bl=strlen(sb), cl=strlen(sc), dl=strlen(sd); size_t tot=al+bl+cl+dl+1; char *r=plant_str_slab_alloc(tot); if(!r)r=malloc(tot); if(r){memcpy(r,sa,al);memcpy(r+al,sb,bl);memcpy(r+al+bl,sc,cl);memcpy(r+al+bl+cl,sd,dl+1);g_bal_bytes+=(long)tot;} return r?r:a; }
 static long _to_long(tx_t s) { const char* _s=_S(s); return _s ? atol(_s) : 0; }
+/* v0.62.1 — TD-072: parse and release. Used ONLY for fresh ACTION-call
+   returns (always a temp); plant_heapstr_release is magic-checked, so
+   static digit/double strings are safe no-ops. */
+static long _to_long_release(tx_t s) {
+    const char* _s = _S(s);
+    long v = _s ? atol(_s) : 0;
+    if (s) plant_heapstr_release((void*)s);
+    return v;
+}
 /* v0.48.37c — SAFE worker adapter numeric args: the wire codec can
    only carry small ints (raw in the pointer, < 4096) or strings, so
    the codegen stringifies numeric SAFE args at the call site. This

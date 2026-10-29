@@ -572,6 +572,27 @@ static PlantTensor* a2_backprop_nodes(A2Frame* f) {
             case OP_DROPOUT:
                 return plant_tensor_create_error(
                     "ad2: Dropout unsupported (use GRAD)");
+            case OP_SUMAXIS:
+                return plant_tensor_create_error(
+                    "ad2: SUM_AXIS unsupported (use GRAD)");
+            case OP_MEANAXIS:
+                return plant_tensor_create_error(
+                    "ad2: MEAN_AXIS unsupported (use GRAD)");
+            case OP_VARAXIS:
+                return plant_tensor_create_error(
+                    "ad2: VAR_AXIS unsupported (use GRAD)");
+            case OP_SQRT:
+                return plant_tensor_create_error(
+                    "ad2: TENSOR_SQRT unsupported (use GRAD)");
+            case OP_LOG:
+                return plant_tensor_create_error(
+                    "ad2: TENSOR_LOG unsupported (use GRAD)");
+            case OP_EXP:
+                return plant_tensor_create_error(
+                    "ad2: TENSOR_EXP unsupported (use GRAD)");
+            case OP_ABS:
+                return plant_tensor_create_error(
+                    "ad2: TENSOR_ABS unsupported (use GRAD)");
             case A2_BCAST:
                 a2_acc(n->in0, a2_axis_sum(d, n->in0));
                 break;

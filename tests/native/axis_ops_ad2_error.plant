@@ -1,0 +1,14 @@
+# TD-068: ADv2 over an axis op is an explicit error.
+CREATE x (TENSOR) TO TENSOR([[1.0, 2.0], [3.0, 4.0]]).
+TENSOR_TRACK(x).
+CREATE m (TENSOR) TO MEAN_AXIS(x, 1).
+CREATE sq (TENSOR) TO TENSOR_MUL(m, m).
+CREATE loss (DBL) TO TENSOR_SUM(sq).
+CREATE g (TENSOR) TO GRAD_HO(loss, x).
+SHOW g.
+TAPE_CLEAR().
+TENSOR_FREE(g).
+TENSOR_FREE(sq).
+TENSOR_FREE(m).
+TENSOR_FREE(x).
+SHOW "axis-ops-ad2-error-ok".

@@ -1,0 +1,7 @@
+# TD-072: multi-digit -> LON return through the caller coercion (0 B).
+ACTION f() -> LON
+GIVE 42.
+/ACTION.
+CREATE v (LON) TO f().
+SHOW v.
+SHOW "td072-no-leak-ok".

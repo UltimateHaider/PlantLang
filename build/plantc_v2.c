@@ -12857,6 +12857,13 @@ tx_t translate_expr(tx_t expr, PlantArray* nums, PlantArray* evars, PlantArray* 
     e = _handle_func_paren(e, "TENSOR_RAND_UNIFORM", "plant_tensor_rand_uniform");
     e = _handle_func_paren(e, "DENSE_FORWARD", "plant_dense_forward");
     e = _handle_func_paren(e, "CONV2D_FORWARD", "plant_conv2d_forward");
+    e = _handle_func_paren(e, "SUM_AXIS", "plant_tensor_sum_axis");
+    e = _handle_func_paren(e, "MEAN_AXIS", "plant_tensor_mean_axis");
+    e = _handle_func_paren(e, "VAR_AXIS", "plant_tensor_var_axis");
+    e = _handle_func_paren(e, "TENSOR_SQRT", "plant_tensor_sqrt");
+    e = _handle_func_paren(e, "TENSOR_LOG", "plant_tensor_log");
+    e = _handle_func_paren(e, "TENSOR_EXP", "plant_tensor_exp");
+    e = _handle_func_paren(e, "TENSOR_ABS", "plant_tensor_abs");
     e = _handle_func_paren(e, "BATCHNORM_FORWARD", "plant_batchnorm_forward");
     e = _handle_func_paren(e, "LAYERNORM_FORWARD", "plant_layernorm_forward");
     e = _handle_func_paren(e, "DROPOUT_FORWARD", "plant_dropout_forward");
@@ -13516,7 +13523,7 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     }
     lac4 = is_action_call(cval, sigs, "LON");
     if (strcmp(lac4,"1") == 0) {
-    cval = _cat3("_to_long(", cval, ")");
+    cval = _cat3("_to_long_release(", cval, ")");
     }
     if (hoh == 1) {
     return _cat3(_cat4(isel, "  ", target, " = "), cval, ";\n");
@@ -19993,7 +20000,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.62.0 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.62.1 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);

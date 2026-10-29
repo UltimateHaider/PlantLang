@@ -45,6 +45,15 @@
 /* v0.61.4 — dropout. */
 #define OP_DROPOUT 21
 
+/* v0.62.1 — TD-068 axis reductions + sqrt; TD-069 log/exp/abs. */
+#define OP_SUMAXIS  22
+#define OP_MEANAXIS 23
+#define OP_VARAXIS  24
+#define OP_SQRT     25
+#define OP_LOG      26
+#define OP_EXP      27
+#define OP_ABS      28
+
 /* Init: register the tape hook with plant_tensor.c. */
 void plant_autograd_init(void);
 

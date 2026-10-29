@@ -1,9 +1,8 @@
 # Technical Debt Register — PlantLang Chloroplast
 
-> **Status (v0.62.0): TD-055 CLOSED (feature shipped).** TD-048/065/066/067/070
-> CLOSED. **TD-071 (MED, silent-wrong) and TD-072 (LOW, leak) OPEN** —
-> discovered in v0.62.0. TD-068/TD-069 utilities OPEN. TD-016/TD-017
-> DEFERRED.
+> **Status (v0.62.1): TD-068/069/072 CLOSED.** TD-048/055/065/066/067/070
+> CLOSED. **TD-071 (MED, silent-wrong) remains OPEN** — two fixes attempted
+> and reverted (see entry). TD-016/TD-017 DEFERRED.
 
 ## TD-001: PlantArray never freed
 - **Status**: CLOSED (v0.51.2a)
@@ -640,18 +639,6 @@ defining scope.
   `td054_implicit_return_unchanged`.
 - **Related:** TD-059 (misdiagnosis → TD-060).
 
-## TD-055: ACTION bodies cannot see globals (no capture) — OPEN
-
-- **Status:** OPEN
-- **Introduced:** pre-v0.58.3 (discovered during v0.58.3 Phase 3)
-- **Impact:** LOW–MED (globals inaccessible inside ACTIONs)
-- **Symptom:** a global variable referenced inside an ACTION body emits a
-  C reference to an undeclared name (e.g. `'m' undeclared`) — globals are
-  not captured into ACTION bodies.
-- **Workaround:** pass globals as parameters.
-- **Target:** v0.58.4+ (or a broader scope/globals epic)
-- **Related:** none.
-
 ## TD-057: `GIVE <DBL value>` silent truncation / type error — CLOSED
 
 - **Status:** ✅ CLOSED in v0.58.5
@@ -860,18 +847,32 @@ defining scope.
   **inside** expression text (sub-expression rewrite), not just to bare calls.
 - **Related:** TD-055 (surfaced by the nested test), TD-066.
 
-## TD-072: `_to_long(<ACTION returning a heap string>)` leaks — OPEN
+## TD-068: no axis-reduction / `sqrt` primitives — CLOSED
 
-- **Status:** OPEN (LOW — leak)
-- **Introduced:** pre-v0.62.0; discovered in v0.62.0.
-- **Symptom:** `CREATE v (LON) TO f().` where `f` is `-> LON` and its value is
-  multi-digit leaks the returned heap string (11 B per call). Single-digit
-  values come from the static `_from_long` table (no leak).
-- **Workaround:** single-digit returns, or the implicit-return form
-  (`ACTION f()` + `CREATE v (LON) TO f().` — raw `long`, no allocation).
-- **Fix direction:** release the temporary in the coercion site
-  (`_to_long`-with-release helper).
-- **Related:** TD-066, TD-054 (return ABI).
+- **Status:** ✅ CLOSED in v0.62.1
+- **Fixed:** `MEAN_AXIS`, `SUM_AXIS`, `VAR_AXIS` (biased, keepdims=false) and
+  `TENSOR_SQRT` (guards negative input).
+- **Tape:** `OP_SUMAXIS 22`, `OP_MEANAXIS 23`, `OP_VARAXIS 24`, `OP_SQRT 25`;
+  backward scatters/broadcasts `d` (`var`: `2(x−μ)/red`, `sqrt`: `1/(2√x)`).
+- **ADv2:** explicit error. **Tests:** `tensor_{mean,sum,var}_axis`,
+  `tensor_sqrt`, `axis_ops_ad2_error`.
+
+## TD-069: no `log`/`exp`/`abs` tensor primitives — CLOSED
+
+- **Status:** ✅ CLOSED in v0.62.1
+- **Fixed:** `TENSOR_LOG` (guards `x ≤ 0`), `TENSOR_EXP`, `TENSOR_ABS`
+  (`OP_LOG 26`, `OP_EXP 27`, `OP_ABS 28`); backward `1/x`, `exp(x)`, `sign(x)`.
+- Cross-entropy composes in Plant. **ADv2:** explicit error.
+  **Tests:** `tensor_log_exp_abs`, `cross_entropy_softmax`.
+
+## TD-072: `_to_long(<ACTION returning a heap string>)` leaks — CLOSED
+
+- **Status:** ✅ CLOSED in v0.62.1
+- **Fixed:** `_to_long_release` (parse + magic-checked `plant_heapstr_release`)
+  at **ACTION-call coercion sites only**; user variables keep plain
+  `_to_long` (no double-free). Verified: `42` through `-> LON` → 0 B (was 11 B).
+- **Note:** the TD-071 pattern (`inner() + 1`) still leaks, because the call
+  is not recognised, hence neither coerced nor released.
 
 ## TD-070: `TAPE_CLEAR()` frees user tensors (BN/LN/dropout/conv) — CLOSED
 
@@ -889,33 +890,6 @@ defining scope.
   and the conv recorder, plus releasing `in2` in `clear()`.
 - **Verified:** full suite + 8 new tests, 0 B; valgrind clean.
 - **Related:** TD-066 (multi-gradient), TD-041 (intermediate ownership).
-
-## TD-069: no `log`/`exp`/`abs` tensor primitives — OPEN (utility)
-
-- **Status:** OPEN (utility request, **not a bug**)
-- **Introduced:** identified during the v0.61.4 investigation.
-- **Impact:** LOW — `MSE on softmax` works as a loss; cross-entropy needs `log`.
-- **Symptom:** no `plant_tensor_log`/`exp`/`abs`; cross-entropy
-  (`-Σ t·log(p)`) cannot be expressed at tensor level.
-- **Fix direction:** add `log`/`exp`/`abs` elementwise tensor ops + tape
-  rules (~40–60 lines) and a `CROSS_ENTROPY` helper.
-- **Target:** v0.62.1+ (utility).
-- **Related:** TD-068 (axis/`sqrt` utilities).
-
-## TD-068: no axis-reduction / `sqrt` tensor primitives — OPEN (utility)
-
-- **Status:** OPEN (utility request, **not a bug**)
-- **Introduced:** identified during the v0.61.3 investigation.
-- **Impact:** LOW — nothing is broken; BatchNorm/LayerNorm use direct loops.
-- **Symptom:** there is no `mean_axis`/`var_axis`/`sqrt`/`rsqrt` at tensor
-  level (reductions are full-tensor only; `softmax` is the only axis-aware
-  op, 1-D/2-D). Composing normalization by hand in Plant code is therefore
-  impossible without new primitives.
-- **Fix direction:** add `plant_tensor_sum_axis`/`mean_axis`/`var_axis` and
-  `sqrt`/`rsqrt` tensor ops plus tape rules (~50–80 lines), reusable by
-  user code.
-- **Target:** v0.62.0+ (utility).
-- **Related:** BatchNorm/LayerNorm (v0.61.3), softmax axis support.
 
 ## TD-067: `TENSOR_RESHAPE(x, [..])` leaks the inline list — CLOSED
 

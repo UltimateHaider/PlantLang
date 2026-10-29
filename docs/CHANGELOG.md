@@ -1,4 +1,45 @@
-## v0.62.0 — TD-055 (ACTION globals)
+## v0.62.1 — TD-068 + TD-069 + TD-072 (3 of 4 TDs)
+
+### Added
+- **TD-068** — axis reductions + `sqrt`
+  - `MEAN_AXIS(x, axis)`, `SUM_AXIS(x, axis)`, `VAR_AXIS(x, axis)` (biased,
+    keepdims=false), `TENSOR_SQRT(x)` (guards negative).
+  - Taped: `OP_SUMAXIS 22`, `OP_MEANAXIS 23`, `OP_VARAXIS 24`, `OP_SQRT 25`.
+  - Backward: scatter/broadcast of `d` (`mean`: `d/red`; `var`: `2(x−μ)/red`;
+    `sqrt`: `1/(2√x)`).
+- **TD-069** — `TENSOR_LOG` (guards `x ≤ 0`), `TENSOR_EXP`, `TENSOR_ABS`
+  (`OP_LOG 26`, `OP_EXP 27`, `OP_ABS 28`), backward `1/x`, `exp(x)`, `sign(x)`.
+  Cross-entropy now composes in Plant (softmax → log → mul → sum).
+- ADv2: explicit errors for all seven new ops.
+- `docs/TENSOR_UTILS_RECIPE.md` (new).
+- 8 new tests: `tensor_mean_axis`, `tensor_sum_axis`, `tensor_var_axis`,
+  `tensor_sqrt`, `tensor_log_exp_abs`, `cross_entropy_softmax`,
+  `td072_no_leak`, `axis_ops_ad2_error`.
+
+### Fixed (TD-072)
+- `_to_long(<ACTION returning a heap string>)` leaked multi-digit returns
+  (11 B). Fix: `_to_long_release` (parse + magic-checked
+  `plant_heapstr_release`) used **only** at ACTION-call coercion sites; user
+  variables keep plain `_to_long`. Verified: `42` through `-> LON` → 0 B.
+
+### NOT fixed (TD-071 stays OPEN)
+- `-> LON` ACTION call **inside an expression** (`inner() + 1`) is still not
+  coerced (pointer arithmetic). Two implementations were attempted and
+  **reverted**: a full token scan (4.2 GB OOM) and a leading-call wrapper
+  (incorrect wrapping, `_to_long_release(inner ( )+1)`). Recommended future
+  approach: change the `-> LON` return ABI to raw `long`, or coerce in the
+  parser where call nodes are unambiguous.
+
+### Verified
+- Native: **342/342** (was 334, +8). Regression: 319/319.
+- Generics: 7/7. Closures: 6/6.
+- Self-hosting: converged (612,962 B), byte-identical.
+- valgrind strict: PASS. Binary: 1,100,904 B (+1.18% vs v0.62.0).
+
+### Out of Scope (v0.62.2+)
+- TD-071 (ABI/parser fix). Optimizers (SGD/Adam/AdamW). Data loading.
+
+
 
 ### Added
 - **ACTION globals** — top-level `CREATE` variables are visible inside

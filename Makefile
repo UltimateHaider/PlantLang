@@ -14,7 +14,7 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.62.0
+VERSION    ?= 0.62.1
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
@@ -1018,6 +1018,26 @@ verify-v0.51.23: check-no-raw-malloc check-expected-files \
 	@echo "========================================================"
 
 # ── verify-v0.58.1: comprehensive release gate ──────────────
+# ── verify-v0.62.1: comprehensive release gate ──────────────
+verify-v0.62.1: check-no-raw-malloc check-expected-files \
+                check-changelog-numbers check-ffi-safety \
+                check-dispatcher-only
+	@echo "========================================================"
+	@echo "  v0.62.1 VERIFICATION GATE"
+	@echo "========================================================"
+	@echo "[1/7] Native tests..."     && sh tests/native/run_native_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[2/7] Generics..."         && sh tests/generics/run_generics_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[3/7] Closures..."         && sh tests/closures/run_closures_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[4/7] Regression..."       && sh tests/regression/run_regression_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[5/7] Self-hosting..."     && make self || exit 1
+	@cmp -s build/plantc_v3 bin/Chloroplast || \
+		{ echo "STOP: Self-hosting failed"; exit 1; }
+	@echo "[6/7] valgrind strict..."  && $(MAKE) valgrind-check-tensor || exit 1
+	@echo "[7/7] Update RELEASES..."  && make update-growth && make check-releases-updated
+	@echo "========================================================"
+	@echo "  v0.62.1 VERIFIED"
+	@echo "========================================================"
+
 # ── verify-v0.62.0: comprehensive release gate ──────────────
 verify-v0.62.0: check-no-raw-malloc check-expected-files \
                 check-changelog-numbers check-ffi-safety \

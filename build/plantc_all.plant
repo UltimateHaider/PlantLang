@@ -10638,6 +10638,14 @@ ACTION translate_expr(expr(TXT), nums(LST), evars(LST), maths(LST)),
     REAP e FROM _handle_func_paren, e, "DENSE_FORWARD",   "plant_dense_forward".
     # v0.61.2 — CONV2D (taped OP_CONV2D; use GRAD, not GRAD_HO).
     REAP e FROM _handle_func_paren, e, "CONV2D_FORWARD",  "plant_conv2d_forward".
+    # v0.62.1 — TD-068/069: axis reductions, sqrt, log/exp/abs (taped).
+    REAP e FROM _handle_func_paren, e, "SUM_AXIS",    "plant_tensor_sum_axis".
+    REAP e FROM _handle_func_paren, e, "MEAN_AXIS",   "plant_tensor_mean_axis".
+    REAP e FROM _handle_func_paren, e, "VAR_AXIS",    "plant_tensor_var_axis".
+    REAP e FROM _handle_func_paren, e, "TENSOR_SQRT", "plant_tensor_sqrt".
+    REAP e FROM _handle_func_paren, e, "TENSOR_LOG",  "plant_tensor_log".
+    REAP e FROM _handle_func_paren, e, "TENSOR_EXP",  "plant_tensor_exp".
+    REAP e FROM _handle_func_paren, e, "TENSOR_ABS",  "plant_tensor_abs".
     # v0.61.3 — normalisation layers (taped; use GRAD, not GRAD_HO).
     REAP e FROM _handle_func_paren, e, "BATCHNORM_FORWARD", "plant_batchnorm_forward".
     REAP e FROM _handle_func_paren, e, "LAYERNORM_FORWARD", "plant_layernorm_forward".
@@ -11362,7 +11370,7 @@ ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(
       # actions (which keep raw long bits).
       REAP lac4 FROM is_action_call, cval, sigs, "LON".
       IF lac4 IS "1",
-          SET cval TO "_to_long(" + cval + ")".
+          SET cval TO "_to_long_release(" + cval + ")".
       /IF.
       IF hoh IS 1, GIVE isel + "  " + target + " = " + cval + ";\n". /IF.
       GIVE isel + "  long " + target + " = " + cval + ";\n".
@@ -15245,6 +15253,7 @@ ACTION _stmt_text(bd(LST), out(LST)),
   GIVE out.
 /ACTION.
 
+
 # v0.62.0 — TD-055: word-bounded identifier search (for the hoist pre-pass).
 ACTION _is_ident_char(ch(TXT)) -> LON,
   CREATE ii (LON) TO find_any(ch, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_").
@@ -17486,7 +17495,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.62.0 (pure native)".
+  SHOW "Chloroplast 0.62.1 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

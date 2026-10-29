@@ -387,6 +387,75 @@ PlantTensor* plant_autograd_grad(PlantTensor* loss_t, double loss_d,
                 double inv = 1.0 / (double)da->size;
                 int64_t i;
                 for (i = 0; i < da->size; i++) da->data[i] += d->data[0] * inv;
+            } else if (n->op == OP_SUMAXIS || n->op == OP_MEANAXIS ||
+                       n->op == OP_VARAXIS) {
+                /* v0.62.1 — TD-068: axis-reduction backward (keepdims=false).
+                   Rebuild the group geometry and scatter/broadcast d. */
+                int64_t axis = (int64_t)n->scalar;
+                int64_t outer = 1, red, inner = 1, o, i, r, ax;
+                PlantTensor* gx = (n->in0 && plant_tensor_requires_grad(n->in0))
+                                  ? grad_or_zero(n->in0) : 0;
+                if (gx && axis >= 0 && axis < n->in0->ndim) {
+                    red = n->in0->shape[axis];
+                    for (ax = 0; ax < axis; ax++) outer *= n->in0->shape[ax];
+                    for (ax = axis + 1; ax < n->in0->ndim; ax++)
+                        inner *= n->in0->shape[ax];
+                    for (o = 0; o < outer; o++)
+                      for (i = 0; i < inner; i++) {
+                          double g = d->data[o * inner + i];
+                          if (n->op == OP_VARAXIS) {
+                              double s = 0.0, mu;
+                              for (r = 0; r < red; r++)
+                                  s += n->in0->data[(o * red + r) * inner + i];
+                              mu = s / (double)red;
+                              for (r = 0; r < red; r++)
+                                  gx->data[(o * red + r) * inner + i] +=
+                                      g * 2.0 * (n->in0->data[(o * red + r) * inner + i] - mu)
+                                      / (double)red;
+                          } else {
+                              double share = (n->op == OP_MEANAXIS)
+                                             ? g / (double)red : g;
+                              for (r = 0; r < red; r++)
+                                  gx->data[(o * red + r) * inner + i] += share;
+                          }
+                      }
+                }
+            } else if (n->op == OP_SQRT) {
+                /* v0.62.1 — TD-068: d/dx sqrt(x) = 1/(2 sqrt(x)). */
+                PlantTensor* gx = (n->in0 && plant_tensor_requires_grad(n->in0))
+                                  ? grad_or_zero(n->in0) : 0;
+                int64_t i;
+                if (gx)
+                    for (i = 0; i < d->size; i++) {
+                        double s = sqrt(n->in0->data[i]);
+                        gx->data[i] += (s > 0.0) ? d->data[i] / (2.0 * s) : 0.0;
+                    }
+            } else if (n->op == OP_LOG) {
+                /* v0.62.1 — TD-069: d/dx log(x) = 1/x. */
+                PlantTensor* gx = (n->in0 && plant_tensor_requires_grad(n->in0))
+                                  ? grad_or_zero(n->in0) : 0;
+                int64_t i;
+                if (gx)
+                    for (i = 0; i < d->size; i++)
+                        gx->data[i] += d->data[i] / n->in0->data[i];
+            } else if (n->op == OP_EXP) {
+                /* v0.62.1 — TD-069: d/dx exp(x) = exp(x). */
+                PlantTensor* gx = (n->in0 && plant_tensor_requires_grad(n->in0))
+                                  ? grad_or_zero(n->in0) : 0;
+                int64_t i;
+                if (gx)
+                    for (i = 0; i < d->size; i++)
+                        gx->data[i] += d->data[i] * exp(n->in0->data[i]);
+            } else if (n->op == OP_ABS) {
+                /* v0.62.1 — TD-069: d/dx |x| = sign(x). */
+                PlantTensor* gx = (n->in0 && plant_tensor_requires_grad(n->in0))
+                                  ? grad_or_zero(n->in0) : 0;
+                int64_t i;
+                if (gx)
+                    for (i = 0; i < d->size; i++)
+                        gx->data[i] += d->data[i] *
+                            ((n->in0->data[i] > 0.0) ? 1.0 :
+                             ((n->in0->data[i] < 0.0) ? -1.0 : 0.0));
             } else if (n->op == OP_DROPOUT) {
                 /* v0.61.4 — dropout backward: replay the mask stream
                    (same seed/order as forward) → dx = dy * mask. */

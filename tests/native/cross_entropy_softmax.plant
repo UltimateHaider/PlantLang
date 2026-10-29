@@ -1,0 +1,14 @@
+# TD-069: cross-entropy composed from log (softmax + log + mul + sum).
+CREATE logits (TENSOR) TO TENSOR([[1.0, 2.0]]).
+CREATE T (TENSOR) TO TENSOR([[0.0, 1.0]]).
+CREATE p (TENSOR) TO TENSOR_SOFTMAX(logits, 1).
+CREATE lp (TENSOR) TO TENSOR_LOG(p).
+CREATE tl (TENSOR) TO TENSOR_MUL(T, lp).
+CREATE loss (DBL) TO TENSOR_SUM(tl).
+SHOW loss.
+TENSOR_FREE(tl).
+TENSOR_FREE(lp).
+TENSOR_FREE(p).
+TENSOR_FREE(T).
+TENSOR_FREE(logits).
+SHOW "cross-entropy-softmax-ok".

@@ -1,0 +1,20 @@
+# TD-068: VAR_AXIS (biased) forward + backward.
+CREATE x (TENSOR) TO TENSOR([[1.0, 2.0], [3.0, 4.0]]).
+CREATE v0 (TENSOR) TO VAR_AXIS(x, 0).
+CREATE v1 (TENSOR) TO VAR_AXIS(x, 1).
+SHOW v0.
+SHOW v1.
+TENSOR_TRACK(x).
+CREATE v (TENSOR) TO VAR_AXIS(x, 1).
+CREATE sq (TENSOR) TO TENSOR_MUL(v, v).
+CREATE loss (DBL) TO TENSOR_SUM(sq).
+CREATE dx (TENSOR) TO GRAD(loss, x, 1).
+SHOW dx.
+TAPE_CLEAR().
+TENSOR_FREE(dx).
+TENSOR_FREE(sq).
+TENSOR_FREE(v).
+TENSOR_FREE(v1).
+TENSOR_FREE(v0).
+TENSOR_FREE(x).
+SHOW "tensor-var-axis-ok".

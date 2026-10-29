@@ -810,6 +810,167 @@ PlantTensor* plant_layernorm_forward(PlantTensor* x, PlantTensor* gamma,
     return y;
 }
 
+/* v0.62.1 — TD-068: axis reductions (direct loops, keepdims = false).
+   out shape = input shape with `axis` removed. */
+static int _axis_setup(PlantTensor* x, int axis, int64_t* outer, int64_t* red,
+                       int64_t* inner, PlantTensor** out) {
+    int64_t i, oshape[16], od = 0;
+    if (!x) return 0;
+    if (x->ndim < 1) return 0;
+    if (axis < 0 || axis >= x->ndim) return 0;
+    *outer = 1; *red = x->shape[axis]; *inner = 1;
+    for (i = 0; i < axis; i++) *outer *= x->shape[i];
+    for (i = axis + 1; i < x->ndim; i++) *inner *= x->shape[i];
+    for (i = 0; i < x->ndim; i++) if (i != axis) oshape[od++] = x->shape[i];
+    if (od < 1) {
+        int64_t one[1];
+        one[0] = 1;
+        *out = plant_tensor_create(1, one);
+    } else {
+        *out = plant_tensor_create(od, oshape);
+    }
+    return (*out && !plant_tensor_is_error(*out)) ? 1 : 0;
+}
+
+PlantTensor* plant_tensor_sum_axis(PlantTensor* x, int axis) {
+    int64_t outer, red, inner, o, i, r;
+    PlantTensor* out;
+    if (!x) return plant_tensor_create_error("sum_axis: null tensor");
+    if (plant_tensor_is_error(x)) return x;
+    if (!_axis_setup(x, axis, &outer, &red, &inner, &out))
+        return plant_tensor_create_error("sum_axis: bad axis");
+    for (o = 0; o < outer; o++)
+      for (i = 0; i < inner; i++) {
+          double acc = 0.0;
+          for (r = 0; r < red; r++)
+              acc += x->data[(o * red + r) * inner + i];
+          out->data[o * inner + i] = acc;
+      }
+    if (plant_tape_record_hook && plant_tensor_requires_grad(x)) {
+        plant_tape_record_hook(22 /* OP_SUMAXIS */, x, 0, (double)axis, out);
+        out->requires_grad = 1;
+    }
+    return out;
+}
+
+PlantTensor* plant_tensor_mean_axis(PlantTensor* x, int axis) {
+    int64_t outer, red, inner, o, i, r;
+    PlantTensor* out;
+    if (!x) return plant_tensor_create_error("mean_axis: null tensor");
+    if (plant_tensor_is_error(x)) return x;
+    if (!_axis_setup(x, axis, &outer, &red, &inner, &out))
+        return plant_tensor_create_error("mean_axis: bad axis");
+    for (o = 0; o < outer; o++)
+      for (i = 0; i < inner; i++) {
+          double acc = 0.0;
+          for (r = 0; r < red; r++)
+              acc += x->data[(o * red + r) * inner + i];
+          out->data[o * inner + i] = acc / (double)red;
+      }
+    if (plant_tape_record_hook && plant_tensor_requires_grad(x)) {
+        plant_tape_record_hook(23 /* OP_MEANAXIS */, x, 0, (double)axis, out);
+        out->requires_grad = 1;
+    }
+    return out;
+}
+
+PlantTensor* plant_tensor_var_axis(PlantTensor* x, int axis) {
+    int64_t outer, red, inner, o, i, r;
+    PlantTensor* out;
+    if (!x) return plant_tensor_create_error("var_axis: null tensor");
+    if (plant_tensor_is_error(x)) return x;
+    if (!_axis_setup(x, axis, &outer, &red, &inner, &out))
+        return plant_tensor_create_error("var_axis: bad axis");
+    for (o = 0; o < outer; o++)
+      for (i = 0; i < inner; i++) {
+          double s = 0.0, sq = 0.0, mu;
+          for (r = 0; r < red; r++) {
+              double v = x->data[(o * red + r) * inner + i];
+              s += v; sq += v * v;
+          }
+          mu = s / (double)red;
+          out->data[o * inner + i] = sq / (double)red - mu * mu;
+      }
+    if (plant_tape_record_hook && plant_tensor_requires_grad(x)) {
+        plant_tape_record_hook(24 /* OP_VARAXIS */, x, 0, (double)axis, out);
+        out->requires_grad = 1;
+    }
+    return out;
+}
+
+PlantTensor* plant_tensor_sqrt(PlantTensor* x) {
+    int64_t i;
+    PlantTensor* o;
+    if (!x) return plant_tensor_create_error("sqrt: null tensor");
+    if (plant_tensor_is_error(x)) return x;
+    o = plant_tensor_create(x->ndim, x->shape);
+    if (plant_tensor_is_error(o)) return o;
+    for (i = 0; i < x->size; i++) {
+        if (x->data[i] < 0.0) {
+            plant_tensor_free(o);
+            return plant_tensor_create_error("sqrt: negative element");
+        }
+        o->data[i] = sqrt(x->data[i]);
+    }
+    if (plant_tape_record_hook && plant_tensor_requires_grad(x)) {
+        plant_tape_record_hook(25 /* OP_SQRT */, x, 0, 0.0, o);
+        o->requires_grad = 1;
+    }
+    return o;
+}
+
+PlantTensor* plant_tensor_log(PlantTensor* x) {
+    int64_t i;
+    PlantTensor* o;
+    if (!x) return plant_tensor_create_error("log: null tensor");
+    if (plant_tensor_is_error(x)) return x;
+    o = plant_tensor_create(x->ndim, x->shape);
+    if (plant_tensor_is_error(o)) return o;
+    for (i = 0; i < x->size; i++) {
+        if (x->data[i] <= 0.0) {
+            plant_tensor_free(o);
+            return plant_tensor_create_error("log: non-positive element");
+        }
+        o->data[i] = log(x->data[i]);
+    }
+    if (plant_tape_record_hook && plant_tensor_requires_grad(x)) {
+        plant_tape_record_hook(26 /* OP_LOG */, x, 0, 0.0, o);
+        o->requires_grad = 1;
+    }
+    return o;
+}
+
+PlantTensor* plant_tensor_exp(PlantTensor* x) {
+    int64_t i;
+    PlantTensor* o;
+    if (!x) return plant_tensor_create_error("exp: null tensor");
+    if (plant_tensor_is_error(x)) return x;
+    o = plant_tensor_create(x->ndim, x->shape);
+    if (plant_tensor_is_error(o)) return o;
+    for (i = 0; i < x->size; i++) o->data[i] = exp(x->data[i]);
+    if (plant_tape_record_hook && plant_tensor_requires_grad(x)) {
+        plant_tape_record_hook(27 /* OP_EXP */, x, 0, 0.0, o);
+        o->requires_grad = 1;
+    }
+    return o;
+}
+
+PlantTensor* plant_tensor_abs(PlantTensor* x) {
+    int64_t i;
+    PlantTensor* o;
+    if (!x) return plant_tensor_create_error("abs: null tensor");
+    if (plant_tensor_is_error(x)) return x;
+    o = plant_tensor_create(x->ndim, x->shape);
+    if (plant_tensor_is_error(o)) return o;
+    for (i = 0; i < x->size; i++)
+        o->data[i] = (x->data[i] < 0.0) ? -x->data[i] : x->data[i];
+    if (plant_tape_record_hook && plant_tensor_requires_grad(x)) {
+        plant_tape_record_hook(28 /* OP_ABS */, x, 0, 0.0, o);
+        o->requires_grad = 1;
+    }
+    return o;
+}
+
 /* v0.61.4 — Dropout PRNG: local xorshift64* (no global state, fully
    reproducible from the seed). The backward rule replays the same stream,
    so the mask never has to be stored. */

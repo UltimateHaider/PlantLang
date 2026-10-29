@@ -88,6 +88,17 @@ PlantTensor* plant_batchnorm_forward(PlantTensor* x, PlantTensor* gamma,
 PlantTensor* plant_layernorm_forward(PlantTensor* x, PlantTensor* gamma,
                                      PlantTensor* beta, double eps);
 
+/* v0.62.1 — TD-068: axis reductions (keepdims = false) + sqrt. */
+PlantTensor* plant_tensor_sum_axis(PlantTensor* x, int axis);
+PlantTensor* plant_tensor_mean_axis(PlantTensor* x, int axis);
+PlantTensor* plant_tensor_var_axis(PlantTensor* x, int axis);
+PlantTensor* plant_tensor_sqrt(PlantTensor* x);
+
+/* v0.62.1 — TD-069: elementwise log/exp/abs. */
+PlantTensor* plant_tensor_log(PlantTensor* x);
+PlantTensor* plant_tensor_exp(PlantTensor* x);
+PlantTensor* plant_tensor_abs(PlantTensor* x);
+
 /* v0.61.4 — Dropout (deterministic local PRNG; p = 0 is eval/identity). */
 PlantTensor* plant_dropout_forward(PlantTensor* x, double p, int64_t seed);
 /* Shared PRNG helpers (forward and backward must stay in lock-step). */
