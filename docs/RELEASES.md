@@ -2,10 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.62.5a
+# Auto-updated: 0.62.5b
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
-| v0.62.5a | 1100904 | 8963 | 1422 | 109 | 330 | 5361 |
+| v0.62.5b | 1105080 | 8963 | 1422 | 109 | 330 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
 
 ## Release Timeline
@@ -102,6 +102,7 @@
 | v0.62.0 | 2026 | TD-055 (ACTION globals) | Released |
 | v0.62.1 | 2026 | TD-068 + TD-069 + TD-072 (3 of 4) | Released |
 | v0.62.5a | 2026 | is_action_call fix (latent dead code) | Released |
+| v0.62.5b | 2026 | TD-071 CLOSED (leading-call coercion) | Released |
 
 ## Growth Chart (ASCII)
 

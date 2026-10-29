@@ -1,9 +1,14 @@
 # Technical Debt Register — PlantLang Chloroplast
 
-> **Status (v0.62.5a): TD-054 caller coercion is live again** (it was dead
-> code). TD-068/069/072 CLOSED (TD-072 now genuinely fixed). **TD-071 (MED,
-> silent-wrong) OPEN** — E2 pending a gate-level harness. **TD-073 OPEN**
-> (54 untyped numeric `REAP` sites). TD-016/TD-017 DEFERRED.
+> **Status (v0.62.5b): 0 known silent-wrong bugs.** TD-054/068/069/071/072
+> CLOSED (TD-054 effective from v0.62.5a, TD-071 from v0.62.5b). **TD-073
+> OPEN** (53 untyped numeric `REAP` sites — latent, staged v0.62.5c).
+> TD-016/TD-017 DEFERRED.
+
+> **Build-depth (v0.62.5b):** the compiler is self-hosted; when a fix touches
+> codegen, a 2-stage chain (v1→v2→v3) can install a compiler built by a stale
+> codegen. `make` now installs **v4** and `make self` checks convergence across
+> v3→v4→v5.
 
 ## TD-001: PlantArray never freed
 - **Status**: CLOSED (v0.51.2a)
@@ -849,19 +854,27 @@ defining scope.
 - **Target:** v0.62.5b+ (mechanical, MED risk).
 - **Related:** TD-054, TD-071, TD-072.
 
-## TD-071: `-> LON` ACTION call inside an expression is not coerced — OPEN
+## TD-071: `-> LON` ACTION call inside an expression — CLOSED
 
-- **Status:** OPEN (MED — silent-wrong)
-- **Introduced:** pre-v0.62.0; discovered in v0.62.0.
-- **Symptom:** `GIVE inner() + 1.` where `inner` returns `-> LON` emits
-  `return inner ( )+1;` — pointer arithmetic on the `tx_t` return value
-  (observed result `0` instead of `11`). A **bare** call is coerced
-  correctly.
-- **Workaround:** bind first —
-  `CREATE t (LON) TO inner().` / `SET t TO t + 1.` / `GIVE t.`
-- **Fix direction:** apply `is_action_call`-style coercion to ACTION calls
-  **inside** expression text (sub-expression rewrite), not just to bare calls.
-- **Related:** TD-055 (surfaced by the nested test), TD-066.
+- **Status:** ✅ CLOSED in v0.62.5b
+- **Fixed:** `_coerce_lead_call` (typed, fail-safe, **text sentinel** = `""`
+  when unchanged) + `_match_paren` (typed), wired into `gen_give_stmt`
+  (re-box `_from_long(...)` to keep the text ABI) and `gen_create_stmt`
+  (numeric target uses the expression directly).
+  - `inner() + 1 = 11`, `inner() * 2 = 20`, **0 B**; the 3 display/concat
+    regression locks stay green.
+- **Root cause:** uniform `tx_t` text ABI + no expression IR ⇒ a leading ACTION
+  call inside an expression was never coerced (pointer arithmetic).
+- **Two traps hit during the fixes (documented in code):**
+  1. `REAP x FROM <numeric fn>` binds `x` as `tx_t` (pointer) — type numerics
+     with `CREATE x (LON)`.
+  2. A list element read via `plant_list_get` is `tx_t` — never assign it to a
+     numeric flag (`long f = plant_list_get(...)` is a pointer); use a text
+     sentinel instead.
+- **Prerequisites:** TD-054 (v0.62.5a) and the typed-`REAP` lesson (TD-073).
+- **Build-depth note:** a stale *incremental* v3 could still ship the old
+  codegen ⇒ `make` now installs **v4** (one extra generation).
+- **Related:** TD-054, TD-072, TD-073.
 
 ## TD-068: no axis-reduction / `sqrt` primitives — CLOSED
 

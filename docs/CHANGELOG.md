@@ -1,4 +1,39 @@
-## v0.62.5a — is_action_call fix (latent dead code)
+## v0.62.5b — TD-071 CLOSED (leading-call coercion)
+
+### Fixed (TD-071 → CLOSED)
+- An explicit `-> LON` (and `-> DBL`/`FLT`/`NUM`) ACTION call **inside a numeric
+  expression** is now coerced:
+  - `_coerce_lead_call` (all locals typed, **fail-safe**, text sentinel `""`
+    when the shape is not `<action>(…)<more>`) + `_match_paren`.
+  - `gen_give_stmt`: LON context → `_from_long(<coerced>)` (text ABI preserved).
+  - `gen_create_stmt`: LON target → the coerced expression directly.
+  - `inner() + 1 = 11`, `inner() * 2 = 20`, **0 B**.
+- The 3 display/concat locks (`action_brace`, `generic_num_concat`,
+  `generic_num_return`) stay green — no ABI change.
+
+### Fixed (build depth)
+- `make` now installs **v4** (`v1→v2→v3→v4`); `make self` checks v3→v4→v5
+  convergence. Rationale: a 2-stage chain (or stale incremental artifacts) can
+  ship a codegen that predates a self-referential fix.
+
+### Added
+- `td071_expr_coercion` (new regression: 11, 20, 0 B).
+
+### Documented
+- Two codegen traps (untyped numeric `REAP`; `plant_list_get` elements are
+  `tx_t`) — recorded in the TD-071 entry and in code comments.
+
+### Verified
+- Native: **344/344** (was 343, +1). Regression: 319/319.
+- Generics: 7/7. Closures: 6/6.
+- Self-hosting: converged (614,842 B), v3→v4→v5 identical.
+- valgrind strict: PASS.
+
+### Out of Scope (v0.62.5c+)
+- TD-073 (53 untyped `REAP` sites — 4 gated batches).
+- Optimizers + data loading (v0.63.0).
+
+
 
 ### Fixed (latent dead code since v0.54)
 - `is_action_call` **always returned `"0"`**: its `REAP`-bound `iac_id` was

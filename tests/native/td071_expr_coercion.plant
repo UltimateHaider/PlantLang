@@ -1,0 +1,13 @@
+# v0.62.5b — TD-071: an explicit -> LON ACTION call inside a numeric
+# expression is coerced (E2: leading-call coercion).
+ACTION inner() -> LON
+GIVE 10.
+/ACTION.
+ACTION outer() -> LON
+GIVE inner() + 1.
+/ACTION.
+CREATE v (LON) TO outer().
+SHOW v.
+CREATE w (LON) TO inner() * 2.
+SHOW w.
+SHOW "td071-expr-coercion-ok".

@@ -14,7 +14,7 @@
 #   make help       show this help
 # ═══════════════════════════════════════════════════════════════
 
-VERSION    ?= 0.62.5a
+VERSION    ?= 0.62.5b
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
@@ -84,10 +84,13 @@ bootstrap-update: $(NATIVE_BIN)
 # ── all: build the native self-hosted compiler ────────────────
 all: $(NATIVE_BIN) ## Build native self-hosted compiler (bin/Chloroplast)
 
-$(NATIVE_BIN): $(V3_BIN)
+# v0.62.5b — install v4 (not v3): a 2-stage chain can ship a codegen that
+# predates a self-referential fix (v3 is produced by v2, which may be stale
+# in incremental builds). One extra generation removes that class.
+$(NATIVE_BIN): $(V4_BIN)
 	@mkdir -p bin
-	cp $(V3_BIN) $@
-	@echo "== bin/Chloroplast built (self-hosted v3) =="
+	cp $(V4_BIN) $@
+	@echo "== bin/Chloroplast built (self-hosted v4) =="
 
 # ── self: multi-generation self-hosting + convergence ────────
 self: $(V3_C) $(V4_C) $(V5_C) ## Full self-hosting chain + convergence check
@@ -1018,6 +1021,26 @@ verify-v0.51.23: check-no-raw-malloc check-expected-files \
 	@echo "========================================================"
 
 # ── verify-v0.58.1: comprehensive release gate ──────────────
+# ── verify-v0.62.5b: comprehensive release gate ─────────────
+verify-v0.62.5b: check-no-raw-malloc check-expected-files \
+                 check-changelog-numbers check-ffi-safety \
+                 check-dispatcher-only
+	@echo "========================================================"
+	@echo "  v0.62.5b VERIFICATION GATE"
+	@echo "========================================================"
+	@echo "[1/7] Native tests..."     && sh tests/native/run_native_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[2/7] Generics..."         && sh tests/generics/run_generics_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[3/7] Closures..."         && sh tests/closures/run_closures_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[4/7] Regression..."       && sh tests/regression/run_regression_tests.sh $(NATIVE_BIN) || exit 1
+	@echo "[5/7] Self-hosting..."     && make self || exit 1
+	@cmp -s $(V3_C) $(V4_C) && cmp -s $(V4_C) $(V5_C) || \
+		{ echo "STOP: Self-hosting failed"; exit 1; }
+	@echo "[6/7] valgrind strict..."  && $(MAKE) valgrind-check-tensor || exit 1
+	@echo "[7/7] Update RELEASES..."  && make update-growth && make check-releases-updated
+	@echo "========================================================"
+	@echo "  v0.62.5b VERIFIED"
+	@echo "========================================================"
+
 # ── verify-v0.62.5a: comprehensive release gate ─────────────
 verify-v0.62.5a: check-no-raw-malloc check-expected-files \
                  check-changelog-numbers check-ffi-safety \
