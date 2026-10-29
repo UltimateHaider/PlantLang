@@ -1,0 +1,8 @@
+# v0.62.5a — TD-054/072: -> LON caller coercion is emitted again
+# (is_action_call was dead code; the release now actually runs).
+ACTION inner() -> LON
+GIVE 42.
+/ACTION.
+CREATE v (LON) TO inner().
+SHOW v.
+SHOW "action-coercion-lon-ok".

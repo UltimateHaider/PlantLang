@@ -1,4 +1,39 @@
-## v0.62.1 — TD-068 + TD-069 + TD-072 (3 of 4 TDs)
+## v0.62.5a — is_action_call fix (latent dead code)
+
+### Fixed (latent dead code since v0.54)
+- `is_action_call` **always returned `"0"`**: its `REAP`-bound `iac_id` was
+  `tx_t` (untyped), so `IF iac_id IS -1` compared a **pointer**, the scan loop
+  never broke, `iac_name` became the whole expression and `find_sig` always
+  failed.
+- **Silent impact:** the `-> LON` caller coercion (TD-054 part 1) **and** the
+  TD-072 release fix were **dead code** — no `-> LON` call was ever coerced or
+  released.
+- **Fix:** `CREATE iac_id (LON) TO find_any(...)` (typed local).
+- **Now active (verified):**
+  - `CREATE v (LON) TO inner()` → `long v = _to_long_release(inner ( ));` ✓
+  - TD-072: `42` through `-> LON` → **0 B** (was 11 B) ✓
+  - `_has_word` boundary checks are exact again (TD-055 hoist no longer
+    over-matches; bootstrap still identical).
+
+### Added
+- `action_coercion_lon` (new regression: coercion is emitted, 0 B).
+- `td072_no_leak` (existing) now genuinely covers the release path.
+
+### Documented (new TD)
+- **TD-073**: untyped numeric `REAP` targets (**54 sites**) — mechanical audit
+  (`REAP x FROM <numeric fn>` ⇒ `CREATE x (LON)`). Target: v0.62.5b+.
+
+### Verified
+- Native: **343/343** (was 342, +1). Regression: 319/319.
+- Generics: 7/7. Closures: 6/6.
+- Self-hosting: converged (612,951 B — 11 bytes smaller: the dead coercion left
+  no trace), byte-identical. valgrind strict: PASS. Binary unchanged.
+
+### Out of Scope (v0.62.5b+)
+- TD-071 (`-> LON` inside an expression — E2 retry with a gate harness).
+- TD-073 (54 untyped `REAP` sites). Optimizers + data loading (v0.63.0).
+
+
 
 ### Added
 - **TD-068** — axis reductions + `sqrt`

@@ -8790,7 +8790,11 @@ ACTION is_action_call(cval(TXT), sigs(LST), want(TXT)),
   CREATE iac_name(TXT) TO "".
   SEASON iac_i < iac_n,
     REAP iac_c FROM char_at, iac_t, iac_i.
-    REAP iac_id FROM find_any, iac_c, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_".
+    # v0.62.5a — TD-054/TD-071: an implicit REAP target is tx_t, so this
+    # numeric result was compared as a pointer and the loop never broke,
+    # making is_action_call always return "0" (the caller coercion for
+    # `-> LON` calls was dead code since v0.54).
+    CREATE iac_id (LON) TO find_any(iac_c, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_").
     IF iac_id IS -1, BREAK 0. /IF.
     SET iac_name TO iac_name + iac_c.
     SET iac_i TO iac_i + 1.

@@ -1,8 +1,9 @@
 # Technical Debt Register — PlantLang Chloroplast
 
-> **Status (v0.62.1): TD-068/069/072 CLOSED.** TD-048/055/065/066/067/070
-> CLOSED. **TD-071 (MED, silent-wrong) remains OPEN** — two fixes attempted
-> and reverted (see entry). TD-016/TD-017 DEFERRED.
+> **Status (v0.62.5a): TD-054 caller coercion is live again** (it was dead
+> code). TD-068/069/072 CLOSED (TD-072 now genuinely fixed). **TD-071 (MED,
+> silent-wrong) OPEN** — E2 pending a gate-level harness. **TD-073 OPEN**
+> (54 untyped numeric `REAP` sites). TD-016/TD-017 DEFERRED.
 
 ## TD-001: PlantArray never freed
 - **Status**: CLOSED (v0.51.2a)
@@ -833,6 +834,21 @@ defining scope.
   suite 334/334, regression 319/319, self-hosting byte-identical.
 - **Related:** TD-071, TD-072 (found while building the tests).
 
+## TD-073: untyped numeric `REAP` targets (54 sites) — OPEN
+
+- **Status:** OPEN (latent, independent)
+- **Introduced:** since `REAP` (v0.54 era)
+- **Impact:** LOW–MED — most sites "work" only because pointer comparisons
+  happen to behave (`>= 0` always true, `IS -1` never true).
+- **Symptom:** `REAP x FROM <numeric fn>` binds `x` as **tx_t**, so numeric
+  comparisons compare pointers, not numbers.
+- **Confirmed damage:** `is_action_call` (fixed in v0.62.5a) and `_has_word`
+  boundary checks (degraded; now exact as a side effect).
+- **Fix direction:** mechanical audit — `REAP x FROM <numeric fn>` ⇒
+  `CREATE x (LON) TO <numeric fn>` (54 sites; re-derive the count).
+- **Target:** v0.62.5b+ (mechanical, MED risk).
+- **Related:** TD-054, TD-071, TD-072.
+
 ## TD-071: `-> LON` ACTION call inside an expression is not coerced — OPEN
 
 - **Status:** OPEN (MED — silent-wrong)
@@ -864,6 +880,17 @@ defining scope.
   (`OP_LOG 26`, `OP_EXP 27`, `OP_ABS 28`); backward `1/x`, `exp(x)`, `sign(x)`.
 - Cross-entropy composes in Plant. **ADv2:** explicit error.
   **Tests:** `tensor_log_exp_abs`, `cross_entropy_softmax`.
+
+## TD-054: ACTION `-> LON` return ABI — CLOSED (effective only from v0.62.5a)
+
+- **Status:** ✅ CLOSED in v0.58.7 (design), **effective from v0.62.5a**
+- **Update (v0.62.5a):** the caller coercion (TD-054 part 1) was **dead code**:
+  `is_action_call` always returned `"0"` because its `REAP`-bound `iac_id` was
+  `tx_t` (untyped). Fixing that (typed `CREATE iac_id (LON)`) makes the design
+  actually work at bare-call sites: `CREATE v (LON) TO inner()` now emits
+  `long v = _to_long_release(inner ( ));`.
+- **Consequence:** TD-072's release fix was also dead until now.
+- **Related:** TD-073 (root cause), TD-072.
 
 ## TD-072: `_to_long(<ACTION returning a heap string>)` leaks — CLOSED
 

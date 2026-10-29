@@ -16394,7 +16394,6 @@ tx_t is_action_call(tx_t cval, PlantArray* sigs, tx_t want) {
   tx_t iac_t = "";
   tx_t iac_last = "";
   tx_t iac_c = "";
-  tx_t iac_id = "";
   tx_t iac_sp = "";
   tx_t iac_nx = "";
   tx_t iac_sig = "";
@@ -16413,7 +16412,7 @@ tx_t is_action_call(tx_t cval, PlantArray* sigs, tx_t want) {
     tx_t iac_name = "";
     while (iac_i < iac_n) {
     iac_c = char_at(iac_t, iac_i);
-    iac_id = find_any(iac_c, "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_");
+    long iac_id = find_any ( iac_c , "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789_" );
     if (iac_id == - 1) {
                       break;
     }
@@ -20004,7 +20003,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.62.1 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.62.5a (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);
