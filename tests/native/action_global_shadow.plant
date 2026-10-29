@@ -1,0 +1,9 @@
+# TD-055: a parameter shadows the top-level CREATE.
+CREATE g (LON) TO 9.
+ACTION f(g (LON)) -> LON
+GIVE g.
+/ACTION.
+CREATE v (LON) TO f(3).
+SHOW v.
+SHOW g.
+SHOW "action-global-shadow-ok".

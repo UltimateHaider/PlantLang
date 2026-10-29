@@ -1,0 +1,10 @@
+# TD-055: an ACTION reads a top-level CREATE (TENSOR).
+CREATE g (TENSOR) TO TENSOR([1.0, 2.0]).
+ACTION f() -> TENSOR
+GIVE TENSOR_ADD(g, g).
+/ACTION.
+CREATE v (TENSOR) TO f().
+SHOW v.
+TENSOR_FREE(v).
+TENSOR_FREE(g).
+SHOW "action-global-tensor-ok".

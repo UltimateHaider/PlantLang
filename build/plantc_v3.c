@@ -307,6 +307,10 @@ tx_t find_params(PlantArray* sigs, tx_t name);
 tx_t find_ret(PlantArray* sigs, tx_t name);
 tx_t is_ref_param(tx_t ptype);
 tx_t is_ref_at(PlantArray* params, long idx);
+tx_t _put_if_txt(tx_t m, tx_t key, PlantArray* out);
+tx_t _stmt_text(PlantArray* bd, PlantArray* out);
+tx_t _is_ident_char(tx_t ch);
+tx_t _has_word(tx_t t, tx_t w);
 tx_t find_node(PlantArray* ast, tx_t name);
 tx_t find_ext_node(PlantArray* ast, tx_t name);
 tx_t callee_add(PlantArray* acc, tx_t name);
@@ -336,6 +340,7 @@ tx_t _cl_emit_typedef(PlantArray* cnode);
 tx_t _cl_emit_fn(PlantArray* cnode, PlantArray* sigs, PlantArray* subst, PlantArray* reg);
 static tx_t TYPE_REGISTRY;
 static tx_t NUM_GLOBALS;
+static tx_t HOISTED_GLOBALS;
 
 
 tx_t is_keyword(tx_t wrd) {
@@ -13348,6 +13353,7 @@ tx_t gen_show_stmt(tx_t node, PlantArray* nums, PlantArray* evars, tx_t isel) {
 }
 tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray* evars, tx_t actx, tx_t isel, PlantArray* structs, PlantArray* sigs) {
   tx_t target = "";
+  tx_t _hog = "";
   tx_t vtype = "";
   tx_t cnd = "";
   tx_t envname = "";
@@ -13398,6 +13404,11 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
   tx_t iut3 = "";
   tx_t tt0 = "";
     target = _map_get(node, "target");
+    long hoh = 0;
+    _hog = list_contains(HOISTED_GLOBALS, target);
+    if (_hog == 1) {
+    hoh = 1;
+    }
     vtype = _map_get(node, "var_type");
     vtype = subst_type(vtype, subst);
     cnd = _map_get(node, "closure");
@@ -13492,7 +13503,7 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     }
     _cv2 = _cat3("{", _out, "}");
     }
-    if (strcmp(actx,"a") == 0) {
+    if (strcmp(actx,"a") == 0 || hoh == 1) {
     return _cat3(_cat4(isel, "  ", target, " = "), _cv2, ";\n");
     }
     return _cat4(_cat4(_cat4(isel, "  ", _abct, " "), target, "[", _size), "] = ", _cv2, ";\n");
@@ -13510,11 +13521,17 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     if (strcmp(lac4,"1") == 0) {
     cval = _cat3("_to_long(", cval, ")");
     }
+    if (hoh == 1) {
+    return _cat3(_cat4(isel, "  ", target, " = "), cval, ";\n");
+    }
     return _cat3(_cat4(isel, "  long ", target, " = "), cval, ";\n");
     }
     if (strcmp(vtype,"NUM") == 0) {
     if (isnc2 == 0 && strcmp(is_lookup_prefix ( cval ),"1") == 0) {
     cval = _cat3("_to_long(", cval, ")");
+    }
+    if (hoh == 1) {
+    return _cat3(_cat4(isel, "  ", target, " = "), cval, ";\n");
     }
     return _cat3(_cat4(isel, "  int ", target, " = "), cval, ";\n");
     }
@@ -13561,20 +13578,23 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     return _cat3(_cat4(isel, "  long double ", target, " = plant_scl_create(_from_double("), cval, "));\n");
     }
     if (strcmp(vtype,"CMP") == 0) {
+    if (hoh == 1) {
+    return _cat3(_cat4(isel, "  ", target, " = "), cval, ";\n");
+    }
     return _cat3(_cat4(isel, "  PlantComplex ", target, " = "), cval, ";\n");
     }
     if (strcmp(vtype,"LST") == 0) {
     return _cat3(_cat4(isel, "  PlantArray* ", target, " = "), cval, ";\n");
     }
     if (strcmp(vtype,"MATH") == 0) {
-    if (strcmp(actx,"a") == 0) {
+    if (strcmp(actx,"a") == 0 || hoh == 1) {
     return _cat3(_cat4(isel, "  ", target, " = plant_math_create("), cval, ");\n");
     }
     return _cat3(_cat4(isel, "  void* ", target, " = plant_math_create("), cval, ");\n");
     }
     iut2 = is_union_type(vtype, evars);
     if (strcmp(iut2,"1") == 0) {
-    if (strcmp(actx,"a") == 0) {
+    if (strcmp(actx,"a") == 0 || hoh == 1) {
     return _cat3(_cat4(isel, "  ", target, " = "), cval, ";\n");
     }
     return _cat(_cat4(_cat4(isel, "  union ", vtype, " "), target, " = ", cval), ";\n");
@@ -13585,7 +13605,10 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     vb2 = trim(vb2);
     vrk2 = type_info(vb2);
     if (plant_array_length(vrk2) == 0) {
-    if (strcmp(actx,"a") == 0) {
+    if (strcmp(actx,"a") == 0 || hoh == 1) {
+    return _cat3(_cat4(isel, "  ", target, " = "), cval, ";\n");
+    }
+    if (hoh == 1) {
     return _cat3(_cat4(isel, "  ", target, " = "), cval, ";\n");
     }
     return _cat3(_cat4(isel, "  tx_t ", target, " = "), cval, ";\n");
@@ -13600,7 +13623,7 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     tt_inner = trim(tt_inner0);
     tt_mk = substring(tt_inner, 0, 16);
     if (strcmp(tt_mk,"plant_list_make(") == 0) {
-    if (strcmp(actx,"a") == 0) {
+    if (strcmp(actx,"a") == 0 || hoh == 1) {
     return _cat4(_cat4(_cat4(isel, "  ", target, ";\n"), isel, "  { tx_t __cti = ", tt_inner), "; ", target, " = plant_tensor_from_list(__cti); plant_list_free((PlantArray*)__cti); }\n");
     }
     return _cat3(_cat4(_cat4(_cat4(isel, "  ", vct2, " "), target, ";\n", isel), "  { tx_t __cti = ", tt_inner, "; "), target, " = plant_tensor_from_list(__cti); plant_list_free((PlantArray*)__cti); }\n");
@@ -13626,7 +13649,7 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     hfrees = _cat(_cat4(hfrees, isel, "    plant_tensor_free(", ht), ");\n");
     hi = hi+1;
     }
-    if (strcmp(actx,"a") == 0) {
+    if (strcmp(actx,"a") == 0 || hoh == 1) {
     return _cat4(_cat4(_cat4(_cat4(_cat4(isel, "  ", target, ";\n"), isel, "  {\n", hpre), isel, "    ", target), " = ", hfinal, ";\n"), hfrees, isel, "  }\n");
     }
     return _cat3(_cat4(_cat4(_cat4(_cat4(_cat4(isel, "  ", vct2, " "), target, ";\n", isel), "  {\n", hpre, isel), "    ", target, " = "), hfinal, ";\n", hfrees), isel, "  }\n");
@@ -13634,13 +13657,13 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     if (strcmp(vct2,"PlantTensor*") == 0) {
     _oct = is_bare_tensor_id(cval);
     if (strcmp(_oct,"1") == 0) {
-    if (strcmp(actx,"a") == 0) {
+    if (strcmp(actx,"a") == 0 || hoh == 1) {
     return _cat4(_cat4(_cat4(isel, "  plant_tensor_retain_if_tensor(", cval, ");\n"), isel, "  ", target), " = ", cval, ";\n");
     }
     return _cat3(_cat4(_cat4(_cat4(isel, "  plant_tensor_retain_if_tensor(", cval, ");\n"), isel, "  ", vct2), " ", target, " = "), cval, ";\n");
     }
     }
-    if (strcmp(actx,"a") == 0) {
+    if (strcmp(actx,"a") == 0 || hoh == 1) {
     return _cat3(_cat4(isel, "  ", target, " = "), cval, ";\n");
     }
     return _cat(_cat4(_cat4(isel, "  ", vct2, " "), target, " = ", cval), ";\n");
@@ -13658,6 +13681,9 @@ tx_t gen_create_stmt(tx_t node, PlantArray* subst, PlantArray* nums, PlantArray*
     if (strcmp(tt_mk,"plant_list_make(") == 0) {
     return _cat4(_cat4(_cat4(isel, "  tx_t ", target, ";\n"), isel, "  { tx_t __ti = ", tt_inner), "; ", target, " = plant_tensor_from_list(__ti); plant_list_free((PlantArray*)__ti); }\n");
     }
+    }
+    if (hoh == 1) {
+    return _cat3(_cat4(isel, "  ", target, " = "), cval, ";\n");
     }
     return _cat3(_cat4(isel, "  tx_t ", target, " = "), cval, ";\n");
     }
@@ -17436,6 +17462,134 @@ tx_t is_ref_at(PlantArray* params, long idx) {
     }
     return "0";
 }
+tx_t _put_if_txt(tx_t m, tx_t key, PlantArray* out) {
+  tx_t v = "";
+  tx_t vt = "";
+    v = _map_get(m, key);
+    vt = plant_typeof(( v ));
+    if (strcmp(vt,"string") == 0) {
+        out = plant_list_add(out, v);
+    }
+    return out;
+}
+tx_t _stmt_text(PlantArray* bd, PlantArray* out) {
+  tx_t sn = "";
+  tx_t _0 = "";
+  tx_t _1 = "";
+  tx_t _2 = "";
+  tx_t _3 = "";
+  tx_t _4 = "";
+  tx_t _5 = "";
+  tx_t _6 = "";
+  tx_t _7 = "";
+  tx_t _8 = "";
+  tx_t _9 = "";
+  tx_t _10 = "";
+  tx_t _11 = "";
+  tx_t sbody = "";
+  tx_t sbt = "";
+  tx_t _12 = "";
+  tx_t sels = "";
+  tx_t set = "";
+  tx_t _13 = "";
+  tx_t scl = "";
+  tx_t sct = "";
+  tx_t clm = "";
+  tx_t clb = "";
+  tx_t clbt = "";
+  tx_t _14 = "";
+  tx_t clb2 = "";
+  tx_t clb2t = "";
+  tx_t _15 = "";
+    long si = 0;
+    while (si < plant_array_length(bd)) {
+    sn = plant_list_get(bd, si);
+    _0 = _put_if_txt(sn, "value", out);
+    _1 = _put_if_txt(sn, "target", out);
+    _2 = _put_if_txt(sn, "condition", out);
+    _3 = _put_if_txt(sn, "expr", out);
+    _4 = _put_if_txt(sn, "args", out);
+    _5 = _put_if_txt(sn, "items", out);
+    _6 = _put_if_txt(sn, "message", out);
+    _7 = _put_if_txt(sn, "text", out);
+    _8 = _put_if_txt(sn, "range", out);
+    _9 = _put_if_txt(sn, "iterable", out);
+    _10 = _put_if_txt(sn, "pattern", out);
+    _11 = _put_if_txt(sn, "key", out);
+    sbody = _map_get(sn, "body");
+        sbt = plant_typeof(( sbody ));
+    if (strcmp(sbt,"list") == 0) {
+    _12 = _stmt_text(sbody, out);
+    }
+    sels = _map_get(sn, "elseBody");
+        set = plant_typeof(( sels ));
+    if (strcmp(set,"list") == 0) {
+    _13 = _stmt_text(sels, out);
+    }
+    scl = _map_get(sn, "clauses");
+        sct = plant_typeof(( scl ));
+    if (strcmp(sct,"list") == 0) {
+    long ci2 = 0;
+    while (ci2 < plant_array_length(scl)) {
+    clm = plant_list_get(scl, ci2);
+    clb = _map_get(clm, "bodyStatements");
+                clbt = plant_typeof(( clb ));
+    if (strcmp(clbt,"list") == 0) {
+    _14 = _stmt_text(clb, out);
+    }
+    clb2 = _map_get(clm, "body");
+                clb2t = plant_typeof(( clb2 ));
+    if (strcmp(clb2t,"list") == 0) {
+    _15 = _stmt_text(clb2, out);
+    }
+    ci2 = ci2+1;
+    }
+    }
+    si = si+1;
+    }
+    return out;
+}
+tx_t _is_ident_char(tx_t ch) {
+    long ii = find_any ( ch , "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_" );
+    if (ii >= 0) {
+    return _from_long(1);
+    }
+    return _from_long(0);
+}
+tx_t _has_word(tx_t t, tx_t w) {
+  tx_t hseg = "";
+  tx_t hbc = "";
+  tx_t hac = "";
+    long hi = 0;
+    long hn = strlen( t );
+    long hw = strlen( w );
+    while (hi + hw <= hn) {
+    hseg = substring(t, hi, hi+hw);
+    if (strcmp(str_eq ( hseg , w ),"1") == 0) {
+    long hb_ok = 1;
+    long ha_ok = 1;
+    if (hi > 0) {
+    hbc = char_at(t, hi - 1);
+    long hbic = _to_long(_is_ident_char ( hbc ));
+    if (hbic == 1) {
+    hb_ok = 0;
+    }
+    }
+    if (hi + hw < hn) {
+    hac = char_at(t, hi+hw);
+    long haic = _to_long(_is_ident_char ( hac ));
+    if (haic == 1) {
+    ha_ok = 0;
+    }
+    }
+    if (hb_ok == 1 && ha_ok == 1) {
+    return _from_long(1);
+    }
+    }
+    hi = hi+1;
+    }
+    return _from_long(0);
+}
 tx_t find_node(PlantArray* ast, tx_t name) {
     long fi = 0;
     tx_t fe = "";
@@ -18181,9 +18335,36 @@ tx_t generate_c(PlantArray* ast) {
   tx_t glm = "";
   tx_t gtm = "";
   tx_t ggm = "";
+  tx_t tcnd = "";
+  tx_t tcty = "";
+  tx_t tctg = "";
+  tx_t tctv = "";
+  tx_t tctval = "";
+  tx_t tchv = "";
+  tx_t hbnd = "";
+  tx_t hbty = "";
+  tx_t hbbd = "";
+  tx_t _ = "";
+  tx_t hwv = "";
+  tx_t aund = "";
+  tx_t aunty = "";
+  tx_t auan = "";
+  tx_t aufa = "";
+  tx_t aun3 = "";
+  tx_t aufa3 = "";
+  tx_t hocn = "";
+  tx_t hocv0 = "";
+  tx_t hocrhs = "";
+  tx_t hohas = "";
+  tx_t hov = "";
+  tx_t hoal = "";
+  tx_t hcv0 = "";
+  tx_t hcv = "";
+  tx_t hnum = "";
+  tx_t hnf = "";
+  tx_t hng = "";
   tx_t hs_nd = "";
   tx_t hs_ty = "";
-  tx_t _ = "";
   tx_t asy4 = "";
   tx_t cmact = "";
   tx_t ns_code = "";
@@ -18877,6 +19058,99 @@ tx_t generate_c(PlantArray* ast) {
     }
     }
     gwi = gwi+3;
+    }
+    PlantArray* top_creates = plant_list_make ( 0 );
+    long tci = 0;
+    while (tci < plant_array_length(ast)) {
+    tcnd = plant_list_get(ast, tci);
+    tcty = _map_get(tcnd, "type");
+    if (strcmp(tcty,"create_stmt") == 0) {
+    tctg = _map_get(tcnd, "target");
+    tctv = _map_get(tcnd, "var_type");
+    tctval = _map_get(tcnd, "value");
+    tchv = substring(tctv, 0, 5);
+    if (strcmp(tchv,"ARRAY") != 0) {
+                top_creates = plant_list_add(top_creates, tctg);
+                top_creates = plant_list_add(top_creates, tctv);
+                top_creates = plant_list_add(top_creates, tctval);
+    }
+    }
+    tci = tci+1;
+    }
+    PlantArray* hoist_words = plant_list_make ( 0 );
+    long hbi = 0;
+    while (hbi < plant_array_length(ast)) {
+    hbnd = plant_list_get(ast, hbi);
+    hbty = _map_get(hbnd, "type");
+    if (strcmp(hbty,"action_decl") == 0) {
+    hbbd = _map_get(hbnd, "body");
+    _stmt_text(hbbd, hoist_words);
+    }
+    hbi = hbi+1;
+    }
+    tx_t hoist_blob = "";
+    long hwi = 0;
+    while (hwi < plant_array_length(hoist_words)) {
+    hwv = plant_list_get(hoist_words, hwi);
+    hoist_blob = _cat3(hoist_blob, " ", hwv);
+    hwi = hwi+1;
+    }
+    PlantArray* act_used = plant_list_make ( 0 );
+    long aui = 0;
+    while (aui < plant_array_length(ast)) {
+    aund = plant_list_get(ast, aui);
+    aunty = _map_get(aund, "type");
+    if (strcmp(aunty,"action_decl") == 0) {
+    auan = _map_get(aund, "name");
+    aufa = list_contains(act_used, auan);
+    if (aufa == 0) {
+                act_used = plant_list_add(act_used, auan);
+    }
+    }
+    aui = aui+1;
+    }
+    long aui3 = 0;
+    while (aui3 + 2 < plant_array_length(globals)) {
+    aun3 = plant_list_get(globals, aui3);
+    aufa3 = list_contains(act_used, aun3);
+    if (aufa3 == 0) {
+            act_used = plant_list_add(act_used, aun3);
+    }
+    aui3 = aui3+3;
+    }
+    long tci2 = 0;
+    while (tci2 + 2 < plant_array_length(top_creates)) {
+    hocn = plant_list_get(top_creates, tci2);
+    hocv0 = plant_list_get(top_creates, tci2+1);
+    hocrhs = plant_list_get(top_creates, tci2+2);
+    hohas = list_contains(act_used, hocn);
+    long hobw = _to_long(_has_word ( hoist_blob , hocn ));
+    if (hohas == 0 && hobw == 1) {
+    hov = subst_type(hocv0, esub);
+    tx_t hoc = "tx_t";
+    if (strcmp(hov,"") > 0) {
+    hoc = plant_ctype(hov);
+    }
+    hoal = list_contains(HOISTED_GLOBALS, hocn);
+    if (hoal == 0) {
+                HOISTED_GLOBALS = plant_list_add(HOISTED_GLOBALS, hocn);
+    glob_code = _cat3(_cat4(glob_code, "static ", hoc, " "), hocn, ";\n");
+    }
+    hcv0 = translate_expr(hocrhs, nums_top, plant_list_make ( 0 ), plant_list_make ( 0 ));
+    hcv = _handle_cat(hcv0, nums_top, plant_list_make ( 0 ));
+    hnum = expr_is_numeric(hcv, nums_top);
+    if (hnum == 1) {
+    hnf = list_contains(nums_top, hocn);
+    if (hnf == 0) {
+                    nums_top = plant_list_add(nums_top, hocn);
+    }
+    hng = list_contains(NUM_GLOBALS, hocn);
+    if (hng == 0) {
+                    NUM_GLOBALS = plant_list_add(NUM_GLOBALS, hocn);
+    }
+    }
+    }
+    tci2 = tci2+3;
     }
     long has_top_stmt = 0;
     i = 0;
@@ -19712,6 +19986,7 @@ int main(int argc, char **argv) {
   tx_t c_len = "";
   TYPE_REGISTRY = plant_list_make(25, plant_list_make(5, "LON", "long", "1", "1", "scalar"), plant_list_make(5, "NUM", "int", "1", "1", "scalar"), plant_list_make(5, "UNU", "unsigned int", "1", "1", "scalar"), plant_list_make(5, "DBL", "double", "1", "1", "scalar"), plant_list_make(5, "FLT", "float", "1", "1", "scalar"), plant_list_make(5, "DCM", "long double", "1", "1", "scalar"), plant_list_make(5, "CHA", "char", "0", "1", "scalar"), plant_list_make(5, "VOI", "tx_t", "0", "1", "scalar"), plant_list_make(5, "BYT", "signed char", "1", "1", "scalar"), plant_list_make(5, "UBT", "unsigned char", "1", "1", "scalar"), plant_list_make(5, "SHR", "short", "1", "1", "scalar"), plant_list_make(5, "USH", "unsigned short", "1", "1", "scalar"), plant_list_make(5, "ULO", "unsigned long", "1", "1", "scalar"), plant_list_make(5, "CMP", "PlantComplex", "0", "1", "scalar"), plant_list_make(5, "BOL", "bool", "0", "1", "scalar"), plant_list_make(5, "TXT", "tx_t", "0", "1", "scalar"), plant_list_make(5, "LST", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "TPL", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "MAP", "PlantArray*", "0", "1", "composite"), plant_list_make(5, "QUE", "PlantQueue*", "0", "1", "composite"), plant_list_make(5, "STK", "PlantStack*", "0", "1", "composite"), plant_list_make(5, "JSN", "PlantJson*", "0", "1", "composite"), plant_list_make(5, "TENSOR", "PlantTensor*", "0", "1", "composite"), plant_list_make(5, "GEO", "PlantGeo*", "0", "1", "composite"), plant_list_make(5, "SET", "PlantSet*", "0", "1", "composite"));
   NUM_GLOBALS = plant_list_make(0);
+  HOISTED_GLOBALS = plant_list_make(0);
   arg0 = get_cli_arg(0);
   if (strcmp(arg0,"-h") == 0 || strcmp(arg0,"--help") == 0) {
   plant_iReport_print(get_report(), "Chloroplast — Pure Native PlantLang compiler");
@@ -19722,7 +19997,7 @@ int main(int argc, char **argv) {
   return 0;
   }
   if (strcmp(arg0,"-v") == 0 || strcmp(arg0,"--version") == 0) {
-  plant_iReport_print(get_report(), "Chloroplast 0.61.4 (pure native)");
+  plant_iReport_print(get_report(), "Chloroplast 0.62.0 (pure native)");
   return 0;
   }
   source_path = get_cli_arg(0);
@@ -19864,5 +20139,6 @@ int main(int argc, char **argv) {
   plant_async_drain();
   plant_free((void*)TYPE_REGISTRY);
   plant_free((void*)NUM_GLOBALS);
+  plant_free((void*)HOISTED_GLOBALS);
   return 0;
 }

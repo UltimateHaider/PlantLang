@@ -1,0 +1,8 @@
+# TD-055: an ACTION reads a top-level CREATE (LON, implicit return).
+CREATE g (LON) TO 42.
+ACTION f()
+GIVE g.
+/ACTION.
+CREATE v (LON) TO f().
+SHOW v.
+SHOW "action-global-lon-ok".

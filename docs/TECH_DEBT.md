@@ -1,8 +1,8 @@
 # Technical Debt Register — PlantLang Chloroplast
 
-> **Status (v0.61.4): 0 known bugs open** — 0 silent-wrong, 0 crash, 0 leak.
-> TD-048 CLOSED (1st/2nd order; 3rd by design). TD-065/066/067/070 CLOSED.
-> TD-068/TD-069 OPEN (utilities). TD-055 is a feature; TD-016/TD-017 remain
+> **Status (v0.62.0): TD-055 CLOSED (feature shipped).** TD-048/065/066/067/070
+> CLOSED. **TD-071 (MED, silent-wrong) and TD-072 (LOW, leak) OPEN** —
+> discovered in v0.62.0. TD-068/TD-069 utilities OPEN. TD-016/TD-017
 > DEFERRED.
 
 ## TD-001: PlantArray never freed
@@ -830,6 +830,48 @@ defining scope.
 - **Tests:** `td064_map_bracket_read`, `td064_map_bracket_nested`,
   `td064_list_numeric_unchanged`.
 - **Related:** TD-063 (write side, closed v0.58.10).
+
+## TD-055: ACTION globals — CLOSED
+
+- **Status:** ✅ CLOSED in v0.62.0 (feature)
+- **Symptom:** an `ACTION` referencing a top-level `CREATE` variable emitted
+  `tx_t f() { return g; }` where `g` was a `main` local → `gcc: 'g' undeclared`.
+- **Root cause:** ACTIONs compile to C functions; top-level statements are
+  `main` locals, so only `GLOBAL` (file-scope statics) were reachable.
+- **Fix:** surgical hoisting — top-level `CREATE`s whose names appear in an
+  ACTION body become file-scope `static <ctype>`; the top-level `CREATE`
+  emits an assignment only. Read, write-through, nested calls and parameter
+  shadowing all work.
+- **Verified:** `action_global_{lon,txt,tensor,set,nested_call,shadow}` (0 B);
+  suite 334/334, regression 319/319, self-hosting byte-identical.
+- **Related:** TD-071, TD-072 (found while building the tests).
+
+## TD-071: `-> LON` ACTION call inside an expression is not coerced — OPEN
+
+- **Status:** OPEN (MED — silent-wrong)
+- **Introduced:** pre-v0.62.0; discovered in v0.62.0.
+- **Symptom:** `GIVE inner() + 1.` where `inner` returns `-> LON` emits
+  `return inner ( )+1;` — pointer arithmetic on the `tx_t` return value
+  (observed result `0` instead of `11`). A **bare** call is coerced
+  correctly.
+- **Workaround:** bind first —
+  `CREATE t (LON) TO inner().` / `SET t TO t + 1.` / `GIVE t.`
+- **Fix direction:** apply `is_action_call`-style coercion to ACTION calls
+  **inside** expression text (sub-expression rewrite), not just to bare calls.
+- **Related:** TD-055 (surfaced by the nested test), TD-066.
+
+## TD-072: `_to_long(<ACTION returning a heap string>)` leaks — OPEN
+
+- **Status:** OPEN (LOW — leak)
+- **Introduced:** pre-v0.62.0; discovered in v0.62.0.
+- **Symptom:** `CREATE v (LON) TO f().` where `f` is `-> LON` and its value is
+  multi-digit leaks the returned heap string (11 B per call). Single-digit
+  values come from the static `_from_long` table (no leak).
+- **Workaround:** single-digit returns, or the implicit-return form
+  (`ACTION f()` + `CREATE v (LON) TO f().` — raw `long`, no allocation).
+- **Fix direction:** release the temporary in the coercion site
+  (`_to_long`-with-release helper).
+- **Related:** TD-066, TD-054 (return ABI).
 
 ## TD-070: `TAPE_CLEAR()` frees user tensors (BN/LN/dropout/conv) — CLOSED
 

@@ -5447,6 +5447,8 @@ GLOBAL TYPE_REGISTRY TO [
 # v0.54.2a — Item 3: names of numeric GLOBALs, so every ACTION body's
 # `nums` can include them (SHOW/arithmetic treat them numerically).
 GLOBAL NUM_GLOBALS TO [].
+# v0.62.0 — TD-055: top-level CREATE names hoisted to file scope.
+GLOBAL HOISTED_GLOBALS TO [].
 
 # v0.51.4 — Registry lookup: returns the record for `name`, or empty list.
 ACTION type_info(name(TXT)),
@@ -11233,6 +11235,12 @@ ACTION gen_show_stmt(node, nums(LST), evars(LST), isel(TXT)),
 # ──────────────────────────────────────────────────────────────
 ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(TXT), structs(LST), sigs(LST)),
   REAP target FROM _map_get, node, "target".
+  # v0.62.0 — TD-055: a hoisted top-level name lives at file scope, so its
+  # CREATE emits an assignment only. The flag is applied at the terminal
+  # emissions (after the numeric coercion), not by faking actx.
+  CREATE hoh(LON) TO 0.
+  REAP _hog FROM list_contains, HOISTED_GLOBALS, target.
+  IF _hog IS 1, SET hoh TO 1. /IF.
   REAP vtype FROM _map_get, node, "var_type".
   REAP vtype FROM subst_type, vtype, subst.
   REAP cnd FROM _map_get, node, "closure".
@@ -11335,7 +11343,7 @@ ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(
               /SEASON.
               SET _cv2 TO "{" + _out + "}".
           /IF.
-          IF actx IS "a",
+          IF actx IS "a" OR hoh IS 1,
               GIVE isel + "  " + target + " = " + _cv2 + ";\n".
           /IF.
           GIVE isel + "  " + _abct + " " + target + "[" + _size + "] = " + _cv2 + ";\n".
@@ -11356,12 +11364,14 @@ ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(
       IF lac4 IS "1",
           SET cval TO "_to_long(" + cval + ")".
       /IF.
+      IF hoh IS 1, GIVE isel + "  " + target + " = " + cval + ";\n". /IF.
       GIVE isel + "  long " + target + " = " + cval + ";\n".
   /IF.
   IF vtype IS "NUM",
       IF isnc2 IS 0 AND is_lookup_prefix(cval) IS "1",
           SET cval TO "_to_long(" + cval + ")".
       /IF.
+      IF hoh IS 1, GIVE isel + "  " + target + " = " + cval + ";\n". /IF.
       GIVE isel + "  int " + target + " = " + cval + ";\n".
   /IF.
   # v0.50.0a — CHA single-character primitive.
@@ -11417,6 +11427,7 @@ ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(
   /IF.
   # v0.51.11 — CMP complex number (PlantComplex struct by value).
   IF vtype IS "CMP",
+      IF hoh IS 1, GIVE isel + "  " + target + " = " + cval + ";\n". /IF.
       GIVE isel + "  PlantComplex " + target + " = " + cval + ";\n".
   /IF.
   IF vtype IS "LST",
@@ -11424,7 +11435,7 @@ ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(
   /IF.
   # v0.50.0f — MATH symbolic expression.
   IF vtype IS "MATH",
-      IF actx IS "a",
+      IF actx IS "a" OR hoh IS 1,
           GIVE isel + "  " + target + " = plant_math_create(" + cval + ");\n".
       /IF.
       GIVE isel + "  void* " + target + " = plant_math_create(" + cval + ");\n".
@@ -11432,7 +11443,7 @@ ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(
   # v0.50.0d — union CREATE: stack-allocate union and assign directly.
   REAP iut2 FROM is_union_type, vtype, evars.
   IF iut2 IS "1",
-      IF actx IS "a",
+      IF actx IS "a" OR hoh IS 1,
           GIVE isel + "  " + target + " = " + cval + ";\n".
       /IF.
       GIVE isel + "  union " + vtype + " " + target + " = " + cval + ";\n".
@@ -11446,9 +11457,10 @@ ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(
       REAP vb2 FROM trim, vb2.
       REAP vrk2 FROM type_info, vb2.
       IF COUNT vrk2 IS 0,
-          IF actx IS "a",
+          IF actx IS "a" OR hoh IS 1,
               GIVE isel + "  " + target + " = " + cval + ";\n".
           /IF.
+          IF hoh IS 1, GIVE isel + "  " + target + " = " + cval + ";\n". /IF.
           GIVE isel + "  tx_t " + target + " = " + cval + ";\n".
       /IF.
       IF COUNT vrk2 > 0,
@@ -11464,7 +11476,7 @@ ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(
                   REAP tt_inner FROM trim, tt_inner0.
                   REAP tt_mk FROM substring, tt_inner, 0, 16.
                   IF tt_mk IS "plant_list_make(",
-                      IF actx IS "a",
+                      IF actx IS "a" OR hoh IS 1,
                           GIVE isel + "  " + target + ";\n" + isel + "  { tx_t __cti = " + tt_inner + "; " + target + " = plant_tensor_from_list(__cti); plant_list_free((PlantArray*)__cti); }\n".
                       /IF.
                       GIVE isel + "  " + vct2 + " " + target + ";\n" + isel + "  { tx_t __cti = " + tt_inner + "; " + target + " = plant_tensor_from_list(__cti); plant_list_free((PlantArray*)__cti); }\n".
@@ -11491,7 +11503,7 @@ ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(
                   SET hfrees TO hfrees + isel + "    plant_tensor_free(" + ht + ");\n".
                   SET hi TO hi + 1.
               /SEASON.
-              IF actx IS "a",
+              IF actx IS "a" OR hoh IS 1,
                   GIVE isel + "  " + target + ";\n" + isel + "  {\n" + hpre + isel + "    " + target + " = " + hfinal + ";\n" + hfrees + isel + "  }\n".
               /IF.
               GIVE isel + "  " + vct2 + " " + target + ";\n" + isel + "  {\n" + hpre + isel + "    " + target + " = " + hfinal + ";\n" + hfrees + isel + "  }\n".
@@ -11500,13 +11512,13 @@ ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(
           IF vct2 IS "PlantTensor*",
               REAP _oct FROM is_bare_tensor_id, cval.
               IF _oct IS "1",
-                  IF actx IS "a",
+                  IF actx IS "a" OR hoh IS 1,
                       GIVE isel + "  plant_tensor_retain_if_tensor(" + cval + ");\n" + isel + "  " + target + " = " + cval + ";\n".
                   /IF.
                   GIVE isel + "  plant_tensor_retain_if_tensor(" + cval + ");\n" + isel + "  " + vct2 + " " + target + " = " + cval + ";\n".
               /IF.
           /IF.
-          IF actx IS "a",
+          IF actx IS "a" OR hoh IS 1,
               GIVE isel + "  " + target + " = " + cval + ";\n".
           /IF.
           GIVE isel + "  " + vct2 + " " + target + " = " + cval + ";\n".
@@ -11528,6 +11540,7 @@ ACTION gen_create_stmt(node, subst(LST), nums(LST), evars(LST), actx(TXT), isel(
                   GIVE isel + "  tx_t " + target + ";\n" + isel + "  { tx_t __ti = " + tt_inner + "; " + target + " = plant_tensor_from_list(__ti); plant_list_free((PlantArray*)__ti); }\n".
               /IF.
           /IF.
+          IF hoh IS 1, GIVE isel + "  " + target + " = " + cval + ";\n". /IF.
           GIVE isel + "  tx_t " + target + " = " + cval + ";\n".
       /IF.
   /IF.
@@ -15176,6 +15189,94 @@ ACTION is_ref_at(params(LST), idx(LON)),
 #  _map_get — safe MAP field access (external FFI)
 # ──────────────────────────────────────────────────────────────
 ACTION _map_get(m, key(TXT)) -> external.
+# v0.62.0 — TD-055: recursive map/list serializer (AST → text).
+ACTION plant_map_to_string(m) -> external.
+
+# v0.62.0 — TD-055: collect the expression strings of a statement body so
+# the hoist pre-pass can look for top-level names used inside ACTIONs.
+# Only string fields are taken (never whole AST nodes) — whole-node
+# serialisation can follow AST back-references and overflow the stack.
+ACTION _put_if_txt(m(TXT), key(TXT), out(LST)),
+  REAP v FROM _map_get, m, key.
+  REAP vt FROM TYPEOF(v).
+  IF vt IS "string", PUT v INTO out. /IF.
+  GIVE out.
+/ACTION.
+
+ACTION _stmt_text(bd(LST), out(LST)),
+  CREATE si(LON) TO 0.
+  SEASON si < COUNT bd,
+      REAP sn FROM plant_list_get, bd, si.
+      REAP _0 FROM _put_if_txt, sn, "value", out.
+      REAP _1 FROM _put_if_txt, sn, "target", out.
+      REAP _2 FROM _put_if_txt, sn, "condition", out.
+      REAP _3 FROM _put_if_txt, sn, "expr", out.
+      REAP _4 FROM _put_if_txt, sn, "args", out.
+      REAP _5 FROM _put_if_txt, sn, "items", out.
+      REAP _6 FROM _put_if_txt, sn, "message", out.
+      REAP _7 FROM _put_if_txt, sn, "text", out.
+      REAP _8 FROM _put_if_txt, sn, "range", out.
+      REAP _9 FROM _put_if_txt, sn, "iterable", out.
+      REAP _10 FROM _put_if_txt, sn, "pattern", out.
+      REAP _11 FROM _put_if_txt, sn, "key", out.
+      REAP sbody FROM _map_get, sn, "body".
+      REAP sbt FROM TYPEOF(sbody).
+      IF sbt IS "list", REAP _12 FROM _stmt_text, sbody, out. /IF.
+      REAP sels FROM _map_get, sn, "elseBody".
+      REAP set FROM TYPEOF(sels).
+      IF set IS "list", REAP _13 FROM _stmt_text, sels, out. /IF.
+      REAP scl FROM _map_get, sn, "clauses".
+      REAP sct FROM TYPEOF(scl).
+      IF sct IS "list",
+          CREATE ci2(LON) TO 0.
+          SEASON ci2 < COUNT scl,
+              REAP clm FROM plant_list_get, scl, ci2.
+              REAP clb FROM _map_get, clm, "bodyStatements".
+              REAP clbt FROM TYPEOF(clb).
+              IF clbt IS "list", REAP _14 FROM _stmt_text, clb, out. /IF.
+              REAP clb2 FROM _map_get, clm, "body".
+              REAP clb2t FROM TYPEOF(clb2).
+              IF clb2t IS "list", REAP _15 FROM _stmt_text, clb2, out. /IF.
+              SET ci2 TO ci2 + 1.
+          /SEASON.
+      /IF.
+      SET si TO si + 1.
+  /SEASON.
+  GIVE out.
+/ACTION.
+
+# v0.62.0 — TD-055: word-bounded identifier search (for the hoist pre-pass).
+ACTION _is_ident_char(ch(TXT)) -> LON,
+  CREATE ii (LON) TO find_any(ch, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_").
+  IF ii >= 0, GIVE 1. /IF.
+  GIVE 0.
+/ACTION.
+
+ACTION _has_word(t(TXT), w(TXT)) -> LON,
+  CREATE hi(LON) TO 0.
+  CREATE hn(LON) TO LEN(t).
+  CREATE hw(LON) TO LEN(w).
+  SEASON hi + hw <= hn,
+      REAP hseg FROM substring, t, hi, hi + hw.
+      IF str_eq(hseg, w) IS "1",
+          CREATE hb_ok(LON) TO 1.
+          CREATE ha_ok(LON) TO 1.
+          IF hi > 0,
+              REAP hbc FROM char_at, t, hi - 1.
+              CREATE hbic (LON) TO _is_ident_char(hbc).
+              IF hbic IS 1, SET hb_ok TO 0. /IF.
+          /IF.
+          IF hi + hw < hn,
+              REAP hac FROM char_at, t, hi + hw.
+              CREATE haic (LON) TO _is_ident_char(hac).
+              IF haic IS 1, SET ha_ok TO 0. /IF.
+          /IF.
+          IF hb_ok IS 1 AND ha_ok IS 1, GIVE 1. /IF.
+      /IF.
+      SET hi TO hi + 1.
+  /SEASON.
+  GIVE 0.
+/ACTION.
 ACTION plant_list_get(lst, idx(LON)) -> external.
 ACTION char_at(s(TXT), idx(LON)) -> external.
 ACTION substring(s(TXT), start(LON), end(LON)) -> external.
@@ -16476,6 +16577,101 @@ ACTION generate_c(ast(LST)),
         /IF.
         SET gwi TO gwi + 3.
     /SEASON.
+    # v0.62.0 — TD-055: hoist top-level CREATEs that ACTION bodies
+    # reference. The file-scope static mechanism already exists for
+    # GLOBAL; this lifts plain top-level CREATEs the same way so that
+    # ACTIONs can read (and write) them. Surgical: only names actually
+    # used inside an ACTION body are hoisted, so programs without that
+    # pattern generate byte-identical C.
+    CREATE top_creates(LST) TO plant_list_make(0).
+    CREATE tci(LON) TO 0.
+    SEASON tci < COUNT ast,
+        REAP tcnd FROM plant_list_get, ast, tci.
+        REAP tcty FROM _map_get, tcnd, "type".
+        IF tcty IS "create_stmt",
+            REAP tctg FROM _map_get, tcnd, "target".
+            REAP tctv FROM _map_get, tcnd, "var_type".
+            REAP tctval FROM _map_get, tcnd, "value".
+            REAP tchv FROM substring, tctv, 0, 5.
+            IF tchv ISNT "ARRAY",
+                PUT tctg INTO top_creates.
+                PUT tctv INTO top_creates.
+                PUT tctval INTO top_creates.
+            /IF.
+        /IF.
+        SET tci TO tci + 1.
+    /SEASON.
+    # v0.62.0 — TD-055: identifier helpers for the hoist pre-pass.
+    CREATE hoist_words(LST) TO plant_list_make(0).
+    CREATE hbi(LON) TO 0.
+    SEASON hbi < COUNT ast,
+        REAP hbnd FROM plant_list_get, ast, hbi.
+        REAP hbty FROM _map_get, hbnd, "type".
+        IF hbty IS "action_decl",
+            REAP hbbd FROM _map_get, hbnd, "body".
+            REAP _ FROM _stmt_text, hbbd, hoist_words.
+        /IF.
+        SET hbi TO hbi + 1.
+    /SEASON.
+    CREATE hoist_blob(TXT) TO "".
+    CREATE hwi(LON) TO 0.
+    SEASON hwi < COUNT hoist_words,
+        REAP hwv FROM plant_list_get, hoist_words, hwi.
+        SET hoist_blob TO hoist_blob + " " + hwv.
+        SET hwi TO hwi + 1.
+    /SEASON.
+    # Names that must NOT be hoisted: existing GLOBALs (already file-scope)
+    # and ACTION names (a static would collide with the C function).
+    CREATE act_used(LST) TO plant_list_make(0).
+    CREATE aui(LON) TO 0.
+    SEASON aui < COUNT ast,
+        REAP aund FROM plant_list_get, ast, aui.
+        REAP aunty FROM _map_get, aund, "type".
+        IF aunty IS "action_decl",
+            REAP auan FROM _map_get, aund, "name".
+            REAP aufa FROM list_contains, act_used, auan.
+            IF aufa IS 0, PUT auan INTO act_used. /IF.
+        /IF.
+        SET aui TO aui + 1.
+    /SEASON.
+    CREATE aui3(LON) TO 0.
+    SEASON aui3 + 2 < COUNT globals,
+        REAP aun3 FROM plant_list_get, globals, aui3.
+        REAP aufa3 FROM list_contains, act_used, aun3.
+        IF aufa3 IS 0, PUT aun3 INTO act_used. /IF.
+        SET aui3 TO aui3 + 3.
+    /SEASON.
+    CREATE tci2(LON) TO 0.
+    SEASON tci2 + 2 < COUNT top_creates,
+        REAP hocn FROM plant_list_get, top_creates, tci2.
+        REAP hocv0 FROM plant_list_get, top_creates, tci2 + 1.
+        REAP hocrhs FROM plant_list_get, top_creates, tci2 + 2.
+        REAP hohas FROM list_contains, act_used, hocn.
+        CREATE hobw (LON) TO _has_word(hoist_blob, hocn).
+        IF hohas IS 0 AND hobw IS 1,
+            REAP hov FROM subst_type, hocv0, esub.
+            CREATE hoc(TXT) TO "tx_t".
+            IF hov > "",
+                REAP hoc FROM plant_ctype, hov.
+            /IF.
+            REAP hoal FROM list_contains, HOISTED_GLOBALS, hocn.
+            IF hoal IS 0,
+                PUT hocn INTO HOISTED_GLOBALS.
+                SET glob_code TO glob_code + "static " + hoc + " " + hocn + ";\n".
+            /IF.
+            # numeric hoisted globals participate in ACTION numeric handling
+            REAP hcv0 FROM translate_expr, hocrhs, nums_top, plant_list_make(0), plant_list_make(0).
+            REAP hcv FROM _handle_cat, hcv0, nums_top, plant_list_make(0).
+            REAP hnum FROM expr_is_numeric, hcv, nums_top.
+            IF hnum IS 1,
+                REAP hnf FROM list_contains, nums_top, hocn.
+                IF hnf IS 0, PUT hocn INTO nums_top. /IF.
+                REAP hng FROM list_contains, NUM_GLOBALS, hocn.
+                IF hng IS 0, PUT hocn INTO NUM_GLOBALS. /IF.
+            /IF.
+        /IF.
+        SET tci2 TO tci2 + 3.
+    /SEASON.
     # v0.52.3g — TD-033: does any node force the int-main wrapper
     # (has_stmt)? Pre-scan so the main action node can be told to carry
     # the species-registration prologue when the wrapper is NOT emitted.
@@ -17290,7 +17486,7 @@ IF arg0 IS "-h" OR arg0 IS "--help",
   GIVE 0.
 /IF.
 IF arg0 IS "-v" OR arg0 IS "--version",
-  SHOW "Chloroplast 0.61.4 (pure native)".
+  SHOW "Chloroplast 0.62.0 (pure native)".
   GIVE 0.
 /IF.
 REAP source_path FROM get_cli_arg, 0.

@@ -1,0 +1,11 @@
+# TD-055: nested ACTION call both see the same top-level CREATE.
+CREATE g (LON) TO 7.
+ACTION inner() -> LON
+GIVE g.
+/ACTION.
+ACTION outer() -> LON
+GIVE inner().
+/ACTION.
+CREATE v (LON) TO outer().
+SHOW v.
+SHOW "action-global-nested-ok".

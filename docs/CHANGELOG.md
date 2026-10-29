@@ -1,4 +1,43 @@
-## v0.61.4 — Dropout + Full NN example
+## v0.62.0 — TD-055 (ACTION globals)
+
+### Added
+- **ACTION globals** — top-level `CREATE` variables are visible inside
+  `ACTION` bodies: read, **write-through** (`SET g TO …`), across nested
+  ACTION calls, with parameter shadowing.
+- **Surgical hoisting**: a pre-pass collects top-level `CREATE`s,
+  intersects them with the expression strings of ACTION bodies
+  (word-bounded match) and emits `static <ctype> <name>;` at file scope;
+  the top-level `CREATE` then emits an **assignment only**. Empty set ⇒
+  unchanged emission (bootstrap-inert).
+- `_stmt_text` safe field scanner (whole-node AST serialisation can follow
+  back-references and overflow the stack).
+- `docs/GLOBALS_RECIPE.md` (new).
+- 6 new tests: `action_global_lon`, `action_global_txt`,
+  `action_global_tensor`, `action_global_set` (write-through),
+  `action_global_nested_call`, `action_global_shadow`.
+
+### Fixed (TD-055 → CLOSED)
+- `ACTION` bodies referencing top-level variables used to emit
+  `tx_t f() { return g; }` with `g` a `main` local → **C compile error**.
+  Now the name is a file-scope static shared with `main`.
+
+### Documented (new TDs)
+- **TD-071**: an explicit `-> LON` ACTION call **inside an expression**
+  (`inner() + 1`) is not coerced → pointer arithmetic (use a variable).
+- **TD-072**: `_to_long(<ACTION returning a heap string>)` leaks
+  multi-digit returns (11 B); single-digit returns are static.
+
+### Verified
+- Native: **334/334** (was 328, +6). Regression: 319/319.
+- Generics: 7/7. Closures: 6/6.
+- Self-hosting: converged (612,462 B), byte-identical.
+- valgrind strict: PASS. Binary: 1,087,944 B (+0.395% vs v0.61.4).
+
+### Out of Scope (v0.62.1+)
+- TD-068 (axis reduce/`sqrt`), TD-069 (`log`/`exp`/`abs`), TD-071, TD-072.
+- Optimizers (Adam/AdamW), data loading (CSV/JSON/DATALOADER).
+
+
 
 ### Added
 - **Dropout** — `DROPOUT_FORWARD(x, p, seed)`

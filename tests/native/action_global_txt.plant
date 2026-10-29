@@ -1,0 +1,8 @@
+# TD-055: an ACTION reads a top-level CREATE (TXT).
+CREATE g (TXT) TO "hello".
+ACTION f() -> TXT
+GIVE g.
+/ACTION.
+CREATE v (TXT) TO f().
+SHOW v.
+SHOW "action-global-txt-ok".

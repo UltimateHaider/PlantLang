@@ -1,0 +1,10 @@
+# TD-055: an ACTION writes through to a top-level CREATE (SET).
+CREATE g (LON) TO 4.
+ACTION inc() -> LON
+SET g TO g + 1.
+GIVE g.
+/ACTION.
+CREATE v (LON) TO inc().
+SHOW g.
+SHOW v.
+SHOW "action-global-set-ok".
