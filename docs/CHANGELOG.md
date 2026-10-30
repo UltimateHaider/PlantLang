@@ -1,4 +1,36 @@
-## v0.62.5c — TD-073 investigation (parked; docs-only)
+## v0.62.6 — TD-071 full (SET + LET + IF) + bonus SET bare fix
+
+### Fixed (TD-071 → CLOSED, full — 5 contexts)
+- **SET** `x TO <leading -> LON call + …>` → coerced.
+  **Bonus:** the **bare-call** coercion was missing in `SET` entirely (a TD-054
+  coverage gap) — `SET x TO f()` produced a pointer value and leaked 11 B; now
+  coerced (`10`, 0 B).
+- **LET** `x (LON/DBL/FLT/NUM) TO <leading -> LON call + …>` → coerced.
+- **IF** `<leading -> LON call + …> > N` → coerced (numeric condition).
+- Previously (v0.62.5b): `GIVE` and `CREATE`.
+- Text ABI preserved; bare calls coerced exactly once; helper remains fail-safe.
+
+### Added
+- `docs/COERCION_COVERAGE.md` (new): per-context table, the **leading-only**
+  limitation (`1 + inner()`, `f(inner() + 1)`), and the bind-first workaround.
+- 4 new tests: `td071_set_coercion`, `td071_let_coercion`, `td071_if_coercion`,
+  `td071_bare_unchanged` (all 0 B).
+
+### Documented (new TD)
+- **TD-075**: arguments + non-leading calls still uncoerced (needs parser-side
+  per-argument nodes). Target v0.62.7.
+
+### Verified
+- Native: **348/348** (was 344, +4). Regression: 319/319.
+- Generics: 7/7. Closures: 6/6.
+- Self-hosting: converged (615,405 B, `v3.c == v4.c == v5.c`).
+- valgrind strict: PASS. Binary: 1,105,080 B.
+
+### Out of Scope (v0.62.7+)
+- TD-075 (args + non-leading). TD-073 (blocked by TD-074). TD-074 (async audit).
+- Optimizers + data loading (v0.63.0).
+
+
 
 ### Investigated (not shipped)
 - **TD-073** (untyped numeric `REAP`, 53 sites). Three defects proven:

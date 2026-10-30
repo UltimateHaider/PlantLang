@@ -1,9 +1,9 @@
 # Technical Debt Register — PlantLang Chloroplast
 
-> **Status (v0.62.5c): 0 known *active* bugs in the shipped toolchain.**
-> TD-054/068/069/071/072 CLOSED. **TD-073 OPEN (blocked by TD-074)** — latent
-> untyped-`REAP` heuristics (design proven, cannot ship until the async engine
-> is fixed). TD-016/TD-017 DEFERRED.
+> **Status (v0.62.6): 0 known *active* bugs in the shipped toolchain.**
+> TD-054/068/069/**071 (full)**/072 CLOSED. **TD-075 OPEN** (args/non-leading
+> coercion — residual of TD-071). **TD-073 OPEN (blocked by TD-074)** — latent
+> untyped-`REAP` heuristics. TD-016/TD-017 DEFERRED.
 
 > **Build-depth (v0.62.5b):** the compiler is self-hosted; when a fix touches
 > codegen, a 2-stage chain (v1→v2→v3) can install a compiler built by a stale
@@ -876,27 +876,37 @@ defining scope.
 - **Target:** dedicated async-first cycle.
 - **Related:** TD-073.
 
-## TD-071: `-> LON` ACTION call inside an expression — CLOSED
+## TD-071: `-> LON` ACTION call inside an expression — CLOSED (full)
 
-- **Status:** ✅ CLOSED in v0.62.5b
-- **Fixed:** `_coerce_lead_call` (typed, fail-safe, **text sentinel** = `""`
-  when unchanged) + `_match_paren` (typed), wired into `gen_give_stmt`
-  (re-box `_from_long(...)` to keep the text ABI) and `gen_create_stmt`
-  (numeric target uses the expression directly).
-  - `inner() + 1 = 11`, `inner() * 2 = 20`, **0 B**; the 3 display/concat
-    regression locks stay green.
-- **Root cause:** uniform `tx_t` text ABI + no expression IR ⇒ a leading ACTION
-  call inside an expression was never coerced (pointer arithmetic).
-- **Two traps hit during the fixes (documented in code):**
-  1. `REAP x FROM <numeric fn>` binds `x` as `tx_t` (pointer) — type numerics
-     with `CREATE x (LON)`.
-  2. A list element read via `plant_list_get` is `tx_t` — never assign it to a
-     numeric flag (`long f = plant_list_get(...)` is a pointer); use a text
-     sentinel instead.
-- **Prerequisites:** TD-054 (v0.62.5a) and the typed-`REAP` lesson (TD-073).
-- **Build-depth note:** a stale *incremental* v3 could still ship the old
-  codegen ⇒ `make` now installs **v4** (one extra generation).
-- **Related:** TD-054, TD-072, TD-073.
+- **Status:** ✅ CLOSED in v0.62.6 — **5 contexts**
+- **Fixed:** v0.62.5b `GIVE` + `CREATE`; v0.62.6 `SET` + `LET` + `IF` condition.
+  - Bonus in v0.62.6: `SET x TO f()` (a **bare** `-> LON` call) was never coerced
+    at all — a TD-054 coverage gap → produced a pointer value + 11 B leak; now
+    coerced (`10`, 0 B).
+- **Mechanism:** `_coerce_lead_call` (all locals typed, fail-safe, text sentinel
+  `""`) + `_match_paren`; GIVE re-boxes with `_from_long(...)` to keep the text ABI.
+- **Preserved:** whole-expression bare calls (coerced exactly once) and the text
+  ABI (the 3 display/concat regression locks stay green).
+- **Residual limitation → TD-075:** arguments and **non-leading** calls
+  (`1 + inner()`, `f(inner() + 1)`, `f(g() + 1)`).
+- **Build depth:** 4-stage (`v3.c == v4.c == v5.c`).
+- **Docs:** `docs/COERCION_COVERAGE.md`.
+- **Related:** TD-054, TD-072, TD-073, TD-075.
+
+## TD-075: arguments + non-leading calls not coerced — OPEN
+
+- **Status:** OPEN (residual of TD-071)
+- **Introduced:** v0.62.6 (found during the E3 investigation)
+- **Impact:** LOW–MED
+- **Symptom:** `f(inner() + 1)`, `1 + inner()`, `f(g() + 1)` still perform pointer
+  arithmetic; `f(inner())` (bare arg) is also uncoerced.
+- **Reason:** ACTION arguments exist only as source text at emission (no structured
+  per-argument list), and `_coerce_lead_call` only handles a **leading** call.
+- **Workaround:** bind first (`CREATE t (LON) TO inner().`) then use `t`.
+- **Fix direction:** parser-side per-argument nodes (~60 LOC) + per-arg coercion in
+  codegen (type from the callee signature).
+- **Target:** v0.62.7 (dedicated, MED risk).
+- **Related:** TD-071, TD-054.
 
 ## TD-068: no axis-reduction / `sqrt` primitives — CLOSED
 

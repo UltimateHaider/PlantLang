@@ -1,0 +1,8 @@
+# v0.62.6 — TD-071 (E3): IF condition coerces a leading -> LON call.
+ACTION inner() -> LON
+GIVE 10.
+/ACTION.
+IF inner() + 1 > 5,
+SHOW "branch-taken".
+/IF.
+SHOW "td071-if-coercion-ok".

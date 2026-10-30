@@ -1,0 +1,8 @@
+# v0.62.6 — TD-071 (E3): SET coerces a leading -> LON call.
+ACTION inner() -> LON
+GIVE 10.
+/ACTION.
+CREATE v (LON) TO 0.
+SET v TO inner() + 1.
+SHOW v.
+SHOW "td071-set-coercion-ok".

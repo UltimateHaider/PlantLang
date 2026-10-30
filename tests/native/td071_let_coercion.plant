@@ -1,0 +1,7 @@
+# v0.62.6 — TD-071 (E3): LET coerces a leading -> LON call.
+ACTION inner() -> LON
+GIVE 10.
+/ACTION.
+LET v (LON) TO inner() * 2.
+SHOW v.
+SHOW "td071-let-coercion-ok".
