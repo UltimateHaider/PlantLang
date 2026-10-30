@@ -1,4 +1,28 @@
-## v0.62.5b — TD-071 CLOSED (leading-call coercion)
+## v0.62.5c — TD-073 investigation (parked; docs-only)
+
+### Investigated (not shipped)
+- **TD-073** (untyped numeric `REAP`, 53 sites). Three defects proven:
+  **D1** pointer-vs-number compares, **D2** list-mutation-through-by-value-parameter,
+  **D3** `-> LON` helper return compared as a string.
+- A working design was built and verified: parser records `"reap_num"`, codegen fills a
+  parallel `IMPLICIT_TYPES`, emission picks `long` vs `tx_t` (`long f0 = 0;` observed).
+- It **broke `async_in_cancel`**: `async_emit_step` re-emits `ASYNC ACTION` bodies with
+  its own implicit pipeline, and the async engine depends on the legacy `tx_t`
+  "always found" `find_any` semantics.
+- **Reverted cleanly** — the tree is back at v0.62.5b (nothing shipped).
+
+### Documented
+- **TD-073** — OPEN, **blocked by TD-074** (53 non-async sites, design proven).
+- **TD-074** — **NEW**: async engine depends on `find_any` "always found" (blocker).
+- Sequencing for a future cycle: **TD-074 first**, then TD-073 with async excluded at
+  codegen time via the node `"async"` field.
+
+### Verified
+- Native 344/344 · Regression 319/319 (`async_in_cancel` green) · Generics 7/7 ·
+  Closures 6/6 · self-hosting converged (614,842 B) · valgrind PASS.
+- Binary unchanged: 1,105,080 B.
+
+
 
 ### Fixed (TD-071 → CLOSED)
 - An explicit `-> LON` (and `-> DBL`/`FLT`/`NUM`) ACTION call **inside a numeric

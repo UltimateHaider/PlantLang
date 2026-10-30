@@ -1,9 +1,9 @@
 # Technical Debt Register — PlantLang Chloroplast
 
-> **Status (v0.62.5b): 0 known silent-wrong bugs.** TD-054/068/069/071/072
-> CLOSED (TD-054 effective from v0.62.5a, TD-071 from v0.62.5b). **TD-073
-> OPEN** (53 untyped numeric `REAP` sites — latent, staged v0.62.5c).
-> TD-016/TD-017 DEFERRED.
+> **Status (v0.62.5c): 0 known *active* bugs in the shipped toolchain.**
+> TD-054/068/069/071/072 CLOSED. **TD-073 OPEN (blocked by TD-074)** — latent
+> untyped-`REAP` heuristics (design proven, cannot ship until the async engine
+> is fixed). TD-016/TD-017 DEFERRED.
 
 > **Build-depth (v0.62.5b):** the compiler is self-hosted; when a fix touches
 > codegen, a 2-stage chain (v1→v2→v3) can install a compiler built by a stale
@@ -839,20 +839,42 @@ defining scope.
   suite 334/334, regression 319/319, self-hosting byte-identical.
 - **Related:** TD-071, TD-072 (found while building the tests).
 
-## TD-073: untyped numeric `REAP` targets (54 sites) — OPEN
+## TD-073: untyped numeric `REAP` targets (53 sites) — OPEN (blocked by TD-074)
 
-- **Status:** OPEN (latent, independent)
-- **Introduced:** since `REAP` (v0.54 era)
-- **Impact:** LOW–MED — most sites "work" only because pointer comparisons
-  happen to behave (`>= 0` always true, `IS -1` never true).
-- **Symptom:** `REAP x FROM <numeric fn>` binds `x` as **tx_t**, so numeric
-  comparisons compare pointers, not numbers.
-- **Confirmed damage:** `is_action_call` (fixed in v0.62.5a) and `_has_word`
-  boundary checks (degraded; now exact as a side effect).
-- **Fix direction:** mechanical audit — `REAP x FROM <numeric fn>` ⇒
-  `CREATE x (LON) TO <numeric fn>` (54 sites; re-derive the count).
-- **Target:** v0.62.5b+ (mechanical, MED risk).
-- **Related:** TD-054, TD-071, TD-072.
+- **Status:** OPEN — **blocked by TD-074**; design proven, revert-to-green in v0.62.5c.
+- **Introduced:** pre-v0.62.5a (discovered in v0.62.5a, investigated v0.62.5c).
+- **Impact:** LOW–MED (latent; heuristics "work" by accident via pointer compares).
+- **Three proven traps (v0.62.5c):**
+  - **D1** `REAP x FROM <numeric helper>` ⇒ `x` is `tx_t`; `x == 1` is a pointer compare.
+  - **D2** list accumulation (`PUT … INTO res`) through a by-value parameter inside `IF`/`SEASON` does not reach the caller.
+  - **D3** a `-> LON` helper's return compared as a string (`IS "1"`) does not match.
+- **Working design (verified on `is_identifier.f0`):**
+  1. parser records `"reap_num"` on `reap_stmt` (1 when the callee is `find_any`);
+  2. `collect_implicit` fills a parallel `GLOBAL IMPLICIT_TYPES` (name/type);
+  3. the implicit-emission loops emit `long x = 0;` vs `tx_t x = "";`.
+- **Blocker:** TD-074 — `async_emit_step` re-emits `ASYNC ACTION` bodies through its own
+  implicit pipeline, so the parse-time flag doesn't cover them; typing them breaks the
+  `async_in_cancel` lock.
+- **Scope:** 53 sites, all non-async; must be applied only after TD-074.
+- **Target:** future cycle (after TD-074), async exclusion keyed on the **node `"async"` field**
+  at codegen time (not a parser flag).
+
+## TD-074: async engine depends on `find_any` "always found" — OPEN (blocker)
+
+- **Status:** OPEN (blocks TD-073)
+- **Introduced:** pre-v0.62.5a (discovered in v0.62.5c)
+- **Impact:** MED
+- **Symptom:** with real numeric `find_any` indices the `-1` branch starts firing in
+  async bodies and cancellation flow changes — `async_in_cancel` prints
+  `after reap: 1` (vs `2`) and the cancelled spawn keeps running
+  (`start x / p2 x / end x`).
+- **Reason:** `async_emit_step` re-emits `ASYNC ACTION` bodies with its own implicit
+  pipeline; the legacy `tx_t` target makes every `find_any` look "found".
+- **Fix direction:** audit `async_emit_state/step/entry` for `find_any`/index handling and
+  decide whether "always found" is load-bearing (if so, make it explicit rather than a
+  pointer-compare accident).
+- **Target:** dedicated async-first cycle.
+- **Related:** TD-073.
 
 ## TD-071: `-> LON` ACTION call inside an expression — CLOSED
 
