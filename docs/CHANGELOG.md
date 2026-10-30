@@ -1,4 +1,29 @@
-## v0.62.6 — TD-071 full (SET + LET + IF) + bonus SET bare fix
+## v0.62.7 — TD-075 investigation (merged → TD-076, docs-only)
+
+### Investigated (not shipped)
+- **TD-075 (arguments)** and **TD-076 (non-leading calls)** are one architectural
+  problem, proven by three attempted approaches (per-arg list coerce, `find_params`
+  source, instrumented debug) — all reverted.
+- **Root cause proven:** `translate_expr` renders calls as **text** and has **no
+  `sigs`**, so argument types are unknowable there. The statement-level `CALL f(...)`
+  path *does* carry structured args (`args` + `find_params`) but no test uses it.
+- Tree reverted clean to v0.62.6.
+
+### Merged (TDs)
+- **TD-075 merged into TD-076** — "typed expression representation required"
+  (non-leading + args + the residual heuristic typing, after the TD-074 audit).
+
+### Verified
+- Native 348/348 · Regression 319/319 · Generics 7/7 · Closures 6/6
+- Self-hosting converged (615,404 B, `v3.c == v4.c == v5.c`) · valgrind PASS
+- Binary unchanged (1,105,080 B) · no code change.
+
+### Out of Scope (v0.63.0+)
+- TD-076 (typed-expression epic, parser-level, ~2–3 weeks, HIGH risk).
+- TD-073 (blocked by TD-074). TD-074 (async audit).
+- Optimizers + data loading.
+
+
 
 ### Fixed (TD-071 → CLOSED, full — 5 contexts)
 - **SET** `x TO <leading -> LON call + …>` → coerced.

@@ -1,9 +1,10 @@
 # Technical Debt Register — PlantLang Chloroplast
 
-> **Status (v0.62.6): 0 known *active* bugs in the shipped toolchain.**
-> TD-054/068/069/**071 (full)**/072 CLOSED. **TD-075 OPEN** (args/non-leading
-> coercion — residual of TD-071). **TD-073 OPEN (blocked by TD-074)** — latent
-> untyped-`REAP` heuristics. TD-016/TD-017 DEFERRED.
+> **Status (v0.62.7): 0 known *active* bugs in the shipped toolchain.**
+> TD-054/068/069/**071 (full)**/072 CLOSED. **TD-076 OPEN (epic)** — typed
+> expressions needed for args/non-leading (TD-075 merged here).
+> **TD-073 OPEN (blocked by TD-074)** — latent untyped-`REAP` heuristics.
+> TD-016/TD-017 DEFERRED.
 
 > **Build-depth (v0.62.5b):** the compiler is self-hosted; when a fix touches
 > codegen, a 2-stage chain (v1→v2→v3) can install a compiler built by a stale
@@ -893,20 +894,31 @@ defining scope.
 - **Docs:** `docs/COERCION_COVERAGE.md`.
 - **Related:** TD-054, TD-072, TD-073, TD-075.
 
-## TD-075: arguments + non-leading calls not coerced — OPEN
+## TD-076: typed expression representation required (non-leading + args) — OPEN (epic)
 
-- **Status:** OPEN (residual of TD-071)
-- **Introduced:** v0.62.6 (found during the E3 investigation)
-- **Impact:** LOW–MED
-- **Symptom:** `f(inner() + 1)`, `1 + inner()`, `f(g() + 1)` still perform pointer
-  arithmetic; `f(inner())` (bare arg) is also uncoerced.
-- **Reason:** ACTION arguments exist only as source text at emission (no structured
-  per-argument list), and `_coerce_lead_call` only handles a **leading** call.
-- **Workaround:** bind first (`CREATE t (LON) TO inner().`) then use `t`.
-- **Fix direction:** parser-side per-argument nodes (~60 LOC) + per-arg coercion in
-  codegen (type from the callee signature).
-- **Target:** v0.62.7 (dedicated, MED risk).
-- **Related:** TD-071, TD-054.
+- **Status:** OPEN (epic; v0.63.0+)
+- **Supersedes:** TD-075 (arguments) — **merged here in v0.62.7**.
+- **Introduced:** v0.62.6 (during the TD-071 extension investigation).
+- **Impact:** MED — arguments and non-leading calls are uncoerced.
+- **Symptom:**
+  - `f(inner() + 1)` → the argument is uncoerced (pointer arithmetic).
+  - `1 + inner()` → the non-leading call is uncoerced.
+  - `f(g() + 1)` → nested in an argument, uncoerced.
+- **Architectural root cause (proven in v0.62.7):**
+  - `translate_expr` renders calls as **text** (`f ( <args> )`) — it has **no `sigs`**
+    parameter and no structured argument list, so argument types cannot be known there.
+  - The **statement-level** `CALL f(...)` path *does* have structured args
+    (`args` list + `find_params`), so its arguments are coercible today — but no test
+    uses that shape.
+  - Expression calls (CREATE/GIVE/SET/LET/IF values) always go through `translate_expr`
+    ⇒ untyped.
+- **Prerequisite:** a **typed expression representation** (parser/expression nodes),
+  ~700–1100 LOC, HIGH risk, ~2–3 weeks. The same epic unblocks TD-073's residual
+  heuristic typing (after the TD-074 async audit).
+- **Workaround:** bind first —
+  `CREATE tmp (LON) TO inner().` / `CREATE v (LON) TO 1 + tmp.`
+- **Related:** TD-071 (leading-call coercion, CLOSED for statement-level contexts),
+  TD-073, TD-074.
 
 ## TD-068: no axis-reduction / `sqrt` primitives — CLOSED
 
