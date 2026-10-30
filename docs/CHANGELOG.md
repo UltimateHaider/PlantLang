@@ -1,4 +1,33 @@
-## v0.62.7 — TD-075 investigation (merged → TD-076, docs-only)
+## v0.62.8 — TD-073/TD-074 investigation (parked, docs-only)
+
+### Investigated (not shipped)
+- **TD-074 reclassified as a misdiagnosis**: `find_any` is `-> external` (real
+  `long`); neither `async_in_cancel` nor the compiler's `async_emit_*` helpers use
+  it. The async engine does **not** depend on "always found".
+- **TD-073's design works** (parser `reap_num` + per-call name→type map):
+  `long f0 = 0;` verified. The v0.62.5c global-reuse hazard was removed by passing
+  a local map.
+- **But activating the typing drops the async context operand** — pinpointed by
+  diffing emitted C: `h = sleeper(0, c, "x");` → `h = sleeper(0, 0, "x");`.
+- A parser probe intended to locate the loss **broke the bootstrap**
+  (`v2 → v3` SIGSEGV) and was reverted.
+
+### Reclassified / merged
+- **TD-074**: misdiagnosis; the real defect is "`REAP … IN ctx` loses its context
+  operand once `find_any` is typed correctly".
+- **TD-073**: OPEN, **blocked by TD-076** (design proven, one interaction remains).
+- **TD-076**: typed-expression epic now explicitlyBlocks TD-073 and TD-074.
+
+### Verified
+- Native 348/348 · Regression 319/319 · Generics 7/7 · Closures 6/6
+- Self-hosting converged (615,404 B, `v3.c == v4.c == v5.c`) · valgrind PASS
+- Binary unchanged (1,105,080 B) · no code change.
+
+### Out of Scope (v0.63.0+)
+- TD-076 (typed-expression epic, ~700–1100 LOC, HIGH risk, ~2–3 weeks).
+- Optimizers + Data Loading (v0.63.0).
+
+
 
 ### Investigated (not shipped)
 - **TD-075 (arguments)** and **TD-076 (non-leading calls)** are one architectural

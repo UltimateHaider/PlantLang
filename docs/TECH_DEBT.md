@@ -1,9 +1,9 @@
 # Technical Debt Register — PlantLang Chloroplast
 
-> **Status (v0.62.7): 0 known *active* bugs in the shipped toolchain.**
+> **Status (v0.62.8): 0 known *active* bugs in the shipped toolchain.**
 > TD-054/068/069/**071 (full)**/072 CLOSED. **TD-076 OPEN (epic)** — typed
-> expressions needed for args/non-leading (TD-075 merged here).
-> **TD-073 OPEN (blocked by TD-074)** — latent untyped-`REAP` heuristics.
+> expressions (args/non-leading/async-ctx). **TD-073 OPEN (blocked by TD-076)**
+> — latent untyped-`REAP` heuristics (design proven). **TD-074 = MISDIAGNOSIS**.
 > TD-016/TD-017 DEFERRED.
 
 > **Build-depth (v0.62.5b):** the compiler is self-hosted; when a fix touches
@@ -840,140 +840,55 @@ defining scope.
   suite 334/334, regression 319/319, self-hosting byte-identical.
 - **Related:** TD-071, TD-072 (found while building the tests).
 
-## TD-073: untyped numeric `REAP` targets (53 sites) — OPEN (blocked by TD-074)
+## TD-073: untyped numeric `REAP` targets (53 sites) — OPEN (blocked by TD-076)
 
-- **Status:** OPEN — **blocked by TD-074**; design proven, revert-to-green in v0.62.5c.
-- **Introduced:** pre-v0.62.5a (discovered in v0.62.5a, investigated v0.62.5c).
+- **Status:** OPEN — blocked by the typed-expression epic (**TD-076**).
+- **Introduced:** pre-v0.62.5a; investigated v0.62.5c / v0.62.8.
 - **Impact:** LOW–MED (latent; heuristics "work" by accident via pointer compares).
-- **Three proven traps (v0.62.5c):**
-  - **D1** `REAP x FROM <numeric helper>` ⇒ `x` is `tx_t`; `x == 1` is a pointer compare.
-  - **D2** list accumulation (`PUT … INTO res`) through a by-value parameter inside `IF`/`SEASON` does not reach the caller.
-  - **D3** a `-> LON` helper's return compared as a string (`IS "1"`) does not match.
-- **Working design (verified on `is_identifier.f0`):**
-  1. parser records `"reap_num"` on `reap_stmt` (1 when the callee is `find_any`);
-  2. `collect_implicit` fills a parallel `GLOBAL IMPLICIT_TYPES` (name/type);
-  3. the implicit-emission loops emit `long x = 0;` vs `tx_t x = "";`.
-- **Blocker:** TD-074 — `async_emit_step` re-emits `ASYNC ACTION` bodies through its own
-  implicit pipeline, so the parse-time flag doesn't cover them; typing them breaks the
-  `async_in_cancel` lock.
-- **Scope:** 53 sites, all non-async; must be applied only after TD-074.
-- **Target:** future cycle (after TD-074), async exclusion keyed on the **node `"async"` field**
-  at codegen time (not a parser flag).
+- **Proven design (validated twice, both reverted):**
+  - parser records `"reap_num"` on `reap_stmt` (`find_any` only);
+  - `collect_implicit(bd, params, types)` fills a **per-call name→type map**
+    (no global reuse — the v0.62.5c global was overwritten by nested instantiation
+    calls);
+  - emission loops look up the map: `long x = 0;` vs `tx_t x = "";`.
+  - **Verified working:** `long f0 = 0;` in `is_identifier`.
+- **Blocker (v0.62.8):** activating the typing drops the async **context operand** —
+  `h = sleeper(0, c, "x");` becomes `h = sleeper(0, 0, "x");` (single-line diff of
+  the emitted C). The loss happens while building the `reap_stmt` node (the `IN ctx`
+  token detection itself is untouched).
+- **Resolution path:** TD-076 (remove the text heuristics).
+- **Related:** TD-074, TD-076.
 
-## TD-074: async engine depends on `find_any` "always found" — OPEN (blocker)
+## TD-074: async `IN ctx` misparse under typing — MISDIAGNOSIS
 
-- **Status:** OPEN (blocks TD-073)
-- **Introduced:** pre-v0.62.5a (discovered in v0.62.5c)
-- **Impact:** MED
-- **Symptom:** with real numeric `find_any` indices the `-1` branch starts firing in
-  async bodies and cancellation flow changes — `async_in_cancel` prints
-  `after reap: 1` (vs `2`) and the cancelled spawn keeps running
-  (`start x / p2 x / end x`).
-- **Reason:** `async_emit_step` re-emits `ASYNC ACTION` bodies with its own implicit
-  pipeline; the legacy `tx_t` target makes every `find_any` look "found".
-- **Fix direction:** audit `async_emit_state/step/entry` for `find_any`/index handling and
-  decide whether "always found" is load-bearing (if so, make it explicit rather than a
-  pointer-compare accident).
-- **Target:** dedicated async-first cycle.
-- **Related:** TD-073.
+- **Status:** **MISDIAGNOSIS** (original wording: "async engine depends on
+  `find_any` 'always found'"). Proven false in v0.62.8.
+- **Reality:** `find_any` is `-> external` (a real C function returning `long`);
+  neither `async_in_cancel` nor the compiler's `async_emit_*` helpers use `find_any`
+  at all (0 hits).
+- **Real defect:** `REAP … IN ctx` **loses its context operand** once the
+  `find_any`-derived values are correctly typed (pinpoint:
+  `sleeper(0, c, …)` → `sleeper(0, 0, …)`), so the spawn is not bound to the
+  context and cancellation misses it.
+- **Resolution path:** TD-076.
+- **Related:** TD-073, TD-076.
 
-## TD-071: `-> LON` ACTION call inside an expression — CLOSED (full)
-
-- **Status:** ✅ CLOSED in v0.62.6 — **5 contexts**
-- **Fixed:** v0.62.5b `GIVE` + `CREATE`; v0.62.6 `SET` + `LET` + `IF` condition.
-  - Bonus in v0.62.6: `SET x TO f()` (a **bare** `-> LON` call) was never coerced
-    at all — a TD-054 coverage gap → produced a pointer value + 11 B leak; now
-    coerced (`10`, 0 B).
-- **Mechanism:** `_coerce_lead_call` (all locals typed, fail-safe, text sentinel
-  `""`) + `_match_paren`; GIVE re-boxes with `_from_long(...)` to keep the text ABI.
-- **Preserved:** whole-expression bare calls (coerced exactly once) and the text
-  ABI (the 3 display/concat regression locks stay green).
-- **Residual limitation → TD-075:** arguments and **non-leading** calls
-  (`1 + inner()`, `f(inner() + 1)`, `f(g() + 1)`).
-- **Build depth:** 4-stage (`v3.c == v4.c == v5.c`).
-- **Docs:** `docs/COERCION_COVERAGE.md`.
-- **Related:** TD-054, TD-072, TD-073, TD-075.
-
-## TD-076: typed expression representation required (non-leading + args) — OPEN (epic)
+## TD-076: typed expression representation required — OPEN (epic)
 
 - **Status:** OPEN (epic; v0.63.0+)
-- **Supersedes:** TD-075 (arguments) — **merged here in v0.62.7**.
-- **Introduced:** v0.62.6 (during the TD-071 extension investigation).
-- **Impact:** MED — arguments and non-leading calls are uncoerced.
-- **Symptom:**
-  - `f(inner() + 1)` → the argument is uncoerced (pointer arithmetic).
-  - `1 + inner()` → the non-leading call is uncoerced.
-  - `f(g() + 1)` → nested in an argument, uncoerced.
-- **Architectural root cause (proven in v0.62.7):**
-  - `translate_expr` renders calls as **text** (`f ( <args> )`) — it has **no `sigs`**
-    parameter and no structured argument list, so argument types cannot be known there.
-  - The **statement-level** `CALL f(...)` path *does* have structured args
-    (`args` list + `find_params`), so its arguments are coercible today — but no test
-    uses that shape.
-  - Expression calls (CREATE/GIVE/SET/LET/IF values) always go through `translate_expr`
-    ⇒ untyped.
-- **Prerequisite:** a **typed expression representation** (parser/expression nodes),
-  ~700–1100 LOC, HIGH risk, ~2–3 weeks. The same epic unblocks TD-073's residual
-  heuristic typing (after the TD-074 async audit).
-- **Workaround:** bind first —
-  `CREATE tmp (LON) TO inner().` / `CREATE v (LON) TO 1 + tmp.`
-- **Related:** TD-071 (leading-call coercion, CLOSED for statement-level contexts),
-  TD-073, TD-074.
-
-## TD-068: no axis-reduction / `sqrt` primitives — CLOSED
-
-- **Status:** ✅ CLOSED in v0.62.1
-- **Fixed:** `MEAN_AXIS`, `SUM_AXIS`, `VAR_AXIS` (biased, keepdims=false) and
-  `TENSOR_SQRT` (guards negative input).
-- **Tape:** `OP_SUMAXIS 22`, `OP_MEANAXIS 23`, `OP_VARAXIS 24`, `OP_SQRT 25`;
-  backward scatters/broadcasts `d` (`var`: `2(x−μ)/red`, `sqrt`: `1/(2√x)`).
-- **ADv2:** explicit error. **Tests:** `tensor_{mean,sum,var}_axis`,
-  `tensor_sqrt`, `axis_ops_ad2_error`.
-
-## TD-069: no `log`/`exp`/`abs` tensor primitives — CLOSED
-
-- **Status:** ✅ CLOSED in v0.62.1
-- **Fixed:** `TENSOR_LOG` (guards `x ≤ 0`), `TENSOR_EXP`, `TENSOR_ABS`
-  (`OP_LOG 26`, `OP_EXP 27`, `OP_ABS 28`); backward `1/x`, `exp(x)`, `sign(x)`.
-- Cross-entropy composes in Plant. **ADv2:** explicit error.
-  **Tests:** `tensor_log_exp_abs`, `cross_entropy_softmax`.
-
-## TD-054: ACTION `-> LON` return ABI — CLOSED (effective only from v0.62.5a)
-
-- **Status:** ✅ CLOSED in v0.58.7 (design), **effective from v0.62.5a**
-- **Update (v0.62.5a):** the caller coercion (TD-054 part 1) was **dead code**:
-  `is_action_call` always returned `"0"` because its `REAP`-bound `iac_id` was
-  `tx_t` (untyped). Fixing that (typed `CREATE iac_id (LON)`) makes the design
-  actually work at bare-call sites: `CREATE v (LON) TO inner()` now emits
-  `long v = _to_long_release(inner ( ));`.
-- **Consequence:** TD-072's release fix was also dead until now.
-- **Related:** TD-073 (root cause), TD-072.
-
-## TD-072: `_to_long(<ACTION returning a heap string>)` leaks — CLOSED
-
-- **Status:** ✅ CLOSED in v0.62.1
-- **Fixed:** `_to_long_release` (parse + magic-checked `plant_heapstr_release`)
-  at **ACTION-call coercion sites only**; user variables keep plain
-  `_to_long` (no double-free). Verified: `42` through `-> LON` → 0 B (was 11 B).
-- **Note:** the TD-071 pattern (`inner() + 1`) still leaks, because the call
-  is not recognised, hence neither coerced nor released.
-
-## TD-070: `TAPE_CLEAR()` frees user tensors (BN/LN/dropout/conv) — CLOSED
-
-- **Status:** ✅ CLOSED in v0.61.4
-- **Introduced:** v0.61.2 (CONV2D recorder), extended v0.61.3 (norms).
-- **Symptom:** after a forward that used CONV2D / BatchNorm / LayerNorm /
-  Dropout, `TAPE_CLEAR()` freed tensors that were still in use. A second
-  forward pass then read freed memory → silent corruption
-  (`malloc_consolidate(): invalid chunk size`, valgrind `Invalid read` of a
-  block freed by `plant_tape_clear`).
-- **Root cause:** `plant_tape_record` retains its tensors (`plant_tensor_retain`),
-  but `_tape_push` (BN/LN/dropout) and `plant_tape_record_conv` did not —
-  while `plant_tape_clear` frees `in0/in1/in2/out`. Asymmetric ownership.
-- **Fix:** `_tape_hold()` (retain) on every recorded tensor in `_tape_push`
-  and the conv recorder, plus releasing `in2` in `clear()`.
-- **Verified:** full suite + 8 new tests, 0 B; valgrind clean.
-- **Related:** TD-066 (multi-gradient), TD-041 (intermediate ownership).
+- **Supersedes:** TD-075 (arguments — merged here in v0.62.7).
+- **Blocks:** TD-073 (non-async `REAP` typing) and TD-074 (async `IN ctx` misparse).
+- **Impact:** MED.
+- **Symptoms:**
+  - `f(inner() + 1)` — arguments uncoerced (`translate_expr` renders calls as text
+    and has no `sigs`);
+  - `1 + inner()` — non-leading calls uncoerced;
+  - async `IN ctx` loses the operand once `find_any` is typed.
+- **Prerequisite:** typed expression representation (parser/expression nodes),
+  ~700–1100 LOC, HIGH risk, ~2–3 weeks; replaces `translate_expr` and the text
+  heuristics (`_handle_func*`, `_lower_dots`, struct/map parsing, …).
+- **Target:** v0.63.0+ (dedicated epic).
+- **Related:** TD-071, TD-073, TD-074, TD-075.
 
 ## TD-067: `TENSOR_RESHAPE(x, [..])` leaks the inline list — CLOSED
 
