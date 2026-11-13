@@ -6,37 +6,72 @@ native self-hosted PlantLang compiler — Chloroplast** (`src/plantc/*.plant` �
 ## Requirements
 
 - `gcc` (or `CC` override) and GNU `make`
+- `python3` — optional, used by the regression suite's mock HTTP server
+  (network cases are skipped when it is absent)
 - `clang-format`, `cppcheck` — optional (used by `make fmt` / `make lint`, skipped when missing)
 
 No Node.js, no JavaScript, no other dependencies.
+
+### Windows (MSYS2)
+
+The runtime and test runners are POSIX-oriented (`fork`, `AF_UNIX`, shell
+scripts, `diff`, `cmp`), so on Windows build inside **MSYS2**, not from
+PowerShell/CMD directly:
+
+```sh
+# In an MSYS2 MINGW64/UCRT64 shell (package names may differ per env):
+pacman -S --needed gcc make diffutils python curl
+
+cd /d/PlantLang/PlantLang
+make all          # -> bin/Chloroplast.exe
+make self         # -> SELF-HOSTING CONVERGED
+make test         # -> native + generics + closures + regression suites
+```
+
+Notes:
+
+- Binaries carry the `.exe` suffix: `dist/Chloroplast.exe`,
+  `bin/Chloroplast.exe`, `build/plantc_v*.exe`.
+- The resulting executables are **MSYS2-dependent** and need `msys-2.0.dll`
+  at runtime; they are not standalone Win32 binaries.
+- Test runners normalize CRLF fixtures and honor `CC` / `TEST_CFLAGS`, so
+  GCC 14+ (which promotes legacy C conversions to errors) also works.
+- Mission Mode `SAFE` falls back to an in-process implementation on
+  non-Linux hosts. The public API and telemetry match the Linux worker
+  engine, but hard OS isolation (`fork`/`AF_UNIX`/`memfd`/`SCM_RIGHTS`)
+  is Linux-only; see [Known Limitations](#known-limitations).
 
 ## Quick Reference
 
 ```sh
 make help        # list all targets with descriptions
 make             # = make all
-make all         # full native build → bin/Chloroplast
+make all         # full native build → bin/Chloroplast[.exe]
 make self        # multi-generation self-hosting + convergence check
-make test        # native integration tests (bin/Chloroplast + gcc + run + diff)
+make test        # native + generics + closures + regression suites
 make fmt         # clang-format generated C (skips if missing)
 make lint        # cppcheck generated C (skips if missing)
 make dist        # versioned tarball + unpack/build/test validation
 make install     # install to $PREFIX/bin (default ~/.local)
-make clean       # remove build artifacts (keeps dist/Chloroplast bootstrap)
+make clean       # remove build artifacts (keeps the bootstrap seed)
 ```
 
-Variables: `VERSION` (default `0.50.6`), `PREFIX` (default `~/.local`),
-`CC` (default `gcc`).
+Variables: `VERSION` (default `0.62.8`), `PREFIX` (default `~/.local`),
+`CC` (default `gcc`). On Windows the build appends `.exe` automatically and
+uses the checked-in generated-C bootstrap described below.
 
 ## How the Bootstrap Works
 
-`dist/Chloroplast` is the pre-built **bootstrap compiler**. The chain is:
+On Linux, `dist/Chloroplast` is the pre-built **bootstrap compiler**. On
+Windows there is no committed pre-built binary: the seed is compiled from
+`dist/bootstrap/plantc_bootstrap.c` (portable generated C) the first time it
+is needed. Either way the chain is:
 
 ```
-dist/Chloroplast (v1) ──► build/plantc_v2.c ──► build/plantc_v2 (gcc)
-                    ──► build/plantc_v3.c ──► build/plantc_v3 (gcc)   ← bin/Chloroplast
-                    ──► build/plantc_v4.c ──► build/plantc_v4
-                    ──► build/plantc_v5.c
+bootstrap (v1) ──► build/plantc_v2.c ──► build/plantc_v2 (gcc)
+               ──► build/plantc_v3.c ──► build/plantc_v3 (gcc)
+               ──► build/plantc_v4.c ──► build/plantc_v4   ← bin/Chloroplast
+               ──► build/plantc_v5.c
 ```
 
 `make self` additionally checks that `plantc_v3.c`, `plantc_v4.c`, and
@@ -80,13 +115,27 @@ known-good starting point. When you commit, keep them in sync with the sources:
 `make all` + `make self` regenerating them is a requirement for CI and
 `make dist` to pass.
 
+On Windows, `dist/Chloroplast` is a Linux ELF and cannot run. The seed is
+instead built from `dist/bootstrap/plantc_bootstrap.c`, a checked-in snapshot
+of the generated C for the compiler (`build/plantc_v4.c` at the time it was
+refreshed). It is portable C compiled by the host `gcc`, so the same source
+seeds the Windows chain. Refresh it together with the binary seeds:
+
+```sh
+make all && make self
+cp build/plantc_v4.c dist/bootstrap/plantc_bootstrap.c
+```
+
 ## Compiling a PlantLang Program
 
 ```sh
 ./bin/Chloroplast app.plant app.c            # generate C
-gcc -w -O0 -I runtime/c app.c runtime/c/plant_runtime.c -lm -o app
+gcc -w -O0 -std=gnu11 -I runtime/c app.c runtime/c/plant_runtime.c -lm -o app
 ./app
 ```
+
+On Windows use `./bin/Chloroplast.exe` and link with `-ldl` as well (MSYS2
+provides it); the runtime uses the POSIX loader shim for FFI.
 
 The generated C includes `<plant_compat.h>` (runtime helpers) and links against
 `runtime/c/plant_runtime.c`. Link with `-lm` when using `std/math`
@@ -115,20 +164,21 @@ Since v0.47.1 the core standard library ships in the native runtime
 
 ## Tests
 
-`make test` — native integration suite in `tests/native/`:
+`make test` runs four suites:
 
-- CLI checks (`--help`, `--version` → `Chloroplast 0.50.6 (pure native)`,
-  missing-file exit code)
-- compile + gcc + run + output-diff cases (hello, join/`strings:LENGTH`,
-  number concatenation, string escapes, list ops, `strings:` module calls)
-- standard library cases: `json` (valid + invalid/nil + unicode + stringify
-  round-trip + raw MAP), `strings2` (repeat/reverse/pad), `fs`
-  (copy/move/stat + error paths), `math`, `time`
-- advanced FFI case: `ffi` (mock C library `mock_ffi.c`/`mock_ffi.h`,
-  force-included with `-include`; REF swap, Result-style error paths with
-  errno/errmsg checks, `ffi_free` lifecycle + NULL rejection)
+- `tests/native/` — CLI checks (`--help`, `--version`, missing-file exit
+  code) and compile + gcc + run + output-diff cases (language features,
+  standard library, advanced FFI with the mock C library)
+- `tests/generics/` — generics engine integration (+ optional `.grep`
+  structural checks on generated C)
+- `tests/closures/` — closures engine integration (+ optional `.grep` checks)
+- `tests/regression/` — numeric/FFI/async/SAFE regressions; network cases
+  (`harvest_*`, `listen_*`, `json_http`) need `python3` and are skipped
+  when it is unavailable
 
-The legacy JavaScript test suites were removed in v0.46.4 (Pure Native purge).
+All runners honor `CC` and `TEST_CFLAGS`, normalize CRLF fixtures, and work
+from any current directory. The legacy JavaScript test suites were removed in
+v0.46.4 (Pure Native purge).
 
 ## Packaging (make dist)
 
@@ -158,17 +208,32 @@ Installs the compiler binary and the C runtime headers
   automatically.
 - Generated code is not yet clang-formatted; only the grammar subset used by
   the compiler itself is covered by the integration suite.
+- **Windows SAFE isolation:** Mission Mode `SAFE` keeps its full public API,
+  permission checks, audit log, and pool telemetry, but executes adapters
+  in-process. The Linux engine's hard isolation (separate worker processes,
+  `AF_UNIX SOCK_SEQPACKET`, `memfd`, `SCM_RIGHTS` fd passing) is unavailable
+  there, so a crashed adapter can take down the host process. Run untrusted
+  SAFE workloads on Linux when isolation is required.
 
 
 ## Bootstrap Seed
 
 `dist/Chloroplast` is the pre-built compiler used to start the self-hosting
-chain. Update it after each stable release:
+chain on Linux. Update it after each stable release:
 
     cp bin/Chloroplast dist/Chloroplast
     # or: make bootstrap-update
 
-Then verify: make clean && make all && make self && make test
+On Windows the equivalent seed is `dist/bootstrap/plantc_bootstrap.c`. Refresh
+both together:
+
+    make all && make self
+    cp build/plantc_v4.c dist/bootstrap/plantc_bootstrap.c
+
+Then verify: `make clean && make all && make self && make test`
+
+`make clean` removes `build/*.c`, so the checked-in bootstrap source is what
+lets a clean Windows tree rebuild without a pre-built compiler.
 
 ### v0.51.4 bootstrap upgrade
 

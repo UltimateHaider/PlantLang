@@ -1,3 +1,42 @@
+## v0.62.9 — Windows 11 / MSYS2 support
+
+### Added
+- **Windows build**: `Makefile` detects `OS=Windows_NT`, appends `.exe` to all
+  binaries, and builds the bootstrap seed from
+  `dist/bootstrap/plantc_bootstrap.c` (portable generated C) instead of
+  requiring a pre-built ELF. `make all`, `make self`, and `make test` work
+  from an MSYS2 shell with `gcc`, `make`, `diffutils`, `python3`, `curl`.
+- Test runners honor `CC` / `TEST_CFLAGS`, normalize CRLF `.expected` and
+  `.grep` fixtures, skip network cases when `python3` is absent, and reap
+  one-shot `listen_*` servers so a failed client cannot block the suite.
+- Build flags use `-std=gnu11` and demote GCC 14+ hard errors
+  (`int-conversion`, implicit declarations, incompatible pointer types) for
+  the historical codebase.
+
+### Fixed
+- **Parser `plant_list_make(N, …)` count mismatches** in `parser.plant`
+  (9 call sites: `match_stmt`, `ds_pat`, `let_destructure`, `variantName`,
+  `harvest_stmt`, `syntax_error`, `import_stmt`). Declared counts exceeded
+  the passed values, reading garbage varargs — tolerated by luck on Linux,
+  a segfault on Windows.
+- `plant_ctype` used `COUNT` (array length) on a type **string**; now uses
+  `LEN`, so `ARRAY[DBL, N]` emits `double name[N]` instead of an invalid
+  pointer-initialized array.
+- `_map_get` / `plant_list_get` reject non-list pointers (low addresses,
+  wrong `PLANT_ARRAY_MAGIC`) instead of dereferencing them.
+
+### Platform Notes
+- **SAFE on non-Linux** uses an in-process fallback with the same public API
+  and Linux-compatible telemetry (`status`, `stall`, `starve`, heartbeat,
+  audit). Hard OS isolation (`fork`, `AF_UNIX SOCK_SEQPACKET`, `memfd`,
+  `SCM_RIGHTS`) remains Linux-only.
+- Windows binaries are MSYS2-dependent (`msys-2.0.dll`), not standalone Win32.
+
+### Verified (Windows 11, MSYS2 GCC 16.2.0)
+- Native 348/348 · Generics 7/7 · Closures 6/6 · Regression 319/319
+- Self-hosting converged (615,400 B, `v3.c == v4.c == v5.c`)
+- Bootstrap source compiles `match.plant` successfully
+
 ## v0.62.8 — TD-073/TD-074 investigation (parked, docs-only)
 
 ### Investigated (not shipped)

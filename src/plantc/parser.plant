@@ -734,7 +734,7 @@ ACTION parse_array_decl(tokens(LST), pos(LON), rtab(LST)),
   REAP lb_tok FROM plant_iLexer_peek_at, lexer, tokens, p2.
   REAP lb_lx FROM plant_iLexer_tok_lex, lexer, lb_tok.
   IF lb_lx ISNT "[",
-    GIVE plant_list_make(2, plant_list_make(6, "type", "syntax_error", "message", "expected bracket after array"), p2).
+    GIVE plant_list_make(2, plant_list_make(4, "type", "syntax_error", "message", "expected bracket after array"), p2).
   /IF.
   REAP lb_pair FROM plant_iLexer_consume_at, lexer, tokens, p2.
   REAP p3 FROM _second, lb_pair.
@@ -1479,7 +1479,7 @@ ACTION _parse_ds_pattern(tokens(LST), pos(LON)),
       REAP p FROM _second, cmpair.
     /IF.
   /SEASON.
-  GIVE plant_list_make(2, plant_list_make(8, "type", "ds_pat", "kind", kind, "items", items), p).
+  GIVE plant_list_make(2, plant_list_make(6, "type", "ds_pat", "kind", kind, "items", items), p).
 /ACTION.
 
 ACTION parse_let_stmt(tokens(LST), pos(LON), rtab(LST), emode(TXT)),
@@ -1506,7 +1506,7 @@ ACTION parse_let_stmt(tokens(LST), pos(LON), rtab(LST), emode(TXT)),
     REAP dvpair FROM collect_value, tokens, p4d.
     CREATE dsrc TO dvpair[0].
     REAP p5d FROM _second, dvpair.
-    GIVE plant_list_make(2, plant_list_make(10, "type", "let_destructure", "pattern", dkind, "vars", ditems, "source", dsrc), p5d).
+    GIVE plant_list_make(2, plant_list_make(8, "type", "let_destructure", "pattern", dkind, "vars", ditems, "source", dsrc), p5d).
   /IF.
   REAP id_pair FROM plant_iLexer_consume_at, lexer, tokens, p2.
   REAP id_name FROM plant_iLexer_tok_lex, lexer, id_pair[0].
@@ -2599,7 +2599,7 @@ ACTION parse_match_stmt(tokens(LST), pos(LON), clv(TXT), rtab(LST), emode(TXT)),
   SEASON TRUE,
     REAP is_eof_flag FROM plant_iLexer_is_eof_at, lexer, tokens, p4.
     IF is_eof_flag,
-      GIVE plant_list_make(2, plant_list_make(12, "type", "match_stmt", "subjectExpr", subj, "clauses", clauses), p4).
+      GIVE plant_list_make(2, plant_list_make(6, "type", "match_stmt", "subjectExpr", subj, "clauses", clauses), p4).
     /IF.
     REAP tok FROM plant_iLexer_peek_at, lexer, tokens, p4.
     REAP lx FROM plant_iLexer_tok_lex, lexer, tok.
@@ -2607,7 +2607,7 @@ ACTION parse_match_stmt(tokens(LST), pos(LON), clv(TXT), rtab(LST), emode(TXT)),
     IF lx IS "}",
       REAP rb FROM plant_iLexer_consume_at, lexer, tokens, p4.
       REAP p5 FROM _second, rb.
-      GIVE plant_list_make(2, plant_list_make(12, "type", "match_stmt", "subjectExpr", subj, "clauses", clauses), p5).
+      GIVE plant_list_make(2, plant_list_make(6, "type", "match_stmt", "subjectExpr", subj, "clauses", clauses), p5).
     /IF.
     CREATE ptext(TXT) TO "".
     CREATE pbind(TXT) TO "".
@@ -2709,7 +2709,7 @@ ACTION parse_match_stmt(tokens(LST), pos(LON), clv(TXT), rtab(LST), emode(TXT)),
       REAP dcons FROM plant_iLexer_consume_at, lexer, tokens, p4.
       REAP p4 FROM _second, dcons.
     /IF.
-    PUT plant_list_make(12, "variantName", ptext, "binding", pbind, "bodyStatements", cbody) INTO clauses.
+    PUT plant_list_make(6, "variantName", ptext, "binding", pbind, "bodyStatements", cbody) INTO clauses.
   /SEASON.
 /ACTION.
 
@@ -3482,7 +3482,7 @@ ACTION parse_harvest_stmt(tokens(LST), pos(LON)),
   /SEASON.
   REAP dot_pair FROM plant_iLexer_consume_at, lexer, tokens, p4.
   REAP p5 FROM _second, dot_pair.
-  GIVE plant_list_make(2, plant_list_make(20, "type", "harvest_stmt", "url", url, "resp", resp, "method", method, "payload", body, "headers", headers, "timeout", timeout, "map", map, "json", json), p5).
+  GIVE plant_list_make(2, plant_list_make(18, "type", "harvest_stmt", "url", url, "resp", resp, "method", method, "payload", body, "headers", headers, "timeout", timeout, "map", map, "json", json), p5).
 /ACTION.
 
 # v0.48.33 — LISTEN ON port AS req. opens an HTTP server socket on
@@ -4395,9 +4395,9 @@ ACTION parse_declaration(tokens(LST), pos(LON), clv(TXT), ctab(LST), rtab(LST), 
     IF dlx IS ".",
       REAP dpair FROM plant_iLexer_consume_at, lexer, tokens, im_p3.
       REAP im_p4 FROM _second, dpair.
-      GIVE plant_list_make(2, plant_list_make(6, "type", "import_stmt", "path", ipath), im_p4).
+      GIVE plant_list_make(2, plant_list_make(4, "type", "import_stmt", "path", ipath), im_p4).
     /IF.
-    GIVE plant_list_make(2, plant_list_make(6, "type", "import_stmt", "path", ipath), im_p3).
+    GIVE plant_list_make(2, plant_list_make(4, "type", "import_stmt", "path", ipath), im_p3).
   /IF.
   IF lx IS "ACTION",
     REAP r FROM parse_action_decl, tokens, pos, rtab.

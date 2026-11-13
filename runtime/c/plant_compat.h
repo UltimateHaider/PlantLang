@@ -1,6 +1,12 @@
 #ifndef PLANT_COMPAT_H
 #define PLANT_COMPAT_H
 
+/* Must precede every libc header so POSIX/GNU declarations (strdup,
+   popen, ...) are visible on all supported toolchains. */
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE
+#endif
+
 /* v0.49.61: Clean Architecture — plant_compat.h exposes the runtime
    interface boundaries that generated C code calls into, plus
    documentation of the compiler architecture's layered boundaries.
@@ -27,7 +33,6 @@
    plant_compat.h holds only FFI bindings and compatibility
    wrappers. */
 #include <plant_types.h>
-#define _GNU_SOURCE
 #include <plant_runtime.h>
 #include <plant_report.h>
 #include <plant_lexer.h>
@@ -56,10 +61,22 @@ typedef enum {
     PLANT_DEBUG   = 3
 } PlantLogLevel;
 
+/* Some libcs (notably Cygwin/MSYS ctype.h) define a ctype bitmask
+   named _S.  Drop it before defining our string-coercion helper. */
+#ifdef _S
+#undef _S
+#endif
 #define _S(x) ((const char*)(x))
 #define _P(x) ((PlantArray*)(x))
 #define _L(x) ((long)(x))
 #define _POS(x) _to_long(x)
+
+/* Forward declarations used by the inline helpers below (the full
+   definitions live further down in this header / in plant_memory.c). */
+void  plant_env_register(void* p);
+int   plant_heapstr_release(void* p);
+char* plant_heapstr_alloc_copy(const char* s);
+
 static void plant_print(tx_t s) { printf("%s\n", _S(s)); }
 static void* plant_env_alloc(size_t size) { void* p = malloc(size); if (p) plant_env_register(p); return p; }
 void plant_env_register(void* p); /* v0.48.36: closure env registry for TYPEOF/ANALYZE */
@@ -531,7 +548,9 @@ static PlantArray* strings_SPLIT(tx_t s, tx_t d) {
 }
 static tx_t _map_get(PlantArray* m, tx_t k) {
   const char*_k=_S(k);
-  if (!m) return "";
+  /* Guard against non-list values (strings, tagged ints, ...): a
+     missing/foreign object must behave like an empty map, not crash. */
+  if (!m || (uintptr_t)m < 4096 || m->magic != PLANT_ARRAY_MAGIC) return "";
   for (int64_t i = 0; i + 1 < m->count; i += 2)
     if (strcmp(m->items[i], _k) == 0) return m->items[i + 1];
   return "";

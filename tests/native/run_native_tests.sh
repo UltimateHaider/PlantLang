@@ -3,6 +3,10 @@
 # Usage: sh tests/native/run_native_tests.sh [path-to-Chloroplast]
 set -u
 PLANTC=${1:-bin/Chloroplast}
+# Cross-platform compiler flags: GCC 14+ promotes legacy C conversions
+# to errors, and MSYS/Cygwin needs gnu11 for POSIX declarations.
+CC=${CC:-gcc}
+TEST_CFLAGS=${TEST_CFLAGS:--w -O0 -std=gnu11 -Wno-error=int-conversion -Wno-error=implicit-function-declaration -Wno-error=incompatible-pointer-types}
 DIR=$(dirname "$0")
 ROOT=$(cd "$DIR/../.." && pwd)
 BUILD=${TMPDIR:-/tmp}/plantlang_native_tests
@@ -10,6 +14,10 @@ rm -rf "$BUILD"
 mkdir -p "$BUILD"
 pass=0
 fail=0
+
+# Fixtures may be checked out with CRLF (Windows); normalize to LF so
+# program output (always LF) compares byte-for-byte on every platform.
+norm_expected() { tr -d '\r' < "$1" | awk 1; }
 
 # v0.52.0 — precompile the test runtime once (5-10x faster tests).
 if [ ! -f "$ROOT/build/libplant_test_runtime.a" ]; then
@@ -45,6 +53,7 @@ echo "== compile + run cases =="
 for src in "$DIR"/*.plant; do
   name=$(basename "$src" .plant)
   [ -f "$DIR/$name.expected" ] || continue
+  norm_expected "$DIR/$name.expected" > "$BUILD/$name.expected"
   if ! "$PLANTC" "$src" "$BUILD/$name.c" >"$BUILD/$name.compile.log" 2>&1; then
     echo "FAIL  $name (compile)"; fail=$((fail+1)); continue
   fi
@@ -53,7 +62,7 @@ for src in "$DIR"/*.plant; do
   types="$BUILD/$name.types.h"
   sed -n '/\/\*__PLANT_TYPES_BEGIN__\*\//,/\/\*__PLANT_TYPES_END__\*\//p' \
        "$BUILD/$name.c" | sed '1d;$d' > "$types"
-  if ! gcc -w -O0 -DPLANT_MALLOC_SIMULATE -include "$ROOT/tests/native/mock_ffi.h" \
+  if ! "$CC" $TEST_CFLAGS -DPLANT_MALLOC_SIMULATE -include "$ROOT/tests/native/mock_ffi.h" \
         -include "$types" -I "$ROOT/runtime/c" "$BUILD/$name.c" \
         "$ROOT/tests/native/mock_ffi.c" \
         "$ROOT/build/libplant_test_runtime.a" \
@@ -69,12 +78,12 @@ $(MAT_MALLOC_FAIL_AT=3 "$BUILD/$name" 2>&1)
 $(MAT_MALLOC_FAIL_AT=4 "$BUILD/$name" 2>&1)
 $(MAT_MALLOC_FAIL_AT=5 "$BUILD/$name" 2>&1)
 $("$BUILD/$name" 2>&1)"
-    if printf '%s\n' "$out" | diff - "$DIR/$name.expected" >/dev/null; then
+    if printf '%s\n' "$out" | tr -d '\r' | diff - "$BUILD/$name.expected" >/dev/null; then
       echo "PASS  $name"; pass=$((pass+1))
     else
       echo "FAIL  $name (output)"; fail=$((fail+1))
     fi
-  elif "$BUILD/$name" 2>&1 | diff - "$DIR/$name.expected" >/dev/null; then
+  elif "$BUILD/$name" 2>&1 | tr -d '\r' | diff - "$BUILD/$name.expected" >/dev/null; then
     echo "PASS  $name"; pass=$((pass+1))
   else
     echo "FAIL  $name (output)"; fail=$((fail+1))
@@ -87,7 +96,7 @@ echo "== type header (plant_types.h) =="
 # plant_runtime.h (signatures use tx_t) and plant_compat.h (FFI
 # statics) with no conflicts; linking against the real runtime also
 # proves the runtime implementation resolves the same typedef.
-if gcc -w -O0 -I "$ROOT/runtime/c" "$DIR/tx_types.c" \
+if "$CC" $TEST_CFLAGS -I "$ROOT/runtime/c" "$DIR/tx_types.c" \
     "$ROOT/runtime/c/plant_runtime.c" "$ROOT/runtime/c/plant_error.c" \
     "$ROOT/runtime/c/plant_report.c" "$ROOT/runtime/c/plant_report_json.c" \
     "$ROOT/runtime/c/plant_report_xml.c" "$ROOT/runtime/c/plant_report_html.c" \

@@ -18,7 +18,13 @@ VERSION    ?= 0.62.8
 PREFIX     ?= $(HOME)/.local
 
 CC         ?= gcc
-CFLAGS     ?= -w -O0
+# gnu11 keeps the GNU/POSIX extensions the runtime relies on.  The
+# -Wno-error flags keep GCC 14+ (which promotes several legacy C
+# conversions to errors by default) building the historical codebase.
+CFLAGS     ?= -w -O0 -std=gnu11 \
+              -Wno-error=int-conversion \
+              -Wno-error=implicit-function-declaration \
+              -Wno-error=incompatible-pointer-types
 TEST_CFLAGS ?= -DPLANT_MALLOC_SIMULATE
 CPPFLAGS   += -I runtime/c
 RUNTIME    := runtime/c/plant_runtime.c
@@ -53,24 +59,45 @@ TEST_RUNTIME_LIB  := build/libplant_test_runtime.a
 
 SRC_DIR    := src/plantc
 PLANT_SRC  := $(SRC_DIR)/lexer.plant $(SRC_DIR)/parser.plant $(SRC_DIR)/codegen_c.plant $(SRC_DIR)/main.plant
-BOOTSTRAP  := dist/Chloroplast
+
+# ── Platform selection ────────────────────────────────────────
+# Windows (MSYS2/MinGW) uses .exe binaries and a source bootstrap
+# compiled from the checked-in generated C.  Linux keeps the
+# pre-built ELF seed in dist/Chloroplast.
+ifeq ($(OS),Windows_NT)
+  EXEEXT        := .exe
+  BOOTSTRAP     := dist/Chloroplast.exe
+  BOOTSTRAP_SRC := dist/bootstrap/plantc_bootstrap.c
+else
+  EXEEXT        :=
+  BOOTSTRAP     := dist/Chloroplast
+endif
 
 ALL_PLANT  := build/plantc_all.plant
 V2_C       := build/plantc_v2.c
-V2_BIN     := build/plantc_v2
+V2_BIN     := build/plantc_v2$(EXEEXT)
 V3_C       := build/plantc_v3.c
-V3_BIN     := build/plantc_v3
+V3_BIN     := build/plantc_v3$(EXEEXT)
 V4_C       := build/plantc_v4.c
-V4_BIN     := build/plantc_v4
+V4_BIN     := build/plantc_v4$(EXEEXT)
 V5_C       := build/plantc_v5.c
-NATIVE_BIN := bin/Chloroplast
+NATIVE_BIN := bin/Chloroplast$(EXEEXT)
 
 # dist/Chloroplast is the bootstrap seed; update manually via:
 #   cp build/plantc_v3 dist/Chloroplast
 # or run: make bootstrap-update
+ifeq ($(OS),Windows_NT)
+# The Windows seed is built from the portable generated-C snapshot
+# (dist/bootstrap/plantc_bootstrap.c) so no pre-built binary is needed.
+$(BOOTSTRAP): $(BOOTSTRAP_SRC) $(RUNTIME_C) $(COMPAT)
+	@mkdir -p dist
+	@echo "  [bootstrap] $@ (from $(BOOTSTRAP_SRC))"
+	@$(CC) $(CFLAGS) $(CPPFLAGS) $< $(RUNTIME_C) -lm -ldl -o $@
+else
 dist/Chloroplast:
 	@echo "  [bootstrap] dist/Chloroplast not found — run: make bootstrap-update"
 	@false
+endif
 
 .PHONY: bootstrap-update
 bootstrap-update: $(NATIVE_BIN)
@@ -90,7 +117,7 @@ all: $(NATIVE_BIN) ## Build native self-hosted compiler (bin/Chloroplast)
 $(NATIVE_BIN): $(V4_BIN)
 	@mkdir -p bin
 	cp $(V4_BIN) $@
-	@echo "== bin/Chloroplast built (self-hosted v4) =="
+	@echo "== $(NATIVE_BIN) built (self-hosted v4) =="
 
 # ── self: multi-generation self-hosting + convergence ────────
 self: $(V3_C) $(V4_C) $(V5_C) ## Full self-hosting chain + convergence check
@@ -141,7 +168,7 @@ test: $(NATIVE_BIN) ## Run native + generics + closures + regression suites
 # v0.52.0 — Precompile the test-runtime subset once (5-10x faster tests).
 build/trt/%.o: runtime/c/%.c
 	@mkdir -p build/trt
-	@$(CC) -w -O0 -DPLANT_MALLOC_SIMULATE -include tests/native/mock_ffi.h \
+	@$(CC) $(CFLAGS) -DPLANT_MALLOC_SIMULATE -include tests/native/mock_ffi.h \
 		-I runtime/c -I tests/native -c $< -o $@
 
 $(TEST_RUNTIME_LIB): $(TEST_RUNTIME_OBJS)
@@ -242,10 +269,10 @@ dist: all self test ## Build versioned tarball + unpack/build/test validation
 # ── install ────────────────────────────────────────────────────
 install: all ## Install to $(PREFIX) (default ~/.local)
 	@mkdir -p $(PREFIX)/bin $(PREFIX)/include/plantlang
-	@cp $(NATIVE_BIN) $(PREFIX)/bin/Chloroplast
+	@cp $(NATIVE_BIN) $(PREFIX)/bin/Chloroplast$(EXEEXT)
 	@cp $(COMPAT) $(RUNTIME_C) runtime/c/plant_autograd.h $(PREFIX)/include/plantlang/
-	@echo "== installed: $(PREFIX)/bin/Chloroplast =="
-	@$(PREFIX)/bin/Chloroplast --version
+	@echo "== installed: $(PREFIX)/bin/Chloroplast$(EXEEXT) =="
+	@$(PREFIX)/bin/Chloroplast$(EXEEXT) --version
 
 # ── rollback: revert to a tagged prior release ──────────────────
 # Usage: make rollback VERSION=v0.49.56b
@@ -2284,7 +2311,7 @@ verify-v0.51.1: check-no-raw-malloc check-expected-files check-changelog-numbers
 
 # ── clean ──────────────────────────────────────────────────────
 clean: ## Remove build artifacts (keeps dist/Chloroplast bootstrap)
-	@rm -rf build/*.c build/plantc_v2 build/plantc_v3 build/plantc_v4 build/plantc_v5 \
+	@rm -rf build/*.c $(V2_BIN) $(V3_BIN) $(V4_BIN) \
 		build/plantc_all.plant build/distcheck release $(NATIVE_BIN) \
 		build/trt build/libplant_test_runtime.a
 	@echo "== cleaned =="

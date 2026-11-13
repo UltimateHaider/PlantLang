@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/Zero_GC-💚-brightgreen?style=flat-square" alt="Zero GC"/>
   <img src="https://img.shields.io/badge/No_VM-⚡-orange?style=flat-square" alt="No VM"/>
   <img src="https://img.shields.io/badge/License-MIT-ff69b4?style=flat-square" alt="License MIT"/>
-  <img src="https://img.shields.io/badge/Version-0.58.1-9cf?style=flat-square" alt="Version 0.58.1"/>
+  <img src="https://img.shields.io/badge/Version-0.62.8-9cf?style=flat-square" alt="Version 0.62.8"/>
 </p>
 
 <p align="center">
@@ -150,6 +150,7 @@ IF age GREATER THAN OR EQUAL 18,
 ```bash
 gcc  # Any modern version
 make # GNU make
+python3 # optional: mock HTTP server for regression network tests
 ```
 
 ### Build
@@ -161,6 +162,25 @@ make all        # full native build → bin/Chloroplast
 make self       # verify self-hosting convergence
 make test       # run all test suites
 ```
+
+### Windows (MSYS2)
+
+The runtime and test scripts are POSIX-oriented, so build from an **MSYS2**
+shell (not PowerShell/CMD):
+
+```bash
+pacman -S --needed gcc make diffutils python curl
+cd /d/PlantLang/PlantLang
+make all        # → bin/Chloroplast.exe
+make self
+make test
+```
+
+On Windows the bootstrap seed is compiled from the checked-in generated C
+(`dist/bootstrap/plantc_bootstrap.c`), and the resulting binaries require
+`msys-2.0.dll` at runtime. Mission Mode `SAFE` uses an in-process fallback
+there (same API and telemetry, no hard OS isolation). See
+[docs/BUILD.md](docs/BUILD.md) for details.
 
 ### Write Your First Program
 
@@ -182,7 +202,7 @@ gcc -w -I runtime/c out.c runtime/c/plant_runtime.c -lm -o hello
 
 ```bash
 ./bin/Chloroplast --help     # usage + options
-./bin/Chloroplast --version  # Chloroplast 0.58.1 (pure native)
+./bin/Chloroplast --version  # Chloroplast 0.62.8 (pure native)
 ```
 
 ---
@@ -299,11 +319,11 @@ make all && make self && make test
 
 ```text
 ✅ Self-hosting converged (v3 ≡ v4 ≡ v5)
-✅ Native: 235/235
+✅ Native: 348/348
 ✅ Generics: 7/7
 ✅ Closures: 6/6
-✅ Regression: 318/318
-✅ Version: 0.58.1
+✅ Regression: 319/319
+✅ Version: 0.62.8
 ```
 
 ---
@@ -314,7 +334,7 @@ make all && make self && make test
 |----------|-------------|
 | **[Language Tour.md](Language%20Tour.md)** | Complete ground-up syntax & mechanics guide |
 | **[TECHNICAL.md](TECHNICAL.md)** | Deep technical architecture, codegen, memory model |
-| **[CHANGELOG.md](CHANGELOG.md)** | Full version history through v0.58.1 |
+| **[CHANGELOG.md](CHANGELOG.md)** | Full version history through v0.62.8 |
 | **[ROADMAP.md](ROADMAP.md)** | Completed milestones + future plans |
 | **[docs/BUILD.md](docs/BUILD.md)** | Build system reference: targets, packaging, install |
 
@@ -348,8 +368,8 @@ make all && make self && make test
   <img src="https://img.shields.io/badge/Zero_GC-💚-brightgreen?style=for-the-badge" alt="Zero GC"/>
   <img src="https://img.shields.io/badge/No_VM-⚡-orange?style=for-the-badge" alt="No VM"/>
   <img src="https://img.shields.io/badge/License-MIT-ff69b4?style=for-the-badge" alt="License MIT"/>
-  <img src="https://img.shields.io/badge/Version-0.58.1-9cf?style=for-the-badge" alt="Version 0.58.1"/>
-  <img src="https://img.shields.io/badge/Tests-235/235-4CAF50?style=for-the-badge" alt="Tests 235/235"/>
+  <img src="https://img.shields.io/badge/Version-0.62.8-9cf?style=for-the-badge" alt="Version 0.62.8"/>
+  <img src="https://img.shields.io/badge/Tests-348/348-4CAF50?style=for-the-badge" alt="Tests 348/348"/>
   <img src="https://img.shields.io/badge/Self_Hosted-🔄-brightgreen?style=for-the-badge" alt="Self-Hosted"/>
   <img src="https://img.shields.io/badge/PRs-Welcome-ff69b4?style=for-the-badge" alt="PRs Welcome"/>
   <img src="https://img.shields.io/badge/Made_with-❤️-red?style=for-the-badge" alt="Made with Love"/>

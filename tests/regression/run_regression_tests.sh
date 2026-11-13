@@ -5,6 +5,10 @@
 # Usage: sh tests/regression/run_regression_tests.sh [path-to-Chloroplast] [--stress]
 set -u
 PLANTC=${1:-bin/Chloroplast}
+# Cross-platform compiler flags: GCC 14+ promotes legacy C conversions
+# to errors, and MSYS/Cygwin needs gnu11 for POSIX declarations.
+CC=${CC:-gcc}
+TEST_CFLAGS=${TEST_CFLAGS:--w -O0 -std=gnu11 -Wno-error=int-conversion -Wno-error=implicit-function-declaration -Wno-error=incompatible-pointer-types}
 STRESS_FLAG=""
 if [ "${2:-}" = "--stress" ]; then STRESS_FLAG=1; fi
 DIR=$(dirname "$0")
@@ -30,7 +34,9 @@ rm -f /tmp/plantlang_fs_append_*.txt
 # v0.48.33: also started when LISTEN tests exist (listen_busy binds
 # the mock server's port to provoke a bind failure).
 MOCK_PID=
-if { ls "$DIR"/harvest_*.plant >/dev/null 2>&1 || ls "$DIR"/listen_*.plant >/dev/null 2>&1; } && command -v python3 >/dev/null 2>&1; then
+HAVE_PY=0
+if command -v python3 >/dev/null 2>&1; then HAVE_PY=1; fi
+if { ls "$DIR"/harvest_*.plant >/dev/null 2>&1 || ls "$DIR"/listen_*.plant >/dev/null 2>&1; } && [ "$HAVE_PY" -eq 1 ]; then
   python3 "$DIR/mock_http_server.py" >"$BUILD/mock_http_server.log" 2>&1 &
   MOCK_PID=$!
   sleep 1
@@ -40,6 +46,10 @@ if { ls "$DIR"/harvest_*.plant >/dev/null 2>&1 || ls "$DIR"/listen_*.plant >/dev
 fi
 pass=0
 fail=0
+
+# Fixtures may be checked out with CRLF (Windows); normalize to LF so
+# program output (always LF) compares byte-for-byte on every platform.
+norm_expected() { tr -d '\r' < "$1" | awk 1; }
 
 # v0.52.7 — TD-035: normalize generated-C file/line metadata so the
 # storm fixtures are not coupled to codegen line numbers or TMPDIR.
@@ -51,6 +61,7 @@ norm() {
 for src in "$SUITE_DIR"/*.plant; do
   name=$(basename "$src" .plant)
   [ -f "$SUITE_DIR/$name.expected" ] || continue
+  norm_expected "$SUITE_DIR/$name.expected" > "$BUILD/$name.expected"
   if [ -f "$SUITE_DIR/$name.invalid" ]; then
     # negative test: the source must FAIL to compile, and the compiler
     # log must contain every diagnostic line from the .expected file
@@ -58,7 +69,7 @@ for src in "$SUITE_DIR"/*.plant; do
       ok=1
       while IFS= read -r want; do
         grep -Fq -- "$want" "$BUILD/$name.compile.log" || ok=0
-      done < "$SUITE_DIR/$name.expected"
+      done < "$BUILD/$name.expected"
       if [ "$ok" -eq 1 ]; then
         echo "PASS  $name"; pass=$((pass+1))
       else
@@ -77,7 +88,7 @@ for src in "$SUITE_DIR"/*.plant; do
   types="$BUILD/$name.types.h"
   sed -n '/\/\*__PLANT_TYPES_BEGIN__\*\//,/\/\*__PLANT_TYPES_END__\*\//p' \
        "$BUILD/$name.c" | sed '1d;$d' > "$types"
-  if ! gcc -w -O0 -include "$ROOT/tests/native/mock_ffi.h" \
+  if ! "$CC" $TEST_CFLAGS -include "$ROOT/tests/native/mock_ffi.h" \
         -include "$types" -I "$ROOT/runtime/c" "$BUILD/$name.c" \
         "$ROOT/tests/native/mock_ffi.c" \
         "$ROOT/build/libplant_test_runtime.a" \
@@ -91,6 +102,9 @@ for src in "$SUITE_DIR"/*.plant; do
   # .expected file covers both sides. listen_busy needs no client
   # (the mock server already holds its port).
   if [ "${name#listen_}" != "$name" ] && [ "$name" != "listen_busy" ]; then
+    if [ "$HAVE_PY" -eq 0 ]; then
+      echo "SKIP  $name (python3 required)"; continue
+    fi
     "$BUILD/$name" >"$BUILD/$name.out" 2>&1 &
     spid=$!
     case "$name" in
@@ -101,24 +115,27 @@ for src in "$SUITE_DIR"/*.plant; do
         python3 "$DIR/listen_client.py" request 41235 /hello?q=1 ping abc123 >"$BUILD/$name.client" 2>&1
         ;;
     esac
+    # Never let a failed client leave the one-shot server blocked on
+    # accept forever: give it a short grace period, then reap it.
+    n=0
+    while kill -0 "$spid" 2>/dev/null && [ "$n" -lt 50 ]; do
+      sleep 0.1; n=$((n+1))
+    done
+    kill "$spid" 2>/dev/null
     wait "$spid" 2>/dev/null
-    # v0.49.1: normalize the fixture to always end with a newline so a
-    # missing trailing \n in an .expected file cannot fail the diff.
-    awk 1 "$SUITE_DIR/$name.expected" > "$BUILD/$name.expected"
-    if cat "$BUILD/$name.out" "$BUILD/$name.client" 2>/dev/null | diff - "$BUILD/$name.expected" >/dev/null; then
+    if cat "$BUILD/$name.out" "$BUILD/$name.client" 2>/dev/null | tr -d '\r' | diff - "$BUILD/$name.expected" >/dev/null; then
       echo "PASS  $name"; pass=$((pass+1))
     else
       echo "FAIL  $name (output)"; fail=$((fail+1))
     fi
     continue
   fi
-  awk 1 "$SUITE_DIR/$name.expected" > "$BUILD/$name.expected"
   # v0.52.7 — TD-035: storm_* outputs carry generated-C file/line metadata
   # (codegen-line + TMPDIR sensitive); normalize before the diff.
   if echo "$name" | grep -q '^storm_'; then
-    "$BUILD/$name" 2>&1 | norm > "$BUILD/$name.out"
+    "$BUILD/$name" 2>&1 | tr -d '\r' | norm > "$BUILD/$name.out"
   else
-    "$BUILD/$name" > "$BUILD/$name.out" 2>&1
+    "$BUILD/$name" 2>&1 | tr -d '\r' > "$BUILD/$name.out"
   fi
   if diff "$BUILD/$name.out" "$BUILD/$name.expected" >/dev/null; then
     echo "PASS  $name"; pass=$((pass+1))

@@ -2471,7 +2471,7 @@ tx_t parse_array_decl(PlantArray* tokens, long pos, PlantArray* rtab) {
     lb_tok = plant_iLexer_peek_at(lexer, tokens, p2);
     lb_lx = plant_iLexer_tok_lex(lexer, lb_tok);
     if (strcmp(lb_lx,"[") != 0) {
-    return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "syntax_error" , "message" , "expected bracket after array" ) , p2 );
+    return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "syntax_error" , "message" , "expected bracket after array" ) , p2 );
     }
     lb_pair = plant_iLexer_consume_at(lexer, tokens, p2);
     p3 = _second(lb_pair);
@@ -3400,7 +3400,7 @@ tx_t _parse_ds_pattern(PlantArray* tokens, long pos) {
     p = _second(cmpair);
     }
     }
-    return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "ds_pat" , "kind" , kind , "items" , items ) , p );
+    return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "ds_pat" , "kind" , kind , "items" , items ) , p );
 }
 tx_t parse_let_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) {
   tx_t lexer = "";
@@ -3464,7 +3464,7 @@ tx_t parse_let_stmt(PlantArray* tokens, long pos, PlantArray* rtab, tx_t emode) 
     dvpair = collect_value(tokens, p4d);
     tx_t dsrc = plant_list_get(dvpair ,  0 );
     p5d = _second(dvpair);
-    return plant_list_make ( 2 , plant_list_make ( 10 , "type" , "let_destructure" , "pattern" , dkind , "vars" , ditems , "source" , dsrc ) , p5d );
+    return plant_list_make ( 2 , plant_list_make ( 8 , "type" , "let_destructure" , "pattern" , dkind , "vars" , ditems , "source" , dsrc ) , p5d );
     }
     id_pair = plant_iLexer_consume_at(lexer, tokens, p2);
     id_name = plant_iLexer_tok_lex(lexer, plant_list_get(id_pair ,  0 ));
@@ -4818,7 +4818,7 @@ tx_t parse_match_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, 
     while (1) {
     is_eof_flag = plant_iLexer_is_eof_at(lexer, tokens, p4);
     if (is_eof_flag) {
-    return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "match_stmt" , "subjectExpr" , subj , "clauses" , clauses ) , p4 );
+    return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "match_stmt" , "subjectExpr" , subj , "clauses" , clauses ) , p4 );
     }
     tok = plant_iLexer_peek_at(lexer, tokens, p4);
     lx = plant_iLexer_tok_lex(lexer, tok);
@@ -4826,7 +4826,7 @@ tx_t parse_match_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, 
     if (strcmp(lx,"}") == 0) {
     rb = plant_iLexer_consume_at(lexer, tokens, p4);
     p5 = _second(rb);
-    return plant_list_make ( 2 , plant_list_make ( 12 , "type" , "match_stmt" , "subjectExpr" , subj , "clauses" , clauses ) , p5 );
+    return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "match_stmt" , "subjectExpr" , subj , "clauses" , clauses ) , p5 );
     }
     tx_t ptext = "";
     tx_t pbind = "";
@@ -4938,7 +4938,7 @@ tx_t parse_match_stmt(PlantArray* tokens, long pos, tx_t clv, PlantArray* rtab, 
     dcons = plant_iLexer_consume_at(lexer, tokens, p4);
     p4 = _second(dcons);
     }
-        clauses = plant_list_add(clauses, plant_list_make ( 12 , "variantName" , ptext , "binding" , pbind , "bodyStatements" , cbody ));
+        clauses = plant_list_add(clauses, plant_list_make ( 6 , "variantName" , ptext , "binding" , pbind , "bodyStatements" , cbody ));
     }
   return "";
 }
@@ -5781,7 +5781,7 @@ tx_t parse_harvest_stmt(PlantArray* tokens, long pos) {
     }
     dot_pair = plant_iLexer_consume_at(lexer, tokens, p4);
     p5 = _second(dot_pair);
-    return plant_list_make ( 2 , plant_list_make ( 20 , "type" , "harvest_stmt" , "url" , url , "resp" , resp , "method" , method , "payload" , body , "headers" , headers , "timeout" , timeout , "map" , map , "json" , json ) , p5 );
+    return plant_list_make ( 2 , plant_list_make ( 18 , "type" , "harvest_stmt" , "url" , url , "resp" , resp , "method" , method , "payload" , body , "headers" , headers , "timeout" , timeout , "map" , map , "json" , json ) , p5 );
 }
 tx_t parse_listen_stmt(PlantArray* tokens, long pos) {
   tx_t lexer = "";
@@ -6967,9 +6967,9 @@ tx_t parse_declaration(PlantArray* tokens, long pos, tx_t clv, PlantArray* ctab,
     if (strcmp(dlx,".") == 0) {
     dpair = plant_iLexer_consume_at(lexer, tokens, im_p3);
     im_p4 = _second(dpair);
-    return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "import_stmt" , "path" , ipath ) , im_p4 );
+    return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "import_stmt" , "path" , ipath ) , im_p4 );
     }
-    return plant_list_make ( 2 , plant_list_make ( 6 , "type" , "import_stmt" , "path" , ipath ) , im_p3 );
+    return plant_list_make ( 2 , plant_list_make ( 4 , "type" , "import_stmt" , "path" , ipath ) , im_p3 );
     }
     if (strcmp(lx,"ACTION") == 0) {
     r = parse_action_decl(tokens, pos, rtab);
@@ -16127,7 +16127,7 @@ tx_t plant_ctype(tx_t ptype) {
     }
     if (strcmp(base,"ARRAY") == 0) {
     bi = find_any(ptype, "[");
-    inner_from = substring(ptype, bi, plant_array_length(ptype));
+    inner_from = substring(ptype, bi, strlen( ptype ));
     ci = find_any(inner_from, ",");
     elem_name = substring(inner_from, 1, ci);
     elem_name2 = trim(elem_name);

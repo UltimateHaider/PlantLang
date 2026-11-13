@@ -1,0 +1,9 @@
+PASS  basic
+PASS  gstruct
+PASS  listgen
+PASS  multi
+PASS  nested
+PASS  refgen
+PASS  structs
+----------------------------------------
+generics tests: 7 passed, 0 failed

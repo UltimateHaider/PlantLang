@@ -1,0 +1,8 @@
+PASS  block
+PASS  invoke
+PASS  mix
+PASS  move
+PASS  nested
+PASS  ref
+----------------------------------------
+closures tests: 6 passed, 0 failed

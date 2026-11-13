@@ -1,3 +1,6 @@
+/* ctype.h must precede plant_compat.h: Cygwin/MSYS defines _S there
+   (a ctype bitmask), which would otherwise shadow the _S() helper. */
+#include <ctype.h>
 #include "plant_runtime.h"
 #include "plant_compat.h"
 #include "plant_lexer.h"
@@ -18,6 +21,14 @@
 #include <errno.h>
 #include <dlfcn.h>
 #include <limits.h>
+
+/* Cygwin/MSYS <ctype.h> defines _S as a ctype bitmask.  It may be
+   pulled in by a force-included test header before plant_compat.h,
+   so re-assert the project macro after the system includes. */
+#ifdef _S
+#undef _S
+#endif
+#define _S(x) ((const char*)(x))
 
 /* Safe text colorizer utility */
 char* plant_colorize(const char* text, const char* color) {
@@ -1487,7 +1498,7 @@ PlantArray* plant_list_create(int64_t capacity) {
 }
 
 void* plant_list_get(PlantArray* list, int64_t index) {
-    if (!list) return "";
+    if (!list || (uintptr_t)list < 4096 || list->magic != PLANT_ARRAY_MAGIC) return "";
     if (index < 0 || index >= list->count) return "";
     char* v = list->items[index];
     return v ? v : "";
@@ -6169,7 +6180,10 @@ long plant_pool_tick(void) {
    toward SAFE_POOL_EXPAND or fall back gracefully to BALANCED. */
 static plant_worker* plant_pool_acquire(const char* name) {
     plant_pool_init();
-    plant_pool_tick();
+    /* Do not sweep here: recovery is driven by the explicit heartbeat
+       tick.  Sweeping on acquire would silently revive workers that
+       plant_safe_starve() deliberately stalled, hiding the starvation
+       growth path (mirrors plant_rw_acquire, which never sweeps). */
     for (long i = 0; i < g_pool_count; i++) {
         plant_worker* w = &g_pool[i];
         if (w->state == 0) {
@@ -6841,7 +6855,10 @@ tx_t plant_arc_alloc(tx_t sizev) {
     g_arc_allocs++;
     static char msg[96];
     snprintf(msg, sizeof(msg), "seq=%ld size=%ld", o->alloc_seq, (long)sz);
-    plant_audit_log("ARC_ALLOC", msg);
+    /* On Linux this runs in the worker process, whose audit log is not
+       merged into the parent's.  Keep the parent-visible log identical
+       when the SAFE fallback executes the adapter in-process. */
+    if (!g_safe_active) plant_audit_log("ARC_ALLOC", msg);
     /* automatic cycle detection every PERSIST_GC_INTERVAL allocations */
     if (g_arc_allocs % g_persist_cfg_gc_interval == 0) plant_arc_gc();
     /* v0.48.37b: proactive lease eviction under memory pressure */
@@ -6953,11 +6970,11 @@ tx_t plant_arc_persist(tx_t objv) {
     static char msg[96];
     if (o->tainted) {
         snprintf(msg, sizeof(msg), "seq=%ld blocked (untrusted SAFE data)", o->alloc_seq);
-        plant_audit_log("ARC_PERSIST", msg);
+        if (!g_safe_active) plant_audit_log("ARC_PERSIST", msg);
         return (tx_t)"0";
     }
     snprintf(msg, sizeof(msg), "seq=%ld ok", o->alloc_seq);
-    plant_audit_log("ARC_PERSIST", msg);
+    if (!g_safe_active) plant_audit_log("ARC_PERSIST", msg);
     return (tx_t)"1";
 }
 
@@ -7726,6 +7743,7 @@ tx_t plant_safe_boundary_copy(tx_t chanv, tx_t payload) {
     return (tx_t)"1";   /* zero-copy transfer allowed above threshold */
 }
 
+#if defined(__linux__)
 /* ═══════════════════════════════════════════════════════════════
    v0.48.37c: True SAFE Isolation — real worker processes.
 
@@ -8487,6 +8505,103 @@ tx_t plant_safe_call(const char* name, long argc, ...) {
     free(pbuf);
     return g_safe_regs[idx].fn((int)argc, args);
 }
+
+#else  /* !__linux__ — portable in-process SAFE fallback (no OS isolation) */
+/* Windows/MSYS: the Linux worker engine above needs fork(), AF_UNIX
+   SOCK_SEQPACKET, memfd_create() and SCM_RIGHTS.  Keep the same public
+   API and registry, but execute SAFE adapters in-process.  This keeps
+   language semantics and telemetry intact; only the hard OS-isolation
+   guarantee is unavailable on this platform. */
+
+#define PLANT_RW_MAXARG 64
+
+typedef tx_t (*plant_safe_adapter)(int argc, tx_t* argv);
+typedef struct { const char* name; plant_safe_adapter fn; } plant_safe_reg;
+static plant_safe_reg g_safe_regs[64];
+static long g_safe_reg_n = 0;
+static long g_rw_fallback = 0;
+static long g_rw_served = 0;
+
+void plant_safe_register(const char* name, plant_safe_adapter fn) {
+    if (!name || !fn || g_safe_reg_n >= 64) return;
+    for (long i = 0; i < g_safe_reg_n; i++)
+        if (strcmp(g_safe_regs[i].name, name) == 0) return;
+    g_safe_regs[g_safe_reg_n].name = name;
+    g_safe_regs[g_safe_reg_n].fn = fn;
+    g_safe_reg_n++;
+}
+
+static long plant_safe_index(const char* name) {
+    for (long i = 0; i < g_safe_reg_n; i++)
+        if (strcmp(g_safe_regs[i].name, name) == 0) return i;
+    return -1;
+}
+
+tx_t plant_safe_status(void) {
+    static char buf[192];
+    long workers = 0, busy = 0;
+    for (long i = 0; i < g_pool_count; i++) {
+        if (g_pool[i].state == 3) continue;
+        workers++;
+        if (g_pool[i].state == 1) busy++;
+    }
+    /* Report the same pool shape as the Linux worker engine: a restart
+       is a respawn, so it contributes to the cumulative spawn count. */
+    snprintf(buf, sizeof(buf),
+             "workers=%ld busy=%ld spawns=%ld restarts=%ld fallback=%ld served=%ld",
+             workers, busy, g_pool_spawns + g_pool_restarts, g_pool_restarts,
+             g_pool_fallback, g_pool_served);
+    return buf;
+}
+
+tx_t plant_safe_stall(tx_t namev) {
+    const char* want = _S(namev);
+    for (long i = 0; i < g_pool_count; i++) {
+        if (strcmp(g_pool[i].name, want) == 0) {
+            g_pool[i].state = 2;                    /* stalled */
+            g_pool[i].last_heartbeat_ms = plant_ms() - 10000;
+            return (tx_t)"0";
+        }
+    }
+    return (tx_t)"-1";
+}
+
+tx_t plant_safe_starve(tx_t msv) {
+    g_pending_wait_ms = (long)msv;
+    for (long i = 0; i < g_pool_count; i++) {
+        g_pool[i].state = 2;                        /* stalled */
+        g_pool[i].last_heartbeat_ms = plant_ms() - 10000;
+    }
+    return (tx_t)"0";
+}
+
+void plant_maybe_run_worker(void) { }
+
+static long plant_rw_recover_sweep(void) { return 0; }
+
+tx_t plant_safe_call(const char* name, long argc, ...) {
+    if (!name || !g_safe_reg_n) return NULL;
+    long idx = plant_safe_index(name);
+    if (idx < 0) return NULL;
+    if (plant_boundary_block(name, "SAFE")) return NULL;
+    /* MODE_ENTER is emitted by the callee's plant_safe_enter() prologue.
+       On Linux that runs in the worker process (its audit log is
+       separate); in this in-process fallback it already lands in the
+       parent log, so logging here too would duplicate the entry. */
+
+    tx_t args[PLANT_RW_MAXARG];
+    memset(args, 0, sizeof(args));
+    va_list va;
+    va_start(va, argc);
+    for (long i = 0; i < argc && i < PLANT_RW_MAXARG; i++) args[i] = va_arg(va, tx_t);
+    va_end(va);
+
+    g_rw_fallback++;
+    g_rw_served++;
+    return g_safe_regs[idx].fn((int)argc, args);
+}
+
+#endif  /* __linux__ */
 
 /* ================================================================
    v0.49.43 - TLS/HTTPS support via curl subprocess

@@ -8547,7 +8547,7 @@ ACTION plant_ctype(ptype(TXT)),
     # The [N] is appended by gen_create_stmt / let_stmt when emitting the declaration.
     IF base IS "ARRAY",
       REAP bi FROM find_any, ptype, "[".
-      REAP inner_from FROM substring, ptype, bi, COUNT ptype.
+      REAP inner_from FROM substring, ptype, bi, LEN(ptype).
       REAP ci FROM find_any, inner_from, ",".
       REAP elem_name FROM substring, inner_from, 1, ci.
       REAP elem_name2 FROM trim, elem_name.

@@ -1,0 +1,55 @@
+== CLI checks ==
+PASS  cli --help
+PASS  cli --version
+PASS  cli missing-file exits nonzero
+== compile + run cases ==
+PASS  act_forward_all
+PASS  act_second_order
+PASS  action_coercion_lon
+PASS  action_global_lon
+PASS  action_global_nested_call
+PASS  action_global_set
+PASS  action_global_shadow
+PASS  action_global_tensor
+PASS  action_global_txt
+PASS  array_basic
+PASS  axis_ops_ad2_error
+PASS  backcompat_basic
+PASS  backcompat_edge
+PASS  backcompat_mixed
+PASS  batchnorm_2d_layout
+PASS  batchnorm_backward_beta
+PASS  batchnorm_backward_gamma
+PASS  batchnorm_backward_x
+PASS  batchnorm_forward
+PASS  bol_basic
+PASS  bol_logic
+PASS  byt_basic
+PASS  byt_negative
+PASS  byt_ubt_numeric
+PASS  cha_basic
+PASS  closure_free
+PASS  cmp_basic
+PASS  cmp_funcs
+PASS  cmp_numeric
+PASS  cmp_operand_ops
+PASS  cmp_ops
+PASS  cmp_show
+PASS  cmp_show_string
+PASS  concat
+PASS  conv2d_backward_b
+PASS  conv2d_backward_k
+PASS  conv2d_backward_x
+PASS  conv2d_dense_stack
+PASS  conv2d_forward
+PASS  conv2d_relu_stack
+PASS  count_edge_cases
+PASS  cross_entropy_softmax
+PASS  dbl_basic
+PASS  dbl_display
+PASS  dcm_basic
+PASS  dense_backward_b
+PASS  dense_backward_w
+PASS  dense_backward_x
+PASS  dense_forward
+PASS  dense_gelu

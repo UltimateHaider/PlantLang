@@ -1,5 +1,9 @@
 # PlantLang source files
 *.plnt linguist-language=PlantLang
+*.plant linguist-language=PlantLang
+
+# Generated C from PlantLang
+*.c linguist-vendored
 
 # C runtime files
 runtime/c/*.c linguist-language=C
@@ -12,7 +16,24 @@ runtime/c/*.h linguist-language=C
 # Build artifacts (exclude from language stats)
 build/** linguist-vendored
 dist/** linguist-vendored
-*.c linguist-vendored  # generated C from PlantLang
 
 # Test files
 tests/** linguist-test
+
+# ── Line endings ──────────────────────────────────────────────
+# The toolchain, fixtures, and test runners are POSIX-oriented and
+# compare output byte-for-byte; keep every text file LF in the repo
+# and in the working tree on all platforms (Windows included).
+*.plant        text eol=lf
+*.plnt         text eol=lf
+*.c            text eol=lf
+*.h            text eol=lf
+*.sh           text eol=lf
+*.py           text eol=lf
+*.md           text eol=lf
+*.txt          text eol=lf
+*.expected     text eol=lf
+*.grep         text eol=lf
+Makefile       text eol=lf
+.gitattributes text eol=lf
+.gitignore     text eol=lf
