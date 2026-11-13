@@ -101,10 +101,13 @@ for src in "$SUITE_DIR"/*.plant; do
   # reply report is appended after the server's stdout so one
   # .expected file covers both sides. listen_busy needs no client
   # (the mock server already holds its port).
+  # The mock HTTP server is also Python; skip its clients when absent.
+  # listen_busy needs the mock server too: without it the port is free
+  # and LISTEN would block instead of reporting a bind failure.
+  if [ "$HAVE_PY" -eq 0 ] && { [ "${name#harvest_}" != "$name" ] || [ "${name#listen_}" != "$name" ] || [ "$name" = "json_http" ]; }; then
+    echo "SKIP  $name (python3 required)"; continue
+  fi
   if [ "${name#listen_}" != "$name" ] && [ "$name" != "listen_busy" ]; then
-    if [ "$HAVE_PY" -eq 0 ]; then
-      echo "SKIP  $name (python3 required)"; continue
-    fi
     "$BUILD/$name" >"$BUILD/$name.out" 2>&1 &
     spid=$!
     case "$name" in

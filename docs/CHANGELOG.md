@@ -34,7 +34,7 @@
 
 ### Verified (Windows 11, MSYS2 GCC 16.2.0)
 - Native 348/348 · Generics 7/7 · Closures 6/6 · Regression 319/319
-- Self-hosting converged (615,400 B, `v3.c == v4.c == v5.c`)
+- Self-hosting converged (615,390 B, `v3.c == v4.c == v5.c`)
 - Bootstrap source compiles `match.plant` successfully
 
 ## v0.62.8 — TD-073/TD-074 investigation (parked, docs-only)

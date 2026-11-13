@@ -13,6 +13,7 @@
 # Override the MSYS2 root when it is not installed at C:\msys64:
 #   .\scripts\build-windows.ps1 -MsysRoot D:\msys64 test
 
+[CmdletBinding(PositionalBinding = $false)]
 param(
     [string]$MsysRoot = "C:\msys64",
     [Parameter(ValueFromRemainingArguments = $true)]

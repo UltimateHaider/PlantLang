@@ -16127,7 +16127,7 @@ tx_t plant_ctype(tx_t ptype) {
     }
     if (strcmp(base,"ARRAY") == 0) {
     bi = find_any(ptype, "[");
-    inner_from = substring(ptype, bi, plant_array_length(ptype));
+    inner_from = substring(ptype, bi, strlen( ptype ));
     ci = find_any(inner_from, ",");
     elem_name = substring(inner_from, 1, ci);
     elem_name2 = trim(elem_name);

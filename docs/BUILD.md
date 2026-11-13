@@ -28,6 +28,10 @@ make self         # -> SELF-HOSTING CONVERGED
 make test         # -> native + generics + closures + regression suites
 ```
 
+From PowerShell, `scripts\build-windows.ps1` locates MSYS2 and forwards
+targets, e.g. `.\scripts\build-windows.ps1 all self test`
+(use `-MsysRoot D:\msys64` if MSYS2 is not installed at `C:\msys64`).
+
 Notes:
 
 - Binaries carry the `.exe` suffix: `dist/Chloroplast.exe`,
@@ -57,8 +61,8 @@ make clean       # remove build artifacts (keeps the bootstrap seed)
 ```
 
 Variables: `VERSION` (default `0.62.8`), `PREFIX` (default `~/.local`),
-`CC` (default `gcc`). On Windows the build appends `.exe` automatically and
-uses the checked-in generated-C bootstrap described below.
+`CC` (default `gcc`/`cc`). On Windows the build appends `.exe` automatically
+and uses the checked-in generated-C bootstrap described below.
 
 ## How the Bootstrap Works
 
@@ -99,10 +103,11 @@ to work without any external compiler toolchain beyond `gcc`.
   by the build system (`make clean` explicitly keeps it). It is the entry
   point of the bootstrap chain: it compiles `src/plantc/*.plant` into
   `build/plantc_v2.c`, which is then compiled to `build/plantc_v2` with `gcc`.
-- `bin/Chloroplast` is the **shipped compiler** — the `v3` generation produced
-  by `make all`. It is checked in so that users and CI can compile programs
-  immediately, and so the release tarball (`make dist`) can ship a working
-  binary.
+- `bin/Chloroplast` is the **shipped compiler** — the `v4` generation produced
+  by `make all` (the extra generation avoids shipping a codegen that predates
+  a self-referential fix). It is checked in so that users and CI can compile
+  programs immediately, and so the release tarball (`make dist`) can ship a
+  working binary.
 - `build/plantc_v*` (`plantc_v2`, `plantc_v3`, `plantc_v4`, `plantc_v5`) are
   the intermediate generations of the self-hosting chain. Checking them in
   makes the convergence check deterministic: `make self` re-derives each

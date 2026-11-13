@@ -176,6 +176,9 @@ make self
 make test
 ```
 
+From PowerShell you can use the wrapper instead:
+`.\scripts\build-windows.ps1 all self test`.
+
 On Windows the bootstrap seed is compiled from the checked-in generated C
 (`dist/bootstrap/plantc_bootstrap.c`), and the resulting binaries require
 `msys-2.0.dll` at runtime. Mission Mode `SAFE` uses an in-process fallback
