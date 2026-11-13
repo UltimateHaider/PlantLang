@@ -1,3 +1,33 @@
+## v0.63.1 — Repository cleanup (legacy JS/build artifacts)
+
+### Removed
+- **146 legacy files** (~1.66 MiB working-tree reduction), completing the
+  cleanup that `v0.48.38m` documented but never committed:
+  - `core/` (17 files) — pre-self-host JavaScript engine and its C bridge.
+  - `src/**/*.js` outside `src/plantc/` (40 files) — JS/LLVM compiler tree.
+  - `service/`, `webrepl/`, `std/`, `benchmarks/`, `examples/`, `tmp/`.
+  - Editor assets: `language-configuration.json`, `snippets/`, `syntaxes/`,
+    `themes/`.
+  - Root scratch/build leftovers: 8 `*.o` files, `hello`, `--version`,
+    `--version.c`, `m2.*`, `package.json`, `test*.plant`, `build.log`,
+    `phase2.log`, `run_phase1.sh`, `_test_pipeline.plant`, `v3_debug.log`.
+  - `runtime/` top-level leftovers (`runtime.c`, `runtime.o`,
+    `runtime_bridge.o`, `libplantlang.so`).
+  - `tests/suite.plnt` (documented as unused) and `tests/all.plnt`.
+  - `src/plantc/parser_plant_old.txt`, `src/plantc/lexer.c`,
+    `src/plantc/main.c`, and stale `docs/perf_results.md`.
+
+### Fixed
+- The `v0.48.38m` changelog entry claimed these files were removed, but the
+  deletion was never committed; they remained tracked through v0.62.9. This
+  entry records the actual removal. (The legacy tree was JavaScript, not
+  Java: the repository contains no Java artifacts.)
+
+### Verified (Windows 11, MSYS2 GCC 16.2.0)
+- Native 348/348 · Generics 7/7 · Closures 6/6 · Regression 319/319
+- Self-hosting converged (615,390 B, `v3.c == v4.c == v5.c`)
+- Tracked files: 2040 → 1894
+
 ## v0.62.9 — Windows 11 / MSYS2 support
 
 ### Added
