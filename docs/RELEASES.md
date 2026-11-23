@@ -2,11 +2,16 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.62.8
+# Auto-updated: 0.63.2
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
+| v0.63.2 | 1100288 | 9078 | 1422 | 109 | 330 | 5361 |
+| v0.63.1 | 1100288 | 9078 | 1422 | 109 | 330 | 5361 |
 | v0.62.8 | 1105080 | 8963 | 1422 | 109 | 330 | 5361 |
 | v0.51.2a | 896,816 | 8,940 | 416 | 72 | 322 | 5,361 |
+
+> Growth data for intermediate versions (v0.52–v0.62.9) is recorded in
+> `CHANGELOG.md`; this table keeps selected checkpoints.
 
 ## Release Timeline
 
@@ -107,6 +112,8 @@
 | v0.62.6 | 2026 | TD-071 full (SET + LET + IF) + bonus | Released |
 | v0.62.7 | 2026 | TD-075 investigation (merged → TD-076, docs-only) | Released |
 | v0.62.8 | 2026 | TD-073/TD-074 investigation (parked, docs-only) | Released |
+| v0.63.1 | 2026 | Repository cleanup (146 legacy JS/build files) | Released |
+| v0.63.2 | 2026 | Documentation consistency (P0 + P1) | Released |
 
 ## Growth Chart (ASCII)
 

@@ -1,4 +1,4 @@
-# PlantLang v0.50.7 — Data Types Report
+# PlantLang Data Types Report (v0.63.2 — last reviewed)
 
 **Scope:** Complete analysis of every type, conversion function, default, limit, and C representation in the PlantLang compiler and runtime.
 
@@ -1098,4 +1098,4 @@ No conflict (same as TENSOR: keyword + type).
 
 ---
 
-*Report generated for PlantLang v0.50.7. Sources: `runtime/c/plant_runtime.h`, `runtime/c/plant_compat.h`, `runtime/c/plant_runtime.c`, `src/plantc/codegen_c.plant`, `src/plantc/parser.plant`, `src/plantc/lexer.plant`.*
+*Report generated for PlantLang v0.63.2. Sources: `runtime/c/plant_runtime.h`, `runtime/c/plant_compat.h`, `runtime/c/plant_runtime.c`, `src/plantc/codegen_c.plant`, `src/plantc/parser.plant`, `src/plantc/lexer.plant`.*

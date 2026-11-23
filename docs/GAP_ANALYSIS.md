@@ -1,11 +1,11 @@
 # Legacy JS Interpreter vs Self-Hosted Compiler — Gap Analysis Report
 
-**Scope:** Legacy JavaScript interpreter (PlantLang ≤ v0.45.x, `core/interpreter.js` + associated modules, recovered from git at `7f54eae` v0.45.0) vs the self-hosted native compiler (v0.50.7, `src/plantc/*.plant` → C, `runtime/c/plant_runtime.c`).
+**Scope:** Legacy JavaScript interpreter (PlantLang ≤ v0.45.x, `core/interpreter.js` + associated modules, recovered from git at `7f54eae` v0.45.0) vs the self-hosted native compiler (v0.63.2, `src/plantc/*.plant` → C, `runtime/c/plant_runtime.c`).
 
-> **Status note (v0.50.7):** the legacy side no longer exists in the
-> working tree. v0.48.38m removed `core/`, `src/**/*.js`, `service/`,
-> `webrepl/`, `std/`, `benchmarks/`, and the editor assets from the
-> repository; the legacy engine is now preserved only in git history
+> **Status note (v0.63.2):** the legacy side no longer exists in the
+> working tree. It was removed in v0.48.38m (commit `c17de62`), restored
+> in v0.49.62 (commit `216b01e`), and removed again in v0.63.1 (commit
+> `e1a750b`); the legacy engine is now preserved only in git history
 > (last shipped state: v0.45.0, commit `7f54eae`). All legacy-side
 > line counts and behavior cited below are historical.
 
@@ -19,7 +19,7 @@ Since v0.49.50, the compiler adopted a **Dependency Inversion Architecture (DIP)
 
 The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 port. High-level counts:
 
-| Area | Legacy (v0.45.0) | Current (v0.50.7) | Gap |
+| Area | Legacy (v0.45.0) | Current (v0.63.2) | Gap |
 |---|---|---|---|---|
 | Statement keywords (parser dispatch) | ~40 | ~40 (incl. storms, CYCLE forms, NOW/ANALYZE/TYPEOF, FREE/ARC/FAST, WAIT/LOCK) | ~10 missing (deliberate cuts + legacy stubs) |
 | Innate/std library functions | ~60 (41 innate + 19 std/.plnt + 5 FFI stubs) | ~31 expression builtins (codegen_c.plant:2238-2292) + ~22 FFI module bindings (strings/fs/math) + ~50 declared runtime helpers | ~20 missing |
@@ -27,7 +27,7 @@ The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 
 | Network | HTTP client + server (HARVEST/LISTEN) | HARVEST client (v0.48.32, MAP-mode v0.48.34, formalized v0.49.0) + LISTEN server (v0.48.33) | low — no TLS (https: parses to port 443 but sends plaintext) |
 | Error handling | Storm exceptions (WEATHER/SHELTER, 12 storm types) | 13 kinds (v0.48.25: +STOP_STORM), STOP IF, plant_calm finalization, `storm()` factory (v0.48.38a), location backfill (v0.48.38b) | low |
 | Object model | SPC classes, BLOOM instantiation, SELF methods, inheritance | none | high |
-| Testing framework | none | VERIFY/SUITE (v0.49.53/54), 231/231 test suite (7 stress tests) | none — current exceeds legacy |
+| Testing framework | none | VERIFY/SUITE (v0.49.53/54), 348 native / 319 regression tests (7 stress tests) | none — current exceeds legacy |
 
 **Key architectural differences that explain the gaps:**
 
@@ -36,15 +36,15 @@ The transition is a **re-implementation with deliberate scope cuts**, not a 1:1 
 3. **Host capabilities vs portable C runtime.** The interpreter leaned on Node.js (`fs`, `http`, `worker_threads`, `Atomics`, locale formatting, ANSI diagnostics). The C runtime re-implements only a thin slice (stdio via `runtime_bridge.c`, POSIX file ops, and — since v0.48.32 — POSIX sockets wired as HTTP: HARVEST client with MAP/JSON modes, LISTEN server with TIMEOUT/JSON responses). Worker-thread fan-out, TLS, locale-aware time formatting and terminal diagnostics were lost with Node.
 4. **Regex + AST dual pipeline vs single AST pipeline.** The interpreter had a legacy regex execution path with many one-off forms (`CONVERT`, `FLOW`, `MATCH … YIELD`, `NOTE`, `STEADY`) that were never migrated into its own AST path; those forms are effectively dead even in the legacy engine and were simply not carried over. (Exception: `PICK` was re-implemented as a typed built-in in v0.48.38h rather than ported from the regex path.)
 5. **Interpreter-added features post-v0.45 are intentionally dropped.** The prompt excludes intentionally deprecated features; `SPC`/`BLOOM`, VEIN file IO and the JS `Function()` escape hatch were explicitly superseded (the Language Tour marks `core/*.js` as "historical only").
-6. **Dependency Inversion Architecture (DIP).** Since v0.49.50, the compiler uses abstract interfaces (`IRuntime`, `IReport`, `ILexer`, `IParser`, `ICodegen`) with `void* context` pointers and function-pointer vtables, enabling modular testing and clean separation between the compiler frontend and runtime backend. Self-hosting convergence at 503,136 bytes (stable since v0.50.7).
+6. **Dependency Inversion Architecture (DIP).** Since v0.49.50, the compiler uses abstract interfaces (`IRuntime`, `IReport`, `ILexer`, `IParser`, `ICodegen`) with `void* context` pointers and function-pointer vtables, enabling modular testing and clean separation between the compiler frontend and runtime backend. Self-hosting convergence at 615,390 bytes (stable since v0.63.1).
 
 ---
 
 ## 2. Methodology & Sources
 
-- **Legacy side** (recovered from git `7f54eae`, the last commit shipping `core/interpreter.js`; removed from the working tree in v0.48.38m — all sources below are historical):
+- **Legacy side** (recovered from git `7f54eae`, the last commit shipping `core/interpreter.js`; removed in v0.48.38m (commit `c17de62`), restored in v0.49.62 (commit `216b01e`), and removed again in v0.63.1 (commit `e1a750b`) — all sources below are historical):
   `core/interpreter.js` (2,828 L), `core/parser.js` (3,033 L), `core/ast.js` (1,040 L), `core/typechecker.js` (1,529 L), `core/tokenizer.js` (259 L), `core/evaluator.js` (173 L), `core/runtime.js` (64 L), `core/innate.js` (67 L), `core/dispatcher.js` (286 L), `core/matrix.js`, `core/harvest.js` + `harvest_worker.js`, `core/diagnostics.js`, `core/lexer.js`, `core/runtime_bridge.c`, `src/interpreter/{cycle_evaluator,sort_evaluator,bloom_evaluator,show_formatter}.js`, `std/{prelude,string,math,io}.plnt`.
-- **Current side** (working tree v0.50.7): `src/plantc/{lexer,parser,codegen_c,main}.plant`, `runtime/c/plant_runtime.c` (≈8,707 L), `runtime/c/plant_compat.h` (1,151 L), `runtime/c/plant_math.c` (5,184 L), `runtime/c/plant_runtime.h`, `runtime/c/plant_report.c`, `runtime/c/plant_report_json.c`, `runtime/c/plant_report_html.c`, `runtime/c/plant_report_xml.c`, `runtime/c/plant_lexer.h`, `runtime/c/plant_lexer.c`, `runtime/c/plant_parser.h`, `runtime/c/plant_parser.c`, `runtime/c/plant_codegen.h`, `tests/native/mock_ffi.{h,c}`, `tests/regression/stress/`, `Language Tour.md`.
+- **Current side** (working tree v0.63.2): `src/plantc/{lexer,parser,codegen_c,main}.plant`, `runtime/c/plant_runtime.c` (≈9,078 L), `runtime/c/plant_compat.h` (1,264 L), `runtime/c/plant_math.c` (5,361 L), `runtime/c/plant_runtime.h`, `runtime/c/plant_report.c`, `runtime/c/plant_report_json.c`, `runtime/c/plant_report_html.c`, `runtime/c/plant_report_xml.c`, `runtime/c/plant_lexer.h`, `runtime/c/plant_lexer.c`, `runtime/c/plant_parser.h`, `runtime/c/plant_parser.c`, `runtime/c/plant_codegen.h`, `tests/native/mock_ffi.{h,c}`, `tests/regression/stress/`, `Language Tour.md`.
 - **Verification method:** full keyword-dispatch enumeration of both parsers; complete function inventories of `plant_compat.h` and `plant_runtime.c`; spot-checks for every "missing" claim (all negative).
 
 Legend for gap tables: **S** = supported, **P** = partial (different semantics / only reachable internally), **M** = missing, **D** = intentionally deprecated / dropped by design.
@@ -276,7 +276,7 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 5. **Scope model.** PULSE watchers, LOCK/EVAPORATE, ROOT globals and `SELF` bindings need runtime scope objects; compiled scopes are static, so these features would need runtime scope tables.
 6. **Test philosophy.** VERIFY/SUITE were reintroduced as language features: VERIFY (v0.49.53, ANSI color output) and SUITE/SETUP/TEARDOWN (v0.49.54, lifecycle hooks). They coexist with shell harnesses for additional test patterns. Stress tests (v0.49.63) validate deep inheritance, wide method dispatch, and concurrent SAFE workers. CAS subsystem (v0.50.0–v0.50.7) adds symbolic math, derivatives, integrals, ODE solvers, multivariable calculus, vector calculus, and Laplace transforms.
 7. **Legacy dead-ends.** Several "legacy" features were already stubs or regex-only in v0.45 (INFUSE/ABSORB/SEAL/EMPTY parse throws, CONVERT/FLOW/MATCH-YIELD/PICK regex-only, missing `require`d modules in the regex path). These are counted as unsupported but were not first-class even at v0.45.
-8. **Dependency Inversion Architecture (DIP).** Since v0.49.50, the compiler uses abstract interfaces (`IRuntime`, `IReport`, `ILexer`, `IParser`, `ICodegen`) with `void* context` pointers and function-pointer vtables, enabling modular testing and clean separation between the compiler frontend and runtime backend. Self-hosting convergence at 503,136 bytes (stable since v0.50.7).
+8. **Dependency Inversion Architecture (DIP).** Since v0.49.50, the compiler uses abstract interfaces (`IRuntime`, `IReport`, `ILexer`, `IParser`, `ICodegen`) with `void* context` pointers and function-pointer vtables, enabling modular testing and clean separation between the compiler frontend and runtime backend. Self-hosting convergence at 615,390 bytes (stable since v0.63.1).
 
 ---
 
@@ -336,4 +336,4 @@ Legend for gap tables: **S** = supported, **P** = partial (different semantics /
 **Intentionally out of scope (D)**
 - SPC/BLOOM object model, `SELF:`/method dispatch, `PLANT` library statements, PULSE/WHENEVER watchers, JS `Function()` escape hatch, locale-specific IO formatting.
 
-*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.50.7. As of v0.50.7 the legacy side exists only in git history — `core/`, `src/**/*.js`, `std/`, `service/`, `webrepl/`, and `benchmarks/` were removed from the working tree (commit `c17de62`).*
+*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.63.2. The legacy side was removed in v0.48.38m (commit `c17de62`), restored in v0.49.62 (commit `216b01e`), and removed again in v0.63.1 (commit `e1a750b`); it now exists only in git history. Current suite: 348 native, 319 regression, 7 generics, 6 closures.*

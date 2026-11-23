@@ -60,7 +60,7 @@ make install     # install to $PREFIX/bin (default ~/.local)
 make clean       # remove build artifacts (keeps the bootstrap seed)
 ```
 
-Variables: `VERSION` (default `0.62.8`), `PREFIX` (default `~/.local`),
+Variables: `VERSION` (default `0.63.2`), `PREFIX` (default `~/.local`),
 `CC` (default `gcc`/`cc`). On Windows the build appends `.exe` automatically
 and uses the checked-in generated-C bootstrap described below.
 
@@ -149,6 +149,8 @@ references libm functions.
 
 ## Standard Library (std/*)
 
+`std/*` refers to runtime module names (`std/json`, `std/string`, …), not a
+`std/` directory (the legacy `std/` directory was removed in v0.63.1).
 Since v0.47.1 the core standard library ships in the native runtime
 (signatures in `plant_compat.h`, implementations in `plant_runtime.c`):
 
@@ -183,7 +185,8 @@ Since v0.47.1 the core standard library ships in the native runtime
 
 All runners honor `CC` and `TEST_CFLAGS`, normalize CRLF fixtures, and work
 from any current directory. The legacy JavaScript test suites were removed in
-v0.46.4 (Pure Native purge).
+v0.46.4 (Pure Native purge); the remaining legacy JavaScript source files were
+removed in v0.63.1 (repository cleanup).
 
 ## Packaging (make dist)
 

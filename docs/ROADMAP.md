@@ -1,6 +1,16 @@
 # PlantLang Roadmap: v0.46.4+ (Completed & Future)
 
-> **Current version: v0.50.7** — Vector Calculus & Laplace Transforms
+> **Current version: v0.63.2** — Documentation consistency & Windows support
+
+## Recent milestones (v0.54–v0.63.2)
+
+See `CHANGELOG.md` for full details. Highlights:
+- v0.54–v0.59: continued runtime, type-system, memory, and test work.
+- v0.60–v0.61: ADv2 reverse-mode AD; DENSE, activations, CONV2D,
+  BatchNorm/LayerNorm, and Dropout; full NN example.
+- v0.62: TD-071/TD-076 work and the Windows 11 / MSYS2 port.
+- v0.63.1: removed 146 legacy JS/build files.
+- v0.63.2: documentation consistency (this update).
 
 ## ✅ Version v0.46.4: Pure Native & Chloroplast Transition
 
@@ -26,7 +36,7 @@
 - Compiler sources (`src/plantc/*.plant`) re-bootstrapped to a new fixed point:
   `v3 == v4 == v5` at **69 668 bytes** of generated C
 - `package.json` reduced to pure metadata (`name: chloroplast`, `version: 0.46.4`,
-  MIT) — no scripts, no devDependencies
+  MIT) — no scripts, no devDependencies (removed in v0.63.1)
 
 #### Documentation
 - README rewritten for programmers coming from other languages (philosophy,

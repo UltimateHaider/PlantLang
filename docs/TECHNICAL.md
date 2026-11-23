@@ -1,11 +1,11 @@
 # PlantLang Technical Reference
 
-> **Current architecture (v0.50.7+): Pure Native 🚀** — The PlantLang compiler,
+> **Current architecture (v0.63.2+): Pure Native 🚀** — The PlantLang compiler,
 > **Chloroplast**, is fully self-hosted: `src/plantc/*.plant` (lexer, parser, C
 > codegen, driver) compiles to C and links against the native runtime
 > (`runtime/c/plant_runtime.c`, `runtime/c/plant_compat.h`, `runtime/c/plant_math.c`). There is no
 > interpreter: `dist/Chloroplast` (v1) bootstraps `v2 → v3 → v4 → v5` to a
-> byte-identical fixed point (convergence at **503,136 bytes**, `make self`). The compiler binary is
+> byte-identical fixed point (convergence at **615,390 bytes**, `make self`). The compiler binary is
 > `bin/Chloroplast` (`./bin/Chloroplast app.plant out.c`). Sections below
 > referencing `core/*.js` / the legacy JS engine describe historical versions
 > (≤ v0.45.x) and are kept as an architectural record.
@@ -3008,10 +3008,10 @@ missing source file (exit 1), unreadable file, and usage help.
 ### 28.4 Test Coverage
 
 - `make self` — multi-generation self-hosting byte-convergence check
-  (`plantc_v3.c == plantc_v4.c == plantc_v5.c`, fixed point **503,136 bytes**)
+  (`plantc_v3.c == plantc_v4.c == plantc_v5.c`, fixed point **615,390 bytes**)
 - `make test` — native integration suite (`tests/native/`): CLI checks
   (`--help`, `--version`, missing-file exit code) plus compile + run +
-  output-diff cases — 9/9 passing
+  output-diff cases — 348/348 passing
 - Legacy JS test suites were removed in v0.46.4 (Pure Native purge)
 
 ## 29. Native Data Structures (v0.47.2)
@@ -3157,8 +3157,8 @@ only design-convention string allocations remain at exit.
 (ENOENT) and success (errno cleared), `Result`-style parse failure (EINVAL),
 `ffi_free` on a `ffi_make_buf` allocation and NULL rejection. The mock library
 `mock_ffi.c`/`mock_ffi.h` is force-included (`-include`) and linked into every
-test binary; suite at 18/18 passing with the self-hosting fixed point at
-503,136 bytes.
+test binary; full native suite at 348/348 passing with the self-hosting fixed point at
+615,390 bytes.
 
 ## 31. Generics Engine — Monomorphization & Name Mangling (v0.48.1)
 
@@ -3300,8 +3300,8 @@ FFI round-trip), `gstruct` (generic `Box[T]`, multi-type `Pair[T, U]`,
 nested `Wrap[T]` with mock-FFI round-trips). The runner supports optional
 `$name.grep` files — fixed-string structural checks on the generated C
 (`!`-prefixed lines must be absent, e.g. `!} plant_Box_T;`) — and links
-`mock_ffi.c` for struct-FFI interop. Native suite stays 18/18; the
-self-hosting chain converges with the engine active at 503,136 bytes.
+`mock_ffi.c` for struct-FFI interop. Native suite stays 348/348; the
+self-hosting chain converges with the engine active at 615,390 bytes.
 
 ## 32. Closures Engine — Env Structs & Native Functions (v0.48.2)
 
@@ -3408,7 +3408,7 @@ state persistence + outer clearing), `ref` (REF live tracking), `mix`
 inside a closure block body), `block` (block-form body with multiple
 statements), `invoke` (invocation from SEASON/IF bodies). `.grep` files
 check the emitted C structurally (`typedef struct { long cap; } plant_Env_…;`,
-`plant_env_alloc(sizeof`, `&y`, `*)env)->`). Full suite: native 18/18,
+`plant_env_alloc(sizeof`, `&y`, `*)env)->`). Full suite: native 348/348,
 generics 7/7, closures 6/6; self-hosting converges with the engine active.
 
 ## 33. Async Engine — Cooperative Tasks & AWAIT (v0.48.3)
@@ -3559,13 +3559,13 @@ versions. Benchmarks: `perf_concat` (5k `"k" + i + ";"` appends),
 
 ### 34.4 Verification
 
-`tests/native/concat.plant` regression (18/18 native): bare numeric concat
+`tests/native/concat.plant` regression (348/348 native): bare numeric concat
 (`"x=" + x`), multi-segment mixes (`"multi " + msg + " " + x + "!"`),
 parenthesized numeric sub-expressions (`"expr " + (x + 1)`), `LEN` results,
 and numeric-only guards (`7 + 2`, `x + 3` stay arithmetic — verified via
 `"" + k`). Drain scenarios verified: direct `START`, transitive helper,
 `START`-in-expression, `ASYNC IN`, negative no-async case. Full suite:
-native 18/18, generics 7/7, closures 6/6; self-hosting converges at 503,136 bytes.
+native 348/348, regression 319/319, generics 7/7, closures 6/6; self-hosting converges at 615,390 bytes.
 
 ## 35. CAS (Computer Algebra System) Core (v0.50.0–v0.50.4)
 
@@ -3724,8 +3724,8 @@ char* plant_math_verify_ode_str(const char* ode, const char* solution, const cha
 - `tests/native/partial_basic.plant` — 9 tests: partial derivatives, gradient 2D/3D, ODE linear/separable
 - `tests/native/partial_extended.plant` — 5 tests: partial with multiple vars, second-order, gradient edge cases, ODE verify
 - `tests/native/ode_basic.plant` — 2 tests: linear and separable ODE solvers
-- Full native suite: **24/24 pass** (including 3 CLI + 1 tx_types)
-- Self-hosting convergence: **503,136 bytes**
+- Full native suite: **348/348 pass** (including CLI checks)
+- Self-hosting convergence: **615,390 bytes**
 
 ## 38. Vector Calculus & Laplace Transforms (v0.50.7)
 
@@ -3804,9 +3804,9 @@ Reconstructs a time-domain function from its Laplace transform. Supported forms:
 ### 38.7 Test Coverage
 
 - `tests/native/vector_calc.plant` — 14 tests: divergence (2), curl (2), Laplacian (2), forward Laplace (5), inverse Laplace (3)
-- Full native suite: **25/25 pass** (including 3 CLI + 1 tx_types)
-- Self-hosting convergence: **503,136 bytes**
+- Full native suite: **348/348 pass** (including CLI checks)
+- Self-hosting convergence: **615,390 bytes**
 
 ---
 
-*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.50.7. As of v0.50.7 the legacy side exists only in git history — `core/`, `src/**/*.js`, `std/`, `service/`, `webrepl/`, and `benchmarks/` were removed from the working tree (commit `c17de62`).*
+*Report generated for v0.48.19 (commit b2b2705) against legacy v0.45.0 (git 7f54eae); continuously updated through v0.63.2. The legacy side was removed in v0.48.38m (commit `c17de62`), restored in v0.49.62 (commit `216b01e`), and removed again in v0.63.1 (commit `e1a750b`); it now exists only in git history.*

@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/Zero_GC-💚-brightgreen?style=flat-square" alt="Zero GC"/>
   <img src="https://img.shields.io/badge/No_VM-⚡-orange?style=flat-square" alt="No VM"/>
   <img src="https://img.shields.io/badge/License-MIT-ff69b4?style=flat-square" alt="License MIT"/>
-  <img src="https://img.shields.io/badge/Version-0.62.8-9cf?style=flat-square" alt="Version 0.62.8"/>
+  <img src="https://img.shields.io/badge/Version-0.63.2-9cf?style=flat-square" alt="Version 0.63.2"/>
 </p>
 
 <p align="center">
@@ -205,7 +205,7 @@ gcc -w -I runtime/c out.c runtime/c/plant_runtime.c -lm -o hello
 
 ```bash
 ./bin/Chloroplast --help     # usage + options
-./bin/Chloroplast --version  # Chloroplast 0.62.8 (pure native)
+./bin/Chloroplast --version  # Chloroplast 0.63.2 (pure native)
 ```
 
 ---
@@ -326,7 +326,7 @@ make all && make self && make test
 ✅ Generics: 7/7
 ✅ Closures: 6/6
 ✅ Regression: 319/319
-✅ Version: 0.62.8
+✅ Version: 0.63.2
 ```
 
 ---
@@ -337,7 +337,7 @@ make all && make self && make test
 |----------|-------------|
 | **[Language Tour.md](Language%20Tour.md)** | Complete ground-up syntax & mechanics guide |
 | **[TECHNICAL.md](TECHNICAL.md)** | Deep technical architecture, codegen, memory model |
-| **[CHANGELOG.md](CHANGELOG.md)** | Full version history through v0.62.8 |
+| **[CHANGELOG.md](CHANGELOG.md)** | Full version history through v0.63.2 |
 | **[ROADMAP.md](ROADMAP.md)** | Completed milestones + future plans |
 | **[docs/BUILD.md](docs/BUILD.md)** | Build system reference: targets, packaging, install |
 
@@ -371,7 +371,7 @@ make all && make self && make test
   <img src="https://img.shields.io/badge/Zero_GC-💚-brightgreen?style=for-the-badge" alt="Zero GC"/>
   <img src="https://img.shields.io/badge/No_VM-⚡-orange?style=for-the-badge" alt="No VM"/>
   <img src="https://img.shields.io/badge/License-MIT-ff69b4?style=for-the-badge" alt="License MIT"/>
-  <img src="https://img.shields.io/badge/Version-0.62.8-9cf?style=for-the-badge" alt="Version 0.62.8"/>
+  <img src="https://img.shields.io/badge/Version-0.63.2-9cf?style=for-the-badge" alt="Version 0.63.2"/>
   <img src="https://img.shields.io/badge/Tests-348/348-4CAF50?style=for-the-badge" alt="Tests 348/348"/>
   <img src="https://img.shields.io/badge/Self_Hosted-🔄-brightgreen?style=for-the-badge" alt="Self-Hosted"/>
   <img src="https://img.shields.io/badge/PRs-Welcome-ff69b4?style=for-the-badge" alt="PRs Welcome"/>

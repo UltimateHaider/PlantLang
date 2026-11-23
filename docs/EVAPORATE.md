@@ -1,6 +1,6 @@
 # EVAPORATE — Memory Management in Chloroplast
 
-**Status:** authoritative reference · **Verified against:** `runtime/c/plant_runtime.c` (8707 lines), `runtime/c/plant_compat.h`, `runtime/c/plant_runtime.h`, `runtime/c/plant_math.c` (5184 lines), `src/plantc/codegen_c.plant` (9160 lines), `make self` (converged, 503136 bytes), `make test` (native 25, generics 7, closures 6, regression 317 — all green).
+**Status:** authoritative reference · **Verified against:** `runtime/c/plant_runtime.c` (9,078 lines), `runtime/c/plant_compat.h` (1,264 lines), `runtime/c/plant_runtime.h`, `runtime/c/plant_math.c` (5,361 lines), `src/plantc/codegen_c.plant` (12,158 lines), `make self` (converged, 615390 bytes), `make test` (native 348, generics 7, closures 6, regression 319 — all green).
 
 > **Naming note.** EVAPORATE is the *documentation brand* for Chloroplast's memory philosophy, adopted here as the organizing convention. The codebase itself does not use the word "evaporate"; every mechanism described below is real and is cited by file and line. Where the EVAPORATE model implies a primitive that does not exist (for example `plant_arena_reset`), this document says so explicitly and names the mechanism that actually performs the equivalent job.
 
@@ -45,7 +45,7 @@ Segments (`plant_seg`, line 2676) are variable-size blocks: `{ cap, used, refs, 
 - per-arena `seg_size` doubles while the allocation miss ratio exceeds 8%, halves below 2%, clamped to `256 B … 1 MB` (lines 2845–2849);
 - a global segment cache (`g_seg_cache`, `g_cache_max = 64`, lines 2767, 2797–2803) recycles freed segments instead of returning them to the OS.
 
-(The 64KB slab arena from the EVAPORATE model does exist — as the *legacy* standalone runtime's `ArenaSlab` with `ARENA_DEFAULT_SLAB_SIZE = 65536`, `runtime/runtime.c:24–93` — but that file is not part of the self-hosted pipeline.)
+(The 64KB slab arena from the EVAPORATE model did exist in the *legacy* standalone runtime's `ArenaSlab` with `ARENA_DEFAULT_SLAB_SIZE = 65536` (`runtime/runtime.c:24–93`); that file was removed in v0.63.1 and is not part of the self-hosted pipeline.)
 
 ### 2.3 Bump-pointer allocation — `plant_arena_alloc`
 
@@ -248,7 +248,7 @@ In BALANCED and FAST there is no GC at all. The only collector in the system is 
 
 ## Verification Appendix
 
-- `make self` — full v1→v2→v3→v4→v5 self-hosting chain **converged** (503136 bytes).
-- `make test` — native 24, generics 7, closures 6, regression 317, **0 failures** (including `fast_escalation`, `fast_audit`, `fast_security`, `persistent_cycle`, `persistent_cache`, `persistent_finalization`, `persistent_boundary`, `persistent_permissions`, `safe_*` suites).
+- `make self` — full v1→v2→v3→v4→v5 self-hosting chain **converged** (615390 bytes).
+- `make test` — native 348, generics 7, closures 6, regression 319, **0 failures** (including `fast_escalation`, `fast_audit`, `fast_security`, `persistent_cycle`, `persistent_cache`, `persistent_finalization`, `persistent_boundary`, `persistent_permissions`, `safe_*` suites).
 - Generated code inspected (`build/plantc_v5.c`, ~11000 lines): implicit `tx_t x = "";` declarations, `_cat`/`_cat3`/`_cat4` chains, `_from_long`/`_from_digit` numeric wrappers, `plant_async_alloc_state` state structs, mission enter/exit emission.
 - Key line references: arena §2662–2866, FAST §3601–3709, SAFE §3471–3892, SMART §4160–4298, PERSISTENT §4343–4652, audit ring §3415–3468, codegen mission binding `src/plantc/codegen_c.plant:3269–3312`, main epilogue `:5363`.

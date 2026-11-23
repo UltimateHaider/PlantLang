@@ -1,8 +1,32 @@
+## v0.63.2 — Documentation consistency (P0 + P1)
+
+### Fixed
+- Corrected the v0.63.1 cleanup history: the files were deleted in
+  `c17de62` (v0.48.38m), restored in `216b01e` (v0.49.62), and removed
+  again in `e1a750b` (v0.63.1).
+- Synchronized version numbers and current-state figures across
+  `ROADMAP.md`, `RELEASES.md`, `CONTRIBUTING.md`, `TESTING_STRATEGY.md`,
+  `ARCHITECTURE.md`, `DATA_TYPES.md`, `Language Tour.md`, and `BUILD.md`.
+- Updated `GAP_ANALYSIS.md`, `TECHNICAL.md`, and `EVAPORATE.md` to cite
+  615,390-byte convergence and 348 native / 319 regression tests.
+- Noted that `src/plantc/ast.plant`, `src/plantc/tokens.plant`, and the 16
+  `src/plantc/test_*.plant` files were deleted in `c17de62`, restored in
+  `216b01e`, and remain tracked and protected.
+
+### Version
+- `Makefile` VERSION, `src/plantc/main.plant` banner, the native version
+  check, and README badges now report 0.63.2.
+
+### Verified (Windows 11, MSYS2)
+- Native 348/348 · Generics 7/7 · Closures 6/6 · Regression 319/319
+- Self-hosting converged (615,390 B, `v3.c == v4.c == v5.c`)
+
 ## v0.63.1 — Repository cleanup (legacy JS/build artifacts)
 
 ### Removed
-- **146 legacy files** (~1.66 MiB working-tree reduction), completing the
-  cleanup that `v0.48.38m` documented but never committed:
+- **146 legacy files** (~1.66 MiB working-tree reduction). The same set was
+  deleted in `c17de62` (v0.48.38m), restored in `216b01e` (v0.49.62), and
+  removed again here:
   - `core/` (17 files) — pre-self-host JavaScript engine and its C bridge.
   - `src/**/*.js` outside `src/plantc/` (40 files) — JS/LLVM compiler tree.
   - `service/`, `webrepl/`, `std/`, `benchmarks/`, `examples/`, `tmp/`.
@@ -18,10 +42,14 @@
     `src/plantc/main.c`, and stale `docs/perf_results.md`.
 
 ### Fixed
-- The `v0.48.38m` changelog entry claimed these files were removed, but the
-  deletion was never committed; they remained tracked through v0.62.9. This
-  entry records the actual removal. (The legacy tree was JavaScript, not
-  Java: the repository contains no Java artifacts.)
+- The `v0.48.38m` changelog entry claimed these files were removed. They
+  were deleted in `c17de62` (v0.48.38m), restored in `216b01e` (v0.49.62),
+  and remained tracked through v0.62.9. This entry records the final
+  removal. (The legacy tree was JavaScript, not Java: the repository
+  contains no Java artifacts.)
+- Note: `src/plantc/ast.plant`, `src/plantc/tokens.plant`, and the 16
+  `src/plantc/test_*.plant` files were also deleted in `c17de62`, restored
+  in `216b01e`, and are now protected. They remain tracked.
 
 ### Verified (Windows 11, MSYS2 GCC 16.2.0)
 - Native 348/348 · Generics 7/7 · Closures 6/6 · Regression 319/319
@@ -5610,6 +5638,10 @@ staged phases with self-hosting convergence checks after each phase.
 - `make clean && make all` succeeds; `make self` converges (378128 B)
 - Native 20/0, generics 7/0, closures 6/0, regression 144/0
 - `bin/Chloroplast --version` reports 0.48.38m
+
+> **Historical note (v0.63.2):** the `src/plantc/ast.plant`, `tokens.plant`,
+> and `test_*.plant` deletions listed above were restored in `216b01e`
+> (v0.49.62); those files remain tracked and are part of the current tree.
 
 ## v0.48.38l — 2026 (Legacy Depth Marker Removal)
 

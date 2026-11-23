@@ -1,4 +1,4 @@
-# 🌿 PlantLang — Chloroplast v0.50.7
+# 🌿 PlantLang — Chloroplast v0.63.2
 
 > **A programming language designed to read like natural prose.**
 > Write code the way you write a sentence — not the way you debug a cipher.
@@ -87,7 +87,7 @@ ACTION main(),
 
 > Legacy syntax reference: the pre-v0.46 JS engine's `N\` depth-prefixed
 > forms (e.g. `1\ SHOW "x".`), `MISSION: SAFE.` mode declarations, and the
-> `core/*.js` architecture are historical only and do not ship in v0.48.4.
+> `core/*.js` architecture are historical only and do not ship in v0.63.2.
 
 ---
 

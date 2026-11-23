@@ -46,13 +46,13 @@ void test_mat_add() {
 
 **Coverage**: Complete language features through compilation and execution.
 
-**Test Count**: 30 tests (as of v0.51.0b)
+**Test Count**: 348 tests (as of v0.63.2)
 
-**Categories**:
-- CLI tests (3): help, version, error handling
-- Language features (17): arrays, strings, math, control flow, PDE, matrices
-- Standard library (7): queues, sets, stacks, JSON
-- Matrix stress (3): mat_basic, mat_err, mat_malloc
+**Representative categories**:
+- CLI tests: help, version, error handling
+- Language features: arrays, strings, math, control flow, PDE, matrices
+- Standard library: queues, sets, stacks, JSON
+- Matrix stress: mat_basic, mat_err, mat_malloc
 
 **Special: Malloc Failure Tests**:
 `mat_malloc.plant` is compiled with `-DPLANT_MALLOC_SIMULATE` and run three times with different `MAT_MALLOC_FAIL_AT` values:
@@ -71,7 +71,7 @@ bash tests/native/run_native_tests.sh
 
 **Coverage**: Individual language features with expected output comparison.
 
-**Test Count**: ~400 tests (as of v0.51.0)
+**Test Count**: 319 tests (as of v0.63.2)
 
 **Categories**:
 - Matrix operations (1): matrix.plant
@@ -163,16 +163,18 @@ test:
 
 ## Coverage Metrics
 
-### Current Coverage (v0.51.0b)
+### Current Coverage (v0.63.2)
 
-| Category | Tests | Coverage |
-|----------|-------|----------|
-| Native | 30 | 100% |
-| Regression | ~400 | 95% |
-| Generics | ~50 | 90% |
-| Closures | ~30 | 85% |
-| Stress | ~20 | 80% |
-| **Total** | **~530** | **~92%** |
+| Category | Tests | Status |
+|----------|-------|--------|
+| Native | 348 | Green |
+| Regression | 319 | Green |
+| Generics | 7 | Green |
+| Closures | 6 | Green |
+| **Total** | **680** | **Green** |
+
+The stress suite (`make test-stress`, ~20 cases) is separate from the main
+`make test` run.
 
 ### Coverage Goals
 
@@ -250,8 +252,10 @@ v2 ≠ v3 (normalization), v3 == final ✅
 
 ### Pre-release Checklist
 
-- [ ] All native tests pass (30/30)
-- [ ] All regression tests pass (~400/400)
+- [ ] All native tests pass (348/348)
+- [ ] All regression tests pass (319/319)
+- [ ] All generics tests pass (7/7)
+- [ ] All closures tests pass (6/6)
 - [ ] Self-hosting chain converges
 - [ ] No memory leaks (valgrind clean)
 - [ ] Binary size within 10% of previous version
