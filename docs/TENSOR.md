@@ -1,4 +1,4 @@
-# PlantTensor Type (v0.51.1)
+# PlantTensor Type (v0.63.3)
 
 ## Overview
 
@@ -130,10 +130,9 @@ See docs/TECH_DEBT.md (TD-006, TD-008, TD-009).
 
 ## What's NOT Supported Yet
 
-- Operations (add, multiply, reshape, transpose) — deferred to v0.51.2+
 - GPU acceleration — future phase
 - Sparse tensors — future phase
-- Broadcasting — v0.51.6
+- Views — future phase
 
 ## Introspection Built-ins (v0.51.2b)
 
@@ -156,16 +155,28 @@ TENSOR_FREE(T).
 
 ## Roadmap
 
-| Version | Feature |
-|---------|---------|
-| v0.51.1 | TENSOR Core (this release) |
-| v0.51.2a | Core Memory Fixes (TD-001..004) |
-| v0.51.2b | Introspection + Interface (TENSOR_SHAPE/NDIM/SIZE, TD-005) |
-| v0.51.3 | TENSOR Reshape |
-| v0.51.4 | TENSOR Transpose |
-| v0.51.5 | TENSOR Operations |
-| v0.51.6 | TENSOR Broadcasting |
-| v0.51.7 | TENSOR Views |
+| Item | Status |
+|------|--------|
+| Broadcast semantics | ✅ Implemented (v0.55/v0.56) |
+| Higher-order tensors (1D–5D) | ✅ Implemented |
+| Batched matmul / axes | 🟡 Partial |
+| Differentiable ops (GRAD_HO) | ✅ Available (v0.60+) |
+| TENSOR_GRAD/TENSOR_JACOBIAN builtins | ❌ Not exposed |
+| Sparse tensors (COO) | ❌ Not implemented |
+| Views | ❌ Not implemented |
+| GPU | ❌ Not implemented |
+
+## Future work
+
+- **Views** — zero-copy slices that share the parent tensor's storage.
+- **Batched matmul / axes** — generalized transposes and batched matrix
+  multiplication over named axes (`TENSOR_MATMUL(A, B, axes)`).
+- **Sparse tensors (COO)** — `SPARSE_CREATE(indices, values, shape)` and
+  `SPARSE_MATMUL(A, B)`, with automatic dense/sparse selection.
+- **GPU acceleration** — optional accelerator backend for large tensors.
+- **`TENSOR_GRAD` / `TENSOR_JACOBIAN`** — expose the existing ADv2
+  reverse-mode engine as first-class tensor builtins, including integration
+  with `MATH_DERIVATIVE`.
 
 ## Relationship with MATH and Matrix
 

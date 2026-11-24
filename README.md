@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/Zero_GC-💚-brightgreen?style=flat-square" alt="Zero GC"/>
   <img src="https://img.shields.io/badge/No_VM-⚡-orange?style=flat-square" alt="No VM"/>
   <img src="https://img.shields.io/badge/License-MIT-ff69b4?style=flat-square" alt="License MIT"/>
-  <img src="https://img.shields.io/badge/Version-0.63.2-9cf?style=flat-square" alt="Version 0.63.2"/>
+  <img src="https://img.shields.io/badge/Version-0.63.3-9cf?style=flat-square" alt="Version 0.63.3"/>
 </p>
 
 <p align="center">
@@ -179,11 +179,15 @@ make test
 From PowerShell you can use the wrapper instead:
 `.\scripts\build-windows.ps1 all self test`.
 
-On Windows the bootstrap seed is compiled from the checked-in generated C
-(`dist/bootstrap/plantc_bootstrap.c`), and the resulting binaries require
-`msys-2.0.dll` at runtime. Mission Mode `SAFE` uses an in-process fallback
-there (same API and telemetry, no hard OS isolation). See
-[docs/BUILD.md](docs/BUILD.md) for details.
+On Windows the bootstrap uses the committed `dist/Chloroplast.exe` seed
+(rebuilt from `dist/bootstrap/plantc_bootstrap.c` when absent), and the
+resulting binaries require `msys-2.0.dll` at runtime. Mission Mode `SAFE` uses
+an in-process fallback there (same API and telemetry, no hard OS isolation).
+See [docs/BUILD.md](docs/BUILD.md) for details.
+
+`bin/` is generated locally and is not tracked in Git. On a fresh clone, run
+`make all` before using `./bin/Chloroplast` (or `./bin/Chloroplast.exe` on
+Windows).
 
 ### Write Your First Program
 
@@ -205,7 +209,7 @@ gcc -w -I runtime/c out.c runtime/c/plant_runtime.c -lm -o hello
 
 ```bash
 ./bin/Chloroplast --help     # usage + options
-./bin/Chloroplast --version  # Chloroplast 0.63.2 (pure native)
+./bin/Chloroplast --version  # Chloroplast 0.63.3 (pure native)
 ```
 
 ---
@@ -326,7 +330,7 @@ make all && make self && make test
 ✅ Generics: 7/7
 ✅ Closures: 6/6
 ✅ Regression: 319/319
-✅ Version: 0.63.2
+✅ Version: 0.63.3
 ```
 
 ---
@@ -335,10 +339,11 @@ make all && make self && make test
 
 | Document | Description |
 |----------|-------------|
-| **[Language Tour.md](Language%20Tour.md)** | Complete ground-up syntax & mechanics guide |
-| **[TECHNICAL.md](TECHNICAL.md)** | Deep technical architecture, codegen, memory model |
-| **[CHANGELOG.md](CHANGELOG.md)** | Full version history through v0.63.2 |
-| **[ROADMAP.md](ROADMAP.md)** | Completed milestones + future plans |
+| **[docs/README.md](docs/README.md)** | Complete documentation index |
+| **[Language Tour.md](docs/Language%20Tour.md)** | Complete ground-up syntax & mechanics guide |
+| **[TECHNICAL.md](docs/TECHNICAL.md)** | Deep technical architecture, codegen, memory model |
+| **[CHANGELOG.md](docs/CHANGELOG.md)** | Full version history through v0.63.3 |
+| **[ROADMAP.md](docs/ROADMAP.md)** | Completed milestones + future plans |
 | **[docs/BUILD.md](docs/BUILD.md)** | Build system reference: targets, packaging, install |
 
 ---
@@ -371,7 +376,7 @@ make all && make self && make test
   <img src="https://img.shields.io/badge/Zero_GC-💚-brightgreen?style=for-the-badge" alt="Zero GC"/>
   <img src="https://img.shields.io/badge/No_VM-⚡-orange?style=for-the-badge" alt="No VM"/>
   <img src="https://img.shields.io/badge/License-MIT-ff69b4?style=for-the-badge" alt="License MIT"/>
-  <img src="https://img.shields.io/badge/Version-0.63.2-9cf?style=for-the-badge" alt="Version 0.63.2"/>
+  <img src="https://img.shields.io/badge/Version-0.63.3-9cf?style=for-the-badge" alt="Version 0.63.3"/>
   <img src="https://img.shields.io/badge/Tests-348/348-4CAF50?style=for-the-badge" alt="Tests 348/348"/>
   <img src="https://img.shields.io/badge/Self_Hosted-🔄-brightgreen?style=for-the-badge" alt="Self-Hosted"/>
   <img src="https://img.shields.io/badge/PRs-Welcome-ff69b4?style=for-the-badge" alt="PRs Welcome"/>

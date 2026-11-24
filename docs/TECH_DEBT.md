@@ -1,6 +1,6 @@
 # Technical Debt Register — PlantLang Chloroplast
 
-> **Status (v0.62.8): 0 known *active* bugs in the shipped toolchain.**
+> **Status (v0.63.3): 0 known *active* bugs in the shipped toolchain.**
 > TD-054/068/069/**071 (full)**/072 CLOSED. **TD-076 OPEN (epic)** — typed
 > expressions (args/non-leading/async-ctx). **TD-073 OPEN (blocked by TD-076)**
 > — latent untyped-`REAP` heuristics (design proven). **TD-074 = MISDIAGNOSIS**.

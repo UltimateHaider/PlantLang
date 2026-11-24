@@ -1,3 +1,46 @@
+## v0.63.3 — P2 cleanup & Windows fixes
+
+### Removed
+- `docs/RUNTIME_SPLIT_PLAN.md` (superseded; 0 inbound links). The still-open
+  intent — splitting the remaining ~9,078-line `plant_runtime.c` — is recorded
+  as a backlog item in `ROADMAP.md`.
+- `docs/TENSOR_ROADMAP.md` (0 inbound links). Its remaining work is now in
+  `TENSOR.md` under `Roadmap` and `Future work`, with a pointer from
+  `ROADMAP.md`.
+- `bin/` and `build/` are no longer tracked in Git (`git rm -r --cached`).
+  They remain local build outputs and are already covered by `.gitignore`.
+  Only the `dist/` bootstrap seeds stay tracked.
+
+### Fixed
+- `listen_busy` on Windows: the mock HTTP server now uses
+  `SO_EXCLUSIVEADDRUSE` and binds `0.0.0.0` on Windows/MSYS2, so `LISTEN` on
+  the occupied port 41234 fails immediately instead of blocking. Test-only
+  change; `runtime/c/` is untouched.
+
+### Added
+- `docs/README.md` — complete documentation index (5 categories,
+  authoritative-source table, documentation rules).
+- Smart App Control troubleshooting in `BUILD.md` (symptoms, state check,
+  disable steps, Defender distinction, WSL2/CI alternative).
+- `ROADMAP.md` backlog entries for runtime modularization and the tensor stack.
+- `TECH_DEBT.md` status header updated to v0.63.3.
+
+### Changed
+- `README.md`: fixed four broken links to `docs/`, added the documentation
+  index, and clarified that `bin/Chloroplast[.exe]` exists only after
+  `make all`.
+- `BUILD.md`: corrected the binary-artifacts section; `make dist` ships the
+  `dist/` seed, not `bin/`.
+
+### Version
+- `Makefile` VERSION, `src/plantc/main.plant` banner, the native version
+  check, and README badges now report 0.63.3.
+
+### Verified (Windows 11, MSYS2)
+- Native 348/348 · Generics 7/7 · Closures 6/6 · Regression 319/319
+- `listen_busy` passes without any temporary Python wrapper
+- Self-hosting converged (`v3.c == v4.c == v5.c`)
+
 ## v0.63.2 — Documentation consistency (P0 + P1)
 
 ### Fixed

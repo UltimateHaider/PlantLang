@@ -22,6 +22,7 @@ Reads the request head plus Content-Length bytes of body, then
 replies and closes the connection (clients use Connection: close).
 """
 import socket
+import sys
 import time
 
 PORT = 41234
@@ -32,8 +33,15 @@ class _Done(Exception):
 
 
 srv = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-srv.bind(("127.0.0.1", PORT))
+if sys.platform in ("win32", "cygwin", "msys"):
+    # Windows: SO_REUSEADDR lets a second socket bind an active listener.
+    # Use exclusive bind on the wildcard address so LISTEN can fail fast.
+    srv.setsockopt(socket.SOL_SOCKET,
+                   getattr(socket, "SO_EXCLUSIVEADDRUSE", -5), 1)
+    srv.bind(("0.0.0.0", PORT))
+else:
+    srv.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    srv.bind(("127.0.0.1", PORT))
 srv.listen(8)
 
 while True:

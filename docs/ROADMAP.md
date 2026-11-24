@@ -1,8 +1,8 @@
 # PlantLang Roadmap: v0.46.4+ (Completed & Future)
 
-> **Current version: v0.63.2** — Documentation consistency & Windows support
+> **Current version: v0.63.3** — P2 cleanup & Windows fixes
 
-## Recent milestones (v0.54–v0.63.2)
+## Recent milestones (v0.54–v0.63.3)
 
 See `CHANGELOG.md` for full details. Highlights:
 - v0.54–v0.59: continued runtime, type-system, memory, and test work.
@@ -10,7 +10,8 @@ See `CHANGELOG.md` for full details. Highlights:
   BatchNorm/LayerNorm, and Dropout; full NN example.
 - v0.62: TD-071/TD-076 work and the Windows 11 / MSYS2 port.
 - v0.63.1: removed 146 legacy JS/build files.
-- v0.63.2: documentation consistency (this update).
+- v0.63.2: documentation consistency (P0 + P1).
+- v0.63.3: P2 cleanup, `listen_busy` Windows fix, `bin/`/`build/` untracked.
 
 ## ✅ Version v0.46.4: Pure Native & Chloroplast Transition
 
@@ -98,6 +99,14 @@ See `CHANGELOG.md` for full details. Highlights:
 - `--target=morphon` — Carbon Paradigm v5.1 QPU Dataflow target
 - Macros — hygienic compile-time metaprogramming
 - `plantdoc` — documentation generator
+
+### Backlog — Runtime modularization
+The remaining `runtime/c/plant_runtime.c` (~9,078 lines) still bundles core,
+string, list, I/O, and FFI. Splitting it further is deferred; no target version.
+
+### Tensor & numerical stack
+Remaining tensor work (views, batched matmul, sparse COO, GPU) is tracked in
+[TENSOR.md](TENSOR.md).
 
 ---
 

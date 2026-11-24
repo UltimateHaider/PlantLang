@@ -45,6 +45,37 @@ Notes:
   engine, but hard OS isolation (`fork`/`AF_UNIX`/`memfd`/`SCM_RIGHTS`)
   is Linux-only; see [Known Limitations](#known-limitations).
 
+### Smart App Control (Windows 11)
+
+Smart App Control (SAC) blocks unsigned executables created locally, including
+the `collect2.exe`/`ld` stage of the GCC toolchain. Typical symptoms:
+
+- `collect2.exe: fatal error: cannot execute 'ld': ...`
+- `Access is denied` while linking
+- a freshly built `bin/Chloroplast.exe` disappears immediately
+
+Check the current state:
+
+```powershell
+Get-MpComputerStatus | Select-Object SmartAppControlState
+(Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\CI\Policy').VerifiedAndReputablePolicyState
+```
+
+`VerifiedAndReputablePolicyState`: `0` = off, `1` = enforcement, `2` = evaluation.
+
+If SAC is enforcing, disable it via
+**Windows Security → App & browser control → Smart App Control → Off**.
+This is a one-way switch: re-enabling requires resetting or reinstalling
+Windows. As an alternative, build inside WSL2 or a Linux CI runner.
+
+SAC is separate from Microsoft Defender antivirus. Defender exclusions do
+**not** bypass SAC. If Defender alone quarantines build outputs, add an
+exclusion:
+
+```powershell
+Add-MpPreference -ExclusionPath 'D:\PlantLang\PlantLang'   # elevated shell
+```
+
 ## Quick Reference
 
 ```sh
@@ -60,16 +91,16 @@ make install     # install to $PREFIX/bin (default ~/.local)
 make clean       # remove build artifacts (keeps the bootstrap seed)
 ```
 
-Variables: `VERSION` (default `0.63.2`), `PREFIX` (default `~/.local`),
+Variables: `VERSION` (default `0.63.3`), `PREFIX` (default `~/.local`),
 `CC` (default `gcc`/`cc`). On Windows the build appends `.exe` automatically
-and uses the checked-in generated-C bootstrap described below.
+and uses the checked-in `dist/` bootstrap seeds described below.
 
 ## How the Bootstrap Works
 
 On Linux, `dist/Chloroplast` is the pre-built **bootstrap compiler**. On
-Windows there is no committed pre-built binary: the seed is compiled from
-`dist/bootstrap/plantc_bootstrap.c` (portable generated C) the first time it
-is needed. Either way the chain is:
+Windows the committed `dist/Chloroplast.exe` seed is used; if it is missing,
+it is compiled from `dist/bootstrap/plantc_bootstrap.c` (portable generated
+C). Either way the chain is:
 
 ```
 bootstrap (v1) ──► build/plantc_v2.c ──► build/plantc_v2 (gcc)
@@ -93,41 +124,40 @@ cat src/plantc/{lexer,parser,codegen_c,main}.plant | \
 
 ## Binary Artifacts in Git
 
-The repository tracks compiled binaries on purpose: `bin/Chloroplast`,
-`dist/Chloroplast`, and the `build/plantc_v*` chain. They are **bootstrap
-seeds** for the self-hosting build and are required for `make all` / `make self`
-to work without any external compiler toolchain beyond `gcc`.
+Only the `dist/` bootstrap seeds are tracked:
 
-- `dist/Chloroplast` is the **v1 seed**. It is a pre-built snapshot of the
-  compiler, checked in at the last stable release, and it is **never rebuilt**
-  by the build system (`make clean` explicitly keeps it). It is the entry
-  point of the bootstrap chain: it compiles `src/plantc/*.plant` into
-  `build/plantc_v2.c`, which is then compiled to `build/plantc_v2` with `gcc`.
-- `bin/Chloroplast` is the **shipped compiler** — the `v4` generation produced
-  by `make all` (the extra generation avoids shipping a codegen that predates
-  a self-referential fix). It is checked in so that users and CI can compile
-  programs immediately, and so the release tarball (`make dist`) can ship a
-  working binary.
-- `build/plantc_v*` (`plantc_v2`, `plantc_v3`, `plantc_v4`, `plantc_v5`) are
-  the intermediate generations of the self-hosting chain. Checking them in
-  makes the convergence check deterministic: `make self` re-derives each
-  generation and confirms the compilers reach a fixed point
-  (`plantc_v3.c == plantc_v4.c == plantc_v5.c`).
+- `dist/Chloroplast` — the **Linux v1 seed**. It is a pre-built snapshot of the
+  compiler, checked in at the last stable release, and it is **never rebuilt
+  automatically** (`make clean` keeps it). It starts the bootstrap chain by
+  compiling `src/plantc/*.plant` into `build/plantc_v2.c`.
+- `dist/Chloroplast.exe` — the **Windows v1 seed** used by `make` on MSYS2.
+- `dist/bootstrap/plantc_bootstrap.c` — portable generated-C snapshot used to
+  rebuild `dist/Chloroplast.exe` when the binary seed is missing.
 
-Do not delete these files, and do not rebuild `dist/Chloroplast` from current
-sources — the whole point of the bootstrap seed is that it is an immutable,
-known-good starting point. When you commit, keep them in sync with the sources:
-`make all` + `make self` regenerating them is a requirement for CI and
-`make dist` to pass.
+`bin/` and `build/` are **generated locally** and are gitignored:
 
-On Windows, `dist/Chloroplast` is a Linux ELF and cannot run. The seed is
-instead built from `dist/bootstrap/plantc_bootstrap.c`, a checked-in snapshot
-of the generated C for the compiler (`build/plantc_v4.c` at the time it was
-refreshed). It is portable C compiled by the host `gcc`, so the same source
-seeds the Windows chain. Refresh it together with the binary seeds:
+- `bin/Chloroplast[.exe]` is the v4 compiler produced by `make all`.
+- `build/plantc_all.plant` and `build/plantc_v2`…`v5` are intermediate
+  generations of the self-hosting chain; `make self` re-derives them and
+  confirms a fixed point (`plantc_v3.c == plantc_v4.c == plantc_v5.c`).
+
+A fresh clone must run `make all` before using `./bin/Chloroplast[.exe]`;
+`make test` builds it automatically. Do not commit artifacts from `bin/` or
+`build/`.
+
+Do not rebuild `dist/Chloroplast` from current sources — the point of the
+bootstrap seed is that it is an immutable, known-good starting point. When a
+release intentionally refreshes the seed, use `make bootstrap-update` and
+commit the result with the sources. The release tarball (`make dist`) ships
+`$(BOOTSTRAP)` from `dist/`, not from `bin/`.
+
+On Windows, `dist/Chloroplast` is a Linux ELF and cannot run. `make` uses
+`dist/Chloroplast.exe` instead. Refresh the binary seed and the portable C
+snapshot together:
 
 ```sh
 make all && make self
+make bootstrap-update
 cp build/plantc_v4.c dist/bootstrap/plantc_bootstrap.c
 ```
 
@@ -222,26 +252,29 @@ Installs the compiler binary and the C runtime headers
   `AF_UNIX SOCK_SEQPACKET`, `memfd`, `SCM_RIGHTS` fd passing) is unavailable
   there, so a crashed adapter can take down the host process. Run untrusted
   SAFE workloads on Linux when isolation is required.
+- **Windows Smart App Control:** blocks locally built unsigned binaries and can
+  break the GCC link step. See [Smart App Control](#smart-app-control-windows-11).
 
 
 ## Bootstrap Seed
 
 `dist/Chloroplast` is the pre-built compiler used to start the self-hosting
-chain on Linux. Update it after each stable release:
-
-    cp bin/Chloroplast dist/Chloroplast
-    # or: make bootstrap-update
-
-On Windows the equivalent seed is `dist/bootstrap/plantc_bootstrap.c`. Refresh
-both together:
+chain on Linux. Build the compiler first, then refresh the seed:
 
     make all && make self
+    make bootstrap-update        # cp bin/Chloroplast dist/Chloroplast
+
+On Windows the binary seed is `dist/Chloroplast.exe`; refresh it and the
+portable generated-C snapshot together:
+
+    make all && make self
+    make bootstrap-update
     cp build/plantc_v4.c dist/bootstrap/plantc_bootstrap.c
 
 Then verify: `make clean && make all && make self && make test`
 
-`make clean` removes `build/*.c`, so the checked-in bootstrap source is what
-lets a clean Windows tree rebuild without a pre-built compiler.
+`make clean` removes `bin/` and `build/`, so the checked-in `dist/` seeds are
+what lets a clean tree rebuild.
 
 ### v0.51.4 bootstrap upgrade
 

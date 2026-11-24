@@ -2,9 +2,10 @@
 
 ## Cumulative Growth Table
 
-# Auto-updated: 0.63.2
+# Auto-updated: 0.63.3
 | Version | Binary Size | plant_runtime.c | plant_tensor.c | plant_memory.c | plant_report.c | plant_math.c |
 |---------|-------------|-----------------|----------------|----------------|----------------|--------------|
+| v0.63.3 | 1100288 | 9078 | 1422 | 109 | 330 | 5361 |
 | v0.63.2 | 1100288 | 9078 | 1422 | 109 | 330 | 5361 |
 | v0.63.1 | 1100288 | 9078 | 1422 | 109 | 330 | 5361 |
 | v0.62.8 | 1105080 | 8963 | 1422 | 109 | 330 | 5361 |
@@ -114,6 +115,7 @@
 | v0.62.8 | 2026 | TD-073/TD-074 investigation (parked, docs-only) | Released |
 | v0.63.1 | 2026 | Repository cleanup (146 legacy JS/build files) | Released |
 | v0.63.2 | 2026 | Documentation consistency (P0 + P1) | Released |
+| v0.63.3 | 2026 | P2 cleanup + Windows fixes | Released |
 
 ## Growth Chart (ASCII)
 
