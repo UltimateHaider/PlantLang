@@ -47,6 +47,29 @@ container yet (pre-existing leak, ~56 B per overwritten list) — containers
 are still shared. Closing it requires reference counting, not `free()`
 (see TD-077).
 
+### List value ownership (v0.63.5)
+
+`PUSH(L, x)` **transfers ownership** of `x` to `L`:
+
+```plantlang
+CREATE L (LST) TO [].
+CREATE t (TENSOR) TO TENSOR([1, 2]).
+PUSH(L, t).
+LIST_FREE(L).      # releases t — do NOT TENSOR_FREE(t) afterwards
+```
+
+- `LIST_FREE(L)` releases everything that was pushed (tensors, numeric
+  values, nested lists/maps).
+- Do **not** `TENSOR_FREE(x)` after `PUSH(L, x)` + `LIST_FREE(L)` — that is
+  a double free (`SIGABRT`).
+- `POP` transfers the element **out**: the caller becomes responsible for
+  it; `LIST_FREE(L)` will no longer touch it.
+- `SET L[i] TO x` behaves like `PUSH`: the list owns the new value.
+- `PUSH` boxes numeric values (`PUSH(L, 5000)` stores the text `"5000"`), so
+  `SHOW L[0]` prints `5000`.
+- Container values (list/map) are still shared — see TD-077. Bulk string
+  pushes have the slab-overflow gap in TD-079.
+
 ### Example
 
 ```plantlang

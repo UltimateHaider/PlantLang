@@ -1,0 +1,9 @@
+# tests/native/td078_push_numeric.plant — v0.63.5 TD-078
+# PUSH of a numeric literal must be boxed (_from_long) before the list
+# stores it; otherwise LIST_FREE dereferences the raw integer and
+# SIGSEGVs (5000 > _PLANT_PTR_MIN).
+CREATE L (LST) TO [].
+PUSH(L, 5000).
+SHOW L[0].
+LIST_FREE(L).
+SHOW "td078-push-numeric-ok".

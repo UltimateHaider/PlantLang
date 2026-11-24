@@ -7905,6 +7905,13 @@ ACTION generate_node(node, env(LST)),
                 REAP pu_val0 FROM _swap_self, pu_val0.
                 REAP pu_val FROM translate_expr, pu_val0, nums, evars, maths.
                 REAP pu_val FROM _handle_cat, pu_val, nums, evars.
+                # v0.63.5 — TD-078: PUSH never boxed numeric values, so
+                # `PUSH(L, 5000)` emitted a raw int and LIST_FREE
+                # dereferenced it (SIGSEGV). Wrap scalars like SET does.
+                REAP pu_isnum FROM expr_is_numeric, pu_val, nums.
+                IF pu_isnum IS 1,
+                    SET pu_val TO "_from_long(" + pu_val + ")".
+                /IF.
                 CREATE pu_temps(LST) TO plant_list_make(0).
                 CREATE pu_lines(LST) TO plant_list_make(0).
                 REAP pu_res FROM _hoist_tensor_rhs, pu_val, "push", isel0, pu_temps, pu_lines.
@@ -7929,6 +7936,17 @@ ACTION generate_node(node, env(LST)),
                         SET pu_i TO pu_i + 1.
                     /SEASON.
                     GIVE isel0 + "  {\n" + pu_pre + isel0 + "    plant_list_push(" + pu_lst + ", " + pu_final + ");\n" + pu_frees + isel0 + "  }\n".
+                /IF.
+                # v0.63.5 — TD-078: no temps (single numeric value):
+                # emit directly so the _from_long wrap survives. The
+                # generic fallback re-translates the args and would
+                # lose it.
+                IF COUNT pu_temps IS 0 AND pu_isnum IS 1,
+                    REAP pu_lstb0 FROM plant_list_get, pu_args, 0.
+                    REAP pu_lstb0 FROM _swap_self, pu_lstb0.
+                    REAP pu_lstb FROM translate_expr, pu_lstb0, nums, evars, maths.
+                    REAP pu_lstb FROM _handle_cat, pu_lstb, nums, evars.
+                    GIVE isel0 + "  plant_list_push(" + pu_lstb + ", " + pu_val + ");\n".
                 /IF.
             /IF.
         /IF.

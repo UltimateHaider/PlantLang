@@ -1,0 +1,9 @@
+# tests/native/td078_push_numeric_var.plant — v0.63.5 TD-078
+# Same as td078_push_numeric but the value is a LON variable (raw long
+# at the C level). The codegen must consult `nums` and box it.
+CREATE L (LST) TO [].
+CREATE n (LON) TO 5000.
+PUSH(L, n).
+SHOW L[0].
+LIST_FREE(L).
+SHOW "td078-push-numeric-var-ok".

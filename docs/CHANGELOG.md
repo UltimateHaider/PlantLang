@@ -1,3 +1,54 @@
+## v0.63.5 — TD-046 verified + TD-078 (numeric PUSH) + TD-079
+
+### Verified / Closed
+- **TD-046 (PUSH nested intermediates): CLOSED stands.** With the tracked
+  allocator: 0 B in 2-level, 3-level, second-argument, two-temp, repeated
+  PUSH, single-op and bare-variable cases; the two repo tests and
+  `td041_escape_push` are 0 B. Replaying the pre-v0.58.12 emission by hand
+  gives **+104 B** (1 tensor), so the original leak was real (the entry's
+  "72 B" was the old tensor footprint). The pushed value's ownership
+  contract is now documented (see `PRODUCTION_GUIDE.md`).
+
+### Fixed
+- **TD-078 — PUSH did not box numeric values.** `PUSH(L, 5000)` emitted
+  `plant_list_push(L, 5000)` (raw C int as a pointer), so `LIST_FREE(L)`
+  dereferenced address 5000 → SIGSEGV; `PUSH(L, n)` with `LON n = 5000`
+  was identical, and small values printed `<null>` instead of the number.
+  The PUSH interception now applies `expr_is_numeric` + `_from_long`, and
+  emits the push directly when there are no tensor temps (the generic
+  fallback re-translates the args and would drop the wrap).
+  `gen_reap_stmt` is untouched. +18 LOC in `codegen_c.plant`.
+- Tests: `td078_push_numeric` (`PUSH(L, 5000)`) and
+  `td078_push_numeric_var` (`PUSH(L, n)`) — both `SHOW L[0]` → `5000`;
+  both SIGSEGV with the v0.63.4 bootstrap compiler.
+
+### Added
+- `make leak-gate` now also covers `td046_push_nested` and
+  `td046_push_single_unchanged` (exact live-byte deltas, 0 B).
+
+### Deferred
+- **TD-079** — bulk string pushes: 2000 × `"a" + "b"` pushed then
+  `LIST_FREE` = +68464 B (65536 B slab arena + 2928 B of overflow
+  mallocs). `_cat` blocks carry no `PLNTSTR1` header, so `LIST_FREE` cannot
+  release them. Part of the TD-077 ownership/ref-count work (v0.64.0).
+
+### Docs
+- `TECH_DEBT.md`: TD-046 verification + contract; TD-078 CLOSED; TD-079
+  NEW OPEN; status header → v0.63.5.
+- `PRODUCTION_GUIDE.md`: new "List value ownership" section (`PUSH`/`POP`/
+  `SET L[i]`, double-free rule, numeric boxing).
+
+### Verified (Windows 11, MSYS2)
+- Native **352/352** (350 + the 2 TD-078 tests) · Generics **7/7** ·
+  Closures **6/6** · Regression **319/319**
+- `make self`: `SELF-HOSTING CONVERGED (616030 bytes)`;
+  `plantc_v3.c == plantc_v4.c == plantc_v5.c`; `plantc_v4.exe == bin`
+- `make leak-gate`: PASS — 4/4 tests at net **0 B** (baseline 184 B):
+  `td047_map_overwrite`, `td047_map_num_overwrite`,
+  `td046_push_nested`, `td046_push_single_unchanged`
+- TD-078 pre-fix check: both new tests SIGSEGV (139) with the v0.63.4
+  bootstrap compiler; fixed build prints `5000`
+
 ## v0.63.4 — TD-047: MAP overwrite ownership (narrow fix + compiler dedup guard)
 
 ### Fixed

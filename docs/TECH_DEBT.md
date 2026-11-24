@@ -1,10 +1,11 @@
 # Technical Debt Register — PlantLang Chloroplast
 
-> **Status (v0.63.4): TD-047 CLOSED (narrow fix) · TD-077 OPEN (v0.64.0).**
-> TD-047's v0.58.0 "misdiagnosis" closure was wrong: the overwrite leak was
-> real. v0.63.4 fixes tensor/numeric/`LINK` overwrites (0 B, leak-gated) and
-> the compiler's dedup alias; container-value overwrites (56 B) move to
-> **TD-077** (ref-counting, contract change). **TD-076 OPEN (epic)** — typed
+> **Status (v0.63.5): TD-046 CLOSED (verified 0 B) · TD-078 CLOSED (numeric PUSH).**
+> TD-047 CLOSED (narrow fix, v0.63.4) · **TD-077 OPEN (v0.64.0)** · **TD-079
+> OPEN (v0.64.0)**. TD-047's v0.58.0 "misdiagnosis" closure was wrong: the
+> overwrite leak was real; v0.63.4 fixes tensor/numeric/`LINK` overwrites
+> (0 B, leak-gated) and the compiler's dedup alias. TD-046's v0.58.12 fix
+> is valid (0 B in every PUSH-nested case). **TD-076 OPEN (epic)** — typed
 > expressions (args/non-leading/async-ctx). **TD-073 OPEN (blocked by TD-076)**
 > — latent untyped-`REAP` heuristics (design proven). **TD-074 = MISDIAGNOSIS**.
 > TD-016/TD-017 DEFERRED.
@@ -506,12 +507,22 @@ defining scope.
 ## TD-046: PUSH nested intermediates leak — CLOSED
 
 - **Status:** ✅ CLOSED in v0.58.12
+- **Verified in v0.63.5:** 0 B in all PUSH-nested cases — 2 levels, 3
+  levels, nested in the second argument, two temps, repeated PUSH, single
+  op, and bare variable. Replaying the old emission by hand
+  (`plant_list_push(L, plant_tensor_add(plant_tensor_mul(a, b), b))`) =
+  **+104 B** (1 tensor), so the original defect was real.
 - **Introduced:** v0.57.1 (discovered during the TD-044 investigation)
 - **Symptom:** `PUSH(L, TENSOR_ADD(TENSOR_MUL(a, b), b))` emitted
   `plant_list_push(L, plant_tensor_add( plant_tensor_mul(a, b), b))` —
-  the inner `plant_tensor_mul` result leaked (**72 B / 1 block**). The
+  the inner `plant_tensor_mul` result leaked (**72 B / 1 block** as
+  recorded in v0.58.12; **104 B** per tensor in the current build). The
   pushed *outer* tensor is owned by the list (`LIST_FREE` releases it), so
   only nested intermediates leaked (single op / bare var = 0 B).
+- **Ownership contract:** `LIST_FREE(L)` releases everything that was
+  pushed. Do **not** `TENSOR_FREE(x)` after `PUSH(L, x)` + `LIST_FREE(L)`
+  — that is a double free (SIGABRT). `POP` transfers the element out to
+  the caller; `SET L[i]` behaves like `PUSH`.
 - **Fixed:** a **fail-safe** interception in `generate_node`'s `call_stmt`
   branch (`codegen_c.plant`, +40 lines):
   - Translate the PUSH value, run `_hoist_tensor_rhs` (the proven
@@ -527,7 +538,8 @@ defining scope.
   (TD-048, TD-055) and 2 DEFERRED items (TD-016, TD-017).
 - **Tests:** `td046_push_nested`, `td046_push_single_unchanged`.
 - **Related:** TD-041 (intermediate leak, closed), TD-044 (GIVE, closed),
-  TD-017 (deferred).
+  TD-017 (deferred), TD-078 (numeric PUSH — same code path), TD-079
+  (bulk string pushes).
 
 ## TD-049: `SHOW <multi-digit long>` leaks `_from_long` heap string — CLOSED
 
@@ -1090,7 +1102,47 @@ disproven by design (see the v0.60.0d investigation).
   and cycle behaviour. Needs a design review before implementation.
 - **Impact:** MED (leak only, no crash). Compiler alias audit found one
   hot consumer (`ad_map`), already handled locally by TD-047.
-- **Related:** TD-047, TD-044, TD-046.
+- **Related:** TD-047, TD-044, TD-046, TD-079.
+
+## TD-078: PUSH does not box numeric values — CLOSED (v0.63.5)
+- **Status:** ✅ CLOSED in v0.63.5
+- **Introduced:** pre-v0.58.x (found during the TD-046 Phase-1 audit)
+- **Symptom:** `PUSH(L, 5000)` emitted `plant_list_push(L, 5000)` — a raw
+  C int stored as a pointer. `LIST_FREE(L)` then dereferenced address 5000
+  (`plant_list_free`) → **SIGSEGV**; `PUSH(L, n)` with `LON n = 5000` was
+  identical. Values < 4096 survived (skipped by `_PLANT_PTR_MIN`) but
+  `SHOW L[0]` printed `<null>` because they were not strings. List
+  literals `[1, 2, 3]` and `SET M["k"] / SET L[i]` already boxed via
+  `_from_long`, so PUSH was the only inconsistent path.
+- **Fix (v0.63.5, +18 LOC in `codegen_c.plant`):** in the PUSH
+  interception, run `expr_is_numeric(pu_val, nums)` and wrap the value in
+  `_from_long(...)`. When there are **no** tensor temps, emit
+  `plant_list_push(lst, <wrapped>)` directly — the generic
+  `gen_reap_stmt` fallback re-translates the args and would drop the wrap.
+  `gen_reap_stmt` is untouched.
+- **Tests:** `td078_push_numeric` (`PUSH(L, 5000)`), `td078_push_numeric_var`
+  (`PUSH(L, n)`), both `SHOW L[0]` → `5000`; both SIGSEGV before the fix
+  (verified with the v0.63.4 bootstrap compiler).
+- **Related:** TD-046, TD-049, TD-063.
+
+## TD-079: Bulk string pushes leak after slab exhaustion — OPEN (v0.64.0)
+- **Status:** 🟡 OPEN (part of the TD-077 ownership/ref-count work)
+- **Introduced:** pre-v0.58.x; measured in the TD-046 v0.63.5 audit.
+- **Symptom:** 2000 × `CREATE s TO "a" + "b". PUSH(L, s).` then
+  `LIST_FREE(L)` = **+68464 B** = 65536 B (the one-time slab arena) +
+  **2928 B** (976 × 3 B) of `_cat` results that overflowed the 1024-block
+  slab and were malloc'd. `plant_list_free` only calls
+  `plant_heapstr_release`, which requires the `PLNTSTR1` header — slab and
+  plain `_cat` blocks have none, so they are never returned/freed.
+- **Why:** the list owns the text it stores, but `_cat` (slab or malloc)
+  is not a tagged heap string. Single pushes look clean because the slab
+  arena is a one-time 64 KB allocation; the leak only appears once the
+  pool is exhausted.
+- **Fix path:** unify text ownership (`_cat` → tagged heap string, or a
+  slab-aware release in `plant_list_free`). Belongs with TD-077 B1/B2;
+  do not patch `LIST_FREE` in isolation.
+- **Impact:** MED (bounded leak, no crash; worst case ≈ 64 KB + overflow).
+- **Related:** TD-007/010 (heapstr tagging), TD-046, TD-077.
 
 ## TD-045: `SET x TO <new tensor>` overwrites old x without freeing — CLOSED
 - **Status:** ✅ CLOSED in v0.58.0

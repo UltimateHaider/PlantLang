@@ -1,11 +1,15 @@
 #!/bin/sh
-# tests/native/leak_gate.sh — v0.63.4 TD-047 exact leak gate.
+# tests/native/leak_gate.sh — exact leak gate for TD-047 / TD-046.
+#
+# v0.63.4: MAP overwrite (tensor/numeric) — 0 B after the narrow fix.
+# v0.63.5: PUSH nested / single tensor — 0 B after the v0.58.12 fix.
 #
 # Recompiles the runtime with a tracking allocator into $TMPDIR (never into
-# the repo) and asserts that each MAP-overwrite test ends at the same live
-# byte count as a baseline program. A leak is a positive net delta:
+# the repo) and asserts that each test ends at the same live byte count as
+# a baseline program. A leak is a positive net delta:
 #   tensor overwrite  -> +104 B before the fix, 0 B after
 #   numeric overwrite -> +11 B  before the fix, 0 B after
+#   PUSH nested       -> +104 B without the hoist, 0 B after
 #
 # Usage: sh tests/native/leak_gate.sh [path-to-Chloroplast]
 set -u
@@ -84,7 +88,8 @@ if [ -z "$BASE" ]; then
 fi
 
 fail=0
-for t in td047_map_overwrite td047_map_num_overwrite; do
+for t in td047_map_overwrite td047_map_num_overwrite \
+         td046_push_nested td046_push_single_unchanged; do
     src="$ROOT/tests/native/$t.plant"
     bytes=$(run_case "$t" "$src")
     if [ -z "$bytes" ]; then
