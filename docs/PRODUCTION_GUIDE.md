@@ -22,6 +22,31 @@ All three built-ins (`LIST_FREE`, `TENSOR_FREE`, `FREE`) are functionally identi
 - Use `TENSOR_FREE(x)` when x is known to be a tensor
 - Use `FREE x.` when the type is unknown or mixed
 
+### MAP value ownership (v0.63.4)
+
+A pair-list `MAP` **owns the values it stores**: `LIST_FREE(M)` releases them
+recursively, and overwriting a key releases the **tensor or numeric** value
+it replaces (container values — see the gap note below):
+
+```plantlang
+CREATE M (MAP) TO {}.
+CREATE a (TENSOR) TO TENSOR([1, 2]).
+CREATE b (TENSOR) TO TENSOR([3, 4]).
+SET M["k"] TO a.
+SET M["k"] TO b.   # a is released here — do NOT TENSOR_FREE(a) afterwards
+LIST_FREE(M).      # releases b (and the key)
+```
+
+Do not free a value after the map replaced it — that is a double free
+(`SIGABRT`). The same rule applies to `LINK … IN M` and to struct fields
+written with `SET obj.field TO v`. Do not store the same object under two
+keys: both entries would own it and `LIST_FREE(M)` would free it twice.
+
+**Known gap:** overwriting a **list/map** value does not release the old
+container yet (pre-existing leak, ~56 B per overwritten list) — containers
+are still shared. Closing it requires reference counting, not `free()`
+(see TD-077).
+
 ### Example
 
 ```plantlang

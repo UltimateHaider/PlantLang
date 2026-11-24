@@ -159,11 +159,18 @@ $(V5_C): $(ALL_PLANT) $(V4_BIN)
 	@$(V4_BIN) $(ALL_PLANT) $@ >/dev/null 2>&1
 
 # ── test: native + generics + closures integration suites ─────
-test: $(NATIVE_BIN) ## Run native + generics + closures + regression suites
+test: $(NATIVE_BIN) ## Run native + generics + closures + regression + leak gate
 	@sh tests/native/run_native_tests.sh $(NATIVE_BIN)
 	@sh tests/generics/run_generics_tests.sh $(NATIVE_BIN)
 	@sh tests/closures/run_closures_tests.sh $(NATIVE_BIN)
 	@sh tests/regression/run_regression_tests.sh $(NATIVE_BIN)
+	@sh tests/native/leak_gate.sh $(NATIVE_BIN)
+
+# ── leak-gate: exact MAP-overwrite leak gate (TD-047) ──────────
+# Rebuilds the runtime with a tracking allocator in $TMPDIR and fails on
+# any positive net live-byte delta (tensor/numeric MAP overwrite).
+leak-gate: $(NATIVE_BIN) ## Run TD-047 MAP-overwrite leak gate (tracked allocator)
+	@sh tests/native/leak_gate.sh $(NATIVE_BIN)
 
 # v0.52.0 — Precompile the test-runtime subset once (5-10x faster tests).
 build/trt/%.o: runtime/c/%.c

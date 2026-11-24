@@ -1,7 +1,10 @@
 # Technical Debt Register — PlantLang Chloroplast
 
-> **Status (v0.63.3): 0 known *active* bugs in the shipped toolchain.**
-> TD-054/068/069/**071 (full)**/072 CLOSED. **TD-076 OPEN (epic)** — typed
+> **Status (v0.63.4): TD-047 CLOSED (narrow fix) · TD-077 OPEN (v0.64.0).**
+> TD-047's v0.58.0 "misdiagnosis" closure was wrong: the overwrite leak was
+> real. v0.63.4 fixes tensor/numeric/`LINK` overwrites (0 B, leak-gated) and
+> the compiler's dedup alias; container-value overwrites (56 B) move to
+> **TD-077** (ref-counting, contract change). **TD-076 OPEN (epic)** — typed
 > expressions (args/non-leading/async-ctx). **TD-073 OPEN (blocked by TD-076)**
 > — latent untyped-`REAP` heuristics (design proven). **TD-074 = MISDIAGNOSIS**.
 > TD-016/TD-017 DEFERRED.
@@ -1012,15 +1015,82 @@ disproven by design (see the v0.60.0d investigation).
 ### Related
 - `docs/ADV2_LIMITATIONS.md` — detailed analysis.
 - `docs/CHANGELOG.md` v0.60.0a/b/c — what was delivered.
-## TD-047: MAP value ownership — CLOSED (misdiagnosis, v0.58.0)
-- **Status:** ✅ CLOSED (misdiagnosis, v0.58.0)
-- **Introduced:** pre-v0.57.1 (discovered during the TD-044 investigation)
-- **Original claim:** `SET M["k"] TO a` + `LIST_FREE(M)` leaks 72 B.
-- **Correction (empirical):** the 72 B was the caller's **un-freed `a`**.
-  `LIST_FREE(M)` does not free map values (alias-only by design);
-  `TENSOR_FREE(a) + LIST_FREE(M)` = 0 leaks, no double free. **No fix needed.**
-- **Return-aliasing half:** fixed in v0.58.0 by `GIVE <bare var>` retain.
-- **Related:** TD-044, TD-046.
+## TD-047: MAP value ownership — CLOSED (narrow fix, v0.63.4)
+- **Status:** ✅ CLOSED in v0.63.4 (narrow fix; the container sub-case is
+  split out to TD-077). Previously (wrongly) closed as misdiagnosis in
+  v0.58.0; reopened and re-verified in v0.63.4.
+- **Introduced:** pre-v0.57.1 (overwrite path); the v0.58.0 closure was invalid
+- **Original claim (v0.57.x):** `SET M["k"] TO a` + `LIST_FREE(M)` leaks 72 B.
+- **Why that claim was wrong:** the 72 B was the caller's un-freed variable.
+  The pair-list MAP **does** own its values:
+  `SET M["k"] TO a` + `LIST_FREE(M)` = **0 B** (measured with a tracked
+  allocator). The old recipe `TENSOR_FREE(a)` + `LIST_FREE(M)` is a
+  **double free → SIGABRT (134)**, not "0 leaks, no double free".
+  The v0.58.0 measurement could not have tested ownership at all: at that
+  tag `SET M["k"]` still lowered to `plant_list_set` (index-only, silent
+  no-op on a string key — TD-063, fixed in v0.58.10), so the value was
+  never stored.
+- **Real defect (measured):** replacing the value of an existing key leaked
+  the old value — **104 B per tensor**, **11 B per numeric value**
+  (`SET M["k"] TO a; SET M["k"] TO b; LIST_FREE(M)`). `plant_link`
+  (`LINK … IN M`) had the same overwrite path and the same leak.
+  Cause: `items[i + 1] = value` without releasing the previous value.
+- **Fix (v0.63.4, +20 LOC net):** in `plant_map_set` and `plant_link`,
+  release the old value before the store — `plant_heapstr_release` first
+  (numeric values are magic-tagged heap strings that `plant_free` ignores),
+  then `plant_free`, and only when the value is **not a container**
+  (`!plant_is_list(old)`); `old == value` is a no-op. `SET obj.field TO v`
+  shares `plant_map_set`, so field overwrites are covered too.
+  Measured after the fix: tensor overwrite 104 → **0 B**, numeric 11 → **0 B**,
+  `LINK` 104 → **0 B** (leak gate).
+- **Compiler interaction (B-local):** the action-dedup pass
+  (`src/plantc/main.plant`) intentionally did a last-wins overwrite on a
+  name→node MAP whose values are also referenced by `body`. Releasing the
+  old value freed a node that `body` still aliased → `_map_get` SIGSEGV in
+  `conformance` and `species_polymorphism`. Fixed by iterating **backward**
+  and inserting only when the key is absent: same last-wins map, no
+  overwrite. Compiler output verified **byte-identical** to the v0.63.3 seed
+  for both tests (+ `conformance_full`).
+- **Contract:** the MAP owns its **tensor/numeric** values. Overwrite (and
+  `LIST_FREE`) releases the previous value, so an external alias to the old
+  value must not be freed afterwards. Container values remain shared until
+  TD-077. Documented in `PRODUCTION_GUIDE.md`.
+- **Tests:** `tests/native/td047_map_overwrite.plant`,
+  `tests/native/td047_map_num_overwrite.plant`, plus the exact leak gate
+  `tests/native/leak_gate.sh` (`make leak-gate`, also run by `make test`):
+  tensor 0 B net, numeric 0 B net; without the fix it reports +216 B / +22 B.
+- **Known gap (hash `PlantMap`):** `plant_map_free` frees keys but not
+  values; it has **0 callers** (dead). Codegen emits hash maps only for the
+  FFI struct→map conversion; language MAPs are pair-lists.
+- **Related:** TD-044, TD-046, TD-063, TD-077.
+
+## TD-077: Container-value overwrite leak (list/map) — OPEN (v0.64.0)
+- **Status:** 🟡 OPEN (design + phased implementation, v0.64.0)
+- **Introduced:** pre-v0.57.1; isolated by the TD-047 narrow fix in v0.63.4.
+- **Symptom:** overwriting a MAP key whose old value is a `PlantArray`
+  (list or MAP) still leaks that container — **56 B per overwritten
+  2-element list** (40 B header + 16 B items). The TD-047 fix deliberately
+  skips containers (`plant_is_list`).
+- **Why `free()` is not enough:** containers are shared by alias (the
+  compiler's action-dedup map and `body` hold the same AST node). Freeing
+  on overwrite dangles the alias → `_map_get` SIGSEGV (that was the
+  v0.63.4 Phase-2 STOP).
+- **Required work (~110-140 LOC, ref-counting):**
+  - **B1 runtime (~55-65):** `ref_count` in `PlantArray`; `plant_list_retain`
+    / `plant_list_release`; retain in `plant_list_push/set/make/concat/
+    braid`, `plant_map_set`, `plant_link`; `plant_list_free` becomes
+    release; `plant_mem_free` policy for arrays.
+  - **B2 codegen + audit (~25-35):** list branches for `CREATE x TO y`,
+    `SET x TO y`, `GIVE y` (mirror the tensor paths); audit
+    `REAP`/`POP`/`REMOVE`/FFI/json.
+  - **B3 docs/tests (~30):** `LIST_FREE` = release (not destroy); `FREE`
+    shallow/deep policy; `POP`/`REMOVE` ownership; cycles become leaks
+    (not stack overflow); hash-vs-pair-list documentation.
+- **Contract change:** yes — `LIST_FREE`/`FREE`/`POP`/`REMOVE` semantics
+  and cycle behaviour. Needs a design review before implementation.
+- **Impact:** MED (leak only, no crash). Compiler alias audit found one
+  hot consumer (`ad_map`), already handled locally by TD-047.
+- **Related:** TD-047, TD-044, TD-046.
 
 ## TD-045: `SET x TO <new tensor>` overwrites old x without freeing — CLOSED
 - **Status:** ✅ CLOSED in v0.58.0

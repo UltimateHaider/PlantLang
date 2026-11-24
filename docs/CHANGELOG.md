@@ -1,3 +1,62 @@
+## v0.63.4 — TD-047: MAP overwrite ownership (narrow fix + compiler dedup guard)
+
+### Fixed
+- **TD-047** (real defect; the v0.58.0 "misdiagnosis" closure was itself
+  wrong): overwriting an existing pair-list MAP key leaked the value it
+  replaced — 104 B per tensor, 11 B per numeric value. `plant_map_set` and
+  `plant_link` now release the old value before `items[i + 1] = value`:
+  `plant_heapstr_release` first (numeric values are magic-tagged heap
+  strings that `plant_free` ignores), then `plant_free`. `old == value` is a
+  no-op, and **container values are deliberately skipped**
+  (`!plant_is_list(old)`) — see TD-077. +24/−4 lines (net +20), no new API.
+- `SET obj.field TO v` shares the `plant_map_set` path, so struct-field
+  overwrites are covered by the same code.
+- **Compiler dedup alias (B-local):** the polymorphic action-dedup pass in
+  `src/plantc/main.plant` used a deliberate last-wins overwrite on a
+  name→node MAP while `body` still aliased the replaced node. With value
+  release that node was freed → `_map_get` SIGSEGV in `conformance` and
+  `species_polymorphism`. The pass now iterates **backward** and inserts
+  only when the key is absent: same last-wins map, no overwrite. Compiler
+  output for both tests (and `conformance_full`) is **byte-identical** to
+  the v0.63.3 seed.
+
+### Added
+- `tests/native/td047_map_overwrite.plant` (tensor overwrite, incl. the
+  same-pointer guard), `td047_map_num_overwrite.plant` (numeric-string
+  overwrite).
+- `tests/native/leak_gate.sh` + `tests/native/alloc_track.c/.h` — exact
+  live-byte gate: recompiles the runtime with a tracking allocator in
+  `$TMPDIR` and fails on a positive net delta. Tensor overwrite = 0 B,
+  numeric overwrite = 0 B (without the fix: +216 B / +22 B).
+- `make leak-gate`; also run at the end of `make test`.
+
+### Changed
+- Ownership contract: a pair-list MAP owns its **tensor/numeric** values.
+  Overwriting a key (or `LIST_FREE(M)`) releases the previous value, so an
+  aliased old value must not be freed afterwards (double free). Container
+  values (list/map) remain shared. Documented in `PRODUCTION_GUIDE.md`.
+
+### Deferred
+- **TD-077** — container-value overwrite leak (56 B per overwritten list):
+  needs `PlantArray` ref-counting (~110-140 LOC) and changes the public
+  `LIST_FREE`/`FREE`/`POP`/`REMOVE` contract. Scheduled for v0.64.0.
+
+### Corrected
+- The v0.58.0 claim "LIST_FREE(M) does not free map values (alias-only by
+  design)" was false; see the corrected note under v0.58.0 and TD-047 in
+  `docs/TECH_DEBT.md`.
+
+### Verified (Windows 11, MSYS2)
+- Native **350/350** · Generics **7/7** · Closures **6/6** ·
+  Regression **319/319** (`conformance`, `species_polymorphism` compile —
+  no SIGSEGV)
+- `make self`: `SELF-HOSTING CONVERGED (615498 bytes)`;
+  `plantc_v3.c == plantc_v4.c == plantc_v5.c`
+- `build/plantc_v4.exe == bin/Chloroplast.exe`
+- `make leak-gate`: PASS — tensor overwrite net **0 B**, numeric overwrite
+  net **0 B** (baseline 184 B). Without the fix the same gate reports
+  +216 B / +22 B.
+
 ## v0.63.3 — P2 cleanup & Windows fixes
 
 ### Removed
@@ -1339,11 +1398,18 @@ if a real use case emerges.
 - Previously WONTFIX in v0.57.2 (aliasing hazard). Now safe because
   CREATE/GIVE retain-on-alias.
 
-### Corrected (TD-047 → CLOSED, misdiagnosis)
-- TD-047 MAP: the earlier "72 B leak" was the caller's un-freed tensor.
+### Corrected (TD-047 → was CLOSED as misdiagnosis in v0.58.0)
+- ~~TD-047 MAP: the earlier "72 B leak" was the caller's un-freed tensor.
   LIST_FREE(M) does not free map values (alias-only by design).
-  TENSOR_FREE(a) + LIST_FREE(M) = 0 leaks, no double free.
-  No fix needed — TD-047 CLOSED (misdiagnosis).
+  TENSOR_FREE(a) + LIST_FREE(M) = 0 leaks, no double free.~~
+- **This correction was itself wrong (found in v0.63.4).** At v0.58.0
+  `SET M["k"]` still lowered to `plant_list_set` — an index-only call that
+  silently no-op'd on a string key (TD-063, fixed in v0.58.10). The value
+  was therefore never stored, so nothing could leak. Since v0.58.10 the
+  MAP does own its values: `LIST_FREE(M)` frees them, and
+  `TENSOR_FREE(a) + LIST_FREE(M)` is a **double free** (SIGABRT).
+  The real defect (tensor/numeric overwrite leak) is TD-047 **CLOSED** in
+  v0.63.4; the container-value sub-case is **TD-077** (v0.64.0).
 
 ### Deferred (TD-046 → v0.58.1)
 - SET x TO <bare tensor var y> aliasing (type-blind gen_set_stmt).

@@ -1,0 +1,10 @@
+# tests/native/td047_map_num_overwrite.plant — v0.63.4 TD-047
+# Numeric MAP values are magic-tagged heap strings; overwriting a key
+# must release the old string too (plant_heapstr_release before
+# plant_free). Leak gate: 0 B after LIST_FREE(M) (11 B before the fix).
+CREATE M (MAP) TO {"k": 11}.
+SET M["k"] TO 22.
+SET M["k"] TO 22.
+SHOW M["k"].
+LIST_FREE(M).
+SHOW "td047-map-num-overwrite-ok".

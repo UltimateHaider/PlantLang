@@ -8,6 +8,7 @@
 #include "plant_math.h"
 #include "plant_malloc.h"
 #include "plant_tensor.h"
+#include "plant_memory.h"   /* v0.63.4 — TD-047: plant_free / plant_is_list */
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -865,8 +866,20 @@ tx_t plant_map_set(tx_t map, tx_t key, tx_t value) {
         const char* ok = (const char*)m->items[i];
         if (ok && strcmp(ok, k) == 0) break;
     }
-    if (i + 1 < m->count) m->items[i + 1] = value;
-    else {
+    if (i + 1 < m->count) {
+        /* v0.63.4 — TD-047: a pair-list MAP owns its tensor/numeric
+           values, so an overwrite releases the value it replaces.
+           Container values (list/map) are still shared: the compiler
+           keeps aliases to them, so freeing here would dangle those
+           aliases (see TD-077). Numeric values are magic-tagged heap
+           strings that plant_free() ignores → try heapstr first.
+           old == value is a no-op. */
+        void* old = m->items[i + 1];
+        if (old && old != value && !plant_is_list(old)) {
+            if (!plant_heapstr_release(old)) plant_free(old);
+        }
+        m->items[i + 1] = value;
+    } else {
         m = plant_list_push(m, (void*)k);
         m = plant_list_push(m, value);
         m->kind = 1;
@@ -1661,8 +1674,15 @@ tx_t plant_link(tx_t map, tx_t key, tx_t value) {
         const char* ok = (const char*)m->items[i];
         if (ok && strcmp(ok, k) == 0) break;
     }
-    if (i + 1 < m->count) m->items[i + 1] = value;
-    else {
+    if (i + 1 < m->count) {
+        /* v0.63.4 — TD-047: same ownership rule as plant_map_set
+           (tensor/numeric only; containers stay shared — TD-077). */
+        void* old = m->items[i + 1];
+        if (old && old != value && !plant_is_list(old)) {
+            if (!plant_heapstr_release(old)) plant_free(old);
+        }
+        m->items[i + 1] = value;
+    } else {
         m = plant_list_push(m, (void*)k);
         m = plant_list_push(m, value);
     }

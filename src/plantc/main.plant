@@ -151,15 +151,23 @@ SEASON spi99 < COUNT body,
 CREATE ad_map(LST) TO plant_map_create().
 CREATE ad_out(LST) TO plant_list_make(0).
 CREATE ad_emitted(LST) TO plant_map_create().
-CREATE adi(LON) TO 0.
-SEASON adi < COUNT body,
+# v0.63.4 — TD-047: iterate BACKWARD and insert only when absent, so the
+# map keeps the LAST definition (child overrides parent) without an
+# overwrite. Overwriting would release a node that `body` still aliases
+# (the value-owning MAP now frees tensor/numeric overwrites).
+CREATE adi(LON) TO COUNT body.
+SET adi TO adi - 1.
+SEASON adi >= 0,
   REAP en9 FROM plant_list_get, body, adi.
   REAP ety9 FROM _map_get, en9, "type".
   IF ety9 IS "action_decl",
     REAP enm9 FROM _map_get, en9, "name".
-    SET ad_map TO plant_map_set(ad_map, enm9, en9).
+    REAP seen9 FROM _map_get, ad_map, enm9.
+    IF seen9 IS "",
+      SET ad_map TO plant_map_set(ad_map, enm9, en9).
+    /IF.
   /IF.
-  SET adi TO adi + 1.
+  SET adi TO adi - 1.
 /SEASON.
 CREATE adi2(LON) TO 0.
 SEASON adi2 < COUNT body,

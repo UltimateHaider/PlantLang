@@ -1,0 +1,18 @@
+# tests/native/td047_map_overwrite.plant — v0.63.4 TD-047
+# Overwriting an existing MAP key must release the old tensor value.
+# The pair-list MAP owns its values, so a value that was overwritten is
+# gone: never re-use it, never TENSOR_FREE it (that is the double free
+# this fix removes). A re-SET of the *same* pointer is a guarded no-op.
+# Leak gate: 0 B after LIST_FREE(M) (104 B per overwritten tensor before
+# the fix, measured with the tracked runtime).
+CREATE M (MAP) TO {}.
+CREATE a (TENSOR) TO TENSOR([1.0, 2.0]).
+CREATE b (TENSOR) TO TENSOR([1.0, 2.0, 3.0]).
+CREATE c (TENSOR) TO TENSOR([1.0, 2.0, 3.0, 4.0]).
+SET M["k"] TO a.
+SET M["k"] TO a.
+SET M["k"] TO b.
+SET M["k"] TO c.
+SHOW TENSOR_SIZE(M["k"]).
+LIST_FREE(M).
+SHOW "td047-map-overwrite-ok".
